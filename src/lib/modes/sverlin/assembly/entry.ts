@@ -264,9 +264,14 @@ async function whenShown() {
 
 /**
  * Measure every node at every step, keeping the largest size each reaches, then record what every
- * arrangement contains at every step and solve each once over all of them.
+ * arrangement contains at every step and solve each once over all of them. The items of a
+ * collection all keep the largest size any of them reaches: an item's own largest size depends on
+ * the steps it took part in (the last cell of a search never holds the pointer), and items of
+ * different sizes would not line up in a centred row.
  */
 async function recordSteps() {
+  // The ids of each collection's items, by the collection's id, gathered over every step.
+  const collections = new Map<string, Set<string>>();
   const pass = async (step: number, phase: Phase, finish: (shown: Shown) => void) => {
     await whenShown();
     let mounted: Shown | undefined;
@@ -293,7 +298,23 @@ async function recordSteps() {
           height: Math.max(largest?.height ?? 0, height)
         });
       }
+      for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
+        const collection = box.dataset.svCollection;
+        if (!collection) continue;
+        const items = collections.get(collection) ?? new Set<string>();
+        for (const child of box.children)
+          if (child instanceof HTMLElement && child.dataset.svNode) items.add(child.dataset.svNode);
+        collections.set(collection, items);
+      }
     });
+  for (const items of collections.values()) {
+    const sizes = [...items].flatMap((id) => reserved.get(id) ?? []);
+    const largest = {
+      width: Math.max(0, ...sizes.map((size) => size.width)),
+      height: Math.max(0, ...sizes.map((size) => size.height))
+    };
+    for (const id of items) reserved.set(id, largest);
+  }
   // Record what every arrangement contains at every step, then solve each over all of them; a
   // nested arrangement's solution changes its size and so what its parent contains, so recording
   // repeats until no solution changes.

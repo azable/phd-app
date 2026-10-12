@@ -326,9 +326,12 @@
         {@render contents()}
       </Arranged>
     {:else if arrangement}
+      <!-- data-sv-collection marks the items of one collection, so the page gives them all the
+           largest size any of them reaches (see assembly/entry.ts) and they line up. -->
       <div
         class="items {arrangement}"
         class:uniform={collection}
+        data-sv-collection={collection ? id : undefined}
         style:--sv-columns={gridColumns}
         style:gap={measure(spacings, gap ?? drawn.gap)}
         style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
