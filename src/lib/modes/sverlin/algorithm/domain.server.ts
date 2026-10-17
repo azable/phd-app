@@ -1,22 +1,37 @@
-/** The domain block: atomic type definitions built from primitive kinds, refinements, and enumerations. */
+/**
+ * The domain block: atomic types built from primitive kinds, refinements, and enumerations, and the
+ * unions, records, and collections built from them.
+ */
 
 import type { AnyNode, CallExpression, Expression, Pattern } from 'acorn';
 
-import { atomBases, type AtomBase, type AtomRegistry, type AtomType } from './atoms.server';
-import { AlgorithmError } from './block.server';
+import { atomBases, type AtomBase, type AtomType } from './atoms.server';
+import { AlgorithmError, domainFunctions } from './block.server';
 import { parseBlock } from './parse.server';
+import type { DomainRegistry, StructureType } from './structures.server';
 
 /**
- * Read the domain block's atomic type definitions. Nothing is predefined: a type is a primitive
+ * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind (`type('integer')`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
- * enumeration (`type(['♠', '♥'])`).
+ * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from types defined
+ * before it (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`,
+ * `collection(Edge)`).
  */
-export function interpretDomain(body: string): AtomRegistry {
+export function interpretDomain(body: string): DomainRegistry {
   const { root, offset } = parseBlock(body, 'domain');
   const fail = (node: AnyNode, message: string): never => {
     throw new AlgorithmError(message, offset(node));
   };
   const atoms: Record<string, AtomType> = {};
+  const structures: Record<string, StructureType> = {};
+  /** A type defined earlier in the block, named by an identifier. */
+  const defined = (node: Expression | undefined, role: string): string => {
+    if (node?.type !== 'Identifier')
+      return fail(node ?? root, `${role} must name a type defined earlier in the domain block.`);
+    if (!Object.hasOwn(atoms, node.name) && !Object.hasOwn(structures, node.name))
+      fail(node, `Unknown type ${node.name}; define it earlier in the domain block.`);
+    return node.name;
+  };
   for (const statement of root.body) {
     // The parsing wrapper's 'use strict' directive is not part of the authored block.
     if (statement.type === 'ExpressionStatement' && 'directive' in statement) continue;
@@ -26,13 +41,22 @@ export function interpretDomain(body: string): AtomRegistry {
       .declarations) {
       const name = (declarator.id as { name: string }).name;
       const init = declarator.init as Expression | undefined | null;
-      if (init?.type !== 'CallExpression' || (init.callee as { name?: string }).name !== 'type')
+      const kind =
+        init?.type === 'CallExpression' && init.callee.type === 'Identifier'
+          ? init.callee.name
+          : undefined;
+      if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), as in const ${name} = type(Int);`
+          `Define ${name} with type(...), union(...), record({...}), or collection(...), as in const ${name} = type('integer');`
         );
       const call = init as CallExpression;
-      if (name in atoms) fail(declarator as AnyNode, `"${name}" is already a type.`);
+      if (name in atoms || name in structures)
+        fail(declarator as AnyNode, `"${name}" is already a type.`);
+      if (kind !== 'type') {
+        structures[name] = defineStructure(name, kind as StructureType['kind'], call);
+        continue;
+      }
       const [definition, options, extra] = call.arguments as Expression[];
       if (!definition || extra)
         fail(
@@ -49,6 +73,11 @@ export function interpretDomain(body: string): AtomRegistry {
         type = { name, base: definition.value as AtomBase };
       } else if (definition.type === 'Identifier') {
         const parent = atoms[definition.name];
+        if (!parent && Object.hasOwn(structures, definition.name))
+          fail(
+            definition,
+            `type() refines an atomic type, and ${definition.name} is a ${structures[definition.name].kind}.`
+          );
         if (!parent)
           fail(
             definition,
@@ -82,7 +111,45 @@ export function interpretDomain(body: string): AtomRegistry {
       atoms[name] = type;
     }
   }
-  return atoms;
+  return { atoms, structures };
+
+  function defineStructure(
+    name: string,
+    kind: StructureType['kind'],
+    call: CallExpression
+  ): StructureType {
+    const args = call.arguments as Expression[];
+    if (kind === 'union') {
+      if (args.length < 2) fail(call, 'union() takes two or more types, as in union(A, B).');
+      const members = args.map((argument) => defined(argument, 'Each union member'));
+      if (new Set(members).size !== members.length)
+        fail(call, 'A union lists each member type once.');
+      if (members.some((member) => structures[member]?.kind === 'union'))
+        fail(call, 'A union lists types directly, not other unions.');
+      return { kind, name, members };
+    }
+    if (kind === 'collection') {
+      if (args.length !== 1)
+        fail(call, 'collection() takes one element type, as in collection(Edge).');
+      return { kind, name, element: defined(args[0], 'A collection’s element type') };
+    }
+    const [shape] = args;
+    if (args.length !== 1 || shape.type !== 'ObjectExpression')
+      fail(
+        call,
+        'record() takes its fields and their types, as in record({ from: Vertex, to: Vertex }).'
+      );
+    const fields: Record<string, string> = {};
+    for (const property of (shape as { properties: AnyNode[] }).properties) {
+      if (property.type !== 'Property' || property.key.type !== 'Identifier')
+        fail(property, 'Record fields are plain name: Type pairs.');
+      const { key, value } = property as unknown as { key: { name: string }; value: Expression };
+      if (Object.hasOwn(fields, key.name)) fail(property, `The field ${key.name} is listed twice.`);
+      fields[key.name] = defined(value, `The field ${key.name}`);
+    }
+    if (Object.keys(fields).length === 0) fail(call, 'A record needs at least one field.');
+    return { kind, name, fields };
+  }
 }
 
 function applyAtomOptions(

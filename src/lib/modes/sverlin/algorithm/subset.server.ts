@@ -5,6 +5,7 @@ import type { AnyNode, BlockStatement } from 'acorn';
 import {
   AlgorithmError,
   describe,
+  domainFunctions,
   forbiddenProperties,
   reservedNames,
   type BlockKind
@@ -33,7 +34,6 @@ export function checkSubset(
       case 'WhileStatement':
       case 'DoWhileStatement':
       case 'EmptyStatement':
-      case 'ArrayExpression':
       case 'SpreadElement':
       case 'ConditionalExpression':
       case 'LogicalExpression':
@@ -41,7 +41,18 @@ export function checkSubset(
       case 'TemplateLiteral':
       case 'TemplateElement':
       case 'VariableDeclarator':
+        break;
+      case 'ArrayExpression':
       case 'ObjectExpression':
+        // Input and algorithm values all come from domain types, so a literal is only written
+        // where a type is known for it: given to a type, or stored into a collection or record.
+        if ((kind === 'input' || kind === 'algorithm') && !typedContext(node, ancestors))
+          reject(
+            node,
+            node.type === 'ArrayExpression'
+              ? 'Arrays are made by a collection type: define one in the domain block, such as const Queue = collection(Vertex);, and write Queue([...]). A literal can also be stored into a typed collection or record, as in queue.push(...) or cell.items = [...].'
+              : 'Objects are made by a record type: define one in the domain block, such as const Edge = record({ from: Vertex, to: Vertex });, and write Edge({ ... }). A literal can also be stored into a typed collection or record, as in edges.push({ ... }).'
+          );
         break;
       case 'CallExpression':
         if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name, ancestors);
@@ -131,9 +142,43 @@ export function checkSubset(
       }
     }
   };
+  /**
+   * Whether a literal sits where a domain type is known for it: as an argument of a type, of
+   * .push() or .unshift(), or as the value assigned to an element or property, directly or inside
+   * other literals there. The type itself is checked when the value is made.
+   */
+  const typedContext = (node: AnyNode, ancestors: readonly AnyNode[]): boolean => {
+    let child = node;
+    for (let index = ancestors.length - 1; index >= 0; index--) {
+      const ancestor = ancestors[index];
+      if (['ArrayExpression', 'ObjectExpression', 'Property'].includes(ancestor.type)) {
+        child = ancestor;
+        continue;
+      }
+      if (ancestor.type === 'CallExpression') {
+        if (!(ancestor.arguments as AnyNode[]).includes(child)) return false;
+        const callee = ancestor.callee;
+        if (callee.type === 'Identifier') return constructors.has(callee.name);
+        return (
+          callee.type === 'MemberExpression' &&
+          !callee.computed &&
+          callee.property.type === 'Identifier' &&
+          (callee.property.name === 'push' || callee.property.name === 'unshift')
+        );
+      }
+      return (
+        ancestor.type === 'AssignmentExpression' &&
+        ancestor.operator === '=' &&
+        ancestor.right === child &&
+        ancestor.left.type === 'MemberExpression'
+      );
+    }
+    return false;
+  };
   const checkBuiltin = (node: AnyNode, name: string, ancestors: readonly AnyNode[]): void => {
-    if (name === 'type') {
-      if (kind !== 'domain') reject(node, 'type() defines a type and belongs in the domain block.');
+    if (domainFunctions.has(name)) {
+      if (kind !== 'domain')
+        reject(node, `${name}() defines a type and belongs in the domain block.`);
     } else if (constructors.has(name)) {
       if (kind !== 'input' && kind !== 'algorithm')
         reject(node, `${name}(...) creates a typed value in the input or algorithm block.`);

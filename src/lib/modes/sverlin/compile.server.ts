@@ -20,7 +20,8 @@ import {
   type MasterStep,
   type TraceState
 } from './algorithm/interpret.server';
-import { noAtoms, type AtomRegistry } from './algorithm/atoms.server';
+import type { AtomRegistry } from './algorithm/atoms.server';
+import { definesType, noDomain, typeNames } from './algorithm/structures.server';
 import { drawDefaults } from './library/node/defaults';
 import { forms } from './library/node/forms';
 import {
@@ -187,9 +188,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Add a <script lang="sverlin"> algorithm block whose yield statements mark the steps, such as yield "Start";',
         { code: 'missing_algorithm' }
       );
-    const atoms = blocks.domain
+    const domain = blocks.domain
       ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
-      : noAtoms;
+      : noDomain;
+    const { atoms } = domain;
     // Where a block declares a name, so a clash points at the declaration.
     const at = (name: string, ...candidates: (Block | undefined)[]) => {
       for (const block of candidates) {
@@ -203,7 +205,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       }
       return { code: 'name_clash' };
     };
-    const shadowed = Object.keys(atoms).find((name) => libraryNames.includes(name));
+    const shadowed = typeNames(domain).find((name) => libraryNames.includes(name));
     if (shadowed)
       throw new InvalidSvelteSourceError(
         `"${shadowed}" names a library component; choose another type name.`,
@@ -211,7 +213,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       );
     // Names are checked before any block runs, so a clash is reported before what it causes.
     const declared = (block: Block | undefined, kind: 'input' | 'algorithm' | 'design') =>
-      block ? interpretBlock(source, block, (body) => declaredNames(body, kind, atoms)) : [];
+      block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
     const stateNames = [
       ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
     ];
@@ -223,10 +225,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         at(clash, blocks.design)
       );
     const props = [...stateNames, ...designNames];
-    const typeName = props.find((name) => Object.hasOwn(atoms, name));
+    const typeName = props.find((name) => definesType(domain, name));
     if (typeName)
       throw new InvalidSvelteSourceError(
-        `"${typeName}" names an atomic type; choose another variable name.`,
+        `"${typeName}" names a type; choose another variable name.`,
         at(typeName, blocks.input, blocks.algorithm, blocks.design)
       );
     const library = props.find((name) => libraryNames.includes(name));
@@ -236,10 +238,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         at(library, blocks.input, blocks.algorithm, blocks.design)
       );
     const input = blocks.input
-      ? interpretBlock(source, blocks.input, (body) => interpretInput(body, atoms))
+      ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
     const master = interpretBlock(source, blocks.algorithm, (body) =>
-      interpretAlgorithm(body, input, atoms)
+      interpretAlgorithm(body, input, domain)
     );
     const renderers = typeRenderers(ast, atoms, source);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);

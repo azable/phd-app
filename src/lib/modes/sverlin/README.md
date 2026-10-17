@@ -19,8 +19,8 @@ two presentations of a pair should differ in how they show the algorithm.
 
 A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required, even for a single step (`yield 'Start';`); the domain, input, and design blocks are optional.
 
-1. `<script lang="sverlin" domain>`: the atomic types (see Atomic types).
-2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = [Int(3), Int(8), Int(5)];` with `Int` defined in the domain block; every value has a domain type.
+1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
+2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, and marks steps with `yield`. It runs once.
 4. `<script lang="sverlin" design>`: choices drawn from each presentation's seed. Each top-level `const` is a design value (see Design values).
 
@@ -62,11 +62,33 @@ Give values meaning with atomic types. No types are predefined: define each one 
 - a refinement of a type defined earlier, with optional `unit`, `min`, and `max`: `const Height = type(Int, { unit: 'cm', min: 0 });`
 - an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to the view (see Type renderers).
 
-Create typed values with a type's name in the input or algorithm block, such as `const values = [Int(3), Int(8), Int(5)];` and `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, array element, or object property holds is a typed value, or `null` for nothing yet, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type. Plain literals can still appear in expressions, as in `i + 1` or `x < 10`, but storing a plain result is an error: comparisons, `.length`, `.indexOf()`, and `Math` functions give plain values, so wrap a result to keep it, as in `found = Found(values[i] === target)` or `n = Count(values.length)`.
+Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, or `null` for nothing yet, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type. Plain literals can still appear in expressions, as in `i + 1` or `x < 10`, but storing a plain result is an error: comparisons, `.length`, `.indexOf()`, and `Math` functions give plain values, so wrap a result to keep it, as in `found = Found(values[i] === target)` or `n = Count(values.length)`.
 
-Typed values behave like their plain values in comparisons, conditions, `===`, `.indexOf`, `.includes`, template strings, and indexing, and they keep their type as the algorithm moves them between variables and arrays. Arithmetic keeps types too: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on enumerations or boolean types, and leaving a type's `min` or `max` are errors. Type names cannot be used as variable names.
+Typed values behave like their plain values in comparisons, conditions, `===`, `.indexOf`, `.includes`, template strings, and indexing, and they keep their type as the algorithm moves them between variables and arrays. Arithmetic keeps types too: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
 
 The view receives plain values; types only affect how nodes are drawn (see Type renderers).
+
+## Collections, records, and unions
+
+Every array and object in the input and algorithm is made by a type, defined in the domain block from types defined before it, each as a top-level `const`:
+
+- a collection of elements of one type: `const Values = collection(Int);`, and a collection of collections for a grid: `const Grid = collection(Values);`
+- a record with named fields: `const Edge = record({ from: Vertex, to: Vertex, weight: Weight });`
+- a union, a value of one of several types, for a place that holds different kinds of value: `const Dist = union(Distance, Unreached);`
+
+Make one by calling its name, writing its contents as literals, which take their types from it: `Values([3, 8, 5])` holds three `Int`s, and `Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a `Vertex`, a `Vertex`, and a `Weight`. Values added to a collection or assigned to a record's field take its types in the same way: `queue.push(3)`, `dist[v] = 0`, `edge.weight = 5`. An array or object literal anywhere else is an error, so there are no plain arrays or objects. A record has exactly its fields: leaving one out, or reading or writing another, is an error. `.slice()` of a collection gives a collection of the same type.
+
+A union value is always one of its members: a literal becomes the member it fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`, and a literal that fits two members needs its type written, as in `Distance(4)`. Members compare with `===` and `!==`, where values of different members are unequal, but not with `<` or `>`; check which member a value is before ordering it:
+
+```js
+if (
+  dist[e.from] !== Unreached('unreached') &&
+  (dist[e.to] === Unreached('unreached') || dist[e.from] + Distance(e.weight) < dist[e.to])
+)
+  dist[e.to] = dist[e.from] + Distance(e.weight);
+```
+
+The view receives plain arrays and objects. Renderer snippets are for atomic types; draw a record's fields with an `item` snippet, as in `{#snippet item(edge)} <Node>{edge.from} → {edge.to}</Node> {/snippet}`.
 
 ## Design values
 
@@ -77,8 +99,8 @@ The view receives plain values; types only affect how nodes are drawn (see Type 
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, `null`, arrays, plain objects; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: functions of any kind, `new`, classes, `this`, `==`, string methods, other globals, and the names `step` and `seed`. Write helper logic inline.
+- Allowed: numbers, strings, booleans, `null`, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
+- Not allowed: functions of any kind, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library
@@ -162,10 +184,11 @@ Example, with domain, input, algorithm, design, and a script-free view:
 <script lang="sverlin" domain>
   const Int = type('integer');
   const Index = type('integer', { min: -1 });
+  const Values = collection(Int);
 </script>
 
 <script lang="sverlin" input>
-  const values = [Int(3), Int(8), Int(5)];
+  const values = Values([3, 8, 5]);
 </script>
 
 <script lang="sverlin">

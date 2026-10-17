@@ -152,13 +152,13 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer");</script>\n<script lang="sverlin" input>\n  const values = [Int(3), 8];\n</script>\n<script lang="sverlin">\n  let i = 0;\n  yield "A";\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer"); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n  yield "A";\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
       line: 3,
       column: 18,
-      message: expect.stringContaining('values[1] would be the plain number 8')
+      message: expect.stringContaining('Values[1]: Int values must be whole numbers, not "x"')
     });
     await expect(
       compileSvelteComponent(
@@ -213,7 +213,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded and design value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer");</script><script lang="sverlin" input>const values = [Int(4), Int(9)];</script>\n<script lang="sverlin">let total = Int(0); yield "Start"; for (const v of values) total += v; yield "Summed";</script>\n<script lang="sverlin" design>const accent = pick(["red"]);</script>\n<Node layout="column">{@const doubled = total * 2}<Node color={accent}>{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
+      '<script lang="sverlin" domain>const Int = type("integer"); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">let total = Int(0); yield "Start"; for (const v of values) total += v; yield "Summed";</script>\n<script lang="sverlin" design>const accent = pick(["red"]);</script>\n<Node layout="column">{@const doubled = total * 2}<Node color={accent}>{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
     expect(result.labels).toEqual(['Start', 'Summed']);
@@ -309,14 +309,14 @@ describe('single-component Svelte compilation', () => {
 
   it('renders nested arrays as nested nodes without an item snippet', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer");</script><script lang="sverlin" input>const grid = [[Int(1), Int(2)], [Int(3), Int(4)]];</script><script lang="sverlin">yield "A";</script><Node layout="column"><Node items={grid} layout="column" nested="row" /><Node items={[1, 2, 3, 4]} layout="grid" columns={2} /></Node>'
+      '<script lang="sverlin" domain>const Int = type("integer"); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield "A";</script><Node layout="column"><Node items={grid} layout="column" nested="row" /><Node items={[1, 2, 3, 4]} layout="grid" columns={2} /></Node>'
     );
     expect(result.javascript).toContain('sv-node');
   });
 
   it('embeds atomic types and registers renderer snippets named after types', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer"); const Height = type(Int, { unit: "cm" });</script><script lang="sverlin" input>const people = [Height(150), Height(170)];</script><script lang="sverlin">yield "A";</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node items={people} />'
+      '<script lang="sverlin" domain>const Int = type("integer"); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield "A";</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node items={people} />'
     );
     expect(result.javascript).toContain('people[1]');
     expect(result.javascript).toContain('sverlin:renderers');
@@ -345,7 +345,7 @@ describe('single-component Svelte compilation', () => {
       compileSvelteComponent(
         '<script lang="sverlin" domain>const Text = type("text");</script><script lang="sverlin">const Text = 1; yield "A";</script>'
       )
-    ).rejects.toThrow('"Text" names an atomic type');
+    ).rejects.toThrow('"Text" names a type');
     await expect(
       compileSvelteComponent(
         '<script lang="sverlin" domain>const Node = type("integer");</script><script lang="sverlin">yield "A";</script>'

@@ -16,6 +16,8 @@ const domain = interpretDomain(`
   const Weight = type(Int, { unit: 'kg' });
   const Suit = type(['♠', '♥', '♦', '♣']);
   const Grade = type([1, 2, 3]);
+  const Ints = collection(Int);
+  const Person = record({ height: Height });
 `);
 
 /** Run an algorithm with the test domain and return its last step. */
@@ -26,8 +28,8 @@ function last(body: string) {
 
 describe('atomic type definitions', () => {
   it('defines primitive kinds, refinements, and enumerations', () => {
-    expect(domain.Int).toEqual({ name: 'Int', base: 'integer' });
-    expect(domain.Height).toEqual({
+    expect(domain.atoms.Int).toEqual({ name: 'Int', base: 'integer' });
+    expect(domain.atoms.Height).toEqual({
       name: 'Height',
       base: 'integer',
       parent: 'Int',
@@ -35,9 +37,9 @@ describe('atomic type definitions', () => {
       min: 0,
       max: 300
     });
-    expect(domain.Suit).toEqual({ name: 'Suit', base: 'text', values: ['♠', '♥', '♦', '♣'] });
-    expect(domain.Grade.base).toBe('integer');
-    expect(interpretDomain('')).toEqual({});
+    expect(domain.atoms.Suit).toEqual({ name: 'Suit', base: 'text', values: ['♠', '♥', '♦', '♣'] });
+    expect(domain.atoms.Grade.base).toBe('integer');
+    expect(interpretDomain('')).toEqual({ atoms: {}, structures: {} });
   });
 
   it.each([
@@ -58,12 +60,14 @@ describe('atomic type definitions', () => {
 describe('typed values', () => {
   it('records the type of every typed value by path, carried from the input', () => {
     const input = interpretInput(
-      'const values = [Int(3), Int(8)]; const person = { height: Height(170) };',
+      'const values = Ints([3, 8]); const person = Person({ height: 170 });',
       domain
     );
     expect(input.types).toEqual({
+      values: 'Ints',
       'values[0]': 'Int',
       'values[1]': 'Int',
+      person: 'Person',
       'person.height': 'Height'
     });
     const trace = interpretAlgorithm(
@@ -112,7 +116,7 @@ describe('typed values', () => {
     ['combining unrelated types', 'const a = Height(1) + Weight(1);', /cannot be combined/],
     ['comparing unrelated types', 'const a = Height(1) < Weight(1);', /cannot be combined/],
     ['equating unrelated types', 'const a = Height(1) === Weight(1);', /cannot be combined/],
-    ['arithmetic on enumerations', 'const a = Grade(1) + 1;', /cannot be used in arithmetic/],
+    ['leaving an enumeration', 'const a = Grade(3) + 1;', /4 is not a Grade/],
     ['arithmetic on Bool', 'const a = Bool(true) + 1;', /cannot be used in arithmetic/],
     ['leaving a range', 'const a = Height(10) - 20;', /at least 0/]
   ])('rejects %s', (_name, statement, message) => {
@@ -121,7 +125,7 @@ describe('typed values', () => {
 
   it('compares, tests, and searches typed values by value', () => {
     const step = last(`
-      const values = [Int(3), Int(8), Int(5)];
+      const values = Ints([3, 8, 5]);
       const target = Int(8);
       const equal = Bool(values[1] === target);
       const plainEqual = Bool(values[1] === 8);

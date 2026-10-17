@@ -11,7 +11,7 @@ import {
 
 // Input and algorithm values all have domain types; these tests share a small domain.
 const atoms = interpretDomain(
-  "const Int = type('integer'); const Real = type('number'); const Flag = type('boolean'); const Text = type('text');"
+  "const Int = type('integer'); const Real = type('number'); const Flag = type('boolean'); const Text = type('text'); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });"
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);
@@ -20,7 +20,7 @@ const plain = <T extends { types: unknown }>(step: T) => ({ ...step, types: unde
 describe('algorithm interpretation', () => {
   it('records every top-level binding at each yield', () => {
     const trace = interpretAlgorithm(`
-      const values = [Int(3), Int(8), Int(5)];
+      const values = Ints([3, 8, 5]);
       let i = Int(-1);
       let found = Flag(false);
       yield 'Start';
@@ -40,7 +40,7 @@ describe('algorithm interpretation', () => {
 
   it('snapshots state so later mutations do not change earlier steps', () => {
     const trace = interpretAlgorithm(`
-      const a = [Int(2), Int(1)];
+      const a = Ints([2, 1]);
       yield 'Before';
       const t = a[0]; a[0] = a[1]; a[1] = t;
       yield 'After';
@@ -52,15 +52,15 @@ describe('algorithm interpretation', () => {
 
   it('supports loops, objects, array methods, Math, and early return', () => {
     const trace = interpretAlgorithm(`
-      const stack = [];
-      const point = { x: Int(1), y: Int(2) };
+      const stack = Reals([]);
+      const point = Point({ x: 1, y: 2 });
       let total = Int(0);
-      for (const n of [Int(4), Int(9), Int(16)]) { stack.push(Real(Math.sqrt(n))); total += n; }
+      for (const n of Ints([4, 9, 16])) { stack.push(Math.sqrt(n)); total += n; }
       let k = Int(0);
       while (true) { k++; if (k > 2) break; else continue; }
       point.x += stack.indexOf(3);
       let i = Int(0);
-      const a = [Int(0), Int(0)];
+      const a = Ints([0, 0]);
       a[i++] += 5;
       yield stack.join('-');
       return;
@@ -79,8 +79,16 @@ describe('algorithm interpretation', () => {
     ['functions', 'function f() {} yield "A";', /Function Declaration is not supported/],
     ['arrow functions', 'const f = () => 1; yield "A";', /Arrow Function Expression/],
     ['global access', 'const w = globalThis; yield "A";', /"globalThis" is not defined/],
-    ['constructor escapes', 'const a = []; const c = a.constructor; yield "A";', /not allowed/],
-    ['prototype keys', 'const o = {}; o["__proto__"] = 1; yield "A";', /not allowed/],
+    [
+      'constructor escapes',
+      'const a = Ints([]); const c = a.constructor; yield "A";',
+      /not allowed/
+    ],
+    [
+      'prototype keys',
+      'const o = Point({ x: 1, y: 2 }); o["__proto__"] = 1; yield "A";',
+      /not allowed/
+    ],
     ['host methods', 'const s = Text("x"); yield s.repeat(3);', /only available on arrays/],
     ['new', 'const d = new Date(); yield "A";', /New Expression/],
     ['loose equality', 'yield 1 == 1 ? "A" : "B";', /Use ===/],
@@ -88,8 +96,14 @@ describe('algorithm interpretation', () => {
     ['undeclared assignment', 'x = Int(1); yield "A";', /must be declared/],
     ['no steps', 'let x = Int(1);', /at least one step/],
     ['non-string labels', 'yield 3;', /non-empty strings/],
-    ['nested yield', 'const a = [yield "A"];', /statement of its own/],
-    ['object arithmetic', 'const o = {}; yield "A" + (o - 1);', /Expected a number/]
+    ['nested yield', 'const a = Ints([yield "A"]);', /statement of its own/],
+    [
+      'object arithmetic',
+      'const o = Point({ x: 1, y: 2 }); yield "A" + (o - 1);',
+      /Expected a number/
+    ],
+    ['plain arrays', 'const a = [Int(1)]; yield "A";', /Arrays are made by a collection type/],
+    ['plain objects', 'const o = { x: Int(1) }; yield "A";', /Objects are made by a record type/]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretAlgorithm(body)).toThrow(message);
   });
@@ -100,11 +114,11 @@ describe('algorithm interpretation', () => {
       interpretAlgorithm('let s = Text("ab"); while (true) { s = s + s; } yield "A";')
     ).toThrow(/characters/);
     expect(() =>
-      interpretAlgorithm('let a = [Int(1)]; while (true) { a = [...a, ...a]; } yield "A";')
+      interpretAlgorithm('let a = Ints([1]); while (true) { a = Ints([...a, ...a]); } yield "A";')
     ).toThrow(/entries/);
     expect(() =>
       interpretAlgorithm(
-        'let a = [Int(1), Int(2)]; for (let i = Int(0); i < 40; i++) { a = [a, a]; } yield "A";'
+        'let a = Ints([1]); for (let i = Int(0); i < 13; i++) a = Ints([...a, ...a]); for (let j = Int(0); j < 30; j++) yield `S${j}`;'
       )
     ).toThrow(/too large/);
     expect(() =>
@@ -127,7 +141,7 @@ describe('algorithm interpretation', () => {
 
 describe('input, design, and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
-    const input = interpretInput('const values = [Int(2), Int(1)]; const label = Text("pair");');
+    const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
       'yield "Start"; values.reverse(); let swapped = Flag(true); yield "Swapped";',
       input
@@ -137,7 +151,7 @@ describe('input, design, and step selection', () => {
       { values: [1, 2], label: 'pair', swapped: true }
     ]);
     expect(input.state.values).toEqual([2, 1]);
-    expect(() => interpretAlgorithm('let values = []; yield "A";', input)).toThrow(
+    expect(() => interpretAlgorithm('let values = Ints([]); yield "A";', input)).toThrow(
       /already declared here or in the input/
     );
     expect(() => interpretInput('const x = Int(1); yield "A";')).toThrow(/algorithm block/);
@@ -220,18 +234,15 @@ describe('input, design, and step selection', () => {
 
 describe('domain types', () => {
   it('rejects plain values in the input, naming where they are and how to type them', () => {
-    expect(() => interpretInput('const values = [Int(3), 8];')).toThrow(
-      'values[1] would be the plain number 8, but input and algorithm values must have a domain type. Write it as Int(8) or Real(8)'
-    );
-    expect(() => interpretInput('const point = { x: Int(1), label: "a" };')).toThrow(
-      /point\.label would be the plain string "a".*Text\("a"\)/
+    expect(() => interpretInput('const n = 8;')).toThrow(
+      'n would be the plain number 8, but input and algorithm values must have a domain type. Write it as Int(8) or Real(8)'
     );
     expect(() => interpretTypedInput('const n = 3;')).toThrow(
       "Declare a type that says what it means in the domain block, such as const Count = type('integer');, and write Count(3)."
     );
-    // Nothing yet is null, and containers of typed values are fine.
+    // Nothing yet is null, and collections and records made by their types are fine.
     expect(
-      interpretInput('const empty = []; const none = null; const grid = [[Int(1)]];').state
+      interpretInput('const empty = Ints([]); const none = null; const grid = Grid([[1]]);').state
     ).toEqual({ empty: [], none: null, grid: [[1]] });
   });
 
@@ -247,10 +258,10 @@ describe('domain types', () => {
       /i would be the plain number 0/
     );
     expect(() =>
-      interpretAlgorithm('const d = [Int(0)]; let j = Int(0); d[j] = d.length; yield "A";')
-    ).toThrow(/d\[j\] would be the plain number 1/);
-    expect(() => interpretAlgorithm('const s = []; s.push("x"); yield "A";')).toThrow(
-      /an item added by s\.push\(\) would be the plain string "x"/
+      interpretAlgorithm('const d = Ints([0]); let n = Int(0); n = d.length; yield "A";')
+    ).toThrow(/n would be the plain number 1/);
+    expect(() => interpretAlgorithm('const s = Ints([]); s.push("x"); yield "A";')).toThrow(
+      /an item added by s\.push\(\): Int values must be whole numbers, not "x"/
     );
     expect(() => interpretAlgorithm('let h = Int(7); h = h / Int(2); yield "A";')).toThrow(
       /h would be the plain number 3\.5/

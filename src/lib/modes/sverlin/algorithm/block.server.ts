@@ -1,13 +1,21 @@
 /** Vocabulary shared by every Sverlin block: its kinds, its error, and its reserved names. */
 
 /**
- * Domain: atomic type definitions. Input: fixed initial state. Design: seeded presentation choices.
+ * Domain: type definitions. Input: fixed initial state. Design: seeded presentation choices.
  * Algorithm: the yielding steps.
  */
 export type BlockKind = 'domain' | 'input' | 'design' | 'algorithm';
 
 /** Names the view receives from the application rather than from a block. */
 export const reservedNames: ReadonlySet<string> = new Set(['step', 'seed']);
+
+/** The domain block's functions, each defining one type. */
+export const domainFunctions: ReadonlySet<string> = new Set([
+  'type',
+  'union',
+  'record',
+  'collection'
+]);
 
 /** Property names no block may read, write, or declare. */
 export const forbiddenProperties: ReadonlySet<string> = new Set([

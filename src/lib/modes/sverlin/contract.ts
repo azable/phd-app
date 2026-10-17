@@ -13,9 +13,10 @@ export const linearSearchSource = `<script lang="sverlin" domain>
   const Int = type('integer');
   const Index = type('integer', { min: -1 });
   const Found = type('boolean');
+  const Values = collection(Int);
 </script>
 <script lang="sverlin" input>
-  const values = [Int(3), Int(8), Int(5), Int(2), Int(7)];
+  const values = Values([3, 8, 5, 2, 7]);
   const target = Int(2);
 </script>
 <script lang="sverlin">

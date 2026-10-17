@@ -2,7 +2,7 @@
 
 import { parse, type AnyNode, type BlockStatement, type FunctionDeclaration } from 'acorn';
 
-import type { AtomRegistry } from './atoms.server';
+import { typeNames, type DomainRegistry } from './structures.server';
 import { AlgorithmError, type BlockKind } from './block.server';
 import { checkSubset } from './subset.server';
 
@@ -10,13 +10,13 @@ import { checkSubset } from './subset.server';
 const wrapperPrefix = "function* algorithm() {'use strict';";
 
 /**
- * Parse a block's body and check its subset. Offsets are relative to the body; the atom registry
+ * Parse a block's body and check its subset. Offsets are relative to the body; the domain
  * names the type constructors the block may call.
  */
 export function parseBlock(
   body: string,
   kind: BlockKind,
-  atoms?: AtomRegistry
+  domain?: DomainRegistry
 ): { root: BlockStatement; offset: (node: AnyNode) => number } {
   let program;
   try {
@@ -33,6 +33,6 @@ export function parseBlock(
   }
   const root = (program.body[0] as FunctionDeclaration).body;
   const offset = (node: AnyNode) => node.start - wrapperPrefix.length;
-  checkSubset(root, offset, kind, new Set(Object.keys(atoms ?? {})));
+  checkSubset(root, offset, kind, new Set(domain ? typeNames(domain) : []));
   return { root, offset };
 }

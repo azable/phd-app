@@ -15,7 +15,6 @@ import {
   Atom,
   atomProblem,
   combinedType,
-  noAtoms,
   numericResult,
   refines,
   type AtomBase,
@@ -25,6 +24,13 @@ import {
 import { drawFunctions, drawValue, keyedDraws } from './random.server';
 import { AlgorithmError, describe, forbiddenProperties, type BlockKind } from './block.server';
 import { parseBlock } from './parse.server';
+import {
+  noDomain,
+  type CollectionType,
+  type DomainRegistry,
+  type RecordType,
+  type UnionType
+} from './structures.server';
 
 // The domain block and the shared block vocabulary, for callers of this module.
 export { interpretDomain } from './domain.server';
@@ -41,7 +47,10 @@ export type TraceValue =
 
 export type TraceState = Record<string, TraceValue>;
 
-/** Atomic type names by value path, such as { "values[2]": "Int" }; values stay plain. */
+/**
+ * Domain type names by value path, such as { "edges": "Edges", "edges[2]": "Edge",
+ * "edges[2].weight": "Weight" }; values stay plain.
+ */
 export type TypeMap = Record<string, string>;
 
 /** Plain recorded values with the atomic types of the typed ones. */
@@ -64,9 +73,9 @@ export const algorithmLimits = {
 } as const;
 
 /** Interpret the input block into the fixed initial state shared by every presentation. */
-export function interpretInput(body: string, atoms: AtomRegistry = noAtoms): TypedState {
-  const { root, offset } = parseBlock(body, 'input', atoms);
-  return new Interpreter(root, offset, { kind: 'input', atoms }).bindings();
+export function interpretInput(body: string, domain: DomainRegistry = noDomain): TypedState {
+  const { root, offset } = parseBlock(body, 'input', domain);
+  return new Interpreter(root, offset, { kind: 'input', domain }).bindings();
 }
 
 /** Interpret the design block with keyed draws from the presentation seed (see random.server.ts). */
@@ -138,8 +147,8 @@ export function designChoices(body: string): Record<string, DesignChoices> {
 }
 
 /** Names a block declares at its top level, read without running it. */
-export function declaredNames(body: string, kind: BlockKind, atoms?: AtomRegistry): string[] {
-  const { root } = parseBlock(body, kind, atoms);
+export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegistry): string[] {
+  const { root } = parseBlock(body, kind, domain);
   return root.body.flatMap((statement) =>
     statement.type === 'VariableDeclaration'
       ? statement.declarations.map((declarator) => (declarator.id as { name: string }).name)
@@ -151,10 +160,10 @@ export function declaredNames(body: string, kind: BlockKind, atoms?: AtomRegistr
 export function interpretAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
-  atoms: AtomRegistry = noAtoms
+  domain: DomainRegistry = noDomain
 ): MasterStep[] {
-  const { root, offset } = parseBlock(body, 'algorithm', atoms);
-  return new Interpreter(root, offset, { kind: 'algorithm', initial: input, atoms }).run();
+  const { root, offset } = parseBlock(body, 'algorithm', domain);
+  return new Interpreter(root, offset, { kind: 'algorithm', initial: input, domain }).run();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -198,7 +207,10 @@ class Interpreter {
   readonly #kind: BlockKind;
   /** The random number for one design draw. */
   readonly #random?: (draw: AnyNode) => number;
+  readonly #domain: DomainRegistry;
   readonly #atoms: AtomRegistry;
+  /** The record or collection type of every array and object an input or algorithm made. */
+  readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
   readonly #trace: MasterStep[] = [];
   readonly #labels = new Set<string>();
   #operations = 0;
@@ -211,14 +223,15 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       random?: (draw: AnyNode) => number;
-      atoms?: AtomRegistry;
+      domain?: DomainRegistry;
     }
   ) {
     this.#root = root;
     this.#offset = offset;
     this.#kind = options.kind;
     this.#random = options.random;
-    this.#atoms = options.atoms ?? noAtoms;
+    this.#domain = options.domain ?? noDomain;
+    this.#atoms = this.#domain.atoms;
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     this.#globals.bindings.set('undefined', { value: undefined, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
@@ -228,7 +241,7 @@ class Interpreter {
     const initialTypes = options.initial?.types ?? {};
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
-        value: fromTrace(value, name, initialTypes, this.#atoms),
+        value: this.#fromTrace(value, name, initialTypes),
         constant: false
       });
     this.#topLevelNames = [
@@ -278,18 +291,142 @@ class Interpreter {
     return value instanceof Atom ? Boolean(value.value) : Boolean(value);
   }
 
-  /** Create a typed value from a constructor call such as Int(3). */
-  #construct(node: CallExpression, type: AtomType, scope: Scope): Atom {
+  /**
+   * Create a typed value from a constructor call: an atom such as Int(3), converting a value of
+   * another type of the same kind, as in Distance(e.weight); or a union, record, or collection
+   * from a literal, as in Edges([{ from: 0, to: 1 }]).
+   */
+  #construct(node: CallExpression, typeName: string, scope: Scope): Value {
     if (node.arguments.length !== 1 || node.arguments[0].type === 'SpreadElement')
-      this.#fail(node, `${type.name}(...) takes exactly one value.`);
+      this.#fail(node, `${typeName}(...) takes exactly one value.`);
     const argument = this.#expression(node.arguments[0] as Expression, scope);
-    if (argument instanceof Atom && !refines(type, argument.type, this.#atoms))
-      if (atomBase(argument.type) !== atomBase(type) || argument.type.values)
-        this.#fail(node, `A ${argument.type.name} cannot become a ${type.name}.`);
+    const type = this.#atoms[typeName];
+    if (!type) return this.#convert(argument, typeName, node, typeName);
+    if (argument instanceof Atom && atomBase(argument.type) !== atomBase(type))
+      this.#fail(node, `A ${argument.type.name} cannot become a ${type.name}.`);
+    if (argument !== null && typeof argument === 'object' && !(argument instanceof Atom))
+      this.#fail(node, `${type.name}(...) takes one value, not ${kind(argument)}.`);
     const value = argument instanceof Atom ? argument.value : argument;
     const problem = atomProblem(type, value);
     if (problem) this.#fail(node, problem);
     return new Atom(type, value as string | number | boolean);
+  }
+
+  /**
+   * A value as the domain type a place expects. A literal or plain value becomes that type; a typed
+   * value must already be it, or refine it. Records and collections are made field by field and
+   * element by element, and null stands for nothing yet anywhere.
+   */
+  #convert(value: Value, typeName: string, node: AnyNode, path: string): Value {
+    if (value === null || value === undefined) return null;
+    const atom = this.#atoms[typeName];
+    if (atom) return this.#asAtom(value, atom, node, path);
+    const structure = this.#domain.structures[typeName];
+    if (structure.kind === 'union') return this.#asMember(value, structure, node, path);
+    if (structure.kind === 'record') return this.#asRecord(value, structure, node, path);
+    return this.#asCollection(value, structure, node, path);
+  }
+
+  #asAtom(value: Value, type: AtomType, node: AnyNode, path: string): Atom {
+    if (value instanceof Atom) {
+      if (refines(value.type, type, this.#atoms)) return value;
+      return this.#fail(
+        node,
+        `${path} must be a ${type.name}, not a ${value.type.name}; convert it, as in ${type.name}(…).`
+      );
+    }
+    if (value !== null && typeof value === 'object')
+      this.#fail(node, `${path} must be a ${type.name}, not ${kind(value)}.`);
+    const problem = atomProblem(type, value);
+    if (problem) this.#fail(node, `${path}: ${problem}`);
+    return new Atom(type, value as string | number | boolean);
+  }
+
+  /** A typed value keeps its own member type; a literal becomes the one member it fits. */
+  #asMember(value: Value, union: UnionType, node: AnyNode, path: string): Value {
+    const members = union.members.join(' or ');
+    const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
+    if (value instanceof Atom || shape) {
+      const fits = union.members.some((member) =>
+        value instanceof Atom
+          ? !!this.#atoms[member] && refines(value.type, this.#atoms[member], this.#atoms)
+          : shape?.name === member
+      );
+      if (fits) return value;
+      return this.#fail(node, `${path} must be a ${members}, not ${kind(value)}.`);
+    }
+    const candidates = union.members.filter((member) => this.#accepts(member, value));
+    if (candidates.length === 1) return this.#convert(value, candidates[0], node, path);
+    return this.#fail(
+      node,
+      candidates.length
+        ? `${path} could be a ${candidates.join(' or a ')}; say which, as in ${candidates[0]}(…).`
+        : `${path} must be a ${members}, not ${kind(value)}.`
+    );
+  }
+
+  /** Whether a plain value could become a type: the right kind of primitive, array, or object. */
+  #accepts(typeName: string, value: Value): boolean {
+    const atom = this.#atoms[typeName];
+    if (atom) return (value === null || typeof value !== 'object') && !atomProblem(atom, value);
+    const structure = this.#domain.structures[typeName];
+    if (structure.kind === 'collection') return Array.isArray(value);
+    if (structure.kind !== 'record' || !isPlainObject(value)) return false;
+    const fields = Object.keys(structure.fields);
+    const keys = Object.keys(value);
+    return keys.length === fields.length && keys.every((key) => fields.includes(key));
+  }
+
+  #asRecord(value: Value, record: RecordType, node: AnyNode, path: string): ObjectValue {
+    if (!isPlainObject(value))
+      return this.#fail(node, `${path} must be a ${record.name}, not ${kind(value)}.`);
+    const shape = this.#shapes.get(value);
+    if (shape === record) return value;
+    if (shape) return this.#fail(node, `${path} must be a ${record.name}, not a ${shape.name}.`);
+    const fields = Object.keys(record.fields);
+    const extra = Object.keys(value).find((key) => !Object.hasOwn(record.fields, key));
+    if (extra)
+      this.#fail(
+        node,
+        `A ${record.name} has no field ${extra}; its fields are ${fields.join(', ')}.`
+      );
+    const made = Object.create(null) as ObjectValue;
+    for (const field of fields) {
+      if (!Object.hasOwn(value, field))
+        this.#fail(node, `${path} needs ${field}, a ${record.fields[field]}.`);
+      made[field] = this.#convert(value[field], record.fields[field], node, `${path}.${field}`);
+    }
+    this.#shapes.set(made, record);
+    return made;
+  }
+
+  #asCollection(value: Value, collection: CollectionType, node: AnyNode, path: string): Value[] {
+    if (!Array.isArray(value))
+      return this.#fail(node, `${path} must be a ${collection.name}, not ${kind(value)}.`);
+    const shape = this.#shapes.get(value);
+    if (shape === collection) return value;
+    if (shape)
+      return this.#fail(node, `${path} must be a ${collection.name}, not a ${shape.name}.`);
+    const made = value.map((item, index) =>
+      this.#convert(item, collection.element, node, `${path}[${index}]`)
+    );
+    this.#shapes.set(made, collection);
+    return made;
+  }
+
+  /** The type a stored element or field must have: a collection's element or a record's field. */
+  #slotType(container: object, key: string | number, node: AnyNode): string | undefined {
+    const shape = this.#shapes.get(container);
+    if (!shape) return undefined;
+    if (shape.kind === 'collection') return shape.element;
+    if (forbiddenProperties.has(String(key)))
+      this.#fail(node, 'That property name is not allowed.');
+    if (!Object.hasOwn(shape.fields, String(key)))
+      this.#fail(
+        node,
+        `A ${shape.name} has no field ${String(key)}; its fields are ${Object.keys(shape.fields).join(', ')}.`
+      );
+    return shape.fields[String(key)];
   }
 
   /**
@@ -298,8 +435,13 @@ class Interpreter {
    */
   #typed(value: Value, node: AnyNode, name: string): void {
     if (this.#kind === 'design') return;
-    const plain = untypedPart(value, name);
+    const plain = untypedPart(value, name, (object) => this.#shapes.has(object));
     if (!plain) return;
+    if (typeof plain.value === 'object')
+      this.#fail(
+        node,
+        `${plain.path} would be a plain ${Array.isArray(plain.value) ? 'array' : 'object'}, but input and algorithm values must have a domain type. Make it with a collection or record type defined in the domain block, as in Queue([...]) with const Queue = collection(Vertex);, or Edge({ ... }) with const Edge = record({ from: Vertex, to: Vertex });.`
+      );
     const shown =
       typeof plain.value === 'string' ? JSON.stringify(plain.value) : String(plain.value);
     const fitting = Object.values(this.#atoms).filter(
@@ -472,6 +614,8 @@ class Interpreter {
       types[path] = value.type.name;
       return value.value;
     }
+    const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
+    if (shape) types[path] = shape.name;
     if (Array.isArray(value))
       return Array.from(value, (item, index) =>
         this.#snapshot(item, node, `${path}[${index}]`, types)
@@ -572,10 +716,11 @@ class Interpreter {
         // Resolve the target once so a[i++] += 1 evaluates i++ a single time, as in JavaScript.
         const target = this.#reference(node.left as Expression, scope);
         const right = this.#expression(node.right, scope);
-        const value =
+        const value = target.prepare(
           node.operator === '='
             ? right
-            : this.#binary(node.operator.slice(0, -1), target.get(), right, node);
+            : this.#binary(node.operator.slice(0, -1), target.get(), right, node)
+        );
         this.#typed(value, node.right, targetName(node.left as Expression));
         target.set(value);
         return value;
@@ -584,10 +729,12 @@ class Interpreter {
         const target = this.#reference(node.argument, scope);
         const current = target.get();
         const before = this.#number(current, node);
-        const after = this.#numeric(
-          current instanceof Atom ? current.type : undefined,
-          node.operator === '++' ? before + 1 : before - 1,
-          node
+        const after = target.prepare(
+          this.#numeric(
+            current instanceof Atom ? current.type : undefined,
+            node.operator === '++' ? before + 1 : before - 1,
+            node
+          )
         );
         this.#typed(after, node, targetName(node.argument));
         target.set(after);
@@ -598,7 +745,14 @@ class Interpreter {
     }
   }
 
-  #reference(target: Expression, scope: Scope): { get(): Value; set(value: Value): void } {
+  /**
+   * What an assignment writes to: its current value, the value as the place stores it (converted
+   * to a collection's element type or a record's field type), and the write itself.
+   */
+  #reference(
+    target: Expression,
+    scope: Scope
+  ): { get(): Value; prepare(value: Value): Value; set(value: Value): void } {
     if (target.type === 'Identifier') {
       const binding = scope.lookup(target.name);
       if (!binding || binding === this.#globals.bindings.get(target.name))
@@ -606,6 +760,7 @@ class Interpreter {
       if (binding.constant) this.#fail(target, `"${target.name}" is a constant.`);
       return {
         get: () => binding.value,
+        prepare: (value) => value,
         set: (value) => {
           binding.value = value;
         }
@@ -614,11 +769,18 @@ class Interpreter {
     if (target.type !== 'MemberExpression') this.#fail(target, 'Invalid assignment target.');
     const object = this.#expression(target.object as Expression, scope);
     const key = this.#key(target, scope);
+    const slot =
+      object !== null && typeof object === 'object' && !(object instanceof Atom)
+        ? this.#slotType(object, key as string | number, target)
+        : undefined;
+    const prepare = (value: Value) =>
+      slot ? this.#convert(value, slot, target, targetName(target)) : value;
     if (Array.isArray(object)) {
       if (typeof key !== 'number' || !Number.isInteger(key) || key < 0)
         this.#fail(target, 'Array elements are assigned by non-negative integer index.');
       return {
         get: () => object[key],
+        prepare,
         set: (value) => {
           this.#checkLength(key + 1, target);
           while (object.length < key) object.push(undefined);
@@ -637,6 +799,7 @@ class Interpreter {
     if (forbiddenProperties.has(name)) this.#fail(target, 'That property name is not allowed.');
     return {
       get: () => object[name],
+      prepare,
       set: (value) => {
         if (!(name in object)) this.#checkLength(Object.keys(object).length + 1, target);
         object[name] = value;
@@ -670,6 +833,8 @@ class Interpreter {
     if (object !== null && typeof object === 'object') {
       const name = String(key);
       if (forbiddenProperties.has(name)) this.#fail(node, 'That property name is not allowed.');
+      // Reading a field a record does not have is a mistake, not a missing value.
+      this.#slotType(object, name, node);
       return object[name];
     }
     return this.#fail(node, `Cannot read "${String(key)}" of ${String(object)}.`);
@@ -679,13 +844,17 @@ class Interpreter {
     const callee = node.callee;
     if (callee.type === 'Identifier' && this.#random && drawFunctions.has(callee.name))
       return this.#draw(callee.name, node, scope);
-    if (callee.type === 'Identifier' && Object.hasOwn(this.#atoms, callee.name))
-      return this.#construct(node, this.#atoms[callee.name], scope);
+    if (
+      callee.type === 'Identifier' &&
+      (Object.hasOwn(this.#atoms, callee.name) ||
+        Object.hasOwn(this.#domain.structures, callee.name))
+    )
+      return this.#construct(node, callee.name, scope);
     if (callee.type !== 'MemberExpression' || callee.computed || node.optional)
       this.#fail(node, 'Only Math functions and array methods can be called.');
     const object = this.#expression(callee.object as Expression, scope);
     const name = (callee.property as { name: string }).name;
-    const args = node.arguments.map((argument) => {
+    let args = node.arguments.map((argument) => {
       if (argument.type === 'SpreadElement')
         this.#fail(argument, 'Spread arguments are not supported.');
       return this.#expression(argument, scope);
@@ -696,14 +865,16 @@ class Interpreter {
       return fn(...args.map((argument) => this.#number(argument, node)));
     }
     if (!Array.isArray(object)) this.#fail(callee, `.${name}() is only available on arrays.`);
-    if (name === 'push' || name === 'unshift')
-      args.forEach((argument, index) =>
-        this.#typed(
-          argument,
-          node.arguments[index],
-          `an item added by ${targetName(callee.object as Expression)}.${name}()`
-        )
-      );
+    const collection = this.#shapes.get(object) as CollectionType | undefined;
+    if (name === 'push' || name === 'unshift') {
+      const added = `an item added by ${targetName(callee.object as Expression)}.${name}()`;
+      // Items take the collection's element type, as an element assigned by index does.
+      if (collection)
+        args = args.map((argument, index) =>
+          this.#convert(argument, collection.element, node.arguments[index], added)
+        );
+      args.forEach((argument, index) => this.#typed(argument, node.arguments[index], added));
+    }
     this.#charge(node, object.length);
     switch (name) {
       case 'push':
@@ -716,11 +887,15 @@ class Interpreter {
       case 'unshift':
         this.#checkLength(object.length + args.length, node);
         return object.unshift(...args);
-      case 'slice':
-        return object.slice(
+      case 'slice': {
+        const part = object.slice(
           args[0] === undefined ? undefined : this.#number(args[0], node),
           args[1] === undefined ? undefined : this.#number(args[1], node)
         );
+        // A part of a collection is a collection of the same type.
+        if (collection) this.#shapes.set(part, collection);
+        return part;
+      }
       // Typed values are found by value, as === compares them.
       case 'indexOf':
         return object.findIndex((item) => this.#equal(item, args[0], node));
@@ -799,9 +974,13 @@ class Interpreter {
     }
   }
 
+  /**
+   * Arithmetic keeps its operands' type, numeric enumerations included, so a result outside the
+   * type, such as Weight(5) + Weight(4) when Weight allows 4, 5, and 7, is an error.
+   */
   #arithmetic(operator: string, left: Value, right: Value, node: AnyNode): Value {
     const type = this.#combined(left, right, node);
-    if (type && (type.values || (type.base !== 'integer' && type.base !== 'number')))
+    if (type && type.base !== 'integer' && type.base !== 'number')
       this.#fail(node, `${type.name} values cannot be used in arithmetic.`);
     const a = this.#number(left, node);
     const b = this.#number(right, node);
@@ -838,10 +1017,30 @@ class Interpreter {
     }
   }
 
-  /** Atoms compare by value; unrelated types are an error rather than silently unequal. */
+  /**
+   * Atoms compare by value; unrelated types are an error rather than silently unequal, except
+   * members of one union, which a place can hold either of: values of different members are unequal.
+   */
   #equal(left: Value, right: Value, node: AnyNode): boolean {
+    if (left instanceof Atom && right instanceof Atom && this.#unionMembers(left.type, right.type))
+      return (
+        (refines(left.type, right.type, this.#atoms) ||
+          refines(right.type, left.type, this.#atoms)) &&
+        left.value === right.value
+      );
     if (left instanceof Atom || right instanceof Atom) this.#combined(left, right, node);
     return unwrap(left) === unwrap(right);
+  }
+
+  /** Whether two atomic types are both members (or refine members) of one union. */
+  #unionMembers(a: AtomType, b: AtomType): boolean {
+    const memberOf = (union: UnionType, type: AtomType) =>
+      union.members.some(
+        (member) => !!this.#atoms[member] && refines(type, this.#atoms[member], this.#atoms)
+      );
+    return Object.values(this.#domain.structures).some(
+      (structure) => structure.kind === 'union' && memberOf(structure, a) && memberOf(structure, b)
+    );
   }
 
   #number(value: Value, node: AnyNode): number {
@@ -869,6 +1068,29 @@ class Interpreter {
     return text;
   }
 
+  /**
+   * Rebuild interpreter values from recorded input state: null-prototype objects, atoms wherever
+   * the recorded types name one, and records and collections wherever they name one of those.
+   */
+  #fromTrace(value: TraceValue, path: string, types: TypeMap): Value {
+    const typeName = types[path];
+    if (typeName && this.#atoms[typeName] && (value === null || typeof value !== 'object'))
+      return value === null ? null : new Atom(this.#atoms[typeName], value);
+    let made: Value[] | ObjectValue | undefined;
+    if (Array.isArray(value))
+      made = value.map((item, index) => this.#fromTrace(item, `${path}[${index}]`, types));
+    else if (value !== null && typeof value === 'object') {
+      const object = Object.create(null) as ObjectValue;
+      for (const [key, item] of Object.entries(value))
+        object[key] = this.#fromTrace(item, `${path}.${key}`, types);
+      made = object;
+    }
+    if (!made) return value as Value;
+    const shape = typeName ? this.#domain.structures[typeName] : undefined;
+    if (shape && shape.kind !== 'union') this.#shapes.set(made, shape);
+    return made;
+  }
+
   #checkLength(length: number, node: AnyNode): void {
     if (length > algorithmLimits.maximumCollectionLength)
       this.#fail(
@@ -879,28 +1101,42 @@ class Interpreter {
 }
 
 /**
- * The first primitive inside a value that has no domain type, and where it is. Each array or object
- * is checked once, however often it is shared, so a value that repeats itself stays cheap to check.
+ * The first part of a value that has no domain type, and where it is: a primitive, or an array or
+ * object no collection or record type made. Each array or object is checked once, however often it
+ * is shared, so a value that repeats itself stays cheap to check.
  */
 function untypedPart(
   value: Value,
   path: string,
+  typed: (object: object) => boolean,
   checked = new Set<object>()
-): { path: string; value: string | number | boolean } | undefined {
+): { path: string; value: string | number | boolean | object } | undefined {
   if (value === null || value === undefined || value instanceof Atom) return undefined;
   if (typeof value === 'object') {
     if (value === mathMarker || checked.has(value)) return undefined;
+    if (!typed(value)) return { path, value };
     checked.add(value);
     const entries: [string, Value][] = Array.isArray(value)
       ? value.map((item, index) => [`[${index}]`, item])
       : Object.entries(value).map(([key, item]) => [`.${key}`, item]);
     for (const [step, item] of entries) {
-      const found = untypedPart(item, path + step, checked);
+      const found = untypedPart(item, path + step, typed, checked);
       if (found) return found;
     }
     return undefined;
   }
   return { path, value };
+}
+
+/** An object made by the input or algorithm (a record, or a plain object before it becomes one). */
+function isPlainObject(value: Value): value is ObjectValue {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    !(value instanceof Atom) &&
+    value !== mathMarker
+  );
 }
 
 /** How an assignment target reads in the source, such as distances[neighbor]. */
@@ -931,23 +1167,4 @@ function unwrap(value: Value): Value {
 
 function atomBase(type: AtomType): AtomBase {
   return type.base;
-}
-
-/**
- * Rebuild interpreter values from recorded input state: null-prototype objects, and atoms wherever
- * the recorded types name one.
- */
-function fromTrace(value: TraceValue, path: string, types: TypeMap, atoms: AtomRegistry): Value {
-  const typeName = types[path];
-  if (typeName && atoms[typeName] && !Array.isArray(value) && typeof value !== 'object')
-    return new Atom(atoms[typeName], value);
-  if (Array.isArray(value))
-    return value.map((item, index) => fromTrace(item, `${path}[${index}]`, types, atoms));
-  if (value !== null && typeof value === 'object') {
-    const object = Object.create(null) as ObjectValue;
-    for (const [key, item] of Object.entries(value))
-      object[key] = fromTrace(item, `${path}.${key}`, types, atoms);
-    return object;
-  }
-  return value;
 }
