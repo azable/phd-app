@@ -17,13 +17,14 @@ export const presentationReferenceSegmentSchema = v.strictObject({
 
 /**
  * A rendered element's id within one step of a presentation. Only Sverlin presentations support
- * selection; their ids are a node's tag position (line:column), then #n for its nth render, then
- * /index for each item a collection drew itself, as in 12:5#2/3. A <Link> has an id the same way.
+ * selection; their ids are a node's tag position (line:column), then @ and its URL-encoded key if
+ * it has one, then #n for its nth render, then /index for each item a collection drew itself, as in
+ * 12:5#2/3 or 9:5@c. A <Link> has an id the same way.
  */
 export const elementIdSchema = v.pipe(
   v.string(),
   v.maxLength(64),
-  v.regex(/^\d{1,5}:\d{1,5}(?:#\d{1,5})?(?:\/\d{1,5}){0,8}$/u)
+  v.regex(/^\d{1,5}:\d{1,5}(?:@[\w.!~*'()%-]{1,24})?(?:#\d{1,5})?(?:\/\d{1,5}){0,8}$/u)
 );
 
 /** A short label for a selected element, taken from what it showed. */

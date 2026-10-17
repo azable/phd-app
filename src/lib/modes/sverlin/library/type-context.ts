@@ -54,9 +54,10 @@ export type NodeIds = { claim(ref: string): string };
 
 /**
  * Give the nodes of one rendered step their ids. A node's id is its tag's source position (its
- * __ref, such as 12:5), then #2, #3, … for later renders of the same tag, such as inside a loop;
- * items a collection draws itself extend their collection's id with /index. Each step mounts
- * afresh and renders in the same order, so the same state always gives the same ids.
+ * __ref, such as 12:5), then, for a keyed node, @ and its key (see keyedRef), then #2, #3, … for
+ * later renders of the same tag and key, such as inside a loop; items a collection draws itself
+ * extend their collection's id with /index. Each step mounts afresh and renders in the same order,
+ * so the same state always gives the same ids, and a keyed node keeps its id whichever render it is.
  */
 export function provideNodeIds(): void {
   const counts = new Map<string, number>();
@@ -67,6 +68,20 @@ export function provideNodeIds(): void {
       return count === 1 ? ref : `${ref}#${count}`;
     }
   });
+}
+
+// Element ids are at most 64 characters (elementIdSchema), which leaves a key this many after the
+// tag position, a render count, and a few item indices.
+const maximumKeyLength = 24;
+
+/**
+ * The reference a keyed node claims its id by: its tag's position, @, and its key, encoded so it
+ * cannot be read as the #render or /item parts. A key too long to fit leaves the position alone.
+ */
+export function keyedRef(ref: string, key: string | undefined): string {
+  if (key === undefined) return ref;
+  const encoded = encodeURIComponent(key);
+  return encoded && encoded.length <= maximumKeyLength ? `${ref}@${encoded}` : ref;
 }
 
 export function nodeIdsContext(): NodeIds | undefined {

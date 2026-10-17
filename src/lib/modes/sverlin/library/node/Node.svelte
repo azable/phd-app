@@ -13,6 +13,7 @@
   import Node from './Node.svelte';
   import {
     defaultsContext,
+    keyedRef,
     markRendering,
     layoutMemoryContext,
     nodeIdsContext,
@@ -163,7 +164,7 @@
   const drawn = defaultsContext();
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
-  const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(__ref) : undefined));
+  const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined));
   // The largest size this node reaches at any step (see LayoutMemory), kept as its least size so
   // that changing content never moves anything around it.
   const memory = layoutMemoryContext();

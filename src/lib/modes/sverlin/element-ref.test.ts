@@ -25,6 +25,15 @@ describe('element locations', () => {
     expect(locateElement(source, '5:1')).toMatchObject({ markup: '<Node' });
   });
 
+  it('reads a keyed node’s key, decoded, before its render count', () => {
+    expect(locateElement(source, '3:25@c')).toMatchObject({ key: 'c', occurrence: 1, items: [] });
+    expect(locateElement(source, '3:25@node%20b#2')).toMatchObject({
+      key: 'node b',
+      occurrence: 2
+    });
+    expect(locateElement(source, '3:25@%E0%A4')).toBeUndefined();
+  });
+
   it('locates link components too', () => {
     expect(locateElement('<Node>\n  <Link from="a" to="b" />\n</Node>', '2:3')).toMatchObject({
       line: 2,
