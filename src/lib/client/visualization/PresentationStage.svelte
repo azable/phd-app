@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+  import DownloadIcon from '@lucide/svelte/icons/download';
   import ShuffleIcon from '@lucide/svelte/icons/shuffle';
   import { fly } from 'svelte/transition';
 
@@ -10,7 +11,11 @@
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
-  import type { PresentationLayout } from '$lib/shared/presentations';
+  import {
+    presentationMode,
+    type PresentationLayout,
+    type RenderablePresentation
+  } from '$lib/shared/presentations';
 
   import type { PresentationSelection } from './presentation-selection.svelte';
   import {
@@ -46,6 +51,38 @@
     disabled = false
   }: Props = $props();
   let preferencePending = $state<string>();
+
+  // Each visible presentation's viewport, by presentation ID, to ask for exports.
+  const viewports: Record<string, PresentationViewport | undefined> = $state({});
+  let exporting = $state<string>();
+  let exportFailure = $state<{ presentationId: string; message: string }>();
+
+  /** Download a presentation's every step as scene data, the input of render targets. */
+  async function exportScene(presentation: RenderablePresentation) {
+    const { presentationId } = presentation;
+    exporting = presentationId;
+    exportFailure = undefined;
+    try {
+      const scene = await viewports[presentationId]?.describeScene();
+      if (!scene) throw new Error('This visualization cannot describe its steps.');
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(scene, null, 2)], { type: 'application/json' })
+      );
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sverlin-${presentationId.slice(0, 8)}-seed-${scene.seed}.scene.json`;
+      link.click();
+      // The click starts the download at once, so the URL can go.
+      setTimeout(() => URL.revokeObjectURL(url));
+    } catch (cause) {
+      exportFailure = {
+        presentationId,
+        message: cause instanceof Error ? cause.message : String(cause)
+      };
+    } finally {
+      exporting = undefined;
+    }
+  }
 
   const visualizationOperationKinds: readonly ProjectOperationKind[] = [
     'initial-build',
@@ -283,7 +320,34 @@
                 : `${selected.elements.length} elements`}
             </Button>
           {/if}
+          {#if presentationMode(entry.presentation) === 'sverlin'}
+            <div class="absolute top-2 left-2 z-10 flex max-w-[70%] flex-col items-start gap-1">
+              <Button
+                size="xs"
+                variant="secondary"
+                class="shadow-sm"
+                aria-label="Download this visualization's steps as scene data (JSON)"
+                onclick={() => exportScene(entry.presentation)}
+                disabled={exporting !== undefined}
+              >
+                {#if exporting === presentationId}
+                  <Spinner data-icon="inline-start" /> Exporting…
+                {:else}
+                  <DownloadIcon data-icon="inline-start" /> Scene
+                {/if}
+              </Button>
+              {#if exportFailure?.presentationId === presentationId}
+                <p
+                  role="alert"
+                  class="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800"
+                >
+                  {exportFailure.message}
+                </p>
+              {/if}
+            </div>
+          {/if}
           <PresentationViewport
+            bind:this={viewports[presentationId]}
             presentation={entry.presentation}
             step={localStep(entry)}
             label={`Visualization ${index + 1}`}

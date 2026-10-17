@@ -19,7 +19,7 @@
     rendererFor,
     typeContext
   } from '../type-context';
-  import { paletteColor } from './palette';
+  import { paletteColor, paletteName } from './palette';
   import {
     alignments,
     justifications,
@@ -292,6 +292,11 @@
     data-sv-node={id}
     data-sv-key={key}
     data-sv-type={type ?? __type}
+    data-sv-shape={resolvedShape}
+    data-sv-layout={arrangement}
+    data-sv-fill={paletteName(fill)}
+    data-sv-stroke={paletteName(stroke)}
+    data-sv-color={paletteName(color)}
     class:cell={!arrangement && resolvedShape === 'box'}
     style:font-size={fontSize}
     style:font-weight={resolvedWeight === undefined

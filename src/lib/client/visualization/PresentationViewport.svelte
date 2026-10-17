@@ -4,6 +4,7 @@
   import { modeCatalog } from '$lib/modes/catalog';
   import type { SelectedElement } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
+  import type { SverlinScene } from '$lib/modes/sverlin/scene';
   import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
   import {
     presentationMode,
@@ -35,22 +36,31 @@
     onRuntimeError,
     onLoadTiming
   }: Omit<ViewportProps, 'presentation'> & { presentation?: RenderablePresentation } = $props();
+  /** What a mode's playback component may offer: Sverlin describes its steps as scene data. */
+  type ViewportExports = { describeScene?: () => Promise<SverlinScene> };
   const viewports = import.meta.glob<{
-    default: Component<ViewportProps>;
+    default: Component<ViewportProps, ViewportExports>;
   }>('../../modes/*/Viewport.svelte', { eager: true });
   const registered = Object.fromEntries(
     Object.entries(viewports).map(([file, module]) => [file.split('/').at(-2), module.default])
-  ) as Partial<Record<VisualizationMode, Component<ViewportProps>>>;
+  ) as Partial<Record<VisualizationMode, Component<ViewportProps, ViewportExports>>>;
   for (const mode of Object.keys(modeCatalog) as VisualizationMode[]) {
     if (!registered[mode])
       throw new Error(`Visualization mode ${mode} needs a playback component.`);
   }
   const Viewport = $derived(presentation ? registered[presentationMode(presentation)] : undefined);
+  let viewport = $state<ViewportExports>();
+
+  /** Every step as scene data, in modes that describe their steps; undefined in others. */
+  export function describeScene(): Promise<SverlinScene> | undefined {
+    return viewport?.describeScene?.();
+  }
 </script>
 
 <section class="relative min-h-0 flex-1 overflow-hidden bg-white" aria-label={label}>
   {#if presentation && Viewport}
     <Viewport
+      bind:this={viewport}
       {presentation}
       {step}
       {label}

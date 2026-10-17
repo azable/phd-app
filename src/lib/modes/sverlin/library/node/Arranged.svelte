@@ -335,6 +335,8 @@
         <path
           class="link"
           d={edge.path}
+          data-sv-edge={edge.link}
+          data-sv-edge-id={edge.id}
           style:stroke={colour}
           style:stroke-width={widthOf(style)}
           stroke-dasharray={style?.dashed ? '6 4' : undefined}

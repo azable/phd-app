@@ -12,6 +12,7 @@
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
+  import { sceneMessageSchema, type SverlinScene } from './scene';
 
   let {
     presentation,
@@ -57,10 +58,67 @@
   let loaded = $state(false);
   // Whether the page shows its first step: it lays every step out before showing any.
   let ready = $state(false);
+  // Whether the page can describe its steps as scene data; pages built before it could never say so.
+  let describes = $state(false);
   $effect(() => {
     void document;
     loaded = false;
     ready = false;
+    describes = false;
+  });
+
+  // Requests for the page's scene, answered by the page with the request's id.
+  const sceneRequests: Record<
+    string,
+    (answer: v.InferOutput<typeof sceneMessageSchema> | Error) => void
+  > = {};
+  // Describing lays every step out once more, about as long as the first load, which takes about a
+  // third of a second for six steps; two minutes leaves room for the longest traces (200 steps).
+  const describeTimeoutMs = 120_000;
+
+  /** Every step of this presentation as scene data, laid out as it is shown. */
+  export function describeScene(): Promise<SverlinScene> {
+    const page = iframe?.contentWindow;
+    if (!page || !loaded) return Promise.reject(new Error('The visualization has not loaded yet.'));
+    if (!describes)
+      return Promise.reject(
+        new Error('This visualization was built before scene export. Build it again to export it.')
+      );
+    const request = crypto.randomUUID();
+    const { presentationId, seed, labels, parameters } = presentation;
+    return new Promise<SverlinScene>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => answer(new Error('The visualization took too long to describe its steps.')),
+        describeTimeoutMs
+      );
+      function answer(reply: v.InferOutput<typeof sceneMessageSchema> | Error) {
+        clearTimeout(timeout);
+        delete sceneRequests[request];
+        if (reply instanceof Error) reject(reply);
+        else if ('failure' in reply) reject(new Error(reply.failure));
+        else if (reply.steps.length !== labels.length)
+          reject(new Error('The visualization described a different number of steps.'));
+        else
+          resolve({
+            format: 'sverlin-scene-v1',
+            presentationId,
+            seed,
+            ...(parameters ? { parameters } : {}),
+            frame: reply.frame,
+            steps: reply.steps.map((step, index) => ({ ...step, label: labels[index] }))
+          });
+      }
+      sceneRequests[request] = answer;
+      page.postMessage({ type: 'sverlin:describe', request }, '*');
+    });
+  }
+  // A new document cannot answer the old one's requests.
+  $effect(() => {
+    void document;
+    return () => {
+      for (const answer of Object.values(sceneRequests))
+        answer(new Error('The visualization reloaded before it described its steps.'));
+    };
   });
 
   $effect(() => {
@@ -160,9 +218,26 @@
   $effect(() => {
     const receive = (event: MessageEvent) => {
       if (!iframe || event.source !== iframe.contentWindow) return;
-      const data = event.data as { type?: unknown; reportsReady?: unknown } & Partial<
-        Record<keyof CanvasView, unknown>
-      >;
+      const data = event.data as {
+        type?: unknown;
+        reportsReady?: unknown;
+        describes?: unknown;
+        request?: unknown;
+      } & Partial<Record<keyof CanvasView, unknown>>;
+      if (data?.type === 'sverlin:scene') {
+        const answer =
+          typeof data.request === 'string' && Object.hasOwn(sceneRequests, data.request)
+            ? sceneRequests[data.request]
+            : undefined;
+        if (!answer) return;
+        const parsed = v.safeParse(sceneMessageSchema, data);
+        answer(
+          parsed.success
+            ? parsed.output
+            : new Error('The visualization described its steps in an unexpected form.')
+        );
+        return;
+      }
       if (data?.type === 'sverlin:timing') {
         const parsed = v.safeParse(timingMessage, data);
         if (!parsed.success) return;
@@ -178,6 +253,7 @@
       }
       if (data?.type === 'sverlin:loaded') {
         loaded = true;
+        describes = data.describes === true;
         loadedAt = sinceLoad();
         frameAtLoad = frameBox();
         // Presentations built before pages reported readiness never say so; stop waiting for them.

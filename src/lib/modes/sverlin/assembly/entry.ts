@@ -6,12 +6,16 @@
 
 import { mount, unmount, type Component } from 'svelte';
 import {
+  describeFrame,
+  describeStep,
   Frame,
   settleSpans,
   themeCss,
   type FrameSettings,
   type LayoutMemory,
-  type NodeDefaults
+  type NodeDefaults,
+  type SceneFrame,
+  type SceneStep
 } from 'sverlin';
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
@@ -324,15 +328,56 @@ async function recordSteps() {
   }
 }
 
+/**
+ * Describe every step as scene data (see library/scene.ts), each laid out as it is shown, in a
+ * hidden layer of its own, so the step on screen stays as it is.
+ */
+async function describeSteps(): Promise<{ frame?: SceneFrame; steps: SceneStep[] }> {
+  let frame: SceneFrame | undefined;
+  const steps: SceneStep[] = [];
+  for (let step = 0; step < states.length; step++) {
+    await whenShown();
+    steps.push(
+      await new Promise<SceneStep>((done) => {
+        mountStep(step, 'showing', (shown) => {
+          frame ??= describeFrame(shown.layer);
+          done(describeStep(shown.layer));
+          remove(shown);
+        });
+      })
+    );
+  }
+  return { frame, steps };
+}
+
 let ready = false;
 let requested = clampStep(playback.__sverlinStep ?? 0);
 let recorded = false;
+const recording = recordSteps();
 
 // The app sends each new step, with the selection to show in it; the page and its layout engine
-// stay loaded, and the canvas view carries over.
+// stay loaded, and the canvas view carries over. It can also ask for every step as scene data.
 addEventListener('message', (event: MessageEvent) => {
   if (event.source !== window.parent) return;
-  const data = event.data as { type?: unknown; step?: unknown; selection?: unknown };
+  const data = event.data as {
+    type?: unknown;
+    step?: unknown;
+    selection?: unknown;
+    request?: unknown;
+  };
+  if (data?.type === 'sverlin:describe' && typeof data.request === 'string') {
+    const request = data.request;
+    void recording
+      .then(describeSteps)
+      .then((scene) => window.parent.postMessage({ type: 'sverlin:scene', request, ...scene }, '*'))
+      .catch((cause: unknown) =>
+        window.parent.postMessage(
+          { type: 'sverlin:scene', request, failure: errorText(cause) },
+          '*'
+        )
+      );
+    return;
+  }
   if (data?.type !== 'sverlin:step' || typeof data.step !== 'number') return;
   const step = clampStep(data.step);
   playback.__sverlinSelection = Array.isArray(data.selection) ? data.selection : [];
@@ -341,10 +386,10 @@ addEventListener('message', (event: MessageEvent) => {
 });
 
 // The page says it will report when its first step is shown, however long laying out every step
-// takes, so the app keeps its loader up until then.
+// takes, so the app keeps its loader up until then, and that it can describe its steps as scenes.
 if (window.parent !== window)
-  window.parent.postMessage({ type: 'sverlin:loaded', reportsReady: true }, '*');
-void recordSteps().then(() => {
+  window.parent.postMessage({ type: 'sverlin:loaded', reportsReady: true, describes: true }, '*');
+void recording.then(() => {
   recorded = true;
   show(requested);
 });

@@ -23,3 +23,10 @@ export function paletteColor(
   if (color === undefined) return undefined;
   return Object.hasOwn(palette, color) ? palette[color as PaletteColor][use] : color;
 }
+
+/** The palette name a colour was given as, if it is one, so scene data keeps what a colour means. */
+export function paletteName(color: unknown): PaletteColor | undefined {
+  return typeof color === 'string' && Object.hasOwn(palette, color)
+    ? (color as PaletteColor)
+    : undefined;
+}

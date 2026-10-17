@@ -105,7 +105,7 @@ export type LinkSpec = {
 };
 
 /** A link as a spec, whether written as text such as "a -> b" or given as one; undefined if unreadable. */
-function linkSpecOf(link: string | LinkSpec): LinkSpec | undefined {
+export function linkSpecOf(link: string | LinkSpec): LinkSpec | undefined {
   if (typeof link !== 'string') return link;
   const match = /^\s*(\S+)\s*(->|-)\s*(\S+)\s*$/u.exec(link);
   return match ? { from: match[1], to: match[3], directed: match[2] === '->' } : undefined;
