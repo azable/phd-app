@@ -11,11 +11,8 @@
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
-  import {
-    presentationMode,
-    type PresentationLayout,
-    type RenderablePresentation
-  } from '$lib/shared/presentations';
+  import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
+  import type { PresentationLayout } from '$lib/shared/presentations';
 
   import type { PresentationSelection } from './presentation-selection.svelte';
   import {
@@ -57,20 +54,18 @@
   let exporting = $state<string>();
   let exportFailure = $state<{ presentationId: string; message: string }>();
 
-  /** Download a presentation's every step as scene data, the input of render targets. */
-  async function exportScene(presentation: RenderablePresentation) {
-    const { presentationId } = presentation;
+  /** Download a presentation rendered to one of its targets' files. */
+  async function exportTo(presentationId: string, target: string) {
     exporting = presentationId;
     exportFailure = undefined;
     try {
-      const scene = await viewports[presentationId]?.describeScene();
-      if (!scene) throw new Error('This visualization cannot describe its steps.');
-      const url = URL.createObjectURL(
-        new Blob([JSON.stringify(scene, null, 2)], { type: 'application/json' })
-      );
+      const viewport = viewports[presentationId];
+      if (!viewport) throw new Error('This visualization has not loaded yet.');
+      const file = await viewport.render(target);
+      const url = URL.createObjectURL(file.blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `sverlin-${presentationId.slice(0, 8)}-seed-${scene.seed}.scene.json`;
+      link.download = file.name;
       link.click();
       // The click starts the download at once, so the URL can go.
       setTimeout(() => URL.revokeObjectURL(url));
@@ -291,6 +286,7 @@
     {#each visible as entry, index (entry.presentation.presentationId)}
       {@const presentationId = entry.presentation.presentationId}
       {@const selected = visualSelections.for(presentationId, step)}
+      {@const targets = viewports[presentationId]?.renderTargets() ?? []}
       <div
         class="flex min-h-0 flex-1 overflow-hidden bg-muted/30 p-2"
         data-replay-region={`candidate-${index + 1}`}
@@ -320,22 +316,34 @@
                 : `${selected.elements.length} elements`}
             </Button>
           {/if}
-          {#if presentationMode(entry.presentation) === 'sverlin'}
+          {#if targets.length}
             <div class="absolute top-2 left-2 z-10 flex max-w-[70%] flex-col items-start gap-1">
-              <Button
-                size="xs"
-                variant="secondary"
-                class="shadow-sm"
-                aria-label="Download this visualization's steps as scene data (JSON)"
-                onclick={() => exportScene(entry.presentation)}
-                disabled={exporting !== undefined}
-              >
-                {#if exporting === presentationId}
-                  <Spinner data-icon="inline-start" /> Exporting…
-                {:else}
-                  <DownloadIcon data-icon="inline-start" /> Scene
-                {/if}
-              </Button>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger disabled={exporting !== undefined}>
+                  {#snippet child({ props })}
+                    <Button
+                      {...props}
+                      size="xs"
+                      variant="secondary"
+                      class="shadow-sm"
+                      aria-label="Export this visualization"
+                    >
+                      {#if exporting === presentationId}
+                        <Spinner data-icon="inline-start" /> Exporting…
+                      {:else}
+                        <DownloadIcon data-icon="inline-start" /> Export
+                      {/if}
+                    </Button>
+                  {/snippet}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="start">
+                  {#each targets as target (target.id)}
+                    <DropdownMenu.Item onSelect={() => exportTo(presentationId, target.id)}>
+                      {target.title}
+                    </DropdownMenu.Item>
+                  {/each}
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
               {#if exportFailure?.presentationId === presentationId}
                 <p
                   role="alert"

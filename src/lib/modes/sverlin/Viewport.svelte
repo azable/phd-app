@@ -13,6 +13,8 @@
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
   import { sceneMessageSchema, type SverlinScene } from './scene';
+  import { sverlinTargets } from './targets';
+  import type { RenderedFile, RenderTarget } from '../render-targets';
 
   let {
     presentation,
@@ -76,8 +78,20 @@
   // third of a second for six steps; two minutes leaves room for the longest traces (200 steps).
   const describeTimeoutMs = 120_000;
 
+  /** The files this presentation can be exported as. */
+  export function renderTargets(): RenderTarget[] {
+    return sverlinTargets.map(({ id, title, animated }) => ({ id, title, animated }));
+  }
+
+  /** Export this presentation as a target's file, from its every step as scene data. */
+  export async function render(target: string): Promise<RenderedFile> {
+    const chosen = sverlinTargets.find(({ id }) => id === target);
+    if (!chosen) throw new Error(`There is no ${target} export.`);
+    return chosen.render(await describeScene());
+  }
+
   /** Every step of this presentation as scene data, laid out as it is shown. */
-  export function describeScene(): Promise<SverlinScene> {
+  function describeScene(): Promise<SverlinScene> {
     const page = iframe?.contentWindow;
     if (!page || !loaded) return Promise.reject(new Error('The visualization has not loaded yet.'));
     if (!describes)

@@ -38,5 +38,6 @@ export type {
   SceneLook,
   SceneNode,
   ScenePoint,
-  SceneStep
+  SceneStep,
+  SceneText
 } from './scene';

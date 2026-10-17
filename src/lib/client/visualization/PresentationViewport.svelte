@@ -4,7 +4,7 @@
   import { modeCatalog } from '$lib/modes/catalog';
   import type { SelectedElement } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
-  import type { SverlinScene } from '$lib/modes/sverlin/scene';
+  import type { RenderedFile, RenderTarget } from '$lib/modes/render-targets';
   import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
   import {
     presentationMode,
@@ -36,8 +36,11 @@
     onRuntimeError,
     onLoadTiming
   }: Omit<ViewportProps, 'presentation'> & { presentation?: RenderablePresentation } = $props();
-  /** What a mode's playback component may offer: Sverlin describes its steps as scene data. */
-  type ViewportExports = { describeScene?: () => Promise<SverlinScene> };
+  /** What a mode's playback component may offer: the files its presentations export as. */
+  type ViewportExports = {
+    renderTargets?: () => RenderTarget[];
+    render?: (target: string) => Promise<RenderedFile>;
+  };
   const viewports = import.meta.glob<{
     default: Component<ViewportProps, ViewportExports>;
   }>('../../modes/*/Viewport.svelte', { eager: true });
@@ -51,9 +54,16 @@
   const Viewport = $derived(presentation ? registered[presentationMode(presentation)] : undefined);
   let viewport = $state<ViewportExports>();
 
-  /** Every step as scene data, in modes that describe their steps; undefined in others. */
-  export function describeScene(): Promise<SverlinScene> | undefined {
-    return viewport?.describeScene?.();
+  /** The files this presentation can be exported as; none in modes that offer no exports. */
+  export function renderTargets(): RenderTarget[] {
+    return viewport?.renderTargets?.() ?? [];
+  }
+
+  export function render(target: string): Promise<RenderedFile> {
+    return (
+      viewport?.render?.(target) ??
+      Promise.reject(new Error('This visualization cannot be exported.'))
+    );
   }
 </script>
 

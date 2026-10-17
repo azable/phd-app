@@ -20,6 +20,18 @@ const coordinate = v.pipe(v.number(), v.minValue(-1_000_000), v.maxValue(1_000_0
 const length = v.pipe(v.number(), v.minValue(0), v.maxValue(1_000_000));
 const point = v.strictObject({ x: coordinate, y: coordinate });
 const paletteColour = v.picklist(['neutral', 'blue', 'green', 'amber', 'red', 'purple']);
+const box = v.strictObject({ x: coordinate, y: coordinate, width: length, height: length });
+const font = v.pipe(v.string(), v.maxLength(500));
+const fontWeight = v.pipe(v.number(), v.minValue(1), v.maxValue(1000));
+
+const sceneTextSchema = v.strictObject({
+  text,
+  box,
+  color: colour,
+  font,
+  fontSize: length,
+  fontWeight
+});
 
 const sceneNodeSchema = v.strictObject({
   id: text,
@@ -32,7 +44,8 @@ const sceneNodeSchema = v.strictObject({
   value: v.optional(text),
   unit: v.optional(text),
   text: v.optional(text),
-  box: v.strictObject({ x: coordinate, y: coordinate, width: length, height: length }),
+  runs: v.optional(v.pipe(v.array(sceneTextSchema), v.maxLength(maximumNodes))),
+  box,
   look: v.strictObject({
     fill: v.optional(colour),
     stroke: v.optional(colour),
@@ -40,9 +53,9 @@ const sceneNodeSchema = v.strictObject({
     radius: v.optional(length),
     padding: v.optional(v.tuple([length, length, length, length])),
     color: colour,
-    font: v.pipe(v.string(), v.maxLength(500)),
+    font,
     fontSize: length,
-    fontWeight: v.pipe(v.number(), v.minValue(1), v.maxValue(1000)),
+    fontWeight,
     opacity: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(1)))
   }),
   palette: v.optional(
@@ -59,11 +72,12 @@ const sceneLinkSchema = v.strictObject({
   from: text,
   to: text,
   directed: v.boolean(),
+  arrowSize: v.optional(length),
   dashed: v.optional(v.literal(true)),
   stroke: colour,
   strokeWidth: length,
   curve: v.tuple([point, point, point, point]),
-  label: v.optional(v.strictObject({ text, at: point, fontSize: length }))
+  label: v.optional(v.strictObject({ text, at: point, color: colour, font, fontSize: length }))
 });
 
 const sceneStepSchema = v.strictObject({

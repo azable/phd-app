@@ -45,10 +45,23 @@ export type SceneNode = {
   unit?: string;
   /** Text written in the node itself, outside its child nodes. */
   text?: string;
+  /** Every line of text the node draws itself, value included, where the page put it. */
+  runs?: SceneText[];
   box: SceneBox;
   look: SceneLook;
   /** The palette names the view gave its colours, such as 'amber' for the current element. */
   palette?: { fill?: PaletteColor; stroke?: PaletteColor; color?: PaletteColor };
+};
+
+/** One line of one piece of text, as the page laid it out, with its own style. */
+export type SceneText = {
+  text: string;
+  /** From the left of its first word to the right of its last, the height of its line. */
+  box: SceneBox;
+  color: string;
+  font: string;
+  fontSize: number;
+  fontWeight: number;
 };
 
 export type SceneLink = {
@@ -58,12 +71,15 @@ export type SceneLink = {
   from: string;
   to: string;
   directed: boolean;
+  /** An arrow's head, as long as it is wide, its tip at the curve's end. */
+  arrowSize?: number;
   dashed?: true;
   stroke: string;
   strokeWidth: number;
   /** A cubic curve: its start, two control points, and end. */
   curve: [ScenePoint, ScenePoint, ScenePoint, ScenePoint];
-  label?: { text: string; at: ScenePoint; fontSize: number };
+  /** Text at the curve's middle, centred on `at`. */
+  label?: { text: string; at: ScenePoint; color: string; font: string; fontSize: number };
 };
 
 export type SceneStep = {
@@ -160,6 +176,7 @@ function describeNode(
   const unit = shown?.querySelector('.unit')?.textContent ?? undefined;
   const value = shown ? (shown.firstChild?.textContent ?? '') : undefined;
   const text = ownText(element);
+  const runs = textRuns(element, point, ratio, scale);
   const palette = Object.fromEntries(
     (['fill', 'stroke', 'color'] as const).flatMap((use) => {
       const name = dataset[`sv${use[0].toUpperCase()}${use.slice(1)}`];
@@ -180,6 +197,7 @@ function describeNode(
     ...(value === undefined ? {} : { value }),
     ...(unit ? { unit } : {}),
     ...(text ? { text } : {}),
+    ...(runs.length ? { runs } : {}),
     box,
     look,
     ...(palette && Object.keys(palette).length ? { palette } : {})
@@ -197,6 +215,71 @@ function ownText(element: HTMLElement): string {
     if (words) parts.push(words);
   }
   return parts.join(' ');
+}
+
+/**
+ * The lines of text a node draws itself, value included: each text node's words, grouped into the
+ * lines the page wrapped them onto, measured word by word.
+ */
+function textRuns(
+  element: HTMLElement,
+  point: (x: number, y: number) => ScenePoint,
+  ratio: number,
+  scale: number
+): SceneText[] {
+  const runs: SceneText[] = [];
+  const range = document.createRange();
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const holder = node.parentElement;
+    if (!holder || holder.closest(nodeSelector) !== element || holder.closest('svg')) continue;
+    const style = getComputedStyle(holder);
+    const looks = {
+      color: style.color,
+      font: style.fontFamily,
+      fontSize: round((parseFloat(style.fontSize) || 0) * scale),
+      fontWeight: Number(style.fontWeight) || 400
+    };
+    let line:
+      | { words: string[]; left: number; top: number; right: number; bottom: number }
+      | undefined;
+    const finish = () => {
+      if (!line) return;
+      const corner = point(line.left, line.top);
+      runs.push({
+        text: line.words.join(' '),
+        box: {
+          ...corner,
+          width: round((line.right - line.left) * ratio),
+          height: round((line.bottom - line.top) * ratio)
+        },
+        ...looks
+      });
+    };
+    for (const word of (node.textContent ?? '').matchAll(/\S+/gu)) {
+      range.setStart(node, word.index);
+      range.setEnd(node, word.index + word[0].length);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width && !rect.height) continue;
+      // A word more than a pixel lower than the line so far starts a new line.
+      if (line && Math.abs(rect.top - line.top) < 1) {
+        line.words.push(word[0]);
+        line.right = Math.max(line.right, rect.right);
+        line.bottom = Math.max(line.bottom, rect.bottom);
+      } else {
+        finish();
+        line = {
+          words: [word[0]],
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom
+        };
+      }
+    }
+    finish();
+  }
+  return runs;
 }
 
 function describeLink(
@@ -224,21 +307,28 @@ function describeLink(
   )
     if (next instanceof SVGTextElement && next.classList.contains('label')) label = next;
   const [x0, y0, x1, y1, x2, y2, x3, y3] = numbers;
+  // An arrowhead is a marker as long as it is wide, drawn in the units of the curve.
+  const marker = /^url\(#(.+)\)$/u.exec(path.getAttribute('marker-end') ?? '')?.[1];
+  const head = marker ? svg.querySelector<SVGMarkerElement>(`#${CSS.escape(marker)}`) : null;
+  const labelStyle = label && getComputedStyle(label);
   return {
     ...(path.dataset.svEdgeId ? { id: path.dataset.svEdgeId } : {}),
     from: spec.from,
     to: spec.to,
-    directed: path.hasAttribute('marker-end'),
+    directed: !!head,
+    ...(head ? { arrowSize: round(head.markerWidth.baseVal.value * scale) } : {}),
     ...(path.hasAttribute('stroke-dasharray') ? { dashed: true as const } : {}),
     stroke: style.stroke,
     strokeWidth: round((parseFloat(style.strokeWidth) || 0) * scale),
     curve: [at(x0, y0), at(x1, y1), at(x2, y2), at(x3, y3)],
-    ...(label?.textContent
+    ...(label?.textContent && labelStyle
       ? {
           label: {
             text: label.textContent,
             at: at(label.x.baseVal[0]?.value ?? 0, label.y.baseVal[0]?.value ?? 0),
-            fontSize: round((parseFloat(getComputedStyle(label).fontSize) || 0) * scale)
+            color: labelStyle.fill,
+            font: labelStyle.fontFamily,
+            fontSize: round((parseFloat(labelStyle.fontSize) || 0) * scale)
           }
         }
       : {})
