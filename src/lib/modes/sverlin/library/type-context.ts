@@ -54,7 +54,8 @@ export type NodeIds = { claim(ref: string): string };
 
 /**
  * Give the nodes of one rendered step their ids. A node's id is its tag's source position (its
- * __ref, such as 12:5), then, for a keyed node, @ and its key (see keyedRef), then #2, #3, … for
+ * __ref, such as 12:5), then, for a keyed node, @ and its key, or for a link, @ and its ends such
+ * as a->b (see keyedRef), then #2, #3, … for
  * later renders of the same tag and key, such as inside a loop; items a collection draws itself
  * extend their collection's id with /index. Each step mounts afresh and renders in the same order,
  * so the same state always gives the same ids, and a keyed node keeps its id whichever render it is.

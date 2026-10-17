@@ -1,13 +1,14 @@
 <!--
   A link between two children of the node it sits in, drawn as a line or an arrow between the nodes
   its keys name. It takes no space itself: the arranging node reads it, lays its children out with
-  it, and draws it over them. Each link has an id from its place in the source, like a node, so a
-  participant can select it and refer to it in feedback.
+  it, and draws it over them. Each link has an id from its place in the source and its ends, so a
+  participant can select it and refer to it in feedback, and a link whose ends change between steps
+  is a different link rather than the same one drawn to its old ends.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import { nodeIdsContext } from '../type-context';
+  import { keyedRef, nodeIdsContext } from '../type-context';
   import type { NodeColor, StrokeWidth } from './props';
 
   let {
@@ -48,7 +49,7 @@
   } = $props();
 
   const nodeIds = nodeIdsContext();
-  const id = untrack(() => (__ref ? nodeIds?.claim(__ref) : undefined));
+  const id = untrack(() => (__ref ? nodeIds?.claim(keyedRef(__ref, `${from}->${to}`)) : undefined));
 </script>
 
 <span
