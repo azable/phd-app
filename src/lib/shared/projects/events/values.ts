@@ -40,6 +40,9 @@ export const diagnosticSchema = v.object({
   sourcePath: v.optional(v.string()),
   line: v.optional(positiveSchema),
   column: v.optional(positiveSchema),
+  /** Where the code the diagnostic is about ends, both from 1; the end column is exclusive. */
+  endLine: v.optional(positiveSchema),
+  endColumn: v.optional(positiveSchema),
   message: v.string(),
   raw: v.string()
 });

@@ -22,7 +22,13 @@ import {
   type AtomType
 } from './atoms.server';
 import { drawFunctions, drawValue, keyedDraws } from './random.server';
-import { AlgorithmError, describe, forbiddenProperties, type BlockKind } from './block.server';
+import {
+  AlgorithmError,
+  describe,
+  forbiddenProperties,
+  type BlockKind,
+  type Span
+} from './block.server';
 import { parseBlock } from './parse.server';
 import {
   noDomain,
@@ -205,7 +211,7 @@ class Scope {
 
 class Interpreter {
   readonly #root: BlockStatement;
-  readonly #offset: (node: AnyNode) => number;
+  readonly #offset: (node: AnyNode) => Span;
   readonly #globals = new Scope();
   readonly #topLevel = new Scope(this.#globals);
   readonly #topLevelNames: string[];
@@ -223,7 +229,7 @@ class Interpreter {
 
   constructor(
     root: BlockStatement,
-    offset: (node: AnyNode) => number,
+    offset: (node: AnyNode) => Span,
     options: {
       kind: BlockKind;
       initial?: TypedState;
@@ -282,9 +288,15 @@ class Interpreter {
   #execute(): void {
     const completion = this.#block(this.#root.body, this.#topLevel);
     if (completion === 'break' || completion === 'continue')
-      throw new AlgorithmError(`${completion} must be inside a loop.`, this.#offset(this.#root));
+      throw new AlgorithmError(
+        `${completion} must be inside a loop.`,
+        this.#offset(this.#root).start
+      );
     if (completion === 'return' && this.#kind !== 'algorithm')
-      throw new AlgorithmError(`return belongs in the algorithm block.`, this.#offset(this.#root));
+      throw new AlgorithmError(
+        `return belongs in the algorithm block.`,
+        this.#offset(this.#root).start
+      );
   }
 
   #state(node: AnyNode): TypedState {

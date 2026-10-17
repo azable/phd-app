@@ -24,14 +24,25 @@ export const forbiddenProperties: ReadonlySet<string> = new Set([
   'constructor'
 ]);
 
-/** A problem in a block, at an offset into the block's body when known. */
+/** The part of a block's body a piece of code covers, as offsets from its start. */
+export type Span = { start: number; end: number };
+
+/**
+ * A problem in a block: where in the block's body it starts when known, and where the code it is
+ * about ends, so the whole of it can be underlined.
+ */
 export class AlgorithmError extends Error {
   readonly offset?: number;
+  readonly end?: number;
 
-  constructor(message: string, offset?: number) {
+  constructor(message: string, at?: number | Span) {
     super(message);
     this.name = 'AlgorithmError';
-    if (offset !== undefined) this.offset = offset;
+    if (typeof at === 'number') this.offset = at;
+    else if (at) {
+      this.offset = at.start;
+      this.end = at.end;
+    }
   }
 }
 

@@ -71,7 +71,13 @@ function failure(seed: number, cause: unknown, durationMs: number): ModeBuildRes
       raw: messages[index],
       sourcePath: 'Main.svelte',
       ...(problem instanceof InvalidSvelteSourceError
-        ? { code: problem.code, line: problem.line, column: problem.column }
+        ? {
+            code: problem.code,
+            line: problem.line,
+            column: problem.column,
+            endLine: problem.endLine,
+            endColumn: problem.endColumn
+          }
         : {})
     })),
     failureKind: cause instanceof InvalidSvelteSourceError ? 'source' : 'infrastructure'

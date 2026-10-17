@@ -1,9 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { lintGutter, setDiagnostics } from '@codemirror/lint';
   import { Compartment, EditorState } from '@codemirror/state';
   import { EditorView } from 'codemirror';
 
+  import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
+
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
+  import { editorDiagnostics } from './source-diagnostics';
   import {
     showSourceHighlights,
     sourceHighlights,
@@ -18,6 +22,8 @@
     ariaLabel?: string;
     /** Tags to highlight, such as those behind elements selected in a presentation. */
     highlights?: readonly SourceHighlight[];
+    /** Build problems to underline, with the source they were found in. */
+    diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
     onChange?: (value: string) => void;
   };
 
@@ -27,6 +33,7 @@
     language = 'svelte',
     ariaLabel = 'Source code editor',
     highlights = [],
+    diagnostics = { source: '', items: [] },
     onChange
   }: Props = $props();
 
@@ -50,6 +57,7 @@
         extensions: [
           ...artifactEditorExtensions({ language }),
           sourceHighlights,
+          lintGutter(),
           editableCompartment.of(editableExtensions(editable)),
           EditorView.updateListener.of((update) => {
             if (suppressChange || !update.docChanged) return;
@@ -89,6 +97,15 @@
     void value;
     const shown = [...highlights];
     if (view) view.dispatch(showSourceHighlights(view.state, shown));
+  });
+
+  // Diagnostics are placed in the text they were found in; once that text is edited, CodeMirror
+  // moves them with the edits until the next build replaces them.
+  $effect(() => {
+    void value;
+    const { source, items } = diagnostics;
+    if (view && view.state.doc.toString() === source)
+      view.dispatch(setDiagnostics(view.state, editorDiagnostics(view.state, items)));
   });
 
   $effect(() => {

@@ -8,6 +8,7 @@
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
+  import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
   import * as AlertDialog from '$lib/client/components/ui/alert-dialog';
   import { Badge } from '$lib/client/components/ui/badge';
   import { Button } from '$lib/client/components/ui/button';
@@ -62,6 +63,11 @@
       )
   );
   const unmatched = $derived(selectedSources.length > matching.length);
+  // Problems the latest build of the artifact's source found, underlined in the editor.
+  const diagnosed = $derived.by(() => {
+    const source = artifact?.content.text ?? '';
+    return { source, items: buildDiagnosticsFor(session.events, source) };
+  });
 
   function startEditing() {
     if (!artifact || !session.atHead || session.pending || session.readOnly) return;
@@ -117,6 +123,13 @@
         {#if highlights.length}
           <Badge variant="secondary"
             >{highlights.length} selected {highlights.length === 1 ? 'node' : 'nodes'}</Badge
+          >
+        {/if}
+        {#if diagnosed.items.length}
+          <Badge variant="destructive"
+            >{diagnosed.items.length} build {diagnosed.items.length === 1
+              ? 'problem'
+              : 'problems'}</Badge
           >
         {/if}
         <Badge variant="outline">{artifact.content.sha256.slice(0, 8)}</Badge>
@@ -184,6 +197,7 @@
               !session.readOnly}
             ariaLabel="Project visualization source"
             {highlights}
+            diagnostics={diagnosed}
             onChange={updateDraft}
           />
         </div>

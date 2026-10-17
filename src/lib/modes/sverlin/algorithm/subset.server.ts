@@ -8,7 +8,8 @@ import {
   domainFunctions,
   forbiddenProperties,
   reservedNames,
-  type BlockKind
+  type BlockKind,
+  type Span
 } from './block.server';
 import { drawFunctions } from './random.server';
 
@@ -17,7 +18,7 @@ const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
 
 export function checkSubset(
   root: BlockStatement,
-  offset: (node: AnyNode) => number,
+  offset: (node: AnyNode) => Span,
   kind: BlockKind,
   constructors: ReadonlySet<string>
 ): void {

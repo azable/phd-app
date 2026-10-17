@@ -116,6 +116,9 @@ export class InvalidSvelteSourceError extends Error {
   readonly code?: string;
   readonly line?: number;
   readonly column?: number;
+  /** Where the code the problem is about ends, when known, so the whole of it can be underlined. */
+  readonly endLine?: number;
+  readonly endColumn?: number;
   /** Further problems found in the same build, each reported as its own diagnostic. */
   others: InvalidSvelteSourceError[] = [];
 
@@ -132,13 +135,29 @@ export class InvalidSvelteSourceError extends Error {
     super(message);
     this.name = 'InvalidSvelteSourceError';
     const issue = cause as
-      | { code?: unknown; start?: { line?: unknown; column?: unknown } }
+      | {
+          code?: unknown;
+          start?: { line?: unknown; column?: unknown };
+          end?: { line?: unknown; column?: unknown };
+        }
       | undefined;
     if (typeof issue?.code === 'string') this.code = issue.code;
     if (typeof issue?.start?.line === 'number' && issue.start.line >= 1)
       this.line = issue.start.line;
     if (typeof issue?.start?.column === 'number' && issue.start.column >= 0)
       this.column = issue.start.column + 1;
+    // An end is kept only with a start it does not come before.
+    const { line: endLine, column: endColumn } = issue?.end ?? {};
+    if (
+      this.line !== undefined &&
+      this.column !== undefined &&
+      typeof endLine === 'number' &&
+      typeof endColumn === 'number' &&
+      (endLine > this.line || (endLine === this.line && endColumn + 1 >= this.column))
+    ) {
+      this.endLine = endLine;
+      this.endColumn = endColumn + 1;
+    }
   }
 }
 
@@ -362,9 +381,13 @@ function interpretBlock<T>(source: string, block: Block, run: (body: string) => 
     return run(block.body);
   } catch (cause) {
     if (!(cause instanceof AlgorithmError)) throw cause;
-    const position =
-      cause.offset === undefined ? undefined : sourcePosition(source, block.offset + cause.offset);
-    throw new InvalidSvelteSourceError(cause.message, { code: 'algorithm_error', start: position });
+    const at = (offset: number | undefined) =>
+      offset === undefined ? undefined : sourcePosition(source, block.offset + offset);
+    throw new InvalidSvelteSourceError(cause.message, {
+      code: 'algorithm_error',
+      start: at(cause.offset),
+      end: at(cause.end)
+    });
   }
 }
 

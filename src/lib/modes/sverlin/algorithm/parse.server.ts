@@ -3,7 +3,7 @@
 import { parse, type AnyNode, type BlockStatement, type FunctionDeclaration } from 'acorn';
 
 import { typeNames, type DomainRegistry } from './structures.server';
-import { AlgorithmError, type BlockKind } from './block.server';
+import { AlgorithmError, type BlockKind, type Span } from './block.server';
 import { checkSubset } from './subset.server';
 
 // A strict-mode generator wrapper lets acorn parse top-level yield; it shares the body's first line.
@@ -17,7 +17,7 @@ export function parseBlock(
   body: string,
   kind: BlockKind,
   domain?: DomainRegistry
-): { root: BlockStatement; offset: (node: AnyNode) => number } {
+): { root: BlockStatement; offset: (node: AnyNode) => Span } {
   let program;
   try {
     program = parse(`${wrapperPrefix}${body}\n}`, { ecmaVersion: 2022, sourceType: 'script' });
@@ -32,7 +32,10 @@ export function parseBlock(
     );
   }
   const root = (program.body[0] as FunctionDeclaration).body;
-  const offset = (node: AnyNode) => node.start - wrapperPrefix.length;
+  const offset = (node: AnyNode): Span => ({
+    start: node.start - wrapperPrefix.length,
+    end: node.end - wrapperPrefix.length
+  });
   checkSubset(root, offset, kind, new Set(domain ? typeNames(domain) : []));
   return { root, offset };
 }

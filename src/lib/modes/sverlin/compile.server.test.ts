@@ -158,6 +158,9 @@ describe('single-component Svelte compilation', () => {
       code: 'algorithm_error',
       line: 3,
       column: 18,
+      // The whole call the problem is in, up to (not including) the semicolon.
+      endLine: 3,
+      endColumn: 34,
       message: expect.stringContaining('Values[1]: Int values must be whole numbers, not "x"')
     });
     await expect(
