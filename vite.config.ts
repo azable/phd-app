@@ -21,6 +21,9 @@ function MDHmr(): Plugin {
 export default defineConfig({
   cacheDir: '.cache/vite',
   plugins: [tailwindcss(), sveltekit(), MDHmr()],
+  // Loaded only when a PDF is exported, so without this the dev server would find it then and
+  // reload the page, cancelling that export.
+  optimizeDeps: { include: ['jspdf'] },
   server: {
     host: true,
     port: 5173,
