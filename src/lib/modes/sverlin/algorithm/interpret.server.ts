@@ -465,7 +465,7 @@ class Interpreter {
   #noValue(node: AnyNode, path: string, typeName?: string): never {
     return this.#fail(
       node,
-      `${path} would have no value, such as from .pop() of an empty collection or an index past its end. There is no null: ${typeName ? `a ${typeName} is needed here; ` : ''}for "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
+      `${path} would have no value: it was taken from an empty collection, or past its end. There is no null: ${typeName ? `a ${typeName} is needed here; ` : ''}for "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
     );
   }
 

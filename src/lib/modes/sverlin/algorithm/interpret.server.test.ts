@@ -282,7 +282,7 @@ describe('domain types', () => {
     expect(() => interpretInput('const none = null;')).toThrow(/There is no null/);
     expect(() => interpretAlgorithm('let x; yield "A";')).toThrow(/Give x a starting value/);
     expect(() => interpretAlgorithm('const s = Ints([]); const x = s.pop(); yield "A";')).toThrow(
-      /x would have no value, such as from \.pop\(\) of an empty collection/
+      /x would have no value: it was taken from an empty collection/
     );
     expect(() =>
       interpretAlgorithm('const s = Ints([]); let x = Int(0); x = s.pop(); yield "A";')
