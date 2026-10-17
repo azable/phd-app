@@ -90,10 +90,24 @@ export function artifactTheme(): Extension {
       backgroundColor: 'color-mix(in oklab, var(--muted) 70%, transparent)'
     },
     '.cm-content': {
-      padding: '0.75rem 0'
+      padding: '0.75rem 0',
+      caretColor: 'var(--card-foreground)'
     },
     '.cm-line': {
       padding: '0 0.75rem'
+    },
+    // CodeMirror's own cursor and tooltip colours assume a light editor, while its text and
+    // background come from the app's tokens above; take them from the tokens too, so they keep
+    // their contrast whatever colours the tokens resolve to.
+    '.cm-cursor, .cm-dropCursor': {
+      borderLeftColor: 'var(--card-foreground)'
+    },
+    '.cm-tooltip': {
+      backgroundColor: 'var(--popover)',
+      color: 'var(--popover-foreground)',
+      border: '1px solid var(--border)',
+      borderRadius: 'calc(var(--radius) - 4px)',
+      overflow: 'hidden'
     }
   });
 }
