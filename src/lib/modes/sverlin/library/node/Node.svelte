@@ -13,10 +13,12 @@
   import Node from './Node.svelte';
   import {
     defaultsContext,
+    insideComponentBox,
     keyedRef,
     markRendering,
     layoutMemoryContext,
     nodeIdsContext,
+    provideComponentBox,
     rendererFor,
     typeContext
   } from '../type-context';
@@ -83,7 +85,8 @@
     __ref,
     __id,
     __type,
-    __links
+    __links,
+    __component
   }: {
     /** A primitive to display, when the node has neither items nor children. */
     value?: Primitive;
@@ -157,6 +160,8 @@
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
     __links?: boolean;
+    /** Internal: set by the compiler on a typed component's root, naming the component. */
+    __component?: string;
   } = $props();
 
   const types = typeContext();
@@ -165,12 +170,22 @@
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined));
-  // The largest size this node reaches at any step (see LayoutMemory), kept as its least size so
-  // that changing content never moves anything around it.
+  // A node keeps a least size so that changing content never moves anything around it. A typed
+  // component's root keeps the largest box the component reaches for any of its inputs (see
+  // assembly/entry.ts), and the nodes inside it keep their natural sizes, since that box already
+  // holds every way they can be drawn; any other node keeps the largest size it reaches at any step
+  // (see LayoutMemory).
   const memory = layoutMemoryContext();
-  const reserved = untrack(() =>
-    id && memory && !memory.measuring ? memory.reserved.get(id) : undefined
+  const box = untrack(() =>
+    __component && memory && !memory.measuring ? memory.components.get(__component) : undefined
   );
+  const insideBox = insideComponentBox();
+  if (box) provideComponentBox();
+  const reserved = untrack(() => {
+    if (!memory || memory.measuring) return undefined;
+    if (box) return box;
+    return insideBox || !id ? undefined : memory.reserved.get(id);
+  });
   const least = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
   // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
@@ -292,6 +307,7 @@
     class="sv-node {font ?? ''}"
     data-sv-node={id}
     data-sv-key={key}
+    data-sv-component={__component}
     data-sv-type={type ?? __type}
     data-sv-shape={resolvedShape}
     data-sv-layout={arrangement}
@@ -352,13 +368,13 @@
       </div>
     {:else if children}
       {@render children()}
-    {:else}
+    {:else if value !== undefined}
+      <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
       <span class="value"
-        >{value === null || value === undefined ? '∅' : String(value)}{#if unit}<span class="unit"
-            >{unit}</span
-          >{/if}</span
+        >{value === null ? '∅' : String(value)}{#if unit}<span class="unit">{unit}</span>{/if}</span
       >
     {/if}
+    <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
   </div>
 {/if}
 

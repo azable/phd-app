@@ -471,3 +471,63 @@ describe('single-component Svelte compilation', () => {
     } satisfies Partial<InvalidSvelteSourceError>);
   });
 });
+
+describe('typed view components', () => {
+  const domain =
+    '<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';
+  const algorithm = '<script lang="sverlin">let i = Int(1); yield "A";</script>';
+  const component = (view: string, design = '') =>
+    prepareSvelteComponent(
+      `${domain}${algorithm}${design ? `<script lang="sverlin" design>${design}</script>` : ''}${view}`
+    );
+
+  it('reads typed snippets as components, stamps their roots, and lets a design value choose one', async () => {
+    const source = `${domain}${algorithm}<script lang="sverlin" design>const Look = pick([Plain, Bold]);</script>{#snippet Plain(value: Int, current: Flag)}<Node {value} />{/snippet}{#snippet Bold(value: Int, current: Flag)}<Node {value} weight="bold" />{/snippet}{@render Look(i, true)}`;
+    const prepared = prepareSvelteComponent(source);
+    expect(prepared.components).toEqual({ Plain: ['Int', 'Flag'], Bold: ['Int', 'Flag'] });
+    expect(prepared.component).toContain('__component');
+    const drawn = new Set(
+      await Promise.all(
+        [1, 2, 3, 4, 5, 6, 7, 8].map(
+          async (seed) => (await bundlePresentation(prepared, seed)).parameters.Look
+        )
+      )
+    );
+    expect([...drawn].every((look) => look === 'Plain' || look === 'Bold')).toBe(true);
+  });
+
+  it.each([
+    [
+      'reading an algorithm variable',
+      () => component('{#snippet Cell(value: Int)}<Node value={i} />{/snippet}'),
+      /Cell reads i, an input or algorithm variable/
+    ],
+    [
+      'types that are not domain types',
+      () => component('{#snippet Cell(value: Number)}<Node {value} />{/snippet}'),
+      /parameter type Number is not a type/
+    ],
+    [
+      'typing some parameters but not all',
+      () => component('{#snippet Cell(value: Int, current)}<Node {value} />{/snippet}'),
+      /Type every parameter of Cell, or none/
+    ],
+    [
+      'components inside markup',
+      () =>
+        component('<Node items={[1]}>{#snippet item(value: Int)}<Node {value} />{/snippet}</Node>'),
+      /components are defined at the top level/
+    ],
+    [
+      'choices between components of different types',
+      () =>
+        component(
+          '{#snippet A(value: Int)}<Node {value} />{/snippet}{#snippet B(value: Flag)}<Node {value} />{/snippet}',
+          'const Look = pick([A, B]);'
+        ),
+      /Look chooses between components that take different types/
+    ]
+  ])('rejects %s', (_name, prepare, message) => {
+    expect(prepare).toThrow(message);
+  });
+});

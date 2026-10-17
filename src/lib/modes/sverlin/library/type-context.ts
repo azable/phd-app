@@ -128,6 +128,11 @@ export type LayoutMemory = {
    * whose content changes keeps one size and nothing around it moves.
    */
   reserved: Map<string, { width: number; height: number }>;
+  /**
+   * The largest size each typed component's root reaches for any value of its parameters, by
+   * component; every render of the component keeps it as its least size, so they line up.
+   */
+  components: Map<string, { width: number; height: number }>;
   /** Each arrangement's contents at every step, and its solution over all of them, by scope. */
   scopes: Map<string, { inputs: Map<number, SpanInput>; span?: SpanLayout }>;
   /** The root's fit at each step. */
@@ -136,4 +141,16 @@ export type LayoutMemory = {
 
 export function layoutMemoryContext(): LayoutMemory | undefined {
   return getContext<LayoutMemory | undefined>('sverlin:layout-memory');
+}
+
+/**
+ * Mark the nodes inside a component whose box is known from rendering all its inputs: they keep
+ * their natural sizes, since the box already holds every way they can be drawn.
+ */
+export function provideComponentBox(): void {
+  setContext('sverlin:in-component-box', true);
+}
+
+export function insideComponentBox(): boolean {
+  return getContext<boolean | undefined>('sverlin:in-component-box') === true;
 }

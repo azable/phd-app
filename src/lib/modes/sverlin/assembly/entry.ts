@@ -19,6 +19,7 @@ import {
 } from 'sverlin';
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
+import components from 'virtual:components';
 import states from 'virtual:trace';
 
 // The page theme every node draws on: colour tokens, the canvas, and spacing for the page itself.
@@ -107,12 +108,21 @@ let pending: Shown | undefined;
 const scopes: LayoutMemory['scopes'] = new Map();
 const fits: LayoutMemory['fits'] = new Map();
 const reserved: LayoutMemory['reserved'] = new Map();
+const componentSizes: LayoutMemory['components'] = new Map();
 
 /** Measuring finds each node's natural sizes, recording makes the layouts, showing replays them. */
 type Phase = 'measuring' | 'recording' | 'showing';
 
-/** Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. */
-function mountStep(step: number, phase: Phase, settled: (shown: Shown) => void): Shown {
+/**
+ * Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. `extra`
+ * props are passed to the view, such as __probe, which has it render a component for given values.
+ */
+function mountStep(
+  step: number,
+  phase: Phase,
+  settled: (shown: Shown) => void,
+  extra: Record<string, unknown> = {}
+): Shown {
   const {
     __types: types = {},
     __defaults: defaults,
@@ -139,14 +149,15 @@ function mountStep(step: number, phase: Phase, settled: (shown: Shown) => void):
     measuring: phase === 'measuring',
     scopes,
     fits,
-    reserved
+    reserved,
+    components: componentSizes
   };
   try {
     shown.app = mount(Frame, {
       target: layer,
       props: {
         view: Main as Component<Record<string, unknown>>,
-        props: { ...state, step, seed: playback.__sverlinSeed ?? 1 },
+        props: { ...state, step, seed: playback.__sverlinSeed ?? 1, ...extra },
         settings: frame,
         onsettled: () => settled(shown),
         onchanged: () => shown.changes++
@@ -267,6 +278,36 @@ async function whenShown() {
   if (waitedFor) reportTiming({ phase: 'shown', ms: elapsed(), waitedFor });
 }
 
+// A component's cases are drawn in one pass; this bounds them, so a pass stays about as quick as a
+// step's. Parameters with more values are left to the sizes the steps show.
+const maximumCases = 256;
+const maximumValues = 64;
+
+/** Every combination of the values of a component's parameter types, if each has a few. */
+function combinations(types: readonly string[]): unknown[][] | undefined {
+  const valuesOf = (name: string): unknown[] | undefined => {
+    const type = atoms[name];
+    if (!type) return undefined;
+    if (type.values) return type.values;
+    if (type.base === 'boolean') return [true, false];
+    if (
+      type.base === 'integer' &&
+      type.min !== undefined &&
+      type.max !== undefined &&
+      type.max - type.min < maximumValues
+    )
+      return Array.from({ length: type.max - type.min + 1 }, (_, index) => type.min! + index);
+    return undefined;
+  };
+  let cases: unknown[][] = [[]];
+  for (const type of types) {
+    const values = valuesOf(type);
+    if (!values || cases.length * values.length > maximumCases) return undefined;
+    cases = cases.flatMap((before) => values.map((value) => [...before, value]));
+  }
+  return cases;
+}
+
 /**
  * Measure every node at every step, keeping the largest size each reaches, then record what every
  * arrangement contains at every step and solve each once over all of them. The items of a
@@ -277,17 +318,27 @@ async function whenShown() {
 async function recordSteps() {
   // The ids of each collection's items, by the collection's id, gathered over every step.
   const collections = new Map<string, Set<string>>();
-  const pass = async (step: number, phase: Phase, finish: (shown: Shown) => void) => {
+  const pass = async (
+    step: number,
+    phase: Phase,
+    finish: (shown: Shown) => void,
+    extra?: Record<string, unknown>
+  ) => {
     await whenShown();
     let mounted: Shown | undefined;
     const timed = timePass(phase, step, () => mounted);
     await new Promise<void>((done) => {
-      mounted = mountStep(step, phase, (shown) => {
-        timed.done();
-        finish(shown);
-        remove(shown);
-        done();
-      });
+      mounted = mountStep(
+        step,
+        phase,
+        (shown) => {
+          timed.done();
+          finish(shown);
+          remove(shown);
+          done();
+        },
+        extra
+      );
     });
   };
   for (let step = 0; step < states.length; step++)
@@ -319,6 +370,30 @@ async function recordSteps() {
       height: Math.max(0, ...sizes.map((size) => size.height))
     };
     for (const id of items) reserved.set(id, largest);
+  }
+  // A typed component whose parameters all have a few values is drawn once with every combination
+  // of them, and its root keeps the largest box it reaches: a cell has room for the pointer
+  // whether or not this trace ever gives it one. offsetWidth and offsetHeight round to whole
+  // pixels, so a pixel more keeps the box from coming out a fraction smaller than what it holds.
+  for (const [name, types] of Object.entries(components)) {
+    const cases = combinations(types);
+    if (!cases) continue;
+    await pass(
+      0,
+      'measuring',
+      ({ layer }) => {
+        let width = 0;
+        let height = 0;
+        for (const node of layer.querySelectorAll<HTMLElement>(
+          `[data-sv-component="${CSS.escape(name)}"]`
+        )) {
+          width = Math.max(width, node.offsetWidth + 1);
+          height = Math.max(height, node.offsetHeight + 1);
+        }
+        if (width || height) componentSizes.set(name, { width, height });
+      },
+      { __probe: { component: name, cases } }
+    );
   }
   // Record what every arrangement contains at every step, then solve each over all of them; a
   // nested arrangement's solution changes its size and so what its parent contains, so recording

@@ -88,13 +88,53 @@ export function interpretInput(body: string, domain: DomainRegistry = noDomain):
   return new Interpreter(root, offset, { kind: 'input', domain }).bindings();
 }
 
-/** Interpret the design block with keyed draws from the presentation seed (see random.server.ts). */
-export function interpretDesign(body: string, seed: number): TraceState {
+/**
+ * Interpret the design block with keyed draws from the presentation seed (see random.server.ts).
+ * The view's components are in scope by name, so a design value can choose one, as in
+ * const Number = pick([NumberText, NumberDots]); the value is the chosen component's name.
+ */
+export function interpretDesign(
+  body: string,
+  seed: number,
+  components: readonly string[] = []
+): TraceState {
   const { root, offset } = parseBlock(body, 'design');
   return new Interpreter(root, offset, {
     kind: 'design',
-    random: keyedDraws(root, seed)
+    random: keyedDraws(root, seed),
+    names: components
   }).bindings().state;
+}
+
+/**
+ * Design values that choose among components, read without drawing: each const whose value is a
+ * pick over component names, with those names.
+ */
+export function componentChoices(
+  body: string,
+  components: ReadonlySet<string>
+): Record<string, { options: string[]; start: number }> {
+  const { root, offset } = parseBlock(body, 'design');
+  const choices: Record<string, { options: string[]; start: number }> = {};
+  for (const statement of root.body)
+    if (statement.type === 'VariableDeclaration' && statement.kind === 'const')
+      for (const declarator of statement.declarations) {
+        const init = declarator.init;
+        if (
+          declarator.id.type !== 'Identifier' ||
+          init?.type !== 'CallExpression' ||
+          init.callee.type !== 'Identifier' ||
+          init.callee.name !== 'pick' ||
+          init.arguments[0]?.type !== 'ArrayExpression'
+        )
+          continue;
+        const options = init.arguments[0].elements.flatMap((element) =>
+          element?.type === 'Identifier' && components.has(element.name) ? [element.name] : []
+        );
+        if (options.length)
+          choices[declarator.id.name] = { options, start: offset(declarator).start };
+      }
+  return choices;
 }
 
 /**
@@ -235,6 +275,8 @@ class Interpreter {
       initial?: TypedState;
       random?: (draw: AnyNode) => number;
       domain?: DomainRegistry;
+      /** Names in scope whose values are themselves, such as the view's components in the design. */
+      names?: readonly string[];
     }
   ) {
     this.#root = root;
@@ -243,6 +285,8 @@ class Interpreter {
     this.#random = options.random;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
+    for (const name of options.names ?? [])
+      this.#globals.bindings.set(name, { value: name, constant: true });
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     // Input and algorithm values all have a domain type, so there is nothing without a value there.
     if (this.#kind === 'design')

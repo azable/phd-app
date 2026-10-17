@@ -115,10 +115,11 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 ## Node
 
-A node is one of three things:
+A node is one of four things:
 
 - a value: `<Node value={7} />` shows a number, string, or boolean;
 - content: `<Node>any text or markup</Node>` shows its children, for titles, explanations, captions, indices, and pointer names;
+- a shape: `<Node shape="box" radius="full" fill="currentColor" stroke="none" padding="none" minSize={0.6} />` has no value, items, or children, and draws only its box, for marks such as dots and bars; set the props that make the shape, since a drawn look can leave a box without a border or tint;
 - a collection: `<Node items={values} layout="row" />` arranges child nodes. Without an `item` snippet, each primitive item becomes a value node (drawn by its type's renderer, if typed) and each array item a nested collection; to control each item, give `{#snippet item(value, index, type)} <Node {value} {type} … /> {/snippet}`, where `type` is the item's atomic type name or `undefined`.
 
 Titles and annotations are nodes too: `<Node>Linear search</Node>` makes a title, and arranging a node's children with `layout` puts an index, caption, or pointer name beside or above a value: `<Node layout="column"><Node color="neutral">{index}</Node><Node {value} /></Node>`. Without `layout`, children flow as ordinary text.

@@ -12,8 +12,25 @@ declare module 'virtual:trace' {
   export default states;
 }
 
-/** The component's atomic types by name, including built-in Int, Real, Bool, and Text. */
+/** The component's atomic types by name, as its domain block defines them. */
 declare module 'virtual:atoms' {
-  const atoms: Record<string, { name: string; base: string; parent?: string; unit?: string }>;
+  const atoms: Record<
+    string,
+    {
+      name: string;
+      base: string;
+      parent?: string;
+      unit?: string;
+      min?: number;
+      max?: number;
+      values?: (string | number)[];
+    }
+  >;
   export default atoms;
+}
+
+/** The view's typed components and the domain types of their parameters, in order. */
+declare module 'virtual:components' {
+  const components: Record<string, string[]>;
+  export default components;
 }

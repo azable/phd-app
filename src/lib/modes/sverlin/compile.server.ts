@@ -9,6 +9,7 @@ import entrySource from './assembly/entry.ts?raw';
 import preludeSource from './assembly/prelude.ts?raw';
 import {
   AlgorithmError,
+  componentChoices,
   declaredNames,
   designChoices,
   interpretAlgorithm,
@@ -21,7 +22,18 @@ import {
   type TraceState
 } from './algorithm/interpret.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
-import { definesType, noDomain, typeNames } from './algorithm/structures.server';
+import {
+  definesType,
+  noDomain,
+  typeNames,
+  type DomainRegistry
+} from './algorithm/structures.server';
+import {
+  findComponents,
+  probeMarkup,
+  readsOf,
+  type ComponentSignatures
+} from './components.server';
 import { drawDefaults } from './library/node/defaults';
 import { forms } from './library/node/forms';
 import {
@@ -107,6 +119,8 @@ export type PreparedComponent = {
   component: string;
   master: MasterStep[];
   atoms: AtomRegistry;
+  /** The view's typed components and their parameter types. */
+  components: ComponentSignatures;
   design?: Block;
   /** Whether <Link> components sit at the top of the view, between top-level nodes. */
   topLevelLinks?: boolean;
@@ -177,7 +191,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
     const { svelteSource, blocks } = extractBlocks(source);
-    const ast = parse(svelteSource, { filename: 'Main.svelte' });
+    // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
+    // so without moving anything the view's positions name. A view with a script of its own is
+    // parsed as written, so the script is reported below.
+    const scripted = /<script\b/iu.test(svelteSource);
+    const ast = parse(scripted ? svelteSource : `${svelteSource}<script lang="ts"></script>`, {
+      filename: 'Main.svelte'
+    });
+    const found = findComponents(ast.html as Parameters<typeof findComponents>[0]);
     visit(ast, (node) => {
       if (
         node.type === 'ImportDeclaration' ||
@@ -190,7 +211,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           { code: 'import', start: sourcePosition(source, (node as { start?: number }).start ?? 0) }
         );
     });
-    const authoredScript = ast.instance ?? ast.module;
+    const authoredScript = scripted ? (ast.instance ?? ast.module) : undefined;
     if (authoredScript)
       throw new InvalidSvelteSourceError(
         'Views cannot have their own <script>: input, algorithm, and design values, step, seed, and the library components are already in scope. Compute in markup, using {@const} inside a block or component for reuse.',
@@ -200,8 +221,23 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const choices = blocks.design
       ? interpretBlock(source, blocks.design, (body) => designChoices(body))
       : {};
-    const { tagged, topLevelLinks, problems } = withNodeRefs(svelteSource, ast, source, choices);
-    viewProblems = problems;
+    const { tagged, topLevelLinks, problems } = withNodeRefs(
+      svelteSource,
+      ast,
+      source,
+      choices,
+      found.roots
+    );
+    viewProblems = [
+      ...problems,
+      ...found.problems.map(
+        ({ message, start }) =>
+          new InvalidSvelteSourceError(message, {
+            code: 'view_component',
+            start: sourcePosition(source, start)
+          })
+      )
+    ];
     if (!blocks.algorithm)
       throw new InvalidSvelteSourceError(
         'Add a <script lang="sverlin"> algorithm block whose yield statements mark the steps, such as yield "Start";',
@@ -256,6 +292,24 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `"${library}" names a library component; choose another variable name.`,
         at(library, blocks.input, blocks.algorithm, blocks.design)
       );
+    const components = checkComponents(found.components, domain, stateNames, props, source);
+    const componentChoice = blocks.design
+      ? interpretBlock(source, blocks.design, (body) =>
+          componentChoices(body, new Set(Object.keys(components)))
+        )
+      : {};
+    for (const [name, { options, start }] of Object.entries(componentChoice)) {
+      const [first, ...rest] = options;
+      const differs = rest.find((option) => components[option].join() !== components[first].join());
+      if (differs)
+        throw new InvalidSvelteSourceError(
+          `${name} chooses between components that take different types: ${first}(${components[first].join(', ')}) and ${differs}(${components[differs].join(', ')}). A choice is between components with the same parameter types.`,
+          {
+            code: 'component_choice',
+            start: sourcePosition(source, (blocks.design as Block).offset + start)
+          }
+        );
+    }
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
@@ -264,17 +318,23 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     const renderers = typeRenderers(ast, atoms, source);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const component = compile(withGeneratedScripts(tagged, props, renderers), {
-      filename: 'Main.svelte',
-      generate: 'client',
-      css: 'injected',
-      dev: false
-    }).js.code;
+    const component = compile(
+      withGeneratedScripts(
+        `${tagged}${probeMarkup(components)}`,
+        props,
+        renderers,
+        Object.fromEntries(
+          Object.entries(componentChoice).map(([name, { options }]) => [name, options])
+        )
+      ),
+      { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
+    ).js.code;
     return {
       source,
       component,
       master,
       atoms,
+      components,
       ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
     };
@@ -299,7 +359,9 @@ export async function bundlePresentation(
 ): Promise<SvelteBundle> {
   const { master } = prepared;
   const parameters = prepared.design
-    ? interpretBlock(prepared.source, prepared.design, (body) => interpretDesign(body, seed))
+    ? interpretBlock(prepared.source, prepared.design, (body) =>
+        interpretDesign(body, seed, Object.keys(prepared.components))
+      )
     : {};
   // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).
   if (parameters.defaults !== undefined)
@@ -326,7 +388,8 @@ export async function bundlePresentation(
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),
-    JSON.stringify(prepared.atoms)
+    JSON.stringify(prepared.atoms),
+    JSON.stringify(prepared.components)
   );
   const output = result.outputFiles[0];
   if (output.contents.byteLength > maximumBundleBytes) {
@@ -404,14 +467,29 @@ function sourcePosition(source: string, offset: number): { line: number; column:
 function withGeneratedScripts(
   source: string,
   props: readonly string[],
-  renderers: readonly string[]
+  renderers: readonly string[],
+  choices: Record<string, string[]>
 ): string {
-  const names = [...props, 'step', 'seed'].join(', ');
+  // A design value that chooses a component arrives as the component's name, and the view uses
+  // the component itself under the value's name.
+  const names = [
+    ...props.map((name) => (choices[name] ? `${name}: __choice_${name}` : name)),
+    'step',
+    'seed',
+    '__probe'
+  ].join(', ');
+  const chosen = Object.entries(choices)
+    .map(
+      ([name, options]) =>
+        `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]);`
+    )
+    .join(' ');
   // Type renderers are the view's own top-level snippets, which its script may refer to.
   const registration = renderers.length
     ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.join(', ')} });`
     : '';
-  return `<script module>${prelude}</script><script>let { ${names} } = $props(); ${registration}</script>${source}`;
+  // TypeScript, so the types of components' parameters are read and removed.
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -636,7 +714,9 @@ function withNodeRefs(
   svelteSource: string,
   ast: { html?: unknown; css?: { start: number } | null },
   source: string,
-  choices: Record<string, DesignChoices>
+  choices: Record<string, DesignChoices>,
+  /** The root <Node> tags of components, by where they start, with the component each roots. */
+  roots: ReadonlyMap<number, string>
 ): { tagged: string; topLevelLinks: boolean; problems: InvalidSvelteSourceError[] } {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
@@ -725,9 +805,47 @@ function withNodeRefs(
   for (const { start, name, links } of tags.sort((a, b) => b.start - a.start)) {
     const { line, column } = sourcePosition(source, start);
     const end = start + name.length + 1;
-    tagged = `${tagged.slice(0, end)} __ref="${line}:${column + 1}"${links ? ' __links' : ''}${tagged.slice(end)}`;
+    const root = roots.get(start);
+    tagged = `${tagged.slice(0, end)} __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${tagged.slice(end)}`;
   }
   return { tagged, topLevelLinks, problems };
+}
+
+/**
+ * Check the view's components: their parameter types are domain types, their names are free, and
+ * they read only their parameters, design values, and other components, never the input or
+ * algorithm's variables. Gives each component's parameter types.
+ */
+function checkComponents(
+  found: ReturnType<typeof findComponents>['components'],
+  domain: DomainRegistry,
+  stateNames: readonly string[],
+  props: readonly string[],
+  source: string
+): ComponentSignatures {
+  const signatures: ComponentSignatures = {};
+  for (const { name, start, types, node } of found) {
+    const at = { code: 'view_component', start: sourcePosition(source, start) };
+    const unknown = types.find((type) => !definesType(domain, type));
+    if (unknown !== undefined)
+      throw new InvalidSvelteSourceError(
+        `${name}'s parameter type ${unknown} is not a type; define it in the domain block, or use one that is.`,
+        at
+      );
+    if (props.includes(name) || definesType(domain, name) || libraryNames.includes(name))
+      throw new InvalidSvelteSourceError(
+        `${name} names a variable, type, or library component; choose another component name.`,
+        at
+      );
+    const state = [...readsOf(node)].find((read) => stateNames.includes(read));
+    if (state)
+      throw new InvalidSvelteSourceError(
+        `${name} reads ${state}, an input or algorithm variable; a component reads only its parameters and design values, so add a parameter for it and pass ${state} where ${name} is rendered.`,
+        at
+      );
+    signatures[name] = types;
+  }
+  return signatures;
 }
 
 /**
@@ -757,9 +875,9 @@ function typeRenderers(
   });
 }
 
-async function bundle(component: string, states: string, atoms: string) {
+async function bundle(component: string, states: string, atoms: string, components: string) {
   try {
-    return await bundleComponent(component, states, atoms);
+    return await bundleComponent(component, states, atoms, components);
   } catch (cause) {
     // Failures located in the authored component, such as a blocked require(), are source errors.
     const authored = (cause as Partial<BuildFailure>).errors?.find(
@@ -777,13 +895,24 @@ const runtime = (path: string) => /^svelte(?:\/[\w-]+)*$/u.test(path);
 const allowedImports: Record<string, (path: string) => boolean> = {
   entry: (path) =>
     runtime(path) ||
-    ['virtual:component', 'virtual:trace', 'virtual:atoms', 'sverlin'].includes(path),
+    [
+      'virtual:component',
+      'virtual:trace',
+      'virtual:atoms',
+      'virtual:components',
+      'sverlin'
+    ].includes(path),
   component: (path) => runtime(path) || path === 'sverlin',
   // The constraint layout engine, by its one module, which needs none of WebCola's d3 adaptor.
   library: (path) => runtime(path) || /^\.\.?\//u.test(path) || path === 'webcola/dist/src/layout'
 };
 
-function sandboxModules(component: string, states: string, atoms: string): Plugin {
+function sandboxModules(
+  component: string,
+  states: string,
+  atoms: string,
+  components: string
+): Plugin {
   return {
     name: 'sandbox-modules',
     setup(plugin) {
@@ -796,6 +925,8 @@ function sandboxModules(component: string, states: string, atoms: string): Plugi
           return { path: 'Main.svelte', namespace: 'component' };
         if (args.path === 'virtual:trace') return { path: 'states.json', namespace: 'trace' };
         if (args.path === 'virtual:atoms') return { path: 'atoms.json', namespace: 'atoms' };
+        if (args.path === 'virtual:components')
+          return { path: 'components.json', namespace: 'components' };
         if (args.path === 'sverlin') return { path: 'index.ts', namespace: 'library' };
         if (args.namespace === 'library' && !runtime(args.path) && /^\.\.?\//u.test(args.path)) {
           const path = libraryPath(posix.join(posix.dirname(args.importer), args.path));
@@ -823,6 +954,10 @@ function sandboxModules(component: string, states: string, atoms: string): Plugi
         contents: atoms,
         loader: 'json'
       }));
+      plugin.onLoad({ filter: /.*/, namespace: 'components' }, () => ({
+        contents: components,
+        loader: 'json'
+      }));
       plugin.onLoad({ filter: /.*/, namespace: 'trace' }, () => ({
         contents: states,
         loader: 'json'
@@ -835,10 +970,10 @@ function sandboxModules(component: string, states: string, atoms: string): Plugi
   };
 }
 
-function bundleComponent(component: string, states: string, atoms: string) {
+function bundleComponent(component: string, states: string, atoms: string, components: string) {
   return build({
     entryPoints: ['virtual:entry'],
-    plugins: [sandboxModules(component, states, atoms)],
+    plugins: [sandboxModules(component, states, atoms, components)],
     bundle: true,
     write: false,
     platform: 'browser',
