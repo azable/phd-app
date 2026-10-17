@@ -42,14 +42,15 @@ const playback = window as typeof window & {
 const clampStep = (step: number) => Math.min(Math.max(step, 0), states.length - 1);
 
 // The drawn font applies page-wide, so every node inherits it unless it sets its own. Drawn
-// defaults belong to the presentation, so every step shares them.
+// defaults belong to the presentation, so every step shares them. It is set on the body, which the
+// sandbox document gives a font of its own (see ../../sandbox.ts).
 const fonts: Record<string, string> = {
   sans: 'system-ui, sans-serif',
   serif: "ui-serif, Georgia, 'Times New Roman', serif",
   mono: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace"
 };
 const font = (states[0] as StepState).__defaults.font;
-if (fonts[font]) document.documentElement.style.fontFamily = fonts[font];
+if (fonts[font]) document.body.style.fontFamily = fonts[font];
 
 /** A type's unit, or that of the nearest type it refines. */
 function unitOf(typeName: string): string | undefined {
