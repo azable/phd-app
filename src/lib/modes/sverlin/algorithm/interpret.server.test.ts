@@ -240,35 +240,55 @@ describe('domain types', () => {
     expect(() => interpretTypedInput('const n = 3;')).toThrow(
       "Declare a type that says what it means in the domain block, such as const Count = type('integer');, and write Count(3)."
     );
-    // Nothing yet is null, and collections and records made by their types are fine.
-    expect(
-      interpretInput('const empty = Ints([]); const none = null; const grid = Grid([[1]]);').state
-    ).toEqual({ empty: [], none: null, grid: [[1]] });
+    // Collections and records made by their types are fine.
+    expect(interpretInput('const empty = Ints([]); const grid = Grid([[1]]);').state).toEqual({
+      empty: [],
+      grid: [[1]]
+    });
   });
 
   it('rejects plain values the algorithm stores, at the statement that stores them', () => {
-    const body = 'let found = Flag(false);\nyield "A";\nfound = 1 < 2;';
-    expect(() => interpretAlgorithm(body)).toThrow(
-      expect.objectContaining({
-        offset: body.indexOf('1 < 2'),
-        message: expect.stringMatching(/^found would be the plain boolean true.*Flag\(a < b\)/u)
-      })
-    );
     expect(() => interpretAlgorithm('let i = 0; yield "A";')).toThrow(
       /i would be the plain number 0/
     );
-    expect(() =>
-      interpretAlgorithm('const d = Ints([0]); let n = Int(0); n = d.length; yield "A";')
-    ).toThrow(/n would be the plain number 1/);
     expect(() => interpretAlgorithm('const s = Ints([]); s.push("x"); yield "A";')).toThrow(
       /an item added by s\.push\(\): Int values must be whole numbers, not "x"/
-    );
-    expect(() => interpretAlgorithm('let h = Int(7); h = h / Int(2); yield "A";')).toThrow(
-      /h would be the plain number 3\.5/
     );
     // Plain literals in expressions are fine when the result keeps its type.
     expect(
       interpretAlgorithm('let i = Int(0); i = i + 1; i += 2; i++; yield "A";')[0].types
     ).toEqual({ i: 'Int' });
+  });
+
+  it('keeps each variable the type it was made with, converting what is assigned to it', () => {
+    const step = interpretAlgorithm(
+      'const d = Ints([0, 1]); let n = Int(0); n = d.length; let found = Flag(false); found = 1 < 2; yield "A";'
+    )[0];
+    expect(step.state).toMatchObject({ n: 2, found: true });
+    expect(step.types).toMatchObject({ n: 'Int', found: 'Flag' });
+    const body = 'let found = Flag(false);\nyield "A";\nfound = Text("yes");';
+    expect(() => interpretAlgorithm(body)).toThrow(
+      expect.objectContaining({
+        offset: body.indexOf('found = Text'),
+        message: expect.stringMatching(/^found must be a Flag, not a Text/u)
+      })
+    );
+    expect(() => interpretAlgorithm('let h = Int(7); h = h / Int(2); yield "A";')).toThrow(
+      /h: Int values must be whole numbers, not 3\.5/
+    );
+  });
+
+  it('has no null: every place holds a value of its type', () => {
+    expect(() => interpretInput('const none = null;')).toThrow(/There is no null/);
+    expect(() => interpretAlgorithm('let x; yield "A";')).toThrow(/Give x a starting value/);
+    expect(() => interpretAlgorithm('const s = Ints([]); const x = s.pop(); yield "A";')).toThrow(
+      /x would have no value, such as from \.pop\(\) of an empty collection/
+    );
+    expect(() =>
+      interpretAlgorithm('const s = Ints([]); let x = Int(0); x = s.pop(); yield "A";')
+    ).toThrow(/x would have no value.*an Int is needed here|x would have no value/);
+    expect(() => interpretAlgorithm('const x = undefined; yield "A";')).toThrow(
+      /"undefined" is not defined/
+    );
   });
 });

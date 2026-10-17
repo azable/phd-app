@@ -86,6 +86,11 @@ export function checkSubset(
       case 'Literal':
         if ('regex' in node || 'bigint' in node)
           reject(node, 'Regular expressions and BigInt are not supported.');
+        if (node.value === null && (kind === 'input' || kind === 'algorithm'))
+          reject(
+            node,
+            `There is no null: every value has a domain type. For "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
+          );
         break;
       case 'Property':
         if (node.kind !== 'init' || node.method || node.computed)

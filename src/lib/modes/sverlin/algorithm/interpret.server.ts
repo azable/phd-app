@@ -54,7 +54,11 @@ export type TraceState = Record<string, TraceValue>;
 export type TypeMap = Record<string, string>;
 
 /** Plain recorded values with the atomic types of the typed ones. */
-export type TypedState = { state: TraceState; types: TypeMap };
+/**
+ * Plain recorded values with the domain types of the typed ones, and from the input the type each
+ * variable was declared with, which can be a union its value is one member of.
+ */
+export type TypedState = { state: TraceState; types: TypeMap; declared?: Record<string, string> };
 
 /** One uniquely labelled step of the master trace that every presentation of a source shares. */
 export type MasterStep = {
@@ -171,7 +175,8 @@ export function interpretAlgorithm(
 
 type ObjectValue = { [key: string]: Value };
 type Value = undefined | null | boolean | number | string | Atom | Value[] | ObjectValue;
-type Binding = { value: Value; constant: boolean };
+/** A variable: its value, and in the input and algorithm the type it was made with. */
+type Binding = { value: Value; constant: boolean; type?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
@@ -233,7 +238,9 @@ class Interpreter {
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
-    this.#globals.bindings.set('undefined', { value: undefined, constant: true });
+    // Input and algorithm values all have a domain type, so there is nothing without a value there.
+    if (this.#kind === 'design')
+      this.#globals.bindings.set('undefined', { value: undefined, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
     this.#globals.bindings.set('NaN', { value: NaN, constant: true });
     // Input values become ordinary top-level variables the algorithm may update, keeping types.
@@ -242,7 +249,8 @@ class Interpreter {
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
         value: this.#fromTrace(value, name, initialTypes),
-        constant: false
+        constant: false,
+        type: options.initial?.declared?.[name] ?? initialTypes[name]
       });
     this.#topLevelNames = [
       ...initial.map(([name]) => name),
@@ -262,10 +270,13 @@ class Interpreter {
     return this.#trace;
   }
 
-  /** Run an input or design block and return its top-level bindings. */
+  /** Run an input or design block and return its top-level bindings, with their declared types. */
   bindings(): TypedState {
     this.#execute();
-    return this.#state(this.#root);
+    const declared: Record<string, string> = {};
+    for (const [name, binding] of this.#topLevel.bindings)
+      if (binding.type) declared[name] = binding.type;
+    return { ...this.#state(this.#root), ...(Object.keys(declared).length ? { declared } : {}) };
   }
 
   #execute(): void {
@@ -315,10 +326,10 @@ class Interpreter {
   /**
    * A value as the domain type a place expects. A literal or plain value becomes that type; a typed
    * value must already be it, or refine it. Records and collections are made field by field and
-   * element by element, and null stands for nothing yet anywhere.
+   * element by element. There is no null: every place holds a value of its type.
    */
   #convert(value: Value, typeName: string, node: AnyNode, path: string): Value {
-    if (value === null || value === undefined) return null;
+    if (value === null || value === undefined) return this.#noValue(node, path, typeName);
     const atom = this.#atoms[typeName];
     if (atom) return this.#asAtom(value, atom, node, path);
     const structure = this.#domain.structures[typeName];
@@ -414,6 +425,23 @@ class Interpreter {
     return made;
   }
 
+  /**
+   * The type a variable is declared with: the type that made its first value, as in
+   * let d = Dist(0), which declares a union even though its value is one member; otherwise its
+   * first value's own type.
+   */
+  #declaredType(init: Expression, value: Value): string | undefined {
+    if (
+      init.type === 'CallExpression' &&
+      init.callee.type === 'Identifier' &&
+      (Object.hasOwn(this.#atoms, init.callee.name) ||
+        Object.hasOwn(this.#domain.structures, init.callee.name))
+    )
+      return init.callee.name;
+    if (value instanceof Atom) return value.type.name;
+    return value !== null && typeof value === 'object' ? this.#shapes.get(value)?.name : undefined;
+  }
+
   /** The type a stored element or field must have: a collection's element or a record's field. */
   #slotType(container: object, key: string | number, node: AnyNode): string | undefined {
     const shape = this.#shapes.get(container);
@@ -433,8 +461,17 @@ class Interpreter {
    * Input and algorithm values all have domain types: every primitive a variable, element, or
    * property holds is a typed value, or null for nothing yet. Design values are plain.
    */
+  /** A place that would hold no value, such as .pop() of an empty collection, or null. */
+  #noValue(node: AnyNode, path: string, typeName?: string): never {
+    return this.#fail(
+      node,
+      `${path} would have no value, such as from .pop() of an empty collection or an index past its end. There is no null: ${typeName ? `a ${typeName} is needed here; ` : ''}for "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
+    );
+  }
+
   #typed(value: Value, node: AnyNode, name: string): void {
     if (this.#kind === 'design') return;
+    if (value === null || value === undefined) this.#noValue(node, name);
     const plain = untypedPart(value, name, (object) => this.#shapes.has(object));
     if (!plain) return;
     if (typeof plain.value === 'object')
@@ -517,9 +554,22 @@ class Interpreter {
                 ? `"${name}" is already declared here or in the input block.`
                 : `"${name}" is already declared.`
             );
-          const value = declarator.init ? this.#expression(declarator.init, scope) : undefined;
-          if (declarator.init) this.#typed(value, declarator.init, name);
-          scope.bindings.set(name, { value, constant: node.kind === 'const' });
+          if (!declarator.init) {
+            if (this.#kind !== 'design')
+              this.#fail(
+                declarator,
+                `Give ${name} a starting value of its type, as in let ${name} = Index(-1);`
+              );
+            scope.bindings.set(name, { value: undefined, constant: node.kind === 'const' });
+            continue;
+          }
+          const value = this.#expression(declarator.init, scope);
+          this.#typed(value, declarator.init, name);
+          scope.bindings.set(name, {
+            value,
+            constant: node.kind === 'const',
+            ...(this.#kind === 'design' ? {} : { type: this.#declaredType(declarator.init, value) })
+          });
         }
         return 'normal';
       case 'IfStatement':
@@ -560,11 +610,14 @@ class Interpreter {
         if (!Array.isArray(items)) this.#fail(node.right, 'for...of can only iterate over arrays.');
         const declaration = node.left as { kind: string; declarations: { id: Pattern }[] };
         const name = (declaration.declarations[0].id as { name: string }).name;
+        // The loop variable has the collection's element type, which can be a union.
+        const element = (this.#shapes.get(items) as CollectionType | undefined)?.element;
         for (let index = 0; index < items.length; index++) {
           const loopScope = new Scope(scope);
           loopScope.bindings.set(name, {
             value: items[index],
-            constant: declaration.kind === 'const'
+            constant: declaration.kind === 'const',
+            ...(element ? { type: element } : {})
           });
           const completion = this.#statement(node.body, loopScope);
           if (completion === 'return') return completion;
@@ -760,7 +813,9 @@ class Interpreter {
       if (binding.constant) this.#fail(target, `"${target.name}" is a constant.`);
       return {
         get: () => binding.value,
-        prepare: (value) => value,
+        // A variable keeps the type it was made with, as an element or field does.
+        prepare: (value) =>
+          binding.type ? this.#convert(value, binding.type, target, target.name) : value,
         set: (value) => {
           binding.value = value;
         }

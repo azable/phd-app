@@ -158,6 +158,20 @@ describe('unions', () => {
     );
   });
 
+  it('declares a variable made by a union as the union, so it can hold either member', () => {
+    const step = last("let d = Dist(0); d = 'unreached'; yield 'A';");
+    expect(step.types.d).toBe('Unreached');
+    expect(() => last("let d = Dist(0); d = Count(3); yield 'A';")).toThrow(
+      /d must be a Distance or Unreached, not a Count value/
+    );
+    // A variable made by a member keeps that member's type.
+    expect(() => last("let d = Distance(0); d = 'unreached'; yield 'A';")).toThrow(
+      /Distance values must be whole numbers/
+    );
+    // The input's declared types carry into the algorithm.
+    expect(last("d = 'unreached'; yield 'A';", 'const d = Dist(0);').types.d).toBe('Unreached');
+  });
+
   it('compares members with === and !==, but not by order', () => {
     const step = last(`
       const d = Distances([0, "unreached"]);

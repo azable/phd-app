@@ -32,7 +32,7 @@ Compute everything inline in markup. Svelte re-evaluates template expressions wh
 
 ```svelte
 <Node layout="column" align="start">
-  {@const current = i >= 0 && i < values.length ? values[i] : null}
+  {@const started = i >= 0 && i < values.length}
   <Node items={values}>
     {#snippet item(value, index)}
       <Node
@@ -42,7 +42,7 @@ Compute everything inline in markup. Svelte re-evaluates template expressions wh
       />
     {/snippet}
   </Node>
-  <Node>{current === null ? 'Not started' : `Checking ${current}`}</Node>
+  <Node>{started ? `Checking ${values[i]}` : 'Not started'}</Node>
 </Node>
 ```
 
@@ -50,7 +50,7 @@ Facts about the algorithm, such as which cells were checked, are often clearer r
 
 ## Steps
 
-- `yield 'label';` records a step: a copy of every top-level input and algorithm variable. Variables declared inside loops or blocks are not recorded; declare a loop index at the top level (`let i = Index(-1);`) and write `for (i = Index(0); ...)` when the view needs it. A top-level variable not yet declared at a step is `null`.
+- `yield 'label';` records a step: a copy of every top-level input and algorithm variable. Variables declared inside loops or blocks are not recorded; declare a loop index at the top level (`let i = Index(-1);`) and write `for (i = Index(0); ...)` when the view needs it. A top-level variable has no value at steps before its declaration, so declare every variable the view reads before the first `yield`, with a starting value of its type.
 - Labels identify steps when presentations are compared, so make each one say what distinguishes its step; a repeated label is numbered by its occurrence, as in "Shift (2)", which reads less clearly. Inside loops, include what distinguishes the step, such as ``yield `Compare index ${i}`;``.
 - `return;` stops the algorithm early.
 
@@ -62,7 +62,9 @@ Give values meaning with atomic types. No types are predefined: define each one 
 - a refinement of a type defined earlier, with optional `unit`, `min`, and `max`: `const Height = type(Int, { unit: 'cm', min: 0 });`
 - an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to the view (see Type renderers).
 
-Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, or `null` for nothing yet, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type. Plain literals can still appear in expressions, as in `i + 1` or `x < 10`, but storing a plain result is an error: comparisons, `.length`, `.indexOf()`, and `Math` functions give plain values, so wrap a result to keep it, as in `found = Found(values[i] === target)` or `n = Count(values.length)`.
+Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. There is no `null`: every variable starts with a value, and "nothing yet" is a value of a type that says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')` (see Collections, records, and unions). Taking a value that is not there, such as `.pop()` of an empty collection, is an error. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
+
+A variable keeps the type it was made with, and a value assigned to it takes that type, as an element or field does: after `let found = Found(false);`, `found = values[i] === target` stores a `Found`, and after `let n = Count(0);`, `n = values.length` stores a `Count`, while `found = Count(1)` is an error. A variable made by a union, as in `let d = Dist(0);`, can hold any of its members. Plain literals can appear in expressions, as in `i + 1` or `x < 10`, but a new variable needs a type to hold a plain result: comparisons, `.length`, `.indexOf()`, and `Math` functions give plain values, so write `const n = Count(values.length);`.
 
 Typed values behave like their plain values in comparisons, conditions, `===`, `.indexOf`, `.includes`, template strings, and indexing, and they keep their type as the algorithm moves them between variables and arrays. Arithmetic keeps types too: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
 
@@ -99,8 +101,8 @@ The view receives plain arrays and objects. Renderer snippets are for atomic typ
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, `null`, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: functions of any kind, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
+- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
+- Not allowed: `null` and `undefined`, functions of any kind, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library
@@ -115,7 +117,7 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 A node is one of three things:
 
-- a value: `<Node value={7} />` shows a primitive (a number, string, boolean, or `null`);
+- a value: `<Node value={7} />` shows a number, string, or boolean;
 - content: `<Node>any text or markup</Node>` shows its children, for titles, explanations, captions, indices, and pointer names;
 - a collection: `<Node items={values} layout="row" />` arranges child nodes. Without an `item` snippet, each primitive item becomes a value node (drawn by its type's renderer, if typed) and each array item a nested collection; to control each item, give `{#snippet item(value, index, type)} <Node {value} {type} … /> {/snippet}`, where `type` is the item's atomic type name or `undefined`.
 
