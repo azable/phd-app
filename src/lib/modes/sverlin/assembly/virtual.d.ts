@@ -29,14 +29,8 @@ declare module 'virtual:atoms' {
   export default atoms;
 }
 
-/**
- * The view's typed components, each after those it renders, with their parameters: an atomic type
- * by name, or a collection of one filled to the longest the trace holds.
- */
+/** The view's typed components, each after those it renders, with the cases to draw it with. */
 declare module 'virtual:components' {
-  const components: {
-    name: string;
-    parameters: (string | { element: string; length: number })[];
-  }[];
+  const components: { name: string; cases: unknown[][] }[];
   export default components;
 }

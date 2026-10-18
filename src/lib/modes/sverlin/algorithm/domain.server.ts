@@ -12,7 +12,7 @@ import type { DomainRegistry, StructureType } from './structures.server';
 
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
- * kind (`type('integer')`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
+ * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
  * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from types defined
  * before it (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`,
  * `collection(Edge)`).
@@ -48,7 +48,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), or collection(...), as in const ${name} = type('integer');`
+          `Define ${name} with type(...), union(...), record({...}), or collection(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
         );
       const call = init as CallExpression;
       if (name in atoms || name in structures)
@@ -81,7 +81,7 @@ export function interpretDomain(body: string): DomainRegistry {
         if (!parent)
           fail(
             definition,
-            `Unknown type ${definition.name}; define it first, as in const ${definition.name} = type('integer');`
+            `Unknown type ${definition.name}; define it first, as in const ${definition.name} = type('integer', { min: 0, max: 9 });`
           );
         type = { ...parent, name, parent: parent.name };
       } else if (definition.type === 'ArrayExpression') {
@@ -108,6 +108,8 @@ export function interpretDomain(body: string): DomainRegistry {
         );
       }
       if (options) applyAtomOptions(type, options, fail);
+      const unbounded = unboundedProblem(type);
+      if (unbounded) fail(call, unbounded);
       atoms[name] = type;
     }
   }
@@ -179,6 +181,25 @@ function applyAtomOptions(
   }
   if (type.min !== undefined && type.max !== undefined && type.min > type.max)
     fail(options, 'min must not exceed max.');
+}
+
+/** Why an atomic type's values are not a known, finite set, or undefined when they are. */
+function unboundedProblem(type: AtomType): string | undefined {
+  const reason =
+    'Every type must have a known, finite set of values, so the view can be drawn for each of them.';
+  if (type.values || type.base === 'boolean') return undefined;
+  if (type.base === 'text')
+    return `List the values of ${type.name}, as in const ${type.name} = type(['start', 'done']);. ${reason}`;
+  if (type.min !== undefined && type.max !== undefined) return undefined;
+  const missing =
+    type.min === undefined && type.max === undefined
+      ? 'a min and a max'
+      : type.min === undefined
+        ? 'a min'
+        : 'a max';
+  const min = type.min ?? (type.max === undefined ? 0 : Math.min(0, type.max - 9));
+  const max = type.max ?? min + 9;
+  return `Give ${type.name} ${missing}, as in const ${type.name} = type('${type.base}', { min: ${min}, max: ${max} });. ${reason}`;
 }
 
 /** A literal's value, including negative numbers; undefined for anything else. */

@@ -5,9 +5,9 @@ import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret
 const domain = interpretDomain(`
   const Vertex = type([0, 1, 2, 3]);
   const Weight = type([4, 5, 7]);
-  const Distance = type('integer', { min: 0 });
+  const Distance = type('integer', { min: 0, max: 1000 });
   const Unreached = type(['unreached']);
-  const Count = type('integer');
+  const Count = type('integer', { min: -100, max: 1000 });
   const Dist = union(Distance, Unreached);
   const Edge = record({ from: Vertex, to: Vertex, weight: Weight });
   const Edges = collection(Edge);
@@ -41,25 +41,29 @@ describe('union, record, and collection definitions', () => {
     ['unknown members', 'const A = union(B, C);', /Unknown type B/],
     [
       'types defined later',
-      'const A = collection(B); const B = type("integer");',
+      'const A = collection(B); const B = type("integer", { min: -100, max: 1000 });',
       /Unknown type B/
     ],
-    ['one-member unions', 'const B = type("integer"); const A = union(B);', /two or more/],
+    [
+      'one-member unions',
+      'const B = type("integer", { min: -100, max: 1000 }); const A = union(B);',
+      /two or more/
+    ],
     [
       'unions of unions',
-      'const B = type("integer"); const C = type("text"); const U = union(B, C); const A = union(U, B);',
+      'const B = type("integer", { min: -100, max: 1000 }); const C = type(["c"]); const U = union(B, C); const A = union(U, B);',
       /not other unions/
     ],
     ['records without fields', 'const A = record({});', /at least one field/],
     ['record fields that are not types', 'const A = record({ x: 3 });', /must name a type/],
     [
       'collections of several types',
-      'const B = type("integer"); const A = collection(B, B);',
+      'const B = type("integer", { min: -100, max: 1000 }); const A = collection(B, B);',
       /one element type/
     ],
     [
       'refining a record',
-      'const B = type("integer"); const R = record({ b: B }); const A = type(R);',
+      'const B = type("integer", { min: -100, max: 1000 }); const R = record({ b: B }); const A = type(R);',
       /refines an atomic type/
     ]
   ])('rejects %s', (_name, body, message) => {

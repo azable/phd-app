@@ -8,10 +8,10 @@ import {
 } from './interpret.server';
 
 const domain = interpretDomain(`
-  const Int = type('integer');
-  const Real = type('number');
+  const Int = type('integer', { min: -100, max: 1000 });
+  const Real = type('number', { min: -100, max: 1000 });
   const Bool = type('boolean');
-  const Text = type('text');
+  const Text = type(['yes', 'no', 'ab', 'abc']);
   const Height = type(Int, { unit: 'cm', min: 0, max: 300 });
   const Weight = type(Int, { unit: 'kg' });
   const Suit = type(['♠', '♥', '♦', '♣']);
@@ -28,7 +28,7 @@ function last(body: string) {
 
 describe('atomic type definitions', () => {
   it('defines primitive kinds, refinements, and enumerations', () => {
-    expect(domain.atoms.Int).toEqual({ name: 'Int', base: 'integer' });
+    expect(domain.atoms.Int).toEqual({ name: 'Int', base: 'integer', min: -100, max: 1000 });
     expect(domain.atoms.Height).toEqual({
       name: 'Height',
       base: 'integer',
@@ -51,7 +51,31 @@ describe('atomic type definitions', () => {
     ['repeated enumeration values', 'const A = type(["x", "x"]);', /each listed once/],
     ['unknown options', 'const A = type("integer", { colour: "red" });', /Unknown type\(\) option/],
     ['ranges on text', 'const A = type("text", { min: 1 });', /only applies to integer and number/],
-    ['inverted ranges', 'const A = type("integer", { min: 5, max: 1 });', /min must not exceed max/]
+    [
+      'inverted ranges',
+      'const A = type("integer", { min: 5, max: 1 });',
+      /min must not exceed max/
+    ],
+    [
+      'integers without a range',
+      'const A = type("integer");',
+      "Give A a min and a max, as in const A = type('integer', { min: 0, max: 9 });. Every type must have a known, finite set of values, so the view can be drawn for each of them."
+    ],
+    [
+      'numbers with only a min',
+      'const A = type("number", { min: -1 });',
+      "Give A a max, as in const A = type('number', { min: -1, max: 8 });."
+    ],
+    [
+      'numbers with only a max',
+      'const A = type("number", { max: 100 });',
+      "Give A a min, as in const A = type('number', { min: 0, max: 100 });."
+    ],
+    [
+      'open text',
+      'const A = type("text");',
+      "List the values of A, as in const A = type(['start', 'done']);."
+    ]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);
   });

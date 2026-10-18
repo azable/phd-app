@@ -549,12 +549,18 @@ class Interpreter {
             ? 'integer'
             : 'number';
     const example = { integer: 'Count', number: 'Amount', boolean: 'Flag', text: 'Label' }[base];
+    const definition =
+      base === 'boolean'
+        ? "type('boolean')"
+        : base === 'text'
+          ? `type([${shown}])`
+          : `type('${base}', { min: ${Math.min(0, plain.value as number)}, max: ${Math.max(9, plain.value as number)} })`;
     const fix = fitting.length
       ? `Write it as ${fitting
           .slice(0, 3)
           .map((type) => `${type.name}(${shown})`)
           .join(' or ')}, or declare a type that says what it means in the domain block.`
-      : `Declare a type that says what it means in the domain block, such as const ${example} = type('${base}');, and write ${example}(${shown}).`;
+      : `Declare a type that says what it means in the domain block, such as const ${example} = ${definition};, and write ${example}(${shown}).`;
     const computed =
       node.type === 'Literal' || node.type === 'ArrayExpression' || node.type === 'ObjectExpression'
         ? ''

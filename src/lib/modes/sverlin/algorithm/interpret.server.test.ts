@@ -11,7 +11,7 @@ import {
 
 // Input and algorithm values all have domain types; these tests share a small domain.
 const atoms = interpretDomain(
-  "const Int = type('integer'); const Real = type('number'); const Flag = type('boolean'); const Text = type('text'); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });"
+  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });"
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);
@@ -111,7 +111,9 @@ describe('algorithm interpretation', () => {
   it('stops endless loops and oversized state', () => {
     expect(() => interpretAlgorithm('while (true) {} yield "A";')).toThrow(/operations/);
     expect(() =>
-      interpretAlgorithm('let s = Text("ab"); while (true) { s = s + s; } yield "A";')
+      interpretAlgorithm(
+        `let a = Ints([1]); while (a.length < 200) a.push(1); yield a.join("${'-'.repeat(60)}");`
+      )
     ).toThrow(/characters/);
     expect(() =>
       interpretAlgorithm('let a = Ints([1]); while (true) { a = Ints([...a, ...a]); } yield "A";')
@@ -238,7 +240,7 @@ describe('domain types', () => {
       'n would be the plain number 8, but input and algorithm values must have a domain type. Write it as Int(8) or Real(8)'
     );
     expect(() => interpretTypedInput('const n = 3;')).toThrow(
-      "Declare a type that says what it means in the domain block, such as const Count = type('integer');, and write Count(3)."
+      "Declare a type that says what it means in the domain block, such as const Count = type('integer', { min: 0, max: 9 });, and write Count(3)."
     );
     // Collections and records made by their types are fine.
     expect(interpretInput('const empty = Ints([]); const grid = Grid([[1]]);').state).toEqual({

@@ -7,6 +7,7 @@
  */
 
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
+import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 
 /** Each component's parameter types, in order, by name. */
@@ -143,25 +144,28 @@ export function probeMarkup(signatures: ComponentSignatures): string {
     .join('');
 }
 
-/**
- * A parameter as the page enumerates it: an atomic type, by name, or a collection of one, filled
- * to the longest such collection the trace holds. Other types are named and left unenumerated.
- */
-export type ProbeParameter = string | { element: string; length: number };
+/** A component and the cases of its parameters' values the page draws it with. */
+export type ComponentProbe = { name: string; cases: unknown[][] };
 
-/** A component and its parameters, as the page draws it for every value of them. */
-export type ComponentProbe = { name: string; parameters: ProbeParameter[] };
+// A component's cases are drawn in one pass of the page; this bounds them, so a pass stays about as
+// quick as a step's.
+const maximumCases = 256;
+
+/** The values a parameter is drawn with: every value, when there are few enough, and the widest. */
+type ProbeValues = { every?: unknown[]; widest: unknown[] };
+
+type Steps = readonly { state: TraceState; types: TypeMap }[];
 
 /**
- * The view's components in an order where each comes after the components it renders, directly or
- * through a design value choosing among them, so their boxes are known when it is drawn.
+ * The view's components, each after the components it renders, directly or through a design value
+ * choosing among them, so their boxes are known when it is drawn; with the cases to draw it with.
  */
 export function componentProbes(
   found: { name: string; node: SvelteNode }[],
   signatures: ComponentSignatures,
   choices: Record<string, readonly string[]>,
   domain: DomainRegistry,
-  steps: readonly { state: TraceState; types: TypeMap }[]
+  steps: Steps
 ): ComponentProbe[] {
   const renders = new Map(
     found.map(({ name, node }) => [
@@ -179,26 +183,132 @@ export function componentProbes(
     ordered.push(name);
   };
   for (const name of Object.keys(signatures)) visit(name, new Set());
-  const parameter = (type: string): ProbeParameter => {
-    const structure = domain.structures[type];
-    return structure?.kind === 'collection' && Object.hasOwn(domain.atoms, structure.element)
-      ? { element: structure.element, length: longestOf(type, steps) }
-      : type;
-  };
-  return ordered.map((name) => ({ name, parameters: signatures[name].map(parameter) }));
+  const valuesOf = probeValues(domain, steps);
+  return ordered.flatMap((name) => {
+    const cases = combinations(signatures[name].map(valuesOf));
+    return cases ? [{ name, cases }] : [];
+  });
 }
 
-/** The most elements any value of a collection type holds at any step. */
-function longestOf(type: string, steps: readonly { state: TraceState; types: TypeMap }[]): number {
-  let longest = 0;
+/**
+ * Every combination of the parameters' values: every value of each, while the cases fit, and only
+ * the widest values of the parameters with the most values otherwise.
+ */
+function combinations(parameters: (ProbeValues | undefined)[]): unknown[][] | undefined {
+  if (!parameters.every((values) => values !== undefined)) return undefined;
+  const chosen = parameters.map((values) => values.every ?? values.widest);
+  const count = () => chosen.reduce((total, values) => total * values.length, 1);
+  const largestFirst = chosen
+    .map((_, index) => index)
+    .sort((a, b) => chosen[b].length - chosen[a].length);
+  for (const index of largestFirst) {
+    if (count() <= maximumCases) break;
+    chosen[index] = parameters[index].widest;
+  }
+  if (count() > maximumCases) return undefined;
+  return chosen.reduce<unknown[][]>(
+    (cases, values) => cases.flatMap((before) => values.map((value) => [...before, value])),
+    [[]]
+  );
+}
+
+/**
+ * The values of each domain type. A collection is filled to the longest of its type in the trace,
+ * with each value of its element type in turn: rows, columns, and grids are widest when full, and
+ * the items in them keep their components' boxes, so which value is where does not change the size.
+ */
+function probeValues(
+  domain: DomainRegistry,
+  steps: Steps
+): (type: string) => ProbeValues | undefined {
+  const { longest, seen } = traceExtents(steps);
+  const valuesOf = (type: string): ProbeValues | undefined => {
+    const atom = domain.atoms[type];
+    if (atom) return atomValues(atom, [...(seen.get(type) ?? [])]);
+    const structure = domain.structures[type];
+    switch (structure?.kind) {
+      case 'collection': {
+        const element = valuesOf(structure.element);
+        const length = longest.get(type) ?? 0;
+        const fill = (values: unknown[]) =>
+          values.map((value) => Array.from({ length }, () => value));
+        return (
+          element && { every: element.every && fill(element.every), widest: fill(element.widest) }
+        );
+      }
+      case 'union': {
+        const members = structure.members.map(valuesOf);
+        if (!members.every((values) => values !== undefined)) return undefined;
+        const every = members.every((values) => values.every)
+          ? members.flatMap((values) => values.every!)
+          : undefined;
+        return {
+          every: every && every.length <= maximumCases ? every : undefined,
+          widest: members.flatMap((values) => values.widest)
+        };
+      }
+      case 'record': {
+        const names = Object.keys(structure.fields);
+        const fields = names.map((name) => valuesOf(structure.fields[name]));
+        const records = (cases: unknown[][] | undefined) =>
+          cases?.map((values) =>
+            Object.fromEntries(names.map((name, index) => [name, values[index]]))
+          );
+        const widest = records(
+          combinations(fields.map((values) => values && { widest: values.widest }))
+        );
+        return widest && { every: records(combinations(fields)), widest };
+      }
+    }
+    return undefined;
+  };
+  return valuesOf;
+}
+
+/**
+ * An atomic type's values. A number prints widest at an end of its range, or at the value in the
+ * trace with the most digits, as a fraction can be; text, at its longest values.
+ */
+function atomValues(atom: AtomType, seen: readonly unknown[]): ProbeValues | undefined {
+  if (atom.base === 'boolean') return { every: [true, false], widest: [true, false] };
+  const { min, max } = atom;
+  const listed =
+    atom.values ??
+    (atom.base === 'integer' && min !== undefined && max !== undefined && max - min < maximumCases
+      ? Array.from({ length: max - min + 1 }, (_, index) => min + index)
+      : undefined);
+  if (atom.base === 'text')
+    return listed && { every: [...listed], widest: longestPrinted(listed, 2) };
+  const ends = listed
+    ? [Math.min(...(listed as number[])), Math.max(...(listed as number[]))]
+    : min !== undefined && max !== undefined
+      ? [min, max]
+      : undefined;
+  if (!ends) return undefined;
+  return {
+    every: listed && [...listed],
+    widest: [...new Set([...ends, ...longestPrinted(listed ?? seen, 1)])]
+  };
+}
+
+function longestPrinted(values: readonly unknown[], count: number): unknown[] {
+  return [...values].sort((a, b) => String(b).length - String(a).length).slice(0, count);
+}
+
+/** The most elements each collection type holds, and the values each atomic type takes, at any step. */
+function traceExtents(steps: Steps) {
+  const longest = new Map<string, number>();
+  const seen = new Map<string, Set<unknown>>();
   const walk = (value: unknown, path: string, types: TypeMap): void => {
-    if (value === null || typeof value !== 'object') return;
-    if (Array.isArray(value)) {
-      if (types[path] === type) longest = Math.max(longest, value.length);
+    const type = types[path];
+    if (value === null || typeof value !== 'object') {
+      if (type) seen.set(type, (seen.get(type) ?? new Set()).add(value));
+    } else if (Array.isArray(value)) {
+      if (type) longest.set(type, Math.max(longest.get(type) ?? 0, value.length));
       value.forEach((item, index) => walk(item, `${path}[${index}]`, types));
     } else for (const [key, item] of Object.entries(value)) walk(item, `${path}.${key}`, types);
   };
   for (const { state, types } of steps)
     for (const [name, value] of Object.entries(state)) walk(value, name, types);
-  return longest;
+  return { longest, seen };
 }

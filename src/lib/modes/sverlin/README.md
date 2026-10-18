@@ -58,9 +58,11 @@ Facts about the algorithm, such as which cells were checked, are often clearer r
 
 Give values meaning with atomic types. No types are predefined: define each one the request needs, including basic ones such as `Int`, in the domain block, each as a top-level `const`:
 
-- a primitive kind, `'integer'`, `'number'`, `'boolean'`, or `'text'`: `const Int = type('integer');`
-- a refinement of a type defined earlier, with optional `unit`, `min`, and `max`: `const Height = type(Int, { unit: 'cm', min: 0 });`
-- an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to the view (see Type renderers).
+- a primitive kind: `'integer'` or `'number'` with both `min` and `max`, as in `const Int = type('integer', { min: 0, max: 99 });`, or `'boolean'`, as in `const Flag = type('boolean');`
+- a refinement of a type defined earlier, with optional `unit`, `min`, and `max`: `const Height = type(Int, { unit: 'cm', min: 0, max: 250 });`
+- an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to the view (see Type renderers). Text types are always enumerations.
+
+Every type has a known, finite set of values, so the view can be drawn for each of them. Choose ranges that hold every value the algorithm reaches, such as an index from -1 to the input's length.
 
 Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. There is no `null`: every variable starts with a value, and "nothing yet" is a value of a type that says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')` (see Collections, records, and unions). Taking a value that is not there, such as `.pop()` of an empty collection, is an error. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
 
@@ -185,8 +187,8 @@ Example, with domain, input, algorithm, design, and a script-free view:
 
 ```svelte
 <script lang="sverlin" domain>
-  const Int = type('integer');
-  const Index = type('integer', { min: -1 });
+  const Int = type('integer', { min: 0, max: 9 });
+  const Index = type('integer', { min: -1, max: 3 });
   const Values = collection(Int);
 </script>
 

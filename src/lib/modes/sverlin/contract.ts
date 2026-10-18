@@ -10,8 +10,8 @@ export const sverlinStarter = {
 
 /** A small self-contained algorithm example for administrator projects. */
 export const linearSearchSource = `<script lang="sverlin" domain>
-  const Int = type('integer');
-  const Index = type('integer', { min: -1 });
+  const Int = type('integer', { min: 0, max: 9 });
+  const Index = type('integer', { min: -1, max: 5 });
   const Found = type('boolean');
   const Values = collection(Int);
 </script>

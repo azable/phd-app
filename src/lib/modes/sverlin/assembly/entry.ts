@@ -279,47 +279,6 @@ async function whenShown() {
   if (waitedFor) reportTiming({ phase: 'shown', ms: elapsed(), waitedFor });
 }
 
-// A component's cases are drawn in one pass; this bounds them, so a pass stays about as quick as a
-// step's. Parameters with more values are left to the sizes the steps show.
-const maximumCases = 256;
-const maximumValues = 64;
-
-/**
- * Every combination of the values of a component's parameters, if each has a few. A collection
- * takes each value of its element type in turn, in every place: rows, columns, and grids are widest
- * when full, and the items in them keep their components' boxes, so which value is where does not
- * change the size.
- */
-function combinations(
-  parameters: (typeof components)[number]['parameters']
-): unknown[][] | undefined {
-  const valuesOf = (parameter: (typeof parameters)[number]): unknown[] | undefined => {
-    if (typeof parameter !== 'string')
-      return valuesOf(parameter.element)?.map((value) =>
-        Array.from({ length: parameter.length }, () => value)
-      );
-    const type = atoms[parameter];
-    if (!type) return undefined;
-    if (type.values) return type.values;
-    if (type.base === 'boolean') return [true, false];
-    if (
-      type.base === 'integer' &&
-      type.min !== undefined &&
-      type.max !== undefined &&
-      type.max - type.min < maximumValues
-    )
-      return Array.from({ length: type.max - type.min + 1 }, (_, index) => type.min! + index);
-    return undefined;
-  };
-  let cases: unknown[][] = [[]];
-  for (const parameter of parameters) {
-    const values = valuesOf(parameter);
-    if (!values || cases.length * values.length > maximumCases) return undefined;
-    cases = cases.flatMap((before) => values.map((value) => [...before, value]));
-  }
-  return cases;
-}
-
 /**
  * Measure every node at every step, keeping the largest size each reaches, then record what every
  * arrangement contains at every step and solve each once over all of them. The items of a
@@ -383,14 +342,12 @@ async function recordSteps() {
     };
     for (const id of items) reserved.set(id, largest);
   }
-  // A typed component whose parameters all have a few values is drawn once with every combination
-  // of them, and its root keeps the largest box it reaches: a cell has room for the pointer
-  // whether or not this trace ever gives it one. Components come after those they render, whose
-  // boxes they are drawn with. offsetWidth and offsetHeight round to whole pixels, so a pixel more
-  // keeps the box from coming out a fraction smaller than what it holds.
-  for (const { name, parameters } of components) {
-    const cases = combinations(parameters);
-    if (!cases) continue;
+  // A typed component is drawn once with every case of its parameters' values, and its root keeps
+  // the largest box it reaches: a cell has room for the pointer whether or not this trace ever
+  // gives it one. Components come after those they render, whose boxes they are drawn with.
+  // offsetWidth and offsetHeight round to whole pixels, so a pixel more keeps the box from coming
+  // out a fraction smaller than what it holds.
+  for (const { name, cases } of components) {
     await pass(
       0,
       'measuring',
