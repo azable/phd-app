@@ -124,6 +124,11 @@ export type LayoutMemory = {
   /** True while only measuring each node's natural size, before anything is recorded. */
   measuring?: boolean;
   /**
+   * True while drawing components for every value of their parameters: the components measured
+   * before keep their boxes, and no other node keeps a size.
+   */
+  probing?: boolean;
+  /**
    * The largest size each node reaches at any step, by id. Nodes keep it as their least size, so a box
    * whose content changes keeps one size and nothing around it moves.
    */

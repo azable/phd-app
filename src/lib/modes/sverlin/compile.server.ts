@@ -29,9 +29,11 @@ import {
   type DomainRegistry
 } from './algorithm/structures.server';
 import {
+  componentProbes,
   findComponents,
   probeMarkup,
   readsOf,
+  type ComponentProbe,
   type ComponentSignatures
 } from './components.server';
 import { drawDefaults } from './library/node/defaults';
@@ -119,8 +121,8 @@ export type PreparedComponent = {
   component: string;
   master: MasterStep[];
   atoms: AtomRegistry;
-  /** The view's typed components and their parameter types. */
-  components: ComponentSignatures;
+  /** The view's typed components, each after those it renders, as the page enumerates them. */
+  components: ComponentProbe[];
   design?: Block;
   /** Whether <Link> components sit at the top of the view, between top-level nodes. */
   topLevelLinks?: boolean;
@@ -318,15 +320,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     const renderers = typeRenderers(ast, atoms, source);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
+    const chosen = Object.fromEntries(
+      Object.entries(componentChoice).map(([name, { options }]) => [name, options])
+    );
     const component = compile(
-      withGeneratedScripts(
-        `${tagged}${probeMarkup(components)}`,
-        props,
-        renderers,
-        Object.fromEntries(
-          Object.entries(componentChoice).map(([name, { options }]) => [name, options])
-        )
-      ),
+      withGeneratedScripts(`${tagged}${probeMarkup(components)}`, props, renderers, chosen),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
     return {
@@ -334,7 +332,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       component,
       master,
       atoms,
-      components,
+      components: componentProbes(found.components, components, chosen, domain, master),
       ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
     };
@@ -360,7 +358,11 @@ export async function bundlePresentation(
   const { master } = prepared;
   const parameters = prepared.design
     ? interpretBlock(prepared.source, prepared.design, (body) =>
-        interpretDesign(body, seed, Object.keys(prepared.components))
+        interpretDesign(
+          body,
+          seed,
+          prepared.components.map(({ name }) => name)
+        )
       )
     : {};
   // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).

@@ -484,7 +484,10 @@ describe('typed view components', () => {
   it('reads typed snippets as components, stamps their roots, and lets a design value choose one', async () => {
     const source = `${domain}${algorithm}<script lang="sverlin" design>const Look = pick([Plain, Bold]);</script>{#snippet Plain(value: Int, current: Flag)}<Node {value} />{/snippet}{#snippet Bold(value: Int, current: Flag)}<Node {value} weight="bold" />{/snippet}{@render Look(i, true)}`;
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.components).toEqual({ Plain: ['Int', 'Flag'], Bold: ['Int', 'Flag'] });
+    expect(prepared.components).toEqual([
+      { name: 'Plain', parameters: ['Int', 'Flag'] },
+      { name: 'Bold', parameters: ['Int', 'Flag'] }
+    ]);
     expect(prepared.component).toContain('__component');
     const drawn = new Set(
       await Promise.all(
@@ -494,6 +497,18 @@ describe('typed view components', () => {
       )
     );
     expect([...drawn].every((look) => look === 'Plain' || look === 'Bold')).toBe(true);
+  });
+
+  it('orders components after those they render, and fills collections to the longest in the trace', () => {
+    const prepared = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean"); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script><script lang="sverlin" design>const Look = pick([Plain, Bold]);</script>{#snippet Search(values: Row, shown: Flag)}<Node layout="row">{#each values as value}{@render Cell(value, shown)}{/each}</Node>{/snippet}{#snippet Cell(value: Int, current: Flag)}<Node>{@render Look(value, current)}</Node>{/snippet}{#snippet Plain(value: Int, current: Flag)}<Node {value} />{/snippet}{#snippet Bold(value: Int, current: Flag)}<Node {value} weight="bold" />{/snippet}{@render Search(values, true)}`
+    );
+    expect(prepared.components).toEqual([
+      { name: 'Plain', parameters: ['Int', 'Flag'] },
+      { name: 'Bold', parameters: ['Int', 'Flag'] },
+      { name: 'Cell', parameters: ['Int', 'Flag'] },
+      { name: 'Search', parameters: [{ element: 'Int', length: 3 }, 'Flag'] }
+    ]);
   });
 
   it.each([

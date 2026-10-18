@@ -147,6 +147,7 @@ function mountStep(
     step,
     recording: phase === 'recording',
     measuring: phase === 'measuring',
+    probing: extra.__probe !== undefined,
     scopes,
     fits,
     reserved,
@@ -283,10 +284,21 @@ async function whenShown() {
 const maximumCases = 256;
 const maximumValues = 64;
 
-/** Every combination of the values of a component's parameter types, if each has a few. */
-function combinations(types: readonly string[]): unknown[][] | undefined {
-  const valuesOf = (name: string): unknown[] | undefined => {
-    const type = atoms[name];
+/**
+ * Every combination of the values of a component's parameters, if each has a few. A collection
+ * takes each value of its element type in turn, in every place: rows, columns, and grids are widest
+ * when full, and the items in them keep their components' boxes, so which value is where does not
+ * change the size.
+ */
+function combinations(
+  parameters: (typeof components)[number]['parameters']
+): unknown[][] | undefined {
+  const valuesOf = (parameter: (typeof parameters)[number]): unknown[] | undefined => {
+    if (typeof parameter !== 'string')
+      return valuesOf(parameter.element)?.map((value) =>
+        Array.from({ length: parameter.length }, () => value)
+      );
+    const type = atoms[parameter];
     if (!type) return undefined;
     if (type.values) return type.values;
     if (type.base === 'boolean') return [true, false];
@@ -300,8 +312,8 @@ function combinations(types: readonly string[]): unknown[][] | undefined {
     return undefined;
   };
   let cases: unknown[][] = [[]];
-  for (const type of types) {
-    const values = valuesOf(type);
+  for (const parameter of parameters) {
+    const values = valuesOf(parameter);
     if (!values || cases.length * values.length > maximumCases) return undefined;
     cases = cases.flatMap((before) => values.map((value) => [...before, value]));
   }
@@ -373,10 +385,11 @@ async function recordSteps() {
   }
   // A typed component whose parameters all have a few values is drawn once with every combination
   // of them, and its root keeps the largest box it reaches: a cell has room for the pointer
-  // whether or not this trace ever gives it one. offsetWidth and offsetHeight round to whole
-  // pixels, so a pixel more keeps the box from coming out a fraction smaller than what it holds.
-  for (const [name, types] of Object.entries(components)) {
-    const cases = combinations(types);
+  // whether or not this trace ever gives it one. Components come after those they render, whose
+  // boxes they are drawn with. offsetWidth and offsetHeight round to whole pixels, so a pixel more
+  // keeps the box from coming out a fraction smaller than what it holds.
+  for (const { name, parameters } of components) {
+    const cases = combinations(parameters);
     if (!cases) continue;
     await pass(
       0,

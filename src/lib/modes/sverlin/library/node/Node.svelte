@@ -177,14 +177,16 @@
   // (see LayoutMemory).
   const memory = layoutMemoryContext();
   const box = untrack(() =>
-    __component && memory && !memory.measuring ? memory.components.get(__component) : undefined
+    __component && memory && (!memory.measuring || memory.probing)
+      ? memory.components.get(__component)
+      : undefined
   );
   const insideBox = insideComponentBox();
   if (box) provideComponentBox();
   const reserved = untrack(() => {
-    if (!memory || memory.measuring) return undefined;
     if (box) return box;
-    return insideBox || !id ? undefined : memory.reserved.get(id);
+    if (!memory || memory.measuring || insideBox || !id) return undefined;
+    return memory.reserved.get(id);
   });
   const least = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;

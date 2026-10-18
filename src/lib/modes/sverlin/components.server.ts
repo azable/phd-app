@@ -6,6 +6,9 @@
  * same types, as in const Number = pick([NumberText, NumberDots]);.
  */
 
+import type { TraceState, TypeMap } from './algorithm/interpret.server';
+import type { DomainRegistry } from './algorithm/structures.server';
+
 /** Each component's parameter types, in order, by name. */
 export type ComponentSignatures = Record<string, string[]>;
 
@@ -138,4 +141,64 @@ export function probeMarkup(signatures: ComponentSignatures): string {
       return `{#if __probe?.component === '${name}'}{#each __probe.cases as __case}{@render ${name}(${args})}{/each}{/if}`;
     })
     .join('');
+}
+
+/**
+ * A parameter as the page enumerates it: an atomic type, by name, or a collection of one, filled
+ * to the longest such collection the trace holds. Other types are named and left unenumerated.
+ */
+export type ProbeParameter = string | { element: string; length: number };
+
+/** A component and its parameters, as the page draws it for every value of them. */
+export type ComponentProbe = { name: string; parameters: ProbeParameter[] };
+
+/**
+ * The view's components in an order where each comes after the components it renders, directly or
+ * through a design value choosing among them, so their boxes are known when it is drawn.
+ */
+export function componentProbes(
+  found: { name: string; node: SvelteNode }[],
+  signatures: ComponentSignatures,
+  choices: Record<string, readonly string[]>,
+  domain: DomainRegistry,
+  steps: readonly { state: TraceState; types: TypeMap }[]
+): ComponentProbe[] {
+  const renders = new Map(
+    found.map(({ name, node }) => [
+      name,
+      [...readsOf(node)].flatMap((read) =>
+        Object.hasOwn(signatures, read) ? [read] : (choices[read] ?? [])
+      )
+    ])
+  );
+  const ordered: string[] = [];
+  const visit = (name: string, visiting: Set<string>): void => {
+    if (ordered.includes(name) || visiting.has(name)) return;
+    visiting.add(name);
+    for (const rendered of renders.get(name) ?? []) visit(rendered, visiting);
+    ordered.push(name);
+  };
+  for (const name of Object.keys(signatures)) visit(name, new Set());
+  const parameter = (type: string): ProbeParameter => {
+    const structure = domain.structures[type];
+    return structure?.kind === 'collection' && Object.hasOwn(domain.atoms, structure.element)
+      ? { element: structure.element, length: longestOf(type, steps) }
+      : type;
+  };
+  return ordered.map((name) => ({ name, parameters: signatures[name].map(parameter) }));
+}
+
+/** The most elements any value of a collection type holds at any step. */
+function longestOf(type: string, steps: readonly { state: TraceState; types: TypeMap }[]): number {
+  let longest = 0;
+  const walk = (value: unknown, path: string, types: TypeMap): void => {
+    if (value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      if (types[path] === type) longest = Math.max(longest, value.length);
+      value.forEach((item, index) => walk(item, `${path}[${index}]`, types));
+    } else for (const [key, item] of Object.entries(value)) walk(item, `${path}.${key}`, types);
+  };
+  for (const { state, types } of steps)
+    for (const [name, value] of Object.entries(state)) walk(value, name, types);
+  return longest;
 }

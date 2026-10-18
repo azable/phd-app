@@ -29,8 +29,14 @@ declare module 'virtual:atoms' {
   export default atoms;
 }
 
-/** The view's typed components and the domain types of their parameters, in order. */
+/**
+ * The view's typed components, each after those it renders, with their parameters: an atomic type
+ * by name, or a collection of one filled to the longest the trace holds.
+ */
 declare module 'virtual:components' {
-  const components: Record<string, string[]>;
+  const components: {
+    name: string;
+    parameters: (string | { element: string; length: number })[];
+  }[];
   export default components;
 }
