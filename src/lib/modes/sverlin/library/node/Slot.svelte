@@ -7,7 +7,7 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
 
-  import { elementOf, provideSlot, slotContext, typeContext } from '../type-context';
+  import { copyContext, elementOf, provideSlot, slotContext, typeContext } from '../type-context';
 
   let {
     path,
@@ -23,12 +23,14 @@
     children: Snippet;
   } = $props();
 
-  // Each step mounts afresh, so the slot is read once.
+  // Each step mounts afresh, so the slot is read once. A hidden copy names no element.
   provideSlot(
     untrack(() =>
-      inherit
-        ? slotContext()
-        : (path ?? (at === undefined ? undefined : elementOf(typeContext(), of, at)))
+      copyContext()
+        ? undefined
+        : inherit
+          ? slotContext()
+          : (path ?? (at === undefined ? undefined : elementOf(typeContext(), of, at)))
     )
   );
 </script>

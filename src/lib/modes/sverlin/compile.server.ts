@@ -413,7 +413,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             name,
             {
               into: domain.atoms[type]?.index ?? '',
-              reach: -(domain.atoms[type]?.min ?? -1),
               paint
             }
           ];

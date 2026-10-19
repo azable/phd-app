@@ -17,8 +17,15 @@ export type TypeContext = {
   pathOf(container: unknown): string | undefined;
   /** The collection a position at a path points into, such as left for i. */
   targetOf(path: string): string | undefined;
-  /** How many elements a collection variable holds. */
-  lengthOf(name: string): number | undefined;
+  /** Every collection or record a variable holds at any step, by identity. */
+  heldBy(name: string): ReadonlySet<number> | undefined;
+  /** How many elements the collection at a path holds, as values or paths[1]. */
+  lengthOf(path: string): number | undefined;
+  /**
+   * How far before the start and past the end of a collection variable any step records a position
+   * bound to it: the end slots its pointers keep, none where none goes past.
+   */
+  pastEnds(collection: string): { before: number; after: number };
   /** The variables holding a value of a type, such as the Values collections. */
   variablesOf(typeName: string): string[];
   /** The type a type refines, if any. */
@@ -192,8 +199,6 @@ export type PointerCall = {
   value: () => unknown;
   /** The collection type the pointer's index type points into. */
   into: string;
-  /** How many places past each end of the collection its index type goes. */
-  reach: number;
   /** The props of the pointer's <Pointed> for a position, which a link it points at takes. */
   paint?: (position: number) => Record<string, unknown>;
   path?: string;
@@ -206,7 +211,6 @@ export type Pointer = {
   view: Snippet<[unknown]>;
   collection: string;
   position: number;
-  reach: number;
   order: number;
   paint?: (position: number) => Record<string, unknown>;
 };
@@ -237,7 +241,6 @@ export function providePointers(calls: readonly PointerCall[]): void {
             view: call.view(),
             collection,
             position: found.position ?? Number.NaN,
-            reach: call.reach,
             order,
             paint: call.paint
           }
@@ -296,6 +299,18 @@ export function hiddenContext(): boolean | undefined {
 }
 
 /**
+ * Inside the hidden copy of an element that keeps an end slot's room: its nodes name no element, so
+ * no pointer is drawn at them and no identity is shown twice.
+ */
+export function provideCopy(): void {
+  setContext('sverlin:copy', true);
+}
+
+export function copyContext(): boolean {
+  return getContext<boolean | undefined>('sverlin:copy') ?? false;
+}
+
+/**
  * Whether a node's children are laid out in sequence (a row, column, or grid) rather than freely:
  * a pointer's end slots, before the first element and after the last, belong only in a sequence.
  */
@@ -307,12 +322,52 @@ export function sequenceContext(): boolean | undefined {
   return getContext<boolean | undefined>('sverlin:sequence');
 }
 
-/** The element of a collection a slot names, as values[2], or undefined for any other slot. */
+/**
+ * The element of a collection a slot names, as values[2] or the cell paths[1][2], or undefined for
+ * any other slot.
+ */
 export function elementSlot(
   slot: string | undefined
 ): { collection: string; index: number } | undefined {
-  const match = slot ? /^([A-Za-z_$][\w$]*)\[(\d+)\]$/u.exec(slot) : null;
+  const match = slot ? /^(.+)\[(\d+)\]$/u.exec(slot) : null;
   return match ? { collection: match[1], index: Number(match[2]) } : undefined;
+}
+
+/**
+ * Whether a pointer keeps room in the collection at a path: the variable it points into holds it,
+ * now or at another step, as row holds rows of paths, or holds one of its siblings, so the rows of
+ * a grid line up.
+ */
+export function reachesInto(
+  types: TypeContext | undefined,
+  pointer: Pointer,
+  collection: string
+): boolean {
+  if (pointer.collection === collection) return true;
+  const held = types?.heldBy(pointer.collection);
+  if (!held) return false;
+  const parent = elementSlot(collection)?.collection;
+  const siblings =
+    parent === undefined
+      ? [collection]
+      : Array.from({ length: types?.lengthOf(parent) ?? 0 }, (_, index) => `${parent}[${index}]`);
+  return siblings.some((sibling) => {
+    const identity = types?.identityOf(sibling);
+    return identity !== undefined && held.has(identity);
+  });
+}
+
+/** Whether a pointer points into the collection at a path at this step. */
+export function pointsInto(
+  types: TypeContext | undefined,
+  pointer: Pointer,
+  collection: string
+): boolean {
+  const identity = types?.identityOf(collection);
+  return (
+    pointer.collection === collection ||
+    (identity !== undefined && types?.identityOf(pointer.collection) === identity)
+  );
 }
 
 /**

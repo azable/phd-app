@@ -16,7 +16,7 @@ const domain = interpretDomain(`
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 
 describe('positions', () => {
-  it('point into the only collection of their type, from -1 to its length', () => {
+  it('point into the only collection of their type', () => {
     const trace = run(`
       const values = Values([3, 8, 5]);
       let i = Position(-1);
@@ -46,30 +46,23 @@ describe('positions', () => {
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
-  it('step as far past each end as their reach', () => {
-    const reaching = interpretDomain(`
-      const Letter = type(['a', 'b', 'c']);
-      const Letters = collection(Letter);
-      const Position = index(Letters, { reach: 2 });
+  it('hold any whole number, and a step shows one at most 4 past an end', () => {
+    const trace = run(`
+      const values = Values([3, 8, 5]);
+      let i = Position(-2);
+      yield;
+      for (i = Position(0); i < values.length; i += 2) yield;
+      yield;
+      i = 50;
+      i = 0;
+      yield;
     `);
-    expect(reaching.atoms.Position.min).toBe(-2);
-    const trace = interpretAlgorithm(
-      `const letters = Letters(['a', 'b', 'c']);
-       let i = Position(-2);
-       yield;
-       for (i = Position(0); i < letters.length; i += 2) yield;
-       yield;`,
-      undefined,
-      reaching
-    );
-    expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4]);
+    expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4, 0]);
     expect(() =>
-      interpretAlgorithm(
-        `const letters = Letters(['a', 'b', 'c']); let i = Position(0); i = 5; yield;`,
-        undefined,
-        reaching
-      )
-    ).toThrow('a Position goes from -2 to 4 and only 0 to 2 point at an element.');
+      run('const values = Values([3, 8, 5]); let i = Position(0); i = 7; yield;')
+    ).toThrow(
+      'i is 7, 5 past the end of values, too far to draw: a step can show a position at most 4 places past either end.'
+    );
   });
 
   it('record the collection each one points into at every step', () => {
@@ -94,7 +87,9 @@ describe('positions', () => {
       domain
     );
     expect(interpretAlgorithm('yield;', input, domain)[0].targets).toEqual({ i: 'right' });
-    expect(() => interpretAlgorithm('i = 2; yield;', input, domain)).toThrow('outside right');
+    expect(() => interpretAlgorithm('i = 9; yield;', input, domain)).toThrow(
+      'past the end of right'
+    );
   });
 
   it('point into the only collection of their type from records', () => {
@@ -109,9 +104,14 @@ describe('positions', () => {
 
   it.each([
     [
-      'leaving the collection',
-      'const values = Values([3, 8]); let i = Position(0); i = 3; yield;',
-      'i is 3, outside values: a Position goes from -1 to 2, its length, and only 0 to 1 point at an element. To step further past an end, give it a reach, as in index(Values, { reach: 2 }).'
+      'reading outside the collection',
+      'const values = Values([3, 8]); let i = Position(0); i = 2; const x = values[i]; yield;',
+      'values[i] is outside the collection: it has 2 elements, at 0 to 1.'
+    ],
+    [
+      'writing past its length',
+      'const values = Values([3, 8]); let i = Position(0); i = 3; values[i] = 1; yield;',
+      'values[i] is outside the collection: it has 2 elements, so write at 0 to 2, where 2 adds one.'
     ],
     [
       'more than one collection to point into',
@@ -129,9 +129,9 @@ describe('positions', () => {
       'Position(…, …) names the Values it points into first, as in Position(values, 0).'
     ],
     [
-      'a record pointing outside its collection',
-      'const vertices = Names(["A"]); const edges = Edges([{ from: 3, to: 0, weight: 1 }]); yield;',
-      'Edges[0].from is 3, outside vertices'
+      'a record pointing too far past its collection',
+      'const vertices = Names(["A"]); const edges = Edges([{ from: 9, to: 0, weight: 1 }]); yield;',
+      'edges[0].from is 9, 9 past the end of vertices, too far to draw'
     ]
   ])('reject %s', (_name, body, message) => {
     expect(() => run(body)).toThrow(message);
@@ -145,14 +145,9 @@ describe('positions', () => {
     ],
     ['no type', 'const P = index();', /index\(\) takes one collection type/],
     [
-      'a reach that is not a small whole number',
-      'const One = type([1]); const Ints = collection(One); const P = index(Ints, { reach: 9 });',
-      /index\(\) options are \{ reach: n \}.*from 1 to 4/
-    ],
-    [
-      'other options',
-      'const One = type([1]); const Ints = collection(One); const P = index(Ints, { overflow: true });',
-      /index\(\) options are \{ reach: n \}/
+      'options',
+      'const One = type([1]); const Ints = collection(One); const P = index(Ints, { reach: 2 });',
+      /index\(\) takes one collection type/
     ]
   ])('are defined in the domain, rejecting %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);

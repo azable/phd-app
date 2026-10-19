@@ -14,6 +14,7 @@
     linkEnd,
     nodeIdsContext,
     pointersContext,
+    pointsInto,
     slotContext,
     typeContext
   } from '../type-context';
@@ -88,7 +89,7 @@
       ...pointersContext()
         .filter(
           (pointer) =>
-            pointer.collection === element.collection && pointer.position === element.index
+            pointsInto(types, pointer, element.collection) && pointer.position === element.index
         )
         .toSorted((a, b) => a.order - b.order)
         .map((pointer) => pointer.paint?.(pointer.position) ?? {})

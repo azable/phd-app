@@ -82,6 +82,12 @@ export type MasterStep = {
   identities?: StepIdentities;
 };
 
+/**
+ * How far past an end a recorded position can be. The view keeps room for every place one reaches,
+ * as an empty slot, so striding by a few needs only a few; further is no example to draw.
+ */
+const maximumPastEnd = 4;
+
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
 export const algorithmLimits = {
   maximumSteps: 200,
@@ -372,13 +378,17 @@ class Interpreter {
     const types: TypeMap = {};
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
+    const positions: [string, number][] = [];
     for (const name of this.#topLevelNames) {
       const binding = this.#topLevel.bindings.get(name);
       state[name] = binding
-        ? this.#snapshot(binding.value, node, name, { types, targets, placed })
+        ? this.#snapshot(binding.value, node, name, { types, targets, placed, positions })
         : null;
       if (binding?.target) targets[name] = binding.target;
     }
+    if (this.#kind === 'algorithm')
+      for (const [path, value] of positions)
+        if (targets[path]) this.#checkDrawable(path, value, targets[path], node);
     return {
       state,
       types,
@@ -427,9 +437,7 @@ class Interpreter {
         collection,
         `${type.name}(…, …) names the ${type.index} it points into first, as in ${type.name}(${this.#collectionsOf(type)[0] ?? 'values'}, 0).`
       );
-    const position = this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
-    this.#checkPosition(position, name, node, type.name);
-    return position;
+    return this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
   }
 
   #holdsCollection(name: string, type: AtomType): boolean {
@@ -455,19 +463,17 @@ class Interpreter {
   }
 
   /**
-   * A position runs from -1 to its collection's length, or as far past each end as its type
-   * reaches; only 0 to length - 1 point at an element.
+   * A position a step records is drawn at its place, past an end too, where room is kept for it;
+   * one far past an end would keep that much empty room, so it is no example to draw.
    */
-  #checkPosition(position: Atom, target: string, node: AnyNode, path: string): void {
+  #checkDrawable(path: string, value: number, target: string, node: AnyNode): void {
     const collection = this.#topLevel.bindings.get(target)?.value;
     const length = Array.isArray(collection) ? collection.length : 0;
-    const value = position.value as number;
-    const reach = -(position.type.min ?? -1);
-    const last = length + reach - 1;
-    if (value >= -reach && value <= last) return;
+    const past = value < 0 ? -value : value - (length - 1);
+    if (past <= maximumPastEnd) return;
     this.#fail(
       node,
-      `${path} is ${value}, outside ${target}: a ${position.type.name} goes from ${-reach} to ${last}${reach === 1 ? ', its length,' : ''} and ${length ? `only 0 to ${length - 1} point at an element` : `${target} is empty, so none points at an element`}.${reach === 1 ? ` To step further past an end, give it a reach, as in index(${position.type.index}, { reach: 2 }).` : ''}`
+      `${path} is ${value}, ${past} past the ${value < 0 ? 'start' : 'end'} of ${target}, too far to draw: a step can show a position at most ${maximumPastEnd} places past either end.`
     );
   }
 
@@ -483,8 +489,8 @@ class Interpreter {
       const made = this.#asAtom(value, atom, node, path);
       // A position a variable holds points into the variable's collection; one an element or field
       // holds, into the only collection of its type.
-      if (atom.index && this.#kind !== 'design')
-        this.#checkPosition(made, target ?? this.#onlyCollection(atom, node, path), node, path);
+      if (atom.index && this.#kind !== 'design' && target === undefined)
+        this.#onlyCollection(atom, node, path);
       return made;
     }
     const structure = this.#domain.structures[typeName];
@@ -601,16 +607,14 @@ class Interpreter {
    * The collection a position variable points into, fixed at its declaration: the one its
    * constructor names, as in Position(left, 0), or the only one of its type.
    */
-  #targetOf(init: Expression, type: AtomType, value: Value, name: string): string {
+  #targetOf(init: Expression, type: AtomType, name: string): string {
     const named =
       init.type === 'CallExpression' &&
       init.arguments.length === 2 &&
       init.arguments[0].type === 'Identifier'
         ? init.arguments[0].name
         : undefined;
-    const target = named ?? this.#onlyCollection(type, init, name);
-    if (value instanceof Atom) this.#checkPosition(value, target, init, name);
-    return target;
+    return named ?? this.#onlyCollection(type, init, name);
   }
 
   /** The type a stored element or field must have: a collection's element or a record's field. */
@@ -749,7 +753,7 @@ class Interpreter {
             constant: node.kind === 'const',
             ...(type ? { type } : {}),
             ...(type && this.#atoms[type]?.index
-              ? { target: this.#targetOf(declarator.init, this.#atoms[type], value, name) }
+              ? { target: this.#targetOf(declarator.init, this.#atoms[type], name) }
               : {})
           });
         }
@@ -833,9 +837,14 @@ class Interpreter {
     value: Value,
     node: AnyNode,
     path: string,
-    into: { types: TypeMap; targets: Record<string, string>; placed: Placed[] }
+    into: {
+      types: TypeMap;
+      targets: Record<string, string>;
+      placed: Placed[];
+      positions: [string, number][];
+    }
   ): TraceValue {
-    const { types, targets, placed } = into;
+    const { types, targets, placed, positions } = into;
     this.#traceValues += 1;
     if (this.#traceValues > algorithmLimits.maximumTraceValues)
       this.#fail(node, 'The recorded steps are too large; use smaller state or fewer steps.');
@@ -845,6 +854,7 @@ class Interpreter {
       // A position an element or field holds points into the only collection of its type.
       const [only, ...others] = value.type.index ? this.#collectionsOf(value.type) : [];
       if (only && !others.length) targets[path] = only;
+      if (value.type.index) positions.push([path, value.value as number]);
       // A variable only refers to a value; the collection or record holding it places it.
       if (path.includes('[') || path.includes('.')) placed.push([path, value, true]);
       return value.value;
@@ -1018,14 +1028,19 @@ class Interpreter {
     const prepare = (value: Value) =>
       slot ? this.#convert(value, slot, target, targetName(target)) : value;
     if (Array.isArray(object)) {
-      if (typeof key !== 'number' || !Number.isInteger(key) || key < 0)
-        this.#fail(target, 'Array elements are assigned by non-negative integer index.');
+      if (typeof key !== 'number' || !Number.isInteger(key))
+        this.#fail(target, 'Array elements are assigned by whole-number index.');
+      // Writing at the length adds an element; any further would leave a gap with no value.
+      if (key < 0 || key > object.length)
+        this.#fail(
+          target,
+          `${targetName(target)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}, so write at 0 to ${object.length}, where ${object.length} adds one.`
+        );
       return {
         get: () => object[key],
         prepare,
         set: (value) => {
           this.#checkLength(key + 1, target);
-          while (object.length < key) object.push(undefined);
           object[key] = value;
         }
       };
@@ -1069,6 +1084,13 @@ class Interpreter {
     }
     if (Array.isArray(object) || typeof object === 'string') {
       if (key === 'length') return object.length;
+      if (typeof key === 'number' && Number.isInteger(key) && Array.isArray(object)) {
+        if (key >= 0 && key < object.length) return object[key];
+        return this.#fail(
+          node,
+          `${targetName(node)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}${object.length ? `, at 0 to ${object.length - 1}` : ''}.`
+        );
+      }
       if (typeof key === 'number' && Number.isInteger(key) && key >= 0) return object[key];
       return this.#fail(node, `Unsupported element or property "${String(key)}".`);
     }

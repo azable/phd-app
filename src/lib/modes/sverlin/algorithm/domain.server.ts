@@ -11,12 +11,6 @@ import { parseBlock } from './parse.server';
 import type { DomainRegistry, StructureType } from './structures.server';
 
 /**
- * The farthest an index reaches past each end: striding by a few places needs only a few, and
- * every place reached keeps hidden room at both ends of each collection it points into.
- */
-const maximumReach = 4;
-
-/**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
  * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from types defined
@@ -126,37 +120,16 @@ export function interpretDomain(body: string): DomainRegistry {
   return { atoms, structures };
 
   /**
-   * A position in a collection type, as in index(Values): -1 to the length of its collection, or
-   * with { reach: 2 }, -2 to the length + 1, for positions that step past an end. Its min is
-   * minus its reach.
+   * A position in a collection type, as in index(Values): any whole number, of which 0 to its
+   * collection's length - 1 point at an element.
    */
   function defineIndex(name: string, call: CallExpression): AtomType {
-    const [target, options, extra] = call.arguments as Expression[];
-    if (!target || extra)
-      fail(call, 'index() takes one collection type, as in index(Values), then optional options.');
-    const collection = defined(target, 'An index’s collection type');
+    const args = call.arguments as Expression[];
+    if (args.length !== 1) fail(call, 'index() takes one collection type, as in index(Values).');
+    const collection = defined(args[0], 'An index’s collection type');
     if (structures[collection]?.kind !== 'collection')
-      fail(target, `index() points into a collection type, and ${collection} is not one.`);
-    return { name, base: 'integer', min: -(options ? indexReach(options) : 1), index: collection };
-  }
-
-  /** How many places past each end of its collection a position goes: index()'s { reach: n }. */
-  function indexReach(options: Expression): number {
-    const [property, ...others] =
-      options.type === 'ObjectExpression' ? (options.properties as AnyNode[]) : [];
-    const reach =
-      property?.type === 'Property' &&
-      property.key.type === 'Identifier' &&
-      property.key.name === 'reach' &&
-      !others.length
-        ? literalValue(property.value as Expression)
-        : undefined;
-    if (typeof reach !== 'number' || !Number.isInteger(reach) || reach < 1 || reach > maximumReach)
-      fail(
-        options,
-        `index() options are { reach: n }, how many places past each end it goes, from 1 to ${maximumReach}.`
-      );
-    return reach as number;
+      fail(args[0], `index() points into a collection type, and ${collection} is not one.`);
+    return { name, base: 'integer', index: collection };
   }
 
   function defineStructure(

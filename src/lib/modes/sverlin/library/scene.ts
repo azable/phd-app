@@ -205,13 +205,26 @@ function describeNode(
   };
 }
 
+/**
+ * Whether text is the node's own: not in a child node, nor in a hidden one, as the copy of an
+ * element that keeps an end slot's room, which has no id of its own. The nearest mark decides, as
+ * an element shows again inside a hidden pointer.
+ */
+function ownedBy(holder: HTMLElement | null, element: HTMLElement): holder is HTMLElement {
+  return (
+    !!holder &&
+    holder.closest(nodeSelector) === element &&
+    holder.closest<HTMLElement>('[data-sv-hidden]')?.dataset.svHidden !== 'true'
+  );
+}
+
 /** Text written in a node itself: outside its value and its child nodes. */
 function ownText(element: HTMLElement): string {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   const parts: string[] = [];
   for (let text = walker.nextNode(); text; text = walker.nextNode()) {
     const holder = text.parentElement;
-    if (holder?.closest(nodeSelector) !== element || holder.closest('.value, svg')) continue;
+    if (!ownedBy(holder, element) || holder.closest('.value, svg')) continue;
     const words = text.textContent?.trim();
     if (words) parts.push(words);
   }
@@ -233,7 +246,7 @@ function textRuns(
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const holder = node.parentElement;
-    if (!holder || holder.closest(nodeSelector) !== element || holder.closest('svg')) continue;
+    if (!ownedBy(holder, element) || holder.closest('svg')) continue;
     const style = getComputedStyle(holder);
     const looks = {
       color: style.color,

@@ -17,8 +17,8 @@ export type AtomType = {
   /** The only values an enumeration allows. */
   values?: readonly (string | number)[];
   /**
-   * For a position, the collection type it points into: its values run from -1 to the length of
-   * the collection a variable is bound to, and only 0 to length - 1 point at an element.
+   * For a position, the collection type it points into: it holds any whole number, and only 0 to
+   * the length - 1 of the collection a variable is bound to point at an element.
    */
   index?: string;
 };

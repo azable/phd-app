@@ -56,6 +56,37 @@ const fonts: Record<string, string> = {
   mono: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace"
 };
 const font = (states[0] as StepState).__defaults.font;
+
+// Every collection or record each variable holds at any step, by identity, so a pointer through a
+// variable, as c into row = paths[r], keeps room in every row it can point into.
+const held = new Map<string, Set<number>>();
+for (const { __identities: identities = {} } of states as StepState[])
+  for (const [path, identity] of Object.entries(identities))
+    if (!/[[.]/u.test(path)) held.set(path, (held.get(path) ?? new Set()).add(identity));
+
+/** The value at a path of a step's state, as edges[0].to. */
+function valueAt(state: Record<string, unknown>, path: string): unknown {
+  const [name, ...keys] = path.split(/[.[\]]+/u).filter(Boolean);
+  return keys.reduce<unknown>(
+    (value, key) => (value as Record<string, unknown> | undefined)?.[key],
+    state[name]
+  );
+}
+
+// How far before the start and past the end of each collection variable any step records a
+// position bound to it, so its pointers keep end slots only as far as the trace goes.
+const pastEnds = new Map<string, { before: number; after: number }>();
+for (const step of states as StepState[])
+  for (const [path, target] of Object.entries(step.__targets ?? {})) {
+    const position = valueAt(step, path);
+    const collection = valueAt(step, target);
+    if (typeof position !== 'number' || !Array.isArray(collection)) continue;
+    const ends = pastEnds.get(target) ?? { before: 0, after: 0 };
+    pastEnds.set(target, {
+      before: Math.max(ends.before, -position),
+      after: Math.max(ends.after, position - collection.length + 1)
+    });
+  }
 if (fonts[font]) document.body.style.fontFamily = fonts[font];
 
 /** A type's unit, or that of the nearest type it refines. */
@@ -138,11 +169,14 @@ function mountStep(
     __frame: frame,
     ...state
   } = substituted ?? (states[step] as StepState);
-  // Arrays and objects in the props, by path, so a node can find the types of its items.
+  // Arrays and objects in the props, by path and the other way round, so a node can find the types
+  // of its items and the length of the collection it is in.
   const paths = new WeakMap<object, string>();
+  const containers = new Map<string, unknown>();
   const record = (value: unknown, path: string): void => {
     if (value === null || typeof value !== 'object') return;
     paths.set(value, path);
+    containers.set(path, value);
     if (Array.isArray(value)) value.forEach((item, index) => record(item, `${path}[${index}]`));
     else for (const [key, item] of Object.entries(value)) record(item, `${path}.${key}`);
   };
@@ -193,8 +227,10 @@ function mountStep(
             identityOf: (path: string) => identities[path],
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
-            lengthOf: (name: string) => {
-              const collection = state[name];
+            heldBy: (name: string) => held.get(name),
+            pastEnds: (collection: string) => pastEnds.get(collection) ?? { before: 0, after: 0 },
+            lengthOf: (path: string) => {
+              const collection = containers.get(path);
               return Array.isArray(collection) ? collection.length : undefined;
             },
             parent: (typeName: string) => atoms[typeName]?.parent,

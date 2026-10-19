@@ -10,6 +10,7 @@
   import {
     leaveComponentBox,
     pointedContext,
+    provideCopy,
     provideHidden,
     providePointed,
     provideWrapped
@@ -45,6 +46,7 @@
   };
   providePointed(undefined);
   provideHidden(pointed?.placeholder ?? false);
+  if (pointed?.placeholder) provideCopy();
   leaveComponentBox();
   if (pointed) provideWrapped(pointed.slot);
 </script>

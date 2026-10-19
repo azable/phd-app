@@ -15,6 +15,7 @@
   import Slot from './Slot.svelte';
   import {
     defaultsContext,
+    copyContext,
     elementOf,
     hiddenContext,
     insideComponentBox,
@@ -24,6 +25,8 @@
     nodeIdsContext,
     elementSlot,
     pointersContext,
+    pointsInto,
+    reachesInto,
     provideComponentBox,
     provideSequence,
     sequenceContext,
@@ -184,8 +187,11 @@
   const nodeIds = nodeIdsContext();
   const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined));
   // The element of the state this node draws: a collection's item, or a component's root, which
-  // draws the element its call was given (see Slot.svelte).
-  const slot = untrack(() => __slot ?? (__component ? slotContext() : undefined));
+  // draws the element its call was given (see Slot.svelte). A hidden copy draws none.
+  const copy = copyContext();
+  const slot = untrack(() =>
+    copy ? undefined : (__slot ?? (__component ? slotContext() : undefined))
+  );
   // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
   // each step mounts afresh, and the renderer is marked so nodes inside it never call it again.
   const rendered = untrack(() =>
@@ -193,14 +199,20 @@
       ? rendererFor(type)
       : undefined
   );
-  // The root's pointers into the collection whose element this node draws, outermost (written
-  // last) first: the node is then drawn inside them (see Pointing.svelte), once, however many nodes
+  // The root's pointers that can point into the collection whose element this node draws, as
+  // those pointing elsewhere this step keep their room, outermost (written last) first: the node
+  // is then drawn inside them (see Pointing.svelte), once, however many nodes
   // inside also draw the element. A node drawn by its type's renderer leaves it to the renderer's node.
   const element = untrack(() => elementSlot(slot));
   const pointers = untrack(() =>
     !rendered && element && wrappedContext() !== slot
       ? pointersContext()
-          .filter((pointer) => pointer.collection === element.collection)
+          .filter((pointer) => reachesInto(types, pointer, element.collection))
+          .map((pointer) =>
+            pointsInto(types, pointer, element.collection)
+              ? pointer
+              : { ...pointer, position: Number.NaN }
+          )
           .toSorted((a, b) => b.order - a.order)
       : []
   );
@@ -208,10 +220,13 @@
   const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
   // The value this node draws keeps its identity across steps, so it can be followed as it moves.
   const identity = untrack(() => (slot === undefined ? undefined : types?.identityOf(slot)));
-  // The end slots, as far past each end as the farthest-reaching pointer goes.
-  const reach = Math.max(0, ...pointers.map((pointer) => pointer.reach));
-  const before = Array.from({ length: reach }, (_, place) => place - reach);
-  const after = Array.from({ length: reach }, (_, place) => length + place);
+  // The end slots, as far past each end as any step puts one of the pointers' positions: none
+  // where the trace never goes past.
+  const ends = untrack(() => pointers.map((pointer) => types?.pastEnds(pointer.collection)));
+  const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
+  const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
+  const before = Array.from({ length: reachBefore }, (_, place) => place - reachBefore);
+  const after = Array.from({ length: reachAfter }, (_, place) => length + place);
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.

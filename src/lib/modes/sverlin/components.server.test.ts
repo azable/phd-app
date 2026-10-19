@@ -20,7 +20,7 @@ function hoisted(view: string) {
     ast.html,
     view,
     new Set(['i', 'edges', 'e']),
-    new Map([['Arrow', { into: 'Values', reach: 1, paint: '__paint_Arrow' }]])
+    new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]])
   );
   return { ...found, view: withInsertions(view, found.removals) };
 }
@@ -30,8 +30,8 @@ describe('pointers', () => {
     expect(hoisted('<Node>A</Node>{@render Arrow(i)}{@render Arrow(edges[e].to)}')).toMatchObject({
       view: '<Node>A</Node>',
       calls: [
-        '{ view: () => Arrow, value: () => i, path: "i", into: "Values", reach: 1, paint: __paint_Arrow }',
-        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values", reach: 1, paint: __paint_Arrow }'
+        '{ view: () => Arrow, value: () => i, path: "i", into: "Values", paint: __paint_Arrow }',
+        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values", paint: __paint_Arrow }'
       ],
       problems: []
     });
