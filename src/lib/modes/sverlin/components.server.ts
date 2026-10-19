@@ -362,7 +362,11 @@ export function probeValues(
     single: (path: string) => boolean
   ): ProbeValues | undefined => {
     const atom = domain.atoms[type];
-    if (atom) return atomValues(atom, [...(seen.get(type) ?? [])]);
+    // A position runs from -1 to the longest collection of its type in the trace.
+    if (atom)
+      return atomValues(atom.index ? { ...atom, max: longest.get(atom.index) ?? 0 } : atom, [
+        ...(seen.get(type) ?? [])
+      ]);
     const structure = domain.structures[type];
     switch (structure?.kind) {
       case 'collection': {

@@ -231,7 +231,11 @@ export function interpretAlgorithm(
 type ObjectValue = { [key: string]: Value };
 type Value = undefined | null | boolean | number | string | Atom | Value[] | ObjectValue;
 /** A variable: its value, and in the input and algorithm the type it was made with. */
-type Binding = { value: Value; constant: boolean; type?: string };
+/**
+ * A variable: its value, and in the input and algorithm the type it was made with; a position also
+ * names the collection it points into.
+ */
+type Binding = { value: Value; constant: boolean; type?: string; target?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
@@ -373,6 +377,8 @@ class Interpreter {
    * from a literal, as in Edges([{ from: 0, to: 1 }]).
    */
   #construct(node: CallExpression, typeName: string, scope: Scope): Value {
+    if (this.#atoms[typeName]?.index && node.arguments.length === 2)
+      return this.#position(node, this.#atoms[typeName], scope);
     if (node.arguments.length !== 1 || node.arguments[0].type === 'SpreadElement')
       this.#fail(node, `${typeName}(...) takes exactly one value.`);
     const argument = this.#expression(node.arguments[0] as Expression, scope);
@@ -389,14 +395,72 @@ class Interpreter {
   }
 
   /**
+   * A position bound to a collection, as in Position(left, 0): its first argument names a top-level
+   * variable holding a collection of the type it points into.
+   */
+  #position(node: CallExpression, type: AtomType, scope: Scope): Atom {
+    const [collection, number] = node.arguments as Expression[];
+    const name = collection.type === 'Identifier' ? collection.name : undefined;
+    if (!name || !this.#holdsCollection(name, type))
+      this.#fail(
+        collection,
+        `${type.name}(…, …) names the ${type.index} it points into first, as in ${type.name}(${this.#collectionsOf(type)[0] ?? 'values'}, 0).`
+      );
+    const position = this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
+    this.#checkPosition(position, name, node, type.name);
+    return position;
+  }
+
+  #holdsCollection(name: string, type: AtomType): boolean {
+    const value = this.#topLevel.bindings.get(name)?.value;
+    return Array.isArray(value) && this.#shapes.get(value)?.name === type.index;
+  }
+
+  /** The top-level variables holding a collection a position type points into. */
+  #collectionsOf(type: AtomType): string[] {
+    return [...this.#topLevel.bindings.keys()].filter((name) => this.#holdsCollection(name, type));
+  }
+
+  /** The one collection a position can point into, when it does not name one. */
+  #onlyCollection(type: AtomType, node: AnyNode, path: string): string {
+    const names = this.#collectionsOf(type);
+    if (names.length === 1) return names[0];
+    return this.#fail(
+      node,
+      names.length
+        ? `${path} could point into ${names.join(' or ')}; say which, as in ${type.name}(${names[0]}, 0).`
+        : `${path} is a ${type.name}, which points into a ${type.index}, and there is none yet; declare one first.`
+    );
+  }
+
+  /** A position runs from -1 to its collection's length; only 0 to length - 1 point at an element. */
+  #checkPosition(position: Atom, target: string, node: AnyNode, path: string): void {
+    const collection = this.#topLevel.bindings.get(target)?.value;
+    const length = Array.isArray(collection) ? collection.length : 0;
+    const value = position.value as number;
+    if (value >= -1 && value <= length) return;
+    this.#fail(
+      node,
+      `${path} is ${value}, outside ${target}: a ${position.type.name} goes from -1 to ${length}, its length, and ${length ? `only 0 to ${length - 1} point at an element` : `${target} is empty, so none points at an element`}.`
+    );
+  }
+
+  /**
    * A value as the domain type a place expects. A literal or plain value becomes that type; a typed
    * value must already be it, or refine it. Records and collections are made field by field and
    * element by element. There is no null: every place holds a value of its type.
    */
-  #convert(value: Value, typeName: string, node: AnyNode, path: string): Value {
+  #convert(value: Value, typeName: string, node: AnyNode, path: string, target?: string): Value {
     if (value === null || value === undefined) return this.#noValue(node, path, typeName);
     const atom = this.#atoms[typeName];
-    if (atom) return this.#asAtom(value, atom, node, path);
+    if (atom) {
+      const made = this.#asAtom(value, atom, node, path);
+      // A position a variable holds points into the variable's collection; one an element or field
+      // holds, into the only collection of its type.
+      if (atom.index && this.#kind !== 'design')
+        this.#checkPosition(made, target ?? this.#onlyCollection(atom, node, path), node, path);
+      return made;
+    }
     const structure = this.#domain.structures[typeName];
     if (structure.kind === 'union') return this.#asMember(value, structure, node, path);
     if (structure.kind === 'record') return this.#asRecord(value, structure, node, path);
@@ -505,6 +569,22 @@ class Interpreter {
       return init.callee.name;
     if (value instanceof Atom) return value.type.name;
     return value !== null && typeof value === 'object' ? this.#shapes.get(value)?.name : undefined;
+  }
+
+  /**
+   * The collection a position variable points into, fixed at its declaration: the one its
+   * constructor names, as in Position(left, 0), or the only one of its type.
+   */
+  #targetOf(init: Expression, type: AtomType, value: Value, name: string): string {
+    const named =
+      init.type === 'CallExpression' &&
+      init.arguments.length === 2 &&
+      init.arguments[0].type === 'Identifier'
+        ? init.arguments[0].name
+        : undefined;
+    const target = named ?? this.#onlyCollection(type, init, name);
+    if (value instanceof Atom) this.#checkPosition(value, target, init, name);
+    return target;
   }
 
   /** The type a stored element or field must have: a collection's element or a record's field. */
@@ -636,10 +716,15 @@ class Interpreter {
           }
           const value = this.#expression(declarator.init, scope);
           this.#typed(value, declarator.init, name);
+          const type =
+            this.#kind === 'design' ? undefined : this.#declaredType(declarator.init, value);
           scope.bindings.set(name, {
             value,
             constant: node.kind === 'const',
-            ...(this.#kind === 'design' ? {} : { type: this.#declaredType(declarator.init, value) })
+            ...(type ? { type } : {}),
+            ...(type && this.#atoms[type]?.index
+              ? { target: this.#targetOf(declarator.init, this.#atoms[type], value, name) }
+              : {})
           });
         }
         return 'normal';
@@ -886,7 +971,9 @@ class Interpreter {
         get: () => binding.value,
         // A variable keeps the type it was made with, as an element or field does.
         prepare: (value) =>
-          binding.type ? this.#convert(value, binding.type, target, target.name) : value,
+          binding.type
+            ? this.#convert(value, binding.type, target, target.name, binding.target)
+            : value,
         set: (value) => {
           binding.value = value;
         }

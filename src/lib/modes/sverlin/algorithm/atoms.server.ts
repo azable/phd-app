@@ -16,6 +16,11 @@ export type AtomType = {
   max?: number;
   /** The only values an enumeration allows. */
   values?: readonly (string | number)[];
+  /**
+   * For a position, the collection type it points into: its values run from -1 to the length of
+   * the collection a variable is bound to, and only 0 to length - 1 point at an element.
+   */
+  index?: string;
 };
 
 /** Every atomic type available to a component, by name. */

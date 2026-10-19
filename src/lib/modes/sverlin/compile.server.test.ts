@@ -556,6 +556,13 @@ describe('typed view components', () => {
     expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
   });
 
+  it('measures a position with every place in its collection, and either end', () => {
+    const prepared = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">let i = Position(-1); yield "Start"; i = Position(0); yield "A";</script><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+    );
+    expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3, 4] }]);
+  });
+
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">let r = Ratio(0.125); let g = Grid([[1, 2], [3]]); yield "A";</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node items={grid} />{/snippet}{@render R(r)}`

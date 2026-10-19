@@ -79,8 +79,11 @@ Every array and object in the input and algorithm is made by a type, defined in 
 - a collection of elements of one type: `const Values = collection(Int);`, and a collection of collections for a grid: `const Grid = collection(Values);`
 - a record with named fields: `const Edge = record({ from: Vertex, to: Vertex, weight: Weight });`
 - a union, a value of one of several types, for a place that holds different kinds of value: `const Dist = union(Distance, Unreached);`
+- a position in a collection, such as a loop index or a pointer: `const Index = index(Values);`
 
 Make one by calling its name, writing its contents as literals, which take their types from it: `Values([3, 8, 5])` holds three `Int`s, and `Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a `Vertex`, a `Vertex`, and a `Weight`. Values added to a collection or assigned to a record's field take its types in the same way: `queue.push(3)`, `dist[v] = 0`, `edge.weight = 5`. An array or object literal anywhere else is an error, so there are no plain arrays or objects. A record has exactly its fields: leaving one out, or reading or writing another, is an error. `.slice()` of a collection gives a collection of the same type.
+
+A position runs from -1 to its collection's length: -1 and the length point nowhere, as before a search starts and after it ends, and 0 to length - 1 point at an element. A variable is bound to its collection when it is declared: `let i = Index(-1);` points into the only `Values`, and with several, name the one, as in `let i = Index(left, 0);`. The binding stays with the variable, so `k = i + j` gives `k` a number and leaves it pointing into its own collection; a position stored in a record or collection, as in `record({ from: VertexRef, to: VertexRef })`, points into the only collection of its type. Leaving the range is an error.
 
 A union value is always one of its members: a literal becomes the member it fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`, and a literal that fits two members needs its type written, as in `Distance(4)`. Members compare with `===` and `!==`, where values of different members are unequal, but not with `<` or `>`; check which member a value is before ordering it:
 
@@ -188,8 +191,8 @@ Example, with domain, input, algorithm, design, and a script-free view:
 ```svelte
 <script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Index = type('integer', { min: -1, max: 3 });
   const Values = collection(Int);
+  const Index = index(Values);
 </script>
 
 <script lang="sverlin" input>

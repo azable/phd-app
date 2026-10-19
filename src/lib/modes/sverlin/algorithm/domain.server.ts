@@ -48,11 +48,15 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), or collection(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), or index(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
         );
       const call = init as CallExpression;
       if (name in atoms || name in structures)
         fail(declarator as AnyNode, `"${name}" is already a type.`);
+      if (kind === 'index') {
+        atoms[name] = defineIndex(name, call);
+        continue;
+      }
       if (kind !== 'type') {
         structures[name] = defineStructure(name, kind as StructureType['kind'], call);
         continue;
@@ -114,6 +118,16 @@ export function interpretDomain(body: string): DomainRegistry {
     }
   }
   return { atoms, structures };
+
+  /** A position in a collection type, as in index(Values): -1 to the length of its collection. */
+  function defineIndex(name: string, call: CallExpression): AtomType {
+    const args = call.arguments as Expression[];
+    if (args.length !== 1) fail(call, 'index() takes one collection type, as in index(Values).');
+    const collection = defined(args[0], 'An index’s collection type');
+    if (structures[collection]?.kind !== 'collection')
+      fail(args[0], `index() points into a collection type, and ${collection} is not one.`);
+    return { name, base: 'integer', min: -1, index: collection };
+  }
 
   function defineStructure(
     name: string,
@@ -185,6 +199,7 @@ function applyAtomOptions(
 
 /** Why an atomic type's values are not a known, finite set, or undefined when they are. */
 function unboundedProblem(type: AtomType): string | undefined {
+  if (type.index) return undefined;
   const reason =
     'Every type must have a known, finite set of values, so the view can be drawn for each of them.';
   if (type.values || type.base === 'boolean') return undefined;
