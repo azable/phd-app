@@ -220,6 +220,11 @@
       };
       for (const inner of element.querySelectorAll<HTMLElement>('[data-sv-key]'))
         if (inner.dataset.svKey) anchors[inner.dataset.svKey] = anchor(inner);
+      // A node drawing an element of the state is also found by it, as vertices[2], the outermost
+      // such node first, so a link given a position meets the element's whole view.
+      for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-slot]')])
+        if (inner.dataset.svSlot && !(inner.dataset.svSlot in anchors))
+          anchors[inner.dataset.svSlot] = anchor(inner);
       const cells = [...element.querySelectorAll('[data-sv-node]')].filter((inner) =>
         inner.querySelector(':scope > .value')
       );

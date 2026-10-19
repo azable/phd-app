@@ -8,7 +8,15 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import { keyedRef, nodeIdsContext } from '../type-context';
+  import {
+    elementSlot,
+    keyedRef,
+    linkEnd,
+    nodeIdsContext,
+    pointersContext,
+    slotContext,
+    typeContext
+  } from '../type-context';
   import type { NodeColor, StrokeWidth } from './props';
 
   let {
@@ -21,12 +29,19 @@
     strokeWidth,
     curve,
     bend,
-    __ref
+    __ref,
+    __component,
+    __fromPath,
+    __fromOf,
+    __fromAt,
+    __toPath,
+    __toOf,
+    __toAt
   }: {
-    /** The key of the node the link starts from. */
-    from: string;
-    /** The key of the node the link goes to. */
-    to: string;
+    /** The key of the node the link starts from, or a position, as edge.from. */
+    from: string | number;
+    /** The key of the node the link goes to, or a position, as edge.to. */
+    to: string | number;
     /** An arrow (true, the default) or a plain line. */
     directed?: boolean;
     dashed?: boolean;
@@ -46,23 +61,56 @@
     bend?: number;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
+    /** Internal: set by the compiler on a typed component's root, naming the component. */
+    __component?: string;
+    /** Internal: where a position at an end comes from, as a slot's (see Slot.svelte). */
+    __fromPath?: string;
+    __fromOf?: unknown;
+    __fromAt?: string | number;
+    __toPath?: string;
+    __toOf?: unknown;
+    __toAt?: string | number;
   } = $props();
 
+  const types = typeContext();
+  // An end given a position names the node drawing the element it points at.
+  const ends = untrack(() => ({
+    from: linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt }),
+    to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt })
+  }));
+  // A link a component draws for an element, as an edge, takes the paint of the root's pointers at
+  // it, as its stroke for the current edge; the pointer written last wins.
+  const pointed = untrack(() => {
+    const element = __component ? elementSlot(slotContext()) : undefined;
+    if (!element) return {};
+    return Object.assign(
+      {},
+      ...pointersContext()
+        .filter(
+          (pointer) =>
+            pointer.collection === element.collection && pointer.position === element.index
+        )
+        .toSorted((a, b) => a.order - b.order)
+        .map((pointer) => pointer.paint?.(pointer.position) ?? {})
+    ) as { stroke?: NodeColor; strokeWidth?: StrokeWidth; dashed?: boolean };
+  });
   const nodeIds = nodeIdsContext();
-  const id = untrack(() => (__ref ? nodeIds?.claim(keyedRef(__ref, `${from}->${to}`)) : undefined));
+  const id = untrack(() =>
+    __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined
+  );
 </script>
 
 <span
   class="sv-link"
   hidden
   data-sv-link={id ?? ''}
-  data-from={from}
-  data-to={to}
+  data-from={ends.from}
+  data-to={ends.to}
   data-directed={directed ? 'true' : 'false'}
-  data-dashed={dashed ? 'true' : undefined}
+  data-dashed={(pointed.dashed ?? dashed) ? 'true' : undefined}
   data-label={label}
-  data-stroke={stroke}
-  data-stroke-width={strokeWidth}
+  data-stroke={pointed.stroke ?? stroke}
+  data-stroke-width={pointed.strokeWidth ?? strokeWidth}
   data-curve={curve}
   data-bend={typeof bend === 'number' && Number.isFinite(bend)
     ? Math.min(Math.max(bend, -1), 1)

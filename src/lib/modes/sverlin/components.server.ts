@@ -38,6 +38,8 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   roots: Map<number, string>;
   /** The components that are pointers: views of an index type drawn around what they point at. */
   pointers: Set<string>;
+  /** Each pointer's <Pointed>, and the name its snippet gives its position. */
+  pointed: Map<string, { tag: SvelteNode; parameter: string }>;
   problems: ComponentProblem[];
 } {
   const components: { name: string; start: number; type: string; node: SvelteNode }[] = [];
@@ -69,6 +71,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     return undefined;
   };
   const pointers = new Set<string>();
+  const pointedTags = new Map<string, { tag: SvelteNode; parameter: string }>();
   const pointedIn = (node: SvelteNode): SvelteNode[] =>
     (node.children ?? []).flatMap((child) => [
       ...(child.type === 'InlineComponent' && child.name === 'Pointed' ? [child] : []),
@@ -95,10 +98,17 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
         message: `${name} has ${pointed.length} <Pointed>; a pointer draws the element it points at once, so it has one.`,
         start: pointed[1].start ?? 0
       });
-    else if (pointed.length) pointers.add(name);
+    else if (pointed.length) {
+      pointers.add(name);
+      pointedTags.set(name, { tag: pointed[0], parameter: node.parameters?.[0]?.name ?? '_' });
+    }
     components.push({ name, start: node.start ?? 0, type, node });
     for (const child of node.children ?? [])
-      if (child.type === 'InlineComponent' && child.name === 'Node' && child.start !== undefined)
+      if (
+        child.type === 'InlineComponent' &&
+        (child.name === 'Node' || child.name === 'Link') &&
+        child.start !== undefined
+      )
         roots.set(child.start, name);
   }
   // Components are defined at the top level, so every definition is reusable.
@@ -117,7 +127,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     for (const child of part.children ?? []) nested(child, depth + 1);
   };
   for (const node of html?.children ?? []) nested(node.children ?? [], 1);
-  return { components, roots, pointers, problems };
+  return { components, roots, pointers, pointed: pointedTags, problems };
 }
 
 /**
@@ -242,8 +252,12 @@ export type Insertion = { at: number; text: string; remove?: number };
 
 /** The view's source with insertions made, each at its position in the original source. */
 export function withInsertions(source: string, insertions: readonly Insertion[]): string {
+  // From the end, so earlier positions hold; at one position, the last given first, so they read
+  // in the order given, as a slot closing before the next one opens.
+  const ordered = insertions.map((insertion, order) => ({ ...insertion, order }));
+  ordered.sort((a, b) => b.at - a.at || b.order - a.order);
   let result = source;
-  for (const { at, text, remove = 0 } of [...insertions].sort((a, b) => b.at - a.at))
+  for (const { at, text, remove = 0 } of ordered)
     result = `${result.slice(0, at)}${text}${result.slice(at + remove)}`;
   return result;
 }
@@ -258,8 +272,11 @@ export function pointerCalls(
   markup: unknown,
   source: string,
   stateNames: ReadonlySet<string>,
-  /** Each pointer view, with the collection type its index type points into. */
-  pointers: ReadonlyMap<string, string>
+  /**
+   * Each pointer view, with the collection type its index type points into, and the code of a
+   * function giving its <Pointed>'s props for a position, which links it points at take.
+   */
+  pointers: ReadonlyMap<string, { into: string; paint: string }>
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -306,7 +323,7 @@ export function pointerCalls(
         });
       else {
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name))} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -398,6 +415,33 @@ export function slotInsertions(
           { at: part.start ?? 0, text: `<SverlinSlot${slotOf(argument, locals)}>` },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );
+      }
+      return;
+    }
+    if (part.type === 'InlineComponent' && part.name === 'Link') {
+      // A link's end given a position, as in from={edge.from}, joins the node drawing the element
+      // it points at; the link is told where the position comes from, as a slot is.
+      for (const attribute of (part.attributes as Part[] | undefined) ?? []) {
+        if (
+          attribute.type !== 'Attribute' ||
+          (attribute.name !== 'from' && attribute.name !== 'to')
+        )
+          continue;
+        const [value] = Array.isArray(attribute.value) ? (attribute.value as Part[]) : [];
+        const expression =
+          value?.type === 'MustacheTag' || value?.type === 'ExpressionTag'
+            ? (value.expression as Part)
+            : undefined;
+        const slot = slotOf(expression, locals);
+        if (!/ (path|at)=/u.test(slot)) continue;
+        const end = attribute.name;
+        insertions.push({
+          at: (part.start ?? 0) + '<Link'.length,
+          text: slot
+            .replace(' path=', ` __${end}Path=`)
+            .replace(' of=', ` __${end}Of=`)
+            .replace(' at=', ` __${end}At=`)
+        });
       }
       return;
     }

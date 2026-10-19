@@ -381,6 +381,24 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         );
       if (pointing.length) pointerViews.add(name);
     }
+    // A pointer's <Pointed> props, for a position, as code: a link it points at takes them.
+    const paints = [...found.pointed].map(([name, { tag, parameter }]) => {
+      const props = (tag as { attributes?: Attribute[] }).attributes?.flatMap((attribute) => {
+        if (attribute.type !== 'Attribute' || !attribute.name) return [];
+        const [part] = Array.isArray(attribute.value) ? attribute.value : [];
+        const value =
+          attribute.value === true
+            ? 'true'
+            : part?.type === 'Text'
+              ? JSON.stringify((part as { data?: string }).data ?? '')
+              : (part?.type === 'MustacheTag' || part?.type === 'ExpressionTag') &&
+                  part.expression?.start !== undefined
+                ? svelteSource.slice(part.expression.start, part.expression.end)
+                : undefined;
+        return value === undefined ? [] : [`${attribute.name}: ${value}`];
+      });
+      return `const __paint_${name} = (${parameter}: any) => ({ ${(props ?? []).join(', ')} });`;
+    });
     const pointers = pointerCalls(
       ast.html,
       svelteSource,
@@ -388,7 +406,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       new Map(
         [...pointerViews].map((name) => {
           const type = components[name] ?? components[chosen[name]?.[0] ?? ''];
-          return [name, domain.atoms[type]?.index ?? ''];
+          const paint = found.pointers.has(name)
+            ? `__paint_${name}`
+            : `(position: number) => (({ ${chosen[name].map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[__choice_${name}]?.(position) ?? {}`;
+          return [name, { into: domain.atoms[type]?.index ?? '', paint }];
         })
       )
     );
@@ -420,7 +441,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         // A design value named after a type is also its renderer, drawing the nodes showing its values.
         [...renderers, ...typeViews],
         chosen,
-        pointers.calls
+        pointers.calls,
+        paints
       ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
@@ -597,7 +619,8 @@ function withGeneratedScripts(
   props: readonly string[],
   renderers: readonly string[],
   choices: Record<string, string[]>,
-  pointers: readonly string[]
+  pointers: readonly string[],
+  paints: readonly string[]
 ): string {
   // A design value that chooses a component arrives as the component's name, and the view uses
   // the component itself under the value's name.
@@ -620,7 +643,7 @@ function withGeneratedScripts(
     : '';
   // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
   const pointing = pointers.length
-    ? `import { providePointers as __sverlinPointers } from 'sverlin'; __sverlinPointers([${pointers.join(', ')}]);`
+    ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
   return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration} ${pointing}</script>${source}`;

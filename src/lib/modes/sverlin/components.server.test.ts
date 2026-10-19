@@ -20,7 +20,7 @@ function hoisted(view: string) {
     ast.html,
     view,
     new Set(['i', 'edges', 'e']),
-    new Map([['Arrow', 'Values']])
+    new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]])
   );
   return { ...found, view: withInsertions(view, found.removals) };
 }
@@ -30,8 +30,8 @@ describe('pointers', () => {
     expect(hoisted('<Node>A</Node>{@render Arrow(i)}{@render Arrow(edges[e].to)}')).toMatchObject({
       view: '<Node>A</Node>',
       calls: [
-        '{ view: () => Arrow, value: () => i, path: "i", into: "Values" }',
-        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values" }'
+        '{ view: () => Arrow, value: () => i, path: "i", into: "Values", paint: __paint_Arrow }',
+        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values", paint: __paint_Arrow }'
       ],
       problems: []
     });
@@ -57,6 +57,18 @@ describe('element slots', () => {
     );
     expect(slotted('{@render Int(values[i])}')).toBe(
       '<SverlinSlot of={values} at={i}>{@render Int(values[i])}</SverlinSlot>'
+    );
+  });
+
+  it('tells a link where a position at its end comes from', () => {
+    expect(slotted('{#each edges as edge}<Link from={edge.from} to="head" />{/each}')).toBe(
+      '{#each edges as edge}<Link __fromOf={edge} __fromAt="from" from={edge.from} to="head" />{/each}'
+    );
+  });
+
+  it('keeps calls side by side in slots of their own', () => {
+    expect(slotted('{@render Int(target)}{@render Int(values[0])}')).toBe(
+      '<SverlinSlot path="target">{@render Int(target)}</SverlinSlot><SverlinSlot of={values} at={0}>{@render Int(values[0])}</SverlinSlot>'
     );
   });
 

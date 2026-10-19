@@ -190,6 +190,8 @@ export type PointerCall = {
   value: () => unknown;
   /** The collection type the pointer's index type points into. */
   into: string;
+  /** The props of the pointer's <Pointed> for a position, which a link it points at takes. */
+  paint?: (position: number) => Record<string, unknown>;
   path?: string;
   of?: () => unknown;
   at?: () => string | number;
@@ -201,6 +203,7 @@ export type Pointer = {
   collection: string;
   position: number;
   order: number;
+  paint?: (position: number) => Record<string, unknown>;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -224,7 +227,15 @@ export function providePointers(calls: readonly PointerCall[]): void {
     const [only, ...others] = types?.variablesOf(call.into) ?? [];
     const collection = found.collection ?? (others.length ? undefined : only);
     return collection
-      ? [{ view: call.view(), collection, position: found.position ?? Number.NaN, order }]
+      ? [
+          {
+            view: call.view(),
+            collection,
+            position: found.position ?? Number.NaN,
+            order,
+            paint: call.paint
+          }
+        ]
       : [];
   });
   setContext('sverlin:pointers', pointers);
@@ -276,6 +287,41 @@ export function provideHidden(hidden: boolean): void {
 
 export function hiddenContext(): boolean | undefined {
   return getContext<boolean | undefined>('sverlin:hidden');
+}
+
+/**
+ * Whether a node's children are laid out in sequence (a row, column, or grid) rather than freely:
+ * a pointer's end slots, before the first element and after the last, belong only in a sequence.
+ */
+export function provideSequence(sequence: boolean): void {
+  setContext('sverlin:sequence', sequence);
+}
+
+export function sequenceContext(): boolean | undefined {
+  return getContext<boolean | undefined>('sverlin:sequence');
+}
+
+/** The element of a collection a slot names, as values[2], or undefined for any other slot. */
+export function elementSlot(
+  slot: string | undefined
+): { collection: string; index: number } | undefined {
+  const match = slot ? /^([A-Za-z_$][\w$]*)\[(\d+)\]$/u.exec(slot) : null;
+  return match ? { collection: match[1], index: Number(match[2]) } : undefined;
+}
+
+/**
+ * The node a link's end names: given a position from the state, as from={edge.from}, the node
+ * drawing the element it points at, as vertices[2]; otherwise the key it was given.
+ */
+export function linkEnd(
+  types: TypeContext | undefined,
+  end: string | number,
+  where: { path?: string; of?: unknown; at?: string | number }
+): string {
+  const path =
+    where.path ?? (where.at === undefined ? undefined : elementOf(types, where.of, where.at));
+  const target = path === undefined ? undefined : types?.targetOf(path);
+  return target !== undefined && typeof end === 'number' ? `${target}[${end}]` : String(end);
 }
 
 /** Reset for nodes drawn by <Pointed>: the element keeps the sizes it would have outside it. */

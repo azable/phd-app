@@ -22,8 +22,11 @@
     markRendering,
     layoutMemoryContext,
     nodeIdsContext,
+    elementSlot,
     pointersContext,
     provideComponentBox,
+    provideSequence,
+    sequenceContext,
     rendererFor,
     slotContext,
     typeContext,
@@ -193,16 +196,18 @@
   // The root's pointers into the collection whose element this node draws, outermost (written
   // last) first: the node is then drawn inside them (see Pointing.svelte), once, however many nodes
   // inside also draw the element. A node drawn by its type's renderer leaves it to the renderer's node.
-  const element = untrack(() => (slot ? /^([A-Za-z_$][\w$]*)\[(\d+)\]$/u.exec(slot) : null));
+  const element = untrack(() => elementSlot(slot));
   const pointers = untrack(() =>
     !rendered && element && wrappedContext() !== slot
       ? pointersContext()
-          .filter((pointer) => pointer.collection === element[1])
+          .filter((pointer) => pointer.collection === element.collection)
           .toSorted((a, b) => b.order - a.order)
       : []
   );
-  const position = element ? Number(element[2]) : -1;
-  const length = untrack(() => (element ? (types?.lengthOf(element[1]) ?? 0) : 0));
+  const position = element?.index ?? -1;
+  const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
+  // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
+  const inSequence = sequenceContext() !== false;
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   const hidden = hiddenContext();
   // A node keeps a least size so that changing content never moves anything around it. A typed
@@ -295,6 +300,9 @@
   );
   // Links need positions to join, so a node with links and no layout is laid out freely.
   const arrangement = $derived(layout ?? (collection ? 'row' : __links ? 'free' : undefined));
+  untrack(() => {
+    if (arrangement) provideSequence(arrangement !== 'free');
+  });
   // A plain node has no drawn look: no border, padding, or fill unless its props give them.
   const look = $derived.by((): Partial<ShapeDefaults> => {
     if (resolvedShape === 'plain') return {};
@@ -381,11 +389,11 @@
 {/snippet}
 
 {#if pointers.length}
-  {#if position === 0}
+  {#if position === 0 && inSequence}
     <Pointing {pointers} position={-1} name={slot ?? ''} draw={pointed} placeholder />
   {/if}
   <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
-  {#if position === length - 1}
+  {#if position === length - 1 && inSequence}
     <Pointing {pointers} position={length} name={slot ?? ''} draw={pointed} placeholder />
   {/if}
 {:else if rendered}
