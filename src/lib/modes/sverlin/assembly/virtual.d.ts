@@ -29,8 +29,12 @@ declare module 'virtual:atoms' {
   export default atoms;
 }
 
-/** The view's typed components, each after those it renders, with the values to draw it with. */
+/**
+ * The view's typed components, each after those it renders, with the values to draw it with; and
+ * the values its root reads for placement, by path, with the step they are measured at and the
+ * values of their types.
+ */
 declare module 'virtual:components' {
-  const components: { name: string; cases: unknown[] }[];
-  export default components;
+  export const components: { name: string; cases: unknown[] }[];
+  export const placements: { path: string; step: number; values: unknown[] }[];
 }

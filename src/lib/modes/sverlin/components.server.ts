@@ -140,6 +140,78 @@ function collectPattern(pattern: unknown, into: Set<string>): void {
 }
 
 /**
+ * How markup uses values, by path from the names in `roots`, such as `i`, `edge.from`, or
+ * `values[]` for any element: `viewed` paths are passed straight to a view, as in
+ * {@render Int(value)}; `placed` paths are read for anything else, such as showing them or
+ * deciding where something goes (k === i). An {#each} over a path reads its elements through the
+ * loop's name.
+ */
+export function valueUses(
+  markup: unknown,
+  roots: ReadonlySet<string>,
+  views: ReadonlySet<string>
+): { viewed: Set<string>; placed: Set<string> } {
+  const viewed = new Set<string>();
+  const placed = new Set<string>();
+  type Part = Record<string, unknown> & { type?: string; name?: string };
+  const pathOf = (node: unknown, aliases: ReadonlyMap<string, string>): string | undefined => {
+    const part = node as Part | undefined;
+    if (part?.type === 'Identifier' && typeof part.name === 'string')
+      return aliases.get(part.name) ?? (roots.has(part.name) ? part.name : undefined);
+    if (part?.type !== 'MemberExpression') return undefined;
+    const base = pathOf(part.object, aliases);
+    const property = part.property as Part;
+    if (!base) return undefined;
+    if (!part.computed && typeof property.name === 'string') return `${base}.${property.name}`;
+    return property.type === 'Literal' ? `${base}[]` : undefined;
+  };
+  const walk = (node: unknown, aliases: ReadonlyMap<string, string>): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, aliases);
+      return;
+    }
+    const part = node as Part;
+    const path = pathOf(part, aliases);
+    if (path) {
+      placed.add(path);
+      return;
+    }
+    if (part.type === 'EachBlock') {
+      const source = pathOf(part.expression, aliases);
+      const context = part.context as Part | undefined;
+      if (!source) walk(part.expression, aliases);
+      const inner = new Map(aliases);
+      if (source && context?.type === 'Identifier' && typeof context.name === 'string')
+        inner.set(context.name, `${source}[]`);
+      walk(part.children, inner);
+      walk(part.else, aliases);
+      return;
+    }
+    if (part.type === 'RenderTag') {
+      const call = part.expression as Part;
+      const callee = call?.callee as Part | undefined;
+      const toView = typeof callee?.name === 'string' && views.has(callee.name);
+      for (const argument of (call?.arguments as unknown[]) ?? []) {
+        const argumentPath = toView ? pathOf(argument, aliases) : undefined;
+        if (argumentPath) viewed.add(argumentPath);
+        else walk(argument, aliases);
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(part)) {
+      if (key === 'parent' || key === 'typeAnnotation') continue;
+      // A non-computed member or key names a property, not a value.
+      if (part.type === 'MemberExpression' && key === 'property' && !part.computed) continue;
+      if (part.type === 'Property' && key === 'key' && !part.computed) continue;
+      walk(child, aliases);
+    }
+  };
+  walk(markup, new Map());
+  return { viewed, placed };
+}
+
+/**
  * Markup appended to the view so the page can render a component for given arguments: under the
  * reserved prop __probe, every case of one component, each a list of arguments.
  */
@@ -200,11 +272,18 @@ export function componentProbes(
   };
   for (const name of Object.keys(signatures)) visit(name, new Set());
   const valuesOf = probeValues(domain, steps);
+  const views = new Set([...Object.keys(signatures), ...Object.keys(choices)]);
   const probes: ComponentProbe[] = [];
   const problems: ComponentProblem[] = [];
   for (const name of ordered) {
     const type = signatures[name];
-    const values = valuesOf(type);
+    const { node } = found.find((component) => component.name === name)!;
+    const parameter = node.parameters?.[0]?.name ?? '';
+    const values = valuesOf(
+      type,
+      parameter,
+      onlyViewed(valueUses(node.children, new Set([parameter]), views))
+    );
     const cases =
       values && (values.every?.length ?? Infinity) <= maximumCases ? values.every : values?.widest;
     if (cases && cases.length <= maximumCases) probes.push({ name, cases });
@@ -243,19 +322,35 @@ function combinations(fields: (ProbeValues | undefined)[]): unknown[][] | undefi
  * The values of each domain type. A collection is filled to the longest of its type in the trace,
  * with each value of its element type in turn: rows, columns, and grids are widest when full, and
  * the items in them keep their components' boxes, so which value is where does not change the size.
+ * A part of the value at a path that `single` names is drawn with one value: it is passed only to
+ * views, which keep their boxes whichever value they show.
  */
-function probeValues(
+export function probeValues(
   domain: DomainRegistry,
   steps: Steps
-): (type: string) => ProbeValues | undefined {
+): (type: string, path?: string, single?: (path: string) => boolean) => ProbeValues | undefined {
   const { longest, seen } = traceExtents(steps);
-  const valuesOf = (type: string): ProbeValues | undefined => {
+  const valuesOf = (
+    type: string,
+    path = '',
+    single: (path: string) => boolean = () => false
+  ): ProbeValues | undefined => {
+    const values = allValuesOf(type, path, single);
+    return values && single(path)
+      ? { every: [values.widest[0]], widest: [values.widest[0]] }
+      : values;
+  };
+  const allValuesOf = (
+    type: string,
+    path: string,
+    single: (path: string) => boolean
+  ): ProbeValues | undefined => {
     const atom = domain.atoms[type];
     if (atom) return atomValues(atom, [...(seen.get(type) ?? [])]);
     const structure = domain.structures[type];
     switch (structure?.kind) {
       case 'collection': {
-        const element = valuesOf(structure.element);
+        const element = valuesOf(structure.element, `${path}[]`, single);
         const length = longest.get(type) ?? 0;
         const fill = (values: unknown[]) =>
           values.map((value) => Array.from({ length }, () => value));
@@ -264,7 +359,7 @@ function probeValues(
         );
       }
       case 'union': {
-        const members = structure.members.map(valuesOf);
+        const members = structure.members.map((member) => valuesOf(member, path, single));
         if (!members.every((values) => values !== undefined)) return undefined;
         const every = members.every((values) => values.every)
           ? members.flatMap((values) => values.every!)
@@ -276,7 +371,9 @@ function probeValues(
       }
       case 'record': {
         const names = Object.keys(structure.fields);
-        const fields = names.map((name) => valuesOf(structure.fields[name]));
+        const fields = names.map((name) =>
+          valuesOf(structure.fields[name], path ? `${path}.${name}` : name, single)
+        );
         const records = (cases: unknown[][] | undefined) =>
           cases?.map((values) =>
             Object.fromEntries(names.map((name, index) => [name, values[index]]))
@@ -338,4 +435,53 @@ function traceExtents(steps: Steps) {
   for (const { state, types } of steps)
     for (const [name, value] of Object.entries(state)) walk(value, name, types);
   return { longest, seen };
+}
+
+/**
+ * Whether a path's value is passed only to views: it, or a value holding it, is passed to one, and
+ * neither it nor anything holding or held by it is read for anything else.
+ */
+export function onlyViewed({
+  viewed,
+  placed
+}: {
+  viewed: ReadonlySet<string>;
+  placed: ReadonlySet<string>;
+}): (path: string) => boolean {
+  const within = (path: string, outer: string) =>
+    path === outer || path.startsWith(`${outer}.`) || path.startsWith(`${outer}[`);
+  return (path) =>
+    [...viewed].some((view) => within(path, view)) &&
+    ![...placed].some((read) => within(path, read) || within(read, path));
+}
+
+/**
+ * A value the root reads for placement: its path, the step it is first recorded at, and the values
+ * of its type it is measured with.
+ */
+export type Placement = { path: string; step: number; values: unknown[] };
+
+/**
+ * The atomic values the root reads for anything but passing to views, such as i in k === i, each
+ * with the values of its type: the page measures the view with each in place of the trace's, so
+ * the root has room for every value its types allow, not just those the trace reaches.
+ */
+export function rootPlacements(
+  markup: unknown,
+  stateNames: readonly string[],
+  views: ReadonlySet<string>,
+  domain: DomainRegistry,
+  steps: Steps
+): Placement[] {
+  const { placed } = valueUses(markup, new Set(stateNames), views);
+  const valuesOf = probeValues(domain, steps);
+  return [...placed].flatMap((path) => {
+    if (path.includes('[')) return [];
+    const step = steps.findIndex(({ types }) => Object.hasOwn(types, path));
+    const type = step < 0 ? undefined : steps[step].types[path];
+    const values = type && Object.hasOwn(domain.atoms, type) ? valuesOf(type) : undefined;
+    if (!values) return [];
+    const every = values.every && values.every.length <= maximumCases ? values.every : undefined;
+    return [{ path, step, values: every ?? values.widest }];
+  });
 }

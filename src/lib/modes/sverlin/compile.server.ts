@@ -33,8 +33,10 @@ import {
   findComponents,
   probeMarkup,
   readsOf,
+  rootPlacements,
   viewsOf,
   type ComponentProbe,
+  type Placement,
   type ComponentSignatures
 } from './components.server';
 import { drawDefaults } from './library/node/defaults';
@@ -124,6 +126,8 @@ export type PreparedComponent = {
   atoms: AtomRegistry;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
+  /** Values the root reads for placement, measured with every value of their types. */
+  placements: Placement[];
   /** Types with more than one view and no design value choosing: each presentation draws one. */
   views?: Record<string, string[]>;
   design?: Block;
@@ -371,13 +375,24 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
+    const viewChoices = {
+      ...chosen,
+      ...Object.fromEntries(Object.entries(aliases).map(([type, name]) => [type, [name]]))
+    };
     const { probes, problems: probeProblems } = componentProbes(
       found.components,
       components,
-      {
-        ...chosen,
-        ...Object.fromEntries(Object.entries(aliases).map(([type, name]) => [type, [name]]))
-      },
+      viewChoices,
+      domain,
+      master
+    );
+    const placements = rootPlacements(
+      (ast.html?.children ?? []).filter(
+        (node: { type?: string; expression?: { name?: string } }) =>
+          !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
+      ),
+      stateNames,
+      new Set([...Object.keys(components), ...Object.keys(viewChoices)]),
       domain,
       master
     );
@@ -397,6 +412,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       master,
       atoms,
       components: probes,
+      placements,
       ...(Object.keys(drawn).length ? { views: drawn } : {}),
       ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
@@ -460,7 +476,7 @@ export async function bundlePresentation(
     prepared.component,
     JSON.stringify(states),
     JSON.stringify(prepared.atoms),
-    JSON.stringify(prepared.components)
+    JSON.stringify({ components: prepared.components, placements: prepared.placements })
   );
   const output = result.outputFiles[0];
   if (output.contents.byteLength > maximumBundleBytes) {

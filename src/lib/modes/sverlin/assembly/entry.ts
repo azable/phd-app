@@ -19,7 +19,7 @@ import {
 } from 'sverlin';
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
-import components from 'virtual:components';
+import { components, placements } from 'virtual:components';
 import states from 'virtual:trace';
 
 // The page theme every node draws on: colour tokens, the canvas, and spacing for the page itself.
@@ -115,20 +115,22 @@ type Phase = 'measuring' | 'recording' | 'showing';
 
 /**
  * Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. `extra`
- * props are passed to the view, such as __probe, which has it render a component for given values.
+ * props are passed to the view, such as __probe, which has it render a component for given values;
+ * `substituted` measures the step with other values in place of the trace's.
  */
 function mountStep(
   step: number,
   phase: Phase,
   settled: (shown: Shown) => void,
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
+  substituted?: StepState
 ): Shown {
   const {
     __types: types = {},
     __defaults: defaults,
     __frame: frame,
     ...state
-  } = states[step] as StepState;
+  } = substituted ?? (states[step] as StepState);
   // Arrays and objects in the props, by path, so a node can find the types of its items.
   const paths = new WeakMap<object, string>();
   const record = (value: unknown, path: string): void => {
@@ -183,12 +185,15 @@ function mountStep(
       ])
     });
   } catch (cause) {
-    // A view that fails at a step shows why there, and the other steps still load.
-    reportError(cause, step);
-    const notice = document.createElement('p');
-    notice.className = 'sv-error';
-    notice.textContent = `Step ${step + 1} could not be drawn: ${errorText(cause)}`;
-    layer.append(notice);
+    // A view that fails at a step shows why there, and the other steps still load. One that fails
+    // only with substituted values is measured without them, since every step it shows draws.
+    if (!substituted) {
+      reportError(cause, step);
+      const notice = document.createElement('p');
+      notice.className = 'sv-error';
+      notice.textContent = `Step ${step + 1} could not be drawn: ${errorText(cause)}`;
+      layer.append(notice);
+    }
     queueMicrotask(() => settled(shown));
   }
   return shown;
@@ -293,7 +298,8 @@ async function recordSteps() {
     step: number,
     phase: Phase,
     finish: (shown: Shown) => void,
-    extra?: Record<string, unknown>
+    extra?: Record<string, unknown>,
+    substituted?: StepState
   ) => {
     await whenShown();
     let mounted: Shown | undefined;
@@ -308,32 +314,44 @@ async function recordSteps() {
           remove(shown);
           done();
         },
-        extra
+        extra,
+        substituted
       );
     });
   };
-  for (let step = 0; step < states.length; step++)
-    await pass(step, 'measuring', ({ layer }) => {
-      for (const node of layer.querySelectorAll<HTMLElement>('[data-sv-node]')) {
-        const id = node.dataset.svNode as string;
-        const largest = reserved.get(id);
-        // Layout sizes, unaffected by the frame's scale or the root's fit.
-        const width = node.offsetWidth;
-        const height = node.offsetHeight;
-        reserved.set(id, {
-          width: Math.max(largest?.width ?? 0, width),
-          height: Math.max(largest?.height ?? 0, height)
-        });
-      }
-      for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
-        const collection = box.dataset.svCollection;
-        if (!collection) continue;
-        const items = collections.get(collection) ?? new Set<string>();
-        for (const child of box.children)
-          if (child instanceof HTMLElement && child.dataset.svNode) items.add(child.dataset.svNode);
-        collections.set(collection, items);
-      }
-    });
+  const measure = ({ layer }: Shown) => {
+    for (const node of layer.querySelectorAll<HTMLElement>('[data-sv-node]')) {
+      const id = node.dataset.svNode as string;
+      const largest = reserved.get(id);
+      // Layout sizes, unaffected by the frame's scale or the root's fit.
+      const width = node.offsetWidth;
+      const height = node.offsetHeight;
+      reserved.set(id, {
+        width: Math.max(largest?.width ?? 0, width),
+        height: Math.max(largest?.height ?? 0, height)
+      });
+    }
+    for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
+      const collection = box.dataset.svCollection;
+      if (!collection) continue;
+      const items = collections.get(collection) ?? new Set<string>();
+      for (const child of box.children)
+        if (child instanceof HTMLElement && child.dataset.svNode) items.add(child.dataset.svNode);
+      collections.set(collection, items);
+    }
+  };
+  for (let step = 0; step < states.length; step++) await pass(step, 'measuring', measure);
+  // Values the root reads for placement are measured with every value of their types, in a step
+  // where they are recorded, so it has room for values the trace never reaches.
+  for (const { path, step, values } of placements)
+    for (const value of values)
+      await pass(
+        step,
+        'measuring',
+        measure,
+        undefined,
+        withValue(states[step] as StepState, path, value)
+      );
   for (const items of collections.values()) {
     const sizes = [...items].flatMap((id) => reserved.get(id) ?? []);
     const largest = {
@@ -439,3 +457,13 @@ void recording.then(() => {
   recorded = true;
   show(requested);
 });
+
+/** A step's state with the value at a path, such as i or edge.from, replaced. */
+function withValue(state: StepState, path: string, value: unknown): StepState {
+  const copy = structuredClone(state);
+  const keys = path.split('.');
+  let target: Record<string, unknown> = copy;
+  for (const key of keys.slice(0, -1)) target = target[key] as Record<string, unknown>;
+  target[keys.at(-1) as string] = value;
+  return copy;
+}

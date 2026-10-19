@@ -520,11 +520,35 @@ describe('typed view components', () => {
       'Cell',
       'Search'
     ]);
-    // Filled to the longest Row in the trace.
-    expect(prepared.components[3].cases).toEqual([
-      [1, 1, 1],
-      [3, 3, 3]
-    ]);
+    // Plain and Bold show their value, so they take every value; Cell and Search only pass theirs to
+    // views, which keep their boxes, so they take one. Search is filled to the longest Row in the
+    // trace.
+    expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
+      {
+        Plain: [1, 3],
+        Bold: [1, 3],
+        Cell: [1],
+        Search: [[1, 1, 1]]
+      }
+    );
+  });
+
+  it('draws a record with one value for each field passed only to a view', () => {
+    const prepared = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin">yield "A";</script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{@render VertexView(edge.from)}{@render VertexView(edge.to)}<Node value={edge.weight} /></Node>{/snippet}`
+    );
+    // from and to go to VertexView; weight is shown, so it takes each of its values.
+    expect(prepared.components.find(({ name }) => name === 'EdgeView')?.cases).toEqual(
+      [1, 4, 7].map((weight) => ({ from: 0, to: 0, weight }))
+    );
+  });
+
+  it('measures the root with every value of what it reads for placement', () => {
+    const prepared = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield "Start"; i = Index(0); yield "A";</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+    );
+    // i places the pointer; target and the cells go to views.
+    expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
