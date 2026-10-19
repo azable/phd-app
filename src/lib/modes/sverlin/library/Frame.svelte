@@ -7,7 +7,7 @@
   the selection are reported to the app, which restores them when the next step reloads the page.
 -->
 <script lang="ts">
-  import { untrack, type Component } from 'svelte';
+  import { flushSync, untrack, type Component } from 'svelte';
 
   import {
     defaultsContext,
@@ -72,35 +72,39 @@
   // The least size of a CSS root, so once scaled it spans the frame's inside and justify can spread.
   let flowLeast = $state<{ width: number; height: number }>();
   function measureFit() {
-    queueMicrotask(() => {
-      const block = rootElement?.querySelector<HTMLElement>(':scope > .sv-root-inner > *');
-      if (block && frameElement) {
-        const style = getComputedStyle(frameElement);
-        const inside = {
-          width: frameElement.clientWidth - parseFloat(style.paddingLeft) * 2,
-          height: frameElement.clientHeight - parseFloat(style.paddingTop) * 2
-        };
-        // A CSS root is stretched to the frame, so its content's own extent is measured instead.
-        const content = block.classList.contains('sv-flow') ? flowExtent(block) : undefined;
-        const natural = content ?? { width: block.offsetWidth, height: block.offsetHeight };
-        const needed = Math.min(
-          largestFit,
-          inside.width / Math.max(1, natural.width),
-          inside.height / Math.max(1, natural.height)
-        );
-        // Every step shows at the smallest fit any step needs, so the view never zooms between them.
-        if (memory?.recording) memory.fits.set(memory.step, needed);
-        fit = memory && !memory.recording ? Math.min(needed, ...memory.fits.values()) : needed;
-        if (content) flowLeast = { width: inside.width / fit, height: inside.height / fit };
-        rootSize = {
-          width: content ? Math.max(content.width, inside.width / fit) : natural.width,
-          height: content ? Math.max(content.height, inside.height / fit) : natural.height
-        };
-      }
-      layoutRevision++;
-      if (!settled) onchanged?.();
-      scheduleSettle();
-    });
+    queueMicrotask(fitRoot);
+  }
+  // Whether the root has been fitted yet: it is, once its size is first observed.
+  let fitted = false;
+  function fitRoot() {
+    const block = rootElement?.querySelector<HTMLElement>(':scope > .sv-root-inner > *');
+    if (block && frameElement) {
+      fitted = true;
+      const style = getComputedStyle(frameElement);
+      const inside = {
+        width: frameElement.clientWidth - parseFloat(style.paddingLeft) * 2,
+        height: frameElement.clientHeight - parseFloat(style.paddingTop) * 2
+      };
+      // A CSS root is stretched to the frame, so its content's own extent is measured instead.
+      const content = block.classList.contains('sv-flow') ? flowExtent(block) : undefined;
+      const natural = content ?? { width: block.offsetWidth, height: block.offsetHeight };
+      const needed = Math.min(
+        largestFit,
+        inside.width / Math.max(1, natural.width),
+        inside.height / Math.max(1, natural.height)
+      );
+      // Every step shows at the smallest fit any step needs, so the view never zooms between them.
+      if (memory?.recording) memory.fits.set(memory.step, needed);
+      fit = memory && !memory.recording ? Math.min(needed, ...memory.fits.values()) : needed;
+      if (content) flowLeast = { width: inside.width / fit, height: inside.height / fit };
+      rootSize = {
+        width: content ? Math.max(content.width, inside.width / fit) : natural.width,
+        height: content ? Math.max(content.height, inside.height / fit) : natural.height
+      };
+    }
+    layoutRevision++;
+    if (!settled) onchanged?.();
+    scheduleSettle();
   }
 
   /** The extent of a CSS root's children, laid out in its direction with its gap. */
@@ -117,7 +121,10 @@
   provideArrangementParent({ changed: measureFit });
 
   // The layout has settled once two frames pass without another change; a page that cannot paint
-  // yet, such as one loaded while hidden, settles after a moment instead.
+  // yet, such as one loaded while hidden, or a pane the browser draws less often, settles after a
+  // moment instead. The root's size is observed only as frames are drawn, so a layout settling
+  // before it is fitted fits it there, as layout can be read without drawing; shown unfitted, it
+  // would jump to its fit, and the step's moves would start from where it was before.
   let settled = false;
   let settleFrame = 0;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -132,6 +139,10 @@
   }
   function finishSettling() {
     if (settled) return;
+    if (!fitted) {
+      fitRoot();
+      flushSync();
+    }
     settled = true;
     cancelAnimationFrame(settleFrame);
     clearTimeout(settleTimer);
@@ -158,9 +169,11 @@
 
   // The canvas element's own size, observed directly: the window size and its resize events can lag
   // behind the iframe's real size, such as when the app opens a pane, and a stale size would both
-  // misfit the frame and move the point zooming keeps still.
+  // misfit the frame and move the point zooming keeps still. It starts at the window's size, as
+  // the canvas fills the page: the observation arrives a moment after mounting, and a step shown
+  // before it would be drawn unscaled, and move from there.
   let canvas = $state<HTMLDivElement>();
-  let viewport = $state({ width: 0, height: 0 });
+  let viewport = $state({ width: window.innerWidth, height: window.innerHeight });
   // A margin keeps the outline in view at the fitted size.
   const margin = 16;
   const scale = $derived(
