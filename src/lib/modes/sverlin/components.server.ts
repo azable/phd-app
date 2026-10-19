@@ -258,7 +258,8 @@ export function pointerCalls(
   markup: unknown,
   source: string,
   stateNames: ReadonlySet<string>,
-  pointers: ReadonlySet<string>
+  /** Each pointer view, with the collection type its index type points into. */
+  pointers: ReadonlyMap<string, string>
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -304,7 +305,9 @@ export function pointerCalls(
           start
         });
       else {
-        calls.push(`{ view: () => ${name}, value: () => ${text(argument)}, ${position} }`);
+        calls.push(
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name))} }`
+        );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
       return;

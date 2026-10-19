@@ -188,6 +188,8 @@ function mountStep(
                 ? paths.get(container)
                 : undefined,
             targetOf: (path: string) => targets[path],
+            variablesOf: (typeName: string) =>
+              Object.keys(state).filter((name) => types[name] === typeName),
             lengthOf: (name: string) => {
               const collection = state[name];
               return Array.isArray(collection) ? collection.length : undefined;

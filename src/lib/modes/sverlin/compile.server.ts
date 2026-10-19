@@ -381,7 +381,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         );
       if (pointing.length) pointerViews.add(name);
     }
-    const pointers = pointerCalls(ast.html, svelteSource, new Set(stateNames), pointerViews);
+    const pointers = pointerCalls(
+      ast.html,
+      svelteSource,
+      new Set(stateNames),
+      new Map(
+        [...pointerViews].map((name) => {
+          const type = components[name] ?? components[chosen[name]?.[0] ?? ''];
+          return [name, domain.atoms[type]?.index ?? ''];
+        })
+      )
+    );
     if (pointers.problems.length)
       throw InvalidSvelteSourceError.combine(
         pointers.problems.map(

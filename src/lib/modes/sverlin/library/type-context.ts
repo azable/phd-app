@@ -17,6 +17,8 @@ export type TypeContext = {
   targetOf(path: string): string | undefined;
   /** How many elements a collection variable holds. */
   lengthOf(name: string): number | undefined;
+  /** The variables holding a value of a type, such as the Values collections. */
+  variablesOf(typeName: string): string[];
   /** The type a type refines, if any. */
   parent(typeName: string): string | undefined;
   /** A type's unit, or that of the nearest type it refines. */
@@ -186,6 +188,8 @@ export function slotContext(): string | undefined {
 export type PointerCall = {
   view: () => Snippet<[unknown]>;
   value: () => unknown;
+  /** The collection type the pointer's index type points into. */
+  into: string;
   path?: string;
   of?: () => unknown;
   at?: () => string | number;
@@ -203,18 +207,25 @@ export type Pointer = {
 export function providePointers(calls: readonly PointerCall[]): void {
   const types = typeContext();
   const pointers = calls.flatMap((call, order): Pointer[] => {
-    // A position read through one that points nowhere, as edges[e].to with e at -1, is no pointer.
+    // A position read through one that points nowhere, as edges[e].to with e at -1, points at
+    // nothing this step, but keeps its room in the only collection of its type.
+    let found: { collection?: string; position?: number } = {};
     try {
       const path =
         call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
-      const collection = path === undefined ? undefined : types?.targetOf(path);
       const position = call.value();
-      return collection && typeof position === 'number'
-        ? [{ view: call.view(), collection, position, order }]
-        : [];
+      found = {
+        collection: path === undefined ? undefined : types?.targetOf(path),
+        position: typeof position === 'number' ? position : undefined
+      };
     } catch {
-      return [];
+      // Points nowhere.
     }
+    const [only, ...others] = types?.variablesOf(call.into) ?? [];
+    const collection = found.collection ?? (others.length ? undefined : only);
+    return collection
+      ? [{ view: call.view(), collection, position: found.position ?? Number.NaN, order }]
+      : [];
   });
   setContext('sverlin:pointers', pointers);
 }

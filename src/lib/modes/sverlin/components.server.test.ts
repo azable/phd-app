@@ -16,7 +16,12 @@ function slotted(view: string, state = ['values', 'target', 'edges', 'vertices']
 /** The root's pointer calls, and the view without them. */
 function hoisted(view: string) {
   const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
-  const found = pointerCalls(ast.html, view, new Set(['i', 'edges', 'e']), new Set(['Arrow']));
+  const found = pointerCalls(
+    ast.html,
+    view,
+    new Set(['i', 'edges', 'e']),
+    new Map([['Arrow', 'Values']])
+  );
   return { ...found, view: withInsertions(view, found.removals) };
 }
 
@@ -25,8 +30,8 @@ describe('pointers', () => {
     expect(hoisted('<Node>A</Node>{@render Arrow(i)}{@render Arrow(edges[e].to)}')).toMatchObject({
       view: '<Node>A</Node>',
       calls: [
-        '{ view: () => Arrow, value: () => i, path: "i" }',
-        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to" }'
+        '{ view: () => Arrow, value: () => i, path: "i", into: "Values" }',
+        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values" }'
       ],
       problems: []
     });
