@@ -95,8 +95,7 @@ export type ShapeDefaults = {
   padding: Spacing;
   fill: string;
   stroke: string;
-  /** A cell's least size, text weight, and text size relative to its surroundings, in em. */
-  minSize?: MinSize;
+  /** A cell's text weight, and text size relative to its surroundings, in em. */
   weight?: Weight;
   scale?: number;
 };

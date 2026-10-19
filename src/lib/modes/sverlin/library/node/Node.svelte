@@ -232,10 +232,8 @@
   const look = $derived.by((): Partial<ShapeDefaults> => {
     if (resolvedShape === 'plain') return {};
     const base = drawn[resolvedShape];
-    // A framed group keeps the frame but not a cell's text size, weight, or minimum size.
-    return arrangement
-      ? { ...base, scale: undefined, weight: undefined, minSize: undefined }
-      : base;
+    // A framed group keeps the frame but not a cell's text size or weight.
+    return arrangement ? { ...base, scale: undefined, weight: undefined } : base;
   });
   const fontSize = $derived(
     typeof size === 'number' && Number.isFinite(size)
@@ -329,8 +327,8 @@
     style:border-width={resolvedStrokeWidth}
     style:border-radius={radii[radius ?? look.radius ?? 'none']}
     style:padding={measure(spacings, padding ?? look.padding)}
-    style:min-width={least(measure(minSizes, minSize ?? look.minSize), reserved?.width)}
-    style:min-height={least(measure(minSizes, minSize ?? look.minSize), reserved?.height)}
+    style:min-width={least(measure(minSizes, minSize), reserved?.width)}
+    style:min-height={least(measure(minSizes, minSize), reserved?.height)}
     style:opacity={typeof opacity === 'number' && Number.isFinite(opacity)
       ? Math.min(Math.max(opacity, 0), 1)
       : undefined}

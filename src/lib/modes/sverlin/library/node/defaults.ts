@@ -9,7 +9,6 @@ import type {
   Align,
   FrameLayout,
   Justify,
-  MinSize,
   NodeDefaults,
   NodeFont,
   NodeShape,
@@ -52,8 +51,7 @@ export const defaultsPolicy = {
   'box.strokeWidth': { pick: ['none', 'thin', 'thick'] },
   'box.padding': { pick: ['small', 'medium'] },
   'box.tint': tint,
-  // A cell's least size, and its text's size (in em, around the preset 1.25) and weight.
-  'box.minSize': { pick: ['small', 'medium', 'large'] },
+  // A cell's text size (in em, around the preset 1.25) and weight.
   'box.scale': { pick: [1.1, 1.25, 1.4] },
   'box.weight': { pick: ['bold', 'normal'], weights: [2, 1] },
   'card.radius': { pick: ['small', 'medium'] },
@@ -111,7 +109,6 @@ export function drawDefaults(random: (key: string) => number): NodeDefaults {
   return {
     box: {
       ...shape('box'),
-      minSize: choose('box.minSize') as MinSize,
       scale: choose('box.scale') as number,
       weight: choose('box.weight') as Weight
     },

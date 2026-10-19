@@ -165,7 +165,7 @@ Types:
 
 Every prop a view leaves unset has a default, and these defaults are drawn, so they differ between presentations:
 
-- on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), least size, and text size and weight;
+- on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), and text size and weight;
 - on cards: radius, border width, padding, and tint;
 - on collections: the shape, now and then a card around the items;
 - on every arrangement: the gap, and how rows and columns align their items;

@@ -20,7 +20,6 @@ describe('drawn Node defaults', () => {
     expect(defaultsPolicy['frame.layout'].pick).toContain(first.frame.layout);
     expect(defaultsPolicy.gap.pick).toContain(first.gap);
     expect(defaultsPolicy.font.pick).toContain(first.font);
-    expect(defaultsPolicy['box.minSize'].pick).toContain(first.box.minSize);
     expect(defaultsPolicy['box.scale'].pick).toContain(first.box.scale);
     expect(defaultsPolicy['box.weight'].pick).toContain(first.box.weight);
     expect(defaultsPolicy['collection.shape'].pick).toContain(first.collection.shape);
@@ -28,15 +27,11 @@ describe('drawn Node defaults', () => {
     expect(defaultsPolicy['column.align'].pick).toContain(first.align.column);
     expect(defaultsPolicy['link.strokeWidth'].pick).toContain(first.link.strokeWidth);
     // A card's preset keeps its own text and size: only cells draw them.
-    expect(first.card).not.toHaveProperty('minSize');
     expect(first.card).not.toHaveProperty('weight');
   });
 
-  it('varies cell text and size, and frames collections in only some presentations', () => {
+  it('varies cell text, and frames collections in only some presentations', () => {
     const drawn = Array.from({ length: 300 }, (_, seed) => drawDefaults(seed + 1));
-    expect(new Set(drawn.map(({ box }) => box.minSize))).toEqual(
-      new Set(['small', 'medium', 'large'])
-    );
     expect(new Set(drawn.map(({ box }) => box.weight))).toEqual(new Set(['bold', 'normal']));
     const cards = drawn.filter(({ collection }) => collection.shape === 'card').length;
     expect(cards).toBeGreaterThan(40);
