@@ -464,6 +464,46 @@ describe('single-component Svelte compilation', () => {
   });
 });
 
+describe('pointers', () => {
+  const view = (markup: string) =>
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">let i = Position(0); yield;</script><script lang="sverlin" design>const Int = IntText;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}{@render Row(values)}${markup}`;
+
+  it('draws a view with a <Pointed> around the element its position points at', () => {
+    const prepared = prepareSvelteComponent(
+      view(
+        '{#snippet Arrow(p: Position)}<Node layout="column"><Pointed fill="amber" /><Node>i</Node></Node>{/snippet}{@render Arrow(i)}'
+      )
+    );
+    expect(prepared.component).toContain('__sverlinPointers');
+    expect(prepared.components.map(({ name }) => name)).toContain('Arrow');
+  });
+
+  it.each([
+    [
+      '<Pointed> outside a view of an index type',
+      '<Node><Pointed /></Node>',
+      /belongs in a view of an index type/
+    ],
+    [
+      'a pointer that is not a view of an index type',
+      '{#snippet Mark(v: Int)}<Pointed />{/snippet}',
+      /Int is not an index type/
+    ],
+    [
+      'two <Pointed> in one pointer',
+      '{#snippet Arrow(p: Position)}<Node><Pointed /><Pointed /></Node>{/snippet}',
+      /has 2 <Pointed>/
+    ],
+    [
+      'props <Pointed> does not take',
+      '{#snippet Arrow(p: Position)}<Pointed layout="row" />{/snippet}',
+      /<Pointed> has no prop layout/
+    ]
+  ])('rejects %s', (_name, markup, message) => {
+    expect(() => prepareSvelteComponent(view(markup))).toThrow(message);
+  });
+});
+
 describe('typed view components', () => {
   const domain =
     '<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';

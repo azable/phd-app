@@ -11,16 +11,23 @@
   import type { Template } from './arrange';
   import type { Form } from './forms';
   import Node from './Node.svelte';
+  import Pointing from './Pointing.svelte';
+  import Slot from './Slot.svelte';
   import {
     defaultsContext,
+    elementOf,
+    hiddenContext,
     insideComponentBox,
     keyedRef,
     markRendering,
     layoutMemoryContext,
     nodeIdsContext,
+    pointersContext,
     provideComponentBox,
     rendererFor,
-    typeContext
+    slotContext,
+    typeContext,
+    wrappedContext
   } from '../type-context';
   import { paletteColor, paletteName } from './palette';
   import {
@@ -86,7 +93,8 @@
     __id,
     __type,
     __links,
-    __component
+    __component,
+    __slot
   }: {
     /** A primitive to display, when the node has neither items nor children. */
     value?: Primitive;
@@ -162,6 +170,8 @@
     __links?: boolean;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
     __component?: string;
+    /** Internal: the element of the state this node draws, such as values[2], given by its collection or a renderer's caller. */
+    __slot?: string;
   } = $props();
 
   const types = typeContext();
@@ -170,6 +180,31 @@
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined));
+  // The element of the state this node draws: a collection's item, or a component's root, which
+  // draws the element its call was given (see Slot.svelte).
+  const slot = untrack(() => __slot ?? (__component ? slotContext() : undefined));
+  // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
+  // each step mounts afresh, and the renderer is marked so nodes inside it never call it again.
+  const rendered = untrack(() =>
+    type !== undefined && items === undefined && children === undefined
+      ? rendererFor(type)
+      : undefined
+  );
+  // The root's pointers into the collection whose element this node draws, outermost (written
+  // last) first: the node is then drawn inside them (see Pointing.svelte), once, however many nodes
+  // inside also draw the element. A node drawn by its type's renderer leaves it to the renderer's node.
+  const element = untrack(() => (slot ? /^([A-Za-z_$][\w$]*)\[(\d+)\]$/u.exec(slot) : null));
+  const pointers = untrack(() =>
+    !rendered && element && wrappedContext() !== slot
+      ? pointersContext()
+          .filter((pointer) => pointer.collection === element[1])
+          .toSorted((a, b) => b.order - a.order)
+      : []
+  );
+  const position = element ? Number(element[2]) : -1;
+  const length = untrack(() => (element ? (types?.lengthOf(element[1]) ?? 0) : 0));
+  // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
+  const hidden = hiddenContext();
   // A node keeps a least size so that changing content never moves anything around it. A typed
   // component's root keeps the largest box the component reaches for any of its inputs (see
   // assembly/entry.ts), and the nodes inside it keep their natural sizes, since that box already
@@ -177,7 +212,7 @@
   // (see LayoutMemory).
   const memory = layoutMemoryContext();
   const box = untrack(() =>
-    __component && memory && (!memory.measuring || memory.probing)
+    !pointers.length && __component && memory && (!memory.measuring || memory.probing)
       ? memory.components.get(__component)
       : undefined
   );
@@ -190,13 +225,6 @@
   });
   const least = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
-  // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
-  // each step mounts afresh, and the renderer is marked so nodes inside it never call it again.
-  const rendered = untrack(() =>
-    type !== undefined && items === undefined && children === undefined
-      ? rendererFor(type)
-      : undefined
-  );
   if (rendered) markRendering(rendered.name);
   // Only the props the caller set, so a renderer can spread them over its own defaults.
   const callerProps = $derived(
@@ -214,13 +242,52 @@
         radius,
         strokeWidth,
         minSize,
-        // A renderer's node takes this node's identity and type, so a selection names the value.
+        // Links and relations name the renderer's node by this node's key.
+        key,
+        // A renderer's node takes this node's identity, type, and element, so a selection names the value.
         __id: id,
-        __type: type
+        __type: type,
+        __slot: slot
       }).filter(([, setting]) => setting !== undefined)
     ) as NodeProps
   );
   const unit = $derived(type ? types?.unit(type) : undefined);
+  // Every prop as given, to draw this node again inside its pointers.
+  const given = $derived({
+    value,
+    items,
+    layout,
+    columns,
+    nested,
+    item,
+    type,
+    shape,
+    fill,
+    stroke,
+    opacity,
+    color,
+    font,
+    size,
+    weight,
+    padding,
+    gap,
+    align,
+    justify,
+    radius,
+    strokeWidth,
+    minSize,
+    children,
+    key,
+    constraints,
+    flow,
+    form,
+    curve,
+    layoutSeed,
+    __ref,
+    __type,
+    __links,
+    __component
+  });
 
   const collection = $derived(items !== undefined);
   const resolvedShape = $derived(
@@ -282,9 +349,17 @@
   {#if collection}
     {#each items ?? [] as child, index (index)}
       {#if item}
-        {@render item(child, index, types?.itemType(items, index))}
+        <Slot of={items} at={index}
+          >{@render item(child, index, types?.itemType(items, index))}</Slot
+        >
       {:else if Array.isArray(child)}
-        <Node items={child} layout={nested} shape="plain" __id={id && `${id}/${index}`} />
+        <Node
+          items={child}
+          layout={nested}
+          shape="plain"
+          __id={id && `${id}/${index}`}
+          __slot={elementOf(types, items, index)}
+        />
       {:else}
         <Node
           value={child !== null && typeof child === 'object'
@@ -292,6 +367,7 @@
             : (child as Primitive)}
           type={types?.itemType(items, index)}
           __id={id && `${id}/${index}`}
+          __slot={elementOf(types, items, index)}
         />
       {/if}
     {/each}
@@ -300,14 +376,28 @@
   {/if}
 {/snippet}
 
-{#if rendered}
-  {@render rendered.snippet(value ?? null, callerProps)}
+{#snippet pointed(props: Record<string, unknown>)}
+  <Node {...given} __id={id} __slot={slot} {...props} />
+{/snippet}
+
+{#if pointers.length}
+  {#if position === 0}
+    <Pointing {pointers} position={-1} name={slot ?? ''} draw={pointed} placeholder />
+  {/if}
+  <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
+  {#if position === length - 1}
+    <Pointing {pointers} position={length} name={slot ?? ''} draw={pointed} placeholder />
+  {/if}
+{:else if rendered}
+  <Slot path={slot}>{@render rendered.snippet(value ?? null, callerProps)}</Slot>
 {:else}
   <div
     class="sv-node {font ?? ''}"
     data-sv-node={id}
     data-sv-key={key}
     data-sv-component={__component}
+    data-sv-slot={slot}
+    data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
     data-sv-type={type ?? __type}
     data-sv-shape={resolvedShape}
     data-sv-layout={arrangement}

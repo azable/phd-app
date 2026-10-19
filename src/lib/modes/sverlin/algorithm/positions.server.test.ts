@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { interpretAlgorithm, interpretDomain } from './interpret.server';
+import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
@@ -44,6 +44,31 @@ describe('positions', () => {
     `);
     expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
+  });
+
+  it('record the collection each one points into at every step', () => {
+    const [step] = run(`
+      const left = Values([1]);
+      const right = Values([2]);
+      let i = Position(right, 0);
+      const vertices = Names(['A', 'B']);
+      const edges = Edges([{ from: 0, to: 1, weight: 4 }]);
+      yield;
+    `);
+    expect(step.targets).toEqual({
+      i: 'right',
+      'edges[0].from': 'vertices',
+      'edges[0].to': 'vertices'
+    });
+  });
+
+  it('keep the collection an input position names in the algorithm', () => {
+    const input = interpretInput(
+      'const left = Values([1, 2, 3]); const right = Values([4]); let i = Position(right, 0);',
+      domain
+    );
+    expect(interpretAlgorithm('yield;', input, domain)[0].targets).toEqual({ i: 'right' });
+    expect(() => interpretAlgorithm('i = 2; yield;', input, domain)).toThrow('outside right');
   });
 
   it('point into the only collection of their type from records', () => {

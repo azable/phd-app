@@ -59,17 +59,23 @@ export type TraceState = Record<string, TraceValue>;
  */
 export type TypeMap = Record<string, string>;
 
-/** Plain recorded values with the atomic types of the typed ones. */
 /**
- * Plain recorded values with the domain types of the typed ones, and from the input the type each
- * variable was declared with, which can be a union its value is one member of.
+ * Plain recorded values with the domain types of the typed ones, the collection each position
+ * points into, by path, as in { i: 'left', 'edges[0].from': 'vertices' }, and from the input the
+ * type each variable was declared with, which can be a union its value is one member of.
  */
-export type TypedState = { state: TraceState; types: TypeMap; declared?: Record<string, string> };
+export type TypedState = {
+  state: TraceState;
+  types: TypeMap;
+  targets?: Record<string, string>;
+  declared?: Record<string, string>;
+};
 
 /** One step of the master trace that every presentation of a source shares. */
 export type MasterStep = {
   state: TraceState;
   types: TypeMap;
+  targets?: Record<string, string>;
 };
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
@@ -307,11 +313,13 @@ class Interpreter {
     // Input values become ordinary top-level variables the algorithm may update, keeping types.
     const initial = Object.entries(options.initial?.state ?? {});
     const initialTypes = options.initial?.types ?? {};
+    const initialTargets = options.initial?.targets ?? {};
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
         value: this.#fromTrace(value, name, initialTypes),
         constant: false,
-        type: options.initial?.declared?.[name] ?? initialTypes[name]
+        type: options.initial?.declared?.[name] ?? initialTypes[name],
+        ...(initialTargets[name] ? { target: initialTargets[name] } : {})
       });
     this.#topLevelNames = [
       ...initial.map(([name]) => name),
@@ -357,11 +365,13 @@ class Interpreter {
   #state(node: AnyNode): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
+    const targets: Record<string, string> = {};
     for (const name of this.#topLevelNames) {
       const binding = this.#topLevel.bindings.get(name);
-      state[name] = binding ? this.#snapshot(binding.value, node, name, types) : null;
+      state[name] = binding ? this.#snapshot(binding.value, node, name, types, targets) : null;
+      if (binding?.target) targets[name] = binding.target;
     }
-    return { state, types };
+    return { state, types, ...(Object.keys(targets).length ? { targets } : {}) };
   }
 
   /** Conditions read an atom's underlying value, so Bool(false) is false. */
@@ -800,26 +810,35 @@ class Interpreter {
    * Deep copy with a total node budget, which also stops shared structure from multiplying. Atoms
    * become plain values, with their type recorded by path.
    */
-  #snapshot(value: Value, node: AnyNode, path: string, types: TypeMap): TraceValue {
+  #snapshot(
+    value: Value,
+    node: AnyNode,
+    path: string,
+    types: TypeMap,
+    targets: Record<string, string>
+  ): TraceValue {
     this.#traceValues += 1;
     if (this.#traceValues > algorithmLimits.maximumTraceValues)
       this.#fail(node, 'The recorded steps are too large; use smaller state or fewer steps.');
     if (value === undefined) return null;
     if (value instanceof Atom) {
       types[path] = value.type.name;
+      // A position an element or field holds points into the only collection of its type.
+      const [only, ...others] = value.type.index ? this.#collectionsOf(value.type) : [];
+      if (only && !others.length) targets[path] = only;
       return value.value;
     }
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
     if (shape) types[path] = shape.name;
     if (Array.isArray(value))
       return Array.from(value, (item, index) =>
-        this.#snapshot(item, node, `${path}[${index}]`, types)
+        this.#snapshot(item, node, `${path}[${index}]`, types, targets)
       );
     if (value === mathMarker) return null;
     if (value !== null && typeof value === 'object') {
       const copy: Record<string, TraceValue> = {};
       for (const [key, item] of Object.entries(value))
-        copy[key] = this.#snapshot(item, node, `${path}.${key}`, types);
+        copy[key] = this.#snapshot(item, node, `${path}.${key}`, types, targets);
       return copy;
     }
     return typeof value === 'number' && !Number.isFinite(value) ? null : value;

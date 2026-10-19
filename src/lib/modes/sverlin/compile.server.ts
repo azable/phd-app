@@ -32,10 +32,14 @@ import {
   componentProbes,
   findComponents,
   probeMarkup,
+  pointerCalls,
   readsOf,
   rootPlacements,
+  slotInsertions,
   viewsOf,
+  withInsertions,
   type ComponentProbe,
+  type Insertion,
   type Placement,
   type ComponentSignatures
 } from './components.server';
@@ -229,7 +233,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const choices = blocks.design
       ? interpretBlock(source, blocks.design, (body) => designChoices(body))
       : {};
-    const { tagged, topLevelLinks, problems } = withNodeRefs(
+    const { insertions, topLevelLinks, problems } = withNodeRefs(
       svelteSource,
       ast,
       source,
@@ -309,7 +313,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `"${library}" names a library component; choose another variable name.`,
         at(library, blocks.input, blocks.algorithm, blocks.design)
       );
-    const components = checkComponents(found.components, domain, stateNames, props, source);
+    const components = checkComponents(
+      found.components,
+      found.pointers,
+      domain,
+      stateNames,
+      props,
+      source
+    );
     const views = viewsOf(components);
     for (const [name, { options, start }] of Object.entries(componentChoice)) {
       const named = definesType(domain, name);
@@ -352,13 +363,54 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const chosen = Object.fromEntries(
       Object.entries(componentChoice).map(([name, { options }]) => [name, options])
     );
+    const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
+    // A pointer is a view with a <Pointed>, or a design value choosing among such views.
+    const pointerViews = new Set(found.pointers);
+    for (const [name, options] of Object.entries(chosen)) {
+      const pointing = options.filter((option) => found.pointers.has(option));
+      if (pointing.length && pointing.length < options.length)
+        throw new InvalidSvelteSourceError(
+          `${name} chooses between pointers and other views: ${pointing[0]} has a <Pointed> and ${options.find((option) => !found.pointers.has(option))} has none. A choice is between pointers, or between views drawn where they are rendered.`,
+          {
+            code: 'component_choice',
+            start: sourcePosition(
+              source,
+              (blocks.design as Block).offset + componentChoice[name].start
+            )
+          }
+        );
+      if (pointing.length) pointerViews.add(name);
+    }
+    const pointers = pointerCalls(ast.html, svelteSource, new Set(stateNames), pointerViews);
+    if (pointers.problems.length)
+      throw InvalidSvelteSourceError.combine(
+        pointers.problems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_component',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
+    const tagged = withInsertions(svelteSource, [
+      ...insertions,
+      ...pointers.removals,
+      ...slotInsertions(
+        ast.html,
+        svelteSource,
+        new Set(stateNames),
+        new Set([...viewNames].filter((name) => !pointerViews.has(name))),
+        new Set(Object.keys(components))
+      )
+    ]);
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}`,
         props,
         // A design value named after a type is also its renderer, drawing the nodes showing its values.
         [...renderers, ...typeViews],
-        chosen
+        chosen,
+        pointers.calls
       ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
@@ -375,7 +427,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
       ),
       stateNames,
-      new Set([...Object.keys(components), ...Object.keys(chosen)]),
+      viewNames,
       domain,
       master
     );
@@ -447,6 +499,7 @@ export async function bundlePresentation(
     ...master[index].state,
     ...parameters,
     __types: master[index].types,
+    __targets: master[index].targets ?? {},
     __frame: frame,
     __defaults: defaults
   }));
@@ -533,7 +586,8 @@ function withGeneratedScripts(
   source: string,
   props: readonly string[],
   renderers: readonly string[],
-  choices: Record<string, string[]>
+  choices: Record<string, string[]>,
+  pointers: readonly string[]
 ): string {
   // A design value that chooses a component arrives as the component's name, and the view uses
   // the component itself under the value's name.
@@ -554,8 +608,12 @@ function withGeneratedScripts(
   const registration = renderers.length
     ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.map((name) => `get ${name}() { return ${name}; }`).join(', ')} });`
     : '';
+  // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
+  const pointing = pointers.length
+    ? `import { providePointers as __sverlinPointers } from 'sverlin'; __sverlinPointers([${pointers.join(', ')}]);`
+    : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration} ${pointing}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -643,42 +701,60 @@ function possibleValues(
 
 const layouts = ['row', 'column', 'grid', 'free'];
 const named = (scale: object, numeric = true) => ({ names: Object.keys(scale), numeric });
+type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
+
+const nodeProps: PropNames = {
+  value: null,
+  items: null,
+  layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
+  columns: null,
+  nested: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
+  item: null,
+  type: null,
+  shape: named({ box: 0, card: 0, plain: 0 } satisfies Record<NodeShape, 0>, false),
+  fill: null,
+  stroke: null,
+  opacity: null,
+  color: null,
+  font: named({ sans: 0, serif: 0, mono: 0 }, false),
+  size: named(namedSizes),
+  weight: named({ normal: 0, bold: 0 }, false),
+  padding: named(spacings),
+  gap: named(spacings),
+  align: named(alignments, false),
+  justify: named(justifications, false),
+  radius: named(radii, false),
+  strokeWidth: named(strokeWidths),
+  minSize: named(minSizes),
+  children: null,
+  key: null,
+  constraints: null,
+  flow: named({ x: 0, y: 0 }, false),
+  form: named(Object.fromEntries(forms.map((name) => [name, name])), false),
+  curve: named({ straight: 0, curved: 0 }, false),
+  layoutSeed: null
+};
+
 /** The props each library component takes, with the names a prop's text value can be, if limited. */
-export const libraryProps: Record<
-  'Node' | 'Link',
-  Record<string, { names: string[]; numeric: boolean } | null>
-> = {
-  Node: {
-    value: null,
-    items: null,
-    layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-    columns: null,
-    nested: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-    item: null,
-    type: null,
-    shape: named({ box: 0, card: 0, plain: 0 } satisfies Record<NodeShape, 0>, false),
-    fill: null,
-    stroke: null,
-    opacity: null,
-    color: null,
-    font: named({ sans: 0, serif: 0, mono: 0 }, false),
-    size: named(namedSizes),
-    weight: named({ normal: 0, bold: 0 }, false),
-    padding: named(spacings),
-    gap: named(spacings),
-    align: named(alignments, false),
-    justify: named(justifications, false),
-    radius: named(radii, false),
-    strokeWidth: named(strokeWidths),
-    minSize: named(minSizes),
-    children: null,
-    key: null,
-    constraints: null,
-    flow: named({ x: 0, y: 0 }, false),
-    form: named(Object.fromEntries(forms.map((name) => [name, name])), false),
-    curve: named({ straight: 0, curved: 0 }, false),
-    layoutSeed: null
-  },
+export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
+  Node: nodeProps,
+  Pointed: Object.fromEntries(
+    (
+      [
+        'shape',
+        'fill',
+        'stroke',
+        'opacity',
+        'color',
+        'font',
+        'size',
+        'weight',
+        'padding',
+        'radius',
+        'strokeWidth'
+      ] as const
+    ).map((name) => [name, nodeProps[name]])
+  ),
   Link: {
     from: null,
     to: null,
@@ -697,7 +773,7 @@ export const libraryProps: Record<
  * shape="circle", which would otherwise be ignored without a word.
  */
 function checkProps(
-  component: 'Node' | 'Link',
+  component: 'Node' | 'Link' | 'Pointed',
   attributes: readonly Attribute[],
   start: number,
   source: string,
@@ -783,7 +859,7 @@ function withNodeRefs(
   choices: Record<string, DesignChoices>,
   /** The root <Node> tags of components, by where they start, with the component each roots. */
   roots: ReadonlyMap<number, string>
-): { tagged: string; topLevelLinks: boolean; problems: InvalidSvelteSourceError[] } {
+): { insertions: Insertion[]; topLevelLinks: boolean; problems: InvalidSvelteSourceError[] } {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
     type?: string;
@@ -806,7 +882,9 @@ function withNodeRefs(
       return;
     }
     const tag = value as Tag & Record<string, unknown> & { data?: string };
-    const library = tag.type === 'InlineComponent' && (tag.name === 'Node' || tag.name === 'Link');
+    const library =
+      tag.type === 'InlineComponent' &&
+      (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
     const element = tag.type === 'Element' || (tag.type === 'InlineComponent' && !library);
     const special = typeof tag.type === 'string' && Object.hasOwn(unsupportedMarkup, tag.type);
     if (element || special) {
@@ -839,7 +917,7 @@ function withNodeRefs(
         );
       else
         checkProps(
-          tag.name as 'Node' | 'Link',
+          tag.name as 'Node' | 'Link' | 'Pointed',
           tag.attributes ?? [],
           tag.start,
           source,
@@ -847,7 +925,7 @@ function withNodeRefs(
           choices
         );
       const entry = { start: tag.start, name: tag.name as string, links: false };
-      tags.push(entry);
+      if (tag.name !== 'Pointed') tags.push(entry);
       if (tag.name === 'Link') {
         if (around) around.links = true;
         else topLevelLinks = true;
@@ -867,14 +945,15 @@ function withNodeRefs(
       ast.css.start
     );
   walk(ast.html, undefined, false);
-  let tagged = svelteSource;
-  for (const { start, name, links } of tags.sort((a, b) => b.start - a.start)) {
+  const insertions = tags.map(({ start, name, links }): Insertion => {
     const { line, column } = sourcePosition(source, start);
-    const end = start + name.length + 1;
     const root = roots.get(start);
-    tagged = `${tagged.slice(0, end)} __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${tagged.slice(end)}`;
-  }
-  return { tagged, topLevelLinks, problems };
+    return {
+      at: start + name.length + 1,
+      text: ` __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}`
+    };
+  });
+  return { insertions, topLevelLinks, problems };
 }
 
 /**
@@ -884,6 +963,7 @@ function withNodeRefs(
  */
 function checkComponents(
   found: ReturnType<typeof findComponents>['components'],
+  pointers: ReadonlySet<string>,
   domain: DomainRegistry,
   stateNames: readonly string[],
   props: readonly string[],
@@ -910,6 +990,11 @@ function checkComponents(
     if (state)
       throw new InvalidSvelteSourceError(
         `${name} reads ${state}, an input or algorithm variable; a component reads only its value and design values. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
+        at
+      );
+    if (pointers.has(name) && !domain.atoms[type]?.index)
+      throw new InvalidSvelteSourceError(
+        `${name} has a <Pointed>, which stands for the element a position points at, and ${type} is not an index type; a pointer views one, as in const Position = index(Values);.`,
         at
       );
     signatures[name] = type;

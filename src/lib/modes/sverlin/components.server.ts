@@ -36,6 +36,8 @@ export type ComponentProblem = { message: string; start: number };
 export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   components: { name: string; start: number; type: string; node: SvelteNode }[];
   roots: Map<number, string>;
+  /** The components that are pointers: views of an index type drawn around what they point at. */
+  pointers: Set<string>;
   problems: ComponentProblem[];
 } {
   const components: { name: string; start: number; type: string; node: SvelteNode }[] = [];
@@ -66,14 +68,38 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     else return typed[0];
     return undefined;
   };
+  const pointers = new Set<string>();
+  const pointedIn = (node: SvelteNode): SvelteNode[] =>
+    (node.children ?? []).flatMap((child) => [
+      ...(child.type === 'InlineComponent' && child.name === 'Pointed' ? [child] : []),
+      ...pointedIn(child),
+      ...((child as { else?: SvelteNode }).else
+        ? pointedIn((child as { else: SvelteNode }).else)
+        : [])
+    ]);
   for (const node of html?.children ?? []) {
-    if (node.type !== 'SnippetBlock' || !node.expression?.name) continue;
-    const type = typeOf(node);
-    if (!type) continue;
-    components.push({ name: node.expression.name, start: node.start ?? 0, type, node });
+    const pointed = pointedIn(node);
+    const type = node.type === 'SnippetBlock' && node.expression?.name ? typeOf(node) : undefined;
+    if (!type) {
+      for (const tag of pointed)
+        problems.push({
+          message:
+            '<Pointed> stands for the element a position points at, so it belongs in a view of an index type, as in {#snippet Arrow(i: Position)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}.',
+          start: tag.start ?? 0
+        });
+      continue;
+    }
+    const name = node.expression?.name as string;
+    if (pointed.length > 1)
+      problems.push({
+        message: `${name} has ${pointed.length} <Pointed>; a pointer draws the element it points at once, so it has one.`,
+        start: pointed[1].start ?? 0
+      });
+    else if (pointed.length) pointers.add(name);
+    components.push({ name, start: node.start ?? 0, type, node });
     for (const child of node.children ?? [])
       if (child.type === 'InlineComponent' && child.name === 'Node' && child.start !== undefined)
-        roots.set(child.start, node.expression.name);
+        roots.set(child.start, name);
   }
   // Components are defined at the top level, so every definition is reusable.
   const nested = (node: unknown, depth: number): void => {
@@ -91,7 +117,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     for (const child of part.children ?? []) nested(child, depth + 1);
   };
   for (const node of html?.children ?? []) nested(node.children ?? [], 1);
-  return { components, roots, problems };
+  return { components, roots, pointers, problems };
 }
 
 /**
@@ -209,6 +235,214 @@ export function valueUses(
   };
   walk(markup, new Map());
   return { viewed, placed };
+}
+
+/** Text to insert into the view's source at a position in it, replacing `remove` characters there. */
+export type Insertion = { at: number; text: string; remove?: number };
+
+/** The view's source with insertions made, each at its position in the original source. */
+export function withInsertions(source: string, insertions: readonly Insertion[]): string {
+  let result = source;
+  for (const { at, text, remove = 0 } of [...insertions].sort((a, b) => b.at - a.at))
+    result = `${result.slice(0, at)}${text}${result.slice(at + remove)}`;
+  return result;
+}
+
+/**
+ * The root's pointers, as in {@render Arrow(i)}: drawn around the element the position points at,
+ * not where they are written, so each call is removed from the markup and registered in the root's
+ * script (see providePointers in library/type-context.ts). A pointer is rendered at the top of the
+ * root, outside blocks, with a position from the state: a variable, an element, or a field.
+ */
+export function pointerCalls(
+  markup: unknown,
+  source: string,
+  stateNames: ReadonlySet<string>,
+  pointers: ReadonlySet<string>
+): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
+  type Part = Record<string, unknown> & {
+    type?: string;
+    name?: string;
+    start?: number;
+    end?: number;
+  };
+  const removals: Insertion[] = [];
+  const calls: string[] = [];
+  const problems: ComponentProblem[] = [];
+  const text = (node: Part) => source.slice(node.start, node.end);
+  const visit = (node: unknown, where: 'top' | 'block' | 'component'): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, where);
+      return;
+    }
+    const part = node as Part;
+    if (part.type === 'RenderTag') {
+      const call = part.expression as Part;
+      const name = (call?.callee as Part | undefined)?.name;
+      if (typeof name !== 'string' || !pointers.has(name)) return;
+      const [argument] = (call.arguments as Part[] | undefined) ?? [];
+      const position =
+        argument?.type === 'Identifier' && stateNames.has(argument.name ?? '')
+          ? `path: ${JSON.stringify(argument.name)}`
+          : argument?.type === 'MemberExpression'
+            ? `of: () => ${text(argument.object as Part)}, at: () => ${
+                argument.computed
+                  ? text(argument.property as Part)
+                  : JSON.stringify((argument.property as Part).name)
+              }`
+            : undefined;
+      const start = part.start ?? 0;
+      if (where !== 'top')
+        problems.push({
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks and components, as in {@render ${name}(i)}.`,
+          start
+        });
+      else if (!position)
+        problems.push({
+          message: `${name} is a pointer, and points at the element its position names, so it is given a position from the state, such as i or edges[e].to.`,
+          start
+        });
+      else {
+        calls.push(`{ view: () => ${name}, value: () => ${text(argument)}, ${position} }`);
+        removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
+      }
+      return;
+    }
+    const inner =
+      part.type === 'SnippetBlock'
+        ? 'component'
+        : where === 'top' &&
+            typeof part.type === 'string' &&
+            part.type.endsWith('Block') &&
+            part.type !== 'Fragment'
+          ? 'block'
+          : where;
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'expression') visit(child, inner);
+  };
+  visit(markup, 'top');
+  return { removals, calls, problems };
+}
+
+/**
+ * Wrap every {@render} of a view in a SverlinSlot naming the element of the state it draws, so the
+ * view's root nodes are known by it, such as values[2], whichever view the presentation drew:
+ * a variable by its name, an element by the array or object it is taken from and its index or
+ * field (adding an index to an {#each} that has none), and a component's own value by the slot its
+ * call was given. Anything else, such as i + 1, is no element.
+ */
+export function slotInsertions(
+  markup: unknown,
+  source: string,
+  stateNames: ReadonlySet<string>,
+  views: ReadonlySet<string>,
+  componentNames: ReadonlySet<string>
+): Insertion[] {
+  type Part = Record<string, unknown> & {
+    type?: string;
+    name?: string;
+    start?: number;
+    end?: number;
+  };
+  type Local =
+    | { kind: 'item'; of: Part; each: Part & { index?: string }; index?: string }
+    | { kind: 'value' }
+    | { kind: 'other' };
+  const insertions: Insertion[] = [];
+  const indexed = new Map<Part, string>();
+  const text = (node: Part) => source.slice(node.start, node.end);
+  const indexOf = (local: Extract<Local, { kind: 'item' }>): string => {
+    if (local.each.index) return local.each.index;
+    let added = indexed.get(local.each);
+    if (!added) {
+      added = `__k${indexed.size + 1}`;
+      indexed.set(local.each, added);
+      insertions.push({ at: (local.each.context as Part).end ?? 0, text: `, ${added}` });
+    }
+    return added;
+  };
+  const slotOf = (argument: Part | undefined, locals: ReadonlyMap<string, Local>): string => {
+    if (argument?.type === 'Identifier' && typeof argument.name === 'string') {
+      const local = locals.get(argument.name);
+      if (local?.kind === 'value') return ' inherit';
+      if (local?.kind === 'item') return ` of={${text(local.of)}} at={${indexOf(local)}}`;
+      if (local?.kind === 'other') return ` of={${argument.name}}`;
+      return stateNames.has(argument.name) ? ` path="${argument.name}"` : '';
+    }
+    if (argument?.type === 'MemberExpression') {
+      const object = text(argument.object as Part);
+      const property = argument.property as Part;
+      return argument.computed
+        ? ` of={${object}} at={${text(property)}}`
+        : ` of={${object}} at="${property.name}"`;
+    }
+    return '';
+  };
+  const walk = (node: unknown, locals: ReadonlyMap<string, Local>): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, locals);
+      return;
+    }
+    const part = node as Part;
+    if (part.type === 'RenderTag') {
+      const call = part.expression as Part;
+      const callee = call?.callee as Part | undefined;
+      if (typeof callee?.name === 'string' && views.has(callee.name)) {
+        const [argument] = (call.arguments as Part[] | undefined) ?? [];
+        insertions.push(
+          { at: part.start ?? 0, text: `<SverlinSlot${slotOf(argument, locals)}>` },
+          { at: part.end ?? 0, text: '</SverlinSlot>' }
+        );
+      }
+      return;
+    }
+    if (part.type === 'EachBlock') {
+      const context = part.context as Part | undefined;
+      const inner = new Map(locals);
+      if (context?.type === 'Identifier' && typeof context.name === 'string')
+        inner.set(context.name, { kind: 'item', of: part.expression as Part, each: part });
+      else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
+      if (typeof part.index === 'string') inner.set(part.index, { kind: 'other' });
+      walk(part.children, inner);
+      walk(part.else, locals);
+      return;
+    }
+    if (part.type === 'SnippetBlock') {
+      const inner = new Map(locals);
+      const parameters = (part.parameters as Part[] | undefined) ?? [];
+      const component = componentNames.has((part.expression as Part | undefined)?.name ?? '');
+      parameters.forEach((parameter, index) => {
+        for (const name of patternNames(parameter))
+          inner.set(name, component && index === 0 ? { kind: 'value' } : { kind: 'other' });
+      });
+      walk(part.children, inner);
+      return;
+    }
+    if (part.type === 'ConstTag') {
+      // A {@const} names a value of its own, which is an element only if it is an array or object.
+      const assigned = (part.expression as Part | undefined)?.left;
+      const declaration = part.declaration as { declarations?: { id?: unknown }[] } | undefined;
+      for (const id of [assigned, ...(declaration?.declarations ?? []).map(({ id }) => id)])
+        for (const name of patternNames(id))
+          (locals as Map<string, Local>).set(name, { kind: 'other' });
+      return;
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'expression' && key !== 'attributes') walk(child, locals);
+    for (const attribute of (part.attributes as unknown[] | undefined) ?? [])
+      walk(attribute, locals);
+  };
+  walk(markup, new Map());
+  return insertions;
+}
+
+/** The names a parameter or declaration pattern binds. */
+function patternNames(pattern: unknown): string[] {
+  const names = new Set<string>();
+  collectPattern(pattern, names);
+  return [...names];
 }
 
 /**

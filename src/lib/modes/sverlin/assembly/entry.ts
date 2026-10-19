@@ -27,11 +27,14 @@ import states from 'virtual:trace';
 const theme = document.createElement('style');
 theme.textContent = `${themeCss}
 .sv-layer { position: fixed; inset: 0; }
-.sv-layer.pending { visibility: hidden; }`;
+.sv-layer.pending { visibility: hidden; }
+.sv-layer:not(.pending) [data-sv-hidden='true'] { visibility: hidden; }
+.sv-layer:not(.pending) [data-sv-hidden='false'] { visibility: visible; }`;
 document.head.append(theme);
 
 type StepState = Record<string, unknown> & {
   __types?: Record<string, string>;
+  __targets?: Record<string, string>;
   __defaults: NodeDefaults;
   __frame: FrameSettings;
 };
@@ -128,6 +131,7 @@ function mountStep(
 ): Shown {
   const {
     __types: types = {},
+    __targets: targets = {},
     __defaults: defaults,
     __frame: frame,
     ...state
@@ -178,6 +182,15 @@ function mountStep(
                   ? paths.get(container)
                   : undefined;
               return path === undefined ? undefined : types[`${path}[${index}]`];
+            },
+            pathOf: (container: unknown) =>
+              container !== null && typeof container === 'object'
+                ? paths.get(container)
+                : undefined,
+            targetOf: (path: string) => targets[path],
+            lengthOf: (name: string) => {
+              const collection = state[name];
+              return Array.isArray(collection) ? collection.length : undefined;
             },
             parent: (typeName: string) => atoms[typeName]?.parent,
             unit: unitOf

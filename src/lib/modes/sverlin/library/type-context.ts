@@ -11,6 +11,12 @@ import type { SpanInput, SpanLayout } from './node/span';
 export type TypeContext = {
   /** The atomic type name of item `index` of a container taken from the props, if typed. */
   itemType(container: unknown, index: number): string | undefined;
+  /** Where an array or object taken from the props sits in the state, such as edges[0]. */
+  pathOf(container: unknown): string | undefined;
+  /** The collection a position at a path points into, such as left for i. */
+  targetOf(path: string): string | undefined;
+  /** How many elements a collection variable holds. */
+  lengthOf(name: string): number | undefined;
   /** The type a type refines, if any. */
   parent(typeName: string): string | undefined;
   /** A type's unit, or that of the nearest type it refines. */
@@ -158,4 +164,122 @@ export function provideComponentBox(): void {
 
 export function insideComponentBox(): boolean {
   return getContext<boolean | undefined>('sverlin:in-component-box') === true;
+}
+
+/**
+ * The element of the state a component call draws, such as values[2], for the roots of the
+ * component it renders; undefined for a value that is not one, such as i + 1 (see node/Slot.svelte).
+ */
+export function provideSlot(slot: string | undefined): void {
+  setContext('sverlin:slot', slot);
+}
+
+export function slotContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:slot');
+}
+
+/**
+ * A pointer the root renders, as in {@render Arrow(i)}: drawn not where it is written but around
+ * the element its position points at, so the compiler hoists the call into the root's script.
+ * `path`, or `of` with `at`, names the position as Slot.svelte names an element.
+ */
+export type PointerCall = {
+  view: () => Snippet<[unknown]>;
+  value: () => unknown;
+  path?: string;
+  of?: () => unknown;
+  at?: () => string | number;
+};
+
+/** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
+export type Pointer = {
+  view: Snippet<[unknown]>;
+  collection: string;
+  position: number;
+  order: number;
+};
+
+/** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
+export function providePointers(calls: readonly PointerCall[]): void {
+  const types = typeContext();
+  const pointers = calls.flatMap((call, order): Pointer[] => {
+    // A position read through one that points nowhere, as edges[e].to with e at -1, is no pointer.
+    try {
+      const path =
+        call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
+      const collection = path === undefined ? undefined : types?.targetOf(path);
+      const position = call.value();
+      return collection && typeof position === 'number'
+        ? [{ view: call.view(), collection, position, order }]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  setContext('sverlin:pointers', pointers);
+}
+
+export function pointersContext(): readonly Pointer[] {
+  return getContext<readonly Pointer[] | undefined>('sverlin:pointers') ?? [];
+}
+
+/**
+ * Inside a pointer view drawn around an element: how its <Pointed> draws the element, with the
+ * props of the pointers outside it, and whether this pointer is at the element or only keeps its
+ * room. Undefined where a pointer view is drawn alone, as when it is measured, or at an end slot.
+ */
+export type PointedSlot = {
+  slot: string;
+  active: boolean;
+  /** An end slot, before the first element or after the last: the element only keeps its room. */
+  placeholder: boolean;
+  outer: Record<string, unknown>;
+  render?: Snippet<[Record<string, unknown>]>;
+};
+
+export function providePointed(pointed: PointedSlot | undefined): void {
+  setContext('sverlin:pointed', pointed);
+}
+
+export function pointedContext(): PointedSlot | undefined {
+  return getContext<PointedSlot | undefined>('sverlin:pointed');
+}
+
+/** The element already drawn around by pointers, so a node drawing it inside does not again. */
+export function provideWrapped(slot: string): void {
+  setContext('sverlin:wrapped', slot);
+}
+
+export function wrappedContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:wrapped');
+}
+
+/**
+ * Whether nodes are hidden, keeping their room: a pointer's nodes around an element it is not at;
+ * false inside its <Pointed>, where the element shows again. Hidden only once a step is shown
+ * (assembly/entry.ts), and left out of the scene.
+ */
+export function provideHidden(hidden: boolean): void {
+  setContext('sverlin:hidden', hidden);
+}
+
+export function hiddenContext(): boolean | undefined {
+  return getContext<boolean | undefined>('sverlin:hidden');
+}
+
+/** Reset for nodes drawn by <Pointed>: the element keeps the sizes it would have outside it. */
+export function leaveComponentBox(): void {
+  setContext('sverlin:in-component-box', false);
+}
+
+/** The element of a container from the props at an index or field, such as values[2] or edge.from. */
+export function elementOf(
+  types: TypeContext | undefined,
+  container: unknown,
+  at: string | number
+): string | undefined {
+  const path = types?.pathOf(container);
+  if (path === undefined) return undefined;
+  if (!Array.isArray(container)) return `${path}.${at}`;
+  return Number.isInteger(at) ? `${path}[${at}]` : undefined;
 }

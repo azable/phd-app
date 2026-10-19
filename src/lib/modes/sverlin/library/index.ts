@@ -6,6 +6,8 @@
 export { default as Frame } from './Frame.svelte';
 export { default as Link } from './node/Link.svelte';
 export { default as Node } from './node/Node.svelte';
+export { default as Pointed } from './node/Pointed.svelte';
+export { default as SverlinSlot } from './node/Slot.svelte';
 export { themeCss } from './theme';
 export type {
   Align,
@@ -29,6 +31,7 @@ export type {
   Weight
 } from './node/props';
 export type { LayoutMemory } from './type-context';
+export { providePointers } from './type-context';
 export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { describeFrame, describeStep } from './scene';
