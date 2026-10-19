@@ -11,6 +11,7 @@ import {
   Frame,
   settleSpans,
   themeCss,
+  widestInteger,
   type FrameSettings,
   type LayoutMemory,
   type NodeDefaults,
@@ -366,23 +367,36 @@ async function recordSteps() {
   // Components come after those they render, whose boxes they are drawn with.
   // offsetWidth and offsetHeight round to whole pixels, so a pixel more keeps the box from coming
   // out a fraction smaller than what it holds.
-  for (const { name, cases } of components) {
-    await pass(
-      0,
-      'measuring',
-      ({ layer }) => {
-        let width = 0;
-        let height = 0;
-        for (const node of layer.querySelectorAll<HTMLElement>(
-          `[data-sv-component="${CSS.escape(name)}"]`
-        )) {
-          width = Math.max(width, node.offsetWidth + 1);
-          height = Math.max(height, node.offsetHeight + 1);
-        }
-        if (width || height) componentSizes.set(name, { width, height });
-      },
-      { __probe: { component: name, cases } }
-    );
+  for (const { name, cases, range } of components) {
+    let font: string | undefined;
+    const probe = (values: unknown[]) =>
+      pass(
+        0,
+        'measuring',
+        ({ layer }) => {
+          const nodes = layer.querySelectorAll<HTMLElement>(
+            `[data-sv-component="${CSS.escape(name)}"]`
+          );
+          let { width, height } = componentSizes.get(name) ?? { width: 0, height: 0 };
+          for (const node of nodes) {
+            width = Math.max(width, node.offsetWidth + 1);
+            height = Math.max(height, node.offsetHeight + 1);
+          }
+          if (width || height) componentSizes.set(name, { width, height });
+          const value = layer.querySelector<HTMLElement>(
+            `[data-sv-component="${CSS.escape(name)}"] .value`
+          );
+          if (value) font ??= fontOf(value);
+        },
+        { __probe: { component: name, cases: values } }
+      );
+    await probe(cases);
+    // Digits differ in width in most fonts, and the font is drawn per presentation, so a range too
+    // large to draw whole is drawn again with the integer that prints widest in the value's font.
+    if (range && font) {
+      const widest = widestInteger(range.min, range.max, characterWidths(font));
+      if (!cases.includes(widest)) await probe([widest]);
+    }
   }
   // Record what every arrangement contains at every step, then solve each over all of them; a
   // nested arrangement's solution changes its size and so what its parent contains, so recording
@@ -467,4 +481,22 @@ function withValue(state: StepState, path: string, value: unknown): StepState {
   for (const key of keys.slice(0, -1)) target = target[key] as Record<string, unknown>;
   target[keys.at(-1) as string] = value;
   return copy;
+}
+
+/** The font an element's text is drawn in, as a canvas takes it. */
+function fontOf(element: HTMLElement): string {
+  const style = getComputedStyle(element);
+  return `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+}
+
+/** Each character's width in a font. */
+function characterWidths(font: string): (character: string) => number {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context) return () => 1;
+  context.font = font;
+  const widths = new Map<string, number>();
+  return (character) => {
+    if (!widths.has(character)) widths.set(character, context.measureText(character).width);
+    return widths.get(character) as number;
+  };
 }

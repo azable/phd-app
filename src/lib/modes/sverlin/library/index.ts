@@ -30,6 +30,7 @@ export type {
 } from './node/props';
 export type { LayoutMemory } from './type-context';
 export { settleSpans } from './node/span';
+export { widestInteger } from './widest-number';
 export { describeFrame, describeStep } from './scene';
 export type {
   SceneBox,

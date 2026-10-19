@@ -232,7 +232,15 @@ export function viewsOf(signatures: ComponentSignatures): Record<string, string[
 }
 
 /** A component and the values of its type the page draws it with. */
-export type ComponentProbe = { name: string; cases: unknown[] };
+export type ComponentProbe = {
+  name: string;
+  cases: unknown[];
+  /**
+   * An integer range too large to draw whole, for a component that shows its value: the page also
+   * draws it with the integer in the range that prints widest in the font the value is drawn in.
+   */
+  range?: { min: number; max: number };
+};
 
 // A component's cases are drawn in one pass of the page; this bounds them, so a pass stays about as
 // quick as a step's.
@@ -279,14 +287,22 @@ export function componentProbes(
     const type = signatures[name];
     const { node } = found.find((component) => component.name === name)!;
     const parameter = node.parameters?.[0]?.name ?? '';
-    const values = valuesOf(
-      type,
-      parameter,
-      onlyViewed(valueUses(node.children, new Set([parameter]), views))
-    );
+    const single = onlyViewed(valueUses(node.children, new Set([parameter]), views));
+    const values = valuesOf(type, parameter, single);
     const cases =
       values && (values.every?.length ?? Infinity) <= maximumCases ? values.every : values?.widest;
-    if (cases && cases.length <= maximumCases) probes.push({ name, cases });
+    const atom = domain.atoms[type];
+    const range =
+      atom?.base === 'integer' &&
+      !atom.values &&
+      atom.min !== undefined &&
+      atom.max !== undefined &&
+      cases === values?.widest &&
+      !single(parameter)
+        ? { min: atom.min, max: atom.max }
+        : undefined;
+    if (cases && cases.length <= maximumCases)
+      probes.push({ name, cases, ...(range ? { range } : {}) });
     else
       problems.push({
         message: `${name} would be drawn with ${cases?.length ?? 'too many'} values of ${type} to size it, more than the ${maximumCases} a component can take. Give ${type} fewer values, or draw its parts with components of their own.`,

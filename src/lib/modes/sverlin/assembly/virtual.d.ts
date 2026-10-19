@@ -35,6 +35,10 @@ declare module 'virtual:atoms' {
  * values of their types.
  */
 declare module 'virtual:components' {
-  export const components: { name: string; cases: unknown[] }[];
+  export const components: {
+    name: string;
+    cases: unknown[];
+    range?: { min: number; max: number };
+  }[];
   export const placements: { path: string; step: number; values: unknown[] }[];
 }

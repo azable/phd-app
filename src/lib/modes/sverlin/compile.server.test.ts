@@ -568,6 +568,13 @@ describe('typed view components', () => {
         ])
       }
     );
+    // C shows a range too large to draw whole, so the page also draws its widest number in the
+    // presentation's font.
+    expect(prepared.components.find(({ name }) => name === 'C')?.range).toEqual({
+      min: 0,
+      max: 999
+    });
+    expect(prepared.components.find(({ name }) => name === 'R')?.range).toBeUndefined();
   });
 
   it.each([
