@@ -185,8 +185,9 @@ function mountStep(
       ])
     });
   } catch (cause) {
-    // A view that fails at a step shows why there, and the other steps still load. One that fails
-    // only with substituted values is measured without them, since every step it shows draws.
+    // A view that fails at a step shows why there, and the other steps still load. A substituted
+    // state can combine values no run produces, so one that fails is no visual state to size for,
+    // and is left out.
     if (!substituted) {
       reportError(cause, step);
       const notice = document.createElement('p');
