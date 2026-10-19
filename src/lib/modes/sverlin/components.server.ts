@@ -273,10 +273,10 @@ export function pointerCalls(
   source: string,
   stateNames: ReadonlySet<string>,
   /**
-   * Each pointer view, with the collection type its index type points into, and the code of a
-   * function giving its <Pointed>'s props for a position, which links it points at take.
+   * Each pointer view, with the collection type its index type points into, how far past each end
+   * it reaches, and the code of a function giving its <Pointed>'s props for a position, which links it points at take.
    */
-  pointers: ReadonlyMap<string, { into: string; paint: string }>
+  pointers: ReadonlyMap<string, { into: string; reach: number; paint: string }>
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -323,7 +323,7 @@ export function pointerCalls(
         });
       else {
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name)?.into)}, reach: ${pointers.get(name)?.reach ?? 1}, paint: ${pointers.get(name)?.paint} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -643,11 +643,13 @@ export function probeValues(
     single: (path: string) => boolean
   ): ProbeValues | undefined => {
     const atom = domain.atoms[type];
-    // A position runs from -1 to the longest collection of its type in the trace.
+    // A position runs from minus its reach, -1 by default, to as far past the longest collection
+    // of its type in the trace.
     if (atom)
-      return atomValues(atom.index ? { ...atom, max: longest.get(atom.index) ?? 0 } : atom, [
-        ...(seen.get(type) ?? [])
-      ]);
+      return atomValues(
+        atom.index ? { ...atom, max: (longest.get(atom.index) ?? 0) - (atom.min ?? -1) - 1 } : atom,
+        [...(seen.get(type) ?? [])]
+      );
     const structure = domain.structures[type];
     switch (structure?.kind) {
       case 'collection': {

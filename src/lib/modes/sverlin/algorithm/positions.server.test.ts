@@ -46,6 +46,32 @@ describe('positions', () => {
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
+  it('step as far past each end as their reach', () => {
+    const reaching = interpretDomain(`
+      const Letter = type(['a', 'b', 'c']);
+      const Letters = collection(Letter);
+      const Position = index(Letters, { reach: 2 });
+    `);
+    expect(reaching.atoms.Position.min).toBe(-2);
+    const trace = interpretAlgorithm(
+      `const letters = Letters(['a', 'b', 'c']);
+       let i = Position(-2);
+       yield;
+       for (i = Position(0); i < letters.length; i += 2) yield;
+       yield;`,
+      undefined,
+      reaching
+    );
+    expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4]);
+    expect(() =>
+      interpretAlgorithm(
+        `const letters = Letters(['a', 'b', 'c']); let i = Position(0); i = 5; yield;`,
+        undefined,
+        reaching
+      )
+    ).toThrow('a Position goes from -2 to 4 and only 0 to 2 point at an element.');
+  });
+
   it('record the collection each one points into at every step', () => {
     const [step] = run(`
       const left = Values([1]);
@@ -85,7 +111,7 @@ describe('positions', () => {
     [
       'leaving the collection',
       'const values = Values([3, 8]); let i = Position(0); i = 3; yield;',
-      'i is 3, outside values: a Position goes from -1 to 2, its length, and only 0 to 1 point at an element.'
+      'i is 3, outside values: a Position goes from -1 to 2, its length, and only 0 to 1 point at an element. To step further past an end, give it a reach, as in index(Values, { reach: 2 }).'
     ],
     [
       'more than one collection to point into',
@@ -117,7 +143,17 @@ describe('positions', () => {
       'const Int = type([1]); const P = index(Int);',
       /Int is not one/
     ],
-    ['no type', 'const P = index();', /index\(\) takes one collection type/]
+    ['no type', 'const P = index();', /index\(\) takes one collection type/],
+    [
+      'a reach that is not a small whole number',
+      'const One = type([1]); const Ints = collection(One); const P = index(Ints, { reach: 9 });',
+      /index\(\) options are \{ reach: n \}.*from 1 to 4/
+    ],
+    [
+      'other options',
+      'const One = type([1]); const Ints = collection(One); const P = index(Ints, { overflow: true });',
+      /index\(\) options are \{ reach: n \}/
+    ]
   ])('are defined in the domain, rejecting %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);
   });

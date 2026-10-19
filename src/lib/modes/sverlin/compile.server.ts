@@ -409,7 +409,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           const paint = found.pointers.has(name)
             ? `__paint_${name}`
             : `(position: number) => (({ ${chosen[name].map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[__choice_${name}]?.(position) ?? {}`;
-          return [name, { into: domain.atoms[type]?.index ?? '', paint }];
+          return [
+            name,
+            {
+              into: domain.atoms[type]?.index ?? '',
+              reach: -(domain.atoms[type]?.min ?? -1),
+              paint
+            }
+          ];
         })
       )
     );

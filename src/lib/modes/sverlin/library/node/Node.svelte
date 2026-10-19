@@ -206,6 +206,10 @@
   );
   const position = element?.index ?? -1;
   const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
+  // The end slots, as far past each end as the farthest-reaching pointer goes.
+  const reach = Math.max(0, ...pointers.map((pointer) => pointer.reach));
+  const before = Array.from({ length: reach }, (_, place) => place - reach);
+  const after = Array.from({ length: reach }, (_, place) => length + place);
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
@@ -390,11 +394,15 @@
 
 {#if pointers.length}
   {#if position === 0 && inSequence}
-    <Pointing {pointers} position={-1} name={slot ?? ''} draw={pointed} placeholder />
+    {#each before as end (end)}
+      <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+    {/each}
   {/if}
   <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
   {#if position === length - 1 && inSequence}
-    <Pointing {pointers} position={length} name={slot ?? ''} draw={pointed} placeholder />
+    {#each after as end (end)}
+      <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+    {/each}
   {/if}
 {:else if rendered}
   <Slot path={slot}>{@render rendered.snippet(value ?? null, callerProps)}</Slot>

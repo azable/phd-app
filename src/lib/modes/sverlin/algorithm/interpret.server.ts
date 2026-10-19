@@ -441,15 +441,20 @@ class Interpreter {
     );
   }
 
-  /** A position runs from -1 to its collection's length; only 0 to length - 1 point at an element. */
+  /**
+   * A position runs from -1 to its collection's length, or as far past each end as its type
+   * reaches; only 0 to length - 1 point at an element.
+   */
   #checkPosition(position: Atom, target: string, node: AnyNode, path: string): void {
     const collection = this.#topLevel.bindings.get(target)?.value;
     const length = Array.isArray(collection) ? collection.length : 0;
     const value = position.value as number;
-    if (value >= -1 && value <= length) return;
+    const reach = -(position.type.min ?? -1);
+    const last = length + reach - 1;
+    if (value >= -reach && value <= last) return;
     this.#fail(
       node,
-      `${path} is ${value}, outside ${target}: a ${position.type.name} goes from -1 to ${length}, its length, and ${length ? `only 0 to ${length - 1} point at an element` : `${target} is empty, so none points at an element`}.`
+      `${path} is ${value}, outside ${target}: a ${position.type.name} goes from ${-reach} to ${last}${reach === 1 ? ', its length,' : ''} and ${length ? `only 0 to ${length - 1} point at an element` : `${target} is empty, so none points at an element`}.${reach === 1 ? ` To step further past an end, give it a reach, as in index(${position.type.index}, { reach: 2 }).` : ''}`
     );
   }
 

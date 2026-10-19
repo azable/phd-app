@@ -190,6 +190,8 @@ export type PointerCall = {
   value: () => unknown;
   /** The collection type the pointer's index type points into. */
   into: string;
+  /** How many places past each end of the collection its index type goes. */
+  reach: number;
   /** The props of the pointer's <Pointed> for a position, which a link it points at takes. */
   paint?: (position: number) => Record<string, unknown>;
   path?: string;
@@ -202,6 +204,7 @@ export type Pointer = {
   view: Snippet<[unknown]>;
   collection: string;
   position: number;
+  reach: number;
   order: number;
   paint?: (position: number) => Record<string, unknown>;
 };
@@ -232,6 +235,7 @@ export function providePointers(calls: readonly PointerCall[]): void {
             view: call.view(),
             collection,
             position: found.position ?? Number.NaN,
+            reach: call.reach,
             order,
             paint: call.paint
           }
