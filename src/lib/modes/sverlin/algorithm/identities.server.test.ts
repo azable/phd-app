@@ -19,16 +19,22 @@ function identities(body: string, paths: string[]) {
 }
 
 describe('identities', () => {
-  it('move with a swapped value', () => {
+  it('move with a swapped value, a temporary still in scope being a copy', () => {
+    const swap = 'const moved = values[0]; values[0] = values[1]; values[1] = moved;';
     const [before, after] = identities(
-      `const values = Values([7, 3, 9]);
-       yield;
-       const moved = values[0]; values[0] = values[1]; values[1] = moved;
-       yield;`,
+      `const values = Values([7, 3, 9]); yield; { ${swap} } yield;`,
       ['values[0]', 'values[1]', 'values[2]']
     );
     const [seven, three, nine] = before.ids;
     expect(after).toEqual({ ids: [three, seven, nine], copies: {} });
+
+    const [, inScope] = identities(`const values = Values([7, 3, 9]); yield; ${swap} yield;`, [
+      'values[0]',
+      'values[1]',
+      'moved'
+    ]);
+    const copy = inScope.ids[2];
+    expect(inScope).toEqual({ ids: [three, seven, copy], copies: { [copy!]: seven } });
   });
 
   it('make a copy where one value sits in two places, and keep the value a variable held', () => {
@@ -98,8 +104,21 @@ describe('identities', () => {
     expect(step.ids[2]).not.toBe(step.ids[1]);
   });
 
-  it('are left out of variables holding a single value', () => {
-    const [step] = identities(`const values = Values([1]); let n = values[0]; yield;`, ['n']);
-    expect(step.ids).toEqual([undefined]);
+  it('go to a variable only while no collection holds its value', () => {
+    const [, aside, back] = identities(
+      `const values = Values([5, 2, 4]);
+       yield;
+       const key = values[1];
+       values[1] = values[0];
+       yield;
+       values[0] = key;
+       yield;`,
+      ['values[0]', 'key']
+    );
+    const two = aside.ids[1];
+    // The key alone holds the 2, so it moves there; back in the row, the key shows a copy.
+    expect(aside.copies).not.toHaveProperty(String(two));
+    expect(back.ids[0]).toBe(two);
+    expect(back.copies).toEqual({ [back.ids[1]!]: two });
   });
 });

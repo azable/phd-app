@@ -220,17 +220,27 @@ export function designChoices(body: string): Record<string, DesignChoices> {
   return known;
 }
 
-/** Names a block declares at its top level, read without running it. */
+/**
+ * Names a block declares, read without running it: at its top level, and in the algorithm in any
+ * block, as a step records every variable in scope.
+ */
 export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegistry): string[] {
   const { root } = parseBlock(body, kind, domain);
-  return root.body.flatMap((statement) =>
-    statement.type === 'VariableDeclaration'
-      ? statement.declarations.map((declarator) => (declarator.id as { name: string }).name)
-      : []
-  );
+  const names = new Set<string>();
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (node === null || typeof node !== 'object') return;
+    const part = node as { type?: string; declarations?: { id: { name: string } }[] };
+    if (part.type === 'VariableDeclaration')
+      for (const declarator of part.declarations ?? []) names.add(declarator.id.name);
+    if (kind === 'algorithm')
+      for (const [key, child] of Object.entries(node)) if (key !== 'loc') visit(child);
+  };
+  root.body.forEach(visit);
+  return [...names];
 }
 
-/** Interpret the algorithm from the input state; every top-level binding is recorded at each yield. */
+/** Interpret the algorithm from the input state; the variables in scope are recorded at each yield. */
 export function interpretAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
@@ -373,22 +383,45 @@ class Interpreter {
       );
   }
 
-  #state(node: AnyNode): TypedState {
+  /**
+   * The variables in scope, by name: the top level's in the order of their declarations, then each
+   * enclosing block's, outermost first. One not declared yet, or whose block has ended, is not.
+   */
+  #inScope(scope: Scope): [string, Binding][] {
+    const blocks: Scope[] = [];
+    for (
+      let block: Scope | undefined = scope;
+      block && block !== this.#topLevel;
+      block = block.parent
+    )
+      blocks.unshift(block);
+    return [
+      ...this.#topLevelNames.flatMap((name): [string, Binding][] => {
+        const binding = this.#topLevel.bindings.get(name);
+        return binding ? [[name, binding]] : [];
+      }),
+      ...blocks.flatMap((block) => [...block.bindings])
+    ];
+  }
+
+  #state(node: AnyNode, scope: Scope = this.#topLevel): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
     const positions: [string, number][] = [];
-    for (const name of this.#topLevelNames) {
-      const binding = this.#topLevel.bindings.get(name);
-      state[name] = binding
-        ? this.#snapshot(binding.value, node, name, { types, targets, placed, positions })
-        : null;
-      if (binding?.target) targets[name] = binding.target;
+    for (const [name, binding] of this.#inScope(scope)) {
+      state[name] = this.#snapshot(binding.value, node, name, {
+        types,
+        targets,
+        placed,
+        positions
+      });
+      if (binding.target) targets[name] = binding.target;
     }
     if (this.#kind === 'algorithm')
       for (const [path, value] of positions)
-        if (targets[path]) this.#checkDrawable(path, value, targets[path], node);
+        if (targets[path]) this.#checkDrawable(path, value, targets[path], node, scope);
     return {
       state,
       types,
@@ -426,13 +459,13 @@ class Interpreter {
   }
 
   /**
-   * A position bound to a collection, as in Position(left, 0): its first argument names a top-level
-   * variable holding a collection of the type it points into.
+   * A position bound to a collection, as in Position(left, 0): its first argument names a variable
+   * in scope holding a collection of the type it points into.
    */
   #position(node: CallExpression, type: AtomType, scope: Scope): Atom {
     const [collection, number] = node.arguments as Expression[];
     const name = collection.type === 'Identifier' ? collection.name : undefined;
-    if (!name || !this.#holdsCollection(name, type))
+    if (!name || !this.#holdsCollection(name, type, scope))
       this.#fail(
         collection,
         `${type.name}(…, …) names the ${type.index} it points into first, as in ${type.name}(${this.#collectionsOf(type)[0] ?? 'values'}, 0).`
@@ -440,8 +473,8 @@ class Interpreter {
     return this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
   }
 
-  #holdsCollection(name: string, type: AtomType): boolean {
-    const value = this.#topLevel.bindings.get(name)?.value;
+  #holdsCollection(name: string, type: AtomType, scope: Scope = this.#topLevel): boolean {
+    const value = scope.lookup(name)?.value;
     return Array.isArray(value) && this.#shapes.get(value)?.name === type.index;
   }
 
@@ -466,8 +499,8 @@ class Interpreter {
    * A position a step records is drawn at its place, past an end too, where room is kept for it;
    * one far past an end would keep that much empty room, so it is no example to draw.
    */
-  #checkDrawable(path: string, value: number, target: string, node: AnyNode): void {
-    const collection = this.#topLevel.bindings.get(target)?.value;
+  #checkDrawable(path: string, value: number, target: string, node: AnyNode, scope: Scope): void {
+    const collection = scope.lookup(target)?.value;
     const length = Array.isArray(collection) ? collection.length : 0;
     const past = value < 0 ? -value : value - (length - 1);
     if (past <= maximumPastEnd) return;
@@ -720,7 +753,7 @@ class Interpreter {
         return 'normal';
       case 'ExpressionStatement':
         if (node.expression.type === 'YieldExpression') {
-          this.#yield(node);
+          this.#yield(node, scope);
         } else {
           this.#expression(node.expression, scope);
         }
@@ -735,6 +768,7 @@ class Interpreter {
                 ? `"${name}" is already declared here or in the input block.`
                 : `"${name}" is already declared.`
             );
+          this.#checkUnique(name, scope.parent, declarator);
           if (!declarator.init) {
             if (this.#kind !== 'design')
               this.#fail(
@@ -796,6 +830,7 @@ class Interpreter {
         if (!Array.isArray(items)) this.#fail(node.right, 'for...of can only iterate over arrays.');
         const declaration = node.left as { kind: string; declarations: { id: Pattern }[] };
         const name = (declaration.declarations[0].id as { name: string }).name;
+        this.#checkUnique(name, scope, node.left);
         // The loop variable has the collection's element type, which can be a union.
         const element = (this.#shapes.get(items) as CollectionType | undefined)?.element;
         for (let index = 0; index < items.length; index++) {
@@ -822,16 +857,32 @@ class Interpreter {
     }
   }
 
-  #yield(node: AnyNode): void {
+  /**
+   * In the algorithm, a name is declared once among the blocks in scope: steps record every
+   * variable in scope by its name, so an inner j hiding an outer one could not both be drawn.
+   * Loops one after another can each declare their own j. `enclosing` is the innermost block
+   * outside the one the name is declared in.
+   */
+  #checkUnique(name: string, enclosing: Scope | undefined, node: AnyNode): void {
+    if (this.#kind !== 'algorithm') return;
+    for (let block = enclosing; block && block !== this.#globals; block = block.parent)
+      if (block.bindings.has(name))
+        this.#fail(
+          node,
+          `"${name}" is already declared in ${block === this.#topLevel ? 'the top level or the input block' : 'an enclosing block or loop'}; give this one another name, as each step records the variables in scope by name.`
+        );
+  }
+
+  #yield(node: AnyNode, scope: Scope): void {
     if (this.#trace.length >= algorithmLimits.maximumSteps)
       this.#fail(node, `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`);
-    this.#trace.push(this.#state(node));
+    this.#trace.push(this.#state(node, scope));
   }
 
   /**
    * Deep copy with a total node budget, which also stops shared structure from multiplying. Atoms
-   * become plain values, with their type recorded by path; collections, records, and the atoms they
-   * hold are placed for their identities.
+   * become plain values, with their type recorded by path; every collection, record, and atom is
+   * placed for its identity.
    */
   #snapshot(
     value: Value,
@@ -855,14 +906,14 @@ class Interpreter {
       const [only, ...others] = value.type.index ? this.#collectionsOf(value.type) : [];
       if (only && !others.length) targets[path] = only;
       if (value.type.index) positions.push([path, value.value as number]);
-      // A variable only refers to a value; the collection or record holding it places it.
-      if (path.includes('[') || path.includes('.')) placed.push([path, value, true]);
+      // A collection or record holds it, or a variable, after them (see identities.server.ts).
+      placed.push([path, value, path.includes('[') || path.includes('.') ? 'held' : 'variable']);
       return value.value;
     }
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
     if (shape) {
       types[path] = shape.name;
-      placed.push([path, value as object, false]);
+      placed.push([path, value as object, 'shared']);
     }
     if (Array.isArray(value))
       return Array.from(value, (item, index) =>

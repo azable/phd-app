@@ -35,6 +35,7 @@ import {
   pointerCalls,
   readsOf,
   rootPlacements,
+  scopedReadsOf,
   slotInsertions,
   viewsOf,
   withInsertions,
@@ -359,6 +360,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const master = interpretBlock(source, blocks.algorithm, (body) =>
       interpretAlgorithm(body, input, domain)
     );
+    // Variables out of scope at some step: what the view draws from one is hidden there.
+    const scoped = new Set(
+      stateNames.filter((name) => master.some(({ state }) => !(name in state)))
+    );
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
     const chosen = Object.fromEntries(
       Object.entries(componentChoice).map(([name, { options }]) => [name, options])
@@ -417,7 +422,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             }
           ];
         })
-      )
+      ),
+      scoped
     );
     if (pointers.problems.length)
       throw InvalidSvelteSourceError.combine(
@@ -429,6 +435,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             })
         )
       );
+    const scopedReads = scopedReadsOf(ast.html, scoped);
+    if (scopedReads.length)
+      throw InvalidSvelteSourceError.combine(
+        scopedReads.map(
+          ({ name, start }) =>
+            new InvalidSvelteSourceError(
+              `The view reads ${name} itself, but ${name} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${name})}, which draw nothing where it is out of scope.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
     const tagged = withInsertions(svelteSource, [
       ...insertions,
       ...pointers.removals,
@@ -437,7 +454,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         svelteSource,
         new Set(stateNames),
         new Set([...viewNames].filter((name) => !pointerViews.has(name))),
-        new Set(Object.keys(components))
+        new Set(Object.keys(components)),
+        scoped
       )
     ]);
     const component = compile(
@@ -503,6 +521,35 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
   }
 }
 
+/**
+ * The variables out of scope at a step that are in scope at another, each with its value, types,
+ * and bindings from the nearest such step, earlier first: drawn hidden, they keep their room, and
+ * the view never reads a variable that is not there.
+ */
+function standInsFor(
+  master: readonly MasterStep[],
+  index: number
+): { state: TraceState; types: Record<string, string>; targets: Record<string, string> } {
+  const names = new Set(master.flatMap((step) => Object.keys(step.state)));
+  const standIn = { state: {} as TraceState, types: {}, targets: {} };
+  const under = (name: string, record: Record<string, string> = {}) =>
+    Object.entries(record).filter(
+      ([path]) => path === name || path.startsWith(`${name}[`) || path.startsWith(`${name}.`)
+    );
+  for (const name of names) {
+    if (name in master[index].state) continue;
+    const nearest = master
+      .map((step, at) => ({ step, distance: Math.abs(at - index) + (at > index ? 0.5 : 0) }))
+      .filter(({ step }) => name in step.state)
+      .sort((a, b) => a.distance - b.distance)[0]?.step;
+    if (!nearest) continue;
+    standIn.state[name] = nearest.state[name];
+    Object.assign(standIn.types, Object.fromEntries(under(name, nearest.types)));
+    Object.assign(standIn.targets, Object.fromEntries(under(name, nearest.targets)));
+  }
+  return standIn;
+}
+
 /** Draw one seed's design and bundle the presentation with every step's state. */
 export async function bundlePresentation(
   prepared: PreparedComponent,
@@ -532,17 +579,22 @@ export async function bundlePresentation(
   // Every presentation shows every master step until steps can be mapped to frames.
   const masterSteps = master.map((_, index) => index);
   // Each step's state carries its atomic types, the page frame, and the drawn defaults for the view,
-  // under keys no variable can use.
-  const states = masterSteps.map((index) => ({
-    ...master[index].state,
-    ...parameters,
-    __types: master[index].types,
-    __targets: master[index].targets ?? {},
-    __identities: master[index].identities?.ids ?? {},
-    __copies: master[index].identities?.copies ?? {},
-    __frame: frame,
-    __defaults: defaults
-  }));
+  // under keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
+  const states = masterSteps.map((index) => {
+    const standIn = standInsFor(master, index);
+    return {
+      ...standIn.state,
+      ...master[index].state,
+      ...parameters,
+      __types: { ...standIn.types, ...master[index].types },
+      __targets: { ...standIn.targets, ...master[index].targets },
+      __absent: Object.keys(standIn.state),
+      __identities: master[index].identities?.ids ?? {},
+      __copies: master[index].identities?.copies ?? {},
+      __frame: frame,
+      __defaults: defaults
+    };
+  });
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),

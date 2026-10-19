@@ -683,3 +683,21 @@ describe('typed view components', () => {
     expect(prepare).toThrow(message);
   });
 });
+
+describe('scope', () => {
+  const source = (markup: string) =>
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield; for (let i = Position(1); i < values.length; i++) { const key = values[i]; yield; }</script><script lang="sverlin" design>const Int = IntText;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+
+  it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
+    const prepared = prepareSvelteComponent(source('{@render Int(key)}'));
+    const { javascript } = await bundlePresentation(prepared, 1);
+    expect(javascript).toContain('{i:1,key:2,values:[5,2]');
+    expect(javascript).toContain('__absent:["i","key"]');
+  });
+
+  it('rejects the view reading a variable out of scope at some step itself', () => {
+    expect(() => prepareSvelteComponent(source('<Node>{key}</Node>'))).toThrow(
+      'The view reads key itself, but key is out of scope at some steps'
+    );
+  });
+});

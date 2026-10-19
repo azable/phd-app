@@ -42,6 +42,8 @@ type StepState = Record<string, unknown> & {
   __targets?: Record<string, string>;
   __identities?: Record<string, number>;
   __copies?: Record<number, number>;
+  /** Variables out of scope at the step, standing in hidden with a value from another. */
+  __absent?: string[];
   __defaults: NodeDefaults;
   __frame: FrameSettings;
 };
@@ -80,10 +82,13 @@ function valueAt(state: Record<string, unknown>, path: string): unknown {
 }
 
 // How far before the start and past the end of each collection variable any step records a
-// position bound to it, so its pointers keep end slots only as far as the trace goes.
+// position bound to it, so its pointers keep end slots only as far as the trace goes. A variable
+// out of scope at a step only stands in there, so it records nothing.
 const pastEnds = new Map<string, { before: number; after: number }>();
 for (const step of states as StepState[])
   for (const [path, target] of Object.entries(step.__targets ?? {})) {
+    const standsIn = (at: string) => step.__absent?.includes(at.split(/[.[]/u)[0]) ?? false;
+    if (standsIn(path) || standsIn(target)) continue;
     const position = valueAt(step, path);
     const collection = valueAt(step, target);
     if (typeof position !== 'number' || !Array.isArray(collection)) continue;
@@ -179,6 +184,7 @@ function mountStep(
     __targets: targets = {},
     __identities: identities = {},
     __copies: copies = {},
+    __absent: absent = [],
     __defaults: defaults,
     __frame: frame,
     ...state
@@ -239,6 +245,7 @@ function mountStep(
                 : undefined,
             targetOf: (path: string) => targets[path],
             identityOf: (path: string) => identities[path],
+            absent: (name: string) => absent.includes(name),
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
             heldBy: (name: string) => held.get(name),

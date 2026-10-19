@@ -103,3 +103,33 @@ describe('element slots', () => {
     );
   });
 });
+
+describe('scope', () => {
+  it('names the variables out of scope at some step that a view or pointer reads', () => {
+    const view =
+      '{@render Int(values[i])}{#each row as v}{@render Int(v)}{/each}{@render Int(target)}';
+    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    const state = new Set(['values', 'i', 'row', 'target']);
+    const scoped = new Set(['i', 'row']);
+    expect(
+      withInsertions(
+        view,
+        slotInsertions(ast.html, view, state, new Set(['Int']), new Set(), scoped)
+      )
+    ).toBe(
+      '<SverlinSlot of={values} at={i} reads={["i"]}>{@render Int(values[i])}</SverlinSlot>{#each row as v, __k1}<SverlinSlot of={row} at={__k1} reads={["row"]}>{@render Int(v)}</SverlinSlot>{/each}<SverlinSlot path="target">{@render Int(target)}</SverlinSlot>'
+    );
+    const pointers = parse('{@render Arrow(edges[e].to)}<script lang="ts"></script>', {
+      filename: 'Main.svelte'
+    });
+    expect(
+      pointerCalls(
+        pointers.html,
+        '{@render Arrow(edges[e].to)}',
+        new Set(['edges', 'e']),
+        new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]]),
+        new Set(['e'])
+      ).calls[0]
+    ).toContain('reads: ["e"], ');
+  });
+});

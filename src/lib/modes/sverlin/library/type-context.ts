@@ -13,6 +13,8 @@ export type TypeContext = {
   itemType(container: unknown, index: number): string | undefined;
   /** The identity of the value at a path, the same at every step the value stays itself. */
   identityOf(path: string): number | undefined;
+  /** Whether a variable is out of scope at this step, standing in hidden with another's value. */
+  absent(name: string): boolean;
   /** Where an array or object taken from the props sits in the state, such as edges[0]. */
   pathOf(container: unknown): string | undefined;
   /** The collection a position at a path points into, such as left for i. */
@@ -204,6 +206,8 @@ export type PointerCall = {
   path?: string;
   of?: () => unknown;
   at?: () => string | number;
+  /** The state variables its position is read from; with one out of scope it points nowhere. */
+  reads?: readonly string[];
 };
 
 /** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
@@ -220,15 +224,17 @@ export function providePointers(calls: readonly PointerCall[]): void {
   const types = typeContext();
   const pointers = calls.flatMap((call, order): Pointer[] => {
     // A position read through one that points nowhere, as edges[e].to with e at -1, points at
-    // nothing this step, but keeps its room in the only collection of its type.
+    // nothing this step, but keeps its room in the only collection of its type; so does one read
+    // from a variable out of scope, which stands in with another step's value.
     let found: { collection?: string; position?: number } = {};
     try {
       const path =
         call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
       const position = call.value();
+      const absent = call.reads?.some((name) => types?.absent(name)) ?? false;
       found = {
         collection: path === undefined ? undefined : types?.targetOf(path),
-        position: typeof position === 'number' ? position : undefined
+        position: typeof position === 'number' && !absent ? position : undefined
       };
     } catch {
       // Points nowhere.

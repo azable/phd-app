@@ -131,6 +131,62 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
 }
 
 /**
+ * The state variables an expression reads, as values and i in values[i], less names declared
+ * around it: what it draws nothing without, at a step where one is out of scope.
+ */
+export function stateReadsOf(
+  expression: unknown,
+  stateNames: ReadonlySet<string>,
+  locals: { has(name: string): boolean } = new Set()
+): string[] {
+  const read = new Set<string>();
+  const walk = (value: unknown, parent?: Record<string, unknown>, key?: string): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach((item) => walk(item, parent, key));
+    const node = value as Record<string, unknown> & { type?: string; name?: string };
+    const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
+    const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
+    if (node.type === 'Identifier' && typeof node.name === 'string' && !member && !property)
+      read.add(node.name);
+    for (const [childKey, child] of Object.entries(node))
+      if (childKey !== 'parent' && childKey !== 'loc') walk(child, node, childKey);
+  };
+  walk(expression);
+  return [...read].filter((name) => stateNames.has(name) && !locals.has(name));
+}
+
+/**
+ * Where the root reads a variable out of scope at some step other than through a view or pointer:
+ * there it would read the value standing in from another step. {@render} arguments and {#each}
+ * collections are drawn through views, which draw nothing at such steps.
+ */
+export function scopedReadsOf(
+  markup: unknown,
+  scoped: ReadonlySet<string>
+): { name: string; start: number }[] {
+  const found: { name: string; start: number }[] = [];
+  const walk = (value: unknown, parent?: Record<string, unknown>, key?: string): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach((item) => walk(item, parent, key));
+    const node = value as Record<string, unknown> & { type?: string; name?: string };
+    if (node.type === 'RenderTag' || node.type === 'SnippetBlock') return;
+    if (node.type === 'EachBlock') {
+      walk(node.body ?? node.children, node, 'body');
+      walk(node.fallback ?? node.else, node, 'fallback');
+      return;
+    }
+    const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
+    const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
+    if (node.type === 'Identifier' && scoped.has(node.name ?? '') && !member && !property)
+      found.push({ name: node.name ?? '', start: (node.start as number | undefined) ?? 0 });
+    for (const [childKey, child] of Object.entries(node))
+      if (childKey !== 'parent' && childKey !== 'loc') walk(child, node, childKey);
+  };
+  walk(markup);
+  return found;
+}
+
+/**
  * The variables a component reads that it does not declare: identifiers in its expressions, less
  * member and key names, and less its parameters and the names its blocks and {@const} tags declare.
  */
@@ -276,7 +332,9 @@ export function pointerCalls(
    * Each pointer view, with the collection type its index type points into,
    * and the code of a function giving its <Pointed>'s props for a position, which links it points at take.
    */
-  pointers: ReadonlyMap<string, { into: string; paint: string }>
+  pointers: ReadonlyMap<string, { into: string; paint: string }>,
+  /** The state variables out of scope at some step, which a pointer reading one names. */
+  scoped: ReadonlySet<string> = new Set()
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -322,8 +380,9 @@ export function pointerCalls(
           start
         });
       else {
+        const reads = stateReadsOf(argument, scoped);
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -357,7 +416,9 @@ export function slotInsertions(
   source: string,
   stateNames: ReadonlySet<string>,
   views: ReadonlySet<string>,
-  componentNames: ReadonlySet<string>
+  componentNames: ReadonlySet<string>,
+  /** The state variables out of scope at some step, which a slot reading one names. */
+  scoped: ReadonlySet<string> = new Set()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -411,8 +472,20 @@ export function slotInsertions(
       const callee = call?.callee as Part | undefined;
       if (typeof callee?.name === 'string' && views.has(callee.name)) {
         const [argument] = (call.arguments as Part[] | undefined) ?? [];
+        // The state variables the value comes from, through an {#each} item too: it is drawn
+        // hidden at a step where one is out of scope.
+        const local = argument?.type === 'Identifier' ? locals.get(argument.name ?? '') : undefined;
+        const reads = [
+          ...new Set([
+            ...stateReadsOf(argument, scoped, locals),
+            ...(local?.kind === 'item' ? stateReadsOf(local.of, scoped, locals) : [])
+          ])
+        ];
         insertions.push(
-          { at: part.start ?? 0, text: `<SverlinSlot${slotOf(argument, locals)}>` },
+          {
+            at: part.start ?? 0,
+            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''}>`
+          },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );
       }

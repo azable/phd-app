@@ -3,34 +3,52 @@
   compiler wraps every {@render} of a view in one. `path` is a variable's name, `of` with `at` an
   element of an array or object from the props, and `inherit` keeps the slot of the component this
   call is in, for a component passing its own value on. With none of them, the value is no element.
+  `reads` are the state variables the value comes from: at a step where one is out of scope, the
+  value stands in from another step, drawn hidden as a copy, so it keeps its room.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
 
-  import { copyContext, elementOf, provideSlot, slotContext, typeContext } from '../type-context';
+  import {
+    copyContext,
+    elementOf,
+    provideCopy,
+    provideHidden,
+    provideSlot,
+    slotContext,
+    typeContext
+  } from '../type-context';
 
   let {
     path,
     of,
     at,
     inherit = false,
+    reads = [],
     children
   }: {
     path?: string;
     of?: unknown;
     at?: string | number;
     inherit?: boolean;
+    reads?: readonly string[];
     children: Snippet;
   } = $props();
 
-  // Each step mounts afresh, so the slot is read once. A hidden copy names no element.
+  // Each step mounts afresh, so the props are read once. A hidden copy names no element.
+  const types = typeContext();
+  const absent = untrack(() => reads.some((name) => types?.absent(name)));
+  if (absent) {
+    provideHidden(true);
+    provideCopy();
+  }
   provideSlot(
     untrack(() =>
-      copyContext()
+      absent || copyContext()
         ? undefined
         : inherit
           ? slotContext()
-          : (path ?? (at === undefined ? undefined : elementOf(typeContext(), of, at)))
+          : (path ?? (at === undefined ? undefined : elementOf(types, of, at)))
     )
   );
 </script>

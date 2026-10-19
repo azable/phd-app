@@ -51,7 +51,7 @@ describe('algorithm interpretation', () => {
     `);
     expect(trace[0].state.a).toEqual([2, 1]);
     expect(trace[1].state.a).toEqual([1, 2]);
-    expect(trace[0].state.t).toBeNull();
+    expect(trace[0].state).not.toHaveProperty('t');
   });
 
   it('supports loops, objects, array methods, Math, and early return', () => {
@@ -159,7 +159,7 @@ describe('input, design, and step selection', () => {
       input
     );
     expect(trace.map(({ state }) => state)).toEqual([
-      { values: [2, 1], label: 'pair', swapped: null },
+      { values: [2, 1], label: 'pair' },
       { values: [1, 2], label: 'pair', swapped: true }
     ]);
     expect(input.state.values).toEqual([2, 1]);
