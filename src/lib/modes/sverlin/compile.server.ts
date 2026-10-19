@@ -539,6 +539,7 @@ export async function bundlePresentation(
     __types: master[index].types,
     __targets: master[index].targets ?? {},
     __identities: master[index].identities?.ids ?? {},
+    __copies: master[index].identities?.copies ?? {},
     __frame: frame,
     __defaults: defaults
   }));

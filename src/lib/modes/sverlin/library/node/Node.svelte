@@ -24,10 +24,12 @@
     layoutMemoryContext,
     nodeIdsContext,
     elementSlot,
+    pointerIdentityContext,
     pointersContext,
     pointsInto,
     reachesInto,
     provideComponentBox,
+    providePointerIdentity,
     provideSequence,
     sequenceContext,
     rendererFor,
@@ -218,8 +220,11 @@
   );
   const position = element?.index ?? -1;
   const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
-  // The value this node draws keeps its identity across steps, so it can be followed as it moves.
-  const identity = untrack(() => (slot === undefined ? undefined : types?.identityOf(slot)));
+  // The value this node draws keeps its identity across steps, so it can be followed as it moves;
+  // the outermost node a pointer's view draws where the pointer is takes the pointer's.
+  const pointerIdentity = pointerIdentityContext();
+  if (pointerIdentity) providePointerIdentity(undefined);
+  const identity = untrack(() => (slot === undefined ? pointerIdentity : types?.identityOf(slot)));
   // The end slots, as far past each end as any step puts one of the pointers' positions: none
   // where the trace never goes past.
   const ends = untrack(() => pointers.map((pointer) => types?.pastEnds(pointer.collection)));

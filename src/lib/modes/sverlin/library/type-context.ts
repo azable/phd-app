@@ -299,6 +299,18 @@ export function hiddenContext(): boolean | undefined {
 }
 
 /**
+ * The identity of a pointer where it is, for the outermost node its view draws there: the same at
+ * every step, so the node moves with the pointer between steps. Its <Pointed> element keeps its own.
+ */
+export function providePointerIdentity(identity: string | undefined): void {
+  setContext('sverlin:pointer-identity', identity);
+}
+
+export function pointerIdentityContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:pointer-identity');
+}
+
+/**
  * Inside the hidden copy of an element that keeps an end slot's room: its nodes name no element, so
  * no pointer is drawn at them and no identity is shown twice.
  */

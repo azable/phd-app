@@ -8,6 +8,10 @@ import { mount, unmount, type Component } from 'svelte';
 import {
   describeFrame,
   describeStep,
+  animateStep,
+  finishMotion,
+  leaveLayer,
+  motionCss,
   Frame,
   settleSpans,
   themeCss,
@@ -29,13 +33,15 @@ theme.textContent = `${themeCss}
 .sv-layer { position: fixed; inset: 0; }
 .sv-layer.pending { visibility: hidden; }
 .sv-layer:not(.pending) [data-sv-hidden='true'] { visibility: hidden; }
-.sv-layer:not(.pending) [data-sv-hidden='false'] { visibility: visible; }`;
+.sv-layer:not(.pending):not(.sv-leaving) [data-sv-hidden='false'] { visibility: visible; }
+${motionCss}`;
 document.head.append(theme);
 
 type StepState = Record<string, unknown> & {
   __types?: Record<string, string>;
   __targets?: Record<string, string>;
   __identities?: Record<string, number>;
+  __copies?: Record<number, number>;
   __defaults: NodeDefaults;
   __frame: FrameSettings;
 };
@@ -98,7 +104,14 @@ function unitOf(typeName: string): string | undefined {
 
 // The mounted app, unless the view failed to mount, in which case the layer holds a notice instead,
 // with how many times its layout changed before settling, for timing reports.
-type Shown = { step: number; layer: HTMLElement; app?: Record<string, unknown>; changes: number };
+/** A mounted step: its layer, and the values in it copied from another, by identity (see motion.ts). */
+type Shown = {
+  step: number;
+  layer: HTMLElement;
+  app?: Record<string, unknown>;
+  changes: number;
+  copies: Record<number, number>;
+};
 
 /**
  * Report how long laying out takes, so the app can log it: each pass's phase, step, duration, and
@@ -165,6 +178,7 @@ function mountStep(
     __types: types = {},
     __targets: targets = {},
     __identities: identities = {},
+    __copies: copies = {},
     __defaults: defaults,
     __frame: frame,
     ...state
@@ -185,7 +199,7 @@ function mountStep(
   const layer = document.createElement('div');
   layer.className = 'sv-layer pending';
   root.append(layer);
-  const shown: Shown = { step, layer, changes: 0 };
+  const shown: Shown = { step, layer, changes: 0, copies };
   const memory: LayoutMemory = {
     step,
     recording: phase === 'recording',
@@ -287,8 +301,11 @@ function remove(shown: Shown) {
 /**
  * Show a step from the records: mount it in a hidden layer, and once its layout settles, reveal it
  * and remove the step it replaces, so neither a blank page nor an unfinished layout is ever visible.
+ * Values move from where the step before showed them (see library/motion.ts); a step shown before
+ * a move ends finishes it.
  */
 let pendingTiming: ReturnType<typeof timePass> | undefined;
+let leaving: Shown | undefined;
 function show(step: number) {
   if (pending) remove(pending);
   pendingTiming?.cancel();
@@ -297,8 +314,25 @@ function show(step: number) {
   pending = mounted = mountStep(step, 'showing', (shown) => {
     if (pending !== shown) return;
     timed.done();
+    if (leaving) remove(leaving);
+    leaving = undefined;
+    if (current) finishMotion(current.layer);
     shown.layer.classList.remove('pending');
-    if (current) remove(current);
+    if (current) {
+      const before = current;
+      // Only the step right after it copies values from it.
+      const { gone } = animateStep(
+        before.layer,
+        shown.layer,
+        step === before.step + 1 ? shown.copies : {}
+      );
+      leaving = before;
+      leaveLayer(before.layer, gone, () => {
+        if (leaving !== before) return;
+        remove(before);
+        leaving = undefined;
+      });
+    }
     current = shown;
     // The first step shown means the page is ready, so the app can take its loader away.
     if (!ready) reportTiming({ phase: 'ready', ms: Math.round(performance.now() - pageStarted) });

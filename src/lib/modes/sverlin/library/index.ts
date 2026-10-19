@@ -35,6 +35,7 @@ export { providePointers } from './type-context';
 export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { describeFrame, describeStep } from './scene';
+export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,
   SceneFrame,

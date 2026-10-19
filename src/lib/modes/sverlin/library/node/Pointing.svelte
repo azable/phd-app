@@ -9,7 +9,13 @@
   import { untrack, type Snippet } from 'svelte';
 
   import Pointing from './Pointing.svelte';
-  import { providePointed, provideHidden, provideSlot, type Pointer } from '../type-context';
+  import {
+    providePointed,
+    provideHidden,
+    providePointerIdentity,
+    provideSlot,
+    type Pointer
+  } from '../type-context';
 
   let {
     pointers,
@@ -43,6 +49,7 @@
     })
   );
   provideHidden(!active);
+  untrack(() => providePointerIdentity(active ? `pointer:${pointer.order}` : undefined));
   // The pointer view draws no element of its own; its <Pointed> draws the one it points at.
   provideSlot(undefined);
 </script>

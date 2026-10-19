@@ -13,6 +13,7 @@
     provideCopy,
     provideHidden,
     providePointed,
+    providePointerIdentity,
     provideWrapped
   } from '../type-context';
 
@@ -45,6 +46,7 @@
     ...(pointed?.placeholder ? { __id: undefined, __ref: undefined, __slot: undefined } : {})
   };
   providePointed(undefined);
+  providePointerIdentity(undefined);
   provideHidden(pointed?.placeholder ?? false);
   if (pointed?.placeholder) provideCopy();
   leaveComponentBox();
