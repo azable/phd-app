@@ -128,8 +128,6 @@ export type PreparedComponent = {
   components: ComponentProbe[];
   /** Values the root reads for placement, measured with every value of their types. */
   placements: Placement[];
-  /** Types with more than one view and no design value choosing: each presentation draws one. */
-  views?: Record<string, string[]>;
   design?: Block;
   /** Whether <Link> components sit at the top of the view, between top-level nodes. */
   topLevelLinks?: boolean;
@@ -328,26 +326,21 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         );
     }
     const renderers = typeRenderers(ast, atoms, source);
-    // A type's views are alternatives: each presentation draws one, under the type's name, unless a
-    // design value named after the type chooses, or a component or renderer is named after it. A
-    // view that renders its own type, as a cell around {@render Int(value)}, wraps the alternatives
-    // rather than being one.
-    const drawn: Record<string, string[]> = {};
-    const aliases: Record<string, string> = {};
-    for (const [type, all] of Object.entries(views)) {
-      const names = all.filter(
-        (name) => !readsOf(found.components.find((view) => view.name === name)!.node).has(type)
+    // A type is rendered by name, as in {@render Int(value)}, through a snippet named after it or a
+    // design value named after it that chooses among its views.
+    const typeViews = Object.keys(componentChoice).filter((name) => definesType(domain, name));
+    const undefinedType = renderedNames(ast.html).find(
+      ({ name }) =>
+        definesType(domain, name) &&
+        !typeViews.includes(name) &&
+        !renderers.includes(name) &&
+        !Object.hasOwn(components, name)
+    );
+    if (undefinedType)
+      throw new InvalidSvelteSourceError(
+        `${undefinedType.name} is a type, and nothing draws it: choose its view in the design block, as in const ${undefinedType.name} = pick([${views[undefinedType.name]?.join(', ') || `${undefinedType.name}Text, ${undefinedType.name}Dots`}]);, or render one of its views by name.`,
+        { code: 'view_component', start: sourcePosition(source, undefinedType.start) }
       );
-      if (
-        !names.length ||
-        Object.hasOwn(componentChoice, type) ||
-        Object.hasOwn(components, type) ||
-        renderers.includes(type)
-      )
-        continue;
-      if (names.length > 1) drawn[type] = names;
-      else aliases[type] = names[0];
-    }
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
@@ -355,34 +348,23 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       interpretAlgorithm(body, input, domain)
     );
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const chosen = {
-      ...Object.fromEntries(
-        Object.entries(componentChoice).map(([name, { options }]) => [name, options])
-      ),
-      ...drawn
-    };
-    // Every view of a type is also its renderer, drawing the nodes that show its values.
-    const typeViews = Object.keys({ ...drawn, ...aliases }).concat(
-      Object.keys(componentChoice).filter((name) => definesType(domain, name))
+    const chosen = Object.fromEntries(
+      Object.entries(componentChoice).map(([name, { options }]) => [name, options])
     );
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}`,
-        [...props, ...Object.keys(drawn)],
+        props,
+        // A design value named after a type is also its renderer, drawing the nodes showing its values.
         [...renderers, ...typeViews],
-        chosen,
-        aliases
+        chosen
       ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
-    const viewChoices = {
-      ...chosen,
-      ...Object.fromEntries(Object.entries(aliases).map(([type, name]) => [type, [name]]))
-    };
     const { probes, problems: probeProblems } = componentProbes(
       found.components,
       components,
-      viewChoices,
+      chosen,
       domain,
       master
     );
@@ -392,7 +374,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
       ),
       stateNames,
-      new Set([...Object.keys(components), ...Object.keys(viewChoices)]),
+      new Set([...Object.keys(components), ...Object.keys(chosen)]),
       domain,
       master
     );
@@ -413,7 +395,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       atoms,
       components: probes,
       placements,
-      ...(Object.keys(drawn).length ? { views: drawn } : {}),
       ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
     };
@@ -437,19 +418,15 @@ export async function bundlePresentation(
   seed: number
 ): Promise<SvelteBundle> {
   const { master } = prepared;
-  const components = prepared.components.map(({ name }) => name);
-  // Each type with several views draws one, as a design value named after the type; after the
-  // authored ones, and keyed by name like every draw, so they never change an authored draw.
-  const views = Object.entries(prepared.views ?? {})
-    .map(([type, names]) => `\nconst ${type} = pick([${names.join(', ')}]);`)
-    .join('');
   const parameters = prepared.design
     ? interpretBlock(prepared.source, prepared.design, (body) =>
-        interpretDesign(`${body}${views}`, seed, components)
+        interpretDesign(
+          body,
+          seed,
+          prepared.components.map(({ name }) => name)
+        )
       )
-    : views
-      ? interpretDesign(views, seed, components)
-      : {};
+    : {};
   // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).
   if (parameters.defaults !== undefined)
     throw new InvalidSvelteSourceError(
@@ -555,8 +532,7 @@ function withGeneratedScripts(
   source: string,
   props: readonly string[],
   renderers: readonly string[],
-  choices: Record<string, string[]>,
-  aliases: Record<string, string> = {}
+  choices: Record<string, string[]>
 ): string {
   // A design value that chooses a component arrives as the component's name, and the view uses
   // the component itself under the value's name.
@@ -572,17 +548,13 @@ function withGeneratedScripts(
         `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]);`
     )
     .join(' ');
-  // A type with one view renders it under the type's name.
-  const aliased = Object.entries(aliases)
-    .map(([type, name]) => `const ${type} = ${name};`)
-    .join(' ');
-  // Type renderers are the view's own top-level snippets, or the views drawn for a type, which its
-  // script may refer to; getters, so a drawn view is read when a node renders.
+  // Type renderers are the view's own top-level snippets, or the views design values choose for a
+  // type, which its script may refer to; getters, so a drawn view is read when a node renders.
   const registration = renderers.length
     ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.map((name) => `get ${name}() { return ${name}; }`).join(', ')} });`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${aliased} ${registration}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -1169,4 +1141,23 @@ function frameSettings(value: unknown): FrameSettings {
     ...(constraints ? { constraints } : {}),
     ...(layoutSeed !== undefined ? { layoutSeed: layoutSeed as number } : {})
   };
+}
+
+/** The names {@render} tags call, as in {@render Int(value)}, and where each tag starts. */
+function renderedNames(markup: unknown): { name: string; start: number }[] {
+  const names: { name: string; start: number }[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as {
+      type?: string;
+      start?: number;
+      expression?: { callee?: { name?: string } };
+    };
+    const name = part.type === 'RenderTag' ? part.expression?.callee?.name : undefined;
+    if (name) names.push({ name, start: part.start ?? 0 });
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child);
+  };
+  walk(markup);
+  return names;
 }

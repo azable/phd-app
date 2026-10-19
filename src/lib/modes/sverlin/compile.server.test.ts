@@ -481,15 +481,15 @@ describe('typed view components', () => {
       `${domain}${algorithm}${design ? `<script lang="sverlin" design>${design}</script>` : ''}${view}`
     );
 
-  it('reads typed snippets as views of one type, and draws one of a type’s views per presentation', async () => {
+  it('reads typed snippets as views of one type, and draws the view a design value named after the type picks', async () => {
     const prepared = component(
-      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int, node)}<Node {value} weight="bold" {...node} />{/snippet}{@render Int(i)}<Node value={i} type="Int" />'
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int, node)}<Node {value} weight="bold" {...node} />{/snippet}{@render Int(i)}<Node value={i} type="Int" />',
+      'const Int = pick([IntText, IntBold]);'
     );
     expect(prepared.components).toEqual([
       { name: 'IntText', cases: [1, 3] },
       { name: 'IntBold', cases: [1, 3] }
     ]);
-    expect(prepared.views).toEqual({ Int: ['IntText', 'IntBold'] });
     expect(prepared.component).toContain('__component');
     const drawn = await Promise.all(
       [1, 2, 3, 4, 5, 6, 7, 8].map(
@@ -503,17 +503,22 @@ describe('typed view components', () => {
     const views =
       '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int)}<Node {value} weight="bold" />{/snippet}';
     const fixed = component(`${views}{@render Int(i)}`, 'const Int = IntBold;');
-    expect(fixed.views).toBeUndefined();
     expect((await bundlePresentation(fixed, 1)).parameters.Int).toBe('IntBold');
     const chosen = component(`${views}{@render Look(i)}`, 'const Look = pick([IntText, IntBold]);');
     expect(['IntText', 'IntBold']).toContain((await bundlePresentation(chosen, 1)).parameters.Look);
   });
 
-  it('orders components after those they render, and leaves views that wrap their own type out of its choice', () => {
+  it('draws no view a design value does not pick, and orders components after those they render', async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script><script lang="sverlin" design>const Int = pick([Plain, Bold]);</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
     );
-    expect(prepared.views).toEqual({ Int: ['Plain', 'Bold'] });
+    // Cell views Int too, but only Plain and Bold are picked.
+    const drawn = await Promise.all(
+      [1, 2, 3, 4, 5, 6, 7, 8].map(
+        async (seed) => (await bundlePresentation(prepared, seed)).parameters.Int
+      )
+    );
+    expect(new Set(drawn)).toEqual(new Set(['Plain', 'Bold']));
     expect(prepared.components.map(({ name }) => name)).toEqual([
       'Plain',
       'Bold',
@@ -545,7 +550,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield "Start"; i = Index(0); yield "A";</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield "Start"; i = Index(0); yield "A";</script><script lang="sverlin" design>const Int = IntView;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
     expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
@@ -578,6 +583,11 @@ describe('typed view components', () => {
   });
 
   it.each([
+    [
+      'rendering a type nothing draws',
+      () => component('{#snippet IntText(value: Int)}<Node {value} />{/snippet}{@render Int(i)}'),
+      /Int is a type, and nothing draws it: choose its view in the design block, as in const Int = pick\(\[IntText\]\);/
+    ],
     [
       'reading an algorithm variable',
       () => component('{#snippet Cell(value: Int)}<Node value={i} />{/snippet}'),
