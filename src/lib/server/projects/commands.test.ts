@@ -1591,7 +1591,7 @@ function generation(
         ? undefined
         : sourceArtifactContent.startsWith('broken')
           ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-          : `<script lang="sverlin">yield "Start";</script><Node>${sourceArtifactContent}</Node>`,
+          : `<script lang="sverlin">yield;</script><Node>${sourceArtifactContent}</Node>`,
     ...(recovery ? { recovery } : {}),
     prompt: {
       initialPrompt: 'test prompt',

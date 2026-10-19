@@ -13,9 +13,9 @@ import { drawDefaults as drawWith } from './library/node/defaults';
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin">yield "First"; yield "Second";</script><Node>{step}</Node>'
+      '<script lang="sverlin">yield; yield;</script><Node>{step}</Node>'
     );
-    expect(result.labels).toEqual(['First', 'Second']);
+    expect(result.labels).toEqual(['Step 1', 'Step 2']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
   });
@@ -38,21 +38,14 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('derives master steps from yield and varies only the design between seeds', async () => {
-    const master = [
-      'Start',
-      'Compare index 0',
-      'Compare index 1',
-      'Compare index 2',
-      'Found 2 at index 3'
-    ];
     const prepared = prepareSvelteComponent(linearSearchSource);
-    expect(prepared.master.map(({ label }) => label)).toEqual(master);
+    expect(prepared.master.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
     const bundles = await Promise.all(
       Array.from({ length: 12 }, (_, seed) => bundlePresentation(prepared, seed + 1))
     );
     for (const bundle of bundles) {
-      expect(bundle.masterLabels).toEqual(master);
-      expect(bundle.labels).toEqual(master);
+      expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
+      expect(bundle.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5']);
       expect(bundle.masterSteps).toEqual([0, 1, 2, 3, 4]);
       expect(['i', 'index', '↑']).toContain(bundle.parameters.pointerName);
     }
@@ -60,14 +53,14 @@ describe('single-component Svelte compilation', () => {
       new Set([true, false])
     );
     expect(bundles[0].javascript).toContain('[3,8,5,2,7]');
-    expect(bundles[0].javascript).not.toContain('yield `Compare');
+    expect(bundles[0].javascript).not.toContain('yield');
     const again = await bundlePresentation(prepared, 1);
     expect(again.parameters).toEqual(bundles[0].parameters);
   });
 
   it('reports design errors at their authored position and rejects name clashes', async () => {
     const design =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\nlet x = Int(1);\nyield "A";\n</script>\n<script lang="sverlin" design>\nconst size = int(4, 1);\n</script>';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\nlet x = Int(1);\nyield;\n</script>\n<script lang="sverlin" design>\nconst size = int(4, 1);\n</script>';
     await expect(compileSvelteComponent(design)).rejects.toMatchObject({
       code: 'algorithm_error',
       line: 6,
@@ -75,7 +68,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">let x = Int(1); yield "A";</script><script lang="sverlin" design>const x = 2;</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">let x = Int(1); yield;</script><script lang="sverlin" design>const x = 2;</script>'
       )
     ).rejects.toThrow('"x" is defined in the design block');
     await expect(
@@ -86,7 +79,7 @@ describe('single-component Svelte compilation', () => {
   it('checks every value a design constant or condition can give a prop, for any seed', async () => {
     const view = (design: string, markup: string) =>
       compileSvelteComponent(
-        `<script lang="sverlin">yield "A";</script>\n<script lang="sverlin" design>${design}</script>\n${markup}`
+        `<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>${design}</script>\n${markup}`
       );
     await expect(
       view("const cell = pick(['box', 'circle']);", '<Node shape={cell} value={1} />')
@@ -113,7 +106,7 @@ describe('single-component Svelte compilation', () => {
 
   it('reports the view’s problems together with a block’s, in source order', async () => {
     const failure = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let i = 0;\n  yield "A";\n</script>\n<Node shape="circle">v1</Node>\n<Node class="x" />'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let i = 0;\n  yield;\n</script>\n<Node shape="circle">v1</Node>\n<Node class="x" />'
     ).catch((cause: InvalidSvelteSourceError) => cause);
     expect(failure).toMatchObject({ line: 3, message: expect.stringContaining('plain number 0') });
     expect((failure as InvalidSvelteSourceError).others).toMatchObject([
@@ -125,17 +118,17 @@ describe('single-component Svelte compilation', () => {
   it('places name clashes and invalid design values at their declarations', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let x = Int(1);\n  yield "A";\n</script>\n<script lang="sverlin" design>\n  const x = 2;\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let x = Int(1);\n  yield;\n</script>\n<script lang="sverlin" design>\n  const x = 2;\n</script>'
       )
     ).rejects.toMatchObject({ code: 'name_clash', line: 7, column: 3 });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let $x = Int(1);\n  yield "A";\n</script>\n<script lang="sverlin" design>\n  const $xy = 1;\n  const $x = 2;\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let $x = Int(1);\n  yield;\n</script>\n<script lang="sverlin" design>\n  const $xy = 1;\n  const $x = 2;\n</script>'
       )
     ).rejects.toMatchObject({ code: 'name_clash', line: 8, column: 3 });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n<script lang="sverlin" design>\n  const frame = { spread: "row" };\n</script>'
+        '<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>\n  const frame = { spread: "row" };\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'design_value',
@@ -144,7 +137,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n\n<script module>import x from "y";</script>'
+        '<script lang="sverlin">yield;</script>\n\n<script module>import x from "y";</script>'
       )
     ).rejects.toMatchObject({ line: 3 });
   });
@@ -152,7 +145,7 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n  yield "A";\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n  yield;\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -165,7 +158,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let i = 0;\n  yield "A";\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let i = 0;\n  yield;\n</script>'
       )
     ).rejects.toMatchObject({
       line: 3,
@@ -176,7 +169,7 @@ describe('single-component Svelte compilation', () => {
 
   it('reports algorithm errors at their authored line and column', async () => {
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\n  let x = Int(1);\n  yield "A";\n  x = missing;\n</script>\n<Node>{x}</Node>';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\n  let x = Int(1);\n  yield;\n  x = missing;\n</script>\n<Node>{x}</Node>';
     await expect(compileSvelteComponent(source)).rejects.toMatchObject({
       name: 'InvalidSvelteSourceError',
       code: 'algorithm_error',
@@ -188,7 +181,7 @@ describe('single-component Svelte compilation', () => {
 
   it('keeps Svelte error positions after removing the algorithm block', async () => {
     await expect(
-      compileSvelteComponent('<script lang="sverlin">\nyield "A";\n</script>\n\n{#if}')
+      compileSvelteComponent('<script lang="sverlin">\nyield;\n</script>\n\n{#if}')
     ).rejects.toMatchObject({ line: 5 });
   });
 
@@ -198,7 +191,7 @@ describe('single-component Svelte compilation', () => {
     );
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script><script lang="sverlin">yield "B";</script>'
+        '<script lang="sverlin">yield;</script><script lang="sverlin">yield;</script>'
       )
     ).rejects.toThrow('only one algorithm block');
   });
@@ -208,24 +201,24 @@ describe('single-component Svelte compilation', () => {
     expect(result.javascript).toContain('sv-node');
     expect(result.javascript).toContain('sv-node');
     const withoutModuleScript = await compileSvelteComponent(
-      '<script lang="sverlin">yield "Start";</script><Node>x</Node>'
+      '<script lang="sverlin">yield;</script><Node>x</Node>'
     );
-    expect(withoutModuleScript.labels).toEqual(['Start']);
+    expect(withoutModuleScript.labels).toEqual(['Step 1']);
     expect(withoutModuleScript.javascript).toContain('sv-node');
   });
 
   it('puts every recorded and design value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">let total = Int(0); yield "Start"; for (const v of values) total += v; yield "Summed";</script>\n<script lang="sverlin" design>const accent = pick(["red"]);</script>\n<Node layout="column">{@const doubled = total * 2}<Node color={accent}>{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">let total = Int(0); yield; for (const v of values) total += v; yield;</script>\n<script lang="sverlin" design>const accent = pick(["red"]);</script>\n<Node layout="column">{@const doubled = total * 2}<Node color={accent}>{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
-    expect(result.labels).toEqual(['Start', 'Summed']);
+    expect(result.labels).toEqual(['Step 1', 'Step 2']);
     expect(result.parameters).toMatchObject({ accent: 'red' });
   });
 
   it('rejects props a library component does not take, and written values it cannot use', async () => {
     const view = (markup: string) =>
-      compileSvelteComponent(`<script lang="sverlin">yield "A";</script>\n${markup}`);
+      compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);
     await expect(view('<Node shape="circle">v1</Node>')).rejects.toMatchObject({
       code: 'invalid_prop',
       line: 2,
@@ -252,7 +245,7 @@ describe('single-component Svelte compilation', () => {
 
   it('draws views only with Node and Link, styled by their props', async () => {
     const view = (markup: string) =>
-      compileSvelteComponent(`<script lang="sverlin">yield "A";</script>\n${markup}`);
+      compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);
     await expect(view('<Node>Hi</Node>\n<style>div { color: red; }</style>')).rejects.toMatchObject(
       { code: 'view_style', line: 3, message: expect.stringContaining('<style>') }
     );
@@ -286,7 +279,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects view scripts and values that shadow library components', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n\n<script>const x = 1;</script>\n<Node>{x}</Node>'
+        '<script lang="sverlin">yield;</script>\n\n<script>const x = 1;</script>\n<Node>{x}</Node>'
       )
     ).rejects.toMatchObject({
       code: 'view_script',
@@ -295,31 +288,29 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script><script module>const x = 1;</script>'
+        '<script lang="sverlin">yield;</script><script module>const x = 1;</script>'
       )
     ).rejects.toThrow('Views cannot have their own <script>');
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n<script lang="sverlin" inputs>const x = 1;</script>'
+        '<script lang="sverlin">yield;</script>\n<script lang="sverlin" inputs>const x = 1;</script>'
       )
     ).rejects.toMatchObject({ code: 'sverlin_block', line: 2 });
     await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin">const Node = 1; yield "A";</script><Node>x</Node>'
-      )
+      compileSvelteComponent('<script lang="sverlin">const Node = 1; yield;</script><Node>x</Node>')
     ).rejects.toThrow('"Node" names a library component');
   });
 
   it('renders nested arrays as nested nodes without an item snippet', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield "A";</script><Node layout="column"><Node items={grid} layout="column" nested="row" /><Node items={[1, 2, 3, 4]} layout="grid" columns={2} /></Node>'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield;</script><Node layout="column"><Node items={grid} layout="column" nested="row" /><Node items={[1, 2, 3, 4]} layout="grid" columns={2} /></Node>'
     );
     expect(result.javascript).toContain('sv-node');
   });
 
   it('embeds atomic types and registers renderer snippets named after types', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield "A";</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node items={people} />'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node items={people} />'
     );
     expect(result.javascript).toContain('people[1]');
     expect(result.javascript).toContain('sverlin:renderers');
@@ -328,7 +319,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects invalid domain blocks, renderers, and clashing names', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n<script lang="sverlin" domain>\nconst A = type(Integer);\n</script>'
+        '<script lang="sverlin">yield;</script>\n<script lang="sverlin" domain>\nconst A = type(Integer);\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -337,7 +328,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield "A";</script>\n{#snippet Int(value, node, extra)}{value}{/snippet}'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>\n{#snippet Int(value, node, extra)}{value}{/snippet}'
       )
     ).rejects.toMatchObject({
       code: 'type_renderer',
@@ -346,18 +337,18 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Text = type(["a"]);</script><script lang="sverlin">const Text = 1; yield "A";</script>'
+        '<script lang="sverlin" domain>const Text = type(["a"]);</script><script lang="sverlin">const Text = 1; yield;</script>'
       )
     ).rejects.toThrow('"Text" names a type');
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Node = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield "A";</script>'
+        '<script lang="sverlin" domain>const Node = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>'
       )
     ).rejects.toThrow('"Node" names a library component');
   });
 
   it('records drawn defaults with the design values, which cannot opt out of them', async () => {
-    const source = '<script lang="sverlin">yield "A";</script><Node value={1} />';
+    const source = '<script lang="sverlin">yield;</script><Node value={1} />';
     const drawn = await compileSvelteComponent(source, 3);
     expect(drawn.parameters.__defaults).toEqual(drawWith((key) => keyedRandom(3, key)));
     await expect(
@@ -368,7 +359,7 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('resolves the page frame from the design value frame', async () => {
-    const algorithm = '<script lang="sverlin">yield "A";</script><Node>a</Node>';
+    const algorithm = '<script lang="sverlin">yield;</script><Node>a</Node>';
     const design = (body: string) => `${algorithm}<script lang="sverlin" design>${body}</script>`;
     await expect(compileSvelteComponent(design("const frame = '4:3';"))).resolves.toBeDefined();
     await expect(
@@ -399,7 +390,7 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
-    const algorithm = '<script lang="sverlin">yield "A";</script>';
+    const algorithm = '<script lang="sverlin">yield;</script>';
     const nested = prepareSvelteComponent(
       `${algorithm}\n<Node layout="free">\n  <Node key="a">a</Node><Node key="b">b</Node>\n  {#if true}<Link from="a" to="b" />{/if}\n</Node>`
     );
@@ -416,7 +407,7 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('tags every Node with its source position and reserves __ props', async () => {
-    const algorithm = '<script lang="sverlin">yield "A";</script>';
+    const algorithm = '<script lang="sverlin">yield;</script>';
     const { component } = prepareSvelteComponent(
       `${algorithm}\n<Node layout="column">\n  {#if true}<Node value={1} />{/if}\n</Node>`
     );
@@ -438,7 +429,7 @@ describe('single-component Svelte compilation', () => {
     async (path) => {
       await expect(
         compileSvelteComponent(
-          `<script lang="sverlin">yield "A";</script><Node>{require(${JSON.stringify(path)})}</Node>`
+          `<script lang="sverlin">yield;</script><Node>{require(${JSON.stringify(path)})}</Node>`
         )
       ).rejects.toMatchObject({
         name: 'InvalidSvelteSourceError',
@@ -449,17 +440,18 @@ describe('single-component Svelte compilation', () => {
 
   it('keeps authored line numbers after prelude injection', async () => {
     await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin">yield "A";</script>\n<Node>\n{$state(1)}</Node>'
-      )
+      compileSvelteComponent('<script lang="sverlin">yield;</script>\n<Node>\n{$state(1)}</Node>')
     ).rejects.toMatchObject({ line: 3, column: 2 });
   });
 
-  it('numbers repeated step labels so stored playback steps stay distinct', async () => {
-    const result = await compileSvelteComponent(
-      '<script lang="sverlin">yield "Same"; yield "Same";</script><Node>Hi</Node>'
-    );
-    expect(result.labels).toEqual(['Same', 'Same (2)']);
+  it('identifies the master trace by its recorded states, whatever the view', async () => {
+    const source = (values: string, view: string) =>
+      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">yield; values.reverse(); yield;</script>${view}`;
+    const signature = async (values: string, view: string) =>
+      (await compileSvelteComponent(source(values, view))).masterSignature;
+    const first = await signature('[1, 2]', '<Node items={values} />');
+    expect(await signature('[1, 2]', '<Node layout="column" items={values} />')).toBe(first);
+    expect(await signature('[2, 1]', '<Node items={values} />')).not.toBe(first);
   });
 
   it('retains line and column for assistant source repair', async () => {
@@ -475,7 +467,7 @@ describe('single-component Svelte compilation', () => {
 describe('typed view components', () => {
   const domain =
     '<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';
-  const algorithm = '<script lang="sverlin">let i = Int(1); yield "A";</script>';
+  const algorithm = '<script lang="sverlin">let i = Int(1); yield;</script>';
   const component = (view: string, design = '') =>
     prepareSvelteComponent(
       `${domain}${algorithm}${design ? `<script lang="sverlin" design>${design}</script>` : ''}${view}`
@@ -510,7 +502,7 @@ describe('typed view components', () => {
 
   it('draws no view a design value does not pick, and orders components after those they render', async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script><script lang="sverlin" design>const Int = pick([Plain, Bold]);</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield; values = Row([1, 3, 1]); yield;</script><script lang="sverlin" design>const Int = pick([Plain, Bold]);</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
     );
     // Cell views Int too, but only Plain and Bold are picked.
     const drawn = await Promise.all(
@@ -540,7 +532,7 @@ describe('typed view components', () => {
 
   it('draws a record with one value for each field passed only to a view', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin">yield "A";</script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{@render VertexView(edge.from)}{@render VertexView(edge.to)}<Node value={edge.weight} /></Node>{/snippet}`
+      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin">yield;</script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{@render VertexView(edge.from)}{@render VertexView(edge.to)}<Node value={edge.weight} /></Node>{/snippet}`
     );
     // from and to go to VertexView; weight is shown, so it takes each of its values.
     expect(prepared.components.find(({ name }) => name === 'EdgeView')?.cases).toEqual(
@@ -550,7 +542,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield "Start"; i = Index(0); yield "A";</script><script lang="sverlin" design>const Int = IntView;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield; i = Index(0); yield;</script><script lang="sverlin" design>const Int = IntView;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
     expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
@@ -558,14 +550,14 @@ describe('typed view components', () => {
 
   it('measures a position with every place in its collection, and either end', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">let i = Position(-1); yield "Start"; i = Position(0); yield "A";</script><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">let i = Position(-1); yield; i = Position(0); yield;</script><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3, 4] }]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">let r = Ratio(0.125); let g = Grid([[1, 2], [3]]); yield "A";</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node items={grid} />{/snippet}{@render R(r)}`
+      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">let r = Ratio(0.125); let g = Grid([[1, 2], [3]]); yield;</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node items={grid} />{/snippet}{@render R(r)}`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -643,7 +635,7 @@ describe('typed view components', () => {
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
-          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin">yield "A";</script>{#snippet F(flags: Flags)}<Node>{flags.a}</Node>{/snippet}`
+          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin">yield;</script>{#snippet F(flags: Flags)}<Node>{flags.a}</Node>{/snippet}`
         ),
       /F would be drawn with too many values of Flags/
     ]

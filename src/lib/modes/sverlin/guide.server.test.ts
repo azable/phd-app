@@ -28,7 +28,7 @@ describe('Sverlin language guide and assistant instructions', () => {
     expect(examples.length).toBeGreaterThan(0);
     for (const example of examples) {
       const result = await compileSvelteComponent(example);
-      expect(result.masterLabels.length).toBeGreaterThan(0);
+      expect(result.labels.length).toBeGreaterThan(0);
     }
   });
 

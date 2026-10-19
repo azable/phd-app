@@ -23,17 +23,17 @@ describe('algorithm interpretation', () => {
       const values = Ints([3, 8, 5]);
       let i = Int(-1);
       let found = Flag(false);
-      yield 'Start';
+      yield;
       for (i = Int(0); i < values.length; i++) {
-        yield \`Compare \${values[i]}\`;
+        yield;
         if (values[i] === 8) {
           found = Flag(true);
-          yield 'Found';
+          yield;
           break;
         }
       }
     `);
-    expect(trace.map(({ label }) => label)).toEqual(['Start', 'Compare 3', 'Compare 8', 'Found']);
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 1]);
     expect(trace[0].state).toEqual({ values: [3, 8, 5], i: -1, found: false });
     expect(trace[3].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
   });
@@ -41,9 +41,9 @@ describe('algorithm interpretation', () => {
   it('snapshots state so later mutations do not change earlier steps', () => {
     const trace = interpretAlgorithm(`
       const a = Ints([2, 1]);
-      yield 'Before';
+      yield;
       const t = a[0]; a[0] = a[1]; a[1] = t;
-      yield 'After';
+      yield;
     `);
     expect(trace[0].state.a).toEqual([2, 1]);
     expect(trace[1].state.a).toEqual([1, 2]);
@@ -62,76 +62,82 @@ describe('algorithm interpretation', () => {
       let i = Int(0);
       const a = Ints([0, 0]);
       a[i++] += 5;
-      yield stack.join('-');
+      const joined = Int(stack.join('-').length);
+      yield;
       return;
-      yield 'Unreachable';
+      yield;
     `);
     expect(trace.map(plain)).toEqual([
       {
-        label: '2-3-4',
-        state: { stack: [2, 3, 4], point: { x: 2, y: 2 }, total: 29, k: 3, i: 1, a: [5, 0] },
+        state: {
+          stack: [2, 3, 4],
+          point: { x: 2, y: 2 },
+          total: 29,
+          k: 3,
+          i: 1,
+          a: [5, 0],
+          joined: 5
+        },
         types: undefined
       }
     ]);
   });
 
   it.each([
-    ['functions', 'function f() {} yield "A";', /Function Declaration is not supported/],
-    ['arrow functions', 'const f = () => 1; yield "A";', /Arrow Function Expression/],
-    ['global access', 'const w = globalThis; yield "A";', /"globalThis" is not defined/],
-    [
-      'constructor escapes',
-      'const a = Ints([]); const c = a.constructor; yield "A";',
-      /not allowed/
-    ],
+    ['functions', 'function f() {} yield;', /Function Declaration is not supported/],
+    ['arrow functions', 'const f = () => 1; yield;', /Arrow Function Expression/],
+    ['global access', 'const w = globalThis; yield;', /"globalThis" is not defined/],
+    ['constructor escapes', 'const a = Ints([]); const c = a.constructor; yield;', /not allowed/],
     [
       'prototype keys',
-      'const o = Point({ x: 1, y: 2 }); o["__proto__"] = 1; yield "A";',
+      'const o = Point({ x: 1, y: 2 }); o["__proto__"] = 1; yield;',
       /not allowed/
     ],
-    ['host methods', 'const s = Text("x"); yield s.repeat(3);', /only available on arrays/],
-    ['new', 'const d = new Date(); yield "A";', /New Expression/],
-    ['loose equality', 'yield 1 == 1 ? "A" : "B";', /Use ===/],
-    ['reserved names', 'let step = Int(0); yield "A";', /reserved/],
-    ['undeclared assignment', 'x = Int(1); yield "A";', /must be declared/],
+    [
+      'host methods',
+      'const s = Text("x"); const t = Text(s.repeat(3)); yield;',
+      /only available on arrays/
+    ],
+    ['new', 'const d = new Date(); yield;', /New Expression/],
+    ['loose equality', 'const f = Flag(1 == 1); yield;', /Use ===/],
+    ['reserved names', 'let step = Int(0); yield;', /reserved/],
+    ['undeclared assignment', 'x = Int(1); yield;', /must be declared/],
     ['no steps', 'let x = Int(1);', /at least one step/],
-    ['non-string labels', 'yield 3;', /non-empty strings/],
-    ['nested yield', 'const a = Ints([yield "A"]);', /statement of its own/],
+    ['step labels', 'yield "Start";', /yield takes nothing/],
+    ['nested yield', 'const a = Ints([yield]); yield;', /statement of its own/],
     [
       'object arithmetic',
-      'const o = Point({ x: 1, y: 2 }); yield "A" + (o - 1);',
+      'const o = Point({ x: 1, y: 2 }); const n = Int(o - 1); yield;',
       /Expected a number/
     ],
-    ['plain arrays', 'const a = [Int(1)]; yield "A";', /Arrays are made by a collection type/],
-    ['plain objects', 'const o = { x: Int(1) }; yield "A";', /Objects are made by a record type/]
+    ['plain arrays', 'const a = [Int(1)]; yield;', /Arrays are made by a collection type/],
+    ['plain objects', 'const o = { x: Int(1) }; yield;', /Objects are made by a record type/]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretAlgorithm(body)).toThrow(message);
   });
 
   it('stops endless loops and oversized state', () => {
-    expect(() => interpretAlgorithm('while (true) {} yield "A";')).toThrow(/operations/);
+    expect(() => interpretAlgorithm('while (true) {} yield;')).toThrow(/operations/);
     expect(() =>
       interpretAlgorithm(
-        `let a = Ints([1]); while (a.length < 200) a.push(1); yield a.join("${'-'.repeat(60)}");`
+        `let a = Ints([1]); while (a.length < 200) a.push(1); const n = Int(a.join("${'-'.repeat(60)}").length); yield;`
       )
     ).toThrow(/characters/);
     expect(() =>
-      interpretAlgorithm('let a = Ints([1]); while (true) { a = Ints([...a, ...a]); } yield "A";')
+      interpretAlgorithm('let a = Ints([1]); while (true) { a = Ints([...a, ...a]); } yield;')
     ).toThrow(/entries/);
     expect(() =>
       interpretAlgorithm(
-        'let a = Ints([1]); for (let i = Int(0); i < 13; i++) a = Ints([...a, ...a]); for (let j = Int(0); j < 30; j++) yield `S${j}`;'
+        'let a = Ints([1]); for (let i = Int(0); i < 13; i++) a = Ints([...a, ...a]); for (let j = Int(0); j < 30; j++) yield;'
       )
     ).toThrow(/too large/);
     expect(() =>
-      interpretAlgorithm(
-        `for (let i = Int(0); i <= ${algorithmLimits.maximumSteps}; i++) yield \`S\${i}\`;`
-      )
+      interpretAlgorithm(`for (let i = Int(0); i <= ${algorithmLimits.maximumSteps}; i++) yield;`)
     ).toThrow(/more than/);
   });
 
   it('reports offsets into the algorithm body', () => {
-    const body = 'let x = Int(1);\nyield "A";\nx = y;';
+    const body = 'let x = Int(1);\nyield;\nx = y;';
     expect(() => interpretAlgorithm(body)).toThrow(
       expect.objectContaining({ offset: body.indexOf('y;') })
     );
@@ -145,7 +151,7 @@ describe('input, design, and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
     const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
-      'yield "Start"; values.reverse(); let swapped = Flag(true); yield "Swapped";',
+      'yield; values.reverse(); let swapped = Flag(true); yield;',
       input
     );
     expect(trace.map(({ state }) => state)).toEqual([
@@ -153,10 +159,10 @@ describe('input, design, and step selection', () => {
       { values: [1, 2], label: 'pair', swapped: true }
     ]);
     expect(input.state.values).toEqual([2, 1]);
-    expect(() => interpretAlgorithm('let values = Ints([]); yield "A";', input)).toThrow(
+    expect(() => interpretAlgorithm('let values = Ints([]); yield;', input)).toThrow(
       /already declared here or in the input/
     );
-    expect(() => interpretInput('const x = Int(1); yield "A";')).toThrow(/algorithm block/);
+    expect(() => interpretInput('const x = Int(1); yield;')).toThrow(/algorithm block/);
   });
 
   it('draws design values deterministically from the seed', () => {
@@ -175,11 +181,10 @@ describe('input, design, and step selection', () => {
   });
 
   it.each([
-    ['draws outside the design block', () => interpretAlgorithm('const a = pick([1]); yield "A";')],
+    ['draws outside the design block', () => interpretAlgorithm('const a = pick([1]); yield;')],
     ['draws not assigned to a top-level const', () => interpretDesign('let a = pick([1]);', 1)],
     ['draws inside expressions', () => interpretDesign('const a = pick([1]) + 1;', 1)],
     ['draws inside blocks', () => interpretDesign('if (true) { const a = int(1, 2); }', 1)],
-    ['removed optional yields', () => interpretAlgorithm('yield optional("x");')],
     ['unknown functions', () => interpretDesign('const a = shuffle([1]);', 1)]
   ])('rejects %s', (_name, run) => {
     expect(run).toThrow(/design draw|not available/);
@@ -224,14 +229,6 @@ describe('input, design, and step selection', () => {
     expect(() => interpretDesign('const a = int(1.5, 3);', 1)).toThrow(/integers/);
     expect(() => interpretDesign('const a = pick([]);', 1)).toThrow(/non-empty array/);
   });
-
-  it('numbers a repeated step label by its occurrence', () => {
-    expect(
-      interpretAlgorithm(
-        'for (let i = Int(0); i < 3; i++) yield "Compare"; yield "Compare (2)";'
-      ).map(({ label }) => label)
-    ).toEqual(['Compare', 'Compare (2)', 'Compare (3)', 'Compare (2) (2)']);
-  });
 });
 
 describe('domain types', () => {
@@ -250,46 +247,44 @@ describe('domain types', () => {
   });
 
   it('rejects plain values the algorithm stores, at the statement that stores them', () => {
-    expect(() => interpretAlgorithm('let i = 0; yield "A";')).toThrow(
-      /i would be the plain number 0/
-    );
-    expect(() => interpretAlgorithm('const s = Ints([]); s.push("x"); yield "A";')).toThrow(
+    expect(() => interpretAlgorithm('let i = 0; yield;')).toThrow(/i would be the plain number 0/);
+    expect(() => interpretAlgorithm('const s = Ints([]); s.push("x"); yield;')).toThrow(
       /an item added by s\.push\(\): Int values must be whole numbers, not "x"/
     );
     // Plain literals in expressions are fine when the result keeps its type.
-    expect(
-      interpretAlgorithm('let i = Int(0); i = i + 1; i += 2; i++; yield "A";')[0].types
-    ).toEqual({ i: 'Int' });
+    expect(interpretAlgorithm('let i = Int(0); i = i + 1; i += 2; i++; yield;')[0].types).toEqual({
+      i: 'Int'
+    });
   });
 
   it('keeps each variable the type it was made with, converting what is assigned to it', () => {
     const step = interpretAlgorithm(
-      'const d = Ints([0, 1]); let n = Int(0); n = d.length; let found = Flag(false); found = 1 < 2; yield "A";'
+      'const d = Ints([0, 1]); let n = Int(0); n = d.length; let found = Flag(false); found = 1 < 2; yield;'
     )[0];
     expect(step.state).toMatchObject({ n: 2, found: true });
     expect(step.types).toMatchObject({ n: 'Int', found: 'Flag' });
-    const body = 'let found = Flag(false);\nyield "A";\nfound = Text("yes");';
+    const body = 'let found = Flag(false);\nyield;\nfound = Text("yes");';
     expect(() => interpretAlgorithm(body)).toThrow(
       expect.objectContaining({
         offset: body.indexOf('found = Text'),
         message: expect.stringMatching(/^found must be a Flag, not a Text/u)
       })
     );
-    expect(() => interpretAlgorithm('let h = Int(7); h = h / Int(2); yield "A";')).toThrow(
+    expect(() => interpretAlgorithm('let h = Int(7); h = h / Int(2); yield;')).toThrow(
       /h: Int values must be whole numbers, not 3\.5/
     );
   });
 
   it('has no null: every place holds a value of its type', () => {
     expect(() => interpretInput('const none = null;')).toThrow(/There is no null/);
-    expect(() => interpretAlgorithm('let x; yield "A";')).toThrow(/Give x a starting value/);
-    expect(() => interpretAlgorithm('const s = Ints([]); const x = s.pop(); yield "A";')).toThrow(
+    expect(() => interpretAlgorithm('let x; yield;')).toThrow(/Give x a starting value/);
+    expect(() => interpretAlgorithm('const s = Ints([]); const x = s.pop(); yield;')).toThrow(
       /x would have no value: it was taken from an empty collection/
     );
     expect(() =>
-      interpretAlgorithm('const s = Ints([]); let x = Int(0); x = s.pop(); yield "A";')
+      interpretAlgorithm('const s = Ints([]); let x = Int(0); x = s.pop(); yield;')
     ).toThrow(/x would have no value.*an Int is needed here|x would have no value/);
-    expect(() => interpretAlgorithm('const x = undefined; yield "A";')).toThrow(
+    expect(() => interpretAlgorithm('const x = undefined; yield;')).toThrow(
       /"undefined" is not defined/
     );
   });

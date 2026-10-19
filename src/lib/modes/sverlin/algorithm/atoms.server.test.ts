@@ -95,7 +95,7 @@ describe('typed values', () => {
       'person.height': 'Height'
     });
     const trace = interpretAlgorithm(
-      'yield "Start"; const t = values[0]; values[0] = values[1]; values[1] = t; yield "Swapped";',
+      'yield; const t = values[0]; values[0] = values[1]; values[1] = t; yield;',
       input,
       domain
     );
@@ -104,11 +104,11 @@ describe('typed values', () => {
   });
 
   it('checks values when they are created', () => {
-    expect(() => last('const a = Int(3.5); yield "A";')).toThrow(/whole numbers/);
-    expect(() => last('const a = Height(-1); yield "A";')).toThrow(/at least 0/);
-    expect(() => last('const a = Suit("x"); yield "A";')).toThrow(/not a Suit/);
-    expect(() => last('const a = Bool(1); yield "A";')).toThrow(/true or false/);
-    expect(() => last('const a = Height(Suit("♠")); yield "A";')).toThrow(/cannot become/);
+    expect(() => last('const a = Int(3.5); yield;')).toThrow(/whole numbers/);
+    expect(() => last('const a = Height(-1); yield;')).toThrow(/at least 0/);
+    expect(() => last('const a = Suit("x"); yield;')).toThrow(/not a Suit/);
+    expect(() => last('const a = Bool(1); yield;')).toThrow(/true or false/);
+    expect(() => last('const a = Height(Suit("♠")); yield;')).toThrow(/cannot become/);
   });
 
   it('carries types through arithmetic and adopts the more specific type', () => {
@@ -121,7 +121,7 @@ describe('typed values', () => {
       let f = Int(1);
       f++;
       const g = -Weight(5);
-      yield 'Done';
+      yield;
     `);
     expect(step.state).toMatchObject({ a: 9, b: 3.5, c: 7.5, d: 155, e: 300, f: 2, g: -5 });
     // b and c are no longer whole, so they leave the integer type, and are kept as Real.
@@ -144,7 +144,7 @@ describe('typed values', () => {
     ['arithmetic on Bool', 'const a = Bool(true) + 1;', /cannot be used in arithmetic/],
     ['leaving a range', 'const a = Height(10) - 20;', /at least 0/]
   ])('rejects %s', (_name, statement, message) => {
-    expect(() => last(`${statement} yield "A";`)).toThrow(message);
+    expect(() => last(`${statement} yield;`)).toThrow(message);
   });
 
   it('compares, tests, and searches typed values by value', () => {
@@ -160,9 +160,8 @@ describe('typed values', () => {
       if (Bool(true)) count += 1;
       const name = Text('ab') + 'c';
       const length = Int(Text('abc').length);
-      yield \`Found \${target} at \${position}\`;
+      yield;
     `);
-    expect(step.label).toBe('Found 8 at 1');
     expect(step.state).toMatchObject({
       equal: true,
       plainEqual: true,
@@ -178,6 +177,6 @@ describe('typed values', () => {
 
   it('keeps constructors and type definitions in their blocks', () => {
     expect(() => interpretDesign('const a = Int(3);', 1)).toThrow(/Int\(\) is not available/);
-    expect(() => last('const A = type(Int); yield "A";')).toThrow(/belongs in the domain block/);
+    expect(() => last('const A = type(Int); yield;')).toThrow(/belongs in the domain block/);
   });
 });

@@ -66,9 +66,8 @@ export type TypeMap = Record<string, string>;
  */
 export type TypedState = { state: TraceState; types: TypeMap; declared?: Record<string, string> };
 
-/** One uniquely labelled step of the master trace that every presentation of a source shares. */
+/** One step of the master trace that every presentation of a source shares. */
 export type MasterStep = {
-  label: string;
   state: TraceState;
   types: TypeMap;
 };
@@ -276,7 +275,6 @@ class Interpreter {
   /** The record or collection type of every array and object an input or algorithm made. */
   readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
   readonly #trace: MasterStep[] = [];
-  readonly #labels = new Set<string>();
   #operations = 0;
   #traceValues = 0;
 
@@ -329,7 +327,7 @@ class Interpreter {
   run(): MasterStep[] {
     this.#execute();
     if (this.#trace.length === 0)
-      throw new AlgorithmError('The algorithm must yield at least one step, as in yield "Start";');
+      throw new AlgorithmError('The algorithm must yield at least one step, as in yield;');
     return this.#trace;
   }
 
@@ -690,7 +688,7 @@ class Interpreter {
         return 'normal';
       case 'ExpressionStatement':
         if (node.expression.type === 'YieldExpression') {
-          this.#yield(node.expression.argument ?? undefined, node, scope);
+          this.#yield(node);
         } else {
           this.#expression(node.expression, scope);
         }
@@ -792,22 +790,10 @@ class Interpreter {
     }
   }
 
-  #yield(argument: Expression | undefined, node: AnyNode, scope: Scope): void {
-    const label = unwrap(
-      argument === undefined ? `Step ${this.#trace.length + 1}` : this.#expression(argument, scope)
-    );
-    if (typeof label !== 'string' || !label.trim())
-      this.#fail(node, 'yield labels must be non-empty strings.');
-    // Labels identify steps, so a repeated one is numbered by its occurrence, as in "Shift (2)";
-    // every presentation runs the same algorithm, so the numbering is the same in each.
-    const trimmed = label.trim();
-    let unique = trimmed;
-    for (let occurrence = 2; this.#labels.has(unique); occurrence++)
-      unique = `${trimmed} (${occurrence})`;
+  #yield(node: AnyNode): void {
     if (this.#trace.length >= algorithmLimits.maximumSteps)
       this.#fail(node, `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`);
-    this.#labels.add(unique);
-    this.#trace.push({ label: unique, ...this.#state(node) });
+    this.#trace.push(this.#state(node));
   }
 
   /**

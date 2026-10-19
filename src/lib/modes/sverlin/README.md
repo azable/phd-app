@@ -17,7 +17,7 @@ two presentations of a pair should differ in how they show the algorithm.
 
 ## Blocks
 
-A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required, even for a single step (`yield 'Start';`); the domain, input, and design blocks are optional.
+A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required, even for a single step (`yield;`); the domain, input, and design blocks are optional.
 
 1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
@@ -50,8 +50,8 @@ Facts about the algorithm, such as which cells were checked, are often clearer r
 
 ## Steps
 
-- `yield 'label';` records a step: a copy of every top-level input and algorithm variable. Variables declared inside loops or blocks are not recorded; declare a loop index at the top level (`let i = Index(-1);`) and write `for (i = Index(0); ...)` when the view needs it. A top-level variable has no value at steps before its declaration, so declare every variable the view reads before the first `yield`, with a starting value of its type.
-- Labels identify steps when presentations are compared, so make each one say what distinguishes its step; a repeated label is numbered by its occurrence, as in "Shift (2)", which reads less clearly. Inside loops, include what distinguishes the step, such as ``yield `Compare index ${i}`;``.
+- `yield;` records a step: a copy of every top-level input and algorithm variable. Variables declared inside loops or blocks are not recorded; declare a loop index at the top level (`let i = Index(-1);`) and write `for (i = Index(0); ...)` when the view needs it. A top-level variable has no value at steps before its declaration, so declare every variable the view reads before the first `yield`, with a starting value of its type.
+- A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
 
 ## Atomic types
@@ -201,11 +201,11 @@ Example, with domain, input, algorithm, design, and a script-free view:
 
 <script lang="sverlin">
   let i = Index(-1);
-  yield 'Start';
+  yield;
   for (i = Index(0); i < values.length; i++) {
-    yield `Visit index ${i}`;
+    yield;
   }
-  yield 'Done';
+  yield;
 </script>
 
 <script lang="sverlin" design>

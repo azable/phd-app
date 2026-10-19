@@ -53,6 +53,7 @@ import {
 } from './library/node/scales';
 import type { FrameSettings, NodeShape } from './library/node/props';
 import { keyedRandom } from './algorithm/random.server';
+import { stepSignature } from '../signature.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
 const maximumSourceBytes = 256 * 1024;
@@ -106,10 +107,10 @@ function loadLibraryModule(path: string): { contents: string; loader: 'js' | 'ts
 /** One seeded presentation of a prepared component. */
 export type SvelteBundle = {
   javascript: string;
-  /** Labels of the steps this presentation keeps. */
+  /** Labels of the steps this presentation keeps: their numbers in the master trace. */
   labels: string[];
-  /** Labels of every master step, shared by all presentations of the source. */
-  masterLabels: string[];
+  /** Identity of the master trace, from its recorded states, shared by all presentations of the source. */
+  masterSignature: string;
   /** Master step index of each kept step. */
   masterSteps: number[];
   /** Design values drawn for this presentation. */
@@ -247,7 +248,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ];
     if (!blocks.algorithm)
       throw new InvalidSvelteSourceError(
-        'Add a <script lang="sverlin"> algorithm block whose yield statements mark the steps, such as yield "Start";',
+        'Add a <script lang="sverlin"> algorithm block whose yield statements mark the steps, such as yield;',
         { code: 'missing_algorithm' }
       );
     const domain = blocks.domain
@@ -461,8 +462,8 @@ export async function bundlePresentation(
   }
   return {
     javascript: output.text,
-    labels: masterSteps.map((index) => master[index].label),
-    masterLabels: master.map(({ label }) => label),
+    labels: masterSteps.map((index) => `Step ${index + 1}`),
+    masterSignature: stepSignature(master.map((step) => JSON.stringify(step))),
     masterSteps,
     // Drawn defaults are recorded with the design values, so analysis sees each side's full look.
     parameters: { ...parameters, __defaults: defaults }

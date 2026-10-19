@@ -86,7 +86,7 @@ describe('values made by collection and record types', () => {
 
   it('carries collections and records from the input into the algorithm', () => {
     const step = last(
-      'const e = edges[0]; e.weight = 7; edges.push({ from: 1, to: 2, weight: 5 }); const part = edges.slice(1); yield "A";',
+      'const e = edges[0]; e.weight = 7; edges.push({ from: 1, to: 2, weight: 5 }); const part = edges.slice(1); yield;',
       'const edges = Edges([{ from: 0, to: 1, weight: 4 }]);'
     );
     expect(step.state.edges).toEqual([
@@ -136,44 +136,44 @@ describe('values made by collection and record types', () => {
     ['plain arrays', 'const q = [Vertex(1)];', /Arrays are made by a collection type/],
     ['plain objects', 'const e = { from: Vertex(1) };', /Objects are made by a record type/]
   ])('rejects %s', (_name, statement, message) => {
-    expect(() => last(`${statement} yield "A";`)).toThrow(message);
+    expect(() => last(`${statement} yield;`)).toThrow(message);
   });
 
   it('converts what is pushed or assigned into a collection to its element type', () => {
-    const step = last('const q = Queue([]); q.push(1); q.unshift(0); q[2] = 3; yield "A";');
+    const step = last('const q = Queue([]); q.push(1); q.unshift(0); q[2] = 3; yield;');
     expect(step.state.q).toEqual([0, 1, 3]);
     expect(step.types).toMatchObject({ 'q[0]': 'Vertex', 'q[1]': 'Vertex', 'q[2]': 'Vertex' });
-    expect(() => last('const q = Queue([]); q.push(9); yield "A";')).toThrow(/9 is not a Vertex/);
+    expect(() => last('const q = Queue([]); q.push(9); yield;')).toThrow(/9 is not a Vertex/);
   });
 });
 
 describe('unions', () => {
   it('makes a literal the one member it fits, and keeps a typed value’s own member', () => {
-    const step = last('const d = Distances([0, "unreached", Distance(4)]); yield "A";');
+    const step = last('const d = Distances([0, "unreached", Distance(4)]); yield;');
     expect(step.types).toMatchObject({
       d: 'Distances',
       'd[0]': 'Distance',
       'd[1]': 'Unreached',
       'd[2]': 'Distance'
     });
-    expect(() => last('const d = Either(3); yield "A";')).toThrow(/could be a Distance or a Count/);
-    expect(() => last('const d = Distances([Count(3)]); yield "A";')).toThrow(
+    expect(() => last('const d = Either(3); yield;')).toThrow(/could be a Distance or a Count/);
+    expect(() => last('const d = Distances([Count(3)]); yield;')).toThrow(
       /must be a Distance or Unreached, not a Count value/
     );
   });
 
   it('declares a variable made by a union as the union, so it can hold either member', () => {
-    const step = last("let d = Dist(0); d = 'unreached'; yield 'A';");
+    const step = last("let d = Dist(0); d = 'unreached'; yield;");
     expect(step.types.d).toBe('Unreached');
-    expect(() => last("let d = Dist(0); d = Count(3); yield 'A';")).toThrow(
+    expect(() => last('let d = Dist(0); d = Count(3); yield;')).toThrow(
       /d must be a Distance or Unreached, not a Count value/
     );
     // A variable made by a member keeps that member's type.
-    expect(() => last("let d = Distance(0); d = 'unreached'; yield 'A';")).toThrow(
+    expect(() => last("let d = Distance(0); d = 'unreached'; yield;")).toThrow(
       /Distance values must be whole numbers/
     );
     // The input's declared types carry into the algorithm.
-    expect(last("d = 'unreached'; yield 'A';", 'const d = Dist(0);').types.d).toBe('Unreached');
+    expect(last("d = 'unreached'; yield;", 'const d = Dist(0);').types.d).toBe('Unreached');
   });
 
   it('compares members with === and !==, but not by order', () => {
@@ -181,23 +181,21 @@ describe('unions', () => {
       const d = Distances([0, "unreached"]);
       const reached = Count(d[0] !== Unreached("unreached") ? 1 : 0);
       const unreached = Count(d[1] === Unreached("unreached") ? 1 : 0);
-      yield "A";
+      yield;
     `);
     expect(step.state).toMatchObject({ reached: 1, unreached: 1 });
     expect(() =>
-      last(
-        'const d = Distances([0, "unreached"]); const x = Count(d[0] < d[1] ? 1 : 0); yield "A";'
-      )
+      last('const d = Distances([0, "unreached"]); const x = Count(d[0] < d[1] ? 1 : 0); yield;')
     ).toThrow(/cannot be combined/);
   });
 });
 
 describe('enumerations in arithmetic', () => {
   it('keeps the type, and fails when the result is not one of its values', () => {
-    const step = last('const w = Weight(4) + 1; yield "A";');
+    const step = last('const w = Weight(4) + 1; yield;');
     expect(step.state.w).toBe(5);
     expect(step.types.w).toBe('Weight');
-    expect(() => last('const w = Weight(4) + Weight(4); yield "A";')).toThrow(
+    expect(() => last('const w = Weight(4) + Weight(4); yield;')).toThrow(
       '8 is not a Weight; allowed values are 4, 5, 7.'
     );
   });
@@ -206,7 +204,7 @@ describe('enumerations in arithmetic', () => {
     const step = last(`
       const e = Edge({ from: 0, to: 1, weight: 7 });
       const d = Distance(e.weight) + Distance(e.weight);
-      yield "A";
+      yield;
     `);
     expect(step.state.d).toBe(14);
     expect(step.types.d).toBe('Distance');

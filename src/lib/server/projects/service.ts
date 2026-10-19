@@ -703,7 +703,7 @@ export async function activateBuiltPresentations(
       format: 'browser-bundle-v1',
       mode: bundle.mode,
       // Presentations of one master trace share a signature even when they keep different steps.
-      stepSignature: stepSignature(bundle.masterLabels ?? bundle.labels),
+      stepSignature: bundle.masterSignature ?? stepSignature(bundle.labels),
       labels: bundle.labels,
       ...(bundle.masterSteps ? { masterSteps: bundle.masterSteps } : {}),
       ...(bundle.parameters ? { parameters: bundle.parameters } : {}),

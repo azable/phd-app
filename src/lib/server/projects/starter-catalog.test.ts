@@ -13,16 +13,10 @@ describe('starter catalog', () => {
   it('offers only developer-owned, buildable components', async () => {
     expect(listProjectTemplates().map(({ id }) => id)).toEqual(['blank', 'linear-search']);
     const blank = resolveProjectTemplate({ templateId: 'blank' });
-    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['Start']);
+    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['Step 1']);
     expect(
-      (await compileSvelteComponent(getProjectTemplate('linear-search').source)).masterLabels
-    ).toEqual([
-      'Start',
-      'Compare index 0',
-      'Compare index 1',
-      'Compare index 2',
-      'Found 2 at index 3'
-    ]);
+      (await compileSvelteComponent(getProjectTemplate('linear-search').source)).labels
+    ).toHaveLength(5);
   });
 
   it('rejects unknown templates and mode-incompatible examples', () => {

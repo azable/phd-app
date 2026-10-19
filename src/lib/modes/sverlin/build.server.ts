@@ -37,7 +37,7 @@ export async function buildBatch(
           html: '',
           javascript: bundle.javascript,
           labels: bundle.labels,
-          masterLabels: bundle.masterLabels,
+          masterSignature: bundle.masterSignature,
           masterSteps: bundle.masterSteps,
           parameters: bundle.parameters
         }

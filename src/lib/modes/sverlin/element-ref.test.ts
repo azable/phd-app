@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { locateElement } from './element-ref';
 
 const source = [
-  '<script lang="sverlin">yield "A";</script>',
+  '<script lang="sverlin">yield;</script>',
   '<Node items={values}>',
   '  {#snippet item(value)}<Node {value} />{/snippet}',
   '</Node>',

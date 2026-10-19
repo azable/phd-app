@@ -20,8 +20,8 @@ export type ModeBuildResult =
         html: string;
         javascript: string;
         labels: string[];
-        // Aligned modes: every master step label, the master index of each kept step, and design values.
-        masterLabels?: string[];
+        // Aligned modes: the master trace's identity, the master index of each kept step, and design values.
+        masterSignature?: string;
         masterSteps?: number[];
         parameters?: Record<string, unknown>;
       };

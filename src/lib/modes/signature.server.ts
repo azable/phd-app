@@ -2,6 +2,6 @@
 
 import { createHash } from 'node:crypto';
 
-export function stepSignature(labels: readonly string[]): string {
-  return createHash('sha256').update(JSON.stringify(labels)).digest('hex');
+export function stepSignature(steps: readonly string[]): string {
+  return createHash('sha256').update(JSON.stringify(steps)).digest('hex');
 }

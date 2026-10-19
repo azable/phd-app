@@ -19,8 +19,7 @@ describe('Svelte-backed project lifecycle', () => {
     const { document: created } = await createProjectSkeleton({}, dependencies);
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
-    const source =
-      '<script lang="sverlin">yield "First"; yield "Second";</script><Node>{step}</Node>';
+    const source = '<script lang="sverlin">yield; yield;</script><Node>{step}</Node>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -39,7 +38,7 @@ describe('Svelte-backed project lifecycle', () => {
     expect(presentations.every((presentation) => presentation.format === 'browser-bundle-v1')).toBe(
       true
     );
-    expect(presentations[0]).toMatchObject({ mode: 'sverlin', labels: ['First', 'Second'] });
+    expect(presentations[0]).toMatchObject({ mode: 'sverlin', labels: ['Step 1', 'Step 2'] });
 
     const rebuilt = await buildProjectPresentations(
       {
