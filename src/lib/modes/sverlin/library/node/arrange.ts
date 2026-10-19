@@ -119,6 +119,16 @@ export function linkKey(link: string | LinkSpec): string | undefined {
   return spec && (spec.id ?? linkText(spec));
 }
 
+/**
+ * A layout run on to convergence for at most a bound of solver steps: some layouts never converge,
+ * with constraints and stress pulling against each other, and would otherwise never return.
+ */
+class BoundedLayout extends Layout {
+  settle(steps: number): void {
+    for (let step = 0; step < steps && !this.tick(); step++);
+  }
+}
+
 /** A box a link attaches to: inside child `box`, relative to that child's top-left. */
 export type Anchor = { box: number; x: number; y: number; width: number; height: number };
 
@@ -433,7 +443,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   }
 
   if (boxes.length) {
-    const layout = new Layout()
+    const layout = new BoundedLayout()
       .size([startArea.width, startArea.height])
       .nodes(nodes)
       .links(solvedLinks)
@@ -441,9 +451,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       .avoidOverlaps(true)
       .handleDisconnected(false)
       .linkDistance((link) => (link as unknown as { ideal: number }).ideal);
-    // Iterations without constraints, then with the view's, then with all; running on to
-    // convergence is synchronous here, and the same input always gives the same result.
-    layout.start(20, 20, 20, 0, true, false);
+    // Iterations without constraints, then with the view's, then with all; then on to convergence,
+    // synchronously, so the same input always gives the same result.
+    layout.start(20, 20, 20, 0, false, false);
+    layout.settle(1000);
   }
 
   const centres = nodes.slice(0, boxes.length).map(({ x = 0, y = 0 }) => ({ x, y }));
