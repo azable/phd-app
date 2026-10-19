@@ -29,6 +29,7 @@ import {
   type BlockKind,
   type Span
 } from './block.server';
+import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { parseBlock } from './parse.server';
 import {
   noDomain,
@@ -68,6 +69,8 @@ export type TypedState = {
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
+  /** In the algorithm, which values are the same across steps (see identities.server.ts). */
+  identities?: StepIdentities;
   declared?: Record<string, string>;
 };
 
@@ -76,6 +79,7 @@ export type MasterStep = {
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
+  identities?: StepIdentities;
 };
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
@@ -281,6 +285,7 @@ class Interpreter {
   /** The record or collection type of every array and object an input or algorithm made. */
   readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
   readonly #trace: MasterStep[] = [];
+  readonly #identities = new Identities();
   #operations = 0;
   #traceValues = 0;
 
@@ -366,12 +371,20 @@ class Interpreter {
     const state: TraceState = {};
     const types: TypeMap = {};
     const targets: Record<string, string> = {};
+    const placed: Placed[] = [];
     for (const name of this.#topLevelNames) {
       const binding = this.#topLevel.bindings.get(name);
-      state[name] = binding ? this.#snapshot(binding.value, node, name, types, targets) : null;
+      state[name] = binding
+        ? this.#snapshot(binding.value, node, name, { types, targets, placed })
+        : null;
       if (binding?.target) targets[name] = binding.target;
     }
-    return { state, types, ...(Object.keys(targets).length ? { targets } : {}) };
+    return {
+      state,
+      types,
+      ...(Object.keys(targets).length ? { targets } : {}),
+      ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed) } : {})
+    };
   }
 
   /** Conditions read an atom's underlying value, so Bool(false) is false. */
@@ -813,15 +826,16 @@ class Interpreter {
 
   /**
    * Deep copy with a total node budget, which also stops shared structure from multiplying. Atoms
-   * become plain values, with their type recorded by path.
+   * become plain values, with their type recorded by path; collections, records, and the atoms they
+   * hold are placed for their identities.
    */
   #snapshot(
     value: Value,
     node: AnyNode,
     path: string,
-    types: TypeMap,
-    targets: Record<string, string>
+    into: { types: TypeMap; targets: Record<string, string>; placed: Placed[] }
   ): TraceValue {
+    const { types, targets, placed } = into;
     this.#traceValues += 1;
     if (this.#traceValues > algorithmLimits.maximumTraceValues)
       this.#fail(node, 'The recorded steps are too large; use smaller state or fewer steps.');
@@ -831,19 +845,24 @@ class Interpreter {
       // A position an element or field holds points into the only collection of its type.
       const [only, ...others] = value.type.index ? this.#collectionsOf(value.type) : [];
       if (only && !others.length) targets[path] = only;
+      // A variable only refers to a value; the collection or record holding it places it.
+      if (path.includes('[') || path.includes('.')) placed.push([path, value, true]);
       return value.value;
     }
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
-    if (shape) types[path] = shape.name;
+    if (shape) {
+      types[path] = shape.name;
+      placed.push([path, value as object, false]);
+    }
     if (Array.isArray(value))
       return Array.from(value, (item, index) =>
-        this.#snapshot(item, node, `${path}[${index}]`, types, targets)
+        this.#snapshot(item, node, `${path}[${index}]`, into)
       );
     if (value === mathMarker) return null;
     if (value !== null && typeof value === 'object') {
       const copy: Record<string, TraceValue> = {};
       for (const [key, item] of Object.entries(value))
-        copy[key] = this.#snapshot(item, node, `${path}.${key}`, types, targets);
+        copy[key] = this.#snapshot(item, node, `${path}.${key}`, into);
       return copy;
     }
     return typeof value === 'number' && !Number.isFinite(value) ? null : value;

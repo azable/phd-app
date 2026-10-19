@@ -539,6 +539,7 @@ export async function bundlePresentation(
     ...parameters,
     __types: master[index].types,
     __targets: master[index].targets ?? {},
+    __identities: master[index].identities?.ids ?? {},
     __frame: frame,
     __defaults: defaults
   }));
@@ -555,7 +556,10 @@ export async function bundlePresentation(
   return {
     javascript: output.text,
     labels: masterSteps.map((index) => `Step ${index + 1}`),
-    masterSignature: stepSignature(master.map((step) => JSON.stringify(step))),
+    // Identities say how values move between steps, not what a step shows.
+    masterSignature: stepSignature(
+      master.map(({ identities: _identities, ...step }) => JSON.stringify(step))
+    ),
     masterSteps,
     // Drawn defaults are recorded with the design values, so analysis sees each side's full look.
     parameters: { ...parameters, __defaults: defaults }

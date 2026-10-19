@@ -35,6 +35,7 @@ document.head.append(theme);
 type StepState = Record<string, unknown> & {
   __types?: Record<string, string>;
   __targets?: Record<string, string>;
+  __identities?: Record<string, number>;
   __defaults: NodeDefaults;
   __frame: FrameSettings;
 };
@@ -132,6 +133,7 @@ function mountStep(
   const {
     __types: types = {},
     __targets: targets = {},
+    __identities: identities = {},
     __defaults: defaults,
     __frame: frame,
     ...state
@@ -188,6 +190,7 @@ function mountStep(
                 ? paths.get(container)
                 : undefined,
             targetOf: (path: string) => targets[path],
+            identityOf: (path: string) => identities[path],
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
             lengthOf: (name: string) => {

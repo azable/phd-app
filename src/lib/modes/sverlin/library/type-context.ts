@@ -11,6 +11,8 @@ import type { SpanInput, SpanLayout } from './node/span';
 export type TypeContext = {
   /** The atomic type name of item `index` of a container taken from the props, if typed. */
   itemType(container: unknown, index: number): string | undefined;
+  /** The identity of the value at a path, the same at every step the value stays itself. */
+  identityOf(path: string): number | undefined;
   /** Where an array or object taken from the props sits in the state, such as edges[0]. */
   pathOf(container: unknown): string | undefined;
   /** The collection a position at a path points into, such as left for i. */

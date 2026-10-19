@@ -206,6 +206,8 @@
   );
   const position = element?.index ?? -1;
   const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
+  // The value this node draws keeps its identity across steps, so it can be followed as it moves.
+  const identity = untrack(() => (slot === undefined ? undefined : types?.identityOf(slot)));
   // The end slots, as far past each end as the farthest-reaching pointer goes.
   const reach = Math.max(0, ...pointers.map((pointer) => pointer.reach));
   const before = Array.from({ length: reach }, (_, place) => place - reach);
@@ -413,6 +415,7 @@
     data-sv-key={key}
     data-sv-component={__component}
     data-sv-slot={slot}
+    data-sv-identity={identity}
     data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
     data-sv-type={type ?? __type}
     data-sv-shape={resolvedShape}

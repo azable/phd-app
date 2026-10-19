@@ -15,7 +15,11 @@ const atoms = interpretDomain(
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);
-const plain = <T extends { types: unknown }>(step: T) => ({ ...step, types: undefined });
+const plain = <T extends { types: unknown }>(step: T) => ({
+  ...step,
+  types: undefined,
+  identities: undefined
+});
 
 describe('algorithm interpretation', () => {
   it('records every top-level binding at each yield', () => {
