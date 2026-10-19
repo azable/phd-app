@@ -481,45 +481,49 @@ describe('typed view components', () => {
       `${domain}${algorithm}${design ? `<script lang="sverlin" design>${design}</script>` : ''}${view}`
     );
 
-  it('reads typed snippets as components, stamps their roots, and lets a design value choose one', async () => {
-    const source = `${domain}${algorithm}<script lang="sverlin" design>const Look = pick([Plain, Bold]);</script>{#snippet Plain(value: Int, current: Flag)}<Node {value} />{/snippet}{#snippet Bold(value: Int, current: Flag)}<Node {value} weight="bold" />{/snippet}{@render Look(i, true)}`;
-    const prepared = prepareSvelteComponent(source);
-    const cases = [
-      [1, true],
-      [1, false],
-      [3, true],
-      [3, false]
-    ];
+  it('reads typed snippets as views of one type, and draws one of a type’s views per presentation', async () => {
+    const prepared = component(
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int, node)}<Node {value} weight="bold" {...node} />{/snippet}{@render Int(i)}<Node value={i} type="Int" />'
+    );
     expect(prepared.components).toEqual([
-      { name: 'Plain', cases },
-      { name: 'Bold', cases }
+      { name: 'IntText', cases: [1, 3] },
+      { name: 'IntBold', cases: [1, 3] }
     ]);
+    expect(prepared.views).toEqual({ Int: ['IntText', 'IntBold'] });
     expect(prepared.component).toContain('__component');
-    const drawn = new Set(
-      await Promise.all(
-        [1, 2, 3, 4, 5, 6, 7, 8].map(
-          async (seed) => (await bundlePresentation(prepared, seed)).parameters.Look
-        )
+    const drawn = await Promise.all(
+      [1, 2, 3, 4, 5, 6, 7, 8].map(
+        async (seed) => (await bundlePresentation(prepared, seed)).parameters.Int
       )
     );
-    expect([...drawn].every((look) => look === 'Plain' || look === 'Bold')).toBe(true);
+    expect(new Set(drawn)).toEqual(new Set(['IntText', 'IntBold']));
   });
 
-  it('orders components after those they render, and fills collections to the longest in the trace', () => {
+  it('lets a design value named after a type fix its view, and another name choose among views', async () => {
+    const views =
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int)}<Node {value} weight="bold" />{/snippet}';
+    const fixed = component(`${views}{@render Int(i)}`, 'const Int = IntBold;');
+    expect(fixed.views).toBeUndefined();
+    expect((await bundlePresentation(fixed, 1)).parameters.Int).toBe('IntBold');
+    const chosen = component(`${views}{@render Look(i)}`, 'const Look = pick([IntText, IntBold]);');
+    expect(['IntText', 'IntBold']).toContain((await bundlePresentation(chosen, 1)).parameters.Look);
+  });
+
+  it('orders components after those they render, and leaves views that wrap their own type out of its choice', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean"); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script><script lang="sverlin" design>const Look = pick([Plain, Bold]);</script>{#snippet Search(values: Row, shown: Flag)}<Node layout="row">{#each values as value}{@render Cell(value, shown)}{/each}</Node>{/snippet}{#snippet Cell(value: Int, current: Flag)}<Node>{@render Look(value, current)}</Node>{/snippet}{#snippet Plain(value: Int, current: Flag)}<Node {value} />{/snippet}{#snippet Bold(value: Int, current: Flag)}<Node {value} weight="bold" />{/snippet}{@render Search(values, true)}`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield "A"; values = Row([1, 3, 1]); yield "B";</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
     );
+    expect(prepared.views).toEqual({ Int: ['Plain', 'Bold'] });
     expect(prepared.components.map(({ name }) => name)).toEqual([
       'Plain',
       'Bold',
       'Cell',
       'Search'
     ]);
+    // Filled to the longest Row in the trace.
     expect(prepared.components[3].cases).toEqual([
-      [[1, 1, 1], true],
-      [[1, 1, 1], false],
-      [[3, 3, 3], true],
-      [[3, 3, 3], false]
+      [1, 1, 1],
+      [3, 3, 3]
     ]);
   });
 
@@ -530,15 +534,13 @@ describe('typed view components', () => {
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
         // A range's ends, and the value in the trace that prints longest.
-        C: [[0], [999], [1]],
-        R: [[0], [1], [0.125]],
-        S: [[0], [999], [1], ['yes'], ['x']],
-        P: [0, 999, 1].flatMap((a) => ['x', 'yes'].map((b) => [{ a, b }])),
+        C: [0, 999, 1],
+        R: [0, 1, 0.125],
+        S: [0, 999, 1, 'yes', 'x'],
+        P: [0, 999, 1].flatMap((a) => ['x', 'yes'].map((b) => ({ a, b }))),
         G: [0, 999, 1].map((value) => [
-          [
-            [value, value],
-            [value, value]
-          ]
+          [value, value],
+          [value, value]
         ])
       }
     );
@@ -553,12 +555,17 @@ describe('typed view components', () => {
     [
       'types that are not domain types',
       () => component('{#snippet Cell(value: Number)}<Node {value} />{/snippet}'),
-      /parameter type Number is not a type/
+      /Cell's type Number is not a type/
     ],
     [
-      'typing some parameters but not all',
-      () => component('{#snippet Cell(value: Int, current)}<Node {value} />{/snippet}'),
-      /Type every parameter of Cell, or none/
+      'viewing more than one type',
+      () => component('{#snippet Cell(value: Int, current: Flag)}<Node {value} />{/snippet}'),
+      /Cell takes 2 domain types, Int, Flag; a component views one type/
+    ],
+    [
+      'a value after the node',
+      () => component('{#snippet Cell(node, value: Int)}<Node {value} />{/snippet}'),
+      /Cell takes its value first/
     ],
     [
       'components inside markup',
@@ -567,13 +574,30 @@ describe('typed view components', () => {
       /components are defined at the top level/
     ],
     [
-      'choices between components of different types',
+      'choices between views of different types',
       () =>
         component(
           '{#snippet A(value: Int)}<Node {value} />{/snippet}{#snippet B(value: Flag)}<Node {value} />{/snippet}',
           'const Look = pick([A, B]);'
         ),
-      /Look chooses between components that take different types/
+      /Look chooses between components that view different types/
+    ],
+    [
+      'a type’s design value choosing a view of another type',
+      () =>
+        component(
+          '{#snippet A(value: Int)}<Node {value} />{/snippet}{#snippet B(value: Flag)}<Node {value} />{/snippet}',
+          'const Int = B;'
+        ),
+      /Int chooses B, which views Flag/
+    ],
+    [
+      'views with more values than can be drawn',
+      () =>
+        prepareSvelteComponent(
+          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin">yield "A";</script>{#snippet F(flags: Flags)}<Node>{flags.a}</Node>{/snippet}`
+        ),
+      /F would be drawn with too many values of Flags/
     ]
   ])('rejects %s', (_name, prepare, message) => {
     expect(prepare).toThrow(message);

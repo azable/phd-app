@@ -120,6 +120,15 @@ export function componentChoices(
     if (statement.type === 'VariableDeclaration' && statement.kind === 'const')
       for (const declarator of statement.declarations) {
         const init = declarator.init;
+        // One component, fixed, as in const Int = IntDots;.
+        if (
+          declarator.id.type === 'Identifier' &&
+          init?.type === 'Identifier' &&
+          components.has(init.name)
+        ) {
+          choices[declarator.id.name] = { options: [init.name], start: offset(declarator).start };
+          continue;
+        }
         if (
           declarator.id.type !== 'Identifier' ||
           init?.type !== 'CallExpression' ||

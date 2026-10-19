@@ -33,6 +33,7 @@ import {
   findComponents,
   probeMarkup,
   readsOf,
+  viewsOf,
   type ComponentProbe,
   type ComponentSignatures
 } from './components.server';
@@ -123,6 +124,8 @@ export type PreparedComponent = {
   atoms: AtomRegistry;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
+  /** Types with more than one view and no design value choosing: each presentation draws one. */
+  views?: Record<string, string[]>;
   design?: Block;
   /** Whether <Link> components sit at the top of the view, between top-level nodes. */
   topLevelLinks?: boolean;
@@ -282,7 +285,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         at(clash, blocks.design)
       );
     const props = [...stateNames, ...designNames];
-    const typeName = props.find((name) => definesType(domain, name));
+    // A design value named after a type may choose among that type's views, as in
+    // const Int = IntDots;, so only other uses of a type's name are clashes.
+    const componentChoice = blocks.design
+      ? interpretBlock(source, blocks.design, (body) =>
+          componentChoices(body, new Set(found.components.map(({ name }) => name)))
+        )
+      : {};
+    const typeName = props.find(
+      (name) => definesType(domain, name) && !Object.hasOwn(componentChoice, name)
+    );
     if (typeName)
       throw new InvalidSvelteSourceError(
         `"${typeName}" names a type; choose another variable name.`,
@@ -295,22 +307,42 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         at(library, blocks.input, blocks.algorithm, blocks.design)
       );
     const components = checkComponents(found.components, domain, stateNames, props, source);
-    const componentChoice = blocks.design
-      ? interpretBlock(source, blocks.design, (body) =>
-          componentChoices(body, new Set(Object.keys(components)))
-        )
-      : {};
+    const views = viewsOf(components);
     for (const [name, { options, start }] of Object.entries(componentChoice)) {
-      const [first, ...rest] = options;
-      const differs = rest.find((option) => components[option].join() !== components[first].join());
+      const named = definesType(domain, name);
+      const type = named ? name : components[options[0]];
+      const differs = options.find((option) => components[option] !== type);
       if (differs)
         throw new InvalidSvelteSourceError(
-          `${name} chooses between components that take different types: ${first}(${components[first].join(', ')}) and ${differs}(${components[differs].join(', ')}). A choice is between components with the same parameter types.`,
+          named
+            ? `${name} chooses ${differs}, which views ${components[differs]}; a design value named after a type chooses among that type's views${views[name] ? `, ${views[name].join(', ')}` : ''}.`
+            : `${name} chooses between components that view different types: ${options[0]} views ${type} and ${differs} views ${components[differs]}. A choice is between views of one type.`,
           {
             code: 'component_choice',
             start: sourcePosition(source, (blocks.design as Block).offset + start)
           }
         );
+    }
+    const renderers = typeRenderers(ast, atoms, source);
+    // A type's views are alternatives: each presentation draws one, under the type's name, unless a
+    // design value named after the type chooses, or a component or renderer is named after it. A
+    // view that renders its own type, as a cell around {@render Int(value)}, wraps the alternatives
+    // rather than being one.
+    const drawn: Record<string, string[]> = {};
+    const aliases: Record<string, string> = {};
+    for (const [type, all] of Object.entries(views)) {
+      const names = all.filter(
+        (name) => !readsOf(found.components.find((view) => view.name === name)!.node).has(type)
+      );
+      if (
+        !names.length ||
+        Object.hasOwn(componentChoice, type) ||
+        Object.hasOwn(components, type) ||
+        renderers.includes(type)
+      )
+        continue;
+      if (names.length > 1) drawn[type] = names;
+      else aliases[type] = names[0];
     }
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
@@ -318,21 +350,54 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const master = interpretBlock(source, blocks.algorithm, (body) =>
       interpretAlgorithm(body, input, domain)
     );
-    const renderers = typeRenderers(ast, atoms, source);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const chosen = Object.fromEntries(
-      Object.entries(componentChoice).map(([name, { options }]) => [name, options])
+    const chosen = {
+      ...Object.fromEntries(
+        Object.entries(componentChoice).map(([name, { options }]) => [name, options])
+      ),
+      ...drawn
+    };
+    // Every view of a type is also its renderer, drawing the nodes that show its values.
+    const typeViews = Object.keys({ ...drawn, ...aliases }).concat(
+      Object.keys(componentChoice).filter((name) => definesType(domain, name))
     );
     const component = compile(
-      withGeneratedScripts(`${tagged}${probeMarkup(components)}`, props, renderers, chosen),
+      withGeneratedScripts(
+        `${tagged}${probeMarkup(components)}`,
+        [...props, ...Object.keys(drawn)],
+        [...renderers, ...typeViews],
+        chosen,
+        aliases
+      ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
+    const { probes, problems: probeProblems } = componentProbes(
+      found.components,
+      components,
+      {
+        ...chosen,
+        ...Object.fromEntries(Object.entries(aliases).map(([type, name]) => [type, [name]]))
+      },
+      domain,
+      master
+    );
+    if (probeProblems.length)
+      throw InvalidSvelteSourceError.combine(
+        probeProblems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_component',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
     return {
       source,
       component,
       master,
       atoms,
-      components: componentProbes(found.components, components, chosen, domain, master),
+      components: probes,
+      ...(Object.keys(drawn).length ? { views: drawn } : {}),
       ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
     };
@@ -356,15 +421,19 @@ export async function bundlePresentation(
   seed: number
 ): Promise<SvelteBundle> {
   const { master } = prepared;
+  const components = prepared.components.map(({ name }) => name);
+  // Each type with several views draws one, as a design value named after the type; after the
+  // authored ones, and keyed by name like every draw, so they never change an authored draw.
+  const views = Object.entries(prepared.views ?? {})
+    .map(([type, names]) => `\nconst ${type} = pick([${names.join(', ')}]);`)
+    .join('');
   const parameters = prepared.design
     ? interpretBlock(prepared.source, prepared.design, (body) =>
-        interpretDesign(
-          body,
-          seed,
-          prepared.components.map(({ name }) => name)
-        )
+        interpretDesign(`${body}${views}`, seed, components)
       )
-    : {};
+    : views
+      ? interpretDesign(views, seed, components)
+      : {};
   // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).
   if (parameters.defaults !== undefined)
     throw new InvalidSvelteSourceError(
@@ -470,7 +539,8 @@ function withGeneratedScripts(
   source: string,
   props: readonly string[],
   renderers: readonly string[],
-  choices: Record<string, string[]>
+  choices: Record<string, string[]>,
+  aliases: Record<string, string> = {}
 ): string {
   // A design value that chooses a component arrives as the component's name, and the view uses
   // the component itself under the value's name.
@@ -486,12 +556,17 @@ function withGeneratedScripts(
         `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]);`
     )
     .join(' ');
-  // Type renderers are the view's own top-level snippets, which its script may refer to.
+  // A type with one view renders it under the type's name.
+  const aliased = Object.entries(aliases)
+    .map(([type, name]) => `const ${type} = ${name};`)
+    .join(' ');
+  // Type renderers are the view's own top-level snippets, or the views drawn for a type, which its
+  // script may refer to; getters, so a drawn view is read when a node renders.
   const registration = renderers.length
-    ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.join(', ')} });`
+    ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.map((name) => `get ${name}() { return ${name}; }`).join(', ')} });`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${aliased} ${registration}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -814,9 +889,9 @@ function withNodeRefs(
 }
 
 /**
- * Check the view's components: their parameter types are domain types, their names are free, and
- * they read only their parameters, design values, and other components, never the input or
- * algorithm's variables. Gives each component's parameter types.
+ * Check the view's components: their types are domain types, their names are free (or their own
+ * type's, making them its only view), and they read only their value, design values, and other
+ * components, never the input or algorithm's variables. Gives each component's type.
  */
 function checkComponents(
   found: ReturnType<typeof findComponents>['components'],
@@ -826,26 +901,29 @@ function checkComponents(
   source: string
 ): ComponentSignatures {
   const signatures: ComponentSignatures = {};
-  for (const { name, start, types, node } of found) {
+  for (const { name, start, type, node } of found) {
     const at = { code: 'view_component', start: sourcePosition(source, start) };
-    const unknown = types.find((type) => !definesType(domain, type));
-    if (unknown !== undefined)
+    if (!definesType(domain, type))
       throw new InvalidSvelteSourceError(
-        `${name}'s parameter type ${unknown} is not a type; define it in the domain block, or use one that is.`,
+        `${name}'s type ${type} is not a type; define it in the domain block, or use one that is.`,
         at
       );
-    if (props.includes(name) || definesType(domain, name) || libraryNames.includes(name))
+    if (
+      props.includes(name) ||
+      (definesType(domain, name) && name !== type) ||
+      libraryNames.includes(name)
+    )
       throw new InvalidSvelteSourceError(
-        `${name} names a variable, type, or library component; choose another component name.`,
+        `${name} names a variable, another type, or a library component; choose another component name.`,
         at
       );
     const state = [...readsOf(node)].find((read) => stateNames.includes(read));
     if (state)
       throw new InvalidSvelteSourceError(
-        `${name} reads ${state}, an input or algorithm variable; a component reads only its parameters and design values, so add a parameter for it and pass ${state} where ${name} is rendered.`,
+        `${name} reads ${state}, an input or algorithm variable; a component reads only its value and design values. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
         at
       );
-    signatures[name] = types;
+    signatures[name] = type;
   }
   return signatures;
 }

@@ -1,17 +1,18 @@
 /**
- * Typed view components: top-level snippets whose parameters are domain types, as in
- * {#snippet Cell(value: Int, current: Flag)}. A component reads only its parameters, design
- * values, and other components, so its size can be found by rendering it for every value of its
- * parameters (see assembly/entry.ts), and a design value can choose among components that take the
- * same types, as in const Number = pick([NumberText, NumberDots]);.
+ * Typed view components: top-level snippets that view one domain type, as in
+ * {#snippet IntText(value: Int)}, optionally taking the props of the node they draw, as in
+ * (value: Int, node). A component reads only its value, design values, and other components, so its
+ * size can be found by rendering it for every value of its type (see assembly/entry.ts). The views
+ * of one type are alternatives: each presentation draws one, which renders as the type's name, as
+ * in {@render Int(value)}.
  */
 
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 
-/** Each component's parameter types, in order, by name. */
-export type ComponentSignatures = Record<string, string[]>;
+/** Each component's type, by name. */
+export type ComponentSignatures = Record<string, string>;
 
 type SvelteNode = {
   type?: string;
@@ -29,17 +30,18 @@ export type ComponentProblem = { message: string; start: number };
 
 /**
  * The view's components, the start of each one's root <Node> tags, and problems: a snippet that
- * types some parameters but not all, or that is typed but not at the top level.
+ * types more than one parameter, or types one other than its first, or that is typed but not at the
+ * top level.
  */
 export function findComponents(html: { children?: SvelteNode[] } | undefined): {
-  components: { name: string; start: number; types: string[]; node: SvelteNode }[];
+  components: { name: string; start: number; type: string; node: SvelteNode }[];
   roots: Map<number, string>;
   problems: ComponentProblem[];
 } {
-  const components: { name: string; start: number; types: string[]; node: SvelteNode }[] = [];
+  const components: { name: string; start: number; type: string; node: SvelteNode }[] = [];
   const roots = new Map<number, string>();
   const problems: ComponentProblem[] = [];
-  const typesOf = (snippet: SvelteNode): string[] | undefined => {
+  const typeOf = (snippet: SvelteNode): string | undefined => {
     const parameters = snippet.parameters ?? [];
     const types = parameters.map((parameter) => {
       const annotation = parameter.typeAnnotation?.typeAnnotation;
@@ -47,22 +49,28 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
         ? annotation.typeName.name
         : undefined;
     });
-    if (types.every((type) => type === undefined)) return undefined;
-    if (types.some((type) => type === undefined)) {
-      // Reported once, and not taken as a component, so nothing else is said about it.
+    const typed = types.filter((type) => type !== undefined);
+    if (!typed.length) return undefined;
+    // Reported once, and not taken as a component, so nothing else is said about it.
+    const name = snippet.expression?.name;
+    if (typed.length > 1)
       problems.push({
-        message: `Type every parameter of ${snippet.expression?.name}, or none: a component's parameters are domain types, as in (value: Int, current: Flag).`,
+        message: `${name} takes ${typed.length} domain types, ${typed.join(', ')}; a component views one type. Give each value its own component, or define one type that holds them, such as a record, and draw how they relate where both values are in scope.`,
         start: snippet.start ?? 0
       });
-      return undefined;
-    }
-    return types as string[];
+    else if (types[0] === undefined || parameters.length > 2)
+      problems.push({
+        message: `${name} takes its value first and at most the node's props after it, as in (value: Int, node): a component views one domain type.`,
+        start: snippet.start ?? 0
+      });
+    else return typed[0];
+    return undefined;
   };
   for (const node of html?.children ?? []) {
     if (node.type !== 'SnippetBlock' || !node.expression?.name) continue;
-    const types = typesOf(node);
-    if (!types) continue;
-    components.push({ name: node.expression.name, start: node.start ?? 0, types, node });
+    const type = typeOf(node);
+    if (!type) continue;
+    components.push({ name: node.expression.name, start: node.start ?? 0, type, node });
     for (const child of node.children ?? [])
       if (child.type === 'InlineComponent' && child.name === 'Node' && child.start !== undefined)
         roots.set(child.start, node.expression.name);
@@ -75,7 +83,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
       return;
     }
     const part = node as SvelteNode;
-    if (part.type === 'SnippetBlock' && depth > 0 && typesOf(part))
+    if (part.type === 'SnippetBlock' && depth > 0 && typeOf(part))
       problems.push({
         message: `${part.expression?.name} has typed parameters, so it is a component, and components are defined at the top level of the view, not inside other markup.`,
         start: part.start ?? 0
@@ -137,15 +145,22 @@ function collectPattern(pattern: unknown, into: Set<string>): void {
  */
 export function probeMarkup(signatures: ComponentSignatures): string {
   return Object.entries(signatures)
-    .map(([name, types]) => {
-      const args = types.map((_, index) => `__case[${index}]`).join(', ');
-      return `{#if __probe?.component === '${name}'}{#each __probe.cases as __case}{@render ${name}(${args})}{/each}{/if}`;
-    })
+    .map(
+      ([name]) =>
+        `{#if __probe?.component === '${name}'}{#each __probe.cases as __case}{@render ${name}(__case)}{/each}{/if}`
+    )
     .join('');
 }
 
-/** A component and the cases of its parameters' values the page draws it with. */
-export type ComponentProbe = { name: string; cases: unknown[][] };
+/** The components that view each type, in source order. */
+export function viewsOf(signatures: ComponentSignatures): Record<string, string[]> {
+  const views: Record<string, string[]> = {};
+  for (const [name, type] of Object.entries(signatures)) (views[type] ??= []).push(name);
+  return views;
+}
+
+/** A component and the values of its type the page draws it with. */
+export type ComponentProbe = { name: string; cases: unknown[] };
 
 // A component's cases are drawn in one pass of the page; this bounds them, so a pass stays about as
 // quick as a step's.
@@ -158,15 +173,16 @@ type Steps = readonly { state: TraceState; types: TypeMap }[];
 
 /**
  * The view's components, each after the components it renders, directly or through a design value
- * choosing among them, so their boxes are known when it is drawn; with the cases to draw it with.
+ * choosing among them, so their boxes are known when it is drawn; with the values to draw it with.
+ * A component with more cases than a pass can draw is a problem.
  */
 export function componentProbes(
-  found: { name: string; node: SvelteNode }[],
+  found: { name: string; start: number; node: SvelteNode }[],
   signatures: ComponentSignatures,
   choices: Record<string, readonly string[]>,
   domain: DomainRegistry,
   steps: Steps
-): ComponentProbe[] {
+): { probes: ComponentProbe[]; problems: ComponentProblem[] } {
   const renders = new Map(
     found.map(({ name, node }) => [
       name,
@@ -184,26 +200,37 @@ export function componentProbes(
   };
   for (const name of Object.keys(signatures)) visit(name, new Set());
   const valuesOf = probeValues(domain, steps);
-  return ordered.flatMap((name) => {
-    const cases = combinations(signatures[name].map(valuesOf));
-    return cases ? [{ name, cases }] : [];
-  });
+  const probes: ComponentProbe[] = [];
+  const problems: ComponentProblem[] = [];
+  for (const name of ordered) {
+    const type = signatures[name];
+    const values = valuesOf(type);
+    const cases =
+      values && (values.every?.length ?? Infinity) <= maximumCases ? values.every : values?.widest;
+    if (cases && cases.length <= maximumCases) probes.push({ name, cases });
+    else
+      problems.push({
+        message: `${name} would be drawn with ${cases?.length ?? 'too many'} values of ${type} to size it, more than the ${maximumCases} a component can take. Give ${type} fewer values, or draw its parts with components of their own.`,
+        start: found.find((component) => component.name === name)?.start ?? 0
+      });
+  }
+  return { probes, problems };
 }
 
 /**
- * Every combination of the parameters' values: every value of each, while the cases fit, and only
- * the widest values of the parameters with the most values otherwise.
+ * Every combination of a record's field values: every value of each, while the cases fit, and only
+ * the widest values of the fields with the most values otherwise.
  */
-function combinations(parameters: (ProbeValues | undefined)[]): unknown[][] | undefined {
-  if (!parameters.every((values) => values !== undefined)) return undefined;
-  const chosen = parameters.map((values) => values.every ?? values.widest);
+function combinations(fields: (ProbeValues | undefined)[]): unknown[][] | undefined {
+  if (!fields.every((values) => values !== undefined)) return undefined;
+  const chosen = fields.map((values) => values.every ?? values.widest);
   const count = () => chosen.reduce((total, values) => total * values.length, 1);
   const largestFirst = chosen
     .map((_, index) => index)
     .sort((a, b) => chosen[b].length - chosen[a].length);
   for (const index of largestFirst) {
     if (count() <= maximumCases) break;
-    chosen[index] = parameters[index].widest;
+    chosen[index] = fields[index].widest;
   }
   if (count() > maximumCases) return undefined;
   return chosen.reduce<unknown[][]>(

@@ -342,9 +342,9 @@ async function recordSteps() {
     };
     for (const id of items) reserved.set(id, largest);
   }
-  // A typed component is drawn once with every case of its parameters' values, and its root keeps
-  // the largest box it reaches: a cell has room for the pointer whether or not this trace ever
-  // gives it one. Components come after those they render, whose boxes they are drawn with.
+  // A typed component is drawn once with each value of its type it is sized by, and its root keeps
+  // the largest box it reaches: every value has room, whether or not this trace ever shows it.
+  // Components come after those they render, whose boxes they are drawn with.
   // offsetWidth and offsetHeight round to whole pixels, so a pixel more keeps the box from coming
   // out a fraction smaller than what it holds.
   for (const { name, cases } of components) {

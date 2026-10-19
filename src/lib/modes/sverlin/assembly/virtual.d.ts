@@ -29,8 +29,8 @@ declare module 'virtual:atoms' {
   export default atoms;
 }
 
-/** The view's typed components, each after those it renders, with the cases to draw it with. */
+/** The view's typed components, each after those it renders, with the values to draw it with. */
 declare module 'virtual:components' {
-  const components: { name: string; cases: unknown[][] }[];
+  const components: { name: string; cases: unknown[] }[];
   export default components;
 }
