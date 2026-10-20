@@ -137,7 +137,7 @@
             {#if !session.readOnly}
               <button
                 type="button"
-                class="pointer-events-auto relative z-10 ml-auto rounded-md transition-shadow hover:ring-2 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                class="group pointer-events-auto relative z-10 ml-auto flex leading-none focus-visible:outline-none"
                 aria-label={`Add ${presentationDisplayId(id)} to feedback`}
                 title="Add to feedback"
                 onclick={(event) => {

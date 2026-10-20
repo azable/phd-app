@@ -52,7 +52,7 @@
         {#if interactive}
           <button
             type="button"
-            class="mx-0.5 inline-flex items-center gap-1 rounded-md align-middle hover:ring-2 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            class="group mx-0.5 inline-flex items-center gap-1 rounded-md align-middle leading-none focus-visible:outline-none"
             class:bg-background={inverted}
             title={referenceChipTitle(reference)}
             onclick={(event) => onReferenceActivate(reference, event.shiftKey)}

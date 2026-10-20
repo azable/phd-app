@@ -166,8 +166,7 @@
       return label;
     }
     const pill = document.createElement('span');
-    pill.className =
-      'inline-flex overflow-hidden rounded-md leading-5 ring-1 ring-border ring-inset';
+    pill.className = 'inline-flex overflow-hidden rounded-md leading-5 ring-1 ring-border';
     const source = document.createElement('span');
     source.className = 'px-1.5 font-semibold';
     source.style.backgroundColor = `hsl(${known.hue} 70% 55% / 0.32)`;
