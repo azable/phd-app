@@ -102,7 +102,8 @@
     __type,
     __links,
     __component,
-    __slot
+    __slot,
+    __text = false
   }: {
     /** A primitive to display, when the node has neither items nor children. */
     value?: Primitive;
@@ -180,6 +181,8 @@
     __component?: string;
     /** Internal: the element of the state this node draws, such as values[2], given by its collection or a renderer's caller. */
     __slot?: string;
+    /** Internal: set by the compiler on a node writing text around views, which sit inline in it. */
+    __text?: boolean;
   } = $props();
 
   const types = typeContext();
@@ -443,7 +446,8 @@
     data-sv-fill={paletteName(fill)}
     data-sv-stroke={paletteName(stroke)}
     data-sv-color={paletteName(color)}
-    class:cell={!arrangement && resolvedShape === 'box'}
+    class:cell={!arrangement && resolvedShape === 'box' && !__text}
+    class:text={__text}
     style:font-size={fontSize}
     style:font-weight={resolvedWeight === undefined
       ? undefined
@@ -516,6 +520,15 @@
   .cell {
     display: grid;
     place-items: center;
+  }
+  /*
+    Text written around views: the views sit in the line like words, centred on it, each its own
+    size, and the line wraps between them.
+  */
+  .text > :global(.sv-node) {
+    display: inline-grid;
+    place-items: center;
+    vertical-align: middle;
   }
   .sans {
     font-family: system-ui, sans-serif;

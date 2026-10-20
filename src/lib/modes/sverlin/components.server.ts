@@ -540,6 +540,22 @@ export function slotInsertions(
       walk(part.children, inner);
       return;
     }
+    // A node writing text around views reads as a line of text, its views set inline in it.
+    if (part.type === 'InlineComponent' && part.name === 'Node') {
+      const attributes = (part.attributes as Part[] | undefined) ?? [];
+      const children = (part.children as Part[] | undefined) ?? [];
+      const text = children.some(
+        (child) =>
+          (child.type === 'Text' && String(child.data ?? '').trim() !== '') ||
+          child.type === 'MustacheTag' ||
+          child.type === 'ExpressionTag'
+      );
+      const views = children.some(
+        (child) => child.type === 'RenderTag' || child.type === 'InlineComponent'
+      );
+      if (text && views && !attributes.some((attribute) => attribute.name === 'layout'))
+        insertions.push({ at: (part.start ?? 0) + '<Node'.length, text: ' __text' });
+    }
     if (part.type === 'ConstTag') {
       // A {@const} names a value of its own, which is an element only if it is an array or object.
       const assigned = (part.expression as Part | undefined)?.left;

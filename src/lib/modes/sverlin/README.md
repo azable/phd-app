@@ -48,6 +48,8 @@ Compute everything inline in markup. Svelte re-evaluates template expressions wh
 
 Facts about the algorithm, such as which cells were checked, are often clearer recorded as algorithm variables; keep purely visual choices in the view and design block.
 
+A node that writes text around nodes or views, with no `layout`, reads as a line of text: `<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>` sets the two views inline in the sentence, each its own size, and the line wraps between words. Drawing a value through its view this way, rather than as `{target}`, keeps it sized and styled like the value elsewhere.
+
 ## Steps
 
 - `yield;` records a step: a copy of every variable in scope there, the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.

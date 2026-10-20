@@ -133,3 +133,19 @@ describe('scope', () => {
     ).toContain('reads: ["e"], ');
   });
 });
+
+describe('text', () => {
+  it('sets views inline in a node that writes text around them', () => {
+    const view =
+      '<Node>Found {@render Int(target)} here</Node><Node>{@render Int(target)}</Node><Node layout="row">At {@render Int(target)}</Node>';
+    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    expect(
+      withInsertions(
+        view,
+        slotInsertions(ast.html, view, new Set(['target']), new Set(['Int']), new Set())
+      )
+    ).toBe(
+      '<Node __text>Found <SverlinSlot path="target">{@render Int(target)}</SverlinSlot> here</Node><Node><SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node><Node layout="row">At <SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node>'
+    );
+  });
+});
