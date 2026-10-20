@@ -15,6 +15,10 @@ export type TypeContext = {
   identityOf(path: string): number | undefined;
   /** Whether a variable is out of scope at this step, standing in hidden with another's value. */
   absent(name: string): boolean;
+  /** The identity of the element a reference refers to this step; none once it is gone. */
+  refOf(path: string): number | undefined;
+  /** The element with an identity this step, as queue[2]. */
+  elementWith(identity: number): string | undefined;
   /** Where an array or object taken from the props sits in the state, such as edges[0]. */
   pathOf(container: unknown): string | undefined;
   /** The collection a position at a path points into, such as left for i. */
@@ -208,6 +212,8 @@ export type PointerCall = {
   at?: () => string | number;
   /** The state variables its position is read from; with one out of scope it points nowhere. */
   reads?: readonly string[];
+  /** A reference's pointer: it points at the element the reference refers to, wherever it is. */
+  ref?: boolean;
 };
 
 /** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
@@ -230,12 +236,21 @@ export function providePointers(calls: readonly PointerCall[]): void {
     try {
       const path =
         call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
-      const position = call.value();
       const absent = call.reads?.some((name) => types?.absent(name)) ?? false;
-      found = {
-        collection: path === undefined ? undefined : types?.targetOf(path),
-        position: typeof position === 'number' && !absent ? position : undefined
-      };
+      if (call.ref) {
+        // A reference points at the element with the identity it refers to, wherever it is.
+        const identity = path === undefined || absent ? undefined : types?.refOf(path);
+        const element = elementSlot(
+          identity === undefined ? undefined : types?.elementWith(identity)
+        );
+        found = { collection: element?.collection, position: element?.index };
+      } else {
+        const position = call.value();
+        found = {
+          collection: path === undefined ? undefined : types?.targetOf(path),
+          position: typeof position === 'number' && !absent ? position : undefined
+        };
+      }
     } catch {
       // Points nowhere.
     }

@@ -332,7 +332,7 @@ export function pointerCalls(
    * Each pointer view, with the collection type its index type points into,
    * and the code of a function giving its <Pointed>'s props for a position, which links it points at take.
    */
-  pointers: ReadonlyMap<string, { into: string; paint: string }>,
+  pointers: ReadonlyMap<string, { into: string; ref?: boolean; paint: string }>,
   /** The state variables out of scope at some step, which a pointer reading one names. */
   scoped: ReadonlySet<string> = new Set()
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
@@ -382,7 +382,7 @@ export function pointerCalls(
       else {
         const reads = stateReadsOf(argument, scoped);
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${pointers.get(name)?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -746,6 +746,9 @@ export function probeValues(
           widest: members.flatMap((values) => values.widest)
         };
       }
+      // A reference is drawn as the element it refers to.
+      case 'ref':
+        return valuesOf(structure.element, path, single);
       case 'record': {
         const names = Object.keys(structure.fields);
         const fields = names.map((name) =>

@@ -42,6 +42,7 @@ type StepState = Record<string, unknown> & {
   __targets?: Record<string, string>;
   __identities?: Record<string, number>;
   __copies?: Record<number, number>;
+  __refs?: Record<string, number>;
   /** Variables out of scope at the step, standing in hidden with a value from another. */
   __absent?: string[];
   __defaults: NodeDefaults;
@@ -184,6 +185,7 @@ function mountStep(
     __targets: targets = {},
     __identities: identities = {},
     __copies: copies = {},
+    __refs: refs = {},
     __absent: absent = [],
     __defaults: defaults,
     __frame: frame,
@@ -246,6 +248,11 @@ function mountStep(
             targetOf: (path: string) => targets[path],
             identityOf: (path: string) => identities[path],
             absent: (name: string) => absent.includes(name),
+            refOf: (path: string) => refs[path],
+            elementWith: (identity: number) =>
+              Object.keys(identities).find(
+                (path) => identities[path] === identity && /\[\d+\]$/u.test(path)
+              ),
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
             heldBy: (name: string) => held.get(name),

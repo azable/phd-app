@@ -48,13 +48,17 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), or index(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
         );
       const call = init as CallExpression;
       if (name in atoms || name in structures)
         fail(declarator as AnyNode, `"${name}" is already a type.`);
       if (kind === 'index') {
         atoms[name] = defineIndex(name, call);
+        continue;
+      }
+      if (kind === 'ref') {
+        structures[name] = defineRef(name, call);
         continue;
       }
       if (kind !== 'type') {
@@ -132,6 +136,26 @@ export function interpretDomain(body: string): DomainRegistry {
     return { name, base: 'integer', index: collection };
   }
 
+  /**
+   * A reference to an element of a collection type, as in ref(Queue). Its elements are single
+   * values: a record's fields are values of their own, which a reference would also have to follow.
+   */
+  function defineRef(name: string, call: CallExpression): StructureType {
+    const args = call.arguments as Expression[];
+    if (args.length !== 1) fail(call, 'ref() takes one collection type, as in ref(Queue).');
+    const collection = defined(args[0], 'A reference’s collection type');
+    const structure = structures[collection];
+    if (structure?.kind !== 'collection')
+      fail(args[0], `ref() refers to elements of a collection type, and ${collection} is not one.`);
+    const { element } = structure as { element: string };
+    if (!Object.hasOwn(atoms, element))
+      fail(
+        args[0],
+        `ref() refers to elements that are single values, and ${collection} holds ${element}s; refer to one of its fields' collections, or use an index(${collection}).`
+      );
+    return { kind: 'ref', name, collection, element };
+  }
+
   function defineStructure(
     name: string,
     kind: StructureType['kind'],
@@ -167,7 +191,7 @@ export function interpretDomain(body: string): DomainRegistry {
       fields[key.name] = defined(value, `The field ${key.name}`);
     }
     if (Object.keys(fields).length === 0) fail(call, 'A record needs at least one field.');
-    return { kind, name, fields };
+    return { kind: 'record', name, fields };
   }
 }
 

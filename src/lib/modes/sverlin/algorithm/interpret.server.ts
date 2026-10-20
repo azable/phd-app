@@ -36,6 +36,7 @@ import {
   type CollectionType,
   type DomainRegistry,
   type RecordType,
+  type RefType,
   type UnionType
 } from './structures.server';
 
@@ -410,7 +411,8 @@ class Interpreter {
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
     const positions: [string, number][] = [];
-    for (const [name, binding] of this.#inScope(scope)) {
+    const inScope = this.#inScope(scope);
+    for (const [name, binding] of inScope) {
       state[name] = this.#snapshot(binding.value, node, name, {
         types,
         targets,
@@ -418,6 +420,22 @@ class Interpreter {
         positions
       });
       if (binding.target) targets[name] = binding.target;
+      // A reference is no place of its own: it records which element of a collection of its
+      // type it refers to, as the same value can also be a field elsewhere, as an edge's end.
+      const ref = this.#domain.structures[binding.type ?? ''];
+      if (ref?.kind === 'ref') {
+        types[name] = ref.name;
+        const at = placed.findIndex(([path]) => path === name);
+        if (at >= 0) placed.splice(at, 1);
+        const element = inScope.flatMap(([collection, { value }]) => {
+          const index =
+            Array.isArray(value) && this.#shapes.get(value)?.name === ref.collection
+              ? value.indexOf(binding.value)
+              : -1;
+          return index >= 0 ? [`${collection}[${index}]`] : [];
+        })[0];
+        placed.push([name, binding.value as object, 'ref', element]);
+      }
     }
     if (this.#kind === 'algorithm')
       for (const [path, value] of positions)
@@ -529,7 +547,27 @@ class Interpreter {
     const structure = this.#domain.structures[typeName];
     if (structure.kind === 'union') return this.#asMember(value, structure, node, path);
     if (structure.kind === 'record') return this.#asRecord(value, structure, node, path);
+    if (structure.kind === 'ref') return this.#asRef(value, structure, node);
     return this.#asCollection(value, structure, node, path);
+  }
+
+  /**
+   * A reference is the element itself, taken from a collection of its type: the snapshot records
+   * which element it is (identities.server.ts), so it stays with it as it moves.
+   */
+  #asRef(value: Value, ref: RefType, node: AnyNode): Value {
+    const held = [...this.#topLevel.bindings.values()].some(
+      ({ value: collection }) =>
+        Array.isArray(collection) &&
+        this.#shapes.get(collection)?.name === ref.collection &&
+        collection.includes(value)
+    );
+    if (!held)
+      this.#fail(
+        node,
+        `A ${ref.name} refers to an element of a ${ref.collection}, so make it from one, as in ${ref.name}(${this.#collectionsOf({ name: ref.name, base: 'integer', index: ref.collection })[0] ?? 'queue'}[0]).`
+      );
+    return value;
   }
 
   #asAtom(value: Value, type: AtomType, node: AnyNode, path: string): Atom {
@@ -1402,7 +1440,8 @@ class Interpreter {
     }
     if (!made) return value as Value;
     const shape = typeName ? this.#domain.structures[typeName] : undefined;
-    if (shape && shape.kind !== 'union') this.#shapes.set(made, shape);
+    if (shape && (shape.kind === 'record' || shape.kind === 'collection'))
+      this.#shapes.set(made, shape);
     return made;
   }
 

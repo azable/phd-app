@@ -11,12 +11,25 @@
 
 /**
  * A recorded value's place: a collection or record (`shared`, one id wherever held), a typed value
- * a collection or record holds (`held`), or a typed value a variable holds (`variable`).
+ * a collection or record holds (`held`), or a typed value a variable holds (`variable`). A
+ * reference (`ref`) is no place: it names the element it refers to, as queue[0], if it is there.
  */
-export type Placed = readonly [path: string, value: object, kind: 'shared' | 'held' | 'variable'];
+export type Placed = readonly [
+  path: string,
+  value: object,
+  kind: 'shared' | 'held' | 'variable' | 'ref',
+  element?: string
+];
 
-/** The id of each recorded place, and the id each copy was made from. */
-export type StepIdentities = { ids: Record<string, number>; copies: Record<number, number> };
+/**
+ * The id of each recorded place, the id each copy was made from, and the element each reference
+ * refers to, by id; a reference whose element is gone has none.
+ */
+export type StepIdentities = {
+  ids: Record<string, number>;
+  copies: Record<number, number>;
+  refs: Record<string, number>;
+};
 
 type Claiming = {
   ids: Record<string, number>;
@@ -41,6 +54,11 @@ export class Identities {
     const held = placed.filter(([, , kind]) => kind === 'held');
     this.#claim(held, claiming);
     const holder = new Map(held.map(([path, value]) => [value, ids[path]]));
+    // A reference has the identity of the element it refers to.
+    const refs: Record<string, number> = {};
+    for (const [path, , kind, element] of placed)
+      if (kind === 'ref' && element !== undefined && ids[element] !== undefined)
+        refs[path] = ids[element];
     const alone: Placed[] = [];
     for (const place of placed) {
       const [path, value, kind] = place;
@@ -58,11 +76,11 @@ export class Identities {
     }
     this.#claim(alone, claiming);
 
-    const values = placed.filter(([, , kind]) => kind !== 'shared');
+    const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
     for (const [path, value] of values)
       if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
     this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
-    return { ids, copies };
+    return { ids, copies, refs };
   }
 
   /**

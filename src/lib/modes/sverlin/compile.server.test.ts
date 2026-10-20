@@ -487,7 +487,7 @@ describe('pointers', () => {
     [
       'a pointer that is not a view of an index type',
       '{#snippet Mark(v: Int)}<Pointed />{/snippet}',
-      /Int is not an index type/
+      /Int is neither an index nor a reference type/
     ],
     [
       'two <Pointed> in one pointer',

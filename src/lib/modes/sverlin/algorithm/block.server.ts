@@ -15,7 +15,8 @@ export const domainFunctions: ReadonlySet<string> = new Set([
   'union',
   'record',
   'collection',
-  'index'
+  'index',
+  'ref'
 ]);
 
 /** Property names no block may read, write, or declare. */

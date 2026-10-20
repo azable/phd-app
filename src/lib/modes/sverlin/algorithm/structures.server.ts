@@ -9,7 +9,12 @@ import { noAtoms, type AtomRegistry } from './atoms.server';
 export type UnionType = { kind: 'union'; name: string; members: readonly string[] };
 export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record<string, string>> };
 export type CollectionType = { kind: 'collection'; name: string; element: string };
-export type StructureType = UnionType | RecordType | CollectionType;
+/**
+ * A reference to an element of a collection type, as in ref(Queue): it reads as the element, and
+ * stays with it wherever it moves, pointing at nothing once it is gone.
+ */
+export type RefType = { kind: 'ref'; name: string; collection: string; element: string };
+export type StructureType = UnionType | RecordType | CollectionType | RefType;
 
 /** Every type a component defines, by name: atomic types and the structures built from them. */
 export type DomainRegistry = {

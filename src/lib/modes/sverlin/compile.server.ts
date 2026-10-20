@@ -417,7 +417,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           return [
             name,
             {
-              into: domain.atoms[type]?.index ?? '',
+              ...(domain.structures[type]?.kind === 'ref'
+                ? {
+                    into: (domain.structures[type] as { collection: string }).collection,
+                    ref: true
+                  }
+                : { into: domain.atoms[type]?.index ?? '' }),
               paint
             }
           ];
@@ -591,6 +596,7 @@ export async function bundlePresentation(
       __absent: Object.keys(standIn.state),
       __identities: master[index].identities?.ids ?? {},
       __copies: master[index].identities?.copies ?? {},
+      __refs: master[index].identities?.refs ?? {},
       __frame: frame,
       __defaults: defaults
     };
@@ -1088,9 +1094,9 @@ function checkComponents(
         `${name} reads ${state}, an input or algorithm variable; a component reads only its value and design values. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
         at
       );
-    if (pointers.has(name) && !domain.atoms[type]?.index)
+    if (pointers.has(name) && !domain.atoms[type]?.index && domain.structures[type]?.kind !== 'ref')
       throw new InvalidSvelteSourceError(
-        `${name} has a <Pointed>, which stands for the element a position points at, and ${type} is not an index type; a pointer views one, as in const Position = index(Values);.`,
+        `${name} has a <Pointed>, which stands for the element a position or reference points at, and ${type} is neither an index nor a reference type; a pointer views one, as in const Position = index(Values); or const Front = ref(Queue);.`,
         at
       );
     signatures[name] = type;
