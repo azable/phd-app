@@ -17,7 +17,6 @@ describe('drawn Node defaults', () => {
     }
     expect(defaultsPolicy['frame.justify'].pick).toContain(first.frame.justify);
     expect(defaultsPolicy['frame.align'].pick).toContain(first.frame.align);
-    expect(defaultsPolicy['frame.layout'].pick).toContain(first.frame.layout);
     expect(defaultsPolicy.gap.pick).toContain(first.gap);
     expect(defaultsPolicy.font.pick).toContain(first.font);
     expect(defaultsPolicy['box.scale'].pick).toContain(first.box.scale);
@@ -36,15 +35,6 @@ describe('drawn Node defaults', () => {
     const cards = drawn.filter(({ collection }) => collection.shape === 'card').length;
     expect(cards).toBeGreaterThan(40);
     expect(cards).toBeLessThan(120);
-  });
-
-  it('lays the top level out freely in only a few presentations', () => {
-    const free = Array.from(
-      { length: 500 },
-      (_, seed) => drawDefaults(seed + 1).frame.layout
-    ).filter((layout) => layout === 'free').length;
-    expect(free).toBeGreaterThan(20);
-    expect(free).toBeLessThan(90);
   });
 
   it('draws pale HSL tints within their ranges, sometimes the plain surface', () => {

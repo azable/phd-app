@@ -23,18 +23,12 @@ export type FrameSettings = {
   /** Unset, it comes from the drawn defaults. */
   align?: Align;
   padding: Spacing;
-  /** How the view's top-level nodes are arranged; unset, it comes from the drawn defaults. */
+  /** How the view's top-level nodes are arranged; unset, a column. */
   layout?: FrameLayout;
-  /** Relations between top-level nodes by key, as for a node's constraints. */
-  constraints?: string[];
-  /** A seed for the top-level arrangement alone, to keep a free layout the participant liked. */
-  layoutSeed?: number;
-  /** Set when <Link> components join top-level nodes, so the root lays out with them. */
-  linked?: boolean;
 };
 
 /** The arrangements the page frame offers its top-level nodes. */
-export type FrameLayout = 'column' | 'row' | 'free';
+export type FrameLayout = 'column' | 'row';
 
 /** Which of the presentation's drawn looks a node takes: a cell, a card, or none. */
 export type NodeShape = 'box' | 'card' | 'plain';
@@ -108,7 +102,7 @@ export type ShapeDefaults = {
 export type NodeDefaults = {
   box: ShapeDefaults;
   card: ShapeDefaults;
-  frame: { justify: Justify; align: Align; layout: FrameLayout };
+  frame: { justify: Justify; align: Align };
   collection: { shape: NodeShape };
   align: { row: Align; column: Align };
   gap: Spacing;

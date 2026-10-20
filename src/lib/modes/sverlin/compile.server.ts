@@ -136,8 +136,6 @@ export type PreparedComponent = {
   /** Values the root reads for placement, measured with every value of their types. */
   placements: Placement[];
   design?: Block;
-  /** Whether <Link> components sit at the top of the view, between top-level nodes. */
-  topLevelLinks?: boolean;
 };
 
 export class InvalidSvelteSourceError extends Error {
@@ -257,13 +255,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const choices = blocks.design
       ? interpretBlock(source, blocks.design, (body) => designChoices(body))
       : {};
-    const { insertions, topLevelLinks, problems } = withNodeRefs(
-      svelteSource,
-      ast,
-      source,
-      choices,
-      found.roots
-    );
+    const { insertions, problems } = withNodeRefs(svelteSource, ast, source, choices, found.roots);
     viewProblems = [
       ...problems,
       ...found.problems.map(
@@ -550,7 +542,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       atoms,
       components: probes,
       placements,
-      ...(topLevelLinks ? { topLevelLinks } : {}),
       ...(blocks.design ? { design: blocks.design } : {})
     };
   } catch (cause) {
@@ -618,10 +609,7 @@ export async function bundlePresentation(
       { code: 'design_value', start: designAt(prepared, 'defaults') }
     );
   const defaults = drawDefaults((key) => keyedRandom(seed, key));
-  const frame = {
-    ...located(() => frameSettings(parameters.frame), designAt(prepared, 'frame')),
-    ...(prepared.topLevelLinks ? { linked: true } : {})
-  };
+  const frame = located(() => frameSettings(parameters.frame), designAt(prepared, 'frame'));
   // Every presentation shows every master step until steps can be mapped to frames.
   const masterSteps = master.map((_, index) => index);
   // Each step's state carries its atomic types, the page frame, and the drawn defaults for the view,
@@ -1002,7 +990,7 @@ function withNodeRefs(
   choices: Record<string, DesignChoices>,
   /** The root <Node> tags of components, by where they start, with the component each roots. */
   roots: ReadonlyMap<number, string>
-): { insertions: Insertion[]; topLevelLinks: boolean; problems: InvalidSvelteSourceError[] } {
+): { insertions: Insertion[]; problems: InvalidSvelteSourceError[] } {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
     type?: string;
@@ -1011,7 +999,6 @@ function withNodeRefs(
     attributes?: Attribute[];
   };
   const tags: { start: number; name: string; links: boolean }[] = [];
-  let topLevelLinks = false;
   const reject = (message: string, code: string, start: number | undefined) =>
     problems.push(
       new InvalidSvelteSourceError(message, { code, start: sourcePosition(source, start ?? 0) })
@@ -1071,7 +1058,13 @@ function withNodeRefs(
       if (tag.name !== 'Pointed') tags.push(entry);
       if (tag.name === 'Link') {
         if (around) around.links = true;
-        else topLevelLinks = true;
+        // In a view, as of an edge, it joins the children of the node the view is rendered in.
+        else if (!inNode)
+          reject(
+            'A <Link> joins children of the node around it: put it, with the nodes it joins, in a <Node layout="free">.',
+            'link_placement',
+            tag.start
+          );
       }
       walk(tag.children, tag.name === 'Node' ? entry : around, true);
       return;
@@ -1096,7 +1089,7 @@ function withNodeRefs(
       text: ` __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}`
     };
   });
-  return { insertions, topLevelLinks, problems };
+  return { insertions, problems };
 }
 
 /**
@@ -1335,30 +1328,18 @@ function frameSettings(value: unknown): FrameSettings {
         .join(', ')}.`
     );
   };
-  const settings = ['ratio', 'justify', 'align', 'padding', 'layout', 'constraints', 'layoutSeed'];
+  // The frame arranges its top-level nodes in a column or row; a free arrangement, with its
+  // relations and seed, belongs in a node.
+  if (given.layout === 'free' || given.constraints !== undefined || given.layoutSeed !== undefined)
+    throw new InvalidSvelteSourceError(
+      'The frame arranges the top-level nodes in a column or row. To place nodes freely, relate them, or join them with links, put them in a <Node layout="free"> and give that node its constraints and layoutSeed.'
+    );
+  const settings = ['ratio', 'justify', 'align', 'padding', 'layout'];
   const unknown = Object.keys(given).find((key) => !settings.includes(key));
   if (unknown)
     throw new InvalidSvelteSourceError(
       `The design value frame has no setting ${unknown}; use ${settings.join(', ')}.`
     );
-  // Relations are short strings, checked in full where the page lays out.
-  const strings = (key: 'constraints') => {
-    const list = given[key];
-    if (list === undefined) return undefined;
-    if (
-      !Array.isArray(list) ||
-      list.length > 100 ||
-      !list.every((entry) => typeof entry === 'string' && entry.length <= 200)
-    )
-      throw new InvalidSvelteSourceError(
-        `The design value frame.${key} must be a list of strings such as 'note below cells'.`
-      );
-    return list as string[];
-  };
-  const constraints = strings('constraints');
-  const layoutSeed = given.layoutSeed;
-  if (layoutSeed !== undefined && !Number.isSafeInteger(layoutSeed))
-    throw new InvalidSvelteSourceError('The design value frame.layoutSeed must be a whole number.');
   const padding = given.padding ?? 'large';
   if (!(typeof padding === 'number' && Number.isFinite(padding)))
     choice('padding', spacings, 'large');
@@ -1367,9 +1348,7 @@ function frameSettings(value: unknown): FrameSettings {
     justify: choice('justify', justifications) as FrameSettings['justify'],
     align: choice('align', alignments) as FrameSettings['align'],
     padding: padding as FrameSettings['padding'],
-    layout: choice('layout', { column: 1, row: 1, free: 1 }) as FrameSettings['layout'],
-    ...(constraints ? { constraints } : {}),
-    ...(layoutSeed !== undefined ? { layoutSeed: layoutSeed as number } : {})
+    layout: choice('layout', { column: 1, row: 1 }) as FrameSettings['layout']
   };
 }
 

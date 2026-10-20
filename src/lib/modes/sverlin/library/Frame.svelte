@@ -16,8 +16,6 @@
     provideNodeIds,
     provideSeed
   } from './type-context';
-  import Arranged from './node/Arranged.svelte';
-  import type { Template } from './node/arrange';
   import {
     alignments,
     frameRatios,
@@ -51,14 +49,6 @@
   const drawn = defaultsContext();
   const memory = layoutMemoryContext();
 
-  // The top-level nodes form a column or row by CSS, or are placed by constraint layout when the
-  // arrangement is free, the design relates them, or <Link> components join them.
-  const rootLayout = $derived(settings.layout ?? (settings.linked ? 'free' : drawn.frame.layout));
-  const rootSolved = $derived<Template | undefined>(
-    rootLayout === 'free' || settings.constraints?.length || settings.linked
-      ? rootLayout
-      : undefined
-  );
   let frameElement = $state<HTMLDivElement>();
   let rootElement = $state<HTMLDivElement>();
   // An arranged root larger than the frame's inside is scaled down to fit it.
@@ -85,21 +75,20 @@
         width: frameElement.clientWidth - parseFloat(style.paddingLeft) * 2,
         height: frameElement.clientHeight - parseFloat(style.paddingTop) * 2
       };
-      // A CSS root is stretched to the frame, so its content's own extent is measured instead.
-      const content = block.classList.contains('sv-flow') ? flowExtent(block) : undefined;
-      const natural = content ?? { width: block.offsetWidth, height: block.offsetHeight };
+      // The root is stretched to the frame, so its content's own extent is measured instead.
+      const content = flowExtent(block);
       const needed = Math.min(
         largestFit,
-        inside.width / Math.max(1, natural.width),
-        inside.height / Math.max(1, natural.height)
+        inside.width / Math.max(1, content.width),
+        inside.height / Math.max(1, content.height)
       );
       // Every step shows at the smallest fit any step needs, so the view never zooms between them.
       if (memory?.recording) memory.fits.set(memory.step, needed);
       fit = memory && !memory.recording ? Math.min(needed, ...memory.fits.values()) : needed;
-      if (content) flowLeast = { width: inside.width / fit, height: inside.height / fit };
+      flowLeast = { width: inside.width / fit, height: inside.height / fit };
       rootSize = {
-        width: content ? Math.max(content.width, inside.width / fit) : natural.width,
-        height: content ? Math.max(content.height, inside.height / fit) : natural.height
+        width: Math.max(content.width, inside.width / fit),
+        height: Math.max(content.height, inside.height / fit)
       };
     }
     layoutRevision++;
@@ -248,15 +237,15 @@
 
   /**
    * The constraint layouts around a selected node: the one placing it among its siblings, and the
-   * one placing its own children, if any. Each names the node it belongs to (or the frame) and the
-   * seed it drew from, so feedback such as "keep this layout" can pin that seed.
+   * one placing its own children, if any. Each names the node it belongs to and the seed it drew
+   * from, so feedback such as "keep this layout" can pin that seed.
    */
   function layoutsOf(element: HTMLElement) {
     const own = element.querySelector<HTMLElement>(':scope > .sv-arranged');
     const placing = element.parentElement?.closest<HTMLElement>('.sv-arranged');
     return [own, placing].flatMap((arranged) => {
-      if (!arranged) return [];
-      const owner = arranged.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode ?? 'frame';
+      const owner = arranged?.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode;
+      if (!arranged || !owner) return [];
       const { svLayoutSeed, svForm, svCurve } = arranged.dataset;
       return [
         {
@@ -539,35 +528,22 @@
       style:height="{rootSize.height * fit}px"
     >
       <div class="sv-root-inner" style:transform="scale({fit})">
-        {#if rootSolved}
-          <Arranged
-            template={rootSolved}
-            align={settings.align ?? drawn.frame.align}
-            constraints={settings.constraints}
-            gap={drawn.gap}
-            scope="frame"
-            layoutSeed={settings.layoutSeed}
-          >
-            <View {...props} />
-          </Arranged>
-        {:else}
-          <!-- At least the frame's inside, so justify and align spread what fits. -->
-          <div
-            class="sv-flow"
-            style:flex-direction={rootLayout === 'row' ? 'row' : 'column'}
-            style:gap={measure(spacings, drawn.gap)}
-            style:justify-content={justifications[settings.justify ?? drawn.frame.justify]}
-            style:align-items={alignments[settings.align ?? drawn.frame.align]}
-            style:min-width={flowLeast
-              ? `${flowLeast.width}px`
-              : `calc(${width}px - 2 * ${measure(spacings, settings.padding)})`}
-            style:min-height={flowLeast
-              ? `${flowLeast.height}px`
-              : `calc(${height}px - 2 * ${measure(spacings, settings.padding)})`}
-          >
-            <View {...props} />
-          </div>
-        {/if}
+        <!-- At least the frame's inside, so justify and align spread what fits. -->
+        <div
+          class="sv-flow"
+          style:flex-direction={settings.layout ?? 'column'}
+          style:gap={measure(spacings, drawn.gap)}
+          style:justify-content={justifications[settings.justify ?? drawn.frame.justify]}
+          style:align-items={alignments[settings.align ?? drawn.frame.align]}
+          style:min-width={flowLeast
+            ? `${flowLeast.width}px`
+            : `calc(${width}px - 2 * ${measure(spacings, settings.padding)})`}
+          style:min-height={flowLeast
+            ? `${flowLeast.height}px`
+            : `calc(${height}px - 2 * ${measure(spacings, settings.padding)})`}
+        >
+          <View {...props} />
+        </div>
       </div>
     </div>
   </div>

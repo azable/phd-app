@@ -121,9 +121,8 @@ export type AiSelectedElement = {
   source: ElementLocation;
   /**
    * The constraint layouts around the element: the one placing it and the one placing its children.
-   * Each gives the arranging node (its tag in the source, or the frame), the seed its layout drew
-   * from, and what it drew; setting that node's layoutSeed (frame.layoutSeed for the frame) to the
-   * seed keeps the layout in every presentation.
+   * Each gives the arranging node (its tag in the source), the seed its layout drew from, and what
+   * it drew; setting that node's layoutSeed to the seed keeps the layout in every presentation.
    */
   layouts: Array<{
     node: string;
@@ -392,10 +391,7 @@ function selectedElement(
       source,
       ...(reference.element.bend !== undefined ? { bend: reference.element.bend } : {}),
       layouts: (reference.element.layouts ?? []).map((layout) => {
-        const located =
-          layout.node === 'frame'
-            ? undefined
-            : locateElement(presentation.source.text, layout.node);
+        const located = locateElement(presentation.source.text, layout.node);
         return { ...layout, ...(located ? { source: located } : {}) };
       })
     }

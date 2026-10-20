@@ -169,7 +169,7 @@ The view receives plain arrays and objects, drawn by the views of their types: a
 
 - Draws are `pick(['row', 'grid'])`, `int(3, 6)` (inclusive), `real(0.5, 1.5)`, and `chance(0.3)`, each only in the value of a top-level `const`, either the whole value or inside its object and array literals, such as `const layout = pick(['row', 'grid']);` or `const look = { radius: pick(['medium', 'full']), sizes: [int(1, 3)] };`. Other design constants may combine earlier ones. A seed always draws the same values.
 - Use design values for styling, layout, wording, and library component props. The input and algorithm cannot see them, so steps never depend on the seed.
-- The design value `frame` shapes the page frame that holds the view's top-level nodes: a ratio such as `const frame = '4:3';`, or an object with any of `ratio` (`'16:9'`, the default, `'4:3'`, `'3:2'`, `'1:1'`, `'3:4'`, or `'9:16'`), `justify`, `align`, `padding` (default `'large'`), `layout` (`'column'`, `'row'`, or `'free'`), and `constraints` between top-level nodes by their `key`, as for a node's own (put `<Link>` components at the top of the view to join top-level nodes), and `layoutSeed` to keep a free top-level layout the participant liked, such as `const frame = { layout: 'free', constraints: ['note below cells'] };`. Unset `justify`, `align`, and `layout` are drawn (see Start unopinionated); leave `layout` unset.
+- The design value `frame` shapes the page frame that holds the view's top-level nodes: a ratio such as `const frame = '4:3';`, or an object with any of `ratio` (`'16:9'`, the default, `'4:3'`, `'3:2'`, `'1:1'`, `'3:4'`, or `'9:16'`), `justify`, `align`, `padding` (default `'large'`), `layout` (`'column'`, the default, or `'row'`), as `const frame = { ratio: '4:3', align: 'center' };`. Unset `justify` and `align` are drawn (see Start unopinionated). The frame only stacks its top-level nodes: to place nodes freely, relate them, or join them with links, put them in a `<Node layout="free">` (see Free layout, links, and relations).
 - Design names must differ from input and algorithm names.
 
 ## The subset
@@ -233,7 +233,7 @@ Every prop a view leaves unset has a default, and these defaults are drawn, so t
 - on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), and text size and weight;
 - on cards: radius, border width, padding, and tint;
 - on every arrangement: the gap, and how rows and columns align their items;
-- on the page: the font, and how the page frame spreads, aligns, and arranges the top-level nodes (a column in most presentations, a free arrangement in a few);
+- on the page: the font, and how the page frame spreads and aligns the top-level nodes;
 - in free layouts: the form, the positions, and the curves; on links: the width and the curve.
 
 The tints stay pale so they never compete with the palette colours you give meaning. Other defaults are fixed, such as colours, opacity, a node's layout, and the size of content such as titles.

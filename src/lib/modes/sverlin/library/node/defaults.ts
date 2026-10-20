@@ -7,7 +7,6 @@
 
 import type {
   Align,
-  FrameLayout,
   Justify,
   NodeDefaults,
   NodeFont,
@@ -61,9 +60,6 @@ export const defaultsPolicy = {
   // How a frame spreads and aligns its children, where the frame leaves them unset.
   'frame.justify': { pick: ['start', 'center', 'between', 'evenly'] },
   'frame.align': { pick: ['start', 'center'] },
-  // A column of top-level nodes, or now and then a free arrangement that differs with every seed:
-  // free top-level layouts seldom read as well as a column.
-  'frame.layout': { pick: ['column', 'free'], weights: [9, 1] },
   // Now and then a collection is drawn as a card around its items rather than bare.
   'collection.shape': { pick: ['plain', 'card'], weights: [3, 1] },
   // How rows and columns line their items up across their direction, where a node leaves it unset.
@@ -115,8 +111,7 @@ export function drawDefaults(random: (key: string) => number): NodeDefaults {
     card: shape('card'),
     frame: {
       justify: choose('frame.justify') as Justify,
-      align: choose('frame.align') as Align,
-      layout: choose('frame.layout') as FrameLayout
+      align: choose('frame.align') as Align
     },
     collection: { shape: choose('collection.shape') as NodeShape },
     align: { row: choose('row.align') as Align, column: choose('column.align') as Align },
