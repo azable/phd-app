@@ -28,6 +28,8 @@
     drawn?: readonly DrawnPresentation[];
     /** The drawn defaults each <Node> tag takes in the shown presentations. */
     drawnTags?: readonly TagDefaults[];
+    /** The source the drawn values were made in. */
+    drawnSource?: string;
     /** Build problems to underline, with the source they were found in. */
     diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
     onChange?: (value: string) => void;
@@ -41,6 +43,7 @@
     highlights = [],
     drawn = [],
     drawnTags = [],
+    drawnSource = '',
     diagnostics = { source: '', items: [] },
     onChange
   }: Props = $props();
@@ -108,11 +111,13 @@
     if (view) view.dispatch(showSourceHighlights(view.state, shown));
   });
 
-  // After the document, so draws are marked in the text they were made in.
+  // Drawn values are placed in the text they were made in; once that text is edited, CodeMirror
+  // moves them with the edits, so ghost props can still be written in, until it is that text again.
   $effect(() => {
     void value;
     const shown = { presentations: [...drawn], tags: [...drawnTags] };
-    if (view) view.dispatch({ effects: setDrawnValues.of(shown) });
+    if (view && view.state.doc.toString() === drawnSource)
+      view.dispatch({ effects: setDrawnValues.of(shown) });
   });
 
   // Diagnostics are placed in the text they were found in; once that text is edited, CodeMirror

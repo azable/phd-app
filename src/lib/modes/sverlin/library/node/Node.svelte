@@ -421,6 +421,7 @@
         strokeWidth === undefined && !strokeOff && `${resolvedShape}.strokeWidth`,
         padding === undefined && `${resolvedShape}.padding`,
         fill === undefined && `${resolvedShape}.fill`,
+        stroke === undefined && `${resolvedShape}.stroke`,
         size === undefined && look.scale !== undefined && `${resolvedShape}.scale`,
         weight === undefined && look.weight !== undefined && `${resolvedShape}.weight`
       ],

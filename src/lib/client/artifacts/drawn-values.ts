@@ -1,8 +1,8 @@
 /**
  * CodeMirror markers for what a presentation's seed drew: a mark over each draw call of the design
- * block with, after it, the value each shown presentation drew there, and after each tag that
- * arranges a constraint layout, the layout each shown presentation drew, and after each <Node> tag,
- * the drawn defaults it takes.
+ * block with, after it, the value each shown presentation drew there; and inside each <Node> tag,
+ * ghost props for what it left to the seed, its drawn defaults and the layout it arranged, written
+ * as the view would write them. In an editable editor, clicking a ghost value writes it as a prop.
  *
  * @packageDocumentation
  */
@@ -12,7 +12,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import type { DefaultPill, TagDefaults } from './drawn-defaults';
+import { propText, type GhostProp, type TagDefaults } from './drawn-defaults';
 import { tagEnd } from './selection-highlights';
 
 /**
@@ -41,10 +41,10 @@ export const setDrawnValues = StateEffect.define<{
   tags: readonly TagDefaults[];
 }>();
 
-/**
- * What each shown presentation drew at one place: a draw call, marked from `from` to `to`, or a
- * tag arranging a layout, where `from` and `to` are both just past the tag.
- */
+/** Remove one ghost prop, once it has been written into the source. */
+const removeGhost = StateEffect.define<{ at: number; name: string }>();
+
+/** What each shown presentation drew at one design-block draw call, from `from` to `to`. */
 export type DrawnMarker = {
   from: number;
   to: number;
@@ -53,82 +53,101 @@ export type DrawnMarker = {
   differs: boolean;
 };
 
-/**
- * One marker per draw call and per arranging tag in the document, skipping places it does not
- * hold. A tag rendered more than once, as in an {#each}, shows each layout it drew once.
- */
+/** The ghost props of one tag, at the offset of its closing > (or />). */
+export type TagGhosts = { at: number; props: GhostProp[] };
+
+/** One marker per draw call in the document, skipping spans it does not hold. */
 export function drawnMarkers(
   state: EditorState,
   presentations: readonly DrawnPresentation[]
 ): DrawnMarker[] {
   const markers = new Map<number, DrawnMarker & { compared: Set<string> }>();
-  const add = (
-    from: number,
-    to: number,
-    value: DrawnMarker['values'][number],
-    compared: string
-  ) => {
-    const marker = markers.get(from) ?? {
-      from,
-      to,
-      values: [],
-      differs: false,
-      compared: new Set()
-    };
-    marker.values.push(value);
-    marker.compared.add(compared);
-    marker.differs = marker.compared.size > 1;
-    markers.set(from, marker);
-  };
-  for (const { label, seed, draws, layouts = [] } of presentations) {
+  for (const { label, seed, draws } of presentations)
     for (const draw of draws) {
       if (draw.start >= draw.end || draw.end > state.doc.length) continue;
-      add(
-        draw.start,
-        draw.end,
-        {
-          label,
-          text: valueText(draw.value),
-          title: `${draw.key} = ${JSON.stringify(draw.value)}, drawn by seed ${seed}`
-        },
-        JSON.stringify(draw.value)
-      );
+      const marker = markers.get(draw.start) ?? {
+        from: draw.start,
+        to: draw.end,
+        values: [],
+        differs: false,
+        compared: new Set<string>()
+      };
+      marker.values.push({
+        label,
+        text: valueText(draw.value),
+        title: `${draw.key} = ${JSON.stringify(draw.value)}, drawn by seed ${seed}`
+      });
+      marker.compared.add(JSON.stringify(draw.value));
+      marker.differs = marker.compared.size > 1;
+      markers.set(draw.start, marker);
     }
-    for (const [at, drawn] of layoutsByTag(state, layouts)) {
-      const shapes = [...new Set(drawn.map(layoutText))];
-      add(
-        at,
-        at,
-        {
-          label,
-          text: shapes.join(', '),
-          title: `Layout seeds ${[...new Set(drawn.map(({ seed: own }) => own))].join(', ')}; set layoutSeed to one to keep its layout`
-        },
-        JSON.stringify(shapes)
-      );
-    }
-  }
   return [...markers.values()]
     .map(({ compared: _compared, ...marker }) => marker)
     .sort((a, b) => a.from - b.from);
 }
 
-/** A presentation's layouts grouped by the offset just past the tag that arranges them. */
-function layoutsByTag(state: EditorState, layouts: readonly DrawnLayout[]) {
-  const tags = new Map<number, DrawnLayout[]>();
-  for (const layout of layouts) {
-    if (layout.line < 1 || layout.line > state.doc.lines) continue;
-    const from = state.doc.line(layout.line).from + layout.column - 1;
-    if (state.doc.sliceString(from, from + 5) !== '<Node') continue;
-    const at = from + tagEnd(state.doc.sliceString(from, from + 4000));
-    tags.set(at, [...(tags.get(at) ?? []), layout]);
+/**
+ * The ghost props of every <Node> tag in the document: the defaults it takes, then the layout it
+ * arranged (its form, curve, and layoutSeed). A tag rendered more than once, as in an {#each},
+ * shows each value it drew once, and can be pinned only where it drew one.
+ */
+export function tagGhosts(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[],
+  tags: readonly TagDefaults[]
+): TagGhosts[] {
+  const ghosts = new Map<number, GhostProp[]>();
+  const add = (line: number, column: number, props: GhostProp[]) => {
+    const at = closingAt(state, line, column);
+    if (at !== undefined && props.length) ghosts.set(at, [...(ghosts.get(at) ?? []), ...props]);
+  };
+  for (const { line, column, props } of tags) add(line, column, props);
+  const arranged = new Map<string, { line: number; column: number }>();
+  for (const { layouts = [] } of presentations)
+    for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
+  for (const { line, column } of arranged.values()) {
+    const drawn = presentations.map(({ label, layouts = [] }) => ({
+      label,
+      layouts: layouts.filter((layout) => layout.line === line && layout.column === column)
+    }));
+    const prop = (name: 'form' | 'curve' | 'layoutSeed'): GhostProp | undefined => {
+      const values = drawn.map(({ label, layouts }) => {
+        const distinct = [
+          ...new Set(layouts.map((layout) => (name === 'layoutSeed' ? layout.seed : layout[name])))
+        ].filter((value) => value !== undefined);
+        if (!distinct.length) return { label, text: '–', title: `No ${name} drawn here` };
+        return {
+          label,
+          text: distinct.length > 1 ? `${distinct.length} values` : String(distinct[0]),
+          title: `${name}: ${distinct.join(', ')}`,
+          ...(distinct.length === 1 ? { pin: propText(name, distinct[0]) } : {})
+        };
+      });
+      if (values.every(({ text }) => text === '–')) return undefined;
+      // Seeds differ wherever they are not pinned, so a pair is compared by its forms and curves.
+      const differs = name !== 'layoutSeed' && new Set(values.map(({ text }) => text)).size > 1;
+      return { name, values, differs };
+    };
+    add(
+      line,
+      column,
+      (['form', 'curve', 'layoutSeed'] as const).flatMap((name) => prop(name) ?? [])
+    );
   }
-  return tags;
+  return [...ghosts].map(([at, props]) => ({ at, props })).sort((a, b) => a.at - b.at);
 }
 
-/** A layout's form and curve, or that it drew neither. */
-function layoutText({ form, curve }: DrawnLayout): string {
-  return [form, curve].filter(Boolean).join(' ') || 'layout';
+/** Where a <Node> tag's props end, before its closing > or />, or undefined if none is there. */
+function closingAt(state: EditorState, line: number, column: number): number | undefined {
+  if (line < 1 || line > state.doc.lines) return undefined;
+  const from = state.doc.line(line).from + column - 1;
+  if (state.doc.sliceString(from, from + 5) !== '<Node') return undefined;
+  const end = from + tagEnd(state.doc.sliceString(from, from + 4000));
+  if (state.doc.sliceString(end - 1, end) !== '>') return undefined;
+  let at = state.doc.sliceString(end - 2, end - 1) === '/' ? end - 2 : end - 1;
+  // Before any space ahead of the >, so a prop written there reads name="value" />.
+  while (at > from && /\s/u.test(state.doc.sliceString(at - 1, at))) at--;
+  return at;
 }
 
 /** A short form of a drawn value: reals to two decimals, long values cut. */
@@ -174,39 +193,51 @@ class DrawnValuesWidget extends WidgetType {
   }
 }
 
-/** The defaults a tag takes, one pill per prop with each shown presentation's value. */
-class TagDefaultsWidget extends WidgetType {
-  constructor(private readonly pills: readonly DefaultPill[]) {
+/**
+ * A tag's ghost props, written as props: name= and each value as a pill, a pair's side by side. In an
+ * editable editor, a value with a pin writes that prop into the tag where the ghost was.
+ */
+class GhostPropsWidget extends WidgetType {
+  constructor(private readonly props: readonly GhostProp[]) {
     super();
   }
 
-  eq(other: TagDefaultsWidget): boolean {
-    return JSON.stringify(other.pills) === JSON.stringify(this.pills);
+  eq(other: GhostPropsWidget): boolean {
+    return JSON.stringify(other.props) === JSON.stringify(this.props);
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement('span');
-    wrapper.className = 'cm-drawn-values cm-drawn-defaults';
-    for (const { name, values, differs } of this.pills) {
-      const pill = document.createElement('span');
-      pill.className = differs ? 'cm-drawn-value cm-drawn-differs' : 'cm-drawn-value';
-      pill.title = values
-        .map(({ label, title }) => (label ? `${label}: ${title}` : title))
-        .join('\n');
+    wrapper.className = 'cm-ghost-props';
+    for (const { name, values, differs } of this.props) {
       const prop = document.createElement('span');
-      prop.className = 'cm-drawn-label';
-      prop.textContent = name;
-      pill.append(prop);
-      values.forEach(({ text, color }, index) => {
-        if (index) pill.append(' / ');
+      prop.className = differs ? 'cm-ghost-prop cm-drawn-differs' : 'cm-ghost-prop';
+      prop.append(` ${name}=`);
+      for (const { label, text, color, title, pin } of values) {
+        const value = document.createElement('span');
+        value.className = 'cm-ghost-value';
+        value.title = `${label ? `${label}: ` : ''}${title}${pin ? `\nWhile editing, click to write ${pin}` : ''}`;
         if (color) {
           const swatch = document.createElement('span');
           swatch.className = 'cm-drawn-swatch';
           swatch.style.backgroundColor = color;
-          pill.append(swatch);
-        } else pill.append(text);
-      });
-      wrapper.append(pill);
+          value.append(swatch);
+        } else value.append(text);
+        if (pin) {
+          value.dataset.pin = pin;
+          value.addEventListener('mousedown', (event) => {
+            if (view.state.readOnly) return;
+            event.preventDefault();
+            const at = view.posAtDOM(wrapper);
+            view.dispatch({
+              changes: { from: at, insert: ` ${pin}` },
+              effects: removeGhost.of({ at, name })
+            });
+          });
+        }
+        prop.append(value);
+      }
+      wrapper.append(prop);
     }
     return wrapper;
   }
@@ -216,51 +247,61 @@ class TagDefaultsWidget extends WidgetType {
   }
 }
 
-/** The offset just past each tag that takes defaults, with its pills, skipping tags not found. */
-export function tagDefaultsAt(
-  state: EditorState,
-  tags: readonly TagDefaults[]
-): { at: number; pills: DefaultPill[] }[] {
-  return tags.flatMap(({ line, column, pills }) => {
-    if (line < 1 || line > state.doc.lines || !pills.length) return [];
-    const from = state.doc.line(line).from + column - 1;
-    if (state.doc.sliceString(from, from + 5) !== '<Node') return [];
-    return [{ at: from + tagEnd(state.doc.sliceString(from, from + 4000)), pills }];
-  });
-}
+type DrawnState = { markers: DrawnMarker[]; ghosts: TagGhosts[] };
 
 const drawnCall = Decoration.mark({ class: 'cm-drawn-call' });
 const differingCall = Decoration.mark({ class: 'cm-drawn-call cm-drawn-differs' });
 
-function decorations(
-  state: EditorState,
-  {
-    presentations,
-    tags
-  }: { presentations: readonly DrawnPresentation[]; tags: readonly TagDefaults[] }
-) {
+function decorations({ markers, ghosts }: DrawnState): DecorationSet {
   const marks: Range<Decoration>[] = [];
-  for (const { at, pills } of tagDefaultsAt(state, tags))
-    marks.push(Decoration.widget({ widget: new TagDefaultsWidget(pills), side: 2 }).range(at));
-  for (const marker of drawnMarkers(state, presentations)) {
-    if (marker.from < marker.to)
-      marks.push((marker.differs ? differingCall : drawnCall).range(marker.from, marker.to));
+  for (const marker of markers) {
+    marks.push((marker.differs ? differingCall : drawnCall).range(marker.from, marker.to));
     marks.push(
       Decoration.widget({ widget: new DrawnValuesWidget(marker), side: 1 }).range(marker.to)
     );
   }
+  for (const { at, props } of ghosts)
+    if (props.length)
+      marks.push(Decoration.widget({ widget: new GhostPropsWidget(props), side: 1 }).range(at));
   return Decoration.set(marks, true);
 }
 
-const drawnField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
+// Markers keep their places through edits, as CodeMirror maps them, until the next set replaces them.
+const drawnField = StateField.define<DrawnState>({
+  create: () => ({ markers: [], ghosts: [] }),
   update(value, transaction) {
-    let next = value.map(transaction.changes);
-    for (const effect of transaction.effects)
-      if (effect.is(setDrawnValues)) next = decorations(transaction.state, effect.value);
+    const { changes } = transaction;
+    let next: DrawnState = transaction.docChanged
+      ? {
+          markers: value.markers.map((marker) => ({
+            ...marker,
+            from: changes.mapPos(marker.from),
+            to: changes.mapPos(marker.to)
+          })),
+          ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) }))
+        }
+      : value;
+    for (const effect of transaction.effects) {
+      if (effect.is(setDrawnValues))
+        next = {
+          markers: drawnMarkers(transaction.state, effect.value.presentations),
+          ghosts: tagGhosts(transaction.state, effect.value.presentations, effect.value.tags)
+        };
+      if (effect.is(removeGhost)) {
+        const at = changes.mapPos(effect.value.at, 1);
+        next = {
+          ...next,
+          ghosts: next.ghosts.map((tag) =>
+            tag.at === at
+              ? { ...tag, props: tag.props.filter(({ name }) => name !== effect.value.name) }
+              : tag
+          )
+        };
+      }
+    }
     return next;
   },
-  provide: (field) => EditorView.decorations.from(field)
+  provide: (field) => EditorView.decorations.from(field, decorations)
 });
 
 const drawnTheme = EditorView.baseTheme({
@@ -289,11 +330,34 @@ const drawnTheme = EditorView.baseTheme({
   '.cm-drawn-values.cm-drawn-differs .cm-drawn-value': {
     backgroundColor: 'color-mix(in oklab, #d97706 18%, transparent)'
   },
-  '.cm-drawn-defaults .cm-drawn-value': {
-    backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 12%, transparent)'
+  '.cm-drawn-label': {
+    marginRight: '0.25rem',
+    fontWeight: '600',
+    color: 'var(--muted-foreground)'
   },
-  '.cm-drawn-defaults .cm-drawn-value.cm-drawn-differs': {
-    backgroundColor: 'color-mix(in oklab, #d97706 18%, transparent)'
+  // Ghost props read as code the seed wrote, faded and slanted, with each value a pill as a draw's is.
+  '.cm-ghost-props': {
+    color: 'color-mix(in oklab, var(--card-foreground) 45%, transparent)',
+    fontStyle: 'italic'
+  },
+  '.cm-ghost-value': {
+    display: 'inline-block',
+    marginRight: '0.15rem',
+    padding: '0 0.3rem',
+    borderRadius: '3px',
+    fontSize: '0.75rem',
+    fontStyle: 'normal',
+    lineHeight: '1.35',
+    color: 'var(--card-foreground)',
+    backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 14%, transparent)',
+    cursor: 'default'
+  },
+  '.cm-ghost-prop.cm-drawn-differs .cm-ghost-value': {
+    backgroundColor: 'color-mix(in oklab, #d97706 20%, transparent)'
+  },
+  '.cm-content[contenteditable="true"] .cm-ghost-value[data-pin]:hover': {
+    cursor: 'pointer',
+    outline: '1px solid color-mix(in oklab, var(--card-foreground) 40%, transparent)'
   },
   '.cm-drawn-swatch': {
     display: 'inline-block',
@@ -302,11 +366,6 @@ const drawnTheme = EditorView.baseTheme({
     borderRadius: '2px',
     border: '1px solid color-mix(in oklab, var(--card-foreground) 30%, transparent)',
     verticalAlign: 'middle'
-  },
-  '.cm-drawn-label': {
-    marginRight: '0.25rem',
-    fontWeight: '600',
-    color: 'var(--muted-foreground)'
   }
 });
 

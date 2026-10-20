@@ -3,7 +3,7 @@ import { EditorState } from '@codemirror/state';
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import { drawnMarkers, valueText } from './drawn-values';
+import { drawnMarkers, tagGhosts, valueText } from './drawn-values';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -46,55 +46,95 @@ describe('drawn value markers', () => {
     expect(drawnMarkers(state, [{ seed: 1, draws: [accent('red'), size] }])).toEqual([]);
   });
 
-  it('shows each layout a tag arranged once, just past the tag, comparing forms but not seeds', () => {
+  it('writes a tag’s defaults and layout as ghost props before its >, pinning single values', () => {
     const view =
-      '<Node layout="free">\n  {#each items as item}<Node layout="free">{item}</Node>{/each}\n</Node>';
+      '<Node layout="free">\n  {#each items as item}<Node layout="free" />{/each}\n</Node>';
     const state = EditorState.create({ doc: view });
     const outer = { line: 1, column: 1 };
     const inner = { line: 2, column: 24 };
-    const markers = drawnMarkers(state, [
-      {
-        label: 'top',
-        seed: 1,
-        draws: [],
-        layouts: [
-          { ...outer, seed: 11, form: 'tree-down', curve: 'curved' },
-          { ...inner, seed: 12, form: 'radial' },
-          { ...inner, seed: 13, form: 'radial' }
-        ]
-      },
-      {
-        label: 'bottom',
-        seed: 2,
-        draws: [],
-        layouts: [
-          { ...outer, seed: 21, form: 'tree-down', curve: 'curved' },
-          { ...inner, seed: 22, form: 'layers-right' }
-        ]
-      }
-    ]);
+    const ghosts = tagGhosts(
+      state,
+      [
+        {
+          label: 'top',
+          seed: 1,
+          draws: [],
+          layouts: [
+            { ...outer, seed: 11, form: 'tree-down', curve: 'curved' },
+            { ...inner, seed: 12, form: 'radial' },
+            { ...inner, seed: 13, form: 'radial' }
+          ]
+        },
+        {
+          label: 'bottom',
+          seed: 2,
+          draws: [],
+          layouts: [
+            { ...outer, seed: 21, form: 'tree-down', curve: 'curved' },
+            { ...inner, seed: 22, form: 'layers-right' }
+          ]
+        }
+      ],
+      [
+        {
+          ...outer,
+          props: [{ name: 'gap', values: [{ text: 'small', title: '' }], differs: false }]
+        }
+      ]
+    );
     expect(
-      markers.map(({ from, to, values, differs }) => ({
-        before: view.slice(0, from).split('\n').at(-1),
-        empty: from === to,
-        values: values.map(({ text }) => text),
-        differs
+      ghosts.map(({ at, props }) => ({
+        before: view.slice(0, at).split('\n').at(-1),
+        props: props.map(({ name, values, differs }) => ({
+          name,
+          texts: values.map(({ text }) => text),
+          pins: values.map(({ pin }) => pin),
+          differs
+        }))
       }))
     ).toEqual([
       {
-        before: '<Node layout="free">',
-        empty: true,
-        values: ['tree-down curved', 'tree-down curved'],
-        differs: false
+        before: '<Node layout="free"',
+        props: [
+          { name: 'gap', texts: ['small'], pins: [undefined], differs: false },
+          {
+            name: 'form',
+            texts: ['tree-down', 'tree-down'],
+            pins: ['form="tree-down"', 'form="tree-down"'],
+            differs: false
+          },
+          {
+            name: 'curve',
+            texts: ['curved', 'curved'],
+            pins: ['curve="curved"', 'curve="curved"'],
+            differs: false
+          },
+          {
+            name: 'layoutSeed',
+            texts: ['11', '21'],
+            pins: ['layoutSeed={11}', 'layoutSeed={21}'],
+            differs: false
+          }
+        ]
       },
       {
-        before: '  {#each items as item}<Node layout="free">',
-        empty: true,
-        values: ['radial', 'layers-right'],
-        differs: true
+        before: '  {#each items as item}<Node layout="free"',
+        props: [
+          {
+            name: 'form',
+            texts: ['radial', 'layers-right'],
+            pins: ['form="radial"', 'form="layers-right"'],
+            differs: true
+          },
+          {
+            name: 'layoutSeed',
+            texts: ['2 values', '22'],
+            pins: [undefined, 'layoutSeed={22}'],
+            differs: false
+          }
+        ]
       }
     ]);
-    expect(markers[1].values[0].title).toContain('12, 13');
   });
 
   it('shortens reals and long values', () => {

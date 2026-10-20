@@ -29,7 +29,7 @@ describe('drawn defaults', () => {
     expect(drawnDefaults([{ defaults: undefined }])).toEqual([]);
   });
 
-  it('gives each tag one pill per default it takes, comparing a box’s and a card’s radius', () => {
+  it('gives each tag one ghost prop per default it takes, comparing a box’s and a card’s radius', () => {
     const tags = tagDefaults([
       {
         label: 'top',
@@ -47,14 +47,28 @@ describe('drawn defaults', () => {
     ]);
     expect(tags).toHaveLength(1);
     expect(
-      tags[0].pills.map(({ name, values, differs }) => ({
+      tags[0].props.map(({ name, values, differs }) => ({
         name,
         texts: values.map(({ text }) => text),
         differs
       }))
     ).toEqual([
       { name: 'radius', texts: ['full', 'small'], differs: true },
-      { name: 'tint', texts: ['hsl(1 2% 3%)', '–'], differs: true }
+      { name: 'fill', texts: ['hsl(1 2% 3%)', '–'], differs: true }
+    ]);
+  });
+
+  it('writes each value as the prop that keeps it, except a text scale no prop sets', () => {
+    const [tag] = tagDefaults([
+      {
+        defaults: { box: { radius: 'full', scale: 1.25 }, gap: 'small' },
+        nodeDefaults: [{ line: 1, column: 1, defaults: ['box.radius', 'box.scale', 'gap'] }]
+      }
+    ]);
+    expect(tag.props.map(({ values }) => values[0].pin)).toEqual([
+      'radius="full"',
+      undefined,
+      'gap="small"'
     ]);
   });
 });

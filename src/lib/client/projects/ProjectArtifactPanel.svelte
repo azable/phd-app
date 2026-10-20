@@ -73,8 +73,10 @@
       )
   );
   const unmatched = $derived(selectedSources.length > matching.length);
-  // Like selections, draws are marked only while the editor shows the source they were made in.
-  const drawn = $derived(drawnSources.filter(({ source }) => source === displayedSource));
+  // Draws are marked in the artifact's source, and keep their places in a draft made from it.
+  const drawn = $derived(
+    drawnSources.filter(({ source }) => source === (artifact?.content.text ?? ''))
+  );
   const drawnTags = $derived(tagDefaults(drawn));
   const drawnSeeds = $derived(
     drawn.map(({ label, seed }) => (label ? `${label}: ${seed}` : String(seed))).join(' · ')
@@ -223,6 +225,7 @@
             {highlights}
             {drawn}
             {drawnTags}
+            drawnSource={artifact.content.text}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />

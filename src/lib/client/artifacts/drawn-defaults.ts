@@ -54,20 +54,23 @@ function shown(value: unknown): { text: string; color?: string } {
 /** The drawn defaults one rendered node took, at its tag's line and column (both from 1). */
 export type NodeDefaultsTaken = { line: number; column: number; defaults: readonly string[] };
 
-/** One default a tag takes, such as its radius, and what each visible presentation drew for it. */
-export type DefaultPill = {
+/**
+ * One prop a tag leaves to the seed, such as its radius, and what each visible presentation drew
+ * for it; `pin` is the prop as the view would write it to keep that value, where one can.
+ */
+export type GhostProp = {
   name: string;
-  values: { label?: string; text: string; color?: string; title: string }[];
+  values: { label?: string; text: string; color?: string; title: string; pin?: string }[];
   differs: boolean;
 };
 
-/** The defaults a <Node> tag takes in the visible presentations, one pill per prop. */
-export type TagDefaults = { line: number; column: number; pills: DefaultPill[] };
+/** The defaults a <Node> tag takes in the visible presentations, one ghost prop per prop. */
+export type TagDefaults = { line: number; column: number; props: GhostProp[] };
 
 /**
- * The defaults each tag takes, joining every render of the tag. A prop is one pill whichever shape
- * it was drawn for, so a pair drawing a box and a card compares their radii; a presentation where
- * the tag does not take it shows –.
+ * The defaults each tag takes, joining every render of the tag. A prop is one ghost prop whichever
+ * shape it was drawn for, so a pair drawing a box and a card compares their radii; a presentation
+ * where the tag does not take it shows –.
  */
 export function tagDefaults(
   presentations: readonly {
@@ -84,7 +87,7 @@ export function tagDefaults(
         column,
         keys: presentations.map(() => new Map<string, string>())
       };
-      for (const key of defaults) tag.keys[index].set(pillName(key), key);
+      for (const key of defaults) tag.keys[index].set(propName(key), key);
       tags.set(`${line}:${column}`, tag);
     }
   });
@@ -93,12 +96,17 @@ export function tagDefaults(
     return {
       line,
       column,
-      pills: names.map((name) => {
+      props: names.map((name) => {
         const values = presentations.map(({ label, defaults }, index) => {
           const key = keys[index].get(name);
           if (!key) return { label, text: '–', title: `${name} is not drawn here` };
           const value = new Map(flattened(defaults)).get(key);
-          return { label, ...shown(value), title: `${key} = ${JSON.stringify(value)}` };
+          return {
+            label,
+            ...shown(value),
+            title: `${key} = ${JSON.stringify(value)}`,
+            ...(name in unwritable ? {} : { pin: propText(name, value) })
+          };
         });
         return { name, values, differs: new Set(values.map(({ text }) => text)).size > 1 };
       })
@@ -106,14 +114,15 @@ export function tagDefaults(
   });
 }
 
-/** A default's prop as a view would set it: box.fill is its tint, align.row its align. */
-function pillName(key: string): string {
-  const prop = key.split('.').at(-1) ?? key;
-  return prop === 'fill'
-    ? 'tint'
-    : prop === 'strokeWidth'
-      ? 'stroke'
-      : key.startsWith('align.')
-        ? 'align'
-        : prop;
+/** Defaults no prop sets exactly: a cell's text scale is in em, while size is in rem. */
+const unwritable: Record<string, true> = { scale: true };
+
+/** The prop a default fills in: box.radius is radius, align.row is align. */
+function propName(key: string): string {
+  return key.startsWith('align.') ? 'align' : (key.split('.').at(-1) ?? key);
+}
+
+/** A prop as a view writes it: a text value quoted, anything else in braces. */
+export function propText(name: string, value: unknown): string {
+  return typeof value === 'string' ? `${name}="${value}"` : `${name}={${JSON.stringify(value)}}`;
 }
