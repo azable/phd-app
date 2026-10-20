@@ -70,6 +70,7 @@ import { projectRepository, type ProjectRepository } from './repository';
 import {
   activateBuiltPresentations,
   appendProjectEvents,
+  baseOnPresentation,
   buildProjectSourceBatch,
   defaultProjectServiceDependencies,
   draftEvent,
@@ -104,6 +105,8 @@ export function queueProjectFeedback(
     content: MessageContent;
     focus: EventId[];
     presentationCount: 1 | 2;
+    /** The candidate the participant is viewing. */
+    from?: string;
     deadlineAt?: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -114,9 +117,18 @@ export function queueProjectFeedback(
     assertAcceptedInteraction(before, options.operationId, 'feedback');
     const focus = validateFocus(before, options.focus);
     const content = await validateMessageContent(before, options.content);
-    const interactionEventId = projectHead(before).id + 1;
+    // The assistant revises the source of the candidate the participant is viewing.
+    const based = options.from
+      ? await baseOnPresentation(
+          before,
+          options.from,
+          options.operationId,
+          dependencies.projectService
+        )
+      : before;
+    const interactionEventId = projectHead(based).id + 1;
     const document = await appendProjectEvents(
-      before,
+      based,
       [
         draftEvent({
           type: 'feedback.submitted',
@@ -157,7 +169,14 @@ export function queueProjectPreference(
     assertCurrentProjectOperationActive();
     const before = await dependencies.repository.load(options.projectId);
     assertAcceptedInteraction(before, options.operationId, 'prefer');
-    let document = await appendProjectPreference(before, options, dependencies.projectService);
+    // The assistant builds on the candidate the participant preferred.
+    const based = await baseOnPresentation(
+      before,
+      options.preferred,
+      options.operationId,
+      dependencies.projectService
+    );
+    let document = await appendProjectPreference(based, options, dependencies.projectService);
     const preference = document.events.findLast(
       (event) =>
         event.operationId === options.operationId &&
@@ -383,7 +402,14 @@ export function submitProjectPreference(
   return runProjectCommand(options.projectId, async () => {
     const before = await dependencies.repository.load(options.projectId);
     assertHead(before, options.expectedHead);
-    let document = await appendProjectPreference(before, options, dependencies.projectService);
+    // The assistant builds on the candidate the participant preferred.
+    const based = await baseOnPresentation(
+      before,
+      options.preferred,
+      options.operationId,
+      dependencies.projectService
+    );
+    let document = await appendProjectPreference(based, options, dependencies.projectService);
     const preference = document.events.findLast(
       (event) =>
         event.operationId === options.operationId &&

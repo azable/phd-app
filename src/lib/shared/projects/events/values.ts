@@ -60,7 +60,9 @@ export const artifactOriginSchema = v.variant('kind', [
   v.object({ kind: v.literal('initial') }),
   v.object({ kind: v.literal('manual-edit') }),
   v.object({ kind: v.literal('assistant-edit') }),
-  v.object({ kind: v.literal('restore'), restoredFrom: positiveSchema })
+  v.object({ kind: v.literal('restore'), restoredFrom: positiveSchema }),
+  // The source a candidate was built from, made the newest version so the next step builds on it.
+  v.object({ kind: v.literal('candidate'), presentationId: v.pipe(v.string(), v.uuid()) })
 ]);
 
 /** Runtime schema for an artifact upsert or deletion. */

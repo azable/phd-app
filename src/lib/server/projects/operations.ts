@@ -636,6 +636,7 @@ async function executeProjectCommand(options: {
             content: options.command.content,
             focus: options.command.focus,
             presentationCount: options.command.presentationCount,
+            ...(options.command.from ? { from: options.command.from } : {}),
             ...(options.deadlineAt === undefined
               ? {}
               : { deadlineAt: new Date(options.deadlineAt).toISOString() })
@@ -667,7 +668,8 @@ async function executeProjectCommand(options: {
     case 'resample':
       return buildProjectPresentations({
         ...common,
-        presentationCount: options.command.presentationCount
+        presentationCount: options.command.presentationCount,
+        ...(options.command.from ? { from: options.command.from } : {})
       });
     case 'presentation-refill':
       return replenishProjectPresentations({ ...common, target: options.command.target });

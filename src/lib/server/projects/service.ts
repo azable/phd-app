@@ -187,19 +187,62 @@ export async function loadProjectResource(
   return { document, projects: await dependencies.repository.list(ownerUserId) };
 }
 
+/**
+ * Make the source a presentation was built from the entry artifact's newest version, unless it
+ * already is, so that what the participant does next builds on the candidate they are viewing.
+ */
+export async function baseOnPresentation(
+  document: ProjectDocument,
+  presentationId: string,
+  operationId: string,
+  dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
+): Promise<ProjectDocument> {
+  const snapshot = projectSnapshotAt(document);
+  const artifact = snapshot.artifacts[snapshot.entryArtifactId];
+  const presented = document.events.findLast(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === presentationId
+  );
+  const presentation =
+    presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
+  if (
+    !artifact ||
+    presentation?.format !== 'browser-bundle-v1' ||
+    presentation.source.text === artifact.content.text
+  )
+    return document;
+  return appendProjectEvents(
+    document,
+    [
+      artifactVersionEvent({
+        operationId,
+        origin: { kind: 'candidate', presentationId },
+        changes: [{ operation: 'upsert', artifact: { ...artifact, content: presentation.source } }]
+      })
+    ],
+    dependencies
+  );
+}
+
 /** Build the accepted artifact for an explicit seed or a fresh presentation set. */
 export function buildProjectPresentations(
   options: {
     projectId: string;
     expectedHead: EventId;
     operationId: string;
+    /** The candidate whose source to build, when it is not the newest. */
+    from?: string;
   } & ({ seed: number; purpose: BuildPurpose } | { presentationCount: 1 | 2 }),
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
     const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
+    const based = options.from
+      ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
+      : before;
     const document = await buildDocument(
-      before,
+      based,
       'seed' in options ? [options.seed] : freshPresentationSeeds(options.presentationCount),
       'seed' in options ? options.purpose : 'seed-change',
       options.operationId,

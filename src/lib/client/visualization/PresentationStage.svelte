@@ -14,7 +14,7 @@
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import type { PresentationLayout } from '$lib/shared/presentations';
 
-  import type { PresentationSelection } from './presentation-selection.svelte';
+  import { baseCandidate, type PresentationSelection } from './presentation-selection.svelte';
   import {
     localPresentationStep,
     presentationHeld,
@@ -159,9 +159,11 @@
   }
 
   async function generateVariants() {
+    const from = baseCandidate(visible);
     const succeeded = await session.runCommand({
       type: 'resample',
-      presentationCount: layout === 'comparison' ? 2 : 1
+      presentationCount: layout === 'comparison' ? 2 : 1,
+      ...(from ? { from } : {})
     });
     if (succeeded) {
       selection.returnToLatest();

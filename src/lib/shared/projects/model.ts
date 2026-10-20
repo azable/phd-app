@@ -72,7 +72,9 @@ export const projectCommandSchema = v.variant('type', [
     type: v.literal('feedback'),
     content: messageContentSchema,
     focus: v.array(positiveSchema),
-    presentationCount: v.picklist([1, 2])
+    presentationCount: v.picklist([1, 2]),
+    /** The candidate the participant is viewing, whose source the assistant revises. */
+    from: v.optional(presentationIdSchema)
   }),
   v.strictObject({
     ...commandBase,
@@ -88,7 +90,9 @@ export const projectCommandSchema = v.variant('type', [
   v.strictObject({
     ...commandBase,
     type: v.literal('resample'),
-    presentationCount: v.picklist([1, 2])
+    presentationCount: v.picklist([1, 2]),
+    /** The candidate the participant is viewing, whose source is resampled. */
+    from: v.optional(presentationIdSchema)
   }),
   v.strictObject({
     ...commandBase,

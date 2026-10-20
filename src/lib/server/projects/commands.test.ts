@@ -1809,3 +1809,82 @@ function presentedEvent(document: ProjectDocument): SverlinPresentedEvent {
   }
   return event as SverlinPresentedEvent;
 }
+
+describe('building on the candidate shown', () => {
+  it('makes an earlier candidate’s source the newest version before resampling it', async () => {
+    const { buildProjectPresentations, createProject, updateProjectArtifact } =
+      await import('./service');
+    const created = await createProject(
+      { title: 'Earlier candidate', creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const presented = (document: ProjectDocument) =>
+      document.events.filter(
+        (event): event is ProjectEventOf<'visualization.presented'> =>
+          event.type === 'visualization.presented'
+      );
+    const earlier = presented(created)[0].payload.presentation as BrowserBundlePresentation;
+    const edited = await updateProjectArtifact(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        artifactId: 'main',
+        source: `${earlier.source.text}\n<Node>Edited</Node>`,
+        presentationCount: 1,
+        operationId: '22345678-1234-4123-8123-123456789abc'
+      },
+      serviceDependencies
+    );
+
+    const resampled = await buildProjectPresentations(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(edited.document).id,
+        presentationCount: 1,
+        from: earlier.presentationId,
+        operationId: '32345678-1234-4123-8123-123456789abc'
+      },
+      serviceDependencies
+    );
+
+    const version = resampled.appendedEvents.find(
+      (event): event is ProjectEventOf<'artifact.version-created'> =>
+        event.type === 'artifact.version-created'
+    );
+    expect(version?.payload.origin).toEqual({
+      kind: 'candidate',
+      presentationId: earlier.presentationId
+    });
+    const snapshot = projectSnapshotAt(resampled.document);
+    expect(snapshot.artifacts[snapshot.entryArtifactId].content.text).toBe(earlier.source.text);
+    const [rebuilt] = presented(resampled.document).slice(-1);
+    expect((rebuilt.payload.presentation as BrowserBundlePresentation).source.text).toBe(
+      earlier.source.text
+    );
+  });
+
+  it('leaves the newest source alone when the candidate shown was built from it', async () => {
+    const { buildProjectPresentations, createProject } = await import('./service');
+    const created = await createProject(
+      { title: 'Newest candidate', creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const shown = created.events.find(
+      (event): event is ProjectEventOf<'visualization.presented'> =>
+        event.type === 'visualization.presented'
+    );
+    const resampled = await buildProjectPresentations(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        presentationCount: 1,
+        from: shown!.payload.presentation.presentationId,
+        operationId: '42345678-1234-4123-8123-123456789abc'
+      },
+      serviceDependencies
+    );
+    expect(resampled.appendedEvents.map(({ type }) => type)).not.toContain(
+      'artifact.version-created'
+    );
+  });
+});

@@ -164,3 +164,18 @@ export class PresentationSelection {
 function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
+
+/**
+ * The candidate the participant's next step builds on: the one shown, or the first of a pair built
+ * from one source. A pair built from two sources leaves the newest source to build on.
+ */
+export function baseCandidate(visible: readonly TimelinePresentation[]): string | undefined {
+  const [first] = visible;
+  if (!first || !isSverlinPresentation(first.presentation)) return undefined;
+  const hash = first.presentation.source.sha256;
+  return visible.every(
+    ({ presentation }) => isSverlinPresentation(presentation) && presentation.source.sha256 === hash
+  )
+    ? first.presentation.presentationId
+    : undefined;
+}
