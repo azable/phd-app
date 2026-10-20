@@ -13,7 +13,6 @@
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
   import Pointing from './Pointing.svelte';
-  import Slot from './Slot.svelte';
   import {
     defaultsContext,
     copyContext,
@@ -24,7 +23,6 @@
     hiddenContext,
     insideComponentBox,
     keyedRef,
-    markRendering,
     layoutMemoryContext,
     nodeIdsContext,
     elementSlot,
@@ -38,7 +36,6 @@
     provideSequence,
     collectionLayoutContext,
     sequenceContext,
-    rendererFor,
     slotContext,
     typeContext,
     wrappedContext,
@@ -62,7 +59,6 @@
     MinSize,
     NodeColor,
     NodeFont,
-    NodeProps,
     NodeShape,
     NodeSize,
     NodeStroke,
@@ -77,7 +73,6 @@
   let {
     value,
     layout,
-    type,
     shape,
     fill,
     stroke,
@@ -115,8 +110,6 @@
     value?: Primitive;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /** An atomic type name, such as 'Int'; its renderer snippet, if the view defines one, draws the value. */
-    type?: string;
     /** Which drawn look: 'box' for a value, 'plain' for content and collections, unless given. */
     shape?: NodeShape;
     /** Background colour: a palette name such as 'amber' (a light shade), or any CSS colour. */
@@ -169,15 +162,15 @@
     layoutSeed?: number;
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
-    /** Internal: an id given by the node this one stands for, such as a collection or a renderer's caller. */
+    /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
     __id?: string;
-    /** Internal: the type of the node a renderer draws. */
+    /** Internal: set by the compiler on a node showing its view's own value: that value's type, which gives its unit. */
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
     __links?: boolean;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
     __component?: string;
-    /** Internal: the element of the state this node draws, such as values[2], given by its collection or a renderer's caller. */
+    /** Internal: the element of the state this node draws, such as values[2], given by the node a pointer draws again. */
     __slot?: string;
     /** Internal: set by the compiler on a node writing text around views, which sit inline in it. */
     __text?: boolean;
@@ -203,18 +196,13 @@
   const slot = untrack(() =>
     copy ? undefined : (__slot ?? (__component ? slotContext() : undefined))
   );
-  // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
-  // each step mounts afresh, and the renderer is marked so nodes inside it never call it again.
-  const rendered = untrack(() =>
-    type !== undefined && children === undefined ? rendererFor(type) : undefined
-  );
   // The root's pointers that can point into the collection whose element this node draws, as
   // those pointing elsewhere this step keep their room, outermost (written last) first: the node
   // is then drawn inside them (see Pointing.svelte), once, however many nodes
-  // inside also draw the element. A node drawn by its type's renderer leaves it to the renderer's node.
+  // inside also draw the element.
   const element = untrack(() => elementSlot(slot));
   const pointers = untrack(() =>
-    !rendered && element && wrappedContext() !== slot
+    element && wrappedContext() !== slot
       ? pointersContext()
           .filter((pointer) => reachesInto(types, pointer, element.collection))
           .map((pointer) =>
@@ -291,38 +279,11 @@
   });
   const least = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
-  if (rendered) markRendering(rendered.name);
-  // Only the props the caller set, so a renderer can spread them over its own defaults.
-  const callerProps = $derived(
-    Object.fromEntries(
-      Object.entries({
-        shape,
-        fill,
-        stroke,
-        opacity,
-        color,
-        font,
-        size,
-        weight,
-        padding,
-        radius,
-        strokeWidth,
-        minSize,
-        // Links and relations name the renderer's node by this node's key.
-        key,
-        // A renderer's node takes this node's identity, type, and element, so a selection names the value.
-        __id: id,
-        __type: type,
-        __slot: slot
-      }).filter(([, setting]) => setting !== undefined)
-    ) as NodeProps
-  );
-  const unit = $derived(type ? types?.unit(type) : undefined);
+  const unit = $derived(__type ? types?.unit(__type) : undefined);
   // Every prop as given, to draw this node again inside its pointers.
   const given = $derived({
     value,
     layout,
-    type,
     shape,
     fill,
     stroke,
@@ -479,8 +440,6 @@
       <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
     {/each}
   {/if}
-{:else if rendered}
-  <Slot path={slot}>{@render rendered.snippet(value ?? null, callerProps)}</Slot>
 {:else}
   <div
     class="sv-node {font ?? ''}"
@@ -490,7 +449,7 @@
     data-sv-slot={slot}
     data-sv-identity={identity}
     data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
-    data-sv-type={type ?? __type}
+    data-sv-type={__type}
     data-sv-shape={resolvedShape}
     data-sv-layout={arrangement}
     data-sv-defaults={takenDefaults || undefined}

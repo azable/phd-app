@@ -36,7 +36,7 @@ A node that writes text around nodes or views, with no `layout`, reads as a line
 
 ## Views of types
 
-A view is a snippet that draws one value of one domain type: its first parameter has that type, as in `{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}`, and an optional second parameter, `node`, takes the props its caller sets. A view reads only its value, design values, and other views, never the input or algorithm variables, except a pointer (see Pointers): how two values relate is drawn where both are in scope, in the view that holds them or by a pointer. Define views at the top level of the markup.
+A view is a snippet that draws one value of one domain type: its one parameter has that type, as in `{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}`, and the node showing that value, as `<Node {value} />` does, shows the type's unit too. A view reads only its value, design values, and other views, never the input or algorithm variables, except a pointer (see Pointers): how two values relate is drawn where both are in scope, in the view that holds them or by a pointer. Define views at the top level of the markup.
 
 A design value named after a type chooses its view: `const Int = pick([IntText, IntCard]);` draws one per presentation, and `const Int = IntCard;` fixes one. `{@render Int(value)}` draws a value with whichever was chosen. A view named after its type, `{#snippet Int(value: Int)}`, is that type's only view. Rendering a type nothing draws is an error. In the view, a type's name is its view, never a constructor: draw values the state holds, made in the input and algorithm blocks, and show a loop's own index, as `k` in `{#each list as v, k}`, as text, `{k}`.
 

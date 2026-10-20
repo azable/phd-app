@@ -22,6 +22,8 @@ type SvelteNode = {
   parameters?: { name?: string; typeAnnotation?: { typeAnnotation?: TypeNode } }[];
   children?: SvelteNode[];
   data?: string;
+  attributes?: { type?: string; name?: string; value?: unknown }[];
+  else?: SvelteNode;
 };
 type TypeNode = { type?: string; typeName?: { type?: string; name?: string } };
 
@@ -29,13 +31,15 @@ type TypeNode = { type?: string; typeName?: { type?: string; name?: string } };
 export type ComponentProblem = { message: string; start: number };
 
 /**
- * The view's components, the start of each one's root <Node> tags, and problems: a snippet that
- * types more than one parameter, or types one other than its first, or that is typed but not at the
- * top level.
+ * The view's components, the start of each one's root <Node> tags, the <Node> tags that show a
+ * component's own value with its type, and problems: a snippet that types more than one parameter,
+ * takes more than its value, or is typed but not at the top level.
  */
 export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   components: { name: string; start: number; type: string; node: SvelteNode }[];
   roots: Map<number, string>;
+  /** The <Node> tags whose value is their component's own, by where they start, with its type. */
+  valueTypes: Map<number, string>;
   /** The components that are pointers: views of an index type drawn around what they point at. */
   pointers: Set<string>;
   /** Each pointer's <Pointed>, and the name its snippet gives its position. */
@@ -44,6 +48,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
 } {
   const components: { name: string; start: number; type: string; node: SvelteNode }[] = [];
   const roots = new Map<number, string>();
+  const valueTypes = new Map<number, string>();
   const problems: ComponentProblem[] = [];
   const typeOf = (snippet: SvelteNode): string | undefined => {
     const parameters = snippet.parameters ?? [];
@@ -62,9 +67,9 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
         message: `${name} takes ${typed.length} domain types, ${typed.join(', ')}; a component views one type. Give each value its own component, or define one type that holds them, such as a record, and draw how they relate where both values are in scope.`,
         start: snippet.start ?? 0
       });
-    else if (types[0] === undefined || parameters.length > 2)
+    else if (types[0] === undefined || parameters.length > 1)
       problems.push({
-        message: `${name} takes its value first and at most the node's props after it, as in (value: Int, node): a component views one domain type.`,
+        message: `${name} takes one value, its type given, as in (value: Int): a component views one domain type.`,
         start: snippet.start ?? 0
       });
     else return typed[0];
@@ -103,6 +108,8 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
       pointedTags.set(name, { tag: pointed[0], parameter: node.parameters?.[0]?.name ?? '_' });
     }
     components.push({ name, start: node.start ?? 0, type, node });
+    const parameter = node.parameters?.[0]?.name;
+    if (parameter) for (const start of ownValueNodes(node, parameter)) valueTypes.set(start, type);
     for (const child of node.children ?? [])
       if (
         child.type === 'InlineComponent' &&
@@ -127,7 +134,28 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     for (const child of part.children ?? []) nested(child, depth + 1);
   };
   for (const node of html?.children ?? []) nested(node.children ?? [], 1);
-  return { components, roots, pointers, pointed: pointedTags, problems };
+  return { components, roots, valueTypes, pointers, pointed: pointedTags, problems };
+}
+
+/** The starts of the <Node> tags in a component that show its value, as `<Node {value} />` does. */
+function ownValueNodes(node: SvelteNode, parameter: string): number[] {
+  return [...(node.children ?? []), ...(node.else ? [node.else] : [])].flatMap((child) => {
+    const value = child.attributes?.find(
+      (attribute) => attribute.name === 'value' && attribute.type === 'Attribute'
+    )?.value;
+    const [part] = Array.isArray(value) ? value : [value];
+    const expression = (part as { expression?: { type?: string; name?: string } } | undefined)
+      ?.expression;
+    const own =
+      child.type === 'InlineComponent' &&
+      child.name === 'Node' &&
+      expression?.type === 'Identifier' &&
+      expression.name === parameter;
+    return [
+      ...(own && child.start !== undefined ? [child.start] : []),
+      ...ownValueNodes(child, parameter)
+    ];
+  });
 }
 
 /**

@@ -335,15 +335,19 @@ describe('single-component Svelte compilation', () => {
     });
   });
 
-  it('embeds atomic types and registers renderer snippets named after types', async () => {
-    const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node>{#each people as person}<Node value={person} type="Height" />{/each}</Node>'
-    );
-    expect(result.javascript).toContain('people[1]');
-    expect(result.javascript).toContain('sverlin:renderers');
+  it('marks the node showing a view’s own value with its type, for its unit', async () => {
+    const source = (view: string) =>
+      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>${view}<Node>{#each people as person}{@render Height(person)}{/each}</Node>`;
+    const view =
+      '{#snippet Height(h: Height)}<Node layout="column"><Node value={h} radius="full" /><Node>tall</Node></Node>{/snippet}';
+    const prepared = prepareSvelteComponent(source(view));
+    expect(prepared.component.match(/__type: 'Height'/g)).toHaveLength(1);
+    await expect(
+      compileSvelteComponent(source(`${view}<Node value={people[0]} type="Height" />`))
+    ).rejects.toMatchObject({ code: 'unknown_prop' });
   });
 
-  it('rejects invalid domain blocks, renderers, and clashing names', async () => {
+  it('rejects invalid domain blocks, views, and clashing names', async () => {
     await expect(
       compileSvelteComponent(
         '<script lang="sverlin">yield;</script>\n<script lang="sverlin" domain>\nconst A = type(Integer);\n</script>'
@@ -355,13 +359,9 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>\n{#snippet Int(value, node, extra)}{value}{/snippet}'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>\n{#snippet Int(value: Int, node)}{value}{/snippet}'
       )
-    ).rejects.toMatchObject({
-      code: 'type_renderer',
-      line: 2,
-      message: expect.stringContaining('at most (value, node)')
-    });
+    ).rejects.toThrow('Int takes one value, its type given');
     await expect(
       compileSvelteComponent(
         '<script lang="sverlin" domain>const Text = type(["a"]);</script><script lang="sverlin">const Text = 1; yield;</script>'
@@ -546,7 +546,7 @@ describe('typed view components', () => {
 
   it('reads typed snippets as views of one type, and draws the view a design value named after the type picks', async () => {
     const prepared = component(
-      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int, node)}<Node {value} weight="bold" {...node} />{/snippet}{@render Int(i)}<Node value={i} type="Int" />',
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Int(i)}',
       'const Int = pick([IntText, IntBold]);'
     );
     expect(prepared.components).toEqual([
@@ -677,9 +677,14 @@ describe('typed view components', () => {
       /Cell takes 2 domain types, Int, Flag; a component views one type/
     ],
     [
-      'a value after the node',
+      'a parameter before the value',
       () => component('{#snippet Cell(node, value: Int)}<Node {value} />{/snippet}'),
-      /Cell takes its value first/
+      /Cell takes one value, its type given/
+    ],
+    [
+      'a parameter after the value',
+      () => component('{#snippet Cell(value: Int, node)}<Node {value} />{/snippet}'),
+      /Cell takes one value, its type given/
     ],
     [
       'components inside markup',

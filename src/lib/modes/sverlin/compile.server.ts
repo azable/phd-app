@@ -258,7 +258,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const choices = blocks.design
       ? interpretBlock(source, blocks.design, (body) => designChoices(body))
       : {};
-    const { insertions, problems } = withNodeRefs(svelteSource, ast, source, choices, found.roots);
+    const { insertions, problems } = withNodeRefs(
+      svelteSource,
+      ast,
+      source,
+      choices,
+      found.roots,
+      found.valueTypes
+    );
     viewProblems = [
       ...problems,
       ...found.problems.map(
@@ -356,16 +363,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           }
         );
     }
-    const renderers = typeRenderers(ast, atoms, source);
     // A type is rendered by name, as in {@render Int(value)}, through a snippet named after it or a
     // design value named after it that chooses among its views.
     const typeViews = Object.keys(componentChoice).filter((name) => definesType(domain, name));
     const undefinedType = renderedNames(ast.html).find(
       ({ name }) =>
-        definesType(domain, name) &&
-        !typeViews.includes(name) &&
-        !renderers.includes(name) &&
-        !Object.hasOwn(components, name)
+        definesType(domain, name) && !typeViews.includes(name) && !Object.hasOwn(components, name)
     );
     if (undefinedType)
       throw new InvalidSvelteSourceError(
@@ -503,8 +506,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}`,
         props,
-        // A design value named after a type is also its renderer, drawing the nodes showing its values.
-        [...renderers, ...typeViews],
         chosen,
         pointers.calls,
         paints
@@ -724,7 +725,6 @@ function sourcePosition(source: string, offset: number): { line: number; column:
 function withGeneratedScripts(
   source: string,
   props: readonly string[],
-  renderers: readonly string[],
   choices: Record<string, string[]>,
   pointers: readonly string[],
   paints: readonly string[]
@@ -743,17 +743,12 @@ function withGeneratedScripts(
         `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]);`
     )
     .join(' ');
-  // Type renderers are the view's own top-level snippets, or the views design values choose for a
-  // type, which its script may refer to; getters, so a drawn view is read when a node renders.
-  const registration = renderers.length
-    ? `import { setContext as __sverlinSetContext } from 'svelte'; __sverlinSetContext('sverlin:renderers', { ${renderers.map((name) => `get ${name}() { return ${name}; }`).join(', ')} });`
-    : '';
   // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
   const pointing = pointers.length
     ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${registration} ${pointing}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${pointing}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -846,7 +841,6 @@ type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
 const nodeProps: PropNames = {
   value: null,
   layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-  type: null,
   shape: named({ box: 0, card: 0, plain: 0 } satisfies Record<NodeShape, 0>, false),
   fill: null,
   stroke: null,
@@ -994,7 +988,9 @@ function withNodeRefs(
   source: string,
   choices: Record<string, DesignChoices>,
   /** The root <Node> tags of components, by where they start, with the component each roots. */
-  roots: ReadonlyMap<number, string>
+  roots: ReadonlyMap<number, string>,
+  /** The <Node> tags showing their component's own value, by where they start, with its type. */
+  valueTypes: ReadonlyMap<number, string>
 ): { insertions: Insertion[]; problems: InvalidSvelteSourceError[] } {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
@@ -1089,9 +1085,10 @@ function withNodeRefs(
   const insertions = tags.map(({ start, name, links }): Insertion => {
     const { line, column } = sourcePosition(source, start);
     const root = roots.get(start);
+    const type = valueTypes.get(start);
     return {
       at: start + name.length + 1,
-      text: ` __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}`
+      text: ` __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   return { insertions, problems };
@@ -1142,33 +1139,6 @@ function checkComponents(
     signatures[name] = type;
   }
   return signatures;
-}
-
-/**
- * Top-level snippets named after a domain type render every value of that type, taking the value
- * and the props its node was given, as in {#snippet Int(value, node)} … {/snippet}.
- */
-function typeRenderers(
-  ast: { html?: { children?: unknown[] } },
-  atoms: AtomRegistry,
-  source: string
-): string[] {
-  return (ast.html?.children ?? []).flatMap((node) => {
-    const snippet = node as {
-      type: string;
-      start: number;
-      expression?: { name?: string };
-      parameters?: unknown[];
-    };
-    const name = snippet.expression?.name;
-    if (snippet.type !== 'SnippetBlock' || !name || !Object.hasOwn(atoms, name)) return [];
-    if ((snippet.parameters?.length ?? 0) > 2)
-      throw new InvalidSvelteSourceError(
-        `The ${name} renderer takes at most (value, node), as in {#snippet ${name}(value, node)}.`,
-        { code: 'type_renderer', start: sourcePosition(source, snippet.start) }
-      );
-    return [name];
-  });
 }
 
 async function bundle(component: string, states: string, atoms: string, components: string) {
