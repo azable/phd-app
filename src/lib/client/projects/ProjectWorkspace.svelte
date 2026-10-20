@@ -42,6 +42,8 @@
     MessageContent
   } from '$lib/shared/projects/events/message-content';
   import { activeProjectOperation } from '$lib/shared/projects/operations';
+  import type { DrawnStep } from '$lib/shared/projects/events/message-content';
+  import { locateElement } from '$lib/modes/sverlin/element-ref';
   import type {
     StudyInteractionCapturePolicy,
     StudyWorkspaceObservation
@@ -162,6 +164,8 @@
   let interactionRecorder = $state.raw<ProjectInteractionRecorder>();
   // The canvas view each visible presentation was last left at, for study observations.
   let canvasViews = $state.raw<Record<string, { zoom: number; panX: number; panY: number }>>({});
+  // What each visible presentation's step on screen drew implicitly, as its page last reported it.
+  let drawnSteps = $state.raw<Record<string, DrawnStep>>({});
   let timelineObservation = $state<StudyWorkspaceObservation['timeline']>();
   let draftObservation = $state<StudyWorkspaceObservation['draft']>({
     hasContent: false,
@@ -180,15 +184,29 @@
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
 
-  // The draws of each visible presentation, named top and bottom as the stage stacks a pair.
+  // What each visible presentation drew, named top and bottom as the stage stacks a pair.
   const drawnSources = $derived(
     visiblePresentations.flatMap(({ presentation }, index) =>
-      presentation.format === 'browser-bundle-v1' && presentation.draws
+      presentation.format === 'browser-bundle-v1'
         ? [
             {
               source: presentation.source.text,
               seed: presentation.seed,
-              draws: presentation.draws,
+              draws: presentation.draws ?? [],
+              layouts: (drawnSteps[presentation.presentationId]?.layouts ?? []).flatMap(
+                ({ node, seed, form, curve }) => {
+                  const tag =
+                    node === 'frame' ? undefined : locateElement(presentation.source.text, node);
+                  return tag ? [{ line: tag.line, column: tag.column, seed, form, curve }] : [];
+                }
+              ),
+              nodeDefaults: (drawnSteps[presentation.presentationId]?.defaults ?? []).flatMap(
+                ({ node, defaults }) => {
+                  const tag = locateElement(presentation.source.text, node);
+                  return tag ? [{ line: tag.line, column: tag.column, defaults }] : [];
+                }
+              ),
+              defaults: presentation.parameters?.__defaults,
               ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
             }
           ]
@@ -595,6 +613,8 @@
             onReferenceSelection={(selected) => feedbackComposer?.referenceSelection(selected)}
             onViewChange={(presentationId, view) =>
               (canvasViews = { ...canvasViews, [presentationId]: view })}
+            onDrawnChange={(presentationId, drawn) =>
+              (drawnSteps = { ...drawnSteps, [presentationId]: drawn })}
             disabled={mutationsDisabled}
           />
           <div class="contents" data-replay-region="artifact">

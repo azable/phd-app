@@ -41,7 +41,7 @@ export function highlightRanges(
 }
 
 /** The offset just past a tag's closing >, skipping > inside {expressions} and quoted values. */
-function tagEnd(text: string): number {
+export function tagEnd(text: string): number {
   let depth = 0;
   let quote = '';
   for (let index = 1; index < text.length; index++) {

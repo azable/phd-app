@@ -108,6 +108,42 @@ export function describeFrame(layer: HTMLElement): SceneFrame | undefined {
     : undefined;
 }
 
+/** The constraint layout an arrangement drew: the node it arranges, its seed, form, and curve. */
+export type ArrangementLayout = { node: string; seed: number; form?: string; curve?: string };
+
+/** The layout of one arrangement (an .sv-arranged element), once it has laid out. */
+export function arrangementLayout(arranged: HTMLElement): ArrangementLayout | undefined {
+  const node = arranged.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode;
+  const { svLayoutSeed, svForm, svCurve } = arranged.dataset;
+  if (!node || !Number.isFinite(Number(svLayoutSeed))) return undefined;
+  return {
+    node,
+    seed: Number(svLayoutSeed),
+    ...(svForm ? { form: svForm } : {}),
+    ...(svCurve ? { curve: svCurve } : {})
+  };
+}
+
+/** The layout of every arrangement in a layer, once its step has settled. */
+export function stepLayouts(layer: HTMLElement): ArrangementLayout[] {
+  return [...layer.querySelectorAll<HTMLElement>('.sv-arranged')].flatMap(
+    (arranged) => arrangementLayout(arranged) ?? []
+  );
+}
+
+/** The drawn defaults a node took (see Node.svelte), by their path in the recorded defaults. */
+export type NodeDefaultsTaken = { node: string; defaults: string[] };
+
+/** The drawn defaults every node in a layer took, once its step has settled. */
+export function stepDefaults(layer: HTMLElement): NodeDefaultsTaken[] {
+  return [...layer.querySelectorAll<HTMLElement>('[data-sv-node][data-sv-defaults]')].map(
+    (element) => ({
+      node: element.dataset.svNode as string,
+      defaults: (element.dataset.svDefaults as string).split(' ')
+    })
+  );
+}
+
 /** Describe the step a layer shows, once its layout has settled. */
 export function describeStep(layer: HTMLElement): SceneStep {
   const error = layer.querySelector('.sv-error')?.textContent ?? undefined;

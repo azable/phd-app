@@ -411,6 +411,29 @@
     align ?? (arrangement === 'column' ? drawn.align.column : drawn.align.row)
   );
   const alignment = $derived(alignments[resolvedAlign]);
+  // The drawn defaults this node takes, by their path in the presentation's recorded defaults, so
+  // the source editor can show them beside its tag. The page font is the frame's, not a node's.
+  const takenDefaults = $derived(
+    [
+      shape === undefined && collection && 'collection.shape',
+      resolvedShape !== 'plain' && [
+        radius === undefined && `${resolvedShape}.radius`,
+        strokeWidth === undefined && !strokeOff && `${resolvedShape}.strokeWidth`,
+        padding === undefined && `${resolvedShape}.padding`,
+        fill === undefined && `${resolvedShape}.fill`,
+        size === undefined && look.scale !== undefined && `${resolvedShape}.scale`,
+        weight === undefined && look.weight !== undefined && `${resolvedShape}.weight`
+      ],
+      arrangement &&
+        arrangement !== 'free' &&
+        align === undefined &&
+        `align.${arrangement === 'column' ? 'column' : 'row'}`,
+      arrangement && gap === undefined && 'gap'
+    ]
+      .flat()
+      .filter(Boolean)
+      .join(' ')
+  );
   const justification = $derived(justifications[justify ?? 'start']);
   // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
   // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
@@ -497,6 +520,7 @@
     data-sv-type={type ?? __type}
     data-sv-shape={resolvedShape}
     data-sv-layout={arrangement}
+    data-sv-defaults={takenDefaults || undefined}
     data-sv-fill={paletteName(fill)}
     data-sv-stroke={paletteName(stroke)}
     data-sv-color={paletteName(color)}

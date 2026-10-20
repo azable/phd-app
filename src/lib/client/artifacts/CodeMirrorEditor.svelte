@@ -7,6 +7,7 @@
   import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
+  import type { TagDefaults } from './drawn-defaults';
   import { drawnValues, setDrawnValues, type DrawnPresentation } from './drawn-values';
   import { editorDiagnostics } from './source-diagnostics';
   import {
@@ -25,6 +26,8 @@
     highlights?: readonly SourceHighlight[];
     /** Values the shown presentations drew in the design block, marked where they were drawn. */
     drawn?: readonly DrawnPresentation[];
+    /** The drawn defaults each <Node> tag takes in the shown presentations. */
+    drawnTags?: readonly TagDefaults[];
     /** Build problems to underline, with the source they were found in. */
     diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
     onChange?: (value: string) => void;
@@ -37,6 +40,7 @@
     ariaLabel = 'Source code editor',
     highlights = [],
     drawn = [],
+    drawnTags = [],
     diagnostics = { source: '', items: [] },
     onChange
   }: Props = $props();
@@ -107,7 +111,7 @@
   // After the document, so draws are marked in the text they were made in.
   $effect(() => {
     void value;
-    const shown = [...drawn];
+    const shown = { presentations: [...drawn], tags: [...drawnTags] };
     if (view) view.dispatch({ effects: setDrawnValues.of(shown) });
   });
 

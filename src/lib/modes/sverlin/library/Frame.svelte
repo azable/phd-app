@@ -25,6 +25,7 @@
     spacings
   } from './node/scales';
   import type { FrameSettings } from './node/props';
+  import { arrangementLayout } from './scene';
 
   let {
     view: View,
@@ -243,19 +244,7 @@
   function layoutsOf(element: HTMLElement) {
     const own = element.querySelector<HTMLElement>(':scope > .sv-arranged');
     const placing = element.parentElement?.closest<HTMLElement>('.sv-arranged');
-    return [own, placing].flatMap((arranged) => {
-      const owner = arranged?.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode;
-      if (!arranged || !owner) return [];
-      const { svLayoutSeed, svForm, svCurve } = arranged.dataset;
-      return [
-        {
-          node: owner,
-          seed: Number(svLayoutSeed),
-          ...(svForm ? { form: svForm } : {}),
-          ...(svCurve ? { curve: svCurve } : {})
-        }
-      ];
-    });
+    return [own, placing].flatMap((arranged) => (arranged && arrangementLayout(arranged)) || []);
   }
 
   // A selection is reported with a short label for each node: its type, if any, and its text.

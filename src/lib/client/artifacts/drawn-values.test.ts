@@ -46,6 +46,57 @@ describe('drawn value markers', () => {
     expect(drawnMarkers(state, [{ seed: 1, draws: [accent('red'), size] }])).toEqual([]);
   });
 
+  it('shows each layout a tag arranged once, just past the tag, comparing forms but not seeds', () => {
+    const view =
+      '<Node layout="free">\n  {#each items as item}<Node layout="free">{item}</Node>{/each}\n</Node>';
+    const state = EditorState.create({ doc: view });
+    const outer = { line: 1, column: 1 };
+    const inner = { line: 2, column: 24 };
+    const markers = drawnMarkers(state, [
+      {
+        label: 'top',
+        seed: 1,
+        draws: [],
+        layouts: [
+          { ...outer, seed: 11, form: 'tree-down', curve: 'curved' },
+          { ...inner, seed: 12, form: 'radial' },
+          { ...inner, seed: 13, form: 'radial' }
+        ]
+      },
+      {
+        label: 'bottom',
+        seed: 2,
+        draws: [],
+        layouts: [
+          { ...outer, seed: 21, form: 'tree-down', curve: 'curved' },
+          { ...inner, seed: 22, form: 'layers-right' }
+        ]
+      }
+    ]);
+    expect(
+      markers.map(({ from, to, values, differs }) => ({
+        before: view.slice(0, from).split('\n').at(-1),
+        empty: from === to,
+        values: values.map(({ text }) => text),
+        differs
+      }))
+    ).toEqual([
+      {
+        before: '<Node layout="free">',
+        empty: true,
+        values: ['tree-down curved', 'tree-down curved'],
+        differs: false
+      },
+      {
+        before: '  {#each items as item}<Node layout="free">',
+        empty: true,
+        values: ['radial', 'layers-right'],
+        differs: true
+      }
+    ]);
+    expect(markers[1].values[0].title).toContain('12, 13');
+  });
+
   it('shortens reals and long values', () => {
     expect(valueText(1.23456)).toBe('1.23');
     expect(valueText(3)).toBe('3');

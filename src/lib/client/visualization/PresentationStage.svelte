@@ -24,6 +24,7 @@
   import PresentationViewport from './PresentationViewport.svelte';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
+  import type { DrawnStep } from '$lib/shared/projects/events/message-content';
 
   type Props = {
     session: ProjectSession;
@@ -34,6 +35,8 @@
     visualSelections: VisualSelections;
     onReferenceSelection?: (selection: VisualSelection) => void;
     onViewChange?: (presentationId: string, view: CanvasView) => void;
+    /** What a presentation's step on screen drew implicitly. */
+    onDrawnChange?: (presentationId: string, drawn: DrawnStep) => void;
     disabled?: boolean;
   };
 
@@ -45,6 +48,7 @@
     visualSelections,
     onReferenceSelection = () => {},
     onViewChange = () => {},
+    onDrawnChange = () => {},
     disabled = false
   }: Props = $props();
   let preferencePending = $state<string>();
@@ -362,6 +366,7 @@
             selection={selected?.elements.map(({ id }) => id) ?? []}
             onSelectionChange={(elements) => visualSelections.set(presentationId, step, elements)}
             onViewChange={(view) => onViewChange(presentationId, view)}
+            onDrawnChange={(drawn) => onDrawnChange(presentationId, drawn)}
             onRuntimeError={(failure) =>
               session.reportRuntimeFailure({ presentationId, ...failure })}
             onLoadTiming={(timing) => session.reportLoadTiming(timing)}

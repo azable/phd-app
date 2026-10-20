@@ -72,6 +72,23 @@ export const selectedElementSchema = v.strictObject({
   bend: v.optional(v.pipe(v.number(), v.minValue(-1), v.maxValue(1)))
 });
 
+/**
+ * What a Sverlin step on screen drew without a design-block draw: its constraint layouts, and the
+ * drawn defaults each node took, by their path in the presentation's recorded defaults.
+ */
+export const drawnStepSchema = v.object({
+  layouts: v.pipe(v.array(elementLayoutSchema), v.maxLength(1000)),
+  defaults: v.pipe(
+    v.array(
+      v.object({
+        node: elementIdSchema,
+        defaults: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20))
+      })
+    ),
+    v.maxLength(5000)
+  )
+});
+
 /** One element a participant selected in a presentation at a step, referenced in a message. */
 export const elementReferenceSegmentSchema = v.strictObject({
   type: v.literal('element-ref'),
@@ -92,6 +109,8 @@ export const messageContentSchema = v.pipe(v.array(messageContentSegmentSchema),
 
 export type MessageContentSegment = v.InferOutput<typeof messageContentSegmentSchema>;
 export type MessageContent = MessageContentSegment[];
+export type ElementLayout = v.InferOutput<typeof elementLayoutSchema>;
+export type DrawnStep = v.InferOutput<typeof drawnStepSchema>;
 export type ElementReference = Extract<MessageContentSegment, { type: 'element-ref' }>;
 
 /** Construct the canonical representation of a text-only Markdown message. */

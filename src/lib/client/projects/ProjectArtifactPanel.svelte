@@ -7,6 +7,8 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
+  import DrawnDefaults from '$lib/client/artifacts/DrawnDefaults.svelte';
+  import { tagDefaults, type NodeDefaultsTaken } from '$lib/client/artifacts/drawn-defaults';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
@@ -29,8 +31,12 @@
     editMode?: ProjectArtifactEditMode;
     /** Elements selected in visible presentations, with the source each presentation was built from. */
     selectedSources?: readonly { source: string; ids: readonly string[] }[];
-    /** The draws of the visible presentations, with the source each was built from. */
-    drawnSources?: readonly (DrawnPresentation & { source: string })[];
+    /** What the visible presentations drew, with the source each was built from. */
+    drawnSources?: readonly (DrawnPresentation & {
+      source: string;
+      defaults?: unknown;
+      nodeDefaults?: readonly NodeDefaultsTaken[];
+    })[];
   };
 
   let {
@@ -69,6 +75,7 @@
   const unmatched = $derived(selectedSources.length > matching.length);
   // Like selections, draws are marked only while the editor shows the source they were made in.
   const drawn = $derived(drawnSources.filter(({ source }) => source === displayedSource));
+  const drawnTags = $derived(tagDefaults(drawn));
   const drawnSeeds = $derived(
     drawn.map(({ label, seed }) => (label ? `${label}: ${seed}` : String(seed))).join(' · ')
   );
@@ -134,7 +141,7 @@
             >{highlights.length} selected {highlights.length === 1 ? 'node' : 'nodes'}</Badge
           >
         {/if}
-        {#if drawn.some(({ draws }) => draws.length)}
+        {#if drawn.length}
           <Badge
             variant="secondary"
             title="Values each visible presentation drew, marked in the source"
@@ -202,6 +209,7 @@
       {/if}
 
       {#if expanded}
+        <DrawnDefaults presentations={drawn} />
         <div class="min-h-48 flex-1 overflow-hidden">
           <CodeMirrorEditor
             bind:this={editor}
@@ -214,6 +222,7 @@
             ariaLabel="Project visualization source"
             {highlights}
             {drawn}
+            {drawnTags}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />
