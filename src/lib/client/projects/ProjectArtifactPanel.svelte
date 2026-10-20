@@ -50,12 +50,22 @@
   }: Props = $props();
 
   let draft = $state('');
+  // The source a draft was started from, which its markers keep their places in.
+  let draftBase = $state('');
   let discardRequested = $state(false);
   let expanded = $state(false);
   let editor = $state<{ focus: () => void } | null>(null);
 
   const artifact = $derived(session.snapshot.artifacts[session.snapshot.entryArtifactId]);
-  const displayedSource = $derived(editMode === 'editing' ? draft : (artifact?.content.text ?? ''));
+  // The source the visible presentations were built from, when it is not the newest one: the panel
+  // shows it, so their draws can be marked, and editing it builds a new candidate from it.
+  const candidateSource = $derived.by(() => {
+    if (!session.atHead) return undefined;
+    const sources = [...new Set(drawnSources.map(({ source }) => source))];
+    return sources.length === 1 && sources[0] !== artifact?.content.text ? sources[0] : undefined;
+  });
+  const baseSource = $derived(candidateSource ?? artifact?.content.text ?? '');
+  const displayedSource = $derived(editMode === 'editing' ? draft : baseSource);
   const dirty = $derived(
     editMode === 'editing' && artifact !== undefined && draft !== artifact.content.text
   );
@@ -75,10 +85,9 @@
       )
   );
   const unmatched = $derived(selectedSources.length > matching.length);
-  // Draws are marked in the artifact's source, and keep their places in a draft made from it.
-  const drawn = $derived(
-    drawnSources.filter(({ source }) => source === (artifact?.content.text ?? ''))
-  );
+  // Draws are marked in the source shown, and keep their places in a draft made from it.
+  const markedSource = $derived(editMode === 'editing' ? draftBase : baseSource);
+  const drawn = $derived(drawnSources.filter(({ source }) => source === markedSource));
   const drawnTags = $derived(tagDefaults(drawn));
   // Why a visible presentation's draws are not marked: it was built from another version of the
   // source, or before draws were kept.
@@ -102,13 +111,14 @@
   );
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
-    const source = artifact?.content.text ?? '';
+    const source = markedSource;
     return { source, items: buildDiagnosticsFor(session.events, source) };
   });
 
   function startEditing() {
     if (!artifact || !session.atHead || session.pending || session.readOnly) return;
-    draft = artifact.content.text;
+    draft = baseSource;
+    draftBase = baseSource;
     expanded = true;
     editMode = 'editing';
     void tick().then(() => editor?.focus());
@@ -123,7 +133,7 @@
   }
 
   function discardDraft() {
-    if (artifact) draft = artifact.content.text;
+    draft = draftBase;
     discardRequested = false;
     editMode = 'readonly';
   }
@@ -154,7 +164,13 @@
         <div class="mr-auto min-w-0">
           <p class="truncate font-mono text-sm">{artifact.path}</p>
           <p class="text-sm text-muted-foreground">
-            {session.atHead ? 'Current artifact' : `Artifact at event #${session.snapshot.at}`}
+            {!session.atHead
+              ? `Artifact at event #${session.snapshot.at}`
+              : editMode === 'editing'
+                ? 'Saving builds a new candidate from this source'
+                : drawnSources.length
+                  ? 'The shown candidate’s source'
+                  : 'Source'}
           </p>
         </div>
         {#if highlights.length}
@@ -176,7 +192,9 @@
               : 'problems'}</Badge
           >
         {/if}
-        <Badge variant="outline">{artifact.content.sha256.slice(0, 8)}</Badge>
+        {#if markedSource === artifact.content.text}
+          <Badge variant="outline">{artifact.content.sha256.slice(0, 8)}</Badge>
+        {/if}
         <Button
           size="icon-sm"
           variant="ghost"
@@ -250,7 +268,7 @@
             {highlights}
             {drawn}
             {drawnTags}
-            drawnSource={artifact.content.text}
+            drawnSource={markedSource}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />
