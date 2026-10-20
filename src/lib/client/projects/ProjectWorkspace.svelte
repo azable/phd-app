@@ -29,6 +29,7 @@
     PresentationPlayback
   } from '$lib/client/visualization/presentation-playback.svelte';
   import { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
+  import { candidateId } from '$lib/client/visualization/presentation-history';
   import { VisualSelections } from '$lib/client/visualization/visual-selection.svelte';
   import {
     isSverlinPresentation,
@@ -191,6 +192,8 @@
         ? [
             {
               source: presentation.source.text,
+              sourceHash: presentation.source.sha256,
+              candidate: candidateId(presentation),
               seed: presentation.seed,
               draws: presentation.draws ?? [],
               parameters: presentation.parameters,
@@ -625,6 +628,7 @@
               {presentationCount}
               {selectedSources}
               {drawnSources}
+              onSaved={() => presentationSelection.returnToLatest()}
               bind:editMode
             />
           </div>

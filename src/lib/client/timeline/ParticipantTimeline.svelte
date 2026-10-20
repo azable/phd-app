@@ -8,8 +8,11 @@
   import { Button } from '$lib/client/components/ui/button';
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
+  import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import {
+    candidateId,
     presentationDisplayId,
+    rememberCandidates,
     timelinePresentations,
     type TimelinePresentation
   } from '$lib/client/visualization/presentation-history';
@@ -42,6 +45,8 @@
     onReferenceRequest = () => {},
     onElementReference = () => {}
   }: Props = $props();
+  // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
+  $effect(() => rememberCandidates(timelinePresentations(session.events)));
   const items = $derived(participantTimeline(session.events));
   const activityProgress = $derived.by(() => {
     const pendingEvent = session.pendingEvent;
@@ -130,22 +135,22 @@
           <span class="flex items-baseline gap-2 text-base font-medium">
             <span>Candidate</span>
             {#if !session.readOnly}
-              <Button
-                size="xs"
-                variant="outline"
-                class="pointer-events-auto relative z-10 ml-auto font-mono"
+              <button
+                type="button"
+                class="pointer-events-auto relative z-10 ml-auto rounded-md transition-shadow hover:ring-2 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 aria-label={`Add ${presentationDisplayId(id)} to feedback`}
+                title="Add to feedback"
                 onclick={(event) => {
                   event.stopPropagation();
                   onReferenceRequest(item.value);
                 }}
               >
-                {presentationDisplayId(id)}
-              </Button>
+                <CandidateIdPill {...candidateId(item.value.presentation)} />
+              </button>
             {:else}
-              <span class="font-mono text-sm text-muted-foreground">
-                {presentationDisplayId(id)}
-              </span>
+              <span class="ml-auto"
+                ><CandidateIdPill {...candidateId(item.value.presentation)} /></span
+              >
             {/if}
           </span>
           <span class="mt-1 block text-sm text-muted-foreground"> Click to view </span>

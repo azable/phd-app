@@ -1,5 +1,7 @@
 /** Client-side projection of immutable visualization events into selectable presentations. */
 
+import { SvelteMap } from 'svelte/reactivity';
+
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
 import {
@@ -89,17 +91,81 @@ export type TimelinePresentation = {
   presentation: RenderablePresentation;
 };
 
-/** Stable participant-friendly label derived from the retained presentation UUID. */
-export function presentationDisplayId(presentationId: string): string {
+/** A 32-bit FNV-1a hash of text. */
+function fnv(text: string): number {
   let hash = 2166136261;
-  for (const character of presentationId) {
-    hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-  }
-  const value = hash >>> 0;
+  for (const character of text) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+/** A participant-friendly name for a hash, such as Warm-Otter-33. */
+function friendlyName(value: number): string {
   const adjective = presentationAdjectives[value & 31];
   const noun = presentationNouns[(value >>> 5) & 31];
   const number = String((value >>> 10) % 100).padStart(2, '0');
   return `${adjective}-${noun}-${number}`;
+}
+
+/**
+ * A candidate's identifier, `<source>/<values>`: the source it was built from, as the start of the
+ * source's hash, with a hue drawn from it so candidates of one source match at a glance; and the
+ * values its random variables took, named from their hash, so two candidates that drew the same
+ * values share a name. A layout drawn from the seed is one of those values, so the seed counts
+ * where the source lays anything out by constraints.
+ */
+export type CandidateId = { source: string; hue: number; values: string };
+
+/** The start of a source's hash, which names it, and the hue drawn from it. */
+export function sourceId(hash: string): { source: string; hue: number } {
+  return { source: hash.slice(0, 6), hue: parseInt(hash.slice(6, 9), 16) % 360 };
+}
+
+export function candidateId(presentation: RenderablePresentation): CandidateId {
+  const hash =
+    presentation.format === 'browser-bundle-v1'
+      ? presentation.source.sha256
+      : presentation.authored.sha256;
+  const { source, hue } = sourceId(hash);
+  if (presentation.format !== 'browser-bundle-v1')
+    return { source, hue, values: friendlyName(fnv(presentation.presentationId)) };
+  const seeded = /<Link\b|constraints=|['"]free['"]/u.test(presentation.source.text);
+  const values = JSON.stringify([
+    sorted(presentation.parameters ?? {}),
+    seeded ? presentation.seed : null
+  ]);
+  return { source, hue, values: friendlyName(fnv(values)) };
+}
+
+/** A value with every object's keys in order, so equal values print alike. */
+function sorted(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sorted);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sorted((value as Record<string, unknown>)[key])])
+  );
+}
+
+// The identifiers of the project's candidates by presentation id, for labels that hold only an id.
+const knownCandidates = new SvelteMap<string, CandidateId>();
+
+/** Remember the identifiers of the presentations a project has shown. */
+export function rememberCandidates(presentations: readonly TimelinePresentation[]): void {
+  for (const { presentation } of presentations)
+    if (!knownCandidates.has(presentation.presentationId))
+      knownCandidates.set(presentation.presentationId, candidateId(presentation));
+}
+
+/** A presentation's identifier, if the project has shown it. */
+export function knownCandidate(presentationId: string): CandidateId | undefined {
+  return knownCandidates.get(presentationId);
+}
+
+/** A presentation's identifier as text, `<source>/<values>`. */
+export function presentationDisplayId(presentationId: string): string {
+  const known = knownCandidates.get(presentationId);
+  return known ? `${known.source}/${known.values}` : friendlyName(fnv(presentationId));
 }
 
 /** Return every presentation in Timeline order. */

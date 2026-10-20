@@ -17,6 +17,8 @@
   import { Button } from '$lib/client/components/ui/button';
   import { Spinner } from '$lib/client/components/ui/spinner';
 
+  import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
+  import { sourceId, type CandidateId } from '$lib/client/visualization/presentation-history';
   import { locateElement } from '$lib/modes/sverlin/element-ref';
 
   import type { ProjectSession } from './project-session.svelte';
@@ -36,9 +38,15 @@
       source: string;
       defaults?: unknown;
       nodeDefaults?: readonly NodeDefaultsTaken[];
+      /** The hash of the source it was built from. */
+      sourceHash?: string;
+      /** Its identifier, `<source>/<values>`. */
+      candidate?: CandidateId;
       /** Built before draws were kept, so neither its draws nor its page's defaults are known. */
       unrecorded?: boolean;
     })[];
+    /** Called once a save has built its new candidate, so the stage can show it. */
+    onSaved?: () => void;
   };
 
   let {
@@ -46,7 +54,8 @@
     presentationCount,
     editMode = $bindable<ProjectArtifactEditMode>('readonly'),
     selectedSources = [],
-    drawnSources = []
+    drawnSources = [],
+    onSaved = () => {}
   }: Props = $props();
 
   let draft = $state('');
@@ -106,9 +115,6 @@
           : 'This presentation was';
     return `${subject} built ${reason}, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.${remedy}`;
   });
-  const drawnSeeds = $derived(
-    drawn.map(({ label, seed }) => (label ? `${label}: ${seed}` : String(seed))).join(' · ')
-  );
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
     const source = markedSource;
@@ -148,6 +154,7 @@
     });
     if (succeeded) {
       editMode = 'readonly';
+      onSaved();
     }
   }
 
@@ -163,26 +170,13 @@
         <EditIcon class="size-4 shrink-0 text-muted-foreground" />
         <div class="mr-auto min-w-0">
           <p class="truncate font-mono text-sm">{artifact.path}</p>
-          <p class="text-sm text-muted-foreground">
-            {!session.atHead
-              ? `Artifact at event #${session.snapshot.at}`
-              : editMode === 'editing'
-                ? 'Saving builds a new candidate from this source'
-                : drawnSources.length
-                  ? 'The shown candidate’s source'
-                  : 'Source'}
-          </p>
+          {#if !session.atHead}
+            <p class="text-sm text-muted-foreground">Artifact at event #{session.snapshot.at}</p>
+          {/if}
         </div>
         {#if highlights.length}
           <Badge variant="secondary"
             >{highlights.length} selected {highlights.length === 1 ? 'node' : 'nodes'}</Badge
-          >
-        {/if}
-        {#if drawn.length}
-          <Badge
-            variant="secondary"
-            title="Values each visible presentation drew, marked in the source"
-            >{drawn.length === 1 ? 'Seed' : 'Seeds'} {drawnSeeds}</Badge
           >
         {/if}
         {#if diagnosed.items.length}
@@ -192,9 +186,11 @@
               : 'problems'}</Badge
           >
         {/if}
-        {#if markedSource === artifact.content.text}
-          <Badge variant="outline">{artifact.content.sha256.slice(0, 8)}</Badge>
-        {/if}
+        {#each drawnSources as { candidate, label } (label ?? 'shown')}
+          {#if candidate}<CandidateIdPill {...candidate} {label} />{/if}
+        {:else}
+          <CandidateIdPill {...sourceId(artifact.content.sha256)} />
+        {/each}
         <Button
           size="icon-sm"
           variant="ghost"

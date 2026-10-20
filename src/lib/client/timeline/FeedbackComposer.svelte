@@ -7,7 +7,11 @@
   import * as Field from '$lib/client/components/ui/field';
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
-  import { type TimelinePresentation } from '$lib/client/visualization/presentation-history';
+  import {
+    knownCandidate,
+    type TimelinePresentation
+  } from '$lib/client/visualization/presentation-history';
+  import { baseCandidate } from '$lib/client/visualization/presentation-selection.svelte';
   import type { VisualSelection } from '$lib/client/visualization/visual-selection.svelte';
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
@@ -18,6 +22,7 @@
     selectionReferences
   } from './feedback-context';
   import {
+    referenceChipDetail,
     referenceChipLabel,
     referenceChipTitle,
     type ReferenceSegment
@@ -66,11 +71,13 @@
     const editorContent = serializeEditor();
     if (editorContent.length === 0) return;
     const content = feedbackSubmissionContent(editorContent, automaticContext);
+    const from = baseCandidate(presentations);
     const succeeded = await session.runCommand({
       type: 'feedback',
       content,
       focus: session.focusedEvents,
-      presentationCount
+      presentationCount,
+      ...(from ? { from } : {})
     });
     if (succeeded) {
       editorRevision += 1;
@@ -147,14 +154,41 @@
     onDraftChange(serializeEditor(), focused);
   }
 
+  // A chip's label: the candidate's identifier as its pill (see CandidateIdPill.svelte), then what
+  // an element chip adds, or the label as text for a candidate not yet known.
+  function chipLabel(reference: ReferenceSegment): HTMLSpanElement {
+    const label = document.createElement('span');
+    label.className = 'inline-flex items-center gap-1';
+    const known = knownCandidate(reference.presentationId);
+    if (!known) {
+      label.className = 'rounded-md bg-muted px-1.5 leading-5';
+      label.textContent = referenceChipLabel(reference);
+      return label;
+    }
+    const pill = document.createElement('span');
+    pill.className =
+      'inline-flex overflow-hidden rounded-md leading-5 ring-1 ring-border ring-inset';
+    const source = document.createElement('span');
+    source.className = 'px-1.5 font-semibold';
+    source.style.backgroundColor = `hsl(${known.hue} 70% 55% / 0.32)`;
+    source.textContent = known.source;
+    const values = document.createElement('span');
+    values.className = 'bg-muted/60 px-1.5';
+    values.textContent = known.values;
+    pill.append(source, values);
+    label.append(pill);
+    const detail = referenceChipDetail(reference);
+    if (detail) label.append(detail);
+    return label;
+  }
+
   function referenceChip(reference: ReferenceSegment): HTMLSpanElement {
     const chip = document.createElement('span');
     chip.contentEditable = 'false';
     chip.dataset.reference = JSON.stringify(reference);
     chip.className =
-      'mx-0.5 inline-flex items-center gap-1 rounded-md border bg-muted px-1.5 py-0.5 align-baseline font-mono text-sm text-foreground';
-    const label = document.createElement('span');
-    label.textContent = referenceChipLabel(reference);
+      'mx-0.5 inline-flex items-center gap-1 rounded-md align-middle font-mono text-xs text-foreground';
+    const label = chipLabel(reference);
     chip.title = referenceChipTitle(reference);
     const remove = document.createElement('button');
     remove.type = 'button';

@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { Badge } from '$lib/client/components/ui/badge';
-  import { Button } from '$lib/client/components/ui/button';
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import { renderSafeMarkdown } from './markdown';
+  import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
+  import { knownCandidate } from '$lib/client/visualization/presentation-history';
+
   import {
+    referenceChipDetail,
     referenceChipLabel,
     referenceChipTitle,
     singletonReferenceSegments,
@@ -26,6 +28,19 @@
   }: Props = $props();
 </script>
 
+{#snippet chip(reference: ReferenceSegment)}
+  {@const known = knownCandidate(reference.presentationId)}
+  {@const detail = referenceChipDetail(reference)}
+  {#if known}
+    <CandidateIdPill {...known} />
+    {#if detail}<span class="font-mono text-xs">{detail}</span>{/if}
+  {:else}
+    <span class="rounded-md bg-muted px-1.5 font-mono text-xs leading-5 text-foreground"
+      >{referenceChipLabel(reference)}</span
+    >
+  {/if}
+{/snippet}
+
 <div class="message-content text-base">
   {#each content as segment, index (`${segment.type}-${index}`)}
     {#if segment.type === 'markdown'}
@@ -35,24 +50,23 @@
     {:else}
       {#each singletonReferenceSegments(segment) as reference, position (position)}
         {#if interactive}
-          <Button
+          <button
             type="button"
-            size="xs"
-            variant={inverted ? 'secondary' : 'outline'}
-            class="mx-0.5 inline-flex align-baseline font-mono"
+            class="mx-0.5 inline-flex items-center gap-1 rounded-md align-middle hover:ring-2 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            class:bg-background={inverted}
             title={referenceChipTitle(reference)}
             onclick={(event) => onReferenceActivate(reference, event.shiftKey)}
           >
-            {referenceChipLabel(reference)}
-          </Button>
+            {@render chip(reference)}
+          </button>
         {:else}
-          <Badge
-            variant={inverted ? 'secondary' : 'outline'}
-            class="mx-0.5 inline-flex overflow-visible align-baseline font-mono"
+          <span
+            class="mx-0.5 inline-flex items-center gap-1 rounded-md align-middle"
+            class:bg-background={inverted}
             title={referenceChipTitle(reference)}
           >
-            {referenceChipLabel(reference)}
-          </Badge>
+            {@render chip(reference)}
+          </span>
         {/if}
       {/each}
     {/if}

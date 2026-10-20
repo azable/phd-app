@@ -16,8 +16,14 @@ const chipLabelLength = 20;
 /** Return the compact, participant-facing label for one reference chip. */
 export function referenceChipLabel(reference: ReferenceSegment): string {
   const presentation = presentationDisplayId(reference.presentationId);
-  if (reference.type === 'presentation-ref') return presentation;
-  return `${presentation} · S${reference.step + 1} · ${shortLabel(reference.element.label)}`;
+  const detail = referenceChipDetail(reference);
+  return detail ? `${presentation} · ${detail}` : presentation;
+}
+
+/** What an element chip adds to its presentation: the step and the element's label. */
+export function referenceChipDetail(reference: ReferenceSegment): string | undefined {
+  if (reference.type === 'presentation-ref') return undefined;
+  return `S${reference.step + 1} · ${shortLabel(reference.element.label)}`;
 }
 
 /** Return the full description of one reference chip, shown on hover. */
