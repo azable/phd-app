@@ -153,6 +153,9 @@ importers:
       paneforge:
         specifier: ^1.0.2
         version: 1.0.2(svelte@5.48.5)
+      playwright-core:
+        specifier: ^1.64.1
+        version: 1.64.1
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
@@ -2995,6 +2998,11 @@ packages:
   playwright-core@1.58.0:
     resolution: {integrity: sha512-aaoB1RWrdNi3//rOeKuMiS65UCcgOVljU46At6eFcOFPFHWtd2weHRRow6z/n+Lec0Lvu0k9ZPKJSjPugikirw==}
     engines: {node: '>=18'}
+    hasBin: true
+
+  playwright-core@1.64.1:
+    resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
+    engines: {node: '>=20'}
     hasBin: true
 
   playwright@1.58.0:
@@ -6221,6 +6229,8 @@ snapshots:
 
   playwright-core@1.58.0:
     optional: true
+
+  playwright-core@1.64.1: {}
 
   playwright@1.58.0:
     dependencies:

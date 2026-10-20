@@ -25,6 +25,8 @@ in
     XDG_CACHE_HOME = "${config.devenv.root}/.cache";
     XDG_DATA_HOME = "${config.devenv.root}/.local/share";
     XDG_STATE_HOME = "${config.devenv.root}/.local/state";
+    # The browser the browser tests drive (pnpm run test:browser).
+    SVERLIN_TEST_BROWSER = lib.getExe pkgs.chromium;
   };
 
   services.postgres = {
