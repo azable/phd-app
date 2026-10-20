@@ -194,6 +194,7 @@
               seed: presentation.seed,
               draws: presentation.draws ?? [],
               parameters: presentation.parameters,
+              unrecorded: presentation.draws === undefined,
               layouts: (drawnSteps[presentation.presentationId]?.layouts ?? []).flatMap(
                 ({ node, seed, form, curve }) => {
                   const tag =

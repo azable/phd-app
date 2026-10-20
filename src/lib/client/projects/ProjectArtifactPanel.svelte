@@ -36,6 +36,8 @@
       source: string;
       defaults?: unknown;
       nodeDefaults?: readonly NodeDefaultsTaken[];
+      /** Built before draws were kept, so neither its draws nor its page's defaults are known. */
+      unrecorded?: boolean;
     })[];
   };
 
@@ -78,6 +80,23 @@
     drawnSources.filter(({ source }) => source === (artifact?.content.text ?? ''))
   );
   const drawnTags = $derived(tagDefaults(drawn));
+  // Why a visible presentation's draws are not marked: it was built from another version of the
+  // source, or before draws were kept.
+  const unmarkedNotice = $derived.by(() => {
+    const otherSource = drawnSources.filter((presentation) => !drawn.includes(presentation));
+    const unrecorded = drawn.filter((presentation) => presentation.unrecorded);
+    const [unmarked, reason, remedy] = otherSource.length
+      ? [otherSource, 'from another version of the source', '']
+      : [unrecorded, 'before drawn values were recorded', ' Resample to see drawn values.'];
+    if (!unmarked.length) return undefined;
+    const subject =
+      unmarked.length > 1
+        ? 'These presentations were'
+        : unmarked[0].label
+          ? `The ${unmarked[0].label} presentation was`
+          : 'This presentation was';
+    return `${subject} built ${reason}, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.${remedy}`;
+  });
   const drawnSeeds = $derived(
     drawn.map(({ label, seed }) => (label ? `${label}: ${seed}` : String(seed))).join(' · ')
   );
@@ -200,6 +219,12 @@
           {editMode === 'editing'
             ? 'Selected nodes are not highlighted while the source has unsaved changes.'
             : 'A selected presentation was built from a different source, so its nodes are not highlighted.'}
+        </p>
+      {/if}
+
+      {#if expanded && unmarkedNotice}
+        <p class="border-b bg-muted px-4 py-2 text-sm text-muted-foreground">
+          {unmarkedNotice}
         </p>
       {/if}
 
