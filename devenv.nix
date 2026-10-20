@@ -25,7 +25,9 @@ in
     XDG_CACHE_HOME = "${config.devenv.root}/.cache";
     XDG_DATA_HOME = "${config.devenv.root}/.local/share";
     XDG_STATE_HOME = "${config.devenv.root}/.local/state";
-    # The browser the browser tests drive (pnpm run test:browser).
+  } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+    # The browser the browser tests drive (pnpm run test:browser). nixpkgs'
+    # chromium is Linux-only; on macOS, set it to a local Chrome.
     SVERLIN_TEST_BROWSER = lib.getExe pkgs.chromium;
   };
 
