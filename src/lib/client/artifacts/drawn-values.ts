@@ -1,8 +1,9 @@
 /**
  * CodeMirror markers for what a presentation's seed drew: a mark over each draw call of the design
  * block with, after it, the value each shown presentation drew there; and inside each <Node> tag,
- * ghost props for what it left to the seed, its drawn defaults and the layout it arranged, written
- * as the view would write them. In an editable editor, clicking a ghost value writes it as a prop.
+ * a chip for what it left to the seed, its drawn defaults and the layout it arranged, which opens
+ * them under the tag as ghost props, written as the view would write them. In an editable editor,
+ * clicking a ghost value writes it as a prop.
  * Views a pick could have chosen but no shown presentation did are greyed out.
  *
  * @packageDocumentation
@@ -261,53 +262,43 @@ class DrawnValuesWidget extends WidgetType {
   }
 }
 
-/**
- * A tag's ghost props, written as props: name= and each value as a pill, a pair's side by side. In an
- * editable editor, a value with a pin writes that prop into the tag where the ghost was.
- */
-class GhostPropsWidget extends WidgetType {
-  constructor(private readonly props: readonly GhostProp[]) {
+/** The chip's summary of a tag's ghost props: how many, and which ones a pair drew differently. */
+export function ghostSummary(props: readonly GhostProp[]): string {
+  const differing = props.filter(({ differs }) => differs).map(({ name }) => name);
+  const named =
+    differing.length > 3
+      ? `${differing.slice(0, 2).join(', ')} +${differing.length - 2}`
+      : differing.join(', ');
+  return `${props.length} drawn${differing.length ? ` · ${named} differ${differing.length > 1 ? '' : 's'}` : ''}`;
+}
+
+/** Inside a tag, before its >: a chip saying what the tag left to the seed, opening its ghost props. */
+class GhostChipWidget extends WidgetType {
+  constructor(
+    private readonly props: readonly GhostProp[],
+    private readonly open: boolean
+  ) {
     super();
   }
 
-  eq(other: GhostPropsWidget): boolean {
-    return JSON.stringify(other.props) === JSON.stringify(this.props);
+  eq(other: GhostChipWidget): boolean {
+    return other.open === this.open && JSON.stringify(other.props) === JSON.stringify(this.props);
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const wrapper = document.createElement('span');
-    wrapper.className = 'cm-ghost-props';
-    for (const { name, values, differs } of this.props) {
-      const prop = document.createElement('span');
-      prop.className = differs ? 'cm-ghost-prop cm-drawn-differs' : 'cm-ghost-prop';
-      prop.append(` ${name}=`);
-      for (const { label, text, color, title, pin } of values) {
-        const value = document.createElement('span');
-        value.className = 'cm-ghost-value';
-        value.title = `${label ? `${label}: ` : ''}${title}${pin ? `\nWhile editing, click to write ${pin}` : ''}`;
-        if (color) {
-          const swatch = document.createElement('span');
-          swatch.className = 'cm-drawn-swatch';
-          swatch.style.backgroundColor = color;
-          value.append(swatch);
-        } else value.append(text);
-        if (pin) {
-          value.dataset.pin = pin;
-          value.addEventListener('mousedown', (event) => {
-            if (view.state.readOnly) return;
-            event.preventDefault();
-            const at = view.posAtDOM(wrapper);
-            view.dispatch({
-              changes: { from: at, insert: ` ${pin}` },
-              effects: removeGhost.of({ at, name })
-            });
-          });
-        }
-        prop.append(value);
-      }
-      wrapper.append(prop);
-    }
-    return wrapper;
+    const chip = document.createElement('span');
+    chip.className = this.props.some(({ differs }) => differs)
+      ? 'cm-ghost-chip cm-drawn-differs'
+      : 'cm-ghost-chip';
+    chip.textContent = `${this.open ? '▾' : '▸'} ${ghostSummary(this.props)}`;
+    chip.title = this.open
+      ? 'Hide the props this tag left to the seed'
+      : 'Show the props this tag left to the seed';
+    chip.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      view.dispatch({ effects: toggleGhosts.of(view.posAtDOM(chip)) });
+    });
+    return chip;
   }
 
   ignoreEvent(): boolean {
@@ -315,12 +306,92 @@ class GhostPropsWidget extends WidgetType {
   }
 }
 
-type DrawnState = { markers: DrawnMarker[]; ghosts: TagGhosts[]; unchosen: UnchosenView[] };
+/**
+ * Under a tag's line: its ghost props, one row each, written as the view would set them, with a
+ * column per shown presentation. In an editable editor, a value with a pin writes that prop into
+ * the tag at `at`, where its chip is.
+ */
+class GhostTableWidget extends WidgetType {
+  constructor(
+    private readonly props: readonly GhostProp[],
+    private readonly at: number
+  ) {
+    super();
+  }
+
+  eq(other: GhostTableWidget): boolean {
+    return other.at === this.at && JSON.stringify(other.props) === JSON.stringify(this.props);
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const table = document.createElement('div');
+    table.className = 'cm-ghost-table';
+    const columns = this.props[0]?.values.length ?? 1;
+    table.style.gridTemplateColumns = `max-content repeat(${columns}, max-content)`;
+    const cell = (className: string, text = '') => {
+      const element = document.createElement('span');
+      element.className = className;
+      element.textContent = text;
+      table.append(element);
+      return element;
+    };
+    const labels = this.props[0]?.values.map(({ label }) => label) ?? [];
+    if (labels.some(Boolean)) {
+      cell('cm-ghost-name');
+      for (const label of labels) cell('cm-drawn-label', label ?? '');
+    }
+    for (const { name, values, differs } of this.props) {
+      cell(differs ? 'cm-ghost-name cm-drawn-differs' : 'cm-ghost-name', `${name}=`);
+      for (const { label, text, color, title, pin } of values) {
+        const value = cell(
+          differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value',
+          color ? '' : text
+        );
+        value.title = `${label ? `${label}: ` : ''}${title}${pin ? `\nWhile editing, click to write ${pin}` : ''}`;
+        if (color) {
+          const swatch = document.createElement('span');
+          swatch.className = 'cm-drawn-swatch';
+          swatch.style.backgroundColor = color;
+          value.append(swatch, ` ${text}`);
+        }
+        if (!pin) continue;
+        value.dataset.pin = pin;
+        value.addEventListener('mousedown', (event) => {
+          if (view.state.readOnly) return;
+          event.preventDefault();
+          view.dispatch({
+            changes: { from: this.at, insert: ` ${pin}` },
+            effects: removeGhost.of({ at: this.at, name })
+          });
+        });
+      }
+    }
+    return table;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+/** Open or close the ghost props of the tag whose chip is at a position. */
+const toggleGhosts = StateEffect.define<number>();
+
+type DrawnState = {
+  markers: DrawnMarker[];
+  ghosts: TagGhosts[];
+  /** Where the chips of the tags whose ghost props are open are. */
+  open: number[];
+  unchosen: UnchosenView[];
+};
 
 const drawnCall = Decoration.mark({ class: 'cm-drawn-call' });
 const differingCall = Decoration.mark({ class: 'cm-drawn-call cm-drawn-differs' });
 
-function decorations({ markers, ghosts, unchosen }: DrawnState): DecorationSet {
+function decorations(
+  state: EditorState,
+  { markers, ghosts, open, unchosen }: DrawnState
+): DecorationSet {
   const marks: Range<Decoration>[] = [];
   for (const { from, to, title } of unchosen)
     if (from < to)
@@ -331,15 +402,23 @@ function decorations({ markers, ghosts, unchosen }: DrawnState): DecorationSet {
       Decoration.widget({ widget: new DrawnValuesWidget(marker), side: 1 }).range(marker.to)
     );
   }
-  for (const { at, props } of ghosts)
-    if (props.length)
-      marks.push(Decoration.widget({ widget: new GhostPropsWidget(props), side: 1 }).range(at));
+  for (const { at, props } of ghosts) {
+    if (!props.length || at > state.doc.length) continue;
+    const shown = open.includes(at);
+    marks.push(Decoration.widget({ widget: new GhostChipWidget(props, shown), side: 1 }).range(at));
+    if (shown)
+      marks.push(
+        Decoration.widget({ widget: new GhostTableWidget(props, at), block: true, side: 1 }).range(
+          state.doc.lineAt(at).to
+        )
+      );
+  }
   return Decoration.set(marks, true);
 }
 
 // Markers keep their places through edits, as CodeMirror maps them, until the next set replaces them.
 const drawnField = StateField.define<DrawnState>({
-  create: () => ({ markers: [], ghosts: [], unchosen: [] }),
+  create: () => ({ markers: [], ghosts: [], open: [], unchosen: [] }),
   update(value, transaction) {
     const { changes } = transaction;
     let next: DrawnState = transaction.docChanged
@@ -350,6 +429,7 @@ const drawnField = StateField.define<DrawnState>({
             to: changes.mapPos(marker.to)
           })),
           ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) })),
+          open: value.open.map((at) => changes.mapPos(at, 1)),
           unchosen: value.unchosen.map((view) => ({
             ...view,
             from: changes.mapPos(view.from),
@@ -358,12 +438,25 @@ const drawnField = StateField.define<DrawnState>({
         }
       : value;
     for (const effect of transaction.effects) {
-      if (effect.is(setDrawnValues))
+      if (effect.is(setDrawnValues)) {
+        const ghosts = tagGhosts(transaction.state, effect.value.presentations, effect.value.tags);
         next = {
           markers: drawnMarkers(transaction.state, effect.value.presentations),
-          ghosts: tagGhosts(transaction.state, effect.value.presentations, effect.value.tags),
+          ghosts,
+          // A tag stays open as the shown presentations or their steps change.
+          open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: unchosenViews(transaction.state, effect.value.presentations)
         };
+      }
+      if (effect.is(toggleGhosts)) {
+        const at = changes.mapPos(effect.value, 1);
+        next = {
+          ...next,
+          open: next.open.includes(at)
+            ? next.open.filter((open) => open !== at)
+            : [...next.open, at]
+        };
+      }
       if (effect.is(removeGhost)) {
         const at = changes.mapPos(effect.value.at, 1);
         next = {
@@ -378,7 +471,8 @@ const drawnField = StateField.define<DrawnState>({
     }
     return next;
   },
-  provide: (field) => EditorView.decorations.from(field, decorations)
+  provide: (field) =>
+    EditorView.decorations.compute([field], (state) => decorations(state, state.field(field)))
 });
 
 const drawnTheme = EditorView.baseTheme({
@@ -413,14 +507,35 @@ const drawnTheme = EditorView.baseTheme({
     fontWeight: '600',
     color: 'var(--muted-foreground)'
   },
+  '.cm-ghost-chip': {
+    marginLeft: '0.375rem',
+    padding: '0 0.3rem',
+    borderRadius: '3px',
+    fontSize: '0.75rem',
+    color: 'var(--muted-foreground)',
+    backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 10%, transparent)',
+    cursor: 'pointer',
+    userSelect: 'none'
+  },
+  '.cm-ghost-chip.cm-drawn-differs': {
+    backgroundColor: 'color-mix(in oklab, #d97706 18%, transparent)'
+  },
   // Ghost props read as code the seed wrote, faded and slanted, with each value a pill as a draw's is.
-  '.cm-ghost-props': {
+  '.cm-ghost-table': {
+    display: 'grid',
+    gap: '0.15rem 0.5rem',
+    alignItems: 'baseline',
+    margin: '0.15rem 0 0.35rem 2rem',
+    padding: '0.25rem 0.5rem',
+    width: 'fit-content',
+    maxWidth: 'calc(100% - 2rem)',
+    borderLeft: '2px solid color-mix(in oklab, var(--muted-foreground) 25%, transparent)',
     color: 'color-mix(in oklab, var(--card-foreground) 45%, transparent)',
     fontStyle: 'italic'
   },
+  '.cm-ghost-name.cm-drawn-differs': { color: 'color-mix(in oklab, #d97706 85%, transparent)' },
   '.cm-ghost-value': {
-    display: 'inline-block',
-    marginRight: '0.15rem',
+    justifySelf: 'start',
     padding: '0 0.3rem',
     borderRadius: '3px',
     fontSize: '0.75rem',
@@ -430,7 +545,7 @@ const drawnTheme = EditorView.baseTheme({
     backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 14%, transparent)',
     cursor: 'default'
   },
-  '.cm-ghost-prop.cm-drawn-differs .cm-ghost-value': {
+  '.cm-ghost-value.cm-drawn-differs': {
     backgroundColor: 'color-mix(in oklab, #d97706 20%, transparent)'
   },
   '.cm-content[contenteditable="true"] .cm-ghost-value[data-pin]:hover': {

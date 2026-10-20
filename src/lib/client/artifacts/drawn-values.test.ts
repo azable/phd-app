@@ -3,7 +3,7 @@ import { EditorState } from '@codemirror/state';
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import { drawnMarkers, tagGhosts, unchosenViews, valueText } from './drawn-values';
+import { drawnMarkers, ghostSummary, tagGhosts, unchosenViews, valueText } from './drawn-values';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -135,6 +135,15 @@ describe('drawn value markers', () => {
         ]
       }
     ]);
+  });
+
+  it('sums up a tag’s ghost props in its chip, naming those a pair drew differently', () => {
+    const prop = (name: string, differs = false) => ({ name, values: [], differs });
+    expect(ghostSummary([prop('radius'), prop('gap')])).toBe('2 drawn');
+    expect(ghostSummary([prop('radius', true), prop('gap')])).toBe('2 drawn · radius differs');
+    expect(ghostSummary(['radius', 'fill', 'stroke', 'gap'].map((name) => prop(name, true)))).toBe(
+      '4 drawn · radius, fill +2 differ'
+    );
   });
 
   it('shortens reals and long values', () => {
