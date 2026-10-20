@@ -13,6 +13,7 @@
     "prepare": "svelte-kit sync || echo ''",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:clear-projects": "bash scripts/run-with-env.sh node scripts/clear-projects.mjs",
     "export:data": "pnpm run build:data && node build-data/index.js",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

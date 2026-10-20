@@ -29,6 +29,7 @@ Visualization modes are developer-registered in `src/lib/modes/catalog.ts`. The 
 - Server launches reload the current `.env` through `scripts/run-with-env.sh`, using the same loader as devenv shells. After `.env` changes, coordinate a web-process restart (`devenv processes restart web`); the daemon and PostgreSQL do not need restarting. Do not route isolated test migrations through this launcher: their database URL must remain supplied by the test runner.
 - Use `pnpm run export:data -- --scope projects` (optionally `--project PROJECT_ID` and `--output PATH`) to inspect complete project Timelines or retained operation failures. Do not bypass the canonical export with ad hoc PostgreSQL queries for that work; extend the export if important data is missing.
 - The consolidated `drizzle/0000_lying_jean_grey.sql` is a fresh-database baseline. It does not migrate older compiler-era projects or authentication data. Verify the target database before any reset and never reset it implicitly during ordinary development.
+- `pnpm run db:clear-projects` deletes every project, with its events and interaction sessions, from a local database, keeping accounts and study runs, for starting over after the view language changes. It refuses any other host. Run it only when the developer asks.
 
 ## Engineering rules
 
