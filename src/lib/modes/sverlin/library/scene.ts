@@ -93,7 +93,7 @@ export type SceneFrame = { width: number; height: number; background: string };
 
 const round = (value: number) => Math.round(value * 100) / 100;
 const shapes: readonly string[] = ['box', 'card', 'plain'] satisfies NodeShape[];
-const layouts: readonly string[] = ['row', 'column', 'grid', 'free'] satisfies Layout[];
+const layouts: readonly string[] = ['row', 'column', 'free'] satisfies Layout[];
 const nodeSelector = 'div[data-sv-node]';
 
 /** The frame a layer shows, at its logical size. */

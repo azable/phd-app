@@ -4,7 +4,7 @@ import { EditorState } from '@codemirror/state';
 import { highlightRanges } from './selection-highlights';
 
 const source = [
-  '<Node items={values}>',
+  '<Node layout="row">',
   '  <Node fill={index > i ? "a>b" : undefined} />',
   '  <Node',
   '    size="large">Title</Node>',
@@ -21,7 +21,7 @@ describe('source highlights', () => {
       { line: 3, column: 3 }
     ]);
     expect(ranges.map(text)).toEqual([
-      '<Node items={values}>',
+      '<Node layout="row">',
       '<Node fill={index > i ? "a>b" : undefined} />',
       '<Node\n    size="large">'
     ]);
@@ -35,7 +35,7 @@ describe('source highlights', () => {
         { line: 1, column: 1 },
         { line: 1, column: 1 }
       ]).map(text)
-    ).toEqual(['<Node items={values}>']);
+    ).toEqual(['<Node layout="row">']);
   });
 });
 

@@ -4,8 +4,8 @@ import { locateElement } from './element-ref';
 
 const source = [
   '<script lang="sverlin">yield;</script>',
-  '<Node items={values}>',
-  '  {#snippet item(value)}<Node {value} />{/snippet}',
+  '<Node layout="row">',
+  '  {#each values as item}<Node value={item} />{/each}',
   '</Node>',
   '<Node',
   '  size="large">Title</Node>'
@@ -18,7 +18,7 @@ describe('element locations', () => {
       column: 25,
       occurrence: 4,
       items: [2, 0],
-      markup: '{#snippet item(value)}<Node {value} />{/snippet}'
+      markup: '{#each values as item}<Node value={item} />{/each}'
     });
     expect(locateElement(source, '2:1')).toMatchObject({ occurrence: 1, items: [] });
     // A tag whose attributes start on the next line.

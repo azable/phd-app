@@ -320,16 +320,24 @@ describe('single-component Svelte compilation', () => {
     ).rejects.toThrow('"Node" names a library component');
   });
 
-  it('renders nested arrays as nested nodes without an item snippet', async () => {
+  it('draws nested collections with nested {#each} blocks, and no longer takes items', async () => {
+    const source = (view: string) =>
+      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield;</script>{#snippet Int(value: Int)}<Node {value} />{/snippet}${view}`;
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield;</script><Node layout="column"><Node items={grid} layout="column" nested="row" /><Node items={[1, 2, 3, 4]} layout="grid" columns={2} /></Node>'
+      source(
+        '<Node layout="column">{#each grid as row}<Node>{#each row as v}{@render Int(v)}{/each}</Node>{/each}</Node>'
+      )
     );
     expect(result.javascript).toContain('sv-node');
+    await expect(compileSvelteComponent(source('<Node items={grid} />'))).rejects.toMatchObject({
+      code: 'unknown_prop',
+      message: expect.stringContaining('<Node> has no prop items')
+    });
   });
 
   it('embeds atomic types and registers renderer snippets named after types', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node items={people} />'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>{#snippet Int(value, node)}<Node radius="full" {value} {...node} />{/snippet}{#snippet helper(x)}{x}{/snippet}<Node>{#each people as person}<Node value={person} type="Height" />{/each}</Node>'
     );
     expect(result.javascript).toContain('people[1]');
     expect(result.javascript).toContain('sverlin:renderers');
@@ -467,9 +475,14 @@ describe('single-component Svelte compilation', () => {
       `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">yield; values.reverse(); yield;</script>${view}`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).masterSignature;
-    const first = await signature('[1, 2]', '<Node items={values} />');
-    expect(await signature('[1, 2]', '<Node layout="column" items={values} />')).toBe(first);
-    expect(await signature('[2, 1]', '<Node items={values} />')).not.toBe(first);
+    const first = await signature('[1, 2]', '<Node>{#each values as v}{v}{/each}</Node>');
+    expect(
+      await signature(
+        '[1, 2]',
+        '<Node layout="column">{#each values as v}<Node>{v}</Node>{/each}</Node>'
+      )
+    ).toBe(first);
+    expect(await signature('[2, 1]', '<Node>{#each values as v}{v}{/each}</Node>')).not.toBe(first);
   });
 
   it('retains line and column for assistant source repair', async () => {
@@ -615,7 +628,7 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">let r = Ratio(0.125); let g = Grid([[1, 2], [3]]); yield;</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node items={grid} />{/snippet}{@render R(r)}`
+      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">let r = Ratio(0.125); let g = Grid([[1, 2], [3]]); yield;</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{@render C(count)}{/each}</Node>{/each}</Node>{/snippet}{@render R(r)}`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -624,10 +637,13 @@ describe('typed view components', () => {
         R: [0, 1, 0.125],
         S: [0, 999, 1, 'yes', 'x'],
         P: [0, 999, 1].flatMap((a) => ['x', 'yes'].map((b) => ({ a, b }))),
-        G: [0, 999, 1].map((value) => [
-          [value, value],
-          [value, value]
-        ])
+        // G draws its counts only through C, which keeps its box whichever count it shows.
+        G: [
+          [
+            [0, 0],
+            [0, 0]
+          ]
+        ]
       }
     );
     // C shows a range too large to draw whole, so the page also draws its widest number in the
@@ -667,8 +683,7 @@ describe('typed view components', () => {
     ],
     [
       'components inside markup',
-      () =>
-        component('<Node items={[1]}>{#snippet item(value: Int)}<Node {value} />{/snippet}</Node>'),
+      () => component('<Node>{#snippet Cell(value: Int)}<Node {value} />{/snippet}</Node>'),
       /components are defined at the top level/
     ],
     [

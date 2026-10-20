@@ -839,17 +839,13 @@ function possibleValues(
   }
 }
 
-const layouts = ['row', 'column', 'grid', 'free'];
+const layouts = ['row', 'column', 'free'];
 const named = (scale: object, numeric = true) => ({ names: Object.keys(scale), numeric });
 type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
 
 const nodeProps: PropNames = {
   value: null,
-  items: null,
   layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-  columns: null,
-  nested: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-  item: null,
   type: null,
   shape: named({ box: 0, card: 0, plain: 0 } satisfies Record<NodeShape, 0>, false),
   fill: null,

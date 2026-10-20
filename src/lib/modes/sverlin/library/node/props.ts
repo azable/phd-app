@@ -4,7 +4,7 @@
 export type Primitive = string | number | boolean | null;
 
 /** How a node arranges its items or children. */
-export type Layout = 'row' | 'column' | 'grid' | 'free';
+export type Layout = 'row' | 'column' | 'free';
 
 /** How arranged items line up across the layout direction. */
 export type Align = 'start' | 'center' | 'end';
@@ -96,14 +96,14 @@ export type ShapeDefaults = {
 
 /**
  * Defaults one presentation drew: per framed shape, how a frame spreads and aligns its children,
- * a collection's shape, how rows and columns align their items, the gap between items, the page
+ * a collection's shape and direction, how rows and columns align their items, the gap between items, the page
  * font, and the width of links in pixels.
  */
 export type NodeDefaults = {
   box: ShapeDefaults;
   card: ShapeDefaults;
   frame: { justify: Justify; align: Align };
-  collection: { shape: NodeShape };
+  collection: { shape: NodeShape; layout: 'row' | 'column' };
   align: { row: Align; column: Align };
   gap: Spacing;
   font: NodeFont;

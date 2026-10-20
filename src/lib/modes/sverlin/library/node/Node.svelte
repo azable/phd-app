@@ -1,10 +1,10 @@
 <!--
-  One node of a visualization: a primitive `value`, children content, or, with `items`, a
-  collection. A layout arranges a collection's items, and arranges children too when one is set,
-  so annotations such as an index or a pointer are simply nodes beside a value. A shape only picks
+  One node of a visualization: a primitive `value`, or children content, which makes it a
+  collection when it is one {#each} over a collection. A layout arranges its children, so
+  annotations such as an index or a pointer are simply nodes beside a value. A shape only picks
   which of the presentation's drawn looks a node takes; every visual property is also a prop of its own.
 -->
-<script lang="ts" generics="T">
+<script lang="ts">
   import { untrack, type Snippet } from 'svelte';
 
   import Arranged from './Arranged.svelte';
@@ -34,7 +34,9 @@
     reachesInto,
     provideComponentBox,
     providePointerIdentity,
+    provideCollectionLayout,
     provideSequence,
+    collectionLayoutContext,
     sequenceContext,
     rendererFor,
     slotContext,
@@ -74,11 +76,7 @@
 
   let {
     value,
-    items,
     layout,
-    columns,
-    nested = 'row',
-    item,
     type,
     shape,
     fill,
@@ -110,20 +108,13 @@
     __slot,
     __text = false,
     __itemOf,
-    __itemAt
+    __itemAt,
+    __items
   }: {
-    /** A primitive to display, when the node has neither items nor children. */
+    /** A primitive to display, when the node has no children. */
     value?: Primitive;
-    /** Child values, which make this node a collection. */
-    items?: readonly T[];
-    /** How items (default 'row') or, when set, children are arranged. */
+    /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /** Grid columns; defaults to a near-square grid. */
-    columns?: number;
-    /** Layout for items that are themselves arrays, when no item snippet is given. */
-    nested?: Layout;
-    /** Renders each item of a collection from its value, index, and atomic type name, if typed. */
-    item?: Snippet<[T, number, string | undefined]>;
     /** An atomic type name, such as 'Int'; its renderer snippet, if the view defines one, draws the value. */
     type?: string;
     /** Which drawn look: 'box' for a value, 'plain' for content and collections, unless given. */
@@ -193,6 +184,8 @@
     /** Internal: set by the compiler on the one node an {#each} draws each item in: the collection and the item's index. */
     __itemOf?: unknown;
     __itemAt?: number;
+    /** Internal: set by the compiler on a node whose children are one {#each}: what it iterates, which makes this node a collection. */
+    __items?: ArrayLike<unknown>;
   } = $props();
 
   const types = typeContext();
@@ -213,9 +206,7 @@
   // A typed value node draws through its type's renderer, if the view defines one. Resolved once:
   // each step mounts afresh, and the renderer is marked so nodes inside it never call it again.
   const rendered = untrack(() =>
-    type !== undefined && items === undefined && children === undefined
-      ? rendererFor(type)
-      : undefined
+    type !== undefined && children === undefined ? rendererFor(type) : undefined
   );
   // The root's pointers that can point into the collection whose element this node draws, as
   // those pointing elsewhere this step keep their room, outermost (written last) first: the node
@@ -330,11 +321,7 @@
   // Every prop as given, to draw this node again inside its pointers.
   const given = $derived({
     value,
-    items,
     layout,
-    columns,
-    nested,
-    item,
     type,
     shape,
     fill,
@@ -361,17 +348,27 @@
     __ref,
     __type,
     __links,
-    __component
+    __component,
+    __items
   });
 
-  const collection = $derived(items !== undefined);
+  const collection = $derived(__items !== undefined);
   const resolvedShape = $derived(
     shape ?? (collection ? drawn.collection.shape : children ? 'plain' : 'box')
   );
-  // Links need positions to join, so a node with links and no layout is laid out freely.
-  const arrangement = $derived(layout ?? (collection ? 'row' : __links ? 'free' : undefined));
+  // A collection runs the way the presentation drew, or across the collection around it, as rows
+  // in a column do. Links need positions to join, so a node with links and no layout is laid out
+  // freely.
+  const around = collectionLayoutContext();
+  const collectionLayout = $derived(
+    around === 'row' ? 'column' : around === 'column' ? 'row' : drawn.collection.layout
+  );
+  const arrangement = $derived(
+    layout ?? (collection ? collectionLayout : __links ? 'free' : undefined)
+  );
   untrack(() => {
     if (arrangement) provideSequence(arrangement !== 'free');
+    if (collection) provideCollectionLayout(arrangement);
   });
   // A plain node has no drawn look: no border, padding, or fill unless its props give them.
   const look = $derived.by((): Partial<ShapeDefaults> => {
@@ -404,9 +401,6 @@
         : '0'
       : strokeWidths[width];
   });
-  const gridColumns = $derived(
-    columns ?? Math.max(1, Math.ceil(Math.sqrt(items?.length ?? (arrangement === 'grid' ? 4 : 1))))
-  );
   const resolvedAlign = $derived(
     align ?? (arrangement === 'column' ? drawn.align.column : drawn.align.row)
   );
@@ -416,6 +410,11 @@
   const takenDefaults = $derived(
     [
       shape === undefined && collection && 'collection.shape',
+      layout === undefined &&
+        collection &&
+        around !== 'row' &&
+        around !== 'column' &&
+        'collection.layout',
       resolvedShape !== 'plain' && [
         radius === undefined && `${resolvedShape}.radius`,
         strokeWidth === undefined && !strokeOff && `${resolvedShape}.strokeWidth`,
@@ -448,34 +447,7 @@
 </script>
 
 {#snippet contents()}
-  {#if collection}
-    {#each items ?? [] as child, index (index)}
-      {#if item}
-        <Slot of={items} at={index}
-          >{@render item(child, index, types?.itemType(items, index))}</Slot
-        >
-      {:else if Array.isArray(child)}
-        <Node
-          items={child}
-          layout={nested}
-          shape="plain"
-          __id={id && `${id}/${index}`}
-          __slot={elementOf(types, items, index)}
-        />
-      {:else}
-        <Node
-          value={child !== null && typeof child === 'object'
-            ? JSON.stringify(child)
-            : (child as Primitive)}
-          type={types?.itemType(items, index)}
-          __id={id && `${id}/${index}`}
-          __slot={elementOf(types, items, index)}
-        />
-      {/if}
-    {/each}
-  {:else}
-    {@render children?.()}
-  {/if}
+  {@render children?.()}
 {/snippet}
 
 {#snippet pointed(props: Record<string, unknown>)}
@@ -566,7 +538,6 @@
         class="items {arrangement}"
         class:uniform={collection}
         data-sv-collection={collection ? id : undefined}
-        style:--sv-columns={gridColumns}
         style:gap={measure(spacings, gap ?? drawn.gap)}
         style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
         style:justify-items={collection
@@ -641,10 +612,6 @@
   .column {
     flex-direction: column;
   }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(var(--sv-columns), max-content);
-  }
   /*
     A collection's items sit on equal tracks, each as large as the largest item, so the items of a
     sequence are evenly spaced however their labels differ; each item keeps its own size, centred
@@ -658,10 +625,6 @@
     grid-auto-columns: 1fr;
   }
   .uniform.column {
-    grid-auto-rows: 1fr;
-  }
-  .uniform.grid {
-    grid-template-columns: repeat(var(--sv-columns), 1fr);
     grid-auto-rows: 1fr;
   }
 </style>

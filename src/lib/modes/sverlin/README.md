@@ -43,10 +43,12 @@ A design value named after a type chooses its view: `const Int = pick([IntText, 
 A view of a collection or record draws its parts through their types' views:
 
 ```svelte
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet VertexCard(v: Vertex)}<Node layout="column" shape="card">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
 {#snippet SeenText(seen: Flag)}<Node size="small" color="neutral">{seen ? 'seen' : 'new'}</Node>{/snippet}
 ```
+
+A node whose only child is an `{#each}`, as in `Items`, holds a collection: its items sit on equal tracks, as large as the largest, so they line up evenly; they run as a row or a column, as each presentation draws, unless the node sets `layout`, and a collection inside another runs across it, so a collection of collections draws rows in a column or columns in a row. Put a title or caption for the collection in a node around it, not beside the `{#each}`.
 
 Every view is measured with every value its type allows, so its box keeps one size whatever value it shows and nothing moves between steps; the page moves each value from where it was to where it is (see Steps); participants can select it; and presentations vary how it looks. Offer more than one view of a type where the request leaves its look open, so presentations differ in what they show as well as how it looks: a number as a cell, a card, or a circle, a flag as a word or a tick.
 
@@ -95,14 +97,14 @@ Insertion sort, with the key drawn beside the row:
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Next(p: Position)}<Node layout="column"><Pointed /><Node size="small">i</Node></Node>{/snippet}
 {#snippet Hole(p: Position)}<Node layout="column"><Pointed fill={shifting} /><Node size="small">j</Node></Node>{/snippet}
 
 <Node>Insertion sort</Node>
 <Node layout="row" gap="large" align="start">
   <Node>key {@render Int(key)}</Node>
-  {@render Row(values)}
+  {@render Items(values)}
 </Node>
 {@render Next(i)}
 {@render Hole(j)}
@@ -139,7 +141,7 @@ The view receives plain values; a value's type chooses the views that draw it (s
 
 Every array and object in the input and algorithm is made by a type, defined in the domain block from types defined before it, each as a top-level `const`:
 
-- a collection of elements of one type: `const Values = collection(Int);`, and a collection of collections for a grid: `const Grid = collection(Values);`
+- a collection of elements of one type: `const Values = collection(Int);`, and a collection of collections for a table of rows: `const Grid = collection(Values);`
 - a record with named fields: `const Edge = record({ from: Vertex, to: Vertex, weight: Weight });`
 - a union, a value of one of several types, for a place that holds different kinds of value: `const Dist = union(Distance, Unreached);`
 - a position in a collection, such as a loop index or a pointer: `const Index = index(Values);`
@@ -167,7 +169,7 @@ The view receives plain arrays and objects, drawn by the views of their types: a
 
 ## Design values
 
-- Draws are `pick(['row', 'grid'])`, `int(3, 6)` (inclusive), `real(0.5, 1.5)`, and `chance(0.3)`, each only in the value of a top-level `const`, either the whole value or inside its object and array literals, such as `const layout = pick(['row', 'grid']);` or `const look = { radius: pick(['medium', 'full']), sizes: [int(1, 3)] };`. Other design constants may combine earlier ones. A seed always draws the same values.
+- Draws are `pick(['row', 'column'])`, `int(3, 6)` (inclusive), `real(0.5, 1.5)`, and `chance(0.3)`, each only in the value of a top-level `const`, either the whole value or inside its object and array literals, such as `const layout = pick(['row', 'column']);` or `const look = { radius: pick(['medium', 'full']), sizes: [int(1, 3)] };`. Other design constants may combine earlier ones. A seed always draws the same values.
 - Use design values for styling, layout, wording, and library component props. The input and algorithm cannot see them, so steps never depend on the seed.
 - The design value `frame` shapes the page frame that holds the view's top-level nodes: a ratio such as `const frame = '4:3';`, or an object with any of `ratio` (`'16:9'`, the default, `'4:3'`, `'3:2'`, `'1:1'`, `'3:4'`, or `'9:16'`), `justify`, `align`, `padding` (default `'large'`), `layout` (`'column'`, the default, or `'row'`), as `const frame = { ratio: '4:3', align: 'center' };`. Unset `justify` and `align` are drawn (see Start unopinionated). The frame only stacks its top-level nodes: to place nodes freely, relate them, or join them with links, put them in a `<Node layout="free">` (see Free layout, links, and relations).
 - Design names must differ from input and algorithm names.
@@ -204,11 +206,10 @@ Props starting with `__` are reserved for the library. `shape` picks which of th
 
 Arrangement:
 
-- `layout`: `'row'`, `'column'`, `'grid'`, or `'free'` (placed by layout; see Free layout, links, and relations); arranges a node's children.
+- `layout`: `'row'`, `'column'`, or `'free'` (placed by layout; see Free layout, links, and relations); arranges a node's children.
 - `gap`: space between arranged items: `'none'`, `'small'`, `'medium'`, `'large'`, or a number of em.
 - `align`: `'start'`, `'center'`, or `'end'`; how arranged items line up across the layout direction.
 - `justify`: `'start'`, `'center'`, `'end'`, `'between'`, `'around'`, or `'evenly'`; how arranged items spread along the layout direction (default `'start'`).
-- `columns`: the number of grid columns; defaults to a near-square grid.
 
 Border and colour:
 
@@ -232,6 +233,7 @@ Every prop a view leaves unset has a default, and these defaults are drawn, so t
 
 - on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), and text size and weight;
 - on cards: radius, border width, padding, and tint;
+- on collections: whether they run as a row or a column (one inside another runs across it), and now and then a card around the items;
 - on every arrangement: the gap, and how rows and columns align their items;
 - on the page: the font, and how the page frame spreads and aligns the top-level nodes;
 - in free layouts: the form, the positions, and the curves; on links: the width and the curve.
@@ -278,8 +280,8 @@ Example, with domain, input, algorithm, design, and a script-free view:
 {#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}
 {#snippet IntCircle(value: Int)}<Node {value} radius="full" />{/snippet}
 {#snippet IndexText(i: Index)}<Node value={i} weight="bold" />{/snippet}
-{#snippet Row(list: Values)}
-  <Node layout="row">
+{#snippet Items(list: Values)}
+  <Node>
     {#each list as v, k}
       <Node layout="column">
         {@render Int(v)}
@@ -293,14 +295,14 @@ Example, with domain, input, algorithm, design, and a script-free view:
 {/snippet}
 
 <Node>Array walk</Node>
-{@render Row(values)}
+{@render Items(values)}
 {@render Here(i)}
-<Node>{#if step === 0}Start at the left.{:else}Visiting index {@render Index(i)}.{/if}</Node>
+<Node>{#if step === 0}Start at the first element.{:else}Visiting index {@render Index(i)}.{/if}</Node>
 ```
 
 ## Free layout, links, and relations
 
-`layout="free"` places a node's children by layout instead of in a line or grid: use it for linked structures such as linked lists, trees, and graphs, joined by `<Link>` components (see Link), and for groups whose arrangement is open, with or without links. The children are kept clear of each other and gathered compactly, starting from the presentation's seed. A node hugs its children whatever its layout.
+`layout="free"` places a node's children by layout instead of in a line: use it for linked structures such as linked lists, trees, and graphs, joined by `<Link>` components (see Link), and for groups whose arrangement is open, with or without links. The children are kept clear of each other and gathered compactly, starting from the presentation's seed. A node hugs its children whatever its layout.
 
 - `key`: a name for a child that its parent's links and relations refer to, such as `<Node key="a" value={3} />`. Every direct child is placed, keyed or not; put content that belongs together, such as a value and its index, in one child node. A link attaches to the node its key names: give the key to the value inside a child, or to a child holding one value among labels (such as a value with an index above and a pointer name below), and the arrow meets the value, not the labels.
 - `constraints`: an array of relations between children, each `'a relation b'`: `above`, `below`, `leftOf`, and `rightOf` place a directly above, below, left of, or right of b, centred on it and one gap away, and `sameRow` and `sameColumn` centre a and b on one horizontal or vertical line in either order. They work in free layouts, and in rows and columns as long as they agree with the line. Use relations for what the picture must show, such as a pointer label above its node or a caption below the structure, and leave the rest to the layout.
@@ -400,7 +402,7 @@ Breadth-first search, with the vertex being visited and the edge being examined 
 {#snippet RefCard(v: VertexRef)}<Node value={v} shape="card" />{/snippet}
 {#snippet VertexCard(v: Vertex)}<Node layout="column" shape="card">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
-{#snippet QueueRow(q: Queue)}<Node layout="row">{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
+{#snippet QueueItems(q: Queue)}<Node>{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
 {#snippet Visiting(c: VertexRef)}<Pointed fill="amber" />{/snippet}
 {#snippet Examining(e: EdgeIndex)}<Pointed stroke="red" strokeWidth="thick" />{/snippet}
 
@@ -410,7 +412,7 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   {/each}
   {#each edges as edge}{@render Arrow(edge)}{/each}
 </Node>
-<Node>queue {@render QueueRow(queue)}</Node>
+<Node>queue {@render QueueItems(queue)}</Node>
 {@render Visiting(current)}
 {@render Examining(e)}
 ```

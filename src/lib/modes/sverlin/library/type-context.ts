@@ -5,7 +5,7 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import type { NodeDefaults, NodeProps, Primitive } from './node/props';
+import type { Layout, NodeDefaults, NodeProps, Primitive } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
 
 export type TypeContext = {
@@ -373,7 +373,7 @@ export function itemEndsContext(): string | undefined {
 }
 
 /**
- * Whether a node's children are laid out in sequence (a row, column, or grid) rather than freely:
+ * Whether a node's children are laid out in sequence (a row or column) rather than freely:
  * a pointer's end slots, before the first element and after the last, belong only in a sequence.
  */
 export function provideSequence(sequence: boolean): void {
@@ -382,6 +382,15 @@ export function provideSequence(sequence: boolean): void {
 
 export function sequenceContext(): boolean | undefined {
   return getContext<boolean | undefined>('sverlin:sequence');
+}
+
+/** The way the collection around a node runs, so a collection inside it runs across it, as rows in a column do. */
+export function provideCollectionLayout(layout: Layout | undefined): void {
+  setContext('sverlin:collection-layout', layout);
+}
+
+export function collectionLayoutContext(): Layout | undefined {
+  return getContext<Layout | undefined>('sverlin:collection-layout');
 }
 
 /**

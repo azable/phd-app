@@ -85,6 +85,19 @@ describe('element slots', () => {
     );
   });
 
+  it('makes a node holding only an {#each} a collection, told what the {#each} goes over', () => {
+    expect(
+      slotted('<Node layout="row">\n  {#each values as v}{@render Int(v)}{/each}\n</Node>')
+    ).toMatch(/^<Node __items=\{values\} layout="row">\n {2}\{#each values as v/u);
+    // Beside other children, or written into a sentence, the items are not the node's alone.
+    expect(
+      slotted('<Node><Node>Values</Node>{#each values as v}{@render Int(v)}{/each}</Node>')
+    ).not.toContain('__items');
+    expect(slotted('<Node>{#each values as v}{@render Int(v)}, {/each}</Node>')).not.toContain(
+      '__items'
+    );
+  });
+
   it('tells a link where a position at its end comes from', () => {
     expect(slotted('{#each edges as edge}<Link from={edge.from} to="head" />{/each}')).toBe(
       '{#each edges as edge}<Link __fromOf={edge} __fromAt="from" from={edge.from} to="head" />{/each}'

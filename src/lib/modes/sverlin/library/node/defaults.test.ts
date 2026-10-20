@@ -22,6 +22,7 @@ describe('drawn Node defaults', () => {
     expect(defaultsPolicy['box.scale'].pick).toContain(first.box.scale);
     expect(defaultsPolicy['box.weight'].pick).toContain(first.box.weight);
     expect(defaultsPolicy['collection.shape'].pick).toContain(first.collection.shape);
+    expect(defaultsPolicy['collection.layout'].pick).toContain(first.collection.layout);
     expect(defaultsPolicy['row.align'].pick).toContain(first.align.row);
     expect(defaultsPolicy['column.align'].pick).toContain(first.align.column);
     expect(defaultsPolicy['link.strokeWidth'].pick).toContain(first.link.strokeWidth);
@@ -29,12 +30,15 @@ describe('drawn Node defaults', () => {
     expect(first.card).not.toHaveProperty('weight');
   });
 
-  it('varies cell text, and frames collections in only some presentations', () => {
+  it('varies cell text, which way collections run, and frames them in only some presentations', () => {
     const drawn = Array.from({ length: 300 }, (_, seed) => drawDefaults(seed + 1));
     expect(new Set(drawn.map(({ box }) => box.weight))).toEqual(new Set(['bold', 'normal']));
     const cards = drawn.filter(({ collection }) => collection.shape === 'card').length;
     expect(cards).toBeGreaterThan(40);
     expect(cards).toBeLessThan(120);
+    expect(new Set(drawn.map(({ collection }) => collection.layout))).toEqual(
+      new Set(['row', 'column'])
+    );
   });
 
   it('draws pale HSL tints within their ranges, sometimes the plain surface', () => {

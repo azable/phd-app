@@ -626,6 +626,19 @@ export function slotInsertions(
       );
       if (text && views && !attributes.some((attribute) => attribute.name === 'layout'))
         insertions.push({ at: (part.start ?? 0) + '<Node'.length, text: ' __text' });
+      // A node holding one {#each} and nothing else is a collection: told what the {#each} goes
+      // over, it arranges its items alike (see Node.svelte).
+      else {
+        const [each, ...others] = ((part.children as Part[] | undefined) ?? []).filter(
+          (child) => !(child.type === 'Text' && String(child.data ?? '').trim() === '')
+        );
+        const over = each?.expression as Part | undefined;
+        if (each?.type === 'EachBlock' && !others.length && over)
+          insertions.push({
+            at: (part.start ?? 0) + '<Node'.length,
+            text: ` __items={${source.slice(over.start, over.end)}}`
+          });
+      }
     }
     if (part.type === 'ConstTag') {
       // A {@const} names a value of its own, which is an element only if it is an array or object.
@@ -777,7 +790,7 @@ function combinations(fields: (ProbeValues | undefined)[]): unknown[][] | undefi
 
 /**
  * The values of each domain type. A collection is filled to the longest of its type in the trace,
- * with each value of its element type in turn: rows, columns, and grids are widest when full, and
+ * with each value of its element type in turn: rows and columns are widest when full, and
  * the items in them keep their components' boxes, so which value is where does not change the size.
  * A part of the value at a path that `single` names is drawn with one value: it is passed only to
  * views, which keep their boxes whichever value they show.

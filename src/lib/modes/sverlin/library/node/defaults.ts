@@ -62,6 +62,8 @@ export const defaultsPolicy = {
   'frame.align': { pick: ['start', 'center'] },
   // Now and then a collection is drawn as a card around its items rather than bare.
   'collection.shape': { pick: ['plain', 'card'], weights: [3, 1] },
+  // Which way a collection runs where it leaves its layout unset; one inside another runs across it.
+  'collection.layout': { pick: ['row', 'column'] },
   // How rows and columns line their items up across their direction, where a node leaves it unset.
   'row.align': { pick: ['start', 'center'] },
   'column.align': { pick: ['center', 'start'], weights: [3, 1] },
@@ -113,7 +115,10 @@ export function drawDefaults(random: (key: string) => number): NodeDefaults {
       justify: choose('frame.justify') as Justify,
       align: choose('frame.align') as Align
     },
-    collection: { shape: choose('collection.shape') as NodeShape },
+    collection: {
+      shape: choose('collection.shape') as NodeShape,
+      layout: choose('collection.layout') as 'row' | 'column'
+    },
     align: { row: choose('row.align') as Align, column: choose('column.align') as Align },
     gap: choose('gap') as Spacing,
     font: choose('font') as NodeFont,
