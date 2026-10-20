@@ -156,6 +156,38 @@ export function stateReadsOf(
 }
 
 /**
+ * Where markup calls a view other than as {@render View(value)}, as Index(position) for a typed
+ * value: a view is a snippet, which only draws, and called as a function it fails as it draws.
+ */
+export function viewCallsOf(
+  markup: unknown,
+  views: ReadonlySet<string>
+): { name: string; start: number }[] {
+  const found: { name: string; start: number }[] = [];
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    const node = value as Record<string, unknown> & { type?: string };
+    if (node.type === 'RenderTag') {
+      // The rendered view itself is called as it should be; its arguments are checked.
+      const call = node.expression as { arguments?: unknown[] } | undefined;
+      return walk(call?.arguments);
+    }
+    const callee = node.callee as { type?: string; name?: string } | undefined;
+    if (
+      node.type === 'CallExpression' &&
+      callee?.type === 'Identifier' &&
+      views.has(callee.name ?? '')
+    )
+      found.push({ name: callee.name ?? '', start: (node.start as number | undefined) ?? 0 });
+    for (const [key, child] of Object.entries(node))
+      if (key !== 'parent' && key !== 'loc') walk(child);
+  };
+  walk(markup);
+  return found;
+}
+
+/**
  * Where the root reads a variable out of scope at some step other than through a view or pointer:
  * there it would read the value standing in from another step. {@render} arguments and {#each}
  * collections are drawn through views, which draw nothing at such steps.

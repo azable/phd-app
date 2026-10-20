@@ -701,3 +701,12 @@ describe('scope', () => {
     );
   });
 });
+
+describe('views', () => {
+  it('are only drawn with {@render}, never called to make a value', () => {
+    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield;</script><script lang="sverlin" design>const Int = IntText; const Index = IndexLabel;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{@render Int(v)}{@render Index(Index(k))}{/each}</Node>{/snippet}{@render Row(values)}`;
+    expect(() => prepareSvelteComponent(source)).toThrow(
+      'Index(…) is a view, which only draws: write {@render Index(value)}'
+    );
+  });
+});

@@ -36,6 +36,7 @@ import {
   readsOf,
   rootPlacements,
   scopedReadsOf,
+  viewCallsOf,
   slotInsertions,
   viewsOf,
   withInsertions,
@@ -438,6 +439,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
               code: 'view_component',
               start: sourcePosition(source, start)
             })
+        )
+      );
+    const viewCalls = viewCallsOf(ast.html, viewNames);
+    if (viewCalls.length)
+      throw InvalidSvelteSourceError.combine(
+        viewCalls.map(
+          ({ name, start }) =>
+            new InvalidSvelteSourceError(
+              `${name}(…) is a view, which only draws: write {@render ${name}(value)}, with a value from the state. Values are made in the input and algorithm blocks, not in the view; a loop's own index, as k in {#each list as v, k}, is shown as text, {k}.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
         )
       );
     const scopedReads = scopedReadsOf(ast.html, scoped);
