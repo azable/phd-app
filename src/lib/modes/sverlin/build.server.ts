@@ -39,7 +39,8 @@ export async function buildBatch(
           labels: bundle.labels,
           masterSignature: bundle.masterSignature,
           masterSteps: bundle.masterSteps,
-          parameters: bundle.parameters
+          parameters: bundle.parameters,
+          draws: bundle.draws
         }
       });
     } catch (cause) {

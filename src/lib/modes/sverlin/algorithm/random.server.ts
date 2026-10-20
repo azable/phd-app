@@ -53,7 +53,7 @@ export function keyedRandom(seed: number, key: string): number {
  * The key of every draw: its top-level const's name, then the property names and indices of the
  * object and array literals around it. The placement rules give every draw exactly one key.
  */
-function drawKeys(root: BlockStatement): Map<AnyNode, string> {
+export function drawKeys(root: BlockStatement): Map<AnyNode, string> {
   const keys = new Map<AnyNode, string>();
   const visit = (node: AnyNode | null | undefined, path: string): void => {
     if (!node) return;

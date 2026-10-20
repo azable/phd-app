@@ -55,6 +55,19 @@ export const htmlFramesPresentationSchema = v.strictObject({
   generationEventId: v.optional(positiveSchema)
 });
 
+/** One draw a presentation's seed made in its source's design block. */
+export const designDrawSchema = v.strictObject({
+  /** The draw's place in the block, such as look.radius; with the seed, it alone decides the value. */
+  key: v.string(),
+  call: v.picklist(['pick', 'int', 'real', 'chance']),
+  /** The evaluated arguments: pick's choices, int's or real's bounds, or chance's probability. */
+  args: v.array(v.unknown()),
+  value: v.unknown(),
+  /** The call's span in the presentation's source. */
+  start: naturalSchema,
+  end: naturalSchema
+});
+
 /** Self-contained JavaScript bundle executed only inside an isolated presentation iframe. */
 export const browserBundlePresentationSchema = v.strictObject({
   ...presentationEnvelope,
@@ -78,6 +91,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   ),
   /** Design values drawn from the seed for this presentation. */
   parameters: v.optional(v.record(v.string(), v.unknown())),
+  /** Each draw behind the design values; absent for presentations built before draws were kept. */
+  draws: v.optional(v.array(designDrawSchema)),
   generationEventId: v.optional(positiveSchema)
 });
 
@@ -88,6 +103,7 @@ export const renderablePresentationSchema = v.variant('format', [
 ]);
 
 export type VisualizationMode = v.InferOutput<typeof visualizationModeSchema>;
+export type DesignDraw = v.InferOutput<typeof designDrawSchema>;
 export type PresentationLayout = v.InferOutput<typeof presentationLayoutSchema>;
 export type WorkspaceView = v.InferOutput<typeof workspaceViewSchema>;
 export type HtmlFrame = v.InferOutput<typeof htmlFrameSchema>;

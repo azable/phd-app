@@ -216,6 +216,25 @@ describe('single-component Svelte compilation', () => {
     expect(result.parameters).toMatchObject({ accent: 'red' });
   });
 
+  it('records each design draw with its key, arguments, value, and place in the source', async () => {
+    const source =
+      '<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>const accent = pick(["red", "blue"]); const look = { size: int(2, 4) };</script>\n<Node color={accent}>x</Node>';
+    const result = await compileSvelteComponent(source, 5);
+    expect(result.draws.map(({ key, call, args, value }) => ({ key, call, args, value }))).toEqual([
+      { key: 'accent', call: 'pick', args: [['red', 'blue']], value: result.parameters.accent },
+      {
+        key: 'look.size',
+        call: 'int',
+        args: [2, 4],
+        value: (result.parameters.look as { size: number }).size
+      }
+    ]);
+    expect(result.draws.map(({ start, end }) => source.slice(start, end))).toEqual([
+      'pick(["red", "blue"])',
+      'int(2, 4)'
+    ]);
+  });
+
   it('rejects props a library component does not take, and written values it cannot use', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);

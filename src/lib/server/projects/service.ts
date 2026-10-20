@@ -757,6 +757,7 @@ export async function activateBuiltPresentations(
       labels: bundle.labels,
       ...(bundle.masterSteps ? { masterSteps: bundle.masterSteps } : {}),
       ...(bundle.parameters ? { parameters: bundle.parameters } : {}),
+      ...(bundle.draws ? { draws: bundle.draws } : {}),
       seed: item.seed,
       source: item.source,
       html: recordText(bundle.html, 'text/html'),

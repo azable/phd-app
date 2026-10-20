@@ -21,7 +21,7 @@ import {
   type AtomRegistry,
   type AtomType
 } from './atoms.server';
-import { drawFunctions, drawValue, keyedDraws } from './random.server';
+import { drawFunctions, drawKeys, drawValue, keyedDraws } from './random.server';
 import {
   AlgorithmError,
   describe,
@@ -114,12 +114,43 @@ export function interpretDesign(
   seed: number,
   components: readonly string[] = []
 ): TraceState {
+  return interpretDesignDraws(body, seed, components).values;
+}
+
+/**
+ * One draw a seed made in the design block: its key (see random.server.ts), the draw function and
+ * its evaluated arguments, the value it drew, and the call's span in the block's body.
+ */
+export type DesignDraw = {
+  key: string;
+  call: 'pick' | 'int' | 'real' | 'chance';
+  args: unknown[];
+  value: unknown;
+} & Span;
+
+/** Interpret the design block as interpretDesign does, also recording each draw it makes. */
+export function interpretDesignDraws(
+  body: string,
+  seed: number,
+  components: readonly string[] = []
+): { values: TraceState; draws: DesignDraw[] } {
   const { root, offset } = parseBlock(body, 'design');
-  return new Interpreter(root, offset, {
+  const keys = drawKeys(root);
+  const draws: DesignDraw[] = [];
+  const values = new Interpreter(root, offset, {
     kind: 'design',
     random: keyedDraws(root, seed),
+    onDraw: (node, args, value) =>
+      draws.push({
+        key: keys.get(node) ?? '',
+        call: (node.callee as { name: DesignDraw['call'] }).name,
+        args,
+        value,
+        ...offset(node)
+      }),
     names: components
   }).bindings().state;
+  return { values, draws };
 }
 
 /**
@@ -297,6 +328,7 @@ class Interpreter {
   readonly #kind: BlockKind;
   /** The random number for one design draw. */
   readonly #random?: (draw: AnyNode) => number;
+  readonly #onDraw?: (draw: CallExpression, args: Value[], value: Value) => void;
   readonly #domain: DomainRegistry;
   readonly #atoms: AtomRegistry;
   /** The record or collection type of every array and object an input or algorithm made. */
@@ -313,6 +345,8 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       random?: (draw: AnyNode) => number;
+      /** Called with each design draw's call, evaluated arguments, and drawn value. */
+      onDraw?: (draw: CallExpression, args: Value[], value: Value) => void;
       domain?: DomainRegistry;
       /** Names in scope whose values are themselves, such as the view's components in the design. */
       names?: readonly string[];
@@ -322,6 +356,7 @@ class Interpreter {
     this.#offset = offset;
     this.#kind = options.kind;
     this.#random = options.random;
+    this.#onDraw = options.onDraw;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
     for (const name of options.names ?? [])
@@ -1276,9 +1311,11 @@ class Interpreter {
       return unwrap(this.#expression(argument, scope));
     });
     try {
-      return drawValue(name, args, () =>
+      const value = drawValue(name, args, () =>
         (this.#random as (draw: AnyNode) => number)(node)
       ) as Value;
+      this.#onDraw?.(node, args, value);
+      return value;
     } catch (cause) {
       return this.#fail(node, cause instanceof Error ? cause.message : String(cause));
     }

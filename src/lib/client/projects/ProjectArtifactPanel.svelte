@@ -7,6 +7,7 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
+  import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
   import * as AlertDialog from '$lib/client/components/ui/alert-dialog';
@@ -28,13 +29,16 @@
     editMode?: ProjectArtifactEditMode;
     /** Elements selected in visible presentations, with the source each presentation was built from. */
     selectedSources?: readonly { source: string; ids: readonly string[] }[];
+    /** The draws of the visible presentations, with the source each was built from. */
+    drawnSources?: readonly (DrawnPresentation & { source: string })[];
   };
 
   let {
     session,
     presentationCount,
     editMode = $bindable<ProjectArtifactEditMode>('readonly'),
-    selectedSources = []
+    selectedSources = [],
+    drawnSources = []
   }: Props = $props();
 
   let draft = $state('');
@@ -63,6 +67,11 @@
       )
   );
   const unmatched = $derived(selectedSources.length > matching.length);
+  // Like selections, draws are marked only while the editor shows the source they were made in.
+  const drawn = $derived(drawnSources.filter(({ source }) => source === displayedSource));
+  const drawnSeeds = $derived(
+    drawn.map(({ label, seed }) => (label ? `${label}: ${seed}` : String(seed))).join(' · ')
+  );
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
     const source = artifact?.content.text ?? '';
@@ -123,6 +132,13 @@
         {#if highlights.length}
           <Badge variant="secondary"
             >{highlights.length} selected {highlights.length === 1 ? 'node' : 'nodes'}</Badge
+          >
+        {/if}
+        {#if drawn.some(({ draws }) => draws.length)}
+          <Badge
+            variant="secondary"
+            title="Values each visible presentation drew, marked in the source"
+            >{drawn.length === 1 ? 'Seed' : 'Seeds'} {drawnSeeds}</Badge
           >
         {/if}
         {#if diagnosed.items.length}
@@ -197,6 +213,7 @@
               !session.readOnly}
             ariaLabel="Project visualization source"
             {highlights}
+            {drawn}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />

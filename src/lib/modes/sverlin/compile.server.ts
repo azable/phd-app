@@ -13,11 +13,12 @@ import {
   declaredNames,
   designChoices,
   interpretAlgorithm,
-  interpretDesign,
+  interpretDesignDraws,
   interpretDomain,
   interpretInput,
   type BlockKind,
   type DesignChoices,
+  type DesignDraw,
   type MasterStep,
   type TraceState
 } from './algorithm/interpret.server';
@@ -121,6 +122,8 @@ export type SvelteBundle = {
   masterSteps: number[];
   /** Design values drawn for this presentation. */
   parameters: TraceState;
+  /** Each draw of the design block, with its span in the source rather than the block. */
+  draws: DesignDraw[];
 };
 
 type Block = { body: string; offset: number };
@@ -593,15 +596,16 @@ export async function bundlePresentation(
   seed: number
 ): Promise<SvelteBundle> {
   const { master } = prepared;
-  const parameters = prepared.design
-    ? interpretBlock(prepared.source, prepared.design, (body) =>
-        interpretDesign(
+  const design = prepared.design;
+  const { values: parameters, draws } = design
+    ? interpretBlock(prepared.source, design, (body) =>
+        interpretDesignDraws(
           body,
           seed,
           prepared.components.map(({ name }) => name)
         )
       )
-    : {};
+    : { values: {}, draws: [] };
   // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).
   if (parameters.defaults !== undefined)
     throw new InvalidSvelteSourceError(
@@ -649,7 +653,12 @@ export async function bundlePresentation(
     ),
     masterSteps,
     // Drawn defaults are recorded with the design values, so analysis sees each side's full look.
-    parameters: { ...parameters, __defaults: defaults }
+    parameters: { ...parameters, __defaults: defaults },
+    draws: draws.map((draw) => ({
+      ...draw,
+      start: (design?.offset ?? 0) + draw.start,
+      end: (design?.offset ?? 0) + draw.end
+    }))
   };
 }
 

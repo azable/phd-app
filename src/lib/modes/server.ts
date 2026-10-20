@@ -1,7 +1,11 @@
 /** Discover server-only mode builders by folder convention from the public catalogue. */
 
 import { modeCatalog } from './catalog';
-import type { VisualizationMode, RenderablePresentation } from '$lib/shared/presentations';
+import type {
+  DesignDraw,
+  VisualizationMode,
+  RenderablePresentation
+} from '$lib/shared/presentations';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
 export type PresentationBuilder = (
@@ -24,6 +28,7 @@ export type ModeBuildResult =
         masterSignature?: string;
         masterSteps?: number[];
         parameters?: Record<string, unknown>;
+        draws?: DesignDraw[];
       };
     }
   | {

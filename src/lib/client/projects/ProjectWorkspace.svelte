@@ -179,6 +179,22 @@
     session.loaded && session.snapshot.mode === 'sverlin' && layout === 'comparison' ? 2 : 1
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
+
+  // The draws of each visible presentation, named top and bottom as the stage stacks a pair.
+  const drawnSources = $derived(
+    visiblePresentations.flatMap(({ presentation }, index) =>
+      presentation.format === 'browser-bundle-v1' && presentation.draws
+        ? [
+            {
+              source: presentation.source.text,
+              seed: presentation.seed,
+              draws: presentation.draws,
+              ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
+            }
+          ]
+        : []
+    )
+  );
   const playbackContext = $derived(presentationPlaybackContext(visiblePresentations));
   const activeSeed = $derived.by(() => {
     const presentation = session.loaded
@@ -582,7 +598,13 @@
             disabled={mutationsDisabled}
           />
           <div class="contents" data-replay-region="artifact">
-            <ProjectArtifactPanel {session} {presentationCount} {selectedSources} bind:editMode />
+            <ProjectArtifactPanel
+              {session}
+              {presentationCount}
+              {selectedSources}
+              {drawnSources}
+              bind:editMode
+            />
           </div>
         </Resizable.Pane>
       </Resizable.PaneGroup>

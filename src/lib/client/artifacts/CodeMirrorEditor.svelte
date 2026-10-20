@@ -7,6 +7,7 @@
   import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
+  import { drawnValues, setDrawnValues, type DrawnPresentation } from './drawn-values';
   import { editorDiagnostics } from './source-diagnostics';
   import {
     showSourceHighlights,
@@ -22,6 +23,8 @@
     ariaLabel?: string;
     /** Tags to highlight, such as those behind elements selected in a presentation. */
     highlights?: readonly SourceHighlight[];
+    /** Values the shown presentations drew in the design block, marked where they were drawn. */
+    drawn?: readonly DrawnPresentation[];
     /** Build problems to underline, with the source they were found in. */
     diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
     onChange?: (value: string) => void;
@@ -33,6 +36,7 @@
     language = 'svelte',
     ariaLabel = 'Source code editor',
     highlights = [],
+    drawn = [],
     diagnostics = { source: '', items: [] },
     onChange
   }: Props = $props();
@@ -57,6 +61,7 @@
         extensions: [
           ...artifactEditorExtensions({ language }),
           sourceHighlights,
+          drawnValues,
           lintGutter(),
           editableCompartment.of(editableExtensions(editable)),
           EditorView.updateListener.of((update) => {
@@ -97,6 +102,13 @@
     void value;
     const shown = [...highlights];
     if (view) view.dispatch(showSourceHighlights(view.state, shown));
+  });
+
+  // After the document, so draws are marked in the text they were made in.
+  $effect(() => {
+    void value;
+    const shown = [...drawn];
+    if (view) view.dispatch({ effects: setDrawnValues.of(shown) });
   });
 
   // Diagnostics are placed in the text they were found in; once that text is edited, CodeMirror
