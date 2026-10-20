@@ -30,6 +30,7 @@ Visualization modes are developer-registered in `src/lib/modes/catalog.ts`. The 
 - Use `pnpm run export:data -- --scope projects` (optionally `--project PROJECT_ID` and `--output PATH`) to inspect complete project Timelines or retained operation failures. Do not bypass the canonical export with ad hoc PostgreSQL queries for that work; extend the export if important data is missing.
 - The consolidated `drizzle/0000_lying_jean_grey.sql` is a fresh-database baseline. It does not migrate older compiler-era projects or authentication data. Verify the target database before any reset and never reset it implicitly during ordinary development.
 - `pnpm run db:clear-projects` deletes every project, with its events and interaction sessions, from a local database, keeping accounts and study runs, for starting over after the view language changes. It refuses any other host. Run it only when the developer asks.
+- `/dev/demo` (dev server only, admin) shows one demo project at a fixed URL. To show the developer examples, write each as a `.svelte` file in `.demo/inbox/`: while the page is open, each is saved, in name order, as a candidate in its chat, and removed from the inbox. When done, `touch .demo/flush` to replace the project with a fresh one ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
 
 ## Engineering rules
 

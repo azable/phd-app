@@ -38,3 +38,6 @@ vite.config.ts.timestamp-*
 
 temp.txt
 /sandbox
+
+# Development demo project (see src/lib/server/dev-demo.ts)
+/.demo/
