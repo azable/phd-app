@@ -3,6 +3,7 @@
  * block with, after it, the value each shown presentation drew there; and inside each <Node> tag,
  * ghost props for what it left to the seed, its drawn defaults and the layout it arranged, written
  * as the view would write them. In an editable editor, clicking a ghost value writes it as a prop.
+ * Views a pick could have chosen but no shown presentation did are greyed out.
  *
  * @packageDocumentation
  */
@@ -32,6 +33,8 @@ export type DrawnPresentation = {
   label?: string;
   seed: number;
   draws: readonly DesignDraw[];
+  /** The design values drawn, which say what a presentation built before draws were kept chose. */
+  parameters?: Readonly<Record<string, unknown>>;
   layouts?: readonly DrawnLayout[];
 };
 
@@ -55,6 +58,71 @@ export type DrawnMarker = {
 
 /** The ghost props of one tag, at the offset of its closing > (or />). */
 export type TagGhosts = { at: number; props: GhostProp[] };
+
+/** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
+export type UnchosenView = { from: number; to: number; title: string };
+
+/**
+ * The views that design picks left out of every shown presentation: each {#snippet} offered by a
+ * pick, chosen by none of them, and rendered nowhere else. A presentation built before draws were
+ * kept says what it chose in its design values; one that says nothing leaves the pick's views be.
+ */
+export function unchosenViews(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): UnchosenView[] {
+  const doc = state.doc.toString();
+  const views = snippetBlocks(doc);
+  const draws = presentations.flatMap(({ draws }) => draws);
+  const options = new Map<string, Set<string>>();
+  for (const { key, call, args } of draws) {
+    const [offered] = args;
+    if (call !== 'pick' || !Array.isArray(offered)) continue;
+    const names = options.get(key) ?? new Set<string>();
+    for (const option of offered) if (typeof option === 'string') names.add(option);
+    options.set(key, names);
+  }
+  const chosenBy = (presentation: DrawnPresentation, key: string) =>
+    presentation.draws.find((draw) => draw.key === key)?.value ??
+    key
+      .split('.')
+      .reduce<unknown>(
+        (value, field) => (value as Record<string, unknown> | undefined)?.[field],
+        presentation.parameters
+      );
+  const renderedElsewhere = (name: string, view: { from: number }) =>
+    [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
+      ({ index }) =>
+        doc.slice(view.from, index).trim() !== '{#snippet' &&
+        !draws.some(({ start, end }) => index >= start && index < end)
+    );
+  const unchosen = new Map<string, UnchosenView>();
+  for (const [key, names] of options) {
+    const chosen = presentations.map((presentation) => chosenBy(presentation, key));
+    if (!chosen.every((name) => typeof name === 'string')) continue;
+    const picked = [...new Set(chosen)].join(' and ');
+    for (const name of names) {
+      const view = views.get(name);
+      if (!view || chosen.includes(name) || renderedElsewhere(name, view)) continue;
+      unchosen.set(name, { ...view, title: `Not drawn: ${key} picked ${picked}` });
+    }
+  }
+  return [...unchosen.values()].sort((a, b) => a.from - b.from);
+}
+
+/** Each named {#snippet} block of a source, from its {#snippet to the end of its {/snippet}. */
+function snippetBlocks(doc: string): Map<string, { from: number; to: number }> {
+  const blocks = new Map<string, { from: number; to: number }>();
+  const open: { name: string; from: number }[] = [];
+  for (const match of doc.matchAll(/\{#snippet\s+([A-Za-z_$][\w$]*)|\{\/snippet\}/gu)) {
+    if (match[1]) open.push({ name: match[1], from: match.index });
+    else {
+      const block = open.pop();
+      if (block) blocks.set(block.name, { from: block.from, to: match.index + match[0].length });
+    }
+  }
+  return blocks;
+}
 
 /** One marker per draw call in the document, skipping spans it does not hold. */
 export function drawnMarkers(
@@ -247,13 +315,16 @@ class GhostPropsWidget extends WidgetType {
   }
 }
 
-type DrawnState = { markers: DrawnMarker[]; ghosts: TagGhosts[] };
+type DrawnState = { markers: DrawnMarker[]; ghosts: TagGhosts[]; unchosen: UnchosenView[] };
 
 const drawnCall = Decoration.mark({ class: 'cm-drawn-call' });
 const differingCall = Decoration.mark({ class: 'cm-drawn-call cm-drawn-differs' });
 
-function decorations({ markers, ghosts }: DrawnState): DecorationSet {
+function decorations({ markers, ghosts, unchosen }: DrawnState): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  for (const { from, to, title } of unchosen)
+    if (from < to)
+      marks.push(Decoration.mark({ class: 'cm-unchosen', attributes: { title } }).range(from, to));
   for (const marker of markers) {
     marks.push((marker.differs ? differingCall : drawnCall).range(marker.from, marker.to));
     marks.push(
@@ -268,7 +339,7 @@ function decorations({ markers, ghosts }: DrawnState): DecorationSet {
 
 // Markers keep their places through edits, as CodeMirror maps them, until the next set replaces them.
 const drawnField = StateField.define<DrawnState>({
-  create: () => ({ markers: [], ghosts: [] }),
+  create: () => ({ markers: [], ghosts: [], unchosen: [] }),
   update(value, transaction) {
     const { changes } = transaction;
     let next: DrawnState = transaction.docChanged
@@ -278,14 +349,20 @@ const drawnField = StateField.define<DrawnState>({
             from: changes.mapPos(marker.from),
             to: changes.mapPos(marker.to)
           })),
-          ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) }))
+          ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) })),
+          unchosen: value.unchosen.map((view) => ({
+            ...view,
+            from: changes.mapPos(view.from),
+            to: changes.mapPos(view.to)
+          }))
         }
       : value;
     for (const effect of transaction.effects) {
       if (effect.is(setDrawnValues))
         next = {
           markers: drawnMarkers(transaction.state, effect.value.presentations),
-          ghosts: tagGhosts(transaction.state, effect.value.presentations, effect.value.tags)
+          ghosts: tagGhosts(transaction.state, effect.value.presentations, effect.value.tags),
+          unchosen: unchosenViews(transaction.state, effect.value.presentations)
         };
       if (effect.is(removeGhost)) {
         const at = changes.mapPos(effect.value.at, 1);
@@ -305,6 +382,7 @@ const drawnField = StateField.define<DrawnState>({
 });
 
 const drawnTheme = EditorView.baseTheme({
+  '.cm-unchosen': { opacity: '0.4' },
   '.cm-drawn-call': {
     textDecoration: 'underline dotted color-mix(in oklab, #16a34a 70%, transparent)',
     textUnderlineOffset: '3px'

@@ -193,6 +193,7 @@
               source: presentation.source.text,
               seed: presentation.seed,
               draws: presentation.draws ?? [],
+              parameters: presentation.parameters,
               layouts: (drawnSteps[presentation.presentationId]?.layouts ?? []).flatMap(
                 ({ node, seed, form, curve }) => {
                   const tag =

@@ -3,7 +3,7 @@ import { EditorState } from '@codemirror/state';
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import { drawnMarkers, tagGhosts, valueText } from './drawn-values';
+import { drawnMarkers, tagGhosts, unchosenViews, valueText } from './drawn-values';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -141,5 +141,62 @@ describe('drawn value markers', () => {
     expect(valueText(1.23456)).toBe('1.23');
     expect(valueText(3)).toBe('3');
     expect(valueText('x'.repeat(40))).toHaveLength(32);
+  });
+
+  describe('views no presentation drew', () => {
+    const views = [
+      '<script lang="sverlin" design>',
+      '  const Int = pick([IntCell, IntCard, IntCircle]);',
+      '</script>',
+      '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
+      '{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}',
+      '{#snippet IntCircle(value: Int)}<Node {value} radius="full" />{/snippet}',
+      '{@render Int(target)}'
+    ].join('\n');
+    const pickInt = (value: string): DesignDraw => ({
+      key: 'Int',
+      call: 'pick',
+      args: [['IntCell', 'IntCard', 'IntCircle']],
+      value,
+      start: views.indexOf('pick('),
+      end: views.indexOf(');') + 1
+    });
+    const greyed = (doc: string, presentations: Parameters<typeof unchosenViews>[1]) =>
+      unchosenViews(EditorState.create({ doc }), presentations).map(({ from, to, title }) => ({
+        view: /#snippet (\w+)/u.exec(doc.slice(from, to))?.[1],
+        whole: doc.slice(to - '{/snippet}'.length, to) === '{/snippet}',
+        title
+      }));
+
+    it('greys out each view a pick left out of every shown presentation', () => {
+      expect(
+        greyed(views, [
+          { label: 'top', seed: 1, draws: [pickInt('IntCircle')] },
+          { label: 'bottom', seed: 2, draws: [pickInt('IntCell')] }
+        ])
+      ).toEqual([
+        { view: 'IntCard', whole: true, title: 'Not drawn: Int picked IntCircle and IntCell' }
+      ]);
+    });
+
+    it('keeps views rendered directly', () => {
+      const direct = `${views}\n{@render IntCard(target)}`;
+      expect(greyed(direct, [{ seed: 1, draws: [pickInt('IntCircle')] }])).toEqual([
+        { view: 'IntCell', whole: true, title: 'Not drawn: Int picked IntCircle' }
+      ]);
+    });
+
+    it('reads what a presentation without draws chose from its design values', () => {
+      const older = { seed: 2, draws: [], parameters: { Int: 'IntCell' } };
+      expect(greyed(views, [{ seed: 1, draws: [pickInt('IntCircle')] }, older])).toEqual([
+        { view: 'IntCard', whole: true, title: 'Not drawn: Int picked IntCircle and IntCell' }
+      ]);
+      expect(
+        greyed(views, [
+          { seed: 1, draws: [pickInt('IntCircle')] },
+          { seed: 2, draws: [] }
+        ])
+      ).toEqual([]);
+    });
   });
 });
