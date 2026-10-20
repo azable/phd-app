@@ -9,7 +9,7 @@ describe('visualization attempt profiles', () => {
         purpose: 'initial',
         parameters: {
           model: 'gpt-5.6-luna',
-          reasoningEffort: 'low',
+          reasoningEffort: 'medium',
           maxOutputTokens: 12_000
         }
       },

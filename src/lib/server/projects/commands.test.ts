@@ -223,6 +223,23 @@ describe('createProject', () => {
       serviceDependencies
     );
     expect(again.document.events).toHaveLength(first.document.events.length);
+    // The failure queues one repair of the current source; another failure of it queues none.
+    const requests = (document: ProjectDocument) =>
+      document.events.filter((event) => event.type === 'assistant.turn-requested');
+    expect(requests(first.document)).toMatchObject([
+      { payload: { interactionEventId: recorded[0].id, presentationCount: 1 } }
+    ]);
+    const other = await reportRuntimeFailure(
+      {
+        ...failure,
+        message: 'Another failure',
+        expectedHead: projectHead(first.document).id,
+        operationId: crypto.randomUUID()
+      },
+      serviceDependencies
+    );
+    expect(other.document.events.at(-1)?.type).toBe('visualization.runtime-failed');
+    expect(requests(other.document)).toHaveLength(1);
     // The assistant reads it as an automatic report, not as the participant's words.
     expect(projectConversationMessages(first.document.events).at(-1)).toEqual({
       role: 'user',
@@ -235,7 +252,7 @@ describe('createProject', () => {
         {
           ...failure,
           presentationId: '00000000-0000-4000-8000-000000000000',
-          expectedHead: projectHead(first.document).id,
+          expectedHead: projectHead(other.document).id,
           operationId: crypto.randomUUID()
         },
         serviceDependencies
@@ -486,6 +503,61 @@ describe('submitProjectFeedback', () => {
       }
     });
     expect(projectHead(queued.document).id).toBe(head + 4);
+  });
+
+  it('repairs a view failure the browser reports without the participant asking', async () => {
+    const { getProjectTemplate } = await import('./starter-catalog');
+    const { createProject, reportRuntimeFailure } = await import('./service');
+    const { runQueuedAssistantTurn } = await import('./commands');
+    const created = await createProject(
+      { creation: { templateId: getProjectTemplate('linear-search').id } },
+      serviceDependencies
+    );
+    const presented = created.events.find((event) => event.type === 'visualization.presented');
+    if (presented?.type !== 'visualization.presented') throw new Error('Expected a presentation.');
+    const presentationId = presented.payload.presentation.presentationId;
+    const reported = await reportRuntimeFailure(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        operationId: crypto.randomUUID(),
+        presentationId,
+        message: 't.before is not a function'
+      },
+      serviceDependencies
+    );
+    const [failure, request] = reported.document.events.slice(-2);
+    const assistantOperationId = crypto.randomUUID();
+    await serviceDependencies.repository.append(created.projectId, request.id, [
+      {
+        type: 'operation.accepted',
+        actor: { kind: 'system' },
+        operationId: assistantOperationId,
+        createdAt: '2026-08-30T12:00:02.000Z',
+        payload: { kind: 'assistant-turn' }
+      },
+      {
+        type: 'assistant.turn-started',
+        actor: { kind: 'system' },
+        operationId: assistantOperationId,
+        createdAt: '2026-08-30T12:00:03.000Z',
+        payload: { requestEventIds: [request.id], interactionEventIds: [failure.id] }
+      }
+    ]);
+    mocks.generatePrepared.mockReset().mockResolvedValue(generation(undefined, 'Fixed step 5.'));
+
+    const result = await runQueuedAssistantTurn(
+      { projectId: created.projectId, operationId: assistantOperationId },
+      commandDependencies
+    );
+
+    const { project } = mocks.preparePrompt.mock.calls[0][0];
+    expect(project.interaction).toEqual({ kind: 'runtime-failure', eventId: failure.id });
+    expect(project.selected.presentations).toMatchObject([{ presentationId }]);
+    expect(result.appendedEvents.at(-1)).toMatchObject({
+      type: 'assistant.responded',
+      payload: { content: markdownMessage('Fixed step 5.'), inReplyTo: [failure.id] }
+    });
   });
 
   it('processes queued HTML feedback through its own assistant after intake', async () => {

@@ -11,7 +11,7 @@ describe('single-component Svelte assistant', () => {
         parameters.reasoningEffort
       ])
     ).toEqual([
-      ['initial', 'gpt-5.6-luna', 'low'],
+      ['initial', 'gpt-5.6-luna', 'medium'],
       ['repair', 'gpt-5.6-sol', 'medium'],
       ['repair', 'gpt-5.6-sol', 'high'],
       ['repair', 'gpt-5.6-sol', 'xhigh'],
@@ -120,5 +120,53 @@ describe('single-component Svelte assistant', () => {
         recovery: null
       })
     ).toThrow();
+  });
+});
+
+describe('recorded steps in the assistant context', () => {
+  const workspace = (source: string) => ({
+    entryArtifactId: 'main',
+    artifacts: [{ artifactId: 'main', path: 'Main.svelte', language: 'svelte', source, sha256: '' }]
+  });
+  const context = (source: string, failedSource?: string) =>
+    aiAssistant.buildContext({
+      messages: [],
+      project: { currentWorkspace: workspace(source) } as never,
+      attempt: { number: 1, purpose: 'initial' },
+      ...(failedSource
+        ? {
+            buildFeedback: {
+              attempt: 1,
+              buildEventId: 1,
+              failedSource,
+              assistantReply: '',
+              diagnostics: [],
+              priorFailureSummaries: []
+            }
+          }
+        : {})
+    });
+  const counting = (to: number) =>
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">for (let n = Count(0); n < ${to}; n++) yield;</script><Node>x</Node>`;
+
+  it('gives the steps the current source records, with the variables in scope', () => {
+    expect(context(counting(2)).recordedSteps).toEqual({
+      steps: [
+        { step: 1, state: { n: 0 } },
+        { step: 2, state: { n: 1 } }
+      ]
+    });
+  });
+
+  it('gives a repair the steps of the candidate that failed, and why there are none', () => {
+    expect(context(counting(2), counting(1)).recordedSteps).toEqual({
+      steps: [{ step: 1, state: { n: 0 } }]
+    });
+    expect(
+      (
+        context(counting(2), '<script lang="sverlin">let n = Nope(1); yield;</script>')
+          .recordedSteps as { problem: string }
+      ).problem
+    ).toMatch(/Nope/u);
   });
 });

@@ -7,7 +7,7 @@ export function visualizationAttemptProfiles(
   return [
     {
       purpose: 'initial',
-      parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low', maxOutputTokens }
+      parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'medium', maxOutputTokens }
     },
     {
       purpose: 'repair',

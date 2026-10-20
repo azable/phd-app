@@ -195,6 +195,28 @@ export async function compileSvelteComponent(source: string, seed = 1): Promise<
 }
 
 /**
+ * The steps a component's algorithm records, run without its view, so they can be read whether
+ * or not the view builds, as by the assistant checking what its algorithm does. Throws the
+ * domain, input, or algorithm's problem.
+ */
+export function recordedTrace(source: string): MasterStep[] {
+  const { blocks } = extractBlocks(source);
+  if (!blocks.algorithm)
+    throw new InvalidSvelteSourceError('There is no algorithm block, so there are no steps.', {
+      code: 'missing_algorithm'
+    });
+  const domain = blocks.domain
+    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+    : noDomain;
+  const input = blocks.input
+    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
+    : { state: {}, types: {} };
+  return interpretBlock(source, blocks.algorithm, (body) =>
+    interpretAlgorithm(body, input, domain)
+  );
+}
+
+/**
  * Check, interpret, and compile once per source. Only a single component is accepted; its
  * runtime and the component library are bundled locally, and only the design depends on the seed.
  */

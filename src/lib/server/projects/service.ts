@@ -32,7 +32,7 @@ import {
   type ProjectCreation
 } from '$lib/shared/projects/creation';
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
-import { presentationMode } from '$lib/shared/presentations';
+import { isSverlinPresentation, presentationMode } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
@@ -287,9 +287,14 @@ export function advanceProjectPresentations(
   });
 }
 
+/** Automatic repairs queued in a row, with no participant interaction between them. */
+const maximumAutomaticRepairs = 2;
+
 /**
  * Record that a presentation's view failed as it drew a step in the participant's browser, once
- * per presentation and message, so the assistant sees it and can fix the view.
+ * per presentation and message, so the assistant sees it and can fix the view. A failure of the
+ * current source also queues an assistant turn to repair it, once per source and at most
+ * maximumAutomaticRepairs times in a row, so a view that keeps failing waits for the participant.
  */
 export function reportRuntimeFailure(
   options: {
@@ -304,12 +309,14 @@ export function reportRuntimeFailure(
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
     const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
-    const presented = before.events.some(
+    const presented = before.events.find(
       (event) =>
         event.type === 'visualization.presented' &&
         event.payload.presentation.presentationId === options.presentationId
     );
-    if (!presented) throw new Error('Only a presented visualization can report a failure.');
+    if (presented?.type !== 'visualization.presented') {
+      throw new Error('Only a presented visualization can report a failure.');
+    }
     const known = before.events.some(
       (event) =>
         event.type === 'visualization.runtime-failed' &&
@@ -317,6 +324,7 @@ export function reportRuntimeFailure(
         event.payload.message === options.message
     );
     if (known) return commandResult(before, before);
+    const failureEventId = projectHead(before).id + 1;
     const document = await appendProjectEvents(
       before,
       [
@@ -329,12 +337,54 @@ export function reportRuntimeFailure(
             message: options.message,
             ...(options.step === undefined ? {} : { step: options.step })
           }
-        })
+        }),
+        ...(repairsAutomatically(before, presented.payload.presentation)
+          ? [
+              draftEvent({
+                type: 'assistant.turn-requested',
+                actor: { kind: 'system' },
+                operationId: options.operationId,
+                payload: { interactionEventId: failureEventId, presentationCount: 1 }
+              })
+            ]
+          : [])
       ],
       dependencies
     );
     return commandResult(before, document);
   });
+}
+
+/** Whether a failure of this presentation queues a repair, as reportRuntimeFailure describes. */
+function repairsAutomatically(
+  document: ProjectDocument,
+  presentation: ProjectEventOf<'visualization.presented'>['payload']['presentation']
+): boolean {
+  const snapshot = projectSnapshotAt(document);
+  const current = snapshot.artifacts[snapshot.entryArtifactId]?.content.sha256;
+  if (!isSverlinPresentation(presentation) || presentation.source.sha256 !== current) {
+    return false;
+  }
+  const sources = new Map(
+    document.events.flatMap((event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1'
+        ? [[event.payload.presentation.presentationId, event.payload.presentation.source.sha256]]
+        : []
+    )
+  );
+  let repairs = 0;
+  for (const event of document.events.toReversed()) {
+    if (event.type === 'feedback.submitted' || event.type === 'visualization.preference-recorded') {
+      break;
+    }
+    if (event.type !== 'assistant.turn-requested') continue;
+    const failure = document.events[event.payload.interactionEventId - 1];
+    if (failure?.type !== 'visualization.runtime-failed') continue;
+    if (sources.get(failure.payload.presentationId) === current) return false;
+    repairs += 1;
+  }
+  return repairs < maximumAutomaticRepairs;
 }
 
 /** Append a user-authored project title change. */

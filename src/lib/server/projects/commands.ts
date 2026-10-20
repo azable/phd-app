@@ -202,7 +202,9 @@ export async function runQueuedAssistantTurn(
   if (
     interactions.some(
       (event) =>
-        event?.type !== 'feedback.submitted' && event?.type !== 'visualization.preference-recorded'
+        event?.type !== 'feedback.submitted' &&
+        event?.type !== 'visualization.preference-recorded' &&
+        event?.type !== 'visualization.runtime-failed'
     )
   ) {
     throw new Error('The assistant turn claim references an unknown interaction.');
@@ -225,7 +227,10 @@ export async function runQueuedAssistantTurn(
     presentationIds: [
       ...new Set([
         ...referencedPresentations(content),
-        ...preferences.flatMap((event) => event.payload.presentations)
+        ...preferences.flatMap((event) => event.payload.presentations),
+        ...interactions.flatMap((event) =>
+          event?.type === 'visualization.runtime-failed' ? [event.payload.presentationId] : []
+        )
       ])
     ],
     elements: referencedElements(content),

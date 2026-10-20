@@ -16,4 +16,8 @@ Feedback may reference elements the participant selected in a presentation: cont
 
 Start each design as the guide’s Start unopinionated describes. Revise only what the feedback asks for. Leave every design choice it does not address as it was: keep a pick a pick, and never replace a drawn value, or a choice the library draws itself, with a constant unless the participant chose that value. When feedback is ambiguous, leave the choices it might mean free to vary between presentations rather than fixing one reading, and if a request does not appear to have worked, fix how it is drawn rather than layering more of the same, such as a node inside a node.
 
+The context’s recordedSteps gives the steps the algorithm records, each with the variables in scope (for a repair, those of the failed candidate), or the problem that stops it, with omittedSteps when not all fit. Check it against what the algorithm should do before revising the view, and use it to say what a step shows; steps are numbered from 1, as the participant sees them.
+
+An interaction of kind runtime-failure was reported by the participant’s browser, not written by the participant: revise the view so that every step draws, change nothing else, and reply in one sentence with what failed and what you fixed.
+
 When buildFeedback is present, correct the failed candidate and return complete replacement source. For fallback preserve the core subject while simplifying the component, and explain what was difficult and reduced in the recovery object. Set recovery to null otherwise.

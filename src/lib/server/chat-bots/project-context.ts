@@ -80,6 +80,7 @@ export type AiContextSelection = {
 /** Why the current assistant turn was started. */
 export type AiInteraction =
   | { kind: 'feedback'; eventIds: EventId[] }
+  | { kind: 'runtime-failure'; eventId: EventId }
   | {
       kind: 'preference';
       eventId: EventId;
@@ -312,7 +313,8 @@ function assistantInteraction(
     const event = document.events[id - 1];
     if (
       event?.type !== 'feedback.submitted' &&
-      event?.type !== 'visualization.preference-recorded'
+      event?.type !== 'visualization.preference-recorded' &&
+      event?.type !== 'visualization.runtime-failed'
     ) {
       throw new Error('The assistant turn references an unknown interaction event.');
     }
@@ -337,6 +339,9 @@ function assistantInteraction(
   });
   if (interactions.length === 1 && preferences[0]) {
     return { kind: 'preference', ...preferences[0] };
+  }
+  if (interactions.length === 1 && interactions[0].type === 'visualization.runtime-failed') {
+    return { kind: 'runtime-failure', eventId: interactions[0].id };
   }
   if (interactions.length <= 1) return { kind: 'feedback', eventIds: [...eventIds] };
   return { kind: 'batch', eventIds: [...eventIds], preferences };
