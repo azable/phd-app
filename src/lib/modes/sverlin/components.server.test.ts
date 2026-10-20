@@ -147,5 +147,13 @@ describe('text', () => {
     ).toBe(
       '<Node __text>Found <SverlinSlot path="target">{@render Int(target)}</SverlinSlot> here</Node><Node><SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node><Node layout="row">At <SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node>'
     );
+    const chosen = '<Node>{#if found}Found {@render Int(target)}{:else}Not yet{/if}</Node>';
+    const parsed = parse(`${chosen}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    expect(
+      withInsertions(
+        chosen,
+        slotInsertions(parsed.html, chosen, new Set(['target']), new Set(['Int']), new Set())
+      )
+    ).toMatch(/^<Node __text>/u);
   });
 });

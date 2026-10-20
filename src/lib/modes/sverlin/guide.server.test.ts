@@ -19,6 +19,9 @@ function documentedProps(text: string): Map<string, Set<string>> {
 
 // Named values a component accepts that the guide leaves out on purpose: a link without width.
 const undocumented: Record<string, string[]> = { 'Link.strokeWidth': ['none'] };
+// Props the compiler still takes that the guide leaves out on purpose: the older ways of drawing a
+// collection and a typed value, which views of types replace.
+const undocumentedProps = new Set(['Node.items', 'Node.item', 'Node.nested', 'Node.type']);
 
 describe('Sverlin language guide and assistant instructions', () => {
   it('builds every complete component example', async () => {
@@ -47,7 +50,7 @@ describe('Sverlin language guide and assistant instructions', () => {
     );
     for (const name of documented.keys()) expect(Object.keys(props), name).toContain(name);
     for (const [name, allowed] of Object.entries(props)) {
-      if (name === 'children') continue;
+      if (name === 'children' || undocumentedProps.has(`${component}.${name}`)) continue;
       expect(mentioned.has(name), `${component}.${name} is not mentioned`).toBe(true);
       if (!allowed) continue;
       const listed = documented.get(name);

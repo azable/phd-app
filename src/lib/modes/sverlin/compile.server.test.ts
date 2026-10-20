@@ -39,7 +39,7 @@ describe('single-component Svelte compilation', () => {
 
   it('derives master steps from yield and varies only the design between seeds', async () => {
     const prepared = prepareSvelteComponent(linearSearchSource);
-    expect(prepared.master.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
+    expect(prepared.master.map(({ state }) => state.i)).toEqual([undefined, 0, 1, 2, 3]);
     const bundles = await Promise.all(
       Array.from({ length: 12 }, (_, seed) => bundlePresentation(prepared, seed + 1))
     );

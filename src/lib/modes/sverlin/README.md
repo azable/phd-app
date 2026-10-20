@@ -26,29 +26,89 @@ A component describes its visualization in `<script lang="sverlin">` blocks, wri
 
 ## View
 
-The view is markup made only of `<Node>` and `<Link>` components, text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it, and nodes are styled only through their props (see Node). Text belongs inside a node, such as `<Node>Linear search</Node>`. Every top-level input and algorithm variable (as it was at the selected step), every design value, `step`, `seed`, and the library components `Node` and `Link` are already in scope; never write `import`, and never declare names `Node` or `Link`. Markup uses them directly: `{values[i]}`, `<Node items={values} layout={flow} />`.
+The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it, and nodes are styled only through their props (see Node). Text belongs inside a node, such as `<Node>Linear search</Node>`. Every input and algorithm variable in scope at the selected step, every design value, `step`, `seed`, and the library components are already in scope; never write `import`, and never declare names `Node`, `Link`, or `Pointed`.
 
-Compute everything inline in markup. Svelte re-evaluates template expressions whenever the values they read change, so inline derivations stay correct. For a value used more than once or too long to read inline, use `{@const name = expression}` as the first child of the nearest component or block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`:
+Draw every value of a domain type through a view of its type, as `{@render Int(target)}` (see Views of types), and every position through a pointer (see Pointers); the markup around them arranges, labels, and explains. For a value used more than once or too long to read inline, use `{@const name = expression}` as the first child of the nearest component or block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`.
+
+Facts about the algorithm, such as whether the target was found, are clearer recorded as algorithm variables the view reads; keep purely visual choices in the view and design block.
+
+A node that writes text around nodes or views, with no `layout`, reads as a line of text: `<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>` sets the two views inline in the sentence, each its own size, and the line wraps between words, also when `{#if}` chooses the sentence. Drawing a value through its view this way, rather than as `{target}`, keeps it sized and styled like the value elsewhere.
+
+## Views of types
+
+A view is a snippet that draws one value of one domain type: its first parameter has that type, as in `{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}`, and an optional second parameter, `node`, takes the props its caller sets. A view reads only its value, design values, and other views, never the input or algorithm variables: how two values relate is drawn where both are in scope, in the view that holds them or by a pointer. Define views at the top level of the markup.
+
+A design value named after a type chooses its view: `const Int = pick([IntText, IntCard]);` draws one per presentation, and `const Int = IntCard;` fixes one. `{@render Int(value)}` draws a value with whichever was chosen. A view named after its type, `{#snippet Int(value: Int)}`, is that type's only view. Rendering a type nothing draws is an error.
+
+A view of a collection or record draws its parts through their types' views:
 
 ```svelte
-<Node layout="column" align="start">
-  {@const started = i >= 0 && i < values.length}
-  <Node items={values}>
-    {#snippet item(value, index)}
-      <Node
-        {value}
-        fill={index === i ? 'amber' : undefined}
-        stroke={index === i ? 'amber' : undefined}
-      />
-    {/snippet}
-  </Node>
-  <Node>{started ? `Checking ${values[i]}` : 'Not started'}</Node>
-</Node>
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet VertexCard(v: Vertex)}<Node layout="column" shape="card">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
+{#snippet SeenText(seen: Flag)}<Node size="small" color="neutral">{seen ? 'seen' : 'new'}</Node>{/snippet}
 ```
 
-Facts about the algorithm, such as which cells were checked, are often clearer recorded as algorithm variables; keep purely visual choices in the view and design block.
+Every view is measured with every value its type allows, so its box keeps one size whatever value it shows and nothing moves between steps; the page moves each value from where it was to where it is (see Steps); participants can select it; and presentations vary how it looks. Offer more than one view of a type where the request leaves its look open, so presentations differ in what they show as well as how it looks: a number as a cell, a card, or a circle, a flag as a word or a tick.
 
-A node that writes text around nodes or views, with no `layout`, reads as a line of text: `<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>` sets the two views inline in the sentence, each its own size, and the line wraps between words. Drawing a value through its view this way, rather than as `{target}`, keeps it sized and styled like the value elsewhere.
+## Pointers
+
+A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a pointer: it holds one `<Pointed>`, which stands for the element the position points at, drawn with its own view, and the nodes around it, placed by layout, annotate it:
+
+- a label below: `<Node layout="column"><Pointed /><Node size="small">i</Node></Node>`
+- a bracket: `<Node layout="row"><Node>[</Node><Pointed /></Node>`
+- a highlight alone: `<Pointed fill="amber" />`
+
+`<Pointed>` takes `fill`, `stroke`, `strokeWidth`, `opacity`, `color`, `font`, `size`, `weight`, `padding`, `radius`, and `shape`, over the element's own; paint (fill, stroke, opacity, colour) shows only where the pointer is. Render a pointer at the top level of the markup, outside blocks and views, with a position from the state: a variable (`{@render Arrow(i)}`), an element, or a field (`{@render To(edges[e].to)}`). The page draws it around the element wherever the element is drawn. Every element keeps room for every pointer that can point into its collection, and a position a step shows past an end gets a slot there, so nothing moves as pointers move. Pointers at one element nest, the one rendered last outermost. A pointer whose position is out of scope, or points nowhere, draws nothing and keeps its room. A pointer at an element drawn as a link, such as the current edge, gives the link its `<Pointed>`'s stroke, width, and dashes.
+
+Insertion sort, with the key drawn beside the row:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+
+<script lang="sverlin">
+  for (let i = Position(1); i < values.length; i++) {
+    const key = values[i];
+    let j = i;
+    yield;
+    while (j > 0 && values[j - 1] > key) {
+      values[j] = values[j - 1];
+      j--;
+      yield;
+    }
+    values[j] = key;
+    yield;
+  }
+</script>
+
+<script lang="sverlin" design>
+  const Int = pick([IntCell, IntCard]);
+  const shifting = pick(['amber', 'red', 'purple']);
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Next(p: Position)}<Node layout="column"><Pointed /><Node size="small">i</Node></Node>{/snippet}
+{#snippet Hole(p: Position)}<Node layout="column"><Pointed fill={shifting} /><Node size="small">j</Node></Node>{/snippet}
+
+<Node>Insertion sort</Node>
+<Node layout="row" gap="large" align="start">
+  <Node>key {@render Int(key)}</Node>
+  {@render Row(values)}
+</Node>
+{@render Next(i)}
+{@render Hole(j)}
+```
+
+Between steps, the key leaves the row for its box, the larger values slide right, and the key drops into its place (see Steps). A reference follows its element as it moves: with `const Tracked = ref(Values);` and `const tracked = Tracked(values[3]);`, `{@render Follow(tracked)}` marks that value wherever the sort takes it.
 
 ## Steps
 
@@ -63,7 +123,7 @@ Give values meaning with atomic types. No types are predefined: define each one 
 
 - a primitive kind: `'integer'` or `'number'` with both `min` and `max`, as in `const Int = type('integer', { min: 0, max: 99 });`, or `'boolean'`, as in `const Flag = type('boolean');`
 - a refinement of a type defined earlier, with optional `unit`, `min`, and `max`: `const Height = type(Int, { unit: 'cm', min: 0, max: 250 });`
-- an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to the view (see Type renderers). Text types are always enumerations.
+- an enumeration of allowed text or number values: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the values plainly and leave how they look, such as `♠`, to its views (see Views of types). Text types are always enumerations.
 
 Every type has a known, finite set of values, so the view can be drawn for each of them. Choose ranges that hold every value the algorithm reaches, such as a count up to the input's length. Positions (`index(...)`, below) need no range: their collection gives them one.
 
@@ -73,7 +133,7 @@ A variable keeps the type it was made with, and a value assigned to it takes tha
 
 Typed values behave like their plain values in comparisons, conditions, `===`, `.indexOf`, `.includes`, template strings, and indexing, and they keep their type as the algorithm moves them between variables and arrays. Arithmetic keeps types too: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
 
-The view receives plain values; types only affect how nodes are drawn (see Type renderers).
+The view receives plain values; a value's type chooses the views that draw it (see Views of types).
 
 ## Collections, records, and unions
 
@@ -103,7 +163,7 @@ if (
   dist[e.to] = dist[e.from] + Distance(e.weight);
 ```
 
-The view receives plain arrays and objects. Renderer snippets are for atomic types; draw a record's fields with an `item` snippet, as in `{#snippet item(edge)} <Node>{edge.from} → {edge.to}</Node> {/snippet}`.
+The view receives plain arrays and objects, drawn by the views of their types: a record's view draws its fields through theirs (see Views of types).
 
 ## Design values
 
@@ -120,7 +180,7 @@ The view receives plain arrays and objects. Renderer snippets are for atomic typ
 
 ## Library
 
-Nodes say nothing about what a structure means by themselves: a node with items laid out as a row can show an array, a list of linked nodes, a queue, or anything else. Decide the meaning from the participant's request, and when they leave it open, express the open choice as a drawn design value, so each presentation's seed can pick a different interpretation.
+Nodes say nothing about what a structure means by themselves: nodes laid out as a row can show an array, a list of linked nodes, a queue, or anything else. Decide the meaning from the participant's request, and when they leave it open, express the open choice as a drawn design value, so each presentation's seed can pick a different interpretation.
 
 ### Page frame
 
@@ -128,29 +188,27 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 ## Node
 
-A node is one of four things:
+A node is one of three things:
 
-- a value: `<Node value={7} />` shows a number, string, or boolean;
-- content: `<Node>any text or markup</Node>` shows its children, for titles, explanations, captions, indices, and pointer names;
-- a shape: `<Node shape="box" radius="full" fill="currentColor" stroke="none" padding="none" minSize={0.6} />` has no value, items, or children, and draws only its box, for marks such as dots and bars; set the props that make the shape, since a drawn look can leave a box without a border or tint;
-- a collection: `<Node items={values} layout="row" />` arranges child nodes. Without an `item` snippet, each primitive item becomes a value node (drawn by its type's renderer, if typed) and each array item a nested collection; to control each item, give `{#snippet item(value, index, type)} <Node {value} {type} … /> {/snippet}`, where `type` is the item's atomic type name or `undefined`.
+- a value: `<Node value={7} />` shows a number, string, or boolean, as a view's own node does with its value;
+- content: `<Node>any text or markup</Node>` shows its children, for titles, explanations, captions, indices, and pointer names, and with `layout` arranges them, as a view of a collection arranges its elements' views;
+- a shape: `<Node shape="box" radius="full" fill="currentColor" stroke="none" padding="none" minSize={0.6} />` has no value or children, and draws only its box, for marks such as dots and bars; set the props that make the shape, since a drawn look can leave a box without a border or tint.
 
-Titles and annotations are nodes too: `<Node>Linear search</Node>` makes a title, and arranging a node's children with `layout` puts an index, caption, or pointer name beside or above a value: `<Node layout="column"><Node color="neutral">{index}</Node><Node {value} /></Node>`. Without `layout`, children flow as ordinary text.
+Titles and annotations are nodes too: `<Node>Linear search</Node>` makes a title, and arranging a node's children with `layout` puts an index, caption, or pointer name beside or above a value: `<Node layout="column">{@render Int(v)}<Node color="neutral">{k}</Node></Node>`. Without `layout`, children flow as ordinary text.
 
 ### Props
 
 Props starting with `__` are reserved for the library. `shape` picks which of the presentation's drawn looks a node takes (see Start unopinionated), and every value that look sets can be overridden by the matching prop:
 
-- `shape`: `'box'` (a cell: a drawn border, padding, fill, minimum size, and text size and weight; the default for a value), `'card'` (a surface with a drawn border, padding, and fill), or `'plain'` (no border, padding, or fill; the default for content, and for collections except when one is drawn as a card). A bordered node with a layout draws its border around the whole group.
+- `shape`: `'box'` (a cell: a drawn border, padding, fill, minimum size, and text size and weight; the default for a value), `'card'` (a surface with a drawn border, padding, and fill), or `'plain'` (no border, padding, or fill; the default for content). A bordered node with a layout draws its border around the whole group.
 
 Arrangement:
 
-- `layout`: `'row'`, `'column'`, `'grid'`, or `'free'` (placed by layout; see Free layout, links, and relations); arranges a collection's items (default `'row'`) or, when set, a node's children.
+- `layout`: `'row'`, `'column'`, `'grid'`, or `'free'` (placed by layout; see Free layout, links, and relations); arranges a node's children.
 - `gap`: space between arranged items: `'none'`, `'small'`, `'medium'`, `'large'`, or a number of em.
 - `align`: `'start'`, `'center'`, or `'end'`; how arranged items line up across the layout direction.
 - `justify`: `'start'`, `'center'`, `'end'`, `'between'`, `'around'`, or `'evenly'`; how arranged items spread along the layout direction (default `'start'`).
 - `columns`: the number of grid columns; defaults to a near-square grid.
-- `nested`: the layout, `'row'`, `'column'`, `'grid'`, or `'free'`, for items that are themselves arrays, such as the rows of a matrix (default `'row'`).
 
 Border and colour:
 
@@ -168,22 +226,17 @@ Text:
 - `size`: `'small'`, `'medium'`, `'large'`, `'xlarge'`, or a number of rem such as `1.2`, so it can come from `pick([...])` or `real(0.9, 1.4)`; nested nodes scale with it.
 - `weight`: `'normal'` or `'bold'`.
 
-Types:
-
-- `type`: an atomic type name, such as `'Int'`. If the view defines a renderer snippet for that type, or for a type it refines, the node is drawn by it (see Type renderers); otherwise it draws its default box with the type's `unit` after the value.
-
 ### Start unopinionated
 
 Every prop a view leaves unset has a default, and these defaults are drawn, so they differ between presentations:
 
 - on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), and text size and weight;
 - on cards: radius, border width, padding, and tint;
-- on collections: the shape, now and then a card around the items;
 - on every arrangement: the gap, and how rows and columns align their items;
 - on the page: the font, and how the page frame spreads, aligns, and arranges the top-level nodes (a column in most presentations, a free arrangement in a few);
 - in free layouts: the form, the positions, and the curves; on links: the width and the curve.
 
-The tints stay pale so they never compete with the palette colours you give meaning. Other defaults are fixed, such as colours, opacity, a collection's layout, and the size of content such as titles.
+The tints stay pale so they never compete with the palette colours you give meaning. Other defaults are fixed, such as colours, opacity, a node's layout, and the size of content such as titles.
 
 <!--
 The drawing policy, with its options and weights, is defaultsPolicy in library/node/defaults.ts.
@@ -192,7 +245,7 @@ authors use for meaning, such as 'amber' for the current element; a quarter of p
 draw no tint at all.
 -->
 
-A node's own props and its type's renderer win over drawn defaults, so every prop you set takes a choice away from the presentations. Write the structure, and set only the props that carry meaning, such as a colour that shows which element is current; unset, drawn props vary more widely than a pick between a few values would. Draw meaningful colours in the design block from the palette, so which colour shows "current" varies while staying consistent within a presentation. Use design picks for choices the library does not draw, such as a collection's `layout` or which annotation nodes to show. How a domain type appears is such a choice too: the same type can map to quite different views, and a type's renderer or the view can draw between them, so presentations differ in what they show as well as how it looks. When the participant asks for a consistent or plainer look, set the props that should stay the same; liking one presentation is not such a request.
+A node's own props win over drawn defaults, so every prop you set takes a choice away from the presentations. Write the structure, and set only the props that carry meaning, such as a colour that shows which element is current; unset, drawn props vary more widely than a pick between a few values would. Draw meaningful colours in the design block from the palette, so which colour shows "current" varies while staying consistent within a presentation. Use design picks for choices the library does not draw, such as which annotation nodes to show. Which view draws a type is such a choice too: pick among views that show the value differently (see Views of types), so presentations differ in what they show as well as how it looks. When the participant asks for a consistent or plainer look, set the props that should stay the same; liking one presentation is not such a request.
 
 Example, with domain, input, algorithm, design, and a script-free view:
 
@@ -208,54 +261,42 @@ Example, with domain, input, algorithm, design, and a script-free view:
 </script>
 
 <script lang="sverlin">
-  let i = Index(-1);
   yield;
-  for (i = Index(0); i < values.length; i++) {
+  for (let i = Index(0); i < values.length; i++) {
     yield;
   }
-  yield;
 </script>
 
 <script lang="sverlin" design>
-  const flow = pick(['row', 'column']);
+  const Int = pick([IntCell, IntCard, IntCircle]);
+  const Index = IndexText;
   const showIndices = chance(0.5);
   const current = pick(['amber', 'red', 'purple']);
-  const visited = pick(['blue', 'green']);
 </script>
 
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}
+{#snippet IntCircle(value: Int)}<Node {value} radius="full" />{/snippet}
+{#snippet IndexText(i: Index)}<Node value={i} weight="bold" />{/snippet}
+{#snippet Row(list: Values)}
+  <Node layout="row">
+    {#each list as v, k}
+      <Node layout="column">
+        {@render Int(v)}
+        {#if showIndices}<Node color="neutral">{k}</Node>{/if}
+      </Node>
+    {/each}
+  </Node>
+{/snippet}
+{#snippet Here(i: Index)}
+  <Node layout="column"><Pointed fill={current} /><Node color="neutral">i</Node></Node>
+{/snippet}
+
 <Node>Array walk</Node>
-<Node items={values} layout={flow}>
-  {#snippet item(value, index, type)}
-    <Node layout="column">
-      {#if showIndices}<Node color="neutral">{index}</Node>{/if}
-      {@const colour = index === i ? current : index < i ? visited : undefined}
-      <Node {value} {type} fill={colour} stroke={colour} />
-      {#if index === i}<Node color="neutral">i</Node>{/if}
-    </Node>
-  {/snippet}
-</Node>
-<Node>
-  {i < 0 ? 'Start at the left.' : i < values.length ? `Visiting index ${i}.` : 'Every cell visited.'}
-</Node>
+{@render Row(values)}
+{@render Here(i)}
+<Node>{#if step === 0}Start at the left.{:else}Visiting index {@render Index(i)}.{/if}</Node>
 ```
-
-A matrix needs no snippet: `<Node items={grid} layout="column" nested="row" />` draws each inner array as a row of nodes.
-
-### Type renderers
-
-A top-level snippet named after a domain type is that type's default renderer: every node showing a value of the type is drawn by it, including items drawn without an `item` snippet, `<Node type="Int" … />`, and nodes given an item's `type`. It takes the plain value and `node`, the props the caller set on that node (such as `fill` or `size`), so spreading `{...node}` after the renderer's own props lets the caller's settings win:
-
-```svelte
-{#snippet Int(value, node)}
-  <Node shape={intShape} {value} {...node} />
-{/snippet}
-
-{#snippet Suit(value, node)}
-  <Node {...node}>{{ spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }[value]}</Node>
-{/snippet}
-```
-
-A type without a renderer uses the renderer of the nearest type it refines, and otherwise the default box with its `unit`. A renderer can use design values and step state, so a draw can change how every value of a type looks. The `Node` inside a renderer has no type, so it never calls the renderer again.
 
 ## Free layout, links, and relations
 
@@ -271,11 +312,11 @@ A type without a renderer uses the renderer of the nearest type it refines, and 
 Leave `form` unset (a pick between a few forms only narrows the draw), set `flow` only when asked, such as for a list that must run left to right, and draw which relations to include. A flow suits directed structures; an undirected graph has no flow, and its links are `directed={false}`.
 
 ```svelte
-<Node layout="free" constraints={['head above ' + first]} flow="x">
-  {#each nodes as node (node.id)}
-    <Node key={node.id} value={node.value} fill={node.id === current ? 'amber' : undefined} />
-  {/each}
-  {#each next as [from, to]}<Link {from} {to} />{/each}
+{#snippet NameCard(name: Name)}<Node value={name} shape="card" />{/snippet}
+{#snippet Next(pair: Pair)}<Link from={pair.from} to={pair.to} />{/snippet}
+<Node layout="free" flow="x">
+  {#each names as name}{@render Name(name)}{/each}
+  {#each next as pair}{@render Next(pair)}{/each}
   <Node key="head" size="small" color="neutral">head</Node>
   <Link from="head" to={first} />
 </Node>
@@ -283,9 +324,9 @@ Leave `form` unset (a pick between a few forms only narrows the draw), set `flow
 
 ## Link
 
-`<Link from="a" to="b" />` draws a line, by default an arrow, from the child keyed `a` to the child keyed `b`. Put links among the children of the node whose children they join, beside the nodes they connect; they take no space, and the node lays its children out with them (a node with links and no `layout` is laid out freely). Each link is a component of its own, so a participant can select it and refer to it in feedback, just as they can a node.
+`<Link from={edge.from} to={edge.to} />` draws a line, by default an arrow, between two nodes: a position from the state names the node drawing the element it points at, and a key names a child keyed so, such as a label. Put links among the children of the node whose children they join, beside the nodes they connect, or in a view of an edge rendered there; they take no space, and the node lays its children out with them (a node with links and no `layout` is laid out freely). Each link is a component of its own, so a participant can select it and refer to it in feedback, just as they can a node. A pointer at an element drawn as a link, such as the edge being examined, gives the link its `<Pointed>`'s stroke, width, and dashes (see Pointers).
 
-- `from` and `to`: the keys of the two nodes, or of nodes inside them (see `key` above).
+- `from` and `to`: positions from the state, as `edge.from`, or the keys of two nodes, or of nodes inside them (see `key` above).
 - `directed`: `false` for a plain line instead of an arrow.
 - `dashed`: `true` for a dashed line.
 - `stroke`: the line's colour, a palette name or any CSS colour.
@@ -296,13 +337,80 @@ Leave `form` unset (a pick between a few forms only narrows the draw), set `flow
 
 Links can come and go with the steps: wrap one in `{#if}` to show it only while it matters, such as the pointer being followed. Its place is kept across the animation, so nothing moves when it appears.
 
+Breadth-first search, with the vertex being visited and the edge being examined marked in the graph:
+
 ```svelte
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Flag = type('boolean');
+  const Vertex = record({ name: Name, seen: Flag });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Edge = record({ from: VertexRef, to: VertexRef });
+  const Edges = collection(Edge);
+  const EdgeIndex = index(Edges);
+  const Queue = collection(VertexRef);
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A', seen: false },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]);
+  const edges = Edges([
+    { from: 0, to: 1 },
+    { from: 0, to: 2 },
+    { from: 1, to: 3 },
+    { from: 2, to: 3 },
+    { from: 3, to: 4 }
+  ]);
+</script>
+
+<script lang="sverlin">
+  let queue = Queue([0]);
+  vertices[0].seen = true;
+  yield;
+  while (queue.length > 0) {
+    const current = VertexRef(queue.shift());
+    yield;
+    for (let e = EdgeIndex(0); e < edges.length; e++) {
+      if (edges[e].from === current) {
+        if (!vertices[edges[e].to].seen) {
+          vertices[edges[e].to].seen = true;
+          queue.push(edges[e].to);
+        }
+        yield;
+      }
+    }
+  }
+</script>
+
+<script lang="sverlin" design>
+  const Name = NameText;
+  const Flag = pick([SeenWord, SeenMark]);
+  const VertexRef = RefCard;
+</script>
+
+{#snippet NameText(name: Name)}<Node value={name} weight="bold" />{/snippet}
+{#snippet SeenWord(seen: Flag)}<Node size="small" color="neutral">{seen ? 'seen' : 'new'}</Node>{/snippet}
+{#snippet SeenMark(seen: Flag)}<Node size="small">{seen ? '✓' : '·'}</Node>{/snippet}
+{#snippet RefCard(v: VertexRef)}<Node value={v} shape="card" />{/snippet}
+{#snippet VertexCard(v: Vertex)}<Node layout="column" shape="card">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
+{#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
+{#snippet QueueRow(q: Queue)}<Node layout="row">{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
+{#snippet Visiting(c: VertexRef)}<Pointed fill="amber" />{/snippet}
+{#snippet Examining(e: EdgeIndex)}<Pointed stroke="red" strokeWidth="thick" />{/snippet}
+
 <Node layout="free">
-  {#each nodes as node, index (node.id)}
-    <Node key={node.id} value={node.value} />
-    {#if index > 0}<Link from={nodes[index - 1].id} to={node.id} label="next" />{/if}
+  {#each vertices as v, k}
+    <Node layout="column">{@render VertexCard(v)}<Node size="small" color="neutral">{k}</Node></Node>
   {/each}
-  <Node key="head" size="small" color="neutral">head</Node>
-  <Link from="head" to={nodes[0].id} dashed />
+  {#each edges as edge}{@render Arrow(edge)}{/each}
 </Node>
+<Node>queue {@render QueueRow(queue)}</Node>
+{@render Visiting(current)}
+{@render Examining(e)}
 ```

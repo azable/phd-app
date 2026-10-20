@@ -540,10 +540,20 @@ export function slotInsertions(
       walk(part.children, inner);
       return;
     }
-    // A node writing text around views reads as a line of text, its views set inline in it.
+    // A node writing text around views reads as a line of text, its views set inline in it, the
+    // branches of its blocks included, as a sentence chosen by {#if}.
     if (part.type === 'InlineComponent' && part.name === 'Node') {
       const attributes = (part.attributes as Part[] | undefined) ?? [];
-      const children = (part.children as Part[] | undefined) ?? [];
+      const inline = (nodes: Part[]): Part[] =>
+        nodes.flatMap((child) =>
+          ['IfBlock', 'ElseBlock', 'EachBlock', 'KeyBlock'].includes(child.type ?? '')
+            ? inline([
+                ...((child.children as Part[] | undefined) ?? []),
+                ...(child.else ? [child.else as Part] : [])
+              ])
+            : [child]
+        );
+      const children = inline((part.children as Part[] | undefined) ?? []);
       const text = children.some(
         (child) =>
           (child.type === 'Text' && String(child.data ?? '').trim() !== '') ||
