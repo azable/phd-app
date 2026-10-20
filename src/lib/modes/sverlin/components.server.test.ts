@@ -39,11 +39,26 @@ describe('pointers', () => {
 
   it('are rendered at the top of the view, with a position from the state', () => {
     const messages = (view: string) => hoisted(view).problems.map(({ message }) => message);
-    expect(messages('{#if i > 0}{@render Arrow(i)}{/if}')[0]).toMatch(/at the top of the view/);
+    expect(messages('{#each edges as edge}{@render Arrow(i)}{/each}')[0]).toMatch(
+      /at the top of the view/
+    );
     expect(messages('{#snippet V(x: Values)}{@render Arrow(x)}{/snippet}')[0]).toMatch(
       /at the top of the view/
     );
     expect(messages('{@render Arrow(i + 1)}')[0]).toMatch(/a position from the state/);
+  });
+
+  it('point nowhere where the {#if} branches around them are not taken', () => {
+    expect(
+      hoisted('{#if i > 0}{@render Arrow(i)}{:else if e}{@render Arrow(e)}{:else}A{/if}')
+    ).toMatchObject({
+      view: '{#if i > 0}{:else if e}{:else}A{/if}',
+      calls: [
+        '{ view: () => Arrow, value: () => i, path: "i", shown: () => (i > 0), into: "Values", paint: __paint_Arrow }',
+        '{ view: () => Arrow, value: () => e, path: "e", shown: () => !(i > 0) && (e), into: "Values", paint: __paint_Arrow }'
+      ],
+      problems: []
+    });
   });
 });
 
@@ -57,6 +72,16 @@ describe('element slots', () => {
     );
     expect(slotted('{@render Int(values[i])}')).toBe(
       '<SverlinSlot of={values} at={i}>{@render Int(values[i])}</SverlinSlot>'
+    );
+  });
+
+  it('marks the one node an {#each} draws each item in, which keeps the end slots', () => {
+    expect(
+      slotted(
+        '{#each values as value, k}<Node layout="column">{@render Int(value)}{k}</Node>{/each}'
+      )
+    ).toBe(
+      '{#each values as value, k}<Node __itemOf={values} __itemAt={k} layout="column"><SverlinSlot of={values} at={k}>{@render Int(value)}</SverlinSlot>{k}</Node>{/each}'
     );
   });
 

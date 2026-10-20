@@ -212,6 +212,8 @@ export type PointerCall = {
   at?: () => string | number;
   /** The state variables its position is read from; with one out of scope it points nowhere. */
   reads?: readonly string[];
+  /** Whether the {#if} branches it is rendered in are taken; where they are not, it points nowhere. */
+  shown?: () => boolean;
   /** A reference's pointer: it points at the element the reference refers to, wherever it is. */
   ref?: boolean;
 };
@@ -236,7 +238,9 @@ export function providePointers(calls: readonly PointerCall[]): void {
     try {
       const path =
         call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
-      const absent = call.reads?.some((name) => types?.absent(name)) ?? false;
+      const absent =
+        (call.reads?.some((name) => types?.absent(name)) ?? false) ||
+        (call.shown ? !call.shown() : false);
       if (call.ref) {
         // A reference points at the element with the identity it refers to, wherever it is.
         const identity = path === undefined || absent ? undefined : types?.refOf(path);
@@ -341,6 +345,31 @@ export function provideCopy(): void {
 
 export function copyContext(): boolean {
   return getContext<boolean | undefined>('sverlin:copy') ?? false;
+}
+
+/**
+ * Inside the hidden copy of an {#each} item's node that keeps an end slot's room: the element of
+ * that collection inside draws only the pointers at the end slot, and no node claims an id or an
+ * identity, so the item's own nodes keep theirs.
+ */
+export function provideEndSlot(slot: { collection: string; position: number }): void {
+  setContext('sverlin:end-slot', slot);
+}
+
+export function endSlotContext(): { collection: string; position: number } | undefined {
+  return getContext<{ collection: string; position: number } | undefined>('sverlin:end-slot');
+}
+
+/**
+ * Inside an {#each} item's node, which keeps the end slots of the collection it is an item of:
+ * the element inside keeps none of its own.
+ */
+export function provideItemEnds(collection: string): void {
+  setContext('sverlin:item-ends', collection);
+}
+
+export function itemEndsContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:item-ends');
 }
 
 /**

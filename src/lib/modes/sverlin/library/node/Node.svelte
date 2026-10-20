@@ -11,12 +11,16 @@
   import type { Template } from './arrange';
   import type { Form } from './forms';
   import Node from './Node.svelte';
+  import ItemEnd from './ItemEnd.svelte';
   import Pointing from './Pointing.svelte';
   import Slot from './Slot.svelte';
   import {
     defaultsContext,
     copyContext,
     elementOf,
+    endSlotContext,
+    itemEndsContext,
+    provideItemEnds,
     hiddenContext,
     insideComponentBox,
     keyedRef,
@@ -35,7 +39,8 @@
     rendererFor,
     slotContext,
     typeContext,
-    wrappedContext
+    wrappedContext,
+    type Pointer
   } from '../type-context';
   import { paletteColor, paletteName } from './palette';
   import {
@@ -103,7 +108,9 @@
     __links,
     __component,
     __slot,
-    __text = false
+    __text = false,
+    __itemOf,
+    __itemAt
   }: {
     /** A primitive to display, when the node has neither items nor children. */
     value?: Primitive;
@@ -183,6 +190,9 @@
     __slot?: string;
     /** Internal: set by the compiler on a node writing text around views, which sit inline in it. */
     __text?: boolean;
+    /** Internal: set by the compiler on the one node an {#each} draws each item in: the collection and the item's index. */
+    __itemOf?: unknown;
+    __itemAt?: number;
   } = $props();
 
   const types = typeContext();
@@ -190,7 +200,10 @@
   const drawn = defaultsContext();
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
-  const id = untrack(() => __id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined));
+  const endSlot = endSlotContext();
+  const id = untrack(() =>
+    endSlot ? undefined : (__id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined))
+  );
   // The element of the state this node draws: a collection's item, or a component's root, which
   // draws the element its call was given (see Slot.svelte). A hidden copy draws none.
   const copy = copyContext();
@@ -227,14 +240,42 @@
   // the outermost node a pointer's view draws where the pointer is takes the pointer's.
   const pointerIdentity = pointerIdentityContext();
   if (pointerIdentity) providePointerIdentity(undefined);
-  const identity = untrack(() => (slot === undefined ? pointerIdentity : types?.identityOf(slot)));
+  const identity = untrack(() =>
+    slot === undefined ? pointerIdentity : endSlot ? undefined : types?.identityOf(slot)
+  );
   // The end slots, as far past each end as any step puts one of the pointers' positions: none
   // where the trace never goes past.
-  const ends = untrack(() => pointers.map((pointer) => types?.pastEnds(pointer.collection)));
-  const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
-  const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
-  const before = Array.from({ length: reachBefore }, (_, place) => place - reachBefore);
-  const after = Array.from({ length: reachAfter }, (_, place) => length + place);
+  const endsOf = (into: readonly Pointer[], count: number) => {
+    const ends = into.map((pointer) => types?.pastEnds(pointer.collection));
+    const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
+    const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
+    return {
+      before: Array.from({ length: reachBefore }, (_, place) => place - reachBefore),
+      after: Array.from({ length: reachAfter }, (_, place) => count + place)
+    };
+  };
+  // An {#each} item's node keeps its collection's end slots, as hidden copies of itself beside the
+  // first item and the last, so that labels drawn with each element line up in them too; the
+  // element inside then keeps none.
+  const eachItem = untrack(() =>
+    __itemOf === undefined || endSlot
+      ? undefined
+      : elementSlot(elementOf(types, __itemOf, __itemAt ?? 0))
+  );
+  const itemPointers = untrack(() =>
+    eachItem
+      ? pointersContext().filter((pointer) => reachesInto(types, pointer, eachItem.collection))
+      : []
+  );
+  if (eachItem && itemPointers.length) provideItemEnds(eachItem.collection);
+  const itemLength = untrack(() => (eachItem ? (types?.lengthOf(eachItem.collection) ?? 0) : 0));
+  const itemEnds = untrack(() => endsOf(itemPointers, itemLength));
+  const { before, after } = untrack(() =>
+    endsOf(itemEndsContext() === element?.collection ? [] : pointers, length)
+  );
+  // Inside an item's copy at an end slot, the element draws only the pointers there.
+  const atEnd =
+    endSlot && element?.collection === endSlot.collection ? endSlot.position : undefined;
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
@@ -417,7 +458,20 @@
   <Node {...given} __id={id} __slot={slot} {...props} />
 {/snippet}
 
-{#if pointers.length}
+{#snippet itemCopy()}
+  <Node {...given} {__text} __ref={undefined} />
+{/snippet}
+
+{#if eachItem && eachItem.index === 0 && inSequence}
+  {#each itemEnds.before as end (end)}
+    <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+  {/each}
+{/if}
+{#if atEnd !== undefined}
+  {#if pointers.length}
+    <Pointing {pointers} position={atEnd} name={slot ?? ''} draw={pointed} placeholder />
+  {/if}
+{:else if pointers.length}
   {#if position === 0 && inSequence}
     {#each before as end (end)}
       <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
@@ -509,6 +563,11 @@
     {/if}
     <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
   </div>
+{/if}
+{#if eachItem && eachItem.index === itemLength - 1 && inSequence}
+  {#each itemEnds.after as end (end)}
+    <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+  {/each}
 {/if}
 
 <style>

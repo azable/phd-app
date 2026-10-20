@@ -354,17 +354,22 @@ export function withInsertions(source: string, insertions: readonly Insertion[])
  * The root's pointers, as in {@render Arrow(i)}: drawn around the element the position points at,
  * not where they are written, so each call is removed from the markup and registered in the root's
  * script (see providePointers in library/type-context.ts). A pointer is rendered at the top of the
- * root, outside blocks, with a position from the state: a variable, an element, or a field.
+ * root, outside blocks other than {#if}, with a position from the state: a variable, an element, or
+ * a field. Inside {#if}, it points nowhere at steps where its branch is not taken.
  */
 export function pointerCalls(
   markup: unknown,
   source: string,
   stateNames: ReadonlySet<string>,
   /**
-   * Each pointer view, with the collection type its index type points into,
-   * and the code of a function giving its <Pointed>'s props for a position, which links it points at take.
+   * Each pointer view, with the collection type its index type points into, the code of a
+   * function giving its <Pointed>'s props for a position, which links it points at take, and the
+   * scoped variables its view reads.
    */
-  pointers: ReadonlyMap<string, { into: string; ref?: boolean; paint: string }>,
+  pointers: ReadonlyMap<
+    string,
+    { into: string; ref?: boolean; paint: string; reads?: readonly string[] }
+  >,
   /** The state variables out of scope at some step, which a pointer reading one names. */
   scoped: ReadonlySet<string> = new Set()
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
@@ -378,10 +383,14 @@ export function pointerCalls(
   const calls: string[] = [];
   const problems: ComponentProblem[] = [];
   const text = (node: Part) => source.slice(node.start, node.end);
-  const visit = (node: unknown, where: 'top' | 'block' | 'component'): void => {
+  const visit = (
+    node: unknown,
+    where: 'top' | 'block' | 'component',
+    conditions: readonly string[] = []
+  ): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
-      for (const item of node) visit(item, where);
+      for (const item of node) visit(item, where, conditions);
       return;
     }
     const part = node as Part;
@@ -403,7 +412,7 @@ export function pointerCalls(
       const start = part.start ?? 0;
       if (where !== 'top')
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks and components, as in {@render ${name}(i)}.`,
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside components, as in {@render ${name}(i)}.`,
           start
         });
       else if (!position)
@@ -412,12 +421,19 @@ export function pointerCalls(
           start
         });
       else {
-        const reads = stateReadsOf(argument, scoped);
+        const pointer = pointers.get(name);
+        const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${pointers.get(name)?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointers.get(name)?.into)}, paint: ${pointers.get(name)?.paint} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
+      return;
+    }
+    if (part.type === 'IfBlock' && where === 'top') {
+      const test = `(${text(part.expression as Part)})`;
+      visit(part.children, where, [...conditions, test]);
+      visit(part.else, where, [...conditions, `!${test}`]);
       return;
     }
     const inner =
@@ -426,11 +442,12 @@ export function pointerCalls(
         : where === 'top' &&
             typeof part.type === 'string' &&
             part.type.endsWith('Block') &&
+            part.type !== 'ElseBlock' &&
             part.type !== 'Fragment'
           ? 'block'
           : where;
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'expression') visit(child, inner);
+      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions);
   };
   visit(markup, 'top');
   return { removals, calls, problems };
@@ -553,9 +570,21 @@ export function slotInsertions(
     if (part.type === 'EachBlock') {
       const context = part.context as Part | undefined;
       const inner = new Map(locals);
-      if (context?.type === 'Identifier' && typeof context.name === 'string')
-        inner.set(context.name, { kind: 'item', of: part.expression as Part, each: part });
-      else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
+      if (context?.type === 'Identifier' && typeof context.name === 'string') {
+        const local = { kind: 'item', of: part.expression as Part, each: part } as const;
+        inner.set(context.name, local);
+        // A node holding all of an item, as its value and the labels under it, keeps the item's
+        // end slots in the sequence the items are arranged in (see Node.svelte).
+        const roots = ((part.children as Part[] | undefined) ?? []).filter(
+          (child) => !(child.type === 'Text' && String(child.data ?? '').trim() === '')
+        );
+        const [root] = roots;
+        if (roots.length === 1 && root.type === 'InlineComponent' && root.name === 'Node')
+          insertions.push({
+            at: (root.start ?? 0) + '<Node'.length,
+            text: ` __itemOf={${text(local.of)}} __itemAt={${indexOf(local)}}`
+          });
+      } else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
       if (typeof part.index === 'string') inner.set(part.index, { kind: 'other' });
       walk(part.children, inner);
       walk(part.else, locals);

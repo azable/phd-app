@@ -437,6 +437,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           const paint = found.pointers.has(name)
             ? `__paint_${name}`
             : `(position: number) => (({ ${chosen[name].map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[__choice_${name}]?.(position) ?? {}`;
+          // The scoped variables its view reads, or any view a design value chooses for it reads.
+          const reads = (found.pointers.has(name) ? [name] : chosen[name]).flatMap((option) =>
+            [...readsOf(found.components.find((view) => view.name === option)!.node)].filter(
+              (read) => scoped.has(read)
+            )
+          );
           return [
             name,
             {
@@ -446,7 +452,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
                     ref: true
                   }
                 : { into: domain.atoms[type]?.index ?? '' }),
-              paint
+              paint,
+              ...(reads.length ? { reads: [...new Set(reads)] } : {})
             }
           ];
         })
@@ -1122,8 +1129,9 @@ function checkComponents(
         `${name} names a variable, another type, or a library component; choose another component name.`,
         at
       );
+    // A pointer is drawn only from the top of the view, where every variable is known.
     const state = [...readsOf(node)].find((read) => stateNames.includes(read));
-    if (state)
+    if (state && !pointers.has(name))
       throw new InvalidSvelteSourceError(
         `${name} reads ${state}, an input or algorithm variable; a component reads only its value and design values. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
         at
