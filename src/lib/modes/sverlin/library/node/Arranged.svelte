@@ -80,8 +80,12 @@
   // report it, and pinning it as layoutSeed reproduces the layout exactly, wherever the node moves.
   const drawSeed = $derived(layoutSeed ?? layoutSeedFor(seed, scope));
 
-  // Node ids hold : and #, which an SVG fragment reference cannot.
-  const markerId = $derived(`sv-arrow-${scope.replace(/[^\w-]/gu, '_')}`);
+  // Node ids hold : and #, which an SVG fragment reference cannot. A fragment reference finds the
+  // first element with its id in the page, and two steps' layers are in the page while one replaces
+  // the other, so each arrangement's markers are named apart: otherwise arrows would take the other
+  // layer's arrowheads, of other colours, until it is removed.
+  const instance = $props.id();
+  const markerId = $derived(`sv-arrow-${scope.replace(/[^\w-]/gu, '_')}-${instance}`);
   const parent = arrangementParentContext();
   let host = $state<HTMLDivElement>();
   let result = $state<{

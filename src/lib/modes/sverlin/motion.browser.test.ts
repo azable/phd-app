@@ -170,3 +170,76 @@ it.skipIf(!enabled)(
     }
   }
 );
+
+const walk = `<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C']);
+  const Names = collection(Name);
+  const Vertex = index(Names);
+  const Edge = record({ from: Vertex, to: Vertex });
+  const Edges = collection(Edge);
+  const EdgeIndex = index(Edges);
+</script>
+<script lang="sverlin" input>
+  const vertices = Names(['A', 'B', 'C']);
+  const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
+</script>
+<script lang="sverlin">
+  yield;
+  for (let e = EdgeIndex(0); e < edges.length; e++) yield;
+</script>
+<script lang="sverlin" design>
+  const Name = NameText;
+</script>
+{#snippet NameText(name: Name)}<Node value={name} shape="card" />{/snippet}
+{#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
+{#snippet Current(c: EdgeIndex)}<Pointed stroke="red" strokeWidth="thick" />{/snippet}
+<Node layout="free">
+  {#each vertices as name}{@render Name(name)}{/each}
+  {#each edges as edge}{@render Arrow(edge)}{/each}
+</Node>
+{@render Current(e)}`;
+
+it.skipIf(!enabled)(
+  'draws each arrow with its own step’s arrowhead while two steps are in the page',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(walk);
+    const { javascript } = await bundlePresentation(prepared, 1);
+    const page = await browser!.newPage({ viewport: { width: 1000, height: 600 } });
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:1000px;height:600px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    // The page takes steps only from the page around it, as from the app.
+    const step = (index: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelector('iframe')
+          ?.contentWindow?.postMessage({ type: 'sverlin:step', step: index }, '*');
+      }, index);
+    await step(0);
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    for (let index = 1; index < prepared.master.length; index++) {
+      await step(index);
+      // A fragment reference finds the first element with its id in the page. Checked once both
+      // steps are in the page, waited for as an object, as a count of 0 would read as not yet.
+      const check = await frame.waitForFunction(
+        () => {
+          if (document.querySelectorAll('.sv-layer').length < 2) return false;
+          const foreign = [...document.querySelectorAll('path[marker-end]')].filter((path) => {
+            const id = path.getAttribute('marker-end')!.slice('url(#'.length, -1);
+            return document.getElementById(id)?.closest('.sv-layer') !== path.closest('.sv-layer');
+          }).length;
+          return { foreign };
+        },
+        null,
+        { timeout: 20_000, polling: 5 }
+      );
+      expect(await check.jsonValue(), `step ${index + 1}`).toEqual({ foreign: 0 });
+      await page.waitForTimeout(600);
+    }
+    await page.close();
+  }
+);
