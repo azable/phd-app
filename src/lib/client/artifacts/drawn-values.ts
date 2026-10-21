@@ -2,10 +2,12 @@
  * CodeMirror markers for what a presentation drew: inside each <Node>, <Pointed>, and <Link> tag, a
  * chip naming its kind, which opens under the tag its kind's values in each shown presentation's
  * variant, and the layout it arranged from the seed as ghost props, written as the view would write
- * them; in an editable editor, clicking a layout value writes it as a prop. A strip above the source
- * shows the view each type draws and the page frame. Views of a type that no shown presentation's
- * variant chose are greyed out. A presentation built while sources had design blocks also marks
- * each draw call with the value each shown presentation drew there.
+ * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
+ * type, as {@render Flag(seen)}, the view each shown variant draws it with; the first top-level
+ * node's chip also holds the page frame, which shows above the source where there is no such node.
+ * Views of a type that no shown presentation's variant chose are greyed out. A presentation built
+ * while sources had design blocks also marks each draw call with the value each shown presentation
+ * drew there.
  *
  * @packageDocumentation
  */
@@ -243,6 +245,12 @@ export function tagGhosts(
     );
     add(line, column, props, [...keys]);
   }
+  // The page frame belongs to no tag: it goes with the first top-level node, as page.
+  const [first] = [...tagged]
+    .filter(([, keys]) => [...keys].some((kind) => kind === 'root' || kind.startsWith('root[')))
+    .map(([position]) => position.split(':').map(Number))
+    .sort(([lineA, columnA], [lineB, columnB]) => lineA - lineB || columnA - columnB);
+  if (first) add(first[0], first[1], frameProps(presentations), ['page']);
   const arranged = new Map<string, { line: number; column: number }>();
   for (const { layouts = [] } of presentations)
     for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
@@ -280,18 +288,47 @@ export function tagGhosts(
     .sort((a, b) => a.at - b.at);
 }
 
-/** The view each type draws and the page frame's settings, in each shown presentation's variant. */
-export function designStrip(presentations: readonly DrawnPresentation[]): GhostProp[] {
+/** The page frame's settings in each shown presentation's variant, each named by its setting. */
+export function frameProps(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('views.') || key.startsWith('frame.'))
+      Object.keys(variant).filter((key) => key.startsWith('frame.'))
     )
   );
-  const views = [...keys].filter((key) => key.startsWith('views.')).sort();
-  const frame = [...keys]
-    .filter((key) => key.startsWith('frame.'))
-    .sort(byOrder(frameOrder, (key) => key));
-  return [...views, ...frame].map((key) => variable(presentations, key, key));
+  return [...keys]
+    .sort(byOrder(frameOrder, (key) => key))
+    .map((key) => variable(presentations, key, key.slice('frame.'.length)));
+}
+
+/**
+ * After each render of a type by name, as {@render Flag(v.seen)}, the view each shown presentation's
+ * variant draws it with.
+ */
+export function viewMarkers(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): DrawnMarker[] {
+  const doc = state.doc.toString();
+  const types = new Set(
+    presentations.flatMap(({ variant = {} }) =>
+      Object.keys(variant).flatMap((key) => (key.startsWith('views.') ? [key.slice(6)] : []))
+    )
+  );
+  const markers: DrawnMarker[] = [];
+  for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
+    if (!types.has(match[1])) continue;
+    // The tag ends at the brace that closes its own.
+    let depth = 0;
+    let to = match.index;
+    for (; to < doc.length; to++) {
+      if (doc[to] === '{') depth++;
+      if (doc[to] === '}' && --depth === 0) break;
+    }
+    if (to >= doc.length) continue;
+    const { values, differs } = variable(presentations, `views.${match[1]}`, match[1]);
+    markers.push({ from: match.index, to: to + 1, values, differs });
+  }
+  return markers;
 }
 
 /**
@@ -588,9 +625,15 @@ const drawnField = StateField.define<DrawnState>({
       if (effect.is(setDrawnValues)) {
         const ghosts = tagGhosts(transaction.state, effect.value.presentations);
         next = {
-          markers: drawnMarkers(transaction.state, effect.value.presentations),
+          markers: [
+            ...drawnMarkers(transaction.state, effect.value.presentations),
+            ...viewMarkers(transaction.state, effect.value.presentations)
+          ].sort((a, b) => a.from - b.from),
           ghosts,
-          strip: designStrip(effect.value.presentations),
+          // The frame shows above the source only where no top-level node can hold it.
+          strip: ghosts.some(({ kinds }) => kinds.includes('page'))
+            ? []
+            : frameProps(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: unchosenViews(transaction.state, effect.value.presentations)

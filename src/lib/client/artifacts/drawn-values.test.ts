@@ -4,14 +4,15 @@ import { EditorState } from '@codemirror/state';
 import type { DesignDraw } from '$lib/shared/presentations';
 
 import {
-  designStrip,
   drawnMarkers,
+  frameProps,
   drawnValues,
   ghostSummary,
   setDrawnValues,
   tagGhosts,
   unchosenViews,
-  valueText
+  valueText,
+  viewMarkers
 } from './drawn-values';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
@@ -262,7 +263,7 @@ describe('variant markers', () => {
     const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
     expect(ghosts.map(({ kinds }) => kinds)).toEqual([
       ['Here[current]', 'Here[current,found]'],
-      ['root[title]']
+      ['root[title]', 'page']
     ]);
     const [pointer, title] = ghosts;
     expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
@@ -276,14 +277,29 @@ describe('variant markers', () => {
         ['blue-100', 'Here[current].fill = blue-100, randomised', true]
       ]
     );
-    // A tag of one kind names its props alone.
-    expect(title.props.map(({ name }) => name)).toEqual(['size']);
+    // A tag of one kind names its props alone, and the first top-level node holds the page.
+    expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
   });
 
-  it('strips the views and the frame, views first', () => {
-    expect(designStrip(presentations).map(({ name, differs }) => [name, differs])).toEqual([
-      ['views.Int', false],
-      ['frame.ratio', false]
+  it('gives the first top-level node the page frame', () => {
+    const [, title] = tagGhosts(EditorState.create({ doc: source }), presentations);
+    expect(title.kinds).toEqual(['root[title]', 'page']);
+    expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
+    expect(frameProps(presentations).map(({ name }) => name)).toEqual(['ratio']);
+  });
+
+  it('marks each render of a type with the view each shown variant draws it with', () => {
+    const doc = '<Node>{@render Int(values[i + 1])} and {@render IntCell(v)}</Node>';
+    const markers = viewMarkers(EditorState.create({ doc }), [
+      { ...presentations[0], variant: { 'views.Int': 'IntCell' } },
+      { ...presentations[1], variant: { 'views.Int': 'IntTally' } }
     ]);
+    expect(
+      markers.map(({ from, to, differs, values }) => [
+        doc.slice(from, to),
+        differs,
+        values.map(({ text }) => text)
+      ])
+    ).toEqual([['{@render Int(values[i + 1])}', true, ['IntCell', 'IntTally']]]);
   });
 });
