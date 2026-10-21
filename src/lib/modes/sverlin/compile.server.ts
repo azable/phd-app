@@ -133,9 +133,13 @@ export type PreparedComponent = {
   components: ComponentProbe[];
   /** Values the root reads for placement, measured with every value of their types. */
   placements: Placement[];
-  /** The design space, the views each type rendered by name chooses among, and the first variant. */
+  /**
+   * The design space, the views each type rendered by name chooses among, the kinds each tag can
+   * be (by its line:column), and the first variant.
+   */
   design: {
     views: Record<string, string[]>;
+    tags: Record<string, string[]>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
@@ -260,7 +264,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, every type a choice of its views. Remove the block, and say what nodes are with tags, as <Node tags="current">.',
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
-    const { insertions, problems, kinds } = withNodeRefs(
+    const { insertions, problems, kinds, tagKinds } = withNodeRefs(
       svelteSource,
       ast,
       source,
@@ -526,6 +530,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       placements,
       design: {
         views: chosen,
+        tags: tagKinds,
         space: designSpace(kinds, chosen),
         starter: starterVariant(kinds, chosen)
       }
@@ -941,7 +946,7 @@ function tagSets(
     const fixed = literal(item);
     if (typeof fixed === 'string') alternatives.push(...words(fixed).map((word) => [word]));
     else if (item?.type === 'LogicalExpression' && typeof literal(item.right) === 'string')
-      alternatives.push([literal(item.right) as string, null]);
+      alternatives.push([null, literal(item.right) as string]);
     else if (
       item?.type === 'ConditionalExpression' &&
       literal(item.consequent) !== undefined &&
@@ -995,7 +1000,12 @@ function withNodeRefs(
   roots: ReadonlyMap<number, string>,
   /** The <Node> tags showing their component's own value, by where they start, with its type. */
   valueTypes: ReadonlyMap<number, string>
-): { insertions: Insertion[]; problems: InvalidSvelteSourceError[]; kinds: DesignKind[] } {
+): {
+  insertions: Insertion[];
+  problems: InvalidSvelteSourceError[];
+  kinds: DesignKind[];
+  tagKinds: Record<string, string[]>;
+} {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
     type?: string;
@@ -1114,6 +1124,8 @@ function withNodeRefs(
   // A kind several roles share takes the plainest look, and every prop any of them has.
   const plainest: KindRole[] = ['container', 'text', 'value', 'pointed', 'link'];
   const kinds = new Map<string, KindRole>();
+  // The kinds each tag can be, by its line and column (both from 1), for the editor to show.
+  const tagKinds: Record<string, string[]> = {};
   for (const entry of tags) {
     const read = tagSets(
       entry.tag.attributes?.find((attribute) => attribute.name === 'tags'),
@@ -1135,6 +1147,8 @@ function withNodeRefs(
           entry.start
         );
       kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
+      const { line, column } = sourcePosition(source, entry.start);
+      (tagKinds[`${line}:${column + 1}`] ??= []).push(key);
     }
   }
   const insertions = tags.map(({ start, name, links, view }): Insertion => {
@@ -1150,7 +1164,8 @@ function withNodeRefs(
   return {
     insertions,
     problems,
-    kinds: [...kinds].map(([key, role]) => ({ key, role }))
+    kinds: [...kinds].map(([key, role]) => ({ key, role })),
+    tagKinds
   };
 }
 

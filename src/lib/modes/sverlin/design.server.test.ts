@@ -41,6 +41,13 @@ describe('design space', () => {
     expect(space['Current[current].fill']).toContain('amber-100');
   });
 
+  it('records the kinds each tag can be, by its line and column', () => {
+    const lines = linearSearchSource.split('\n');
+    const line = lines.findIndex((text) => text.includes('<Pointed'));
+    const position = `${line + 1}:${lines[line].indexOf('<Pointed') + 1}`;
+    expect(prepared.design.tags[position]).toEqual(['Current[current]', 'Current[current,found]']);
+  });
+
   it('starts every variable at the starter, each type in its first view', () => {
     expect(Object.keys(starter).sort()).toEqual(Object.keys(space).sort());
     expect(starter['views.Int']).toBe('IntCell');

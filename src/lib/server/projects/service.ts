@@ -856,6 +856,7 @@ export async function activateBuiltPresentations(
       ...(bundle.variant ? { variant: bundle.variant } : {}),
       ...(bundle.origins ? { origins: bundle.origins } : {}),
       ...(bundle.views ? { views: bundle.views } : {}),
+      ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
       seed: item.seed,
       source: item.source,
       html: recordText(bundle.html, 'text/html'),

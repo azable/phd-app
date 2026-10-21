@@ -4,6 +4,7 @@ import { EditorState } from '@codemirror/state';
 import type { DesignDraw } from '$lib/shared/presentations';
 
 import {
+  designStrip,
   drawnMarkers,
   drawnValues,
   ghostSummary,
@@ -170,6 +171,10 @@ describe('drawn value markers', () => {
     expect(ghostSummary(['radius', 'fill', 'stroke', 'gap'].map((name) => prop(name, true)))).toBe(
       '4 drawn · radius, fill +2 differ'
     );
+    expect(ghostSummary([prop('fill', true)], ['Here[current]'])).toBe(
+      'Here[current] · fill differs'
+    );
+    expect(ghostSummary([prop('fill')], ['Here[a]', 'Here[b]', 'Here[c]'])).toBe('Here[a] +2');
   });
 
   it('shortens reals and long values', () => {
@@ -220,5 +225,65 @@ describe('drawn value markers', () => {
         ])
       ).toEqual([]);
     });
+  });
+});
+
+describe('variant markers', () => {
+  const source =
+    "{#snippet Here(i: Index)}\n  <Pointed tags={['current', found && 'found']} />\n{/snippet}\n<Node tags=\"title\">Search</Node>";
+  const variant = (fill: string) => ({
+    'views.Int': 'IntCell',
+    'frame.ratio': '16:9',
+    'Here[current].fill': fill,
+    'Here[current].size': 1,
+    'Here[current,found].fill': 'green-100',
+    'root[title].size': 1.5
+  });
+  const presentations = [
+    {
+      label: 'top',
+      seed: 1,
+      draws: [],
+      variant: variant('amber-100'),
+      origins: { 'Here[current].fill': 'starter' },
+      kinds: { '2:3': ['Here[current]', 'Here[current,found]'], '4:1': ['root[title]'] }
+    },
+    {
+      label: 'bottom',
+      seed: 2,
+      draws: [],
+      variant: variant('blue-100'),
+      origins: { 'Here[current].fill': 'random' },
+      kinds: { '2:3': ['Here[current]', 'Here[current,found]'], '4:1': ['root[title]'] }
+    }
+  ];
+
+  it('gives each tag its kinds’ values in every shown variant, and whether they differ', () => {
+    const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
+    expect(ghosts.map(({ kinds }) => kinds)).toEqual([
+      ['Here[current]', 'Here[current,found]'],
+      ['root[title]']
+    ]);
+    const [pointer, title] = ghosts;
+    expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
+      ['Here[current].fill', true],
+      ['Here[current].size', false],
+      ['Here[current,found].fill', false]
+    ]);
+    expect(pointer.props[0].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
+      [
+        ['amber-100', 'Here[current].fill = amber-100, from the starter', true],
+        ['blue-100', 'Here[current].fill = blue-100, randomised', true]
+      ]
+    );
+    // A tag of one kind names its props alone.
+    expect(title.props.map(({ name }) => name)).toEqual(['size']);
+  });
+
+  it('strips the views and the frame, views first', () => {
+    expect(designStrip(presentations).map(({ name, differs }) => [name, differs])).toEqual([
+      ['views.Int', false],
+      ['frame.ratio', false]
+    ]);
   });
 });

@@ -1,9 +1,11 @@
 /**
- * CodeMirror markers for what a presentation drew: inside each <Node> tag, a chip for the layout it
- * arranged from the seed, which opens it under the tag as ghost props, written as the view would
- * write them; in an editable editor, clicking a ghost value writes it as a prop. Views of a type
- * that no shown presentation's variant chose are greyed out. A presentation built while sources had
- * design blocks also marks each draw call with the value each shown presentation drew there.
+ * CodeMirror markers for what a presentation drew: inside each <Node>, <Pointed>, and <Link> tag, a
+ * chip naming its kind, which opens under the tag its kind's values in each shown presentation's
+ * variant, and the layout it arranged from the seed as ghost props, written as the view would write
+ * them; in an editable editor, clicking a layout value writes it as a prop. A strip above the source
+ * shows the view each type draws and the page frame. Views of a type that no shown presentation's
+ * variant chose are greyed out. A presentation built while sources had design blocks also marks
+ * each draw call with the value each shown presentation drew there.
  *
  * @packageDocumentation
  */
@@ -11,6 +13,7 @@
 import { StateEffect, StateField, type EditorState, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 
+import { colourCss, frameOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
 import type { DesignDraw, DesignValues } from '$lib/shared/presentations';
 
 /**
@@ -45,9 +48,14 @@ export type DrawnLayout = {
 export type DrawnPresentation = {
   label?: string;
   seed: number;
-  /** Its variant, and the views each type rendered by name could draw. */
+  /**
+   * Its variant, where each value came from, the views each type rendered by name could draw, and
+   * the kinds each tag can be, by its line:column.
+   */
   variant?: DesignValues;
+  origins?: Readonly<Record<string, string>>;
   views?: Readonly<Record<string, readonly string[]>>;
+  kinds?: Readonly<Record<string, readonly string[]>>;
   /** The draws of a presentation built while sources had design blocks; none for others. */
   draws: readonly DesignDraw[];
   layouts?: readonly DrawnLayout[];
@@ -70,8 +78,8 @@ export type DrawnMarker = {
   differs: boolean;
 };
 
-/** The ghost props of one tag, at the offset of its closing > (or />). */
-export type TagGhosts = { at: number; props: GhostProp[] };
+/** The ghost props of one tag, at the offset of its closing > (or />), and the kinds it can be. */
+export type TagGhosts = { at: number; props: GhostProp[]; kinds: string[] };
 
 /** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
 export type UnchosenView = { from: number; to: number; title: string };
@@ -160,20 +168,81 @@ export function drawnMarkers(
     .sort((a, b) => a.from - b.from);
 }
 
+/** Where a value of a presentation's variant came from, for its hover text. */
+const originText: Record<string, string> = {
+  chosen: 'chosen',
+  kept: 'kept from the viewed variant',
+  random: 'randomised',
+  starter: 'from the starter'
+};
+
+// Variables in a fixed order, as stored variants may come back with their keys reordered.
+const propOrder = Object.keys(propOptions);
+const frameOrder = Object.keys(frameOptions);
+const byOrder = (order: readonly string[], of: (key: string) => string) => (a: string, b: string) =>
+  order.indexOf(of(a)) - order.indexOf(of(b)) || a.localeCompare(b);
+
+/** One variable, as each shown presentation's variant has it, named as its row shows it. */
+function variable(
+  presentations: readonly DrawnPresentation[],
+  key: string,
+  name: string
+): GhostProp {
+  const values = presentations.map(({ label, variant = {}, origins = {} }) => {
+    const value = variant[key];
+    const origin = origins[key];
+    const colour = colourCss(value);
+    return {
+      label,
+      text: value === undefined ? '–' : String(value),
+      title: `${key} = ${value === undefined ? 'none recorded' : String(value)}${origin ? `, ${originText[origin] ?? origin}` : ''}`,
+      ...(colour ? { color: colour } : {})
+    };
+  });
+  return { name, values, differs: new Set(values.map(({ text }) => text)).size > 1 };
+}
+
 /**
- * The ghost props of every <Node> tag in the document: the layout it arranged (its form, curve,
- * and layoutSeed). A tag rendered more than once, as in an {#each},
- * shows each value it drew once, and can be pinned only where it drew one.
+ * The ghost props of every <Node>, <Pointed>, and <Link> tag in the document: its kind's values in
+ * each shown presentation's variant, a tag that can be several kinds showing each prop by its kind,
+ * and the layout it arranged (its form, curve, and layoutSeed). A tag rendered more than once, as
+ * in an {#each}, shows each layout value it drew once, and can be pinned only where it drew one.
  */
 export function tagGhosts(
   state: EditorState,
   presentations: readonly DrawnPresentation[]
 ): TagGhosts[] {
-  const ghosts = new Map<number, GhostProp[]>();
-  const add = (line: number, column: number, props: GhostProp[]) => {
+  const ghosts = new Map<number, { props: GhostProp[]; kinds: string[] }>();
+  const add = (line: number, column: number, props: GhostProp[], kinds: string[] = []) => {
     const at = closingAt(state, line, column);
-    if (at !== undefined && props.length) ghosts.set(at, [...(ghosts.get(at) ?? []), ...props]);
+    if (at === undefined || !props.length) return;
+    const known = ghosts.get(at) ?? { props: [], kinds: [] };
+    ghosts.set(at, {
+      props: [...known.props, ...props],
+      kinds: [...new Set([...known.kinds, ...kinds])]
+    });
   };
+  const tagged = new Map<string, Set<string>>();
+  for (const { kinds = {} } of presentations)
+    for (const [position, keys] of Object.entries(kinds))
+      tagged.set(position, new Set([...(tagged.get(position) ?? []), ...keys]));
+  for (const [position, keys] of tagged) {
+    const [line, column] = position.split(':').map(Number);
+    const props = [...keys].flatMap((kind) =>
+      [
+        ...new Set(
+          presentations.flatMap(({ variant = {} }) =>
+            Object.keys(variant).filter((key) => key.startsWith(`${kind}.`))
+          )
+        )
+      ]
+        .sort(byOrder(propOrder, (key) => key.slice(kind.length + 1)))
+        .map((key) =>
+          variable(presentations, key, keys.size > 1 ? key : key.slice(kind.length + 1))
+        )
+    );
+    add(line, column, props, [...keys]);
+  }
   const arranged = new Map<string, { line: number; column: number }>();
   for (const { layouts = [] } of presentations)
     for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
@@ -206,14 +275,33 @@ export function tagGhosts(
       (['form', 'curve', 'layoutSeed'] as const).flatMap((name) => prop(name) ?? [])
     );
   }
-  return [...ghosts].map(([at, props]) => ({ at, props })).sort((a, b) => a.at - b.at);
+  return [...ghosts]
+    .map(([at, { props, kinds }]) => ({ at, props, kinds }))
+    .sort((a, b) => a.at - b.at);
 }
 
-/** Where a <Node> tag's props end, before its closing > or />, or undefined if none is there. */
+/** The view each type draws and the page frame's settings, in each shown presentation's variant. */
+export function designStrip(presentations: readonly DrawnPresentation[]): GhostProp[] {
+  const keys = new Set(
+    presentations.flatMap(({ variant = {} }) =>
+      Object.keys(variant).filter((key) => key.startsWith('views.') || key.startsWith('frame.'))
+    )
+  );
+  const views = [...keys].filter((key) => key.startsWith('views.')).sort();
+  const frame = [...keys]
+    .filter((key) => key.startsWith('frame.'))
+    .sort(byOrder(frameOrder, (key) => key));
+  return [...views, ...frame].map((key) => variable(presentations, key, key));
+}
+
+/**
+ * Where a <Node>, <Pointed>, or <Link> tag's props end, before its closing > or />, or undefined
+ * if none is there.
+ */
 function closingAt(state: EditorState, line: number, column: number): number | undefined {
   if (line < 1 || line > state.doc.lines) return undefined;
   const from = state.doc.line(line).from + column - 1;
-  if (state.doc.sliceString(from, from + 5) !== '<Node') return undefined;
+  if (!/^<(?:Node|Pointed|Link)\b/u.test(state.doc.sliceString(from, from + 9))) return undefined;
   const end = from + tagEnd(state.doc.sliceString(from, from + 4000));
   if (state.doc.sliceString(end - 1, end) !== '>') return undefined;
   let at = state.doc.sliceString(end - 2, end - 1) === '/' ? end - 2 : end - 1;
@@ -265,27 +353,39 @@ class DrawnValuesWidget extends WidgetType {
   }
 }
 
-/** The chip's summary of a tag's ghost props: how many, and which ones a pair drew differently. */
-export function ghostSummary(props: readonly GhostProp[]): string {
+/**
+ * The chip's summary of a tag's ghost props: its kinds, or how many props it drew, and which ones a
+ * pair has differently.
+ */
+export function ghostSummary(props: readonly GhostProp[], kinds: readonly string[] = []): string {
   const differing = props.filter(({ differs }) => differs).map(({ name }) => name);
   const named =
     differing.length > 3
       ? `${differing.slice(0, 2).join(', ')} +${differing.length - 2}`
       : differing.join(', ');
-  return `${props.length} drawn${differing.length ? ` · ${named} differ${differing.length > 1 ? '' : 's'}` : ''}`;
+  const what = !kinds.length
+    ? `${props.length} drawn`
+    : kinds.length > 2
+      ? `${kinds[0]} +${kinds.length - 1}`
+      : kinds.join(' / ');
+  return `${what}${differing.length ? ` · ${named} differ${differing.length > 1 ? '' : 's'}` : ''}`;
 }
 
-/** Inside a tag, before its >: a chip saying what the tag left to the seed, opening its ghost props. */
+/** Inside a tag, before its >: a chip naming its kind, opening its ghost props. */
 class GhostChipWidget extends WidgetType {
   constructor(
     private readonly props: readonly GhostProp[],
-    private readonly open: boolean
+    private readonly open: boolean,
+    private readonly kinds: readonly string[]
   ) {
     super();
   }
 
   eq(other: GhostChipWidget): boolean {
-    return other.open === this.open && JSON.stringify(other.props) === JSON.stringify(this.props);
+    return (
+      other.open === this.open &&
+      JSON.stringify([other.props, other.kinds]) === JSON.stringify([this.props, this.kinds])
+    );
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -293,10 +393,8 @@ class GhostChipWidget extends WidgetType {
     chip.className = this.props.some(({ differs }) => differs)
       ? 'cm-ghost-chip cm-drawn-differs'
       : 'cm-ghost-chip';
-    chip.textContent = `${this.open ? '▾' : '▸'} ${ghostSummary(this.props)}`;
-    chip.title = this.open
-      ? 'Hide the props this tag left to the seed'
-      : 'Show the props this tag left to the seed';
+    chip.textContent = `${this.open ? '▾' : '▸'} ${ghostSummary(this.props, this.kinds)}`;
+    chip.title = `${this.open ? 'Hide' : 'Show'} this tag's look in each shown variant, and the layout it drew`;
     chip.addEventListener('mousedown', (event) => {
       event.preventDefault();
       view.dispatch({ effects: toggleGhosts.of(view.posAtDOM(chip)) });
@@ -377,12 +475,48 @@ class GhostTableWidget extends WidgetType {
   }
 }
 
+/**
+ * Above the source: the view each type draws and the page frame, as pills that wrap, each with
+ * every shown presentation's value where they differ.
+ */
+class StripWidget extends WidgetType {
+  constructor(private readonly props: readonly GhostProp[]) {
+    super();
+  }
+
+  eq(other: StripWidget): boolean {
+    return JSON.stringify(other.props) === JSON.stringify(this.props);
+  }
+
+  toDOM(): HTMLElement {
+    const strip = document.createElement('div');
+    strip.className = 'cm-design-strip';
+    for (const { name, values, differs } of this.props) {
+      const pill = document.createElement('span');
+      pill.className = differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value';
+      pill.title = values
+        .map(({ label, title }) => `${label ? `${label}: ` : ''}${title}`)
+        .join('\n');
+      const shown = differs ? values.map(({ text }) => text).join(' / ') : values[0]?.text;
+      pill.textContent = `${name} ${shown ?? ''}`;
+      strip.append(pill);
+    }
+    return strip;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 /** Open or close the ghost props of the tag whose chip is at a position. */
 const toggleGhosts = StateEffect.define<number>();
 
 type DrawnState = {
   markers: DrawnMarker[];
   ghosts: TagGhosts[];
+  /** The view each type draws and the page frame, in each shown variant. */
+  strip: GhostProp[];
   /** Where the chips of the tags whose ghost props are open are. */
   open: number[];
   unchosen: UnchosenView[];
@@ -393,9 +527,13 @@ const differingCall = Decoration.mark({ class: 'cm-drawn-call cm-drawn-differs' 
 
 function decorations(
   state: EditorState,
-  { markers, ghosts, open, unchosen }: DrawnState
+  { markers, ghosts, strip, open, unchosen }: DrawnState
 ): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  if (strip.length)
+    marks.push(
+      Decoration.widget({ widget: new StripWidget(strip), block: true, side: -1 }).range(0)
+    );
   for (const { from, to, title } of unchosen)
     if (from < to)
       marks.push(Decoration.mark({ class: 'cm-unchosen', attributes: { title } }).range(from, to));
@@ -405,10 +543,12 @@ function decorations(
       Decoration.widget({ widget: new DrawnValuesWidget(marker), side: 1 }).range(marker.to)
     );
   }
-  for (const { at, props } of ghosts) {
+  for (const { at, props, kinds } of ghosts) {
     if (!props.length || at > state.doc.length) continue;
     const shown = open.includes(at);
-    marks.push(Decoration.widget({ widget: new GhostChipWidget(props, shown), side: 1 }).range(at));
+    marks.push(
+      Decoration.widget({ widget: new GhostChipWidget(props, shown, kinds), side: 1 }).range(at)
+    );
     if (shown)
       marks.push(
         Decoration.widget({ widget: new GhostTableWidget(props, at), block: true, side: 1 }).range(
@@ -421,7 +561,7 @@ function decorations(
 
 // Markers keep their places through edits, as CodeMirror maps them, until the next set replaces them.
 const drawnField = StateField.define<DrawnState>({
-  create: () => ({ markers: [], ghosts: [], open: [], unchosen: [] }),
+  create: () => ({ markers: [], ghosts: [], strip: [], open: [], unchosen: [] }),
   update(value, transaction) {
     const { changes } = transaction;
     let next: DrawnState = transaction.docChanged
@@ -435,6 +575,7 @@ const drawnField = StateField.define<DrawnState>({
             }))
             .filter(({ from, to }) => from < to),
           ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) })),
+          strip: value.strip,
           open: value.open.map((at) => changes.mapPos(at, 1)),
           unchosen: value.unchosen.map((view) => ({
             ...view,
@@ -449,6 +590,7 @@ const drawnField = StateField.define<DrawnState>({
         next = {
           markers: drawnMarkers(transaction.state, effect.value.presentations),
           ghosts,
+          strip: designStrip(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: unchosenViews(transaction.state, effect.value.presentations)
@@ -483,6 +625,16 @@ const drawnField = StateField.define<DrawnState>({
 
 const drawnTheme = EditorView.baseTheme({
   '.cm-unchosen': { opacity: '0.4' },
+  // Kept in view and wrapping, however wide long lines make the content.
+  '.cm-design-strip': {
+    position: 'sticky',
+    left: '0',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.25rem',
+    maxWidth: '44rem',
+    padding: '0.25rem 0.5rem 0.35rem'
+  },
   '.cm-drawn-call': {
     textDecoration: 'underline dotted color-mix(in oklab, #16a34a 70%, transparent)',
     textUnderlineOffset: '3px'

@@ -41,7 +41,8 @@ export async function buildBatch(
           masterSteps: bundle.masterSteps,
           variant: bundle.variant,
           origins: bundle.origins,
-          views: prepared.design.views
+          views: prepared.design.views,
+          kinds: prepared.design.tags
         }
       });
     } catch (cause) {

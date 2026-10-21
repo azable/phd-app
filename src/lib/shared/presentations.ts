@@ -129,6 +129,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   origins: v.optional(v.record(v.string(), designOriginSchema)),
   /** The views each type rendered by name could draw, the options of its views variable. */
   views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** The kinds each tag can be, by its line:column, as the editor shows them. */
+  kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
   /** Design values and draws of a presentation built while sources had design blocks. */
   parameters: v.optional(v.record(v.string(), v.unknown())),
   draws: v.optional(v.array(designDrawSchema)),
