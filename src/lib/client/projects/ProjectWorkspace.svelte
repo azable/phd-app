@@ -29,7 +29,10 @@
     PresentationPlayback
   } from '$lib/client/visualization/presentation-playback.svelte';
   import { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
-  import { candidateId } from '$lib/client/visualization/presentation-history';
+  import {
+    candidateId,
+    timelinePresentations
+  } from '$lib/client/visualization/presentation-history';
   import { VisualSelections } from '$lib/client/visualization/visual-selection.svelte';
   import {
     isSverlinPresentation,
@@ -184,6 +187,25 @@
     session.loaded && session.snapshot.mode === 'sverlin' && layout === 'comparison' ? 2 : 1
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
+
+  // The changes a source makes from the source it was made from, shown in the source panel while
+  // that source is the one on screen.
+  let changesOf = $state<{ sourceHash: string; parentHash: string } | undefined>();
+  const changes = $derived.by(() => {
+    if (!changesOf) return undefined;
+    const { sourceHash, parentHash } = changesOf;
+    const shown = visiblePresentations.every(
+      ({ presentation }) =>
+        presentation.format === 'browser-bundle-v1' && presentation.source.sha256 === sourceHash
+    );
+    const parent = timelinePresentations(session.events).find(
+      ({ presentation }) =>
+        presentation.format === 'browser-bundle-v1' && presentation.source.sha256 === parentHash
+    )?.presentation;
+    return shown && parent?.format === 'browser-bundle-v1'
+      ? { original: parent.source.text, parentHash }
+      : undefined;
+  });
 
   // What each visible presentation drew, named top and bottom as the stage stacks a pair.
   const drawnSources = $derived(
@@ -556,6 +578,7 @@
                 onReferenceRequest={(presentation) =>
                   feedbackComposer?.referencePresentation(presentation)}
                 onElementReference={showElementReference}
+                onShowChanges={(changes) => (changesOf = changes)}
               />
               {#if !expired && !session.readOnly}
                 <FeedbackComposer
@@ -630,6 +653,8 @@
               {selectedSources}
               {drawnSources}
               onSaved={() => presentationSelection.returnToLatest()}
+              {changes}
+              onCloseChanges={() => (changesOf = undefined)}
               bind:editMode
             />
           </div>

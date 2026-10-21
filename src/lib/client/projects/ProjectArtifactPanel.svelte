@@ -50,6 +50,9 @@
     })[];
     /** Called once a save has built its new candidate, so the stage can show it. */
     onSaved?: () => void;
+    /** The source the shown one was made from, to show the changes from it. */
+    changes?: { original: string; parentHash: string };
+    onCloseChanges?: () => void;
   };
 
   let {
@@ -58,8 +61,16 @@
     editMode = $bindable<ProjectArtifactEditMode>('readonly'),
     selectedSources = [],
     drawnSources = [],
-    onSaved = () => {}
+    onSaved = () => {},
+    changes,
+    onCloseChanges = () => {}
   }: Props = $props();
+
+  // Asking to see a source's changes opens the panel to show them.
+  $effect(() => {
+    if (changes) expanded = true;
+  });
+  const showingChanges = $derived(changes !== undefined && editMode === 'readonly');
 
   let draft = $state('');
   // The source a draft was started from, which its markers keep their places in.
@@ -238,6 +249,22 @@
         {/if}
       </header>
 
+      {#if expanded && showingChanges && changes}
+        <div
+          class="flex items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+        >
+          <span>Changes from</span>
+          <CandidateIdPill {...sourceId(changes.parentHash)} />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            class="ml-auto"
+            aria-label="Stop showing the changes"
+            onclick={onCloseChanges}><XIcon /></Button
+          >
+        </div>
+      {/if}
+
       {#if editMode === 'editing'}
         <div class="border-b px-4 py-2">
           <Input
@@ -285,6 +312,7 @@
             {drawn}
             {drawnTags}
             drawnSource={markedSource}
+            original={showingChanges ? changes?.original : undefined}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />

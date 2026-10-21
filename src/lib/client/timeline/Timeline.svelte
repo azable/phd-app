@@ -34,6 +34,8 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
+    /** Show what the chosen source changes from the source it was made from, or nothing. */
+    onShowChanges?: (changes: { sourceHash: string; parentHash: string } | undefined) => void;
   };
 
   let {
@@ -45,7 +47,8 @@
     onPresentationChange = () => {},
     onViewportChange = () => {},
     onReferenceRequest = () => {},
-    onElementReference = () => {}
+    onElementReference = () => {},
+    onShowChanges = () => {}
   }: Props = $props();
   let viewport = $state<HTMLElement | null>(null);
   let timelineEnd = $state<HTMLElement | null>(null);
@@ -125,6 +128,7 @@
           {onPresentationChange}
           {onReferenceRequest}
           {onElementReference}
+          {onShowChanges}
         />
       {/if}
       <li class="h-px" aria-hidden="true"><span bind:this={timelineEnd}></span></li>

@@ -36,6 +36,8 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
+    /** Show what the chosen source changes from the source it was made from, or nothing. */
+    onShowChanges?: (changes: { sourceHash: string; parentHash: string } | undefined) => void;
   };
 
   let {
@@ -44,7 +46,8 @@
     layout,
     onPresentationChange = () => {},
     onReferenceRequest = () => {},
-    onElementReference = () => {}
+    onElementReference = () => {},
+    onShowChanges = () => {}
   }: Props = $props();
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
@@ -65,6 +68,28 @@
   function activatePresentation(presentation: TimelinePresentation, event: MouseEvent) {
     onPresentationChange();
     selection.activate(presentation, session.events, layout, event.shiftKey);
+  }
+
+  // The source whose card was chosen, rather than one of its variants.
+  let chosenSource = $state<string | undefined>();
+
+  function chooseSource(
+    item: Extract<(typeof items)[number], { kind: 'version' }>,
+    event: MouseEvent
+  ) {
+    const newest = item.variants.at(-1);
+    if (!newest) return;
+    activatePresentation(newest, event);
+    chosenSource = item.sourceHash;
+    onShowChanges(
+      item.parentHash ? { sourceHash: item.sourceHash, parentHash: item.parentHash } : undefined
+    );
+  }
+
+  function chooseVariant(variant: TimelinePresentation, event: MouseEvent) {
+    activatePresentation(variant, event);
+    chosenSource = undefined;
+    onShowChanges(undefined);
   }
 
   // The source card a parent link last showed, outlined for a moment so the eye finds it.
@@ -168,65 +193,77 @@
       {@const current = item.variants.some(({ presentation }) =>
         selectedIds.includes(presentation.presentationId)
       )}
+      {@const chosen = current && chosenSource === item.sourceHash}
       <article
         id={`version-${item.sourceHash}`}
         class={[
-          'w-full rounded-2xl border bg-card px-4 py-3 shadow-md transition-shadow',
+          'relative w-full rounded-2xl border bg-card px-4 py-3 shadow-md transition-[border-color,background-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg',
           current && 'border-primary',
+          chosen && 'bg-muted',
           shown === item.sourceHash && 'ring-2 ring-ring'
         ]}
       >
-        <div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <CandidateIdPill {...sourceId(item.sourceHash)} />
-          {#if item.parentHash}
-            {@const parent = item.parentHash}
-            <span>from</span>
-            <button
-              type="button"
-              class="group flex leading-none focus-visible:outline-none"
-              title="Show the source it was made from"
-              onclick={() => showVersion(parent)}
-            >
-              <CandidateIdPill {...sourceId(parent)} />
-            </button>
-          {/if}
-        </div>
-        <p class={['mt-2 text-base', !item.described && 'text-muted-foreground']}>
-          {item.summary}
-        </p>
-        <div class="mt-2 flex flex-wrap justify-end gap-1">
-          {#each item.variants as variant (variant.presentation.presentationId)}
-            {@const id = variant.presentation.presentationId}
-            {@const selected = selectedIds.includes(id)}
-            {@const values = candidateId(variant.presentation).values}
-            <span
-              class={[
-                'inline-flex overflow-hidden rounded-md font-mono text-[11px] leading-5 ring-1',
-                selected ? 'ring-primary' : 'ring-border'
-              ]}
-            >
+        <!-- Choosing the card shows its source: its newest variant, and what it changes. -->
+        <button
+          type="button"
+          class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          aria-label={`Source ${sourceId(item.sourceHash).source}: ${item.summary}`}
+          aria-pressed={chosen}
+          onclick={(event) => chooseSource(item, event)}
+        ></button>
+        <div class="pointer-events-none relative">
+          <div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <CandidateIdPill {...sourceId(item.sourceHash)} />
+            {#if item.parentHash}
+              {@const parent = item.parentHash}
+              <span>from</span>
               <button
                 type="button"
-                class={[
-                  'px-1.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
-                  selected ? 'bg-primary/20' : 'bg-muted/60'
-                ]}
-                aria-label={`View variant ${values}`}
-                aria-pressed={selected}
-                title="View; Shift-click to compare"
-                onclick={(event) => activatePresentation(variant, event)}>{values}</button
+                class="group pointer-events-auto relative z-10 flex leading-none focus-visible:outline-none"
+                title="Show the source it was made from"
+                onclick={() => showVersion(parent)}
               >
-              {#if !session.readOnly}
+                <CandidateIdPill {...sourceId(parent)} />
+              </button>
+            {/if}
+          </div>
+          <p class={['mt-2 text-base', !item.described && 'text-muted-foreground']}>
+            {item.summary}
+          </p>
+          <div class="mt-2 flex flex-wrap justify-end gap-1">
+            {#each item.variants as variant (variant.presentation.presentationId)}
+              {@const id = variant.presentation.presentationId}
+              {@const selected = selectedIds.includes(id) && !chosen}
+              {@const values = candidateId(variant.presentation).values}
+              <span
+                class={[
+                  'pointer-events-auto relative z-10 inline-flex overflow-hidden rounded-md font-mono text-[11px] leading-5 ring-1',
+                  selected ? 'ring-primary' : 'ring-border'
+                ]}
+              >
                 <button
                   type="button"
-                  class="border-l px-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
-                  aria-label={`Add ${presentationDisplayId(id)} to feedback`}
-                  title="Add to feedback"
-                  onclick={() => onReferenceRequest(variant)}>+</button
+                  class={[
+                    'px-1.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
+                    selected ? 'bg-primary/20' : 'bg-muted/60'
+                  ]}
+                  aria-label={`View variant ${values}`}
+                  aria-pressed={selected}
+                  title="View; Shift-click to compare"
+                  onclick={(event) => chooseVariant(variant, event)}>{values}</button
                 >
-              {/if}
-            </span>
-          {/each}
+                {#if !session.readOnly}
+                  <button
+                    type="button"
+                    class="border-l px-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+                    aria-label={`Add ${presentationDisplayId(id)} to feedback`}
+                    title="Add to feedback"
+                    onclick={() => onReferenceRequest(variant)}>+</button
+                  >
+                {/if}
+              </span>
+            {/each}
+          </div>
         </div>
       </article>
     {:else}

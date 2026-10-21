@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { lintGutter, setDiagnostics } from '@codemirror/lint';
+  import { getChunks, unifiedMergeView } from '@codemirror/merge';
   import { Compartment, EditorState } from '@codemirror/state';
   import { EditorView } from 'codemirror';
 
@@ -32,6 +33,8 @@
     drawnSource?: string;
     /** Build problems to underline, with the source they were found in. */
     diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
+    /** A source to show the changes from, such as the version this one was made from. */
+    original?: string;
     onChange?: (value: string) => void;
   };
 
@@ -45,6 +48,7 @@
     drawnTags = [],
     drawnSource = '',
     diagnostics = { source: '', items: [] },
+    original,
     onChange
   }: Props = $props();
 
@@ -52,6 +56,7 @@
   let view = $state.raw<EditorView | null>(null);
   let suppressChange = false;
   const editableCompartment = new Compartment();
+  const changesCompartment = new Compartment();
 
   /** Focus the underlying CodeMirror editor. */
   export function focus(): void {
@@ -71,6 +76,7 @@
           drawnValues,
           lintGutter(),
           editableCompartment.of(editableExtensions(editable)),
+          changesCompartment.of(changesExtensions(original)),
           EditorView.updateListener.of((update) => {
             if (suppressChange || !update.docChanged) return;
             const nextValue = update.state.doc.toString();
@@ -133,6 +139,21 @@
     if (!view) return;
     view.dispatch({ effects: editableCompartment.reconfigure(editableExtensions(editable)) });
   });
+
+  $effect(() => {
+    if (!view) return;
+    view.dispatch({ effects: changesCompartment.reconfigure(changesExtensions(original)) });
+    // Showing changes starts at the first of them.
+    const [first] = getChunks(view.state)?.chunks ?? [];
+    if (first) view.dispatch({ effects: EditorView.scrollIntoView(first.fromB, { y: 'center' }) });
+  });
+
+  // The changes from an original, inline: removed lines above the lines that replace them.
+  function changesExtensions(from: string | undefined) {
+    return from === undefined
+      ? []
+      : unifiedMergeView({ original: from, mergeControls: false, gutter: true });
+  }
 
   function editableExtensions(isEditable: boolean) {
     return isEditable ? [] : [EditorView.editable.of(false), EditorState.readOnly.of(true)];
