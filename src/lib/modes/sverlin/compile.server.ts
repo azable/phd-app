@@ -9,17 +9,11 @@ import entrySource from './assembly/entry.ts?raw';
 import preludeSource from './assembly/prelude.ts?raw';
 import {
   AlgorithmError,
-  componentChoices,
   declaredNames,
-  designChoices,
   interpretAlgorithm,
-  interpretDesignDraws,
-  type DesignVariant,
   interpretDomain,
   interpretInput,
   type BlockKind,
-  type DesignChoices,
-  type DesignDraw,
   type MasterStep,
   type TraceState
 } from './algorithm/interpret.server';
@@ -47,19 +41,20 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
-import { libraryDefaults } from './library/node/defaults';
-import { forms } from './library/node/forms';
 import {
-  alignments,
-  frameRatios,
-  justifications,
-  minSizes,
-  namedSizes,
-  radii,
-  spacings,
-  strokeWidths
-} from './library/node/scales';
-import type { FrameSettings, NodeShape } from './library/node/props';
+  buildVariant,
+  DesignValueError,
+  designSpace,
+  starterVariant,
+  type DesignKind,
+  type DesignOrigin,
+  type DesignSpace,
+  type DesignValue,
+  type VariantRequest
+} from './design.server';
+import { kindKey, type KindRole } from './library/node/design';
+import { forms } from './library/node/forms';
+import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
@@ -120,10 +115,10 @@ export type SvelteBundle = {
   masterSignature: string;
   /** Master step index of each kept step. */
   masterSteps: number[];
-  /** Design values drawn for this presentation. */
-  parameters: TraceState;
-  /** Each draw of the design block, with its span in the source rather than the block. */
-  draws: DesignDraw[];
+  /** The presentation's variant: every variable's value, by key. */
+  variant: Record<string, DesignValue>;
+  /** Where each value came from. */
+  origins: Record<string, DesignOrigin>;
 };
 
 type Block = { body: string; offset: number };
@@ -138,7 +133,12 @@ export type PreparedComponent = {
   components: ComponentProbe[];
   /** Values the root reads for placement, measured with every value of their types. */
   placements: Placement[];
-  design?: Block;
+  /** The design space, the views each type rendered by name chooses among, and the first variant. */
+  design: {
+    views: Record<string, string[]>;
+    space: DesignSpace;
+    starter: Record<string, DesignValue>;
+  };
 };
 
 export class InvalidSvelteSourceError extends Error {
@@ -251,18 +251,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const authoredScript = scripted ? (ast.instance ?? ast.module) : undefined;
     if (authoredScript)
       throw new InvalidSvelteSourceError(
-        'Views cannot have their own <script>: input, algorithm, and design values, step, seed, and the library components are already in scope. Compute in markup, using {@const} inside a block or component for reuse.',
+        'Views cannot have their own <script>: input and algorithm values, step, seed, and the library components are already in scope. Compute in markup, using {@const} inside a block or component for reuse.',
         { code: 'view_script', start: sourcePosition(source, authoredScript.start) }
       );
     // The view is checked before any block runs, so its problems are reported with theirs.
-    const choices = blocks.design
-      ? interpretBlock(source, blocks.design, (body) => designChoices(body))
-      : {};
-    const { insertions, problems } = withNodeRefs(
+    if (blocks.design)
+      throw new InvalidSvelteSourceError(
+        'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, every type a choice of its views. Remove the block, and say what nodes are with tags, as <Node tags="current">.',
+        { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
+      );
+    const { insertions, problems, kinds } = withNodeRefs(
       svelteSource,
       ast,
       source,
-      choices,
       found.roots,
       found.valueTypes
     );
@@ -305,75 +306,70 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         at(shadowed, blocks.domain)
       );
     // Names are checked before any block runs, so a clash is reported before what it causes.
-    const declared = (block: Block | undefined, kind: 'input' | 'algorithm' | 'design') =>
+    const declared = (block: Block | undefined, kind: 'input' | 'algorithm') =>
       block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
     const stateNames = [
       ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
     ];
-    const designNames = declared(blocks.design, 'design');
-    const clash = designNames.find((name) => stateNames.includes(name));
-    if (clash)
-      throw new InvalidSvelteSourceError(
-        `"${clash}" is defined in the design block and in the input or algorithm block.`,
-        at(clash, blocks.design)
-      );
-    const props = [...stateNames, ...designNames];
-    // A design value named after a type may choose among that type's views, as in
-    // const Int = IntDots;, so only other uses of a type's name are clashes.
-    const componentChoice = blocks.design
-      ? interpretBlock(source, blocks.design, (body) =>
-          componentChoices(body, new Set(found.components.map(({ name }) => name)))
-        )
-      : {};
-    const typeName = props.find(
-      (name) => definesType(domain, name) && !Object.hasOwn(componentChoice, name)
-    );
+    const typeName = stateNames.find((name) => definesType(domain, name));
     if (typeName)
       throw new InvalidSvelteSourceError(
         `"${typeName}" names a type; choose another variable name.`,
-        at(typeName, blocks.input, blocks.algorithm, blocks.design)
+        at(typeName, blocks.input, blocks.algorithm)
       );
-    const library = props.find((name) => libraryNames.includes(name));
+    const library = stateNames.find((name) => libraryNames.includes(name));
     if (library)
       throw new InvalidSvelteSourceError(
         `"${library}" names a library component; choose another variable name.`,
-        at(library, blocks.input, blocks.algorithm, blocks.design)
+        at(library, blocks.input, blocks.algorithm)
       );
     const components = checkComponents(
       found.components,
       found.pointers,
       domain,
       stateNames,
-      props,
+      stateNames,
       source
     );
     const views = viewsOf(components);
-    for (const [name, { options, start }] of Object.entries(componentChoice)) {
-      const named = definesType(domain, name);
-      const type = named ? name : components[options[0]];
-      const differs = options.find((option) => components[option] !== type);
-      if (differs)
-        throw new InvalidSvelteSourceError(
-          named
-            ? `${name} chooses ${differs}, which views ${components[differs]}; a design value named after a type chooses among that type's views${views[name] ? `, ${views[name].join(', ')}` : ''}.`
-            : `${name} chooses between components that view different types: ${options[0]} views ${type} and ${differs} views ${components[differs]}. A choice is between views of one type.`,
-          {
-            code: 'component_choice',
-            start: sourcePosition(source, (blocks.design as Block).offset + start)
-          }
-        );
-    }
-    // A type is rendered by name, as in {@render Int(value)}, through a snippet named after it or a
-    // design value named after it that chooses among its views.
-    const typeViews = Object.keys(componentChoice).filter((name) => definesType(domain, name));
-    const undefinedType = renderedNames(ast.html).find(
-      ({ name }) =>
-        definesType(domain, name) && !typeViews.includes(name) && !Object.hasOwn(components, name)
-    );
-    if (undefinedType)
+    // A type is rendered by name, as in {@render Int(value)}, and draws the view of it the variant
+    // chooses, views.Int; a view named after its type would leave nothing to choose.
+    const ownName = found.components.find(({ name, type }) => name === type);
+    if (ownName)
       throw new InvalidSvelteSourceError(
-        `${undefinedType.name} is a type, and nothing draws it: choose its view in the design block, as in const ${undefinedType.name} = pick([${views[undefinedType.name]?.join(', ') || `${undefinedType.name}Text, ${undefinedType.name}Dots`}]);, or render one of its views by name.`,
-        { code: 'view_component', start: sourcePosition(source, undefinedType.start) }
+        `${ownName.name} is a view named after its type: name it after how it draws, as ${ownName.name}Cell, and {@render ${ownName.name}(…)} draws whichever view of ${ownName.name} the design chooses.`,
+        { code: 'view_component', start: sourcePosition(source, ownName.start) }
+      );
+    const rendered = renderedNames(ast.html).filter(({ name }) => definesType(domain, name));
+    const undrawn = rendered.find(({ name }) => !views[name]?.length);
+    if (undrawn)
+      throw new InvalidSvelteSourceError(
+        `${undrawn.name} is a type, and nothing draws it: add a view of it, as {#snippet ${undrawn.name}Cell(value: ${undrawn.name})}<Node {value} />{/snippet}.`,
+        { code: 'view_component', start: sourcePosition(source, undrawn.start) }
+      );
+    // Each type rendered by name chooses among its views: its plain views, where it also has
+    // pointers, which are rendered by their own names.
+    // A view that draws its own type by name, itself or through views it renders, would draw
+    // itself without end were it chosen, so it is no option for its type.
+    const reads = new Map(found.components.map(({ name, node }) => [name, readsOf(node)]));
+    const drawsItself = (view: string, type: string, seen = new Set<string>()): boolean =>
+      !seen.has(view) &&
+      [...(reads.get(view) ?? [])].some(
+        (read) => read === type || (reads.has(read) && drawsItself(read, type, seen.add(view)))
+      );
+    const optionsOf = (type: string) => {
+      const drawable = views[type].filter((view) => !drawsItself(view, type));
+      const plain = drawable.filter((view) => !found.pointers.has(view));
+      return plain.length ? plain : drawable;
+    };
+    const chosen: Record<string, string[]> = Object.fromEntries(
+      [...new Set(rendered.map(({ name }) => name))].map((name) => [name, optionsOf(name)])
+    );
+    const endless = rendered.find(({ name }) => !chosen[name].length);
+    if (endless)
+      throw new InvalidSvelteSourceError(
+        `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(value: ${endless.name})}<Node {value} />{/snippet}.`,
+        { code: 'view_component', start: sourcePosition(source, endless.start) }
       );
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
@@ -386,44 +382,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       stateNames.filter((name) => master.some(({ state }) => !(name in state)))
     );
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const chosen = Object.fromEntries(
-      Object.entries(componentChoice).map(([name, { options }]) => [name, options])
-    );
     const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
-    // A pointer is a view with a <Pointed>, or a design value choosing among such views.
+    // A pointer is a view with a <Pointed>, or a type whose views are pointers.
     const pointerViews = new Set(found.pointers);
-    for (const [name, options] of Object.entries(chosen)) {
-      const pointing = options.filter((option) => found.pointers.has(option));
-      if (pointing.length && pointing.length < options.length)
-        throw new InvalidSvelteSourceError(
-          `${name} chooses between pointers and other views: ${pointing[0]} has a <Pointed> and ${options.find((option) => !found.pointers.has(option))} has none. A choice is between pointers, or between views drawn where they are rendered.`,
-          {
-            code: 'component_choice',
-            start: sourcePosition(
-              source,
-              (blocks.design as Block).offset + componentChoice[name].start
-            )
-          }
-        );
-      if (pointing.length) pointerViews.add(name);
-    }
-    // A pointer's <Pointed> props, for a position, as code: a link it points at takes them.
+    for (const [name, options] of Object.entries(chosen))
+      if (options.some((option) => found.pointers.has(option))) pointerViews.add(name);
+    // A pointer's kind, for a position, as code: a link it points at takes its look.
     const paints = [...found.pointed].map(([name, { tag, parameter }]) => {
-      const props = (tag as { attributes?: Attribute[] }).attributes?.flatMap((attribute) => {
-        if (attribute.type !== 'Attribute' || !attribute.name) return [];
-        const [part] = Array.isArray(attribute.value) ? attribute.value : [];
-        const value =
-          attribute.value === true
-            ? 'true'
-            : part?.type === 'Text'
-              ? JSON.stringify((part as { data?: string }).data ?? '')
-              : (part?.type === 'MustacheTag' || part?.type === 'ExpressionTag') &&
-                  part.expression?.start !== undefined
-                ? svelteSource.slice(part.expression.start, part.expression.end)
-                : undefined;
-        return value === undefined ? [] : [`${attribute.name}: ${value}`];
-      });
-      return `const __paint_${name} = (${parameter}: any) => ({ ${(props ?? []).join(', ')} });`;
+      const tags = (tag as { attributes?: Attribute[] }).attributes?.find(
+        (attribute) => attribute.name === 'tags'
+      );
+      const [part] = Array.isArray(tags?.value) ? tags.value : [];
+      const value =
+        part?.type === 'Text'
+          ? JSON.stringify((part as { data?: string }).data ?? '')
+          : (part?.type === 'MustacheTag' || part?.type === 'ExpressionTag') &&
+              part.expression?.start !== undefined
+            ? svelteSource.slice(part.expression.start, part.expression.end)
+            : 'undefined';
+      return `const __paint_${name} = (${parameter}: any) => ({ __kind: __sverlinKind(${JSON.stringify(name)}, __sverlinTags(${value}, 'pointed')) });`;
     });
     const pointers = pointerCalls(
       ast.html,
@@ -435,7 +412,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           const paint = found.pointers.has(name)
             ? `__paint_${name}`
             : `(position: number) => (({ ${chosen[name].map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[__choice_${name}]?.(position) ?? {}`;
-          // The scoped variables its view reads, or any view a design value chooses for it reads.
+          // The scoped variables its view reads, or any view its type chooses among reads.
           const reads = (found.pointers.has(name) ? [name] : chosen[name]).flatMap((option) =>
             [...readsOf(found.components.find((view) => view.name === option)!.node)].filter(
               (read) => scoped.has(read)
@@ -504,9 +481,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ]);
     const component = compile(
       withGeneratedScripts(
-        `${tagged}${probeMarkup(components)}`,
-        props,
+        `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
+        [...stateNames, ...Object.keys(chosen)],
         chosen,
+        pointerViews,
         pointers.calls,
         paints
       ),
@@ -546,7 +524,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       atoms,
       components: probes,
       placements,
-      ...(blocks.design ? { design: blocks.design } : {})
+      design: {
+        views: chosen,
+        space: designSpace(kinds, chosen),
+        starter: starterVariant(kinds, chosen)
+      }
     };
   } catch (cause) {
     const error =
@@ -592,37 +574,45 @@ function standInsFor(
 }
 
 /**
- * Give the design's declarations their values, from the variant and the rest drawn from the seed,
- * and bundle the presentation with every step's state.
+ * Give every variable of the design its value, from the variant the request describes, and bundle
+ * the presentation with every step's state.
  */
 export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
-  variant: DesignVariant = {}
+  request: VariantRequest = {}
 ): Promise<SvelteBundle> {
-  const { master } = prepared;
-  const design = prepared.design;
-  const { values: parameters, draws } = design
-    ? interpretBlock(prepared.source, design, (body) =>
-        interpretDesignDraws(
-          body,
-          seed,
-          prepared.components.map(({ name }) => name),
-          variant
-        )
-      )
-    : { values: {}, draws: [] };
-  const frame = located(() => frameSettings(parameters.frame), designAt(prepared, 'frame'));
+  const { master, design } = prepared;
+  let variant: ReturnType<typeof buildVariant>;
+  try {
+    variant = buildVariant(design.space, design.starter, request, seed);
+  } catch (cause) {
+    if (!(cause instanceof DesignValueError)) throw cause;
+    throw new InvalidSvelteSourceError(cause.message, { code: 'design_value' });
+  }
+  const { values } = variant;
+  const frame: FrameSettings = {
+    ratio: values['frame.ratio'] as FrameSettings['ratio'],
+    justify: values['frame.justify'] as FrameSettings['justify'],
+    align: values['frame.align'] as FrameSettings['align'],
+    padding: values['frame.padding'] as number,
+    gap: values['frame.gap'] as number,
+    layout: values['frame.layout'] as FrameSettings['layout']
+  };
+  // Each type rendered by name draws the view the variant chose for it.
+  const views = Object.fromEntries(
+    Object.keys(design.views).map((type) => [type, values[`views.${type}`]])
+  );
   // Every presentation shows every master step until steps can be mapped to frames.
   const masterSteps = master.map((_, index) => index);
-  // Each step's state carries its atomic types, the page frame, and the library defaults for the view,
-  // under keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
+  // Each step's state carries its atomic types, the page frame, and the variant for the view, under
+  // keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
   const states = masterSteps.map((index) => {
     const standIn = standInsFor(master, index);
     return {
       ...standIn.state,
       ...master[index].state,
-      ...parameters,
+      ...views,
       __types: { ...standIn.types, ...master[index].types },
       __targets: { ...standIn.targets, ...master[index].targets },
       __absent: Object.keys(standIn.state),
@@ -630,7 +620,7 @@ export async function bundlePresentation(
       __copies: master[index].identities?.copies ?? {},
       __refs: master[index].identities?.refs ?? {},
       __frame: frame,
-      __defaults: libraryDefaults
+      __design: values
     };
   });
   const result = await bundle(
@@ -651,12 +641,8 @@ export async function bundlePresentation(
       master.map(({ identities: _identities, ...step }) => JSON.stringify(step))
     ),
     masterSteps,
-    parameters,
-    draws: draws.map((draw) => ({
-      ...draw,
-      start: (design?.offset ?? 0) + draw.start,
-      end: (design?.offset ?? 0) + draw.end
-    }))
+    variant: values,
+    origins: variant.origins
   };
 }
 
@@ -666,12 +652,13 @@ const sverlinBlock =
 /** Remove the Sverlin blocks for Svelte, keeping every offset and line in place. */
 function extractBlocks(source: string): {
   svelteSource: string;
-  blocks: Partial<Record<BlockKind, Block>>;
+  // A design block is found only to say that sources have none.
+  blocks: Partial<Record<BlockKind | 'design', Block>>;
 } {
-  const blocks: Partial<Record<BlockKind, Block>> = {};
+  const blocks: Partial<Record<BlockKind | 'design', Block>> = {};
   let svelteSource = source;
   for (const match of source.matchAll(sverlinBlock)) {
-    const kind = (match[2] ?? 'algorithm') as BlockKind;
+    const kind = (match[2] ?? 'algorithm') as BlockKind | 'design';
     if (blocks[kind])
       throw new InvalidSvelteSourceError(`A component can have only one ${kind} block.`, {
         code: 'sverlin_block',
@@ -716,18 +703,19 @@ function sourcePosition(source: string, offset: number): { line: number; column:
 }
 
 /**
- * Give the script-free view its scripts: the library prelude and every recorded or design value,
- * plus step and seed, as props. Both share the first line so authored line numbers are unchanged.
+ * Give the script-free view its scripts: the library prelude and every recorded value and the view
+ * each type rendered by name draws, plus step and seed, as props. Both share the first line so authored line numbers are unchanged.
  */
 function withGeneratedScripts(
   source: string,
   props: readonly string[],
   choices: Record<string, string[]>,
+  pointerTypes: ReadonlySet<string>,
   pointers: readonly string[],
   paints: readonly string[]
 ): string {
-  // A design value that chooses a component arrives as the component's name, and the view uses
-  // the component itself under the value's name.
+  // A type rendered by name arrives as the name of the view the variant chose, and the view uses
+  // that view under the type's name; none draws nothing, and a pointer drawn as none is no pointer.
   const names = [
     ...props.map((name) => (choices[name] ? `${name}: __choice_${name}` : name)),
     'step',
@@ -737,12 +725,12 @@ function withGeneratedScripts(
   const chosen = Object.entries(choices)
     .map(
       ([name, options]) =>
-        `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]);`
+        `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]${pointerTypes.has(name) ? '' : ' ?? __sverlinNone'});`
     )
     .join(' ');
   // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
   const pointing = pointers.length
-    ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
+    ? `import { providePointers as __sverlinPointers, kindKey as __sverlinKind, activeTags as __sverlinTags } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
   return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${pointing}</script>${source}`;
@@ -773,139 +761,69 @@ type Attribute = {
   value?: true | { type?: string; data?: string; expression?: Expression }[];
 };
 
-/**
- * The values an expression in markup can have, where they can be known without running it: a
- * literal, either branch of a condition, or a design constant (every option of a pick). Each value
- * notes the design constant it came from, if any.
- */
-function possibleValues(
-  expression: Expression | undefined,
-  choices: Record<string, DesignChoices>
-): { value: string | number; from?: string }[] {
-  if (!expression) return [];
-  switch (expression.type) {
-    case 'Literal':
-      return typeof expression.value === 'string' || typeof expression.value === 'number'
-        ? [{ value: expression.value }]
-        : [];
-    case 'TemplateLiteral': {
-      const cooked = expression.quasis?.[0]?.value?.cooked;
-      return expression.expressions?.length === 0 && cooked !== undefined
-        ? [{ value: cooked }]
-        : [];
-    }
-    case 'ConditionalExpression':
-      return [
-        ...possibleValues(expression.consequent, choices),
-        ...possibleValues(expression.alternate, choices)
-      ];
-    case 'LogicalExpression':
-      return [
-        ...possibleValues(expression.left, choices),
-        ...possibleValues(expression.right, choices)
-      ];
-    case 'Identifier':
-    case 'MemberExpression': {
-      // A design constant, or a field of one, such as look.radius.
-      const path: string[] = [];
-      let at: Expression | undefined = expression;
-      while (at?.type === 'MemberExpression') {
-        const key =
-          !at.computed && at.property?.type === 'Identifier'
-            ? at.property.name
-            : at.property?.type === 'Literal'
-              ? String(at.property.value)
-              : undefined;
-        if (key === undefined) return [];
-        path.unshift(key);
-        at = at.object;
-      }
-      if (at?.type !== 'Identifier' || !at.name) return [];
-      let found: DesignChoices | undefined = choices[at.name];
-      for (const key of path) found = found && 'fields' in found ? found.fields[key] : undefined;
-      const from = [at.name, ...path].join('.');
-      return found && 'values' in found ? found.values.map((value) => ({ value, from })) : [];
-    }
-    default:
-      return [];
-  }
-}
-
 const layouts = ['row', 'column', 'free'];
 const named = (scale: object, numeric = true) => ({ names: Object.keys(scale), numeric });
 type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
 
-const nodeProps: PropNames = {
-  value: null,
-  layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
-  shape: named({ box: 0, card: 0, plain: 0 } satisfies Record<NodeShape, 0>, false),
-  fill: null,
-  stroke: null,
-  opacity: null,
-  color: null,
-  font: named({ sans: 0, serif: 0, mono: 0 }, false),
-  size: named(namedSizes),
-  weight: named({ normal: 0, bold: 0 }, false),
-  padding: named(spacings),
-  gap: named(spacings),
-  align: named(alignments, false),
-  justify: named(justifications, false),
-  radius: named(radii, false),
-  strokeWidth: named(strokeWidths),
-  minSize: named(minSizes),
-  children: null,
-  key: null,
-  constraints: null,
-  flow: named({ x: 0, y: 0 }, false),
-  form: named(Object.fromEntries(forms.map((name) => [name, name])), false),
-  curve: named({ straight: 0, curved: 0 }, false),
-  layoutSeed: null
-};
-
-/** The props each library component takes, with the names a prop's text value can be, if limited. */
+/**
+ * The props each library component takes in markup: what is drawn and how it is arranged, and the
+ * tags that make its kind. How it looks is the design's (see design.server.ts), so none are props.
+ */
 export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
-  Node: nodeProps,
-  Pointed: Object.fromEntries(
-    (
-      [
-        'shape',
-        'fill',
-        'stroke',
-        'opacity',
-        'color',
-        'font',
-        'size',
-        'weight',
-        'padding',
-        'radius',
-        'strokeWidth'
-      ] as const
-    ).map((name) => [name, nodeProps[name]])
-  ),
+  Node: {
+    value: null,
+    layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
+    tags: null,
+    children: null,
+    key: null,
+    constraints: null,
+    flow: named({ x: 0, y: 0 }, false),
+    form: named(Object.fromEntries(forms.map((name) => [name, name])), false),
+    curve: named({ straight: 0, curved: 0 }, false),
+    layoutSeed: null
+  },
+  Pointed: { tags: null },
   Link: {
     from: null,
     to: null,
     directed: null,
-    dashed: null,
     label: null,
-    stroke: null,
-    strokeWidth: named(strokeWidths),
+    tags: null,
     curve: named({ straight: 0, curved: 0 }, false),
     bend: null
   }
 };
 
+/** Props that set a look, which belongs to the design, not the markup. */
+const designProps = new Set([
+  'shape',
+  'fill',
+  'stroke',
+  'opacity',
+  'color',
+  'font',
+  'size',
+  'weight',
+  'padding',
+  'gap',
+  'align',
+  'justify',
+  'radius',
+  'strokeWidth',
+  'minSize',
+  'dashed'
+]);
+
 /**
  * Reject a prop a library component does not take, or a written value it cannot use, such as
- * shape="circle", which would otherwise be ignored without a word.
+ * layout="grid", which would otherwise be ignored without a word.
  */
 function checkProps(
   component: 'Node' | 'Link' | 'Pointed',
   attributes: readonly Attribute[],
   start: number,
   source: string,
-  problems: InvalidSvelteSourceError[],
-  choices: Record<string, DesignChoices>
+  problems: InvalidSvelteSourceError[]
 ): void {
   const props = libraryProps[component];
   for (const attribute of attributes) {
@@ -914,9 +832,11 @@ function checkProps(
     if (!(attribute.name in props)) {
       problems.push(
         new InvalidSvelteSourceError(
-          `<${component}> has no prop ${attribute.name}. Its props are ${Object.keys(props)
-            .filter((name) => name !== 'children')
-            .join(', ')}.`,
+          designProps.has(attribute.name)
+            ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup. Say what the node is with tags, as tags="current", and its look is a variable of that kind.`
+            : `<${component}> has no prop ${attribute.name}. Its props are ${Object.keys(props)
+                .filter((name) => name !== 'children')
+                .join(', ')}.`,
           { code: 'unknown_prop', ...at }
         )
       );
@@ -930,33 +850,119 @@ function checkProps(
     const candidates =
       parts.length !== 1
         ? []
-        : written && part.data !== undefined
-          ? [{ value: part.data, from: undefined }]
-          : part.type === 'MustacheTag'
-            ? possibleValues(part.expression, choices)
+        : written
+          ? [part.data]
+          : part.type === 'MustacheTag' || part.type === 'ExpressionTag'
+            ? possibleValues(part.expression)
             : [];
-    const bad = candidates.find(({ value }) =>
-      typeof value === 'number' ? !allowed.numeric : !allowed.names.includes(value)
+    const bad = candidates.find((value) =>
+      typeof value === 'number' ? !allowed.numeric : !allowed.names.includes(value ?? '')
     );
-    if (!bad) continue;
-    const shown = typeof bad.value === 'string' ? `"${bad.value}"` : String(bad.value);
+    if (bad === undefined) continue;
     const expression = part.expression;
     const what = written
-      ? `${attribute.name}=${shown} is`
-      : `${attribute.name}={${source.slice(expression?.start ?? 0, expression?.end ?? 0)}} can be ${shown}${bad.from ? `, from the design value ${bad.from},` : ''} which is`;
-    const hint =
-      attribute.name === 'shape' && bad.value === 'circle'
-        ? ' For a circle, give a framed node (one with a value, or shape="box") radius="full".'
-        : '';
+      ? `${attribute.name}="${bad}" is`
+      : `${attribute.name}={${source.slice(expression?.start ?? 0, expression?.end ?? 0)}} can be ${JSON.stringify(bad)}, which is`;
     problems.push(
       new InvalidSvelteSourceError(
         `<${component}> ${what} not a value it takes: use ${allowed.names
           .map((name) => `'${name}'`)
-          .join(', ')}${allowed.numeric ? ', or a number in braces' : ''}.${hint}`,
+          .join(', ')}${allowed.numeric ? ', or a number in braces' : ''}.`,
         { code: 'invalid_prop', ...at }
       )
     );
   }
+}
+
+/**
+ * The values an expression in markup can have, where they can be known without running it: a
+ * literal, or either branch of a condition.
+ */
+function possibleValues(expression: Expression | undefined): (string | number)[] {
+  if (!expression) return [];
+  switch (expression.type) {
+    case 'Literal':
+      return typeof expression.value === 'string' || typeof expression.value === 'number'
+        ? [expression.value]
+        : [];
+    case 'TemplateLiteral': {
+      const cooked = expression.quasis?.[0]?.value?.cooked;
+      return expression.expressions?.length === 0 && cooked !== undefined ? [cooked] : [];
+    }
+    case 'ConditionalExpression':
+      return [...possibleValues(expression.consequent), ...possibleValues(expression.alternate)];
+    case 'LogicalExpression':
+      return [...possibleValues(expression.left), ...possibleValues(expression.right)];
+    default:
+      return [];
+  }
+}
+
+/** The most kinds one tag may make, as each tag that depends on the state doubles them. */
+const maximumKindsPerTag = 16;
+
+/**
+ * The sets of tags a tags prop can give, in order: a name, names separated by spaces, or a list
+ * whose items are names, `condition && 'name'`, or `condition ? 'name' : 'other'` (either may be
+ * null). Any other expression is a problem, as the design needs every kind before the view runs.
+ */
+function tagSets(
+  attribute: Attribute | undefined,
+  source: string
+): { sets: string[][] } | { problem: string } {
+  if (!attribute) return { sets: [[]] };
+  const parts = Array.isArray(attribute.value) ? attribute.value : [];
+  const [part] = parts;
+  const literal = (expression: Expression | undefined): string | null | undefined =>
+    expression?.type === 'Literal'
+      ? typeof expression.value === 'string'
+        ? expression.value
+        : expression.value === null || expression.value === false
+          ? null
+          : undefined
+      : expression?.type === 'Identifier' && expression.name === 'undefined'
+        ? null
+        : undefined;
+  const words = (text: string) => text.split(/\s+/u).filter(Boolean);
+  if (parts.length === 1 && part.type === 'Text') return { sets: [words(part.data ?? '')] };
+  const expression =
+    parts.length === 1 && (part.type === 'MustacheTag' || part.type === 'ExpressionTag')
+      ? part.expression
+      : undefined;
+  const items =
+    expression?.type === 'ArrayExpression'
+      ? ((expression as { elements?: Expression[] }).elements ?? [])
+      : expression
+        ? [expression]
+        : [];
+  // Each item's alternatives: one name, a name or none, or one of several.
+  const alternatives: (string | null)[][] = [];
+  for (const item of items) {
+    const fixed = literal(item);
+    if (typeof fixed === 'string') alternatives.push(...words(fixed).map((word) => [word]));
+    else if (item?.type === 'LogicalExpression' && typeof literal(item.right) === 'string')
+      alternatives.push([literal(item.right) as string, null]);
+    else if (
+      item?.type === 'ConditionalExpression' &&
+      literal(item.consequent) !== undefined &&
+      literal(item.alternate) !== undefined
+    )
+      alternatives.push([literal(item.consequent) ?? null, literal(item.alternate) ?? null]);
+    else
+      return {
+        problem: `tags={${source.slice(item?.start ?? 0, item?.end ?? 0)}} cannot be read before the view runs: write each tag as a name, as 'current', a name the state decides on, as found && 'found', or a choice, as found ? 'found' : 'searching'.`
+      };
+  }
+  let sets: string[][] = [[]];
+  for (const options of alternatives)
+    sets = sets.flatMap((set) =>
+      options.map((option) => (option === null ? set : [...set, option]))
+    );
+  if (sets.length > maximumKindsPerTag)
+    return {
+      problem: `These tags make ${sets.length} kinds of node, more than ${maximumKindsPerTag}: give fewer tags that depend on the state.`
+    };
+  return { sets };
 }
 
 /** Template markup other than <Node> and <Link> that a view cannot use, by its parsed type. */
@@ -974,39 +980,48 @@ const unsupportedMarkup: Record<string, string> = {
 };
 
 /**
- * Tag every <Node> and <Link> in the view with the line and column (both from 1) of its tag in the
- * authored source, as the hidden prop __ref, so a rendered node or link can be traced back to the
- * markup that drew it when a participant selects it for feedback. A <Node> with links among its
- * children is also marked __links, so it lays them out; links at the top of the view mark the root. The prop goes on the tag's own line, so line numbers are unchanged.
+ * Tag every <Node>, <Pointed>, and <Link> in the view with the view it is in (root outside one), as
+ * the hidden prop __view, which with its tags gives its kind; and every <Node> and <Link> with the
+ * line and column (both from 1) of its tag in the authored source, as __ref, so a rendered node or
+ * link can be traced back to the markup that drew it when a participant selects it for feedback. A
+ * <Node> with links among its children is also marked __links, so it lays them out. The props go
+ * on the tag's own line, so line numbers are unchanged. Gives every kind of node the view has.
  */
 function withNodeRefs(
   svelteSource: string,
   ast: { html?: unknown; css?: { start: number } | null },
   source: string,
-  choices: Record<string, DesignChoices>,
   /** The root <Node> tags of components, by where they start, with the component each roots. */
   roots: ReadonlyMap<number, string>,
   /** The <Node> tags showing their component's own value, by where they start, with its type. */
   valueTypes: ReadonlyMap<number, string>
-): { insertions: Insertion[]; problems: InvalidSvelteSourceError[] } {
+): { insertions: Insertion[]; problems: InvalidSvelteSourceError[]; kinds: DesignKind[] } {
   const problems: InvalidSvelteSourceError[] = [];
   type Tag = {
     type?: string;
     name?: string;
     start?: number;
     attributes?: Attribute[];
+    children?: (Tag & { data?: string })[];
+    expression?: { name?: string };
   };
-  const tags: { start: number; name: string; links: boolean }[] = [];
+  type Entry = { start: number; name: string; links: boolean; view: string; tag: Tag };
+  const tags: Entry[] = [];
   const reject = (message: string, code: string, start: number | undefined) =>
     problems.push(
       new InvalidSvelteSourceError(message, { code, start: sourcePosition(source, start ?? 0) })
     );
   // Each <Link> belongs to the nearest <Node> around it, which then lays out with links. Text
   // belongs inside a node or a snippet, where a node draws it, so participants can select it.
-  const walk = (value: unknown, around: { links: boolean } | undefined, inNode: boolean): void => {
+  const walk = (
+    value: unknown,
+    around: { links: boolean } | undefined,
+    inNode: boolean,
+    view: string
+  ): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      for (const part of value) walk(part, around, inNode);
+      for (const part of value) walk(part, around, inNode, view);
       return;
     }
     const tag = value as Tag & Record<string, unknown> & { data?: string };
@@ -1018,7 +1033,7 @@ function withNodeRefs(
     if (element || special) {
       reject(
         element
-          ? `<${tag.name}> is not allowed: draw everything with <Node> and <Link>, setting their props for style, such as <Node size="small" color="neutral">…</Node> instead of <small>.`
+          ? `<${tag.name}> is not allowed: draw everything with <Node> and <Link>, giving a node tags to say what it is, such as <Node tags="caption">…</Node>, and the design gives each kind its look.`
           : `${unsupportedMarkup[tag.type as string]} is not allowed: draw everything with <Node> and <Link>.`,
         'view_markup',
         tag.start
@@ -1027,7 +1042,7 @@ function withNodeRefs(
     }
     if (!inNode && ((tag.type === 'Text' && tag.data?.trim()) || tag.type === 'MustacheTag')) {
       reject(
-        'Text outside a <Node> cannot be selected or styled; put it in a node, such as <Node>Linear search</Node>.',
+        'Text outside a <Node> cannot be selected or given a look; put it in a node, such as <Node>Linear search</Node>.',
         'view_text',
         // Point at the text itself, not the whitespace before it.
         (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0)
@@ -1049,11 +1064,10 @@ function withNodeRefs(
           tag.attributes ?? [],
           tag.start,
           source,
-          problems,
-          choices
+          problems
         );
-      const entry = { start: tag.start, name: tag.name as string, links: false };
-      if (tag.name !== 'Pointed') tags.push(entry);
+      const entry = { start: tag.start, name: tag.name as string, links: false, view, tag };
+      tags.push(entry);
       if (tag.name === 'Link') {
         if (around) around.links = true;
         // In a view, as of an edge, it joins the children of the node the view is rendered in.
@@ -1064,37 +1078,85 @@ function withNodeRefs(
             tag.start
           );
       }
-      walk(tag.children, tag.name === 'Node' ? entry : around, true);
+      walk(tag.children, tag.name === 'Node' ? entry : around, true, view);
       return;
     }
+    const snippet = tag.type === 'SnippetBlock' ? tag.expression?.name : undefined;
     const nested = inNode || tag.type === 'SnippetBlock';
     for (const [key, child] of Object.entries(tag))
       if (key !== 'attributes' && key !== 'parent' && key !== 'metadata')
-        walk(child, around, nested);
+        walk(child, around, nested, snippet ?? view);
   };
   if (ast.css)
     reject(
-      'Views cannot have a <style>: style nodes with their props, such as fill, stroke, radius, padding, font, and size, and leave the rest unset so presentations vary.',
+      'Views cannot have a <style>: give nodes tags to say what they are, and the design gives each kind of node its look.',
       'view_style',
       ast.css.start
     );
-  walk(ast.html, undefined, false);
-  const insertions = tags.map(({ start, name, links }): Insertion => {
+  walk(ast.html, undefined, false, 'root');
+  // What a node is says which props its kind has: one that arranges its children has a layout's.
+  const roleOf = ({ name, links, tag }: Entry): KindRole => {
+    if (name === 'Pointed') return 'pointed';
+    if (name === 'Link') return 'link';
+    const attributes = tag.attributes ?? [];
+    const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
+    const children = (tag.children ?? []).filter(
+      (child) => !(child.type === 'Text' && !child.data?.trim())
+    );
+    if (has('layout') || links || (children.length === 1 && children[0].type === 'EachBlock'))
+      return 'container';
+    if (has('value') || !children.length) return 'value';
+    return 'text';
+  };
+  // An untagged <Pointed> or <Link> is of its own kind, apart from the untagged nodes around it.
+  const untagged = (role: KindRole): string[] =>
+    role === 'pointed' ? ['pointed'] : role === 'link' ? ['link'] : [];
+  // A kind several roles share takes the plainest look, and every prop any of them has.
+  const plainest: KindRole[] = ['container', 'text', 'value', 'pointed', 'link'];
+  const kinds = new Map<string, KindRole>();
+  for (const entry of tags) {
+    const read = tagSets(
+      entry.tag.attributes?.find((attribute) => attribute.name === 'tags'),
+      source
+    );
+    if ('problem' in read) {
+      reject(read.problem, 'view_tags', entry.start);
+      continue;
+    }
+    const role = roleOf(entry);
+    for (const set of read.sets) {
+      const key = kindKey(entry.view, set.length ? set : untagged(role));
+      const known = kinds.get(key);
+      const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
+      if (known && apart(known) !== apart(role))
+        reject(
+          `${key} is drawn by a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and by another kind of tag; give one of them a tag of its own.`,
+          'view_tags',
+          entry.start
+        );
+      kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
+    }
+  }
+  const insertions = tags.map(({ start, name, links, view }): Insertion => {
     const { line, column } = sourcePosition(source, start);
     const root = roots.get(start);
     const type = valueTypes.get(start);
+    const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
     return {
       at: start + name.length + 1,
-      text: ` __ref="${line}:${column + 1}"${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
-  return { insertions, problems };
+  return {
+    insertions,
+    problems,
+    kinds: [...kinds].map(([key, role]) => ({ key, role }))
+  };
 }
 
 /**
- * Check the view's components: their types are domain types, their names are free (or their own
- * type's, making them its only view), and they read only their value, design values, and other
- * components, never the input or algorithm's variables. Gives each component's type.
+ * Check the view's components: their types are domain types, their names are free, and they read
+ * only their value and other components, never the input or algorithm's variables. Gives each component's type.
  */
 function checkComponents(
   found: ReturnType<typeof findComponents>['components'],
@@ -1125,7 +1187,7 @@ function checkComponents(
     const state = [...readsOf(node)].find((read) => stateNames.includes(read));
     if (state && !pointers.has(name))
       throw new InvalidSvelteSourceError(
-        `${name} reads ${state}, an input or algorithm variable; a component reads only its value and design values. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
+        `${name} reads ${state}, an input or algorithm variable; a component reads only its value and other views. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
         at
       );
     if (pointers.has(name) && !domain.atoms[type]?.index && domain.structures[type]?.kind !== 'ref')
@@ -1258,70 +1320,6 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
   for (const [key, child] of Object.entries(node)) {
     if (key !== 'parent' && key !== 'metadata') visit(child, check);
   }
-}
-
-/**
- * The page frame from the design value `frame`: absent, a ratio such as '4:3', or an object with any
- * of ratio, justify, align, and padding. Unset justify and align come from the drawn defaults.
- */
-/** Where the design block declares a design value, such as frame. */
-function designAt(prepared: PreparedComponent, name: string) {
-  const block = prepared.design;
-  const found = block && new RegExp(`\\bconst\\s+${name}\\b`, 'u').exec(block.body);
-  return found && block ? sourcePosition(prepared.source, block.offset + found.index) : undefined;
-}
-
-/** Run a check of a design value, placing any error it raises at the value's declaration. */
-function located<T>(check: () => T, start: ReturnType<typeof designAt>): T {
-  try {
-    return check();
-  } catch (cause) {
-    if (!(cause instanceof InvalidSvelteSourceError) || cause.line !== undefined) throw cause;
-    throw new InvalidSvelteSourceError(cause.message, { code: 'design_value', start });
-  }
-}
-
-function frameSettings(value: unknown): FrameSettings {
-  const given: Record<string, unknown> =
-    value === undefined
-      ? {}
-      : typeof value === 'string'
-        ? { ratio: value }
-        : value !== null && typeof value === 'object' && !Array.isArray(value)
-          ? (value as Record<string, unknown>)
-          : { ratio: value };
-  const choice = (key: string, allowed: object, fallback?: string) => {
-    const setting = given[key] ?? fallback;
-    if (setting === undefined || (typeof setting === 'string' && Object.hasOwn(allowed, setting)))
-      return setting;
-    throw new InvalidSvelteSourceError(
-      `The design value frame.${key} must be one of ${Object.keys(allowed)
-        .map((name) => `"${name}"`)
-        .join(', ')}.`
-    );
-  };
-  // The frame arranges its top-level nodes in a column or row; a free arrangement, with its
-  // relations and seed, belongs in a node.
-  if (given.layout === 'free' || given.constraints !== undefined || given.layoutSeed !== undefined)
-    throw new InvalidSvelteSourceError(
-      'The frame arranges the top-level nodes in a column or row. To place nodes freely, relate them, or join them with links, put them in a <Node layout="free"> and give that node its constraints and layoutSeed.'
-    );
-  const settings = ['ratio', 'justify', 'align', 'padding', 'layout'];
-  const unknown = Object.keys(given).find((key) => !settings.includes(key));
-  if (unknown)
-    throw new InvalidSvelteSourceError(
-      `The design value frame has no setting ${unknown}; use ${settings.join(', ')}.`
-    );
-  const padding = given.padding ?? 'large';
-  if (!(typeof padding === 'number' && Number.isFinite(padding)))
-    choice('padding', spacings, 'large');
-  return {
-    ratio: choice('ratio', frameRatios, '16:9') as FrameSettings['ratio'],
-    justify: choice('justify', justifications) as FrameSettings['justify'],
-    align: choice('align', alignments) as FrameSettings['align'],
-    padding: padding as FrameSettings['padding'],
-    layout: choice('layout', { column: 1, row: 1 }) as FrameSettings['layout']
-  };
 }
 
 /** The names {@render} tags call, as in {@render Int(value)}, and where each tag starts. */

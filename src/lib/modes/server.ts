@@ -2,7 +2,7 @@
 
 import { modeCatalog } from './catalog';
 import type {
-  DesignDraw,
+  DesignValues,
   VisualizationMode,
   RenderablePresentation,
   VariantRequest
@@ -25,11 +25,13 @@ export type ModeBuildResult =
         html: string;
         javascript: string;
         labels: string[];
-        // Aligned modes: the master trace's identity, the master index of each kept step, and design values.
+        // Aligned modes: the master trace's identity and the master index of each kept step.
         masterSignature?: string;
         masterSteps?: number[];
-        parameters?: Record<string, unknown>;
-        draws?: DesignDraw[];
+        // Modes with a design space: the variant, where each value came from, and each type's views.
+        variant?: DesignValues;
+        origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
+        views?: Record<string, string[]>;
       };
     }
   | {
@@ -41,7 +43,7 @@ export type ModeBuildResult =
       failureKind: 'source' | 'infrastructure';
     };
 
-/** One presentation to build: the seed that places its layouts, and the values it starts from. */
+/** One presentation to build: the seed that places its layouts and randomises, and the variant it starts from. */
 export type BuildRequest = { seed: number; variant?: VariantRequest };
 
 export type SourceBatchBuilder = (

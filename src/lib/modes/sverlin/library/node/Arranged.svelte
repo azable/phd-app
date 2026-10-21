@@ -9,7 +9,6 @@
 
   import {
     arrangementParentContext,
-    defaultsContext,
     layoutMemoryContext,
     provideArrangementParent,
     seedContext
@@ -24,8 +23,6 @@
     type Template
   } from './arrange';
   import type { Form } from './forms';
-  import { paletteColor } from './palette';
-  import { measure, spacings, strokeWidths } from './scales';
   import type { Align, Spacing } from './props';
 
   let {
@@ -58,19 +55,21 @@
     children?: Snippet;
   } = $props();
 
-  /** How a link component asked to be drawn. */
-  type LinkStyle = { dashed: boolean; label?: string; stroke?: string; strokeWidth?: string };
-  const colourOf = (style?: LinkStyle) =>
-    style?.stroke ? (paletteColor(style.stroke, 'stroke') ?? 'var(--sv-muted)') : 'var(--sv-muted)';
-  // Unset, a link takes the presentation's drawn width.
-  const fine = `${defaultsContext().link.strokeWidth}px`;
+  /** How a link component is drawn: its kind's look, as CSS (see Link.svelte). */
+  type LinkStyle = {
+    dashed: boolean;
+    label?: string;
+    stroke?: string;
+    strokeWidth?: string;
+    labelColour?: string;
+    opacity?: string;
+    shown: boolean;
+  };
+  // A link drawn by no <Link>, as a relation's, is a fine muted line.
+  const colourOf = (style?: LinkStyle) => style?.stroke ?? 'var(--sv-muted)';
   const widthOf = (style?: LinkStyle) => {
-    const width = style?.strokeWidth;
-    if (!width) return fine;
-    const pixels = Number(width);
-    return Number.isFinite(pixels)
-      ? `${Math.min(Math.max(pixels, 0.5), 12)}px`
-      : (strokeWidths[width as keyof typeof strokeWidths] ?? fine);
+    const pixels = Number(style?.strokeWidth);
+    return Number.isFinite(pixels) && style?.strokeWidth ? `${pixels}px` : '2px';
   };
 
   const seed = seedContext();
@@ -184,7 +183,10 @@
                   dashed: dataset.dashed === 'true',
                   label: dataset.label,
                   stroke: dataset.stroke,
-                  strokeWidth: dataset.strokeWidth
+                  strokeWidth: dataset.strokeWidth,
+                  labelColour: dataset.labelColour,
+                  opacity: dataset.opacity,
+                  shown: dataset.shown !== 'false'
                 }
               ]
             ]
@@ -195,7 +197,7 @@
     const present = new Set(specs.map(({ id }) => id));
     const drawn = (edge: ArrangeEdge) => edge.id !== undefined && present.has(edge.id);
     const fontSize = parseFloat(getComputedStyle(host).fontSize) || 16;
-    const space = parseFloat(measure(spacings, gap) ?? '0') * fontSize;
+    const space = gap * fontSize;
     const boxes = elements.map((element, index) => ({
       // A child without a key is known by its node id, which is the same at every step.
       key: element.dataset.svKey ?? element.dataset.svNode ?? `#${index}`,
@@ -348,6 +350,7 @@
           data-sv-edge-id={edge.id}
           style:stroke={colour}
           style:stroke-width={widthOf(style)}
+          style:opacity={style?.shown === false ? 0 : style?.opacity}
           stroke-dasharray={style?.dashed ? '6 4' : undefined}
           marker-end={edge.directed ? `url(#${markerId}-${colours.indexOf(colour)})` : undefined}
         />
@@ -362,7 +365,13 @@
           />
         {/if}
         {#if style?.label}
-          <text class="label" x={edge.middle.x} y={edge.middle.y}>{style.label}</text>
+          <text
+            class="label"
+            x={edge.middle.x}
+            y={edge.middle.y}
+            style:fill={style.labelColour}
+            style:opacity={style.shown === false ? 0 : style.opacity}>{style.label}</text
+          >
         {/if}
       {/each}
     </svg>

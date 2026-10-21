@@ -1,8 +1,8 @@
 <!--
   One node of a visualization: a primitive `value`, or children content, which makes it a
   collection when it is one {#each} over a collection. A layout arranges its children, so
-  annotations such as an index or a pointer are simply nodes beside a value. A shape only picks
-  which of the library's looks a node takes; every visual property is also a prop of its own.
+  annotations such as an index or a pointer are simply nodes beside a value. Its look is the
+  variant's values for its kind, its view and tags (see design.ts), not props of its own.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -14,7 +14,7 @@
   import ItemEnd from './ItemEnd.svelte';
   import Pointing from './Pointing.svelte';
   import {
-    defaultsContext,
+    designContext,
     copyContext,
     elementOf,
     endSlotContext,
@@ -41,53 +41,14 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import { paletteColor, paletteName } from './palette';
-  import {
-    alignments,
-    justifications,
-    measure,
-    minSizes,
-    namedSizes,
-    radii,
-    spacings,
-    strokeWidths
-  } from './scales';
-  import type {
-    Align,
-    Justify,
-    Layout,
-    MinSize,
-    NodeColor,
-    NodeFont,
-    NodeShape,
-    NodeSize,
-    NodeStroke,
-    Primitive,
-    Radius,
-    ShapeDefaults,
-    Spacing,
-    StrokeWidth,
-    Weight
-  } from './props';
+  import { activeTags, colourCss, kindKey, paintProps } from './design';
+  import { alignments, justifications } from './scales';
+  import type { Align, Justify, Layout, Primitive } from './props';
 
   let {
     value,
     layout,
-    shape,
-    fill,
-    stroke,
-    opacity,
-    color,
-    font,
-    size,
-    weight,
-    padding,
-    gap,
-    align,
-    justify,
-    radius,
-    strokeWidth,
-    minSize,
+    tags,
     children,
     key,
     constraints,
@@ -95,6 +56,8 @@
     form,
     curve,
     layoutSeed,
+    __view = 'root',
+    __over,
     __ref,
     __id,
     __type,
@@ -110,34 +73,11 @@
     value?: Primitive;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /** Which look: 'box' for a value, 'plain' for content and collections, unless given. */
-    shape?: NodeShape;
-    /** Background colour: a palette name such as 'amber' (a light shade), or any CSS colour. */
-    fill?: NodeColor;
-    /** Stroke colour: a palette name (a strong shade), any CSS colour, or 'none' or false for no stroke. */
-    stroke?: NodeStroke;
-    /** From 0 (invisible) to 1 (default). */
-    opacity?: number;
-    /** Text colour: a palette name ('neutral' is muted), or any CSS colour. */
-    color?: NodeColor;
-    /** Font family; nested nodes inherit it unless they set their own. */
-    font?: NodeFont;
-    /** A named size, or a size in rem such as 1.2; nested nodes inherit it. */
-    size?: NodeSize | number;
-    weight?: Weight;
-    /** Space inside the frame: a named spacing, or a number of em. */
-    padding?: Spacing;
-    /** Space between arranged items or children. */
-    gap?: Spacing;
-    /** How arranged items line up across the layout direction. */
-    align?: Align;
-    /** How arranged items spread along the layout direction. */
-    justify?: Justify;
-    radius?: Radius;
-    /** Stroke width: 'none', 'thin', 'thick', or a number of pixels. */
-    strokeWidth?: StrokeWidth;
-    /** The smallest width and height. */
-    minSize?: MinSize;
+    /**
+     * Names saying what this node is, which with its view make its kind and so its look: a name,
+     * names separated by spaces, or a list, as ['current', found && 'found'].
+     */
+    tags?: string | readonly (string | false | null | undefined)[];
     children?: Snippet;
     /** A name its parent's links and relations refer to this node by. */
     key?: string;
@@ -160,6 +100,13 @@
      * layout used, so a layout the participant liked can be kept while everything else varies.
      */
     layoutSeed?: number;
+    /** Internal: the view this node is in, added by the compiler; root outside one. */
+    __view?: string;
+    /**
+     * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
+     * shows only where it is, and its other props hold in every slot, so slots keep one size.
+     */
+    __over?: { kind: string; active: boolean };
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
     /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
@@ -182,8 +129,11 @@
   } = $props();
 
   const types = typeContext();
-  // The library's defaults fill in whatever this node's own props leave unset.
-  const defaults = defaultsContext();
+  // This node's look: the variant's values for its kind, or for a pointer drawing it again.
+  const design = designContext();
+  const kind = $derived(kindKey(__view, activeTags(tags)));
+  const look = (prop: string): unknown =>
+    design[`${__over && (__over.active || !paintProps.has(prop)) ? __over.kind : kind}.${prop}`];
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -284,21 +234,7 @@
   const given = $derived({
     value,
     layout,
-    shape,
-    fill,
-    stroke,
-    opacity,
-    color,
-    font,
-    size,
-    weight,
-    padding,
-    gap,
-    align,
-    justify,
-    radius,
-    strokeWidth,
-    minSize,
+    tags,
     children,
     key,
     constraints,
@@ -306,6 +242,7 @@
     form,
     curve,
     layoutSeed,
+    __view,
     __ref,
     __type,
     __links,
@@ -314,15 +251,12 @@
   });
 
   const collection = $derived(__items !== undefined);
-  const resolvedShape = $derived(
-    shape ?? (collection ? defaults.collection.shape : children ? 'plain' : 'box')
-  );
   // A collection runs as a row, or across the collection around it, as rows
   // in a column do. Links need positions to join, so a node with links and no layout is laid out
   // freely.
   const around = collectionLayoutContext();
   const collectionLayout = $derived(
-    around === 'row' ? 'column' : around === 'column' ? 'row' : defaults.collection.layout
+    around === 'row' ? 'column' : around === 'column' ? 'row' : 'row'
   );
   const arrangement = $derived(
     layout ?? (collection ? collectionLayout : __links ? 'free' : undefined)
@@ -331,42 +265,20 @@
     if (arrangement) provideSequence(arrangement !== 'free');
     if (collection) provideCollectionLayout(arrangement);
   });
-  // A plain node has no look: no border, padding, or fill unless its props give them.
-  const look = $derived.by((): Partial<ShapeDefaults> => {
-    if (resolvedShape === 'plain') return {};
-    const base = defaults[resolvedShape];
-    // A framed group keeps the frame but not a cell's text size or weight.
-    return arrangement ? { ...base, scale: undefined, weight: undefined } : base;
-  });
-  const fontSize = $derived(
-    typeof size === 'number' && Number.isFinite(size)
-      ? `${Math.min(Math.max(size, 0.5), 4)}rem`
-      : size !== undefined
-        ? `${namedSizes[size as NodeSize] ?? 1}rem`
-        : look.scale
-          ? `${look.scale}em`
-          : undefined
-  );
-  const resolvedWeight = $derived(weight ?? look.weight);
-  // stroke="none" or false turns the stroke off whatever its width; otherwise the width
-  // comes from the prop, then the library defaults.
-  const strokeOff = $derived(stroke === 'none' || stroke === false);
-  const strokeColour = $derived(
-    strokeOff ? undefined : paletteColor((stroke as NodeColor | undefined) ?? look.stroke, 'stroke')
-  );
-  const resolvedStrokeWidth = $derived.by(() => {
-    const width = strokeOff ? 'none' : (strokeWidth ?? look.strokeWidth ?? 'none');
-    return typeof width === 'number'
-      ? Number.isFinite(width)
-        ? `${Math.min(Math.max(width, 0), 20)}px`
-        : '0'
-      : strokeWidths[width];
-  });
-  const resolvedAlign = $derived(
-    align ?? (arrangement === 'column' ? defaults.align.column : defaults.align.row)
-  );
+  const measured = (prop: string, unit: string) => {
+    const setting = look(prop);
+    return typeof setting === 'number' ? `${setting}${unit}` : undefined;
+  };
+  const strokeColour = $derived(colourCss(look('stroke')));
+  const strokeWidth = $derived(strokeColour ? measured('strokeWidth', 'px') : '0');
+  const font = $derived(look('font'));
+  const weight = $derived(look('weight'));
+  const gap = $derived((look('gap') as number | undefined) ?? 0);
+  const resolvedAlign = $derived((look('align') as Align | undefined) ?? 'center');
   const alignment = $derived(alignments[resolvedAlign]);
-  const justification = $derived(justifications[justify ?? 'start']);
+  const justification = $derived(
+    justifications[(look('justify') as Justify | undefined) ?? 'start']
+  );
   // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
   // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
   const solved = $derived<Template | undefined>(
@@ -390,109 +302,108 @@
   <Node {...given} {__text} __ref={undefined} />
 {/snippet}
 
-{#if eachItem && eachItem.index === 0 && inSequence}
-  {#each itemEnds.before as end (end)}
-    <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-  {/each}
-{/if}
-{#if atEnd !== undefined}
-  {#if pointers.length}
-    <Pointing {pointers} position={atEnd} name={slot ?? ''} draw={pointed} placeholder />
-  {/if}
-{:else if pointers.length}
-  {#if position === 0 && inSequence}
-    {#each before as end (end)}
-      <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-    {/each}
-  {/if}
-  <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
-  {#if position === length - 1 && inSequence}
-    {#each after as end (end)}
-      <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-    {/each}
-  {/if}
+{#if look('shown') === false}
+  <!-- Left out of this variant: drawn nowhere, keeping no room. -->
 {:else}
-  <div
-    class="sv-node {font ?? ''}"
-    data-sv-node={id}
-    data-sv-key={key}
-    data-sv-component={__component}
-    data-sv-slot={slot}
-    data-sv-identity={identity}
-    data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
-    data-sv-type={__type}
-    data-sv-shape={resolvedShape}
-    data-sv-layout={arrangement}
-    data-sv-fill={paletteName(fill)}
-    data-sv-stroke={paletteName(stroke)}
-    data-sv-color={paletteName(color)}
-    class:cell={!arrangement && resolvedShape === 'box' && !__text}
-    class:text={__text}
-    style:font-size={fontSize}
-    style:font-weight={resolvedWeight === undefined
-      ? undefined
-      : resolvedWeight === 'bold'
-        ? 700
-        : 400}
-    style:color={paletteColor(color, 'text')}
-    style:background-color={paletteColor(fill ?? look.fill, 'fill')}
-    style:border-color={strokeColour}
-    style:border-width={resolvedStrokeWidth}
-    style:border-radius={radii[radius ?? look.radius ?? 'none']}
-    style:padding={measure(spacings, padding ?? look.padding)}
-    style:min-width={least(measure(minSizes, minSize), reserved?.width)}
-    style:min-height={least(measure(minSizes, minSize), reserved?.height)}
-    style:opacity={typeof opacity === 'number' && Number.isFinite(opacity)
-      ? Math.min(Math.max(opacity, 0), 1)
-      : undefined}
-  >
-    {#if solved}
-      <Arranged
-        template={solved}
-        align={resolvedAlign}
-        {constraints}
-        {flow}
-        {form}
-        {curve}
-        {layoutSeed}
-        gap={gap ?? defaults.gap}
-        scope={id ?? 'node'}
-      >
-        {@render contents()}
-      </Arranged>
-    {:else if arrangement}
-      <!-- data-sv-collection marks the items of one collection, so the page gives them all the
-           largest size any of them reaches (see assembly/entry.ts) and they line up. -->
-      <div
-        class="items {arrangement}"
-        class:uniform={collection}
-        data-sv-collection={collection ? id : undefined}
-        style:gap={measure(spacings, gap ?? defaults.gap)}
-        style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
-        style:justify-items={collection
-          ? arrangement === 'column'
-            ? alignment
-            : 'center'
-          : undefined}
-        style:justify-content={justification}
-      >
-        {@render contents()}
-      </div>
-    {:else if children}
-      {@render children()}
-    {:else if value !== undefined}
-      <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
-      <span class="value"
-        >{value === null ? '∅' : String(value)}{#if unit}<span class="unit">{unit}</span>{/if}</span
-      >
+  {#if eachItem && eachItem.index === 0 && inSequence}
+    {#each itemEnds.before as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
+  {/if}
+  {#if atEnd !== undefined}
+    {#if pointers.length}
+      <Pointing {pointers} position={atEnd} name={slot ?? ''} draw={pointed} placeholder />
     {/if}
-    <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
-  </div>
-{/if}
-{#if eachItem && eachItem.index === itemLength - 1 && inSequence}
-  {#each itemEnds.after as end (end)}
-    <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-  {/each}
+  {:else if pointers.length}
+    {#if position === 0 && inSequence}
+      {#each before as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
+    {/if}
+    <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
+    {#if position === length - 1 && inSequence}
+      {#each after as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
+    {/if}
+  {:else}
+    <div
+      class="sv-node {typeof font === 'string' ? font : ''}"
+      data-sv-node={id}
+      data-sv-key={key}
+      data-sv-kind={__over?.active ? __over.kind : kind}
+      data-sv-component={__component}
+      data-sv-slot={slot}
+      data-sv-identity={identity}
+      data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
+      data-sv-type={__type}
+      data-sv-layout={arrangement}
+      data-sv-fill={look('fill')}
+      data-sv-stroke={look('stroke')}
+      data-sv-color={look('color')}
+      class:cell={!arrangement && !children && !__text}
+      class:text={__text}
+      style:font-size={measured('size', 'rem')}
+      style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
+      style:color={colourCss(look('color'))}
+      style:background-color={colourCss(look('fill'))}
+      style:border-color={strokeColour}
+      style:border-width={strokeWidth}
+      style:border-radius={measured('radius', 'px')}
+      style:padding={measured('padding', 'em')}
+      style:min-width={least(measured('minSize', 'em'), reserved?.width)}
+      style:min-height={least(measured('minSize', 'em'), reserved?.height)}
+      style:opacity={look('opacity') as number | undefined}
+    >
+      {#if solved}
+        <Arranged
+          template={solved}
+          align={resolvedAlign}
+          {constraints}
+          {flow}
+          {form}
+          {curve}
+          {layoutSeed}
+          {gap}
+          scope={id ?? 'node'}
+        >
+          {@render contents()}
+        </Arranged>
+      {:else if arrangement}
+        <!-- data-sv-collection marks the items of one collection, so the page gives them all the
+             largest size any of them reaches (see assembly/entry.ts) and they line up. -->
+        <div
+          class="items {arrangement}"
+          class:uniform={collection}
+          data-sv-collection={collection ? id : undefined}
+          style:gap={`${gap}em`}
+          style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
+          style:justify-items={collection
+            ? arrangement === 'column'
+              ? alignment
+              : 'center'
+            : undefined}
+          style:justify-content={justification}
+        >
+          {@render contents()}
+        </div>
+      {:else if children}
+        {@render children()}
+      {:else if value !== undefined}
+        <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
+        <span class="value"
+          >{value === null ? '∅' : String(value)}{#if unit}<span class="unit">{unit}</span
+            >{/if}</span
+        >
+      {/if}
+      <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
+    </div>
+  {/if}
+  {#if eachItem && eachItem.index === itemLength - 1 && inSequence}
+    {#each itemEnds.after as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
+  {/if}
 {/if}
 
 <style>

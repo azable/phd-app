@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { drawValue, seededRandom } from './random.server';
+import { keyedRandom, seededRandom } from './random.server';
 
 describe('seeded randomness', () => {
   it('gives neighbouring seeds unrelated draws', () => {
@@ -22,14 +22,9 @@ describe('seeded randomness', () => {
     expect(seededRandom(10, 1)()).not.toBe(values[0]);
   });
 
-  it('maps one random number to each draw function', () => {
-    expect(drawValue('pick', [['a', 'b', 'c']], () => 0.5)).toBe('b');
-    expect(drawValue('int', [1, 3], () => 0.99)).toBe(3);
-    expect(drawValue('real', [2, 4], () => 0.25)).toBe(2.5);
-    expect(drawValue('chance', [0.3], () => 0.2)).toBe(true);
-    expect(() => drawValue('pick', [[]], () => 0)).toThrow(/non-empty array/);
-    expect(() => drawValue('int', [1.5, 3], () => 0)).toThrow(/integers/);
-    expect(() => drawValue('real', [3, 1], () => 0)).toThrow(/minimum ≤ maximum/);
-    expect(() => drawValue('chance', [2], () => 0)).toThrow(/probability from 0 to 1/);
+  it('gives each key its own number for a seed, the same every time', () => {
+    expect(keyedRandom(3, 'views.Int')).toBe(keyedRandom(3, 'views.Int'));
+    expect(keyedRandom(3, 'views.Int')).not.toBe(keyedRandom(3, 'IntCell.fill'));
+    expect(keyedRandom(4, 'views.Int')).not.toBe(keyedRandom(3, 'views.Int'));
   });
 });

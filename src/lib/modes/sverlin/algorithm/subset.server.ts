@@ -11,7 +11,6 @@ import {
   type BlockKind,
   type Span
 } from './block.server';
-import { drawFunctions } from './random.server';
 
 const allowedBinary = new Set(['+', '-', '*', '/', '%', '**', '<', '<=', '>', '>=', '===', '!==']);
 const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
@@ -56,7 +55,7 @@ export function checkSubset(
           );
         break;
       case 'CallExpression':
-        if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name, ancestors);
+        if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name);
         break;
       case 'ReturnStatement':
         if (node.argument) reject(node, 'return stops the algorithm and cannot return a value.');
@@ -186,30 +185,13 @@ export function checkSubset(
     }
     return false;
   };
-  const checkBuiltin = (node: AnyNode, name: string, ancestors: readonly AnyNode[]): void => {
+  const checkBuiltin = (node: AnyNode, name: string): void => {
     if (domainFunctions.has(name)) {
       if (kind !== 'domain')
         reject(node, `${name}() defines a type and belongs in the domain block.`);
     } else if (constructors.has(name)) {
       if (kind !== 'input' && kind !== 'algorithm')
         reject(node, `${name}(...) creates a typed value in the input or algorithm block.`);
-    } else if (drawFunctions.has(name)) {
-      // A draw is the value of a top-level const, or sits inside object and array literals that
-      // make up that value, such as const look = { cells: pick([...]) }.
-      const [, topDeclaration, topDeclarator, ...within] = ancestors;
-      if (
-        kind !== 'design' ||
-        topDeclaration?.type !== 'VariableDeclaration' ||
-        topDeclaration.kind !== 'const' ||
-        topDeclarator?.type !== 'VariableDeclarator' ||
-        !within.every((ancestor) =>
-          ['ObjectExpression', 'Property', 'ArrayExpression'].includes(ancestor.type)
-        )
-      )
-        reject(
-          node,
-          `${name}() is a design draw; use it only in the value of a top-level const in the design block, such as const layout = ${name}(...).`
-        );
     } else {
       reject(
         node,

@@ -1,12 +1,13 @@
 <!--
   In a view of an index type, the element the position points at: the element's own node, drawn
-  with these props over its own, inside whatever layout the view wraps it in. Paint (fill, stroke,
-  colour, opacity) shows only where the pointer is; the rest also applies where it only keeps its
-  room, so every slot has the same size. In an end slot it is a hidden copy of the neighbouring
-  element, with no identity of its own; drawn alone, as when the view is measured, it is empty.
+  in this pointer's kind (its view and tags) over its own, inside whatever layout the view wraps it
+  in. Paint (fill, stroke, colour, opacity) shows only where the pointer is; the rest also applies
+  where it only keeps its room, so every slot has the same size. In an end slot it is a hidden copy
+  of the neighbouring element, with no identity of its own; drawn alone, as when the view is
+  measured, it is empty.
 -->
 <script lang="ts">
-  import type { NodeProps } from './props';
+  import { activeTags, kindKey } from './design';
   import {
     leaveComponentBox,
     pointedContext,
@@ -17,31 +18,23 @@
     provideWrapped
   } from '../type-context';
 
-  let props: Pick<
-    NodeProps,
-    | 'shape'
-    | 'fill'
-    | 'stroke'
-    | 'opacity'
-    | 'color'
-    | 'font'
-    | 'size'
-    | 'weight'
-    | 'padding'
-    | 'radius'
-    | 'strokeWidth'
-  > = $props();
+  let {
+    tags,
+    __view = 'root'
+  }: {
+    /** Names saying what the pointed element is while pointed at, as on a <Node>. */
+    tags?: string | readonly (string | false | null | undefined)[];
+    /** Internal: the view this tag is in, added by the compiler. */
+    __view?: string;
+  } = $props();
 
-  const paint = new Set(['fill', 'stroke', 'opacity', 'color']);
   const pointed = pointedContext();
-  // This pointer's props, under those of the pointers outside it: the pointer written last wins.
-  const own = Object.fromEntries(
-    Object.entries(props).filter(
-      ([name, value]) => value !== undefined && (pointed?.active || !paint.has(name))
-    )
-  );
+  // This pointer's kind, under those of the pointers outside it: the pointer written last wins.
   const merged = {
-    ...own,
+    __over: {
+      kind: kindKey(__view, activeTags(tags, 'pointed')),
+      active: pointed?.active ?? false
+    },
     ...pointed?.outer,
     ...(pointed?.placeholder ? { __id: undefined, __ref: undefined, __slot: undefined } : {})
   };

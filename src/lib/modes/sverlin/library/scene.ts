@@ -2,12 +2,11 @@
  * Scene data: what one step of a presentation draws, as plain data, so render targets can draw it
  * again outside the page. Every node and link is placed in the frame's logical coordinates (pixels
  * of the frame, from its top left corner, whatever the zoom), with its look as the page computed
- * it, library defaults included, and the palette names the view gave, so a target can keep what a
- * colour means. The app checks what the page sends against ../scene.ts.
+ * it, and its kind and the colour names its variant gave, so a target can keep what a colour means. The app checks what the page sends against ../scene.ts.
  */
 
 import { linkSpecOf } from './node/arrange';
-import type { Layout, NodeShape, PaletteColor } from './node/props';
+import type { Layout } from './node/props';
 
 export type ScenePoint = { x: number; y: number };
 export type SceneBox = ScenePoint & { width: number; height: number };
@@ -36,7 +35,8 @@ export type SceneNode = {
   key?: string;
   /** Its atomic type name, if typed. */
   type?: string;
-  shape: NodeShape;
+  /** Its kind of node, as Arrow[current]: what its look is the variant's values for. */
+  kind?: string;
   /** How it arranges its items or children, if it does. */
   layout?: Layout;
   collection?: true;
@@ -49,8 +49,8 @@ export type SceneNode = {
   runs?: SceneText[];
   box: SceneBox;
   look: SceneLook;
-  /** The palette names the view gave its colours, such as 'amber' for the current element. */
-  palette?: { fill?: PaletteColor; stroke?: PaletteColor; color?: PaletteColor };
+  /** The colours its variant gave it, by name, such as 'amber-100' for the current element. */
+  colours?: { fill?: string; stroke?: string; color?: string };
 };
 
 /** One line of one piece of text, as the page laid it out, with its own style. */
@@ -92,7 +92,6 @@ export type SceneStep = {
 export type SceneFrame = { width: number; height: number; background: string };
 
 const round = (value: number) => Math.round(value * 100) / 100;
-const shapes: readonly string[] = ['box', 'card', 'plain'] satisfies NodeShape[];
 const layouts: readonly string[] = ['row', 'column', 'free'] satisfies Layout[];
 const nodeSelector = 'div[data-sv-node]';
 
@@ -201,19 +200,19 @@ function describeNode(
   const value = shown ? (shown.firstChild?.textContent ?? '') : undefined;
   const text = ownText(element);
   const runs = textRuns(element, point, ratio, scale);
-  const palette = Object.fromEntries(
+  const colours = Object.fromEntries(
     (['fill', 'stroke', 'color'] as const).flatMap((use) => {
       const name = dataset[`sv${use[0].toUpperCase()}${use.slice(1)}`];
-      return name ? [[use, name]] : [];
+      return name && name !== 'none' ? [[use, name]] : [];
     })
-  ) as SceneNode['palette'];
+  ) as SceneNode['colours'];
   const parent = element.parentElement?.closest<HTMLElement>(nodeSelector)?.dataset.svNode;
   return {
     id: dataset.svNode ?? '',
     ...(parent ? { parent } : {}),
     ...(dataset.svKey ? { key: dataset.svKey } : {}),
     ...(dataset.svType ? { type: dataset.svType } : {}),
-    shape: (shapes.includes(dataset.svShape ?? '') ? dataset.svShape : 'plain') as NodeShape,
+    ...(dataset.svKind ? { kind: dataset.svKind } : {}),
     ...(layouts.includes(dataset.svLayout ?? '') ? { layout: dataset.svLayout as Layout } : {}),
     ...(element.querySelector(':scope > [data-sv-collection]')
       ? { collection: true as const }
@@ -224,7 +223,7 @@ function describeNode(
     ...(runs.length ? { runs } : {}),
     box,
     look,
-    ...(palette && Object.keys(palette).length ? { palette } : {})
+    ...(colours && Object.keys(colours).length ? { colours } : {})
   };
 }
 

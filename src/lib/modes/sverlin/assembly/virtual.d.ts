@@ -6,7 +6,7 @@ declare module 'virtual:component' {
   export default Main;
 }
 
-/** Each step's recorded values and design values, with atomic types by path under __types. */
+/** Each step's recorded values and the view each type draws, with atomic types by path under __types. */
 declare module 'virtual:trace' {
   const states: Record<string, unknown>[];
   export default states;

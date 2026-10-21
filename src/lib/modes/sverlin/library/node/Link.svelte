@@ -18,18 +18,18 @@
     slotContext,
     typeContext
   } from '../type-context';
-  import type { NodeColor, StrokeWidth } from './props';
+  import { activeTags, colourCss, kindKey } from './design';
+  import { designContext } from '../type-context';
 
   let {
     from,
     to,
     directed = true,
-    dashed = false,
     label,
-    stroke,
-    strokeWidth,
+    tags,
     curve,
     bend,
+    __view = 'root',
     __ref,
     __component,
     __fromPath,
@@ -45,13 +45,10 @@
     to: string | number;
     /** An arrow (true, the default) or a plain line. */
     directed?: boolean;
-    dashed?: boolean;
     /** Text shown along the link, at its middle. */
     label?: string;
-    /** The link's colour: a palette name or any CSS colour; unset, a muted grey. */
-    stroke?: NodeColor;
-    /** 'thin', 'thick', or a number of pixels; unset, a fine line. */
-    strokeWidth?: StrokeWidth;
+    /** Names saying what the link is, which with its view make its kind and so its look. */
+    tags?: string | readonly (string | false | null | undefined)[];
     /** Whether this link runs straight or curves, whatever its arrangement prefers. */
     curve?: 'straight' | 'curved';
     /**
@@ -60,6 +57,8 @@
      * the participant liked can be kept.
      */
     bend?: number;
+    /** Internal: the view this link is in, added by the compiler. */
+    __view?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
@@ -79,11 +78,14 @@
     from: linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt }),
     to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt })
   }));
-  // A link a component draws for an element, as an edge, takes the paint of the root's pointers at
-  // it, as its stroke for the current edge; the pointer written last wins.
-  const pointed = untrack(() => {
+  // The link's look is the variant's values for its kind; one a component draws for an element, as
+  // an edge, takes the stroke of the kind of the root's pointer at it, as for the current edge, the
+  // pointer written last winning.
+  const design = designContext();
+  const kind = kindKey(__view, activeTags(tags, 'link'));
+  const pointer = untrack(() => {
     const element = __component ? elementSlot(slotContext()) : undefined;
-    if (!element) return {};
+    if (!element) return undefined;
     return Object.assign(
       {},
       ...pointersContext()
@@ -93,8 +95,12 @@
         )
         .toSorted((a, b) => a.order - b.order)
         .map((pointer) => pointer.paint?.(pointer.position) ?? {})
-    ) as { stroke?: NodeColor; strokeWidth?: StrokeWidth; dashed?: boolean };
+    ).__kind as string | undefined;
   });
+  const look = (prop: string, over = true) =>
+    design[
+      `${over && pointer && design[`${pointer}.${prop}`] !== undefined ? pointer : kind}.${prop}`
+    ];
   const nodeIds = nodeIdsContext();
   const id = untrack(() =>
     __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined
@@ -108,10 +114,13 @@
   data-from={ends.from}
   data-to={ends.to}
   data-directed={directed ? 'true' : 'false'}
-  data-dashed={(pointed.dashed ?? dashed) ? 'true' : undefined}
+  data-dashed={look('dashed', false) ? 'true' : undefined}
   data-label={label}
-  data-stroke={pointed.stroke ?? stroke}
-  data-stroke-width={pointed.strokeWidth ?? strokeWidth}
+  data-label-colour={colourCss(look('color', false))}
+  data-stroke={colourCss(look('stroke'))}
+  data-stroke-width={look('strokeWidth')}
+  data-shown={look('shown', false) === false ? 'false' : undefined}
+  data-opacity={look('opacity', false)}
   data-curve={curve}
   data-bend={typeof bend === 'number' && Number.isFinite(bend)
     ? Math.min(Math.max(bend, -1), 1)

@@ -1,10 +1,9 @@
 /**
- * CodeMirror markers for what a presentation's seed drew: a mark over each draw call of the design
- * block with, after it, the value each shown presentation drew there; and inside each <Node> tag,
- * a chip for what it left to the seed, its drawn defaults and the layout it arranged, which opens
- * them under the tag as ghost props, written as the view would write them. In an editable editor,
- * clicking a ghost value writes it as a prop.
- * Views a pick could have chosen but no shown presentation did are greyed out.
+ * CodeMirror markers for what a presentation drew: inside each <Node> tag, a chip for the layout it
+ * arranged from the seed, which opens it under the tag as ghost props, written as the view would
+ * write them; in an editable editor, clicking a ghost value writes it as a prop. Views of a type
+ * that no shown presentation's variant chose are greyed out. A presentation built while sources had
+ * design blocks also marks each draw call with the value each shown presentation drew there.
  *
  * @packageDocumentation
  */
@@ -12,7 +11,7 @@
 import { StateEffect, StateField, type EditorState, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 
-import type { DesignDraw } from '$lib/shared/presentations';
+import type { DesignDraw, DesignValues } from '$lib/shared/presentations';
 
 /**
  * One prop a tag left to the seed, such as its layoutSeed, and what each visible presentation drew
@@ -46,9 +45,11 @@ export type DrawnLayout = {
 export type DrawnPresentation = {
   label?: string;
   seed: number;
+  /** Its variant, and the views each type rendered by name could draw. */
+  variant?: DesignValues;
+  views?: Readonly<Record<string, readonly string[]>>;
+  /** The draws of a presentation built while sources had design blocks; none for others. */
   draws: readonly DesignDraw[];
-  /** The design values drawn, which say what a presentation built before draws were kept chose. */
-  parameters?: Readonly<Record<string, unknown>>;
   layouts?: readonly DrawnLayout[];
 };
 
@@ -76,48 +77,33 @@ export type TagGhosts = { at: number; props: GhostProp[] };
 export type UnchosenView = { from: number; to: number; title: string };
 
 /**
- * The views that design picks left out of every shown presentation: each {#snippet} offered by a
- * pick, chosen by none of them, and rendered nowhere else. A presentation built before draws were
- * kept says what it chose in its design values; one that says nothing leaves the pick's views be.
+ * The views no shown presentation drew: each {#snippet} that is one of a type's views, chosen by no
+ * shown presentation's variant, and rendered nowhere by its own name. A presentation that recorded
+ * no variant leaves its views be.
  */
 export function unchosenViews(
   state: EditorState,
   presentations: readonly DrawnPresentation[]
 ): UnchosenView[] {
   const doc = state.doc.toString();
-  const views = snippetBlocks(doc);
-  const draws = presentations.flatMap(({ draws }) => draws);
+  const blocks = snippetBlocks(doc);
   const options = new Map<string, Set<string>>();
-  for (const { key, call, args } of draws) {
-    const [offered] = args;
-    if (call !== 'pick' || !Array.isArray(offered)) continue;
-    const names = options.get(key) ?? new Set<string>();
-    for (const option of offered) if (typeof option === 'string') names.add(option);
-    options.set(key, names);
-  }
-  const chosenBy = (presentation: DrawnPresentation, key: string) =>
-    presentation.draws.find((draw) => draw.key === key)?.value ??
-    key
-      .split('.')
-      .reduce<unknown>(
-        (value, field) => (value as Record<string, unknown> | undefined)?.[field],
-        presentation.parameters
-      );
+  for (const { views = {} } of presentations)
+    for (const [type, names] of Object.entries(views))
+      options.set(type, new Set([...(options.get(type) ?? []), ...names]));
   const renderedElsewhere = (name: string, view: { from: number }) =>
     [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
-      ({ index }) =>
-        doc.slice(view.from, index).trim() !== '{#snippet' &&
-        !draws.some(({ start, end }) => index >= start && index < end)
+      ({ index }) => doc.slice(view.from, index).trim() !== '{#snippet'
     );
   const unchosen = new Map<string, UnchosenView>();
-  for (const [key, names] of options) {
-    const chosen = presentations.map((presentation) => chosenBy(presentation, key));
+  for (const [type, names] of options) {
+    const chosen = presentations.map(({ variant }) => variant?.[`views.${type}`]);
     if (!chosen.every((name) => typeof name === 'string')) continue;
     const picked = [...new Set(chosen)].join(' and ');
     for (const name of names) {
-      const view = views.get(name);
+      const view = blocks.get(name);
       if (!view || chosen.includes(name) || renderedElsewhere(name, view)) continue;
-      unchosen.set(name, { ...view, title: `Not drawn: ${key} picked ${picked}` });
+      unchosen.set(name, { ...view, title: `Not drawn: views.${type} is ${picked}` });
     }
   }
   return [...unchosen.values()].sort((a, b) => a.from - b.from);

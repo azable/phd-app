@@ -24,7 +24,7 @@ import {
   isSverlinPresentation,
   presentationMode,
   presentationStepLabels,
-  variantValues
+  presentationVariant
 } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
@@ -583,11 +583,10 @@ async function runSverlinAssistantTurn(
 ): Promise<ProjectDocument> {
   const chatbot = dependencies.getChatbot(projectSnapshotAt(document).assistantId);
   // The first presentation keeps the viewed variant's values; every attempt builds the same seeds.
-  const viewedDraws = viewedPresentation(
-    document,
-    contextSelection.interactionEventIds ?? []
-  )?.draws;
-  const viewed = viewedDraws ? variantValues(viewedDraws) : undefined;
+  const viewedVariant = presentationVariant(
+    viewedPresentation(document, contextSelection.interactionEventIds ?? [])
+  );
+  const viewed = Object.keys(viewedVariant).length ? viewedVariant : undefined;
   let seeds: readonly number[] | undefined;
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
@@ -635,7 +634,9 @@ async function runSverlinAssistantTurn(
       // the failed candidate when repairing it.
       const { decision } = generation.result;
       let candidate: string | undefined;
-      let variant: { base?: DesignValues; chosen?: DesignValues } = { base: viewed };
+      let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] } = {
+        base: viewed
+      };
       switch (decision.action) {
         case 'respond':
         case 'resample':
@@ -740,7 +741,12 @@ async function runSverlinAssistantTurn(
       }
 
       seeds ??= freshPresentationSeeds(presentationCount);
-      const requests = basedRequests(seeds, variant.base, variant.chosen);
+      const randomised = variant.randomise;
+      const requests = basedRequests(seeds, variant.base, variant.chosen).map((request, index) =>
+        index === 0 && randomised?.length
+          ? { ...request, variant: { ...request.variant, randomise: randomised } }
+          : request
+      );
       const built = await buildCandidateBatch(
         { document: current, candidate, requests, operationId, attempt },
         dependencies
@@ -1848,18 +1854,16 @@ function errorMessage(cause: unknown): string {
 }
 
 /**
- * The values a vary decision builds from: the viewed variant's, less those it asks to randomise,
- * with the values it chose.
+ * The variant a vary decision builds from: the viewed one, with the values it sets, and the
+ * variables it asks to draw afresh.
  */
 function variedValues(
   viewed: DesignValues | undefined,
   decision: SourceDecisionOf<'vary'>
-): { base?: DesignValues; chosen: DesignValues } {
-  const randomised = new Set(decision.randomise);
+): { base?: DesignValues; chosen: DesignValues; randomise: string[] } {
   return {
-    ...(viewed
-      ? { base: Object.fromEntries(Object.entries(viewed).filter(([key]) => !randomised.has(key))) }
-      : {}),
-    chosen: Object.fromEntries(decision.values.map(({ variable, value }) => [variable, value]))
+    ...(viewed ? { base: viewed } : {}),
+    chosen: Object.fromEntries(decision.values.map(({ variable, value }) => [variable, value])),
+    randomise: [...decision.randomise]
   };
 }

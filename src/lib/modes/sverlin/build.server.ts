@@ -1,4 +1,4 @@
-/** Prepare a single component once, then bundle each request's design and steps. */
+/** Prepare a single component once, then bundle each request's variant and steps. */
 
 import {
   bundlePresentation,
@@ -39,8 +39,9 @@ export async function buildBatch(
           labels: bundle.labels,
           masterSignature: bundle.masterSignature,
           masterSteps: bundle.masterSteps,
-          parameters: bundle.parameters,
-          draws: bundle.draws
+          variant: bundle.variant,
+          origins: bundle.origins,
+          views: prepared.design.views
         }
       });
     } catch (cause) {

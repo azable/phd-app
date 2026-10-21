@@ -4,7 +4,7 @@
  * Domain: type definitions. Input: fixed initial state. Design: seeded presentation choices.
  * Algorithm: the yielding steps.
  */
-export type BlockKind = 'domain' | 'input' | 'design' | 'algorithm';
+export type BlockKind = 'domain' | 'input' | 'algorithm';
 
 /** Names the view receives from the application rather than from a block. */
 export const reservedNames: ReadonlySet<string> = new Set(['step', 'seed']);

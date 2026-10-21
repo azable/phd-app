@@ -106,7 +106,7 @@
         new Error('This visualization was built before scene export. Build it again to export it.')
       );
     const request = crypto.randomUUID();
-    const { presentationId, seed, labels, parameters } = presentation;
+    const { presentationId, seed, labels, variant } = presentation;
     return new Promise<SverlinScene>((resolve, reject) => {
       const timeout = setTimeout(
         () => answer(new Error('The visualization took too long to describe its steps.')),
@@ -124,7 +124,7 @@
             format: 'sverlin-scene-v1',
             presentationId,
             seed,
-            ...(parameters ? { parameters } : {}),
+            ...(variant ? { variant } : {}),
             frame: reply.frame,
             steps: reply.steps.map((step, index) => ({ ...step, label: labels[index] }))
           });

@@ -1,4 +1,4 @@
-/** Interpret Sverlin input, design, and algorithm blocks into recorded state and steps. */
+/** Interpret Sverlin input and algorithm blocks into recorded state and steps. */
 
 import type {
   AnyNode,
@@ -21,7 +21,6 @@ import {
   type AtomRegistry,
   type AtomType
 } from './atoms.server';
-import { checkedValue, drawFunctions, drawKeys, drawValue, keyedRandom } from './random.server';
 import {
   AlgorithmError,
   describe,
@@ -105,194 +104,6 @@ export function interpretInput(body: string, domain: DomainRegistry = noDomain):
 }
 
 /**
- * The values a design starts from, by key: chosen values must each name a declaration and lie in
- * its domain; a base variant's values are kept where they still do.
- */
-export type DesignVariant = {
-  chosen?: Readonly<Record<string, unknown>>;
-  base?: Readonly<Record<string, unknown>>;
-};
-
-/**
- * Interpret the design block with the variant's values for its declarations, by key, and keyed
- * draws from the presentation seed for the rest (see random.server.ts). The view's components are
- * in scope by name, so a design value can choose one, as in const Number = pick([NumberText,
- * NumberDots]); the value is the chosen component's name.
- */
-export function interpretDesign(
-  body: string,
-  seed: number,
-  components: readonly string[] = [],
-  variant: DesignVariant = {}
-): TraceState {
-  return interpretDesignDraws(body, seed, components, variant).values;
-}
-
-/**
- * One declaration in the design block and the value it took: its key (see random.server.ts), the
- * declaring function and its evaluated arguments (the domain), the value, where it came from
- * (absent when randomised), and the call's span in the block's body.
- */
-export type DesignDraw = {
-  key: string;
-  call: 'pick' | 'int' | 'real' | 'chance';
-  args: unknown[];
-  value: unknown;
-  origin?: 'chosen' | 'kept';
-} & Span;
-
-/**
- * Interpret the design block as interpretDesign does, also recording each declaration's value. A
- * chosen value outside its declaration's domain, or for no declaration, is an error naming it.
- */
-export function interpretDesignDraws(
-  body: string,
-  seed: number,
-  components: readonly string[] = [],
-  { chosen = {}, base = {} }: DesignVariant = {}
-): { values: TraceState; draws: DesignDraw[] } {
-  const { root, offset } = parseBlock(body, 'design');
-  const keys = drawKeys(root);
-  const declared = new Set(keys.values());
-  const undeclared = Object.keys(chosen).filter((key) => !declared.has(key));
-  if (undeclared.length > 0)
-    throw new AlgorithmError(
-      `The design declares no ${undeclared.join(', ')}; its declarations are ${[...declared].join(', ') || 'none'}.`
-    );
-  const draws: DesignDraw[] = [];
-  const values = new Interpreter(root, offset, {
-    kind: 'design',
-    choose: (node, name, args) => {
-      const key = keys.get(node) ?? '';
-      const [value, origin] = Object.hasOwn(chosen, key)
-        ? [checkedValue(key, name, args, chosen[key]), 'chosen' as const]
-        : Object.hasOwn(base, key) && fits(key, name, args, base[key])
-          ? [base[key], 'kept' as const]
-          : [drawValue(name, args, () => keyedRandom(seed, key)), undefined];
-      draws.push({
-        key,
-        call: name as DesignDraw['call'],
-        args,
-        value,
-        ...(origin ? { origin } : {}),
-        ...offset(node)
-      });
-      return value as Value;
-    },
-    names: components
-  }).bindings().state;
-  return { values, draws };
-}
-
-function fits(key: string, name: string, args: readonly unknown[], value: unknown): boolean {
-  try {
-    checkedValue(key, name, args, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Design values that choose among components, read without drawing: each const whose value is a
- * pick over component names, with those names.
- */
-export function componentChoices(
-  body: string,
-  components: ReadonlySet<string>
-): Record<string, { options: string[]; start: number }> {
-  const { root, offset } = parseBlock(body, 'design');
-  const choices: Record<string, { options: string[]; start: number }> = {};
-  for (const statement of root.body)
-    if (statement.type === 'VariableDeclaration' && statement.kind === 'const')
-      for (const declarator of statement.declarations) {
-        const init = declarator.init;
-        // One component, fixed, as in const Int = IntDots;.
-        if (
-          declarator.id.type === 'Identifier' &&
-          init?.type === 'Identifier' &&
-          components.has(init.name)
-        ) {
-          choices[declarator.id.name] = { options: [init.name], start: offset(declarator).start };
-          continue;
-        }
-        if (
-          declarator.id.type !== 'Identifier' ||
-          init?.type !== 'CallExpression' ||
-          init.callee.type !== 'Identifier' ||
-          init.callee.name !== 'pick' ||
-          init.arguments[0]?.type !== 'ArrayExpression'
-        )
-          continue;
-        const options = init.arguments[0].elements.flatMap((element) =>
-          element?.type === 'Identifier' && components.has(element.name) ? [element.name] : []
-        );
-        if (options.length)
-          choices[declarator.id.name] = { options, start: offset(declarator).start };
-      }
-  return choices;
-}
-
-/**
- * The values a design constant can take, read without drawing: a literal, or every option of a
- * pick over literals, and the same for each field of an object. Anything else is left out.
- */
-export type DesignChoices =
-  | { values: readonly (string | number)[] }
-  | { fields: Record<string, DesignChoices> };
-
-/** Every design constant's possible values, so the view's props can be checked for every seed. */
-export function designChoices(body: string): Record<string, DesignChoices> {
-  const { root } = parseBlock(body, 'design');
-  const known: Record<string, DesignChoices> = {};
-  const literal = (node: AnyNode): string | number | undefined => {
-    if (
-      node.type === 'Literal' &&
-      (typeof node.value === 'string' || typeof node.value === 'number')
-    )
-      return node.value;
-    if (node.type === 'TemplateLiteral' && node.expressions.length === 0)
-      return node.quasis[0]?.value.cooked ?? undefined;
-    return undefined;
-  };
-  const choicesOf = (node: AnyNode): DesignChoices | undefined => {
-    const value = literal(node);
-    if (value !== undefined) return { values: [value] };
-    if (node.type === 'Identifier') return known[node.name];
-    if (
-      node.type === 'CallExpression' &&
-      node.callee.type === 'Identifier' &&
-      node.callee.name === 'pick' &&
-      node.arguments[0]?.type === 'ArrayExpression'
-    ) {
-      const options = node.arguments[0].elements.map((element) =>
-        element && element.type !== 'SpreadElement' ? literal(element) : undefined
-      );
-      const values = options.filter((option) => option !== undefined);
-      return values.length ? { values } : undefined;
-    }
-    if (node.type === 'ObjectExpression') {
-      const fields: Record<string, DesignChoices> = {};
-      for (const property of node.properties) {
-        if (property.type !== 'Property' || property.computed) continue;
-        const key = property.key.type === 'Identifier' ? property.key.name : literal(property.key);
-        const choices = key === undefined ? undefined : choicesOf(property.value);
-        if (choices) fields[String(key)] = choices;
-      }
-      return { fields };
-    }
-    return undefined;
-  };
-  for (const statement of root.body)
-    if (statement.type === 'VariableDeclaration' && statement.kind === 'const')
-      for (const declarator of statement.declarations) {
-        const choices = declarator.init ? choicesOf(declarator.init) : undefined;
-        if (choices && declarator.id.type === 'Identifier') known[declarator.id.name] = choices;
-      }
-  return known;
-}
-
-/**
  * Names a block declares, read without running it: at its top level, and in the algorithm in any
  * block, as a step records every variable in scope.
  */
@@ -334,8 +145,6 @@ type Value = undefined | null | boolean | number | string | Atom | Value[] | Obj
  */
 type Binding = { value: Value; constant: boolean; type?: string; target?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
-/** The value a design declaration takes, from its call, function name, and evaluated arguments. */
-type Choose = (draw: CallExpression, name: string, args: unknown[]) => Value;
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
   abs: Math.abs,
@@ -368,8 +177,6 @@ class Interpreter {
   readonly #topLevel = new Scope(this.#globals);
   readonly #topLevelNames: string[];
   readonly #kind: BlockKind;
-  /** The random number for one design draw. */
-  readonly #choose?: Choose;
   readonly #domain: DomainRegistry;
   readonly #atoms: AtomRegistry;
   /** The record or collection type of every array and object an input or algorithm made. */
@@ -385,25 +192,15 @@ class Interpreter {
     options: {
       kind: BlockKind;
       initial?: TypedState;
-      /** The value of a design declaration, from its call, function name, and evaluated arguments. */
-      choose?: Choose;
       domain?: DomainRegistry;
-      /** Names in scope whose values are themselves, such as the view's components in the design. */
-      names?: readonly string[];
     }
   ) {
     this.#root = root;
     this.#offset = offset;
     this.#kind = options.kind;
-    this.#choose = options.choose;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
-    for (const name of options.names ?? [])
-      this.#globals.bindings.set(name, { value: name, constant: true });
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
-    // Input and algorithm values all have a domain type, so there is nothing without a value there.
-    if (this.#kind === 'design')
-      this.#globals.bindings.set('undefined', { value: undefined, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
     this.#globals.bindings.set('NaN', { value: NaN, constant: true });
     // Input values become ordinary top-level variables the algorithm may update, keeping types.
@@ -435,7 +232,7 @@ class Interpreter {
     return this.#trace;
   }
 
-  /** Run an input or design block and return its top-level bindings, with their declared types. */
+  /** Run an input block and return its top-level bindings, with their declared types. */
   bindings(): TypedState {
     this.#execute();
     const declared: Record<string, string> = {};
@@ -614,8 +411,7 @@ class Interpreter {
       const made = this.#asAtom(value, atom, node, path);
       // A position a variable holds points into the variable's collection; one an element or field
       // holds, into the only collection of its type.
-      if (atom.index && this.#kind !== 'design' && target === undefined)
-        this.#onlyCollection(atom, node, path);
+      if (atom.index && target === undefined) this.#onlyCollection(atom, node, path);
       return made;
     }
     const structure = this.#domain.structures[typeName];
@@ -779,7 +575,7 @@ class Interpreter {
 
   /**
    * Input and algorithm values all have domain types: every primitive a variable, element, or
-   * property holds is a typed value, or null for nothing yet. Design values are plain.
+   * property holds is a typed value, or null for nothing yet.
    */
   /** A place that would hold no value, such as .pop() of an empty collection, or null. */
   #noValue(node: AnyNode, path: string, typeName?: string): never {
@@ -790,7 +586,6 @@ class Interpreter {
   }
 
   #typed(value: Value, node: AnyNode, name: string): void {
-    if (this.#kind === 'design') return;
     if (value === null || value === undefined) this.#noValue(node, name);
     const plain = untypedPart(value, name, (object) => this.#shapes.has(object));
     if (!plain) return;
@@ -881,19 +676,14 @@ class Interpreter {
                 : `"${name}" is already declared.`
             );
           this.#checkUnique(name, scope.parent, declarator);
-          if (!declarator.init) {
-            if (this.#kind !== 'design')
-              this.#fail(
-                declarator,
-                `Give ${name} a starting value of its type, as in let ${name} = Index(-1);`
-              );
-            scope.bindings.set(name, { value: undefined, constant: node.kind === 'const' });
-            continue;
-          }
+          if (!declarator.init)
+            this.#fail(
+              declarator,
+              `Give ${name} a starting value of its type, as in let ${name} = Index(-1);`
+            );
           const value = this.#expression(declarator.init, scope);
           this.#typed(value, declarator.init, name);
-          const type =
-            this.#kind === 'design' ? undefined : this.#declaredType(declarator.init, value);
+          const type = this.#declaredType(declarator.init, value);
           scope.bindings.set(name, {
             value,
             constant: node.kind === 'const',
@@ -1269,8 +1059,6 @@ class Interpreter {
 
   #call(node: CallExpression, scope: Scope): Value {
     const callee = node.callee;
-    if (callee.type === 'Identifier' && this.#choose && drawFunctions.has(callee.name))
-      return this.#draw(callee.name, node, scope);
     if (
       callee.type === 'Identifier' &&
       (Object.hasOwn(this.#atoms, callee.name) ||
@@ -1339,20 +1127,6 @@ class Interpreter {
       }
       default:
         return this.#fail(callee, `Array method .${name}() is not available.`);
-    }
-  }
-
-  /** A design declaration: its evaluated arguments, and the value it takes. */
-  #draw(name: string, node: CallExpression, scope: Scope): Value {
-    const args = node.arguments.map((argument) => {
-      if (argument.type === 'SpreadElement')
-        this.#fail(argument, 'Spread arguments are not supported.');
-      return unwrap(this.#expression(argument, scope));
-    });
-    try {
-      return (this.#choose as Choose)(node, name, args);
-    } catch (cause) {
-      return this.#fail(node, cause instanceof Error ? cause.message : String(cause));
     }
   }
 

@@ -55,42 +55,51 @@ export const htmlFramesPresentationSchema = v.strictObject({
   generationEventId: v.optional(positiveSchema)
 });
 
-/** One declaration in a presentation's design block, and the value it took. */
+/**
+ * One declaration in a presentation's design block, and the value it took: kept to read
+ * presentations built while sources had design blocks.
+ */
 export const designDrawSchema = v.strictObject({
-  /** The declaration's place in the block, such as look.radius, which names its value. */
   key: v.string(),
   call: v.picklist(['pick', 'int', 'real', 'chance']),
-  /** The evaluated arguments: pick's choices, int's or real's bounds, or chance's probability. */
   args: v.array(v.unknown()),
   value: v.unknown(),
-  /**
-   * Where the value came from: chosen for this build, by a person or an agent, or kept from the
-   * variant it was built on. Absent, it was randomised.
-   */
   origin: v.optional(v.picklist(['chosen', 'kept'])),
-  /** The call's span in the presentation's source. */
   start: naturalSchema,
   end: naturalSchema
 });
 
-/** Values for a design's declarations, by key. */
-export const designValuesSchema = v.record(v.string(), v.unknown());
+/** A value a variable of a design space takes. */
+export const designValueSchema = v.union([
+  v.pipe(v.string(), v.maxLength(200)),
+  v.number(),
+  v.boolean()
+]);
+
+/** A variant: every variable of a source's design space, by key, as Arrow[current].fill. */
+export const designValuesSchema = v.record(v.pipe(v.string(), v.maxLength(200)), designValueSchema);
 export type DesignValues = v.InferOutput<typeof designValuesSchema>;
 
+/** Where a variant's value came from: chosen for the build, kept, drawn, or the starter's. */
+export const designOriginSchema = v.picklist(['chosen', 'kept', 'random', 'starter']);
+
 /**
- * The values a build starts from. Chosen values must each name a declaration and lie in its
- * domain. A base variant's values are kept where the source still declares them in domain. The
- * rest are randomised.
+ * The values a build starts from. Chosen values must each name a variable and be one of its
+ * options. A base variant's values are kept where they still fit, and the starter gives the rest.
+ * Randomise draws afresh: everything (true), keeping the base's equalities, or the variables named.
  */
 export const variantRequestSchema = v.strictObject({
-  chosen: v.optional(designValuesSchema),
-  base: v.optional(designValuesSchema)
+  chosen: v.optional(v.record(v.string(), v.unknown())),
+  base: v.optional(v.record(v.string(), v.unknown())),
+  randomise: v.optional(v.union([v.literal(true), v.array(v.string())]))
 });
 export type VariantRequest = v.InferOutput<typeof variantRequestSchema>;
 
-/** A presentation's values, by key. */
-export function variantValues(draws: readonly { key: string; value: unknown }[]): DesignValues {
-  return Object.fromEntries(draws.map(({ key, value }) => [key, value]));
+/** A presentation's variant, by key; empty for one built before variants were recorded. */
+export function presentationVariant(
+  presentation: RenderablePresentation | undefined
+): DesignValues {
+  return presentation?.format === 'browser-bundle-v1' ? (presentation.variant ?? {}) : {};
 }
 
 /** Self-contained JavaScript bundle executed only inside an isolated presentation iframe. */
@@ -114,9 +123,14 @@ export const browserBundlePresentationSchema = v.strictObject({
       )
     )
   ),
-  /** Design values drawn from the seed for this presentation. */
+  /** Its variant: every variable of the source's design space, by key. */
+  variant: v.optional(designValuesSchema),
+  /** Where each of the variant's values came from. */
+  origins: v.optional(v.record(v.string(), designOriginSchema)),
+  /** The views each type rendered by name could draw, the options of its views variable. */
+  views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** Design values and draws of a presentation built while sources had design blocks. */
   parameters: v.optional(v.record(v.string(), v.unknown())),
-  /** Each draw behind the design values; absent for presentations built before draws were kept. */
   draws: v.optional(v.array(designDrawSchema)),
   generationEventId: v.optional(positiveSchema)
 });

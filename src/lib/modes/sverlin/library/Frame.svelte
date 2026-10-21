@@ -10,20 +10,12 @@
   import { flushSync, untrack, type Component } from 'svelte';
 
   import {
-    defaultsContext,
     layoutMemoryContext,
     provideArrangementParent,
     provideNodeIds,
     provideSeed
   } from './type-context';
-  import {
-    alignments,
-    frameRatios,
-    frameWidth,
-    justifications,
-    measure,
-    spacings
-  } from './node/scales';
+  import { alignments, frameRatios, frameWidth, justifications } from './node/scales';
   import type { FrameSettings } from './node/props';
   import { arrangementLayout } from './scene';
 
@@ -36,7 +28,7 @@
   }: {
     /** The authored view. */
     view: Component<Record<string, unknown>>;
-    /** The view's props: the step's state, design values, step, and seed. */
+    /** The view's props: the step's state, the view each type draws, step, and seed. */
     props: Record<string, unknown>;
     settings: FrameSettings;
     /** Called once the layout has stopped changing, so the page can be shown finished. */
@@ -47,7 +39,6 @@
 
   provideNodeIds();
   provideSeed(untrack(() => (typeof props.seed === 'number' ? props.seed : 1)));
-  const defaults = defaultsContext();
   const memory = layoutMemoryContext();
 
   let frameElement = $state<HTMLDivElement>();
@@ -506,9 +497,9 @@
     style:width="{width}px"
     style:height="{height}px"
     style:transform="translate(-50%, -50%) translate({panX}px, {panY}px) scale({shown})"
-    style:padding={measure(spacings, settings.padding)}
-    style:justify-content={justifications[settings.justify ?? defaults.frame.justify]}
-    style:align-items={alignments[settings.align ?? defaults.frame.align]}
+    style:padding={`${settings.padding}em`}
+    style:justify-content={justifications[settings.justify]}
+    style:align-items={alignments[settings.align]}
   >
     <div
       class="sv-root"
@@ -520,16 +511,16 @@
         <!-- At least the frame's inside, so justify and align spread what fits. -->
         <div
           class="sv-flow"
-          style:flex-direction={settings.layout ?? 'column'}
-          style:gap={measure(spacings, defaults.gap)}
-          style:justify-content={justifications[settings.justify ?? defaults.frame.justify]}
-          style:align-items={alignments[settings.align ?? defaults.frame.align]}
+          style:flex-direction={settings.layout}
+          style:gap={`${settings.gap}em`}
+          style:justify-content={justifications[settings.justify]}
+          style:align-items={alignments[settings.align]}
           style:min-width={flowLeast
             ? `${flowLeast.width}px`
-            : `calc(${width}px - 2 * ${measure(spacings, settings.padding)})`}
+            : `calc(${width}px - 2 * ${settings.padding}em)`}
           style:min-height={flowLeast
             ? `${flowLeast.height}px`
-            : `calc(${height}px - 2 * ${measure(spacings, settings.padding)})`}
+            : `calc(${height}px - 2 * ${settings.padding}em)`}
         >
           <View {...props} />
         </div>

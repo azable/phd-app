@@ -19,7 +19,7 @@ const colour = v.pipe(v.string(), v.maxLength(200));
 const coordinate = v.pipe(v.number(), v.minValue(-1_000_000), v.maxValue(1_000_000));
 const length = v.pipe(v.number(), v.minValue(0), v.maxValue(1_000_000));
 const point = v.strictObject({ x: coordinate, y: coordinate });
-const paletteColour = v.picklist(['neutral', 'blue', 'green', 'amber', 'red', 'purple']);
+const colourName = v.pipe(v.string(), v.maxLength(40));
 const box = v.strictObject({ x: coordinate, y: coordinate, width: length, height: length });
 const font = v.pipe(v.string(), v.maxLength(500));
 const fontWeight = v.pipe(v.number(), v.minValue(1), v.maxValue(1000));
@@ -38,7 +38,7 @@ const sceneNodeSchema = v.strictObject({
   parent: v.optional(text),
   key: v.optional(text),
   type: v.optional(text),
-  shape: v.picklist(['box', 'card', 'plain']),
+  kind: v.optional(text),
   layout: v.optional(v.picklist(['row', 'column', 'free'])),
   collection: v.optional(v.literal(true)),
   value: v.optional(text),
@@ -58,11 +58,11 @@ const sceneNodeSchema = v.strictObject({
     fontWeight,
     opacity: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(1)))
   }),
-  palette: v.optional(
+  colours: v.optional(
     v.strictObject({
-      fill: v.optional(paletteColour),
-      stroke: v.optional(paletteColour),
-      color: v.optional(paletteColour)
+      fill: v.optional(colourName),
+      stroke: v.optional(colourName),
+      color: v.optional(colourName)
     })
   )
 });
@@ -104,8 +104,8 @@ export type SverlinScene = {
   format: 'sverlin-scene-v1';
   presentationId: string;
   seed: number;
-  /** Design values drawn from the seed, if the presentation recorded them. */
-  parameters?: Record<string, unknown>;
+  /** The presentation's variant, if it recorded one. */
+  variant?: Record<string, string | number | boolean>;
   frame: SceneFrame;
   steps: (SceneStep & { label: string })[];
 };

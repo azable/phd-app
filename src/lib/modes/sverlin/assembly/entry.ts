@@ -18,8 +18,8 @@ import {
   themeCss,
   widestInteger,
   type FrameSettings,
+  type DesignValues,
   type LayoutMemory,
-  type NodeDefaults,
   type SceneFrame,
   type SceneStep
 } from 'sverlin';
@@ -46,7 +46,8 @@ type StepState = Record<string, unknown> & {
   __refs?: Record<string, number>;
   /** Variables out of scope at the step, standing in hidden with a value from another. */
   __absent?: string[];
-  __defaults: NodeDefaults;
+  /** The presentation's variant: every variable of its design, by key. */
+  __design: DesignValues;
   __frame: FrameSettings;
 };
 
@@ -56,16 +57,6 @@ const playback = window as typeof window & {
   __sverlinSelection?: unknown;
 };
 const clampStep = (step: number) => Math.min(Math.max(step, 0), states.length - 1);
-
-// The drawn font applies page-wide, so every node inherits it unless it sets its own. Drawn
-// defaults belong to the presentation, so every step shares them. It is set on the body, which the
-// sandbox document gives a font of its own (see ../../sandbox.ts).
-const fonts: Record<string, string> = {
-  sans: 'system-ui, sans-serif',
-  serif: "ui-serif, Georgia, 'Times New Roman', serif",
-  mono: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace"
-};
-const font = (states[0] as StepState).__defaults.font;
 
 // Every collection or record each variable holds at any step, by identity, so a pointer through a
 // variable, as c into row = paths[r], keeps room in every row it can point into.
@@ -100,7 +91,6 @@ for (const step of states as StepState[])
       after: Math.max(ends.after, position - collection.length + 1)
     });
   }
-if (fonts[font]) document.body.style.fontFamily = fonts[font];
 
 /** A type's unit, or that of the nearest type it refines. */
 function unitOf(typeName: string): string | undefined {
@@ -188,7 +178,7 @@ function mountStep(
     __copies: copies = {},
     __refs: refs = {},
     __absent: absent = [],
-    __defaults: defaults,
+    __design: design,
     __frame: frame,
     ...state
   } = substituted ?? (states[step] as StepState);
@@ -230,7 +220,7 @@ function mountStep(
         onchanged: () => shown.changes++
       },
       context: new Map<string, unknown>([
-        ['sverlin:defaults', defaults],
+        ['sverlin:design', design],
         ['sverlin:layout-memory', memory],
         [
           'sverlin:types',

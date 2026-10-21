@@ -247,8 +247,9 @@
               candidate: candidateId(presentation),
               seed: presentation.seed,
               draws: presentation.draws ?? [],
-              parameters: presentation.parameters,
-              unrecorded: presentation.draws === undefined,
+              ...(presentation.variant ? { variant: presentation.variant } : {}),
+              ...(presentation.views ? { views: presentation.views } : {}),
+              unrecorded: presentation.variant === undefined && presentation.draws === undefined,
               layouts: (drawnSteps[presentation.presentationId]?.layouts ?? []).flatMap(
                 ({ node, seed, form, curve }) => {
                   const tag =

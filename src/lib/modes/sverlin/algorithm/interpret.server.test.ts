@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   algorithmLimits,
   interpretAlgorithm as interpretTyped,
-  interpretDesign,
   interpretDomain,
   interpretInput as interpretTypedInput,
   type TypedState
@@ -151,7 +150,7 @@ describe('algorithm interpretation', () => {
   });
 });
 
-describe('input, design, and step selection', () => {
+describe('input and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
     const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
@@ -169,69 +168,8 @@ describe('input, design, and step selection', () => {
     expect(() => interpretInput('const x = Int(1); yield;')).toThrow(/algorithm block/);
   });
 
-  it('draws design values deterministically from the seed', () => {
-    const body =
-      'const layout = pick(["row", "grid", "stack"]); const size = int(3, 6); const scale = real(0.5, 1.5); const bold = chance(0.5); const doubled = size * 2;';
-    const first = interpretDesign(body, 42);
-    expect(interpretDesign(body, 42)).toEqual(first);
-    expect(['row', 'grid', 'stack']).toContain(first.layout);
-    expect(first.size).toBeGreaterThanOrEqual(3);
-    expect(first.size).toBeLessThanOrEqual(6);
-    expect(first.doubled).toBe((first.size as number) * 2);
-    const layouts = new Set(
-      Array.from({ length: 30 }, (_, seed) => interpretDesign(body, seed + 1).layout)
-    );
-    expect(layouts.size).toBe(3);
-  });
-
-  it.each([
-    ['draws outside the design block', () => interpretAlgorithm('const a = pick([1]); yield;')],
-    ['draws not assigned to a top-level const', () => interpretDesign('let a = pick([1]);', 1)],
-    ['draws inside expressions', () => interpretDesign('const a = pick([1]) + 1;', 1)],
-    ['draws inside blocks', () => interpretDesign('if (true) { const a = int(1, 2); }', 1)],
-    ['unknown functions', () => interpretDesign('const a = shuffle([1]);', 1)]
-  ])('rejects %s', (_name, run) => {
-    expect(run).toThrow(/design draw|not available/);
-  });
-
-  it('keys each draw by its name, so other draws never change it', () => {
-    const before = 'const a = pick([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); const b = real(0, 1);';
-    const after =
-      'const extra = int(0, 100); const b = real(0, 1); const late = chance(0.5); const a = pick([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);';
-    for (const seed of [1, 2, 3, 99, 123456]) {
-      const first = interpretDesign(before, seed);
-      const second = interpretDesign(after, seed);
-      expect(second.a).toBe(first.a);
-      expect(second.b).toBe(first.b);
-    }
-  });
-
-  it('keys nested draws by their path, independently of each other and of order', () => {
-    const one = interpretDesign(
-      'const look = { x: real(0, 1), y: real(0, 1) }; const sizes = [real(0, 1), real(0, 1)]; const p = real(0, 1); const q = real(0, 1);',
-      7
-    );
-    const reordered = interpretDesign('const look = { y: real(0, 1), x: real(0, 1) };', 7);
-    const look = one.look as { x: number; y: number };
-    const sizes = one.sizes as number[];
-    expect(look.x).not.toBe(look.y);
-    expect(sizes[0]).not.toBe(sizes[1]);
-    expect(one.p).not.toBe(one.q);
-    expect(reordered.look).toEqual(one.look);
-  });
-
-  it('allows draws inside the object and array literals of a top-level const', () => {
-    const design = interpretDesign(
-      'const look = { cells: { shape: pick(["circle"]), size: real(1, 1) } }; const sizes = [int(2, 2)];',
-      3
-    );
-    expect(design).toEqual({ look: { cells: { shape: 'circle', size: 1 } }, sizes: [2] });
-  });
-
-  it('validates draw arguments', () => {
-    expect(() => interpretDesign('const a = int(5, 1);', 1)).toThrow(/minimum ≤ maximum/);
-    expect(() => interpretDesign('const a = int(1.5, 3);', 1)).toThrow(/integers/);
-    expect(() => interpretDesign('const a = pick([]);', 1)).toThrow(/non-empty array/);
+  it('has no design draws', () => {
+    expect(() => interpretAlgorithm('const a = pick([1]); yield;')).toThrow(/not available/);
   });
 });
 

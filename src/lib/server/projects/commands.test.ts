@@ -1580,7 +1580,7 @@ describe('submitProjectFeedback', () => {
     const presentation = presentedEvent(created).payload.presentation;
     if (presentation.format !== 'browser-bundle-v1') throw new Error('Expected a Sverlin bundle.');
     const lines = presentation.source.text.split('\n');
-    const line = lines.findIndex((text) => text.startsWith('<Node size={titleSize}')) + 1;
+    const line = lines.findIndex((text) => text.startsWith('<Node tags="title"')) + 1;
     const reference: ElementReference = {
       type: 'element-ref',
       presentationId: presentation.presentationId,
@@ -2018,7 +2018,7 @@ describe('assistant edits', () => {
     expect(change?.operation === 'upsert' && change.artifact.content.text).toContain('Corrected');
   });
 
-  it('varies the viewed variant: chosen values in both, the rest kept in the first', async () => {
+  it('varies the viewed variant: chosen values in both, the rest kept in the first and randomised in the second', async () => {
     const { createProject } = await import('./service');
     const { runQueuedAssistantTurn } = await import('./commands');
     const document = await createProject(
@@ -2034,7 +2034,7 @@ describe('assistant edits', () => {
       );
     // The older of the pair, so the newest presentation cannot stand in for it.
     const [viewed] = presented(document.events);
-    const before = Object.fromEntries((viewed.draws ?? []).map(({ key, value }) => [key, value]));
+    const before = viewed.variant ?? {};
     const head = projectHead(document).id;
     const feedbackOperationId = '82345678-1234-4123-8123-123456789abc';
     const assistantOperationId = '82345678-1234-4123-8123-123456789abd';
@@ -2045,7 +2045,7 @@ describe('assistant edits', () => {
         operationId: feedbackOperationId,
         createdAt: '2026-08-30T12:00:00.000Z',
         payload: {
-          content: markdownMessage('Try circles.'),
+          content: markdownMessage('Try tallies.'),
           focus: [],
           presentationCount: 2,
           viewing: viewed.presentationId
@@ -2077,9 +2077,9 @@ describe('assistant edits', () => {
       ...generation(undefined, 'Varied.'),
       decision: {
         action: 'vary' as const,
-        values: [{ variable: 'Int', value: 'IntCircle' }],
-        randomise: ['showIndices'],
-        summary: 'Draws every value as a circle'
+        values: [{ variable: 'views.Int', value: 'IntTally' }],
+        randomise: ['Current[current].fill'],
+        summary: 'Draws every value with a tally'
       }
     });
 
@@ -2092,14 +2092,17 @@ describe('assistant edits', () => {
     const [first, second] = presented(result.appendedEvents);
     const origins = (presentation: BrowserBundlePresentation) =>
       Object.fromEntries(
-        (presentation.draws ?? []).map(({ key, value, origin }) => [key, { value, origin }])
+        Object.entries(presentation.variant ?? {}).map(([key, value]) => [
+          key,
+          { value, origin: presentation.origins?.[key] }
+        ])
       );
-    expect(origins(first).Int).toEqual({ value: 'IntCircle', origin: 'chosen' });
-    expect(origins(second).Int).toEqual({ value: 'IntCircle', origin: 'chosen' });
-    expect(origins(first).showIndices.origin).toBeUndefined();
+    expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
+    expect(origins(second)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
+    expect(origins(first)['Current[current].fill'].origin).not.toBe('chosen');
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'Int' && key !== 'showIndices')
+      if (key !== 'views.Int' && key !== 'Current[current].fill')
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
-    expect(Object.values(origins(second)).filter(({ origin }) => origin === 'kept')).toEqual([]);
+    expect(Object.values(origins(second)).some(({ origin }) => origin === 'random')).toBe(true);
   });
 });

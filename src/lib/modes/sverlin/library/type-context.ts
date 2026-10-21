@@ -5,7 +5,8 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import type { Layout, NodeDefaults } from './node/props';
+import type { DesignValues } from './node/design';
+import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
 
 export type TypeContext = {
@@ -44,9 +45,9 @@ export function typeContext(): TypeContext | undefined {
   return getContext<TypeContext | undefined>('sverlin:types');
 }
 
-/** The defaults this presentation drew (see node/defaults.ts). */
-export function defaultsContext(): NodeDefaults {
-  return getContext<NodeDefaults>('sverlin:defaults');
+/** The presentation's variant: every variable of its design space, by key (see node/design.ts). */
+export function designContext(): DesignValues {
+  return getContext<DesignValues | undefined>('sverlin:design') ?? {};
 }
 
 /** Hands out the ids rendered nodes carry for selection; see provideNodeIds. */

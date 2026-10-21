@@ -38,11 +38,13 @@ export const sourceDecisions = {
         variable: v.pipe(
           v.string(),
           v.minLength(1),
-          v.description('A variable from project.variables, by its key.')
+          v.description(
+            'A variable from project.design, by its key, as Here[current].fill or views.Int.'
+          )
         ),
         value: v.pipe(
           v.union([v.string(), v.number(), v.boolean()]),
-          v.description('A value in the variable’s domain.')
+          v.description('One of the variable’s options.')
         )
       })
     ),

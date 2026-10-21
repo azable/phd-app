@@ -17,8 +17,8 @@ function documentedProps(text: string): Map<string, Set<string>> {
   return props;
 }
 
-// Named values a component accepts that the guide leaves out on purpose: a link without width.
-const undocumented: Record<string, string[]> = { 'Link.strokeWidth': ['none'] };
+// Named values a component accepts that the guide leaves out on purpose.
+const undocumented: Record<string, string[]> = {};
 // Props the compiler still takes that the guide leaves out on purpose: the older ways of drawing a
 // collection and a typed value, which views of types replace.
 const undocumentedProps = new Set(['Node.items', 'Node.item', 'Node.nested', 'Node.type']);

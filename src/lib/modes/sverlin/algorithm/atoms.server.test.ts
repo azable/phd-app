@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  interpretAlgorithm,
-  interpretDesign,
-  interpretDomain,
-  interpretInput
-} from './interpret.server';
+import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: -100, max: 1000 });
@@ -176,7 +171,6 @@ describe('typed values', () => {
   });
 
   it('keeps constructors and type definitions in their blocks', () => {
-    expect(() => interpretDesign('const a = Int(3);', 1)).toThrow(/Int\(\) is not available/);
     expect(() => last('const A = type(Int); yield;')).toThrow(/belongs in the domain block/);
   });
 });

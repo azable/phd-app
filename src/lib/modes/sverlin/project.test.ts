@@ -80,8 +80,11 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
     expect(left.masterSteps).toEqual([0, 1, 2, 3, 4]);
-    expect(left.parameters).toHaveProperty('pointerName');
-    expect(right.parameters).toHaveProperty('showIndices');
+    // The first is the starter; the second is randomised from it.
+    expect(left.variant?.['views.Int']).toBe('IntCell');
+    expect(left.origins?.['IntCell.fill']).toBe('starter');
+    expect(right.variant).not.toEqual(left.variant);
+    expect(right.views).toEqual({ Int: ['IntCell', 'IntTally'], Index: ['IndexText'] });
     const frames = alignPresentationFrames([left, right]);
     expect(frames).toHaveLength(5);
     const document = await appendProjectPreference(

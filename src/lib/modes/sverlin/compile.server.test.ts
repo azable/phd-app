@@ -8,6 +8,16 @@ import {
 } from './compile.server';
 import { linearSearchSource } from './contract';
 
+/** The kinds of node a prepared source's design space has, from its variables' keys. */
+const kindsOf = (space: Record<string, unknown>) =>
+  [
+    ...new Set(
+      Object.keys(space)
+        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.'))
+        .map((key) => key.slice(0, key.lastIndexOf('.')))
+    )
+  ].sort();
+
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
@@ -35,71 +45,58 @@ describe('single-component Svelte compilation', () => {
     );
   });
 
-  it('derives master steps from yield and varies only the design between seeds', async () => {
+  it('derives master steps from yield and varies only the variant between seeds', async () => {
     const prepared = prepareSvelteComponent(linearSearchSource);
     expect(prepared.master.map(({ state }) => state.i)).toEqual([undefined, 0, 1, 2, 3]);
     const bundles = await Promise.all(
-      Array.from({ length: 12 }, (_, seed) => bundlePresentation(prepared, seed + 1))
+      Array.from({ length: 12 }, (_, seed) =>
+        bundlePresentation(prepared, seed + 1, { randomise: true })
+      )
     );
     for (const bundle of bundles) {
       expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
       expect(bundle.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5']);
       expect(bundle.masterSteps).toEqual([0, 1, 2, 3, 4]);
-      expect(['i', 'index', '↑']).toContain(bundle.parameters.pointerName);
     }
-    expect(new Set(bundles.map(({ parameters }) => parameters.showIndices))).toEqual(
-      new Set([true, false])
+    expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
+      new Set(['IntCell', 'IntTally'])
     );
     expect(bundles[0].javascript).toContain('[3,8,5,2,7]');
     expect(bundles[0].javascript).not.toContain('yield');
-    const again = await bundlePresentation(prepared, 1);
-    expect(again.parameters).toEqual(bundles[0].parameters);
+    const again = await bundlePresentation(prepared, 1, { randomise: true });
+    expect(again.variant).toEqual(bundles[0].variant);
+    expect((await bundlePresentation(prepared, 1)).variant).toEqual(prepared.design.starter);
   });
 
-  it('reports design errors at their authored position and rejects name clashes', async () => {
-    const design =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\nlet x = Int(1);\nyield;\n</script>\n<script lang="sverlin" design>\nconst size = int(4, 1);\n</script>';
-    await expect(compileSvelteComponent(design)).rejects.toMatchObject({
-      code: 'algorithm_error',
-      line: 6,
-      message: expect.stringContaining('minimum ≤ maximum')
-    });
+  it('rejects a design block, and a source with no algorithm block', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">let x = Int(1); yield;</script><script lang="sverlin" design>const x = 2;</script>'
+        '<script lang="sverlin">\nyield;\n</script>\n<script lang="sverlin" design>\nconst size = 1;\n</script>'
       )
-    ).rejects.toThrow('"x" is defined in the design block');
+    ).rejects.toMatchObject({
+      code: 'sverlin_block',
+      line: 4,
+      message: expect.stringContaining('Sources have no design block')
+    });
     await expect(
       compileSvelteComponent('<script lang="sverlin" input>const x = 1;</script><Node>x</Node>')
     ).rejects.toThrow('Add a <script lang="sverlin"> algorithm block');
   });
 
-  it('checks every value a design constant or condition can give a prop, for any seed', async () => {
-    const view = (design: string, markup: string) =>
-      compileSvelteComponent(
-        `<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>${design}</script>\n${markup}`
-      );
-    await expect(
-      view("const cell = pick(['box', 'circle']);", '<Node shape={cell} value={1} />')
-    ).rejects.toMatchObject({
-      code: 'invalid_prop',
-      line: 3,
-      message: expect.stringContaining(
-        '<Node> shape={cell} can be "circle", from the design value cell, which is not a value it takes'
-      )
+  it('rejects looks given as props, which are the design’s', async () => {
+    const view = (markup: string) =>
+      compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);
+    await expect(view('<Node fill="amber" value={1} />')).rejects.toMatchObject({
+      code: 'unknown_prop',
+      line: 2,
+      message: expect.stringContaining('<Node> fill is a look')
     });
-    await expect(
-      view("const look = { radius: pick(['small', 'round']) };", '<Node radius={look.radius} />')
-    ).rejects.toThrow('from the design value look.radius');
-    await expect(view('', "<Node layout={step ? 'row' : 'stack'} />")).rejects.toThrow(
-      `layout={step ? 'row' : 'stack'} can be "stack"`
-    );
+    await expect(view('<Node size={step ? 1 : 2}>x</Node>')).rejects.toThrow('size is a look');
     await expect(
       view(
-        "const cell = pick(['box', 'card']); const gap = pick(['small', 2]);",
-        '<Node shape={cell} gap={gap} radius={step ? undefined : "full"} />'
+        '<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" stroke="red" /></Node>'
       )
-    ).resolves.toBeDefined();
+    ).rejects.toThrow('<Link> stroke is a look');
   });
 
   it('reports the view’s problems together with a block’s, in source order', async () => {
@@ -108,38 +105,23 @@ describe('single-component Svelte compilation', () => {
     ).catch((cause: InvalidSvelteSourceError) => cause);
     expect(failure).toMatchObject({ line: 3, message: expect.stringContaining('plain number 0') });
     expect((failure as InvalidSvelteSourceError).others).toMatchObject([
-      { code: 'invalid_prop', line: 6 },
+      { code: 'unknown_prop', line: 6 },
       { code: 'unknown_prop', line: 7 }
     ]);
   });
 
-  it('places name clashes and invalid design values at their declarations', async () => {
-    await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let x = Int(1);\n  yield;\n</script>\n<script lang="sverlin" design>\n  const x = 2;\n</script>'
-      )
-    ).rejects.toMatchObject({ code: 'name_clash', line: 7, column: 3 });
-    await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  let $x = Int(1);\n  yield;\n</script>\n<script lang="sverlin" design>\n  const $xy = 1;\n  const $x = 2;\n</script>'
-      )
-    ).rejects.toMatchObject({ code: 'name_clash', line: 8, column: 3 });
-    await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>\n  const frame = { spread: "row" };\n</script>'
-      )
-    ).rejects.toMatchObject({
-      code: 'design_value',
-      line: 3,
-      message: expect.stringContaining('frame has no setting spread')
-    });
+  it('places problems at their authored positions', async () => {
     await expect(
       compileSvelteComponent(
         '<script lang="sverlin">yield;</script>\n\n<script module>import x from "y";</script>'
       )
     ).rejects.toMatchObject({ line: 3 });
+    await expect(
+      compileSvelteComponent(
+        '<script lang="sverlin">yield;</script>\n<Node>a</Node>\n<Node tags={step ? name : "b"}>b</Node>'
+      )
+    ).rejects.toMatchObject({ code: 'view_tags', line: 3 });
   });
-
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
@@ -205,44 +187,72 @@ describe('single-component Svelte compilation', () => {
     expect(withoutModuleScript.javascript).toContain('sv-node');
   });
 
-  it('puts every recorded and design value in scope for a script-free view', async () => {
+  it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">let total = Int(0); yield; for (const v of values) total += v; yield;</script>\n<script lang="sverlin" design>const accent = pick(["red"]);</script>\n<Node layout="column">{@const doubled = total * 2}<Node color={accent}>{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">let total = Int(0); yield; for (const v of values) total += v; yield;</script>\n<Node layout="column">{@const doubled = total * 2}<Node tags="sum">{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
     expect(result.labels).toEqual(['Step 1', 'Step 2']);
-    expect(result.parameters).toMatchObject({ accent: 'red' });
+    expect(result.variant['root[sum].fill']).toBeDefined();
   });
 
-  it('records each design draw with its key, arguments, value, and place in the source', async () => {
-    const source =
-      '<script lang="sverlin">yield;</script>\n<script lang="sverlin" design>const accent = pick(["red", "blue"]); const look = { size: int(2, 4) };</script>\n<Node color={accent}>x</Node>';
-    const result = await compileSvelteComponent(source, 5);
-    expect(result.draws.map(({ key, call, args, value }) => ({ key, call, args, value }))).toEqual([
-      { key: 'accent', call: 'pick', args: [['red', 'blue']], value: result.parameters.accent },
-      {
-        key: 'look.size',
-        call: 'int',
-        args: [2, 4],
-        value: (result.parameters.look as { size: number }).size
-      }
-    ]);
-    expect(result.draws.map(({ start, end }) => source.slice(start, end))).toEqual([
-      'pick(["red", "blue"])',
-      'int(2, 4)'
-    ]);
+  it('gives every kind of node, from its view and tags, the variables its role has', () => {
+    const { design } = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values); const Flag = type('boolean');</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">let i = Position(0); let found = Flag(false); yield;</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}<Node layout="column"><Pointed tags={['current', found && 'found']} /><Node tags="label">i</Node></Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}<Node layout="row">{#each values as v}{@render Int(v)}{/each}</Node>{@render Arrow(i)}<Node tags={found ? 'done' : null}>note</Node><Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" /></Node>`
+    );
+    expect(kindsOf(design.space)).toEqual(
+      [
+        'root',
+        'root[done]',
+        'root[link]',
+        'IntCell',
+        'Arrow',
+        'Arrow[current]',
+        'Arrow[current,found]',
+        'Arrow[label]',
+        'Mark[pointed]'
+      ].sort()
+    );
+    expect(design.space['root.gap']).toBeDefined();
+    expect(design.space['IntCell.gap']).toBeUndefined();
+    expect(design.space['Arrow[current].shown']).toBeUndefined();
+    expect(design.space['root[link].dashed']).toEqual([false, true]);
+    expect(design.space['views.Int']).toEqual(['IntCell', 'none']);
+  });
+
+  it.each([
+    [
+      'tags that cannot be read before the view runs',
+      '<Node tags={name}>x</Node>',
+      /tags=\{name\} cannot be read before the view runs/
+    ],
+    [
+      'more kinds than one tag may make',
+      "<Node tags={[step && 'a', step && 'b', step && 'c', step && 'd', step && 'e']}>x</Node>",
+      /make 32 kinds of node, more than 16/
+    ]
+  ])('rejects %s', async (_name, markup, message) => {
+    await expect(
+      compileSvelteComponent(`<script lang="sverlin">yield;</script>${markup}`)
+    ).rejects.toThrow(message);
+  });
+
+  it('rejects a <Pointed> and a node of one kind', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">let i = Position(0); yield;</script>{#snippet Arrow(p: Position)}<Node layout="column"><Pointed tags="x" /><Node tags="x">i</Node></Node>{/snippet}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{@render Arrow(i)}`
+      )
+    ).toThrow(/and by another kind of tag/);
   });
 
   it('rejects props a library component does not take, and written values it cannot use', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);
-    await expect(view('<Node shape="circle">v1</Node>')).rejects.toMatchObject({
+    await expect(view('<Node form="spiral" />')).rejects.toMatchObject({
       code: 'invalid_prop',
-      line: 2,
-      message: expect.stringContaining('radius="full"')
+      line: 2
     });
-    await expect(view("<Node form={'spiral'} />")).rejects.toMatchObject({ code: 'invalid_prop' });
-    await expect(view('<Node minSize="huge" />')).rejects.toThrow('or a number in braces');
+    await expect(view('<Node layout="grid" />')).rejects.toThrow("use 'row', 'column', 'free'");
     await expect(view('<Node class="big" />')).rejects.toMatchObject({
       code: 'unknown_prop',
       message: expect.stringContaining('<Node> has no prop class')
@@ -255,12 +265,12 @@ describe('single-component Svelte compilation', () => {
     // Values worked out in markup, and props passed on by a spread, are left to the component.
     await expect(
       view(
-        '{#snippet Int(value, node)}<Node {value} {...node} />{/snippet}<Node shape={step ? "box" : "card"} radius="full" minSize={3} value={1} />'
+        '{#snippet Int(value, node)}<Node {value} {...node} />{/snippet}<Node layout={step ? "row" : "column"} value={1} />'
       )
     ).resolves.toBeDefined();
   });
 
-  it('draws views only with Node and Link, styled by their props', async () => {
+  it('draws views only with Node and Link', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(`<script lang="sverlin">yield;</script>\n${markup}`);
     await expect(view('<Node>Hi</Node>\n<style>div { color: red; }</style>')).rejects.toMatchObject(
@@ -320,7 +330,7 @@ describe('single-component Svelte compilation', () => {
 
   it('draws nested collections with nested {#each} blocks, and no longer takes items', async () => {
     const source = (view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield;</script>{#snippet Int(value: Int)}<Node {value} />{/snippet}${view}`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin">yield;</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}${view}`;
     const result = await compileSvelteComponent(
       source(
         '<Node layout="column">{#each grid as row}<Node>{#each row as v}{@render Int(v)}{/each}</Node>{/each}</Node>'
@@ -337,7 +347,7 @@ describe('single-component Svelte compilation', () => {
     const source = (view: string) =>
       `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin">yield;</script>${view}<Node>{#each people as person}{@render Height(person)}{/each}</Node>`;
     const view =
-      '{#snippet Height(h: Height)}<Node layout="column"><Node value={h} radius="full" /><Node>tall</Node></Node>{/snippet}';
+      '{#snippet HeightView(h: Height)}<Node layout="column"><Node value={h} /><Node>tall</Node></Node>{/snippet}';
     const prepared = prepareSvelteComponent(source(view));
     expect(prepared.component.match(/__type: 'Height'/g)).toHaveLength(1);
     await expect(
@@ -357,9 +367,9 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>\n{#snippet Int(value: Int, node)}{value}{/snippet}'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">yield;</script>\n{#snippet IntCell(value: Int, node)}{value}{/snippet}'
       )
-    ).rejects.toThrow('Int takes one value, its type given');
+    ).rejects.toThrow('IntCell takes one value, its type given');
     await expect(
       compileSvelteComponent(
         '<script lang="sverlin" domain>const Text = type(["a"]);</script><script lang="sverlin">const Text = 1; yield;</script>'
@@ -372,56 +382,42 @@ describe('single-component Svelte compilation', () => {
     ).rejects.toThrow('"Node" names a library component');
   });
 
-  it('takes chosen values, keeps base values still in domain, and randomises the rest', async () => {
+  it('takes chosen values, keeps base values that still fit, and gives the rest the starter', async () => {
     const prepared = prepareSvelteComponent(
-      "<script lang=\"sverlin\">yield;</script><Node value={1} radius={look.radius} /><script lang=\"sverlin\" design>const look = { radius: pick(['small', 'full']), gap: pick(['small', 'large']), size: int(1, 3) };</script>"
+      '<script lang="sverlin">yield;</script><Node value={1} />'
     );
     const built = await bundlePresentation(prepared, 3, {
-      chosen: { 'look.radius': 'full' },
-      // Removed and out-of-domain base values are randomised instead.
-      base: { 'look.gap': 'large', 'look.size': 9, 'look.width': 2 }
+      chosen: { 'root.radius': 999 },
+      // Removed and unfit base values are the starter's instead.
+      base: { 'root.fill': 'blue-100', 'root.size': 9, 'gone.width': 2 }
     });
-    expect(built.parameters).toMatchObject({ look: { radius: 'full', gap: 'large' } });
-    expect(built.draws?.map(({ key, origin }) => [key, origin])).toEqual([
-      ['look.radius', 'chosen'],
-      ['look.gap', 'kept'],
-      ['look.size', undefined]
-    ]);
-    expect(built.parameters).not.toHaveProperty('__defaults');
+    expect(built.variant).toMatchObject({ 'root.radius': 999, 'root.fill': 'blue-100' });
+    expect(built.variant['root.size']).toBe(prepared.design.starter['root.size']);
+    expect(built.variant).not.toHaveProperty('gone.width');
+    expect(built.origins).toMatchObject({
+      'root.radius': 'chosen',
+      'root.fill': 'kept',
+      'root.size': 'starter'
+    });
     await expect(
-      bundlePresentation(prepared, 3, { chosen: { 'look.radius': 'round' } })
-    ).rejects.toThrow('look.radius is "round", which is not one of its choices');
-    await expect(bundlePresentation(prepared, 3, { chosen: { 'look.width': 2 } })).rejects.toThrow(
-      'The design declares no look.width'
+      bundlePresentation(prepared, 3, { chosen: { 'root.radius': 3 } })
+    ).rejects.toMatchObject({
+      code: 'design_value',
+      message: expect.stringContaining('root.radius cannot be 3')
+    });
+    await expect(bundlePresentation(prepared, 3, { chosen: { 'root.width': 2 } })).rejects.toThrow(
+      'root has no prop width'
     );
   });
 
-  it('resolves the page frame from the design value frame', async () => {
-    const algorithm = '<script lang="sverlin">yield;</script><Node>a</Node>';
-    const design = (body: string) => `${algorithm}<script lang="sverlin" design>${body}</script>`;
-    await expect(compileSvelteComponent(design("const frame = '4:3';"))).resolves.toBeDefined();
+  it('takes the page frame from the variant', async () => {
+    const prepared = prepareSvelteComponent('<script lang="sverlin">yield;</script><Node>a</Node>');
+    expect(prepared.design.starter['frame.ratio']).toBe('16:9');
+    const built = await bundlePresentation(prepared, 1, { chosen: { 'frame.ratio': '4:3' } });
+    expect(built.javascript).toMatch(/"?ratio"?:"4:3"/u);
     await expect(
-      compileSvelteComponent(
-        design("const frame = { justify: pick(['start', 'between']), padding: 2 };")
-      )
-    ).resolves.toBeDefined();
-    await expect(compileSvelteComponent(design("const frame = '5:4';"))).rejects.toThrow(
-      'frame.ratio must be one of'
-    );
-    await expect(
-      compileSvelteComponent(design("const frame = { spread: 'row' };"))
-    ).rejects.toThrow('frame has no setting spread');
-    await expect(
-      compileSvelteComponent(design("const frame = { padding: 'huge' };"))
-    ).rejects.toThrow('frame.padding must be one of');
-    await expect(
-      compileSvelteComponent(
-        design("const frame = { layout: 'free', constraints: ['note below cells'] };")
-      )
-    ).rejects.toThrow('put them in a <Node layout="free">');
-    await expect(
-      compileSvelteComponent(design("const frame = { layout: 'grid' };"))
-    ).rejects.toThrow('frame.layout must be one of');
+      bundlePresentation(prepared, 1, { chosen: { 'frame.ratio': '5:4' } })
+    ).rejects.toThrow('frame.ratio cannot be "5:4"');
   });
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
@@ -508,16 +504,17 @@ describe('single-component Svelte compilation', () => {
 
 describe('pointers', () => {
   const view = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">let i = Position(0); yield;</script><script lang="sverlin" design>const Int = IntText;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}{@render Row(values)}${markup}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">let i = Position(0); yield;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}{@render Row(values)}${markup}`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
       view(
-        '{#snippet Arrow(p: Position)}<Node layout="column"><Pointed fill="amber" /><Node>i</Node></Node>{/snippet}{@render Arrow(i)}'
+        '{#snippet Arrow(p: Position)}<Node layout="column"><Pointed tags="current" /><Node>i</Node></Node>{/snippet}{@render Arrow(i)}'
       )
     );
     expect(prepared.component).toContain('__sverlinPointers');
     expect(prepared.components.map(({ name }) => name)).toContain('Arrow');
+    expect(prepared.design.space['Arrow[current].fill']).toBeDefined();
   });
 
   it.each([
@@ -550,65 +547,38 @@ describe('typed view components', () => {
   const domain =
     '<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';
   const algorithm = '<script lang="sverlin">let i = Int(1); yield;</script>';
-  const component = (view: string, design = '') =>
-    prepareSvelteComponent(
-      `${domain}${algorithm}${design ? `<script lang="sverlin" design>${design}</script>` : ''}${view}`
-    );
+  const component = (view: string) => prepareSvelteComponent(`${domain}${algorithm}${view}`);
 
-  it('reads typed snippets as views of one type, and draws the view a design value named after the type picks', async () => {
+  it('reads typed snippets as views of one type, and draws the view the variant chooses for the type', async () => {
     const prepared = component(
-      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Int(i)}',
-      'const Int = pick([IntText, IntBold]);'
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntPair(value: Int)}<Node layout="row"><Node {value} /><Node {value} /></Node>{/snippet}{@render Int(i)}'
     );
     expect(prepared.components).toEqual([
       { name: 'IntText', cases: [1, 3] },
-      { name: 'IntBold', cases: [1, 3] }
+      { name: 'IntPair', cases: [1, 3] }
     ]);
     expect(prepared.component).toContain('__component');
+    expect(prepared.design.space['views.Int']).toEqual(['IntText', 'IntPair', 'none']);
     const drawn = await Promise.all(
       [1, 2, 3, 4, 5, 6, 7, 8].map(
-        async (seed) => (await bundlePresentation(prepared, seed)).parameters.Int
+        async (seed) =>
+          (await bundlePresentation(prepared, seed, { randomise: true })).variant['views.Int']
       )
     );
-    expect(new Set(drawn)).toEqual(new Set(['IntText', 'IntBold']));
+    expect(new Set(drawn)).toEqual(new Set(['IntText', 'IntPair']));
+    const none = await bundlePresentation(prepared, 1, { chosen: { 'views.Int': 'none' } });
+    expect(none.javascript).toContain('"views.Int":"none"');
   });
 
-  it('lets a design value named after a type fix its view, and another name choose among views', async () => {
-    const views =
-      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntBold(value: Int)}<Node {value} weight="bold" />{/snippet}';
-    const fixed = component(`${views}{@render Int(i)}`, 'const Int = IntBold;');
-    expect((await bundlePresentation(fixed, 1)).parameters.Int).toBe('IntBold');
-    const chosen = component(`${views}{@render Look(i)}`, 'const Look = pick([IntText, IntBold]);');
-    expect(['IntText', 'IntBold']).toContain((await bundlePresentation(chosen, 1)).parameters.Look);
-  });
-
-  it('draws no view a design value does not pick, and orders components after those they render', async () => {
+  it('orders components after those they render', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield; values = Row([1, 3, 1]); yield;</script><script lang="sverlin" design>const Int = pick([Plain, Bold]);</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Cell(value)}{/each}</Node>{/snippet}{#snippet Cell(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Bold(value: Int)}<Node {value} weight="bold" />{/snippet}{@render Search(values)}`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">let values = Row([1, 3]); yield; values = Row([1, 3, 1]); yield;</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Int(value)}{/each}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}{@render Search(values)}`
     );
-    // Cell views Int too, but only Plain and Bold are picked.
-    const drawn = await Promise.all(
-      [1, 2, 3, 4, 5, 6, 7, 8].map(
-        async (seed) => (await bundlePresentation(prepared, seed)).parameters.Int
-      )
-    );
-    expect(new Set(drawn)).toEqual(new Set(['Plain', 'Bold']));
-    expect(prepared.components.map(({ name }) => name)).toEqual([
-      'Plain',
-      'Bold',
-      'Cell',
-      'Search'
-    ]);
-    // Plain and Bold show their value, so they take every value; Cell and Search only pass theirs to
-    // views, which keep their boxes, so they take one. Search is filled to the longest Row in the
-    // trace.
+    expect(prepared.components.map(({ name }) => name)).toEqual(['Plain', 'Boxed', 'Search']);
+    // Plain and Boxed show their value, so they take every value; Search only passes its values to
+    // views, which keep their boxes, so it takes one, filled to the longest Row in the trace.
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
-      {
-        Plain: [1, 3],
-        Bold: [1, 3],
-        Cell: [1],
-        Search: [[1, 1, 1]]
-      }
+      { Plain: [1, 3], Boxed: [1, 3], Search: [[1, 1, 1]] }
     );
   });
 
@@ -624,7 +594,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield; i = Index(0); yield;</script><script lang="sverlin" design>const Int = IntView;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield; i = Index(0); yield;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
     expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
@@ -669,8 +639,13 @@ describe('typed view components', () => {
   it.each([
     [
       'rendering a type nothing draws',
-      () => component('{#snippet IntText(value: Int)}<Node {value} />{/snippet}{@render Int(i)}'),
-      /Int is a type, and nothing draws it: choose its view in the design block, as in const Int = pick\(\[IntText\]\);/
+      () => component('<Node>{@render Int(i)}</Node>'),
+      /Int is a type, and nothing draws it: add a view of it/
+    ],
+    [
+      'a view named after its type',
+      () => component('{#snippet Int(value: Int)}<Node {value} />{/snippet}{@render Int(i)}'),
+      /Int is a view named after its type/
     ],
     [
       'reading an algorithm variable',
@@ -703,24 +678,6 @@ describe('typed view components', () => {
       /components are defined at the top level/
     ],
     [
-      'choices between views of different types',
-      () =>
-        component(
-          '{#snippet A(value: Int)}<Node {value} />{/snippet}{#snippet B(value: Flag)}<Node {value} />{/snippet}',
-          'const Look = pick([A, B]);'
-        ),
-      /Look chooses between components that view different types/
-    ],
-    [
-      'a type’s design value choosing a view of another type',
-      () =>
-        component(
-          '{#snippet A(value: Int)}<Node {value} />{/snippet}{#snippet B(value: Flag)}<Node {value} />{/snippet}',
-          'const Int = B;'
-        ),
-      /Int chooses B, which views Flag/
-    ],
-    [
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
@@ -735,7 +692,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield; for (let i = Position(1); i < values.length; i++) { const key = values[i]; yield; }</script><script lang="sverlin" design>const Int = IntText;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield; for (let i = Position(1); i < values.length; i++) { const key = values[i]; yield; }</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(source('{@render Int(key)}'));
@@ -753,9 +710,32 @@ describe('scope', () => {
 
 describe('views', () => {
   it('are only drawn with {@render}, never called to make a value', () => {
-    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield;</script><script lang="sverlin" design>const Int = IntText; const Index = IndexLabel;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{@render Int(v)}{@render Index(Index(k))}{/each}</Node>{/snippet}{@render Row(values)}`;
+    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">yield;</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{@render Int(v)}{@render Index(Index(k))}{/each}</Node>{/snippet}{@render Row(values)}`;
     expect(() => prepareSvelteComponent(source)).toThrow(
       'Index(…) is a view, which only draws: write {@render Index(value)}'
     );
+  });
+});
+
+describe('view choices and prop values', () => {
+  const domain =
+    '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 3 });</script><script lang="sverlin">const i = Int(1); yield;</script>';
+
+  it('leaves out of a type’s views those that draw the type itself', () => {
+    const prepared = prepareSvelteComponent(
+      `${domain}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{@render Int(i)}`
+    );
+    expect(prepared.design.space['views.Int']).toEqual(['Plain', 'none']);
+    expect(() =>
+      prepareSvelteComponent(
+        `${domain}{#snippet Boxed(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}{@render Int(i)}`
+      )
+    ).toThrow('Every view of Int draws Int itself');
+  });
+
+  it('checks every value an expression can give a prop with fixed options', () => {
+    expect(() =>
+      prepareSvelteComponent(`${domain}<Node layout={step ? 'row' : 'stack'}><Node>a</Node></Node>`)
+    ).toThrow(`layout={step ? 'row' : 'stack'} can be "stack"`);
   });
 });

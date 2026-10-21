@@ -24,6 +24,9 @@ import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
 import type { BrowserBundlePresentation, RenderablePresentation } from '$lib/shared/presentations';
 import { presentationStepLabels } from '$lib/shared/presentations';
+import { frameOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
+
+type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 
@@ -53,15 +56,21 @@ export type AiWorkspace = {
 };
 
 /**
- * One variable the base declares in its design block: its key, its declaration with the domain
- * evaluated, as pick(["small", "full"]) or int(1, 3), and the value it takes in the viewed variant,
- * with where that value came from (absent when randomised).
+ * One variable of the base's design space: its key, as Arrow[current].fill or views.Int, its options
+ * (a list, or the name of an option set in design.options, as fill), and its value in the viewed
+ * variant, with where that value came from.
  */
 export type AiVariable = {
   variable: string;
-  declared: string;
-  value: unknown;
-  origin?: 'chosen' | 'kept';
+  options: string | readonly DesignValue[];
+  value: DesignValue;
+  origin?: string;
+};
+
+/** The base's design space as the viewed variant has it: its variables, and their option sets. */
+export type AiDesign = {
+  options: Record<string, readonly DesignValue[]>;
+  variables: AiVariable[];
 };
 
 /** One version of the source, named as the participant sees it, by the start of its hash. */
@@ -125,8 +134,8 @@ export type AiSelectedPresentation = AiPresentationSummary & {
   displaySetId?: string;
   format: RenderablePresentation['format'];
   steps: Array<{ label: string }>;
-  /** Design values this presentation drew from its seed. */
-  parameters?: Record<string, unknown>;
+  /** Its variant: every variable of its design space, by key. */
+  variant?: Record<string, DesignValue>;
 };
 
 /**
@@ -169,10 +178,10 @@ export type AiProjectContext = {
    */
   versions: AiSourceVersion[];
   /**
-   * The variables the base declares, with the values of the variant the participant is viewing.
-   * Empty when no presentation of the base recorded its values.
+   * The base's design space, with the values of the variant the participant is viewing. Empty when
+   * no presentation of the base recorded its variant.
    */
-  variables: AiVariable[];
+  design: AiDesign;
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
@@ -316,7 +325,7 @@ export function projectAiContext(
     headEventId: projectHead(document).id,
     base: projectWorkspace(snapshot),
     versions: sourceVersions(document),
-    variables: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
+    design: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     timelineWindow: {
@@ -397,8 +406,8 @@ function selectedPresentation(document: ProjectDocument, id: string): AiSelected
         displaySetId: event.payload.displaySetId,
         format: presentation.format,
         steps: presentationStepLabels(presentation).map((label) => ({ label })),
-        ...(presentation.format === 'browser-bundle-v1' && presentation.parameters
-          ? { parameters: presentation.parameters }
+        ...(presentation.format === 'browser-bundle-v1' && presentation.variant
+          ? { variant: presentation.variant }
           : {})
       };
     }
@@ -561,11 +570,21 @@ export function viewedPresentation(
     : undefined;
 }
 
-function designVariables(presentation: BrowserBundlePresentation | undefined): AiVariable[] {
-  return (presentation?.draws ?? []).map(({ key, call, args, value, origin }) => ({
-    variable: key,
-    declared: `${call}(${args.map((arg) => JSON.stringify(arg)).join(', ')})`,
-    value,
-    ...(origin ? { origin } : {})
-  }));
+/** A presentation's design space and variant, each prop's options named once. */
+function designVariables(presentation: BrowserBundlePresentation | undefined): AiDesign {
+  const options: Record<string, readonly DesignValue[]> = {};
+  const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
+    const origin = presentation?.origins?.[key];
+    const view = key.startsWith('views.') ? key.slice('views.'.length) : undefined;
+    const set = key.startsWith('frame.') ? key : key.slice(key.lastIndexOf('.') + 1);
+    const known: Record<string, readonly DesignValue[]> = { ...propOptions, ...frameOptions };
+    if (!view && Object.hasOwn(known, set)) options[set] = known[set];
+    return {
+      variable: key,
+      options: view ? [...(presentation?.views?.[view] ?? []), 'none'] : set,
+      value,
+      ...(origin ? { origin } : {})
+    };
+  });
+  return { options, variables };
 }

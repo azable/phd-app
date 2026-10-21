@@ -130,7 +130,7 @@ export function candidateId(presentation: RenderablePresentation): CandidateId {
     return { source, hue, values: friendlyName(fnv(presentation.presentationId)) };
   const seeded = /<Link\b|constraints=|['"]free['"]/u.test(presentation.source.text);
   const values = JSON.stringify([
-    sorted(presentation.parameters ?? {}),
+    sorted(presentation.variant ?? presentation.parameters ?? {}),
     seeded ? presentation.seed : null
   ]);
   return { source, hue, values: friendlyName(fnv(values)) };

@@ -180,22 +180,13 @@ describe('drawn value markers', () => {
 
   describe('views no presentation drew', () => {
     const views = [
-      '<script lang="sverlin" design>',
-      '  const Int = pick([IntCell, IntCard, IntCircle]);',
-      '</script>',
       '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-      '{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}',
-      '{#snippet IntCircle(value: Int)}<Node {value} radius="full" />{/snippet}',
+      '{#snippet IntTally(value: Int)}<Node layout="column"><Node {value} /></Node>{/snippet}',
+      '{#snippet IntDots(value: Int)}<Node tags="dots">{value}</Node>{/snippet}',
       '{@render Int(target)}'
     ].join('\n');
-    const pickInt = (value: string): DesignDraw => ({
-      key: 'Int',
-      call: 'pick',
-      args: [['IntCell', 'IntCard', 'IntCircle']],
-      value,
-      start: views.indexOf('pick('),
-      end: views.indexOf(');') + 1
-    });
+    const options = { Int: ['IntCell', 'IntTally', 'IntDots'] };
+    const showing = (view: string) => ({ 'views.Int': view });
     const greyed = (doc: string, presentations: Parameters<typeof unchosenViews>[1]) =>
       unchosenViews(EditorState.create({ doc }), presentations).map(({ from, to, title }) => ({
         view: /#snippet (\w+)/u.exec(doc.slice(from, to))?.[1],
@@ -203,32 +194,28 @@ describe('drawn value markers', () => {
         title
       }));
 
-    it('greys out each view a pick left out of every shown presentation', () => {
+    it('greys out each view of a type no shown presentation chose', () => {
       expect(
         greyed(views, [
-          { label: 'top', seed: 1, draws: [pickInt('IntCircle')] },
-          { label: 'bottom', seed: 2, draws: [pickInt('IntCell')] }
+          { label: 'top', seed: 1, draws: [], views: options, variant: showing('IntDots') },
+          { label: 'bottom', seed: 2, draws: [], views: options, variant: showing('IntCell') }
         ])
       ).toEqual([
-        { view: 'IntCard', whole: true, title: 'Not drawn: Int picked IntCircle and IntCell' }
+        { view: 'IntTally', whole: true, title: 'Not drawn: views.Int is IntDots and IntCell' }
       ]);
     });
 
     it('keeps views rendered directly', () => {
-      const direct = `${views}\n{@render IntCard(target)}`;
-      expect(greyed(direct, [{ seed: 1, draws: [pickInt('IntCircle')] }])).toEqual([
-        { view: 'IntCell', whole: true, title: 'Not drawn: Int picked IntCircle' }
-      ]);
+      const direct = `${views}\n{@render IntTally(target)}`;
+      expect(
+        greyed(direct, [{ seed: 1, draws: [], views: options, variant: showing('IntDots') }])
+      ).toEqual([{ view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }]);
     });
 
-    it('reads what a presentation without draws chose from its design values', () => {
-      const older = { seed: 2, draws: [], parameters: { Int: 'IntCell' } };
-      expect(greyed(views, [{ seed: 1, draws: [pickInt('IntCircle')] }, older])).toEqual([
-        { view: 'IntCard', whole: true, title: 'Not drawn: Int picked IntCircle and IntCell' }
-      ]);
+    it('leaves views be beside a presentation that recorded no variant', () => {
       expect(
         greyed(views, [
-          { seed: 1, draws: [pickInt('IntCircle')] },
+          { seed: 1, draws: [], views: options, variant: showing('IntDots') },
           { seed: 2, draws: [] }
         ])
       ).toEqual([]);

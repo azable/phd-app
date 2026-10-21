@@ -9,27 +9,8 @@ export { default as Node } from './node/Node.svelte';
 export { default as Pointed } from './node/Pointed.svelte';
 export { default as SverlinSlot } from './node/Slot.svelte';
 export { themeCss } from './theme';
-export type {
-  Align,
-  FrameRatio,
-  FrameSettings,
-  Justify,
-  Layout,
-  MinSize,
-  NodeColor,
-  NodeDefaults,
-  NodeFont,
-  NodeProps,
-  NodeShape,
-  NodeSize,
-  NodeStroke,
-  PaletteColor,
-  Primitive,
-  Radius,
-  Spacing,
-  StrokeWidth,
-  Weight
-} from './node/props';
+export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
+export { activeTags, kindKey, type DesignValues } from './node/design';
 export type { LayoutMemory } from './type-context';
 export { providePointers } from './type-context';
 export { settleSpans } from './node/span';

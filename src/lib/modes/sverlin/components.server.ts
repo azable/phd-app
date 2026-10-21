@@ -1,10 +1,9 @@
 /**
  * Typed view components: top-level snippets that view one domain type, as in
  * {#snippet IntText(value: Int)}, optionally taking the props of the node they draw, as in
- * (value: Int, node). A component reads only its value, design values, and other components, so its
- * size can be found by rendering it for every value of its type (see assembly/entry.ts). A design
- * value named after a type chooses among its views, as in const Int = pick([IntText, IntDots]);,
- * and renders as the type's name, as in {@render Int(value)}.
+ * (value: Int, node). A component reads only its value and other components, so its size can be
+ * found by rendering it for every value of its type (see assembly/entry.ts). A type renders by its
+ * name, as in {@render Int(value)}, drawing the view of it its variant chooses (views.Int).
  */
 
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
@@ -734,7 +733,7 @@ type ProbeValues = { every?: unknown[]; widest: unknown[] };
 type Steps = readonly { state: TraceState; types: TypeMap }[];
 
 /**
- * The view's components, each after the components it renders, directly or through a design value
+ * The view's components, each after the components it renders, directly or through a type's name
  * choosing among them, so their boxes are known when it is drawn; with the values to draw it with.
  * A component with more cases than a pass can draw is a problem.
  */

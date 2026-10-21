@@ -73,7 +73,7 @@ export const selectedElementSchema = v.strictObject({
 });
 
 /**
- * What a Sverlin step on screen drew from its seed rather than its design values: its constraint
+ * What a Sverlin step on screen drew from its seed rather than its variant: its constraint
  * layouts.
  */
 export const drawnStepSchema = v.object({

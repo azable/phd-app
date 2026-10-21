@@ -36,7 +36,11 @@ import type {
   DesignValues,
   VariantRequest
 } from '$lib/shared/presentations';
-import { isSverlinPresentation, presentationMode, variantValues } from '$lib/shared/presentations';
+import {
+  isSverlinPresentation,
+  presentationMode,
+  presentationVariant
+} from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
@@ -245,12 +249,15 @@ export function buildProjectPresentations(
     const based = options.from
       ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
       : before;
+    // New variants of the source as it is: every one randomised, from the one it was made from.
     const document = await buildDocument(
       based,
       'seed' in options ? [options.seed] : freshPresentationSeeds(options.presentationCount),
       'seed' in options ? options.purpose : 'seed-change',
       options.operationId,
-      dependencies
+      dependencies,
+      options.from ? presentedValues(before, options.from) : undefined,
+      true
     );
     return commandResult(before, document);
   });
@@ -286,7 +293,9 @@ export function replenishProjectPresentations(
         freshPresentationSeeds(count, usedSeeds),
         'seed-change',
         options.operationId,
-        dependencies
+        dependencies,
+        undefined,
+        true
       );
       const nextState = presentationBufferState(next, options.target);
       document = next;
@@ -618,7 +627,8 @@ async function buildDocument(
   purpose: BuildPurpose,
   operationId: string,
   dependencies: ProjectServiceDependencies,
-  base?: DesignValues
+  base?: DesignValues,
+  randomiseAll = false
 ) {
   const snapshot = projectSnapshotAt(document);
   const artifact = snapshot.artifacts[snapshot.entryArtifactId];
@@ -649,7 +659,7 @@ async function buildDocument(
       sourceContent: artifact.content.text,
       source: artifact.content,
       sourceLabel: artifact.path,
-      requests: basedRequests(seeds, base),
+      requests: basedRequests(seeds, base, undefined, randomiseAll),
       purpose,
       input: 'committed-artifact',
       operationId
@@ -843,8 +853,9 @@ export async function activateBuiltPresentations(
       stepSignature: bundle.masterSignature ?? stepSignature(bundle.labels),
       labels: bundle.labels,
       ...(bundle.masterSteps ? { masterSteps: bundle.masterSteps } : {}),
-      ...(bundle.parameters ? { parameters: bundle.parameters } : {}),
-      ...(bundle.draws ? { draws: bundle.draws } : {}),
+      ...(bundle.variant ? { variant: bundle.variant } : {}),
+      ...(bundle.origins ? { origins: bundle.origins } : {}),
+      ...(bundle.views ? { views: bundle.views } : {}),
       seed: item.seed,
       source: item.source,
       html: recordText(bundle.html, 'text/html'),
@@ -925,25 +936,28 @@ async function checkedDocument(
 }
 
 /**
- * The builds for a batch of seeds. Every one takes the chosen values. The first also keeps the base
- * variant's, so a change shows on the variant it was made from; the rest randomise everything
- * else, so there is still a variant to compare it with.
+ * The builds for a batch of seeds, each from the base variant (or the starter) with the chosen
+ * values. The first keeps the base's other values, so a change shows on the variant it was made
+ * from; the rest randomise them, so there is still a variant to compare it with. Randomising all,
+ * every build is a new variant.
  */
 export function basedRequests(
   seeds: readonly number[],
   base?: DesignValues,
-  chosen?: DesignValues
+  chosen?: DesignValues,
+  randomiseAll = false
 ): BuildRequest[] {
   return seeds.map((seed, index) => {
     const variant: VariantRequest = {
-      ...(index === 0 && base ? { base } : {}),
-      ...(chosen ? { chosen } : {})
+      ...(base ? { base } : {}),
+      ...(chosen ? { chosen } : {}),
+      ...(randomiseAll || index > 0 ? { randomise: true as const } : {})
     };
     return Object.keys(variant).length > 0 ? { seed, variant } : { seed };
   });
 }
 
-/** The values a presentation's declarations took, when it recorded them. */
+/** A presentation's variant, when it recorded one. */
 export function presentedValues(
   document: ProjectDocument,
   presentationId: string
@@ -955,7 +969,6 @@ export function presentedValues(
   );
   const presentation =
     presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
-  return presentation?.format === 'browser-bundle-v1' && presentation.draws
-    ? variantValues(presentation.draws)
-    : undefined;
+  const variant = presentationVariant(presentation);
+  return Object.keys(variant).length ? variant : undefined;
 }

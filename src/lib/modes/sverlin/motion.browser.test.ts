@@ -40,15 +40,12 @@ const merge = `<script lang="sverlin" domain>
     yield;
   }
 </script>
-<script lang="sverlin" design>
-  const Int = pick([IntText, IntCard]);
-</script>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
-{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}
+{#snippet IntCard(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node size="small">↑</Node></Node>{/snippet}
-{#snippet Placed(p: Position)}<Pointed fill="amber" />{/snippet}
-<Node layout="column" align="start">{@render Row(left)}{@render Row(right)}{@render Row(merged)}</Node>
+{#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node tags="label">↑</Node></Node>{/snippet}
+{#snippet Placed(p: Position)}<Pointed tags="placed" />{/snippet}
+<Node layout="column">{@render Row(left)}{@render Row(right)}{@render Row(merged)}</Node>
 {@render Arrow(i)}
 {@render Arrow(j)}
 {@render Placed(k)}`;
@@ -187,12 +184,9 @@ const walk = `<script lang="sverlin" domain>
   yield;
   for (let e = EdgeIndex(0); e < edges.length; e++) yield;
 </script>
-<script lang="sverlin" design>
-  const Name = NameText;
-</script>
-{#snippet NameText(name: Name)}<Node value={name} shape="card" />{/snippet}
+{#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
-{#snippet Current(c: EdgeIndex)}<Pointed stroke="red" strokeWidth="thick" />{/snippet}
+{#snippet Current(c: EdgeIndex)}<Pointed tags="current" />{/snippet}
 <Node layout="free">
   {#each vertices as name}{@render Name(name)}{/each}
   {#each edges as edge}{@render Arrow(edge)}{/each}
