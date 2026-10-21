@@ -571,7 +571,9 @@ export function viewedPresentation(
 }
 
 /** A presentation's design space and variant, each prop's options named once. */
-function designVariables(presentation: BrowserBundlePresentation | undefined): AiDesign {
+export function designVariables(
+  presentation: Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views'> | undefined
+): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];

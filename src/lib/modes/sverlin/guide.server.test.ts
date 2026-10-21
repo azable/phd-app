@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import aiAssistant, { languageGuide } from './bot.server';
+import chooser from './chooser.server';
 import { compileSvelteComponent, libraryProps } from './compile.server';
 import guide from './README.md?raw';
 
@@ -72,5 +73,13 @@ describe('Sverlin language guide and assistant instructions', () => {
     expect(aiAssistant.initialPrompt).not.toContain('-->');
     // The prompt refers the assistant to this section by name.
     expect(guide).toContain('\n### Declare what varies\n');
+  });
+
+  it('gives the chooser its instructions and the guide’s Design section', () => {
+    expect(chooser.initialPrompt).toMatch(/^You choose how Sverlin presentations look./u);
+    expect(chooser.initialPrompt).toContain('## Design');
+    expect(chooser.initialPrompt).toContain('### Declare what varies');
+    expect(chooser.initialPrompt).not.toContain('## The subset');
+    expect(chooser.initialPrompt).not.toContain('<!--');
   });
 });

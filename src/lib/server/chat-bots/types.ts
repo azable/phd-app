@@ -121,7 +121,7 @@ export type BuildFeedback = {
 };
 
 /** Role of one bounded generation profile in an agent's attempt ladder. */
-export type ChatAttemptPurpose = 'intake' | 'initial' | 'repair' | 'fallback';
+export type ChatAttemptPurpose = 'intake' | 'initial' | 'repair' | 'fallback' | 'choosing';
 
 /** Recordable identity of the profile selected for one generation request. */
 export type ChatAttempt = {

@@ -17,7 +17,7 @@ export const aiGenerationRequestedEventSchema = v.object({
   type: v.literal('ai.generation-requested'),
   payload: v.object({
     attempt: positiveSchema,
-    purpose: v.picklist(['intake', 'initial', 'repair', 'fallback']),
+    purpose: v.picklist(['intake', 'initial', 'repair', 'fallback', 'choosing']),
     prompt: recordedTextSchema,
     promptTemplateSha256: sha256Schema,
     requestedModel: textSchema,

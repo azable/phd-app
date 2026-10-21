@@ -31,7 +31,8 @@ import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/opera
 import {
   getChatbot,
   getCandidateChatbot,
-  getParticipantIntakeClassifier
+  getParticipantIntakeClassifier,
+  getSverlinChooser
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
@@ -44,6 +45,7 @@ import {
 import {
   projectAiContext,
   projectConversationMessages,
+  designVariables,
   viewedPresentation,
   type AiContextSelection,
   type AiProjectContext
@@ -92,6 +94,8 @@ export type ProjectCommandDependencies = {
   getChatbot: typeof getChatbot;
   getCandidateChatbot: typeof getCandidateChatbot;
   getParticipantIntakeClassifier: typeof getParticipantIntakeClassifier;
+  /** The bot choosing a built source's variants; without one, a turn shows its first build. */
+  getChooser?: typeof getSverlinChooser;
 };
 
 export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
@@ -99,7 +103,8 @@ export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
   projectService: defaultProjectServiceDependencies,
   getChatbot,
   getCandidateChatbot,
-  getParticipantIntakeClassifier
+  getParticipantIntakeClassifier,
+  getChooser: getSverlinChooser
 };
 
 /** Validate and durably queue participant feedback without waiting for the assistant. */
@@ -753,12 +758,29 @@ async function runSverlinAssistantTurn(
       );
       current = built.document;
       if (batchSucceeded(built.recorded)) {
+        // A new source's presentations show the variants the chooser picks from its design space.
+        const shown =
+          decision.action === 'revise' || decision.action === 'edit'
+            ? await chosenBuild(
+                {
+                  document: current,
+                  recorded: built.recorded,
+                  candidate,
+                  summary: decision.summary,
+                  seeds,
+                  operationId,
+                  attempt
+                },
+                dependencies
+              )
+            : { document: current, recorded: built.recorded };
+        current = shown.document;
         assertCurrentProjectOperationActive();
         return {
           document: await acceptSverlinCandidate(
             {
               document: current,
-              recorded: built.recorded,
+              recorded: shown.recorded,
               generationEvent: generation.generationEvent,
               candidate,
               ...('summary' in decision ? { summary: decision.summary } : {}),
@@ -1241,6 +1263,92 @@ async function buildCandidateBatch(
     dependencies.projectService
   );
   return { document: recorded.document, recorded };
+}
+
+/**
+ * Build a candidate again with the variants the chooser picks from its design space, starting from
+ * the first build's variant (the viewed one, with the starter's values for anything new). A value
+ * the space does not offer is left out. Without a chooser, or when choosing or building fails, the
+ * first build stands.
+ */
+async function chosenBuild(
+  options: {
+    document: ProjectDocument;
+    recorded: RecordedBuildBatch;
+    candidate: string;
+    summary?: string;
+    seeds: readonly number[];
+    operationId: string;
+    attempt: number;
+  },
+  dependencies: ProjectCommandDependencies
+): Promise<{ document: ProjectDocument; recorded: RecordedBuildBatch }> {
+  const firstBuild = { document: options.document, recorded: options.recorded };
+  const chooser = dependencies.getChooser?.();
+  const [first] = options.recorded.builds;
+  const bundle = first?.result.ok && 'bundle' in first ? first.result.bundle : undefined;
+  if (!chooser || !bundle?.variant) return firstBuild;
+  const design = designVariables(bundle);
+  const prompt = await chooser.preparePrompt({
+    messages: projectConversationMessages(options.document.events),
+    project: {
+      source: options.candidate,
+      ...(options.summary ? { summary: options.summary } : {}),
+      count: options.seeds.length,
+      design
+    },
+    attempt: 1
+  });
+  const generation = await runPreparedGeneration(
+    {
+      document: options.document,
+      attempt: options.attempt,
+      operationId: options.operationId,
+      prompt,
+      generate: () => chooser.generatePrepared(prompt, { signal: currentProjectOperationSignal() }),
+      validateResult: () => {},
+      fallbackResponse: (result) => ({ variants: result.variants }),
+      notifyFailure: false
+    },
+    dependencies
+  );
+  if (!generation.ok) return { ...firstBuild, document: generation.document };
+  const offered = (key: string) => {
+    const found = design.variables.find(({ variable }) => variable === key);
+    if (!found) return undefined;
+    return typeof found.options === 'string' ? design.options[found.options] : found.options;
+  };
+  const requests = options.seeds.map((seed, index) => {
+    const variant = generation.result.variants[index];
+    const chosen = Object.fromEntries(
+      (variant?.values ?? [])
+        .filter(({ variable, value }) => offered(variable)?.includes(value))
+        .map(({ variable, value }) => [variable, value])
+    );
+    const randomise = (variant?.randomise ?? []).filter((key) => offered(key));
+    // A variant the chooser left out is drawn at random, so a pair still has two.
+    return {
+      seed,
+      variant: {
+        base: bundle.variant,
+        chosen,
+        ...(!variant ? { randomise: true as const } : randomise.length ? { randomise } : {})
+      }
+    };
+  });
+  const rebuilt = await buildCandidateBatch(
+    {
+      document: generation.document,
+      candidate: options.candidate,
+      requests,
+      operationId: options.operationId,
+      attempt: options.attempt
+    },
+    dependencies
+  );
+  return batchSucceeded(rebuilt.recorded)
+    ? { document: rebuilt.document, recorded: rebuilt.recorded }
+    : { document: rebuilt.document, recorded: options.recorded };
 }
 
 /** The entry artifact's source in a project's newest state. */

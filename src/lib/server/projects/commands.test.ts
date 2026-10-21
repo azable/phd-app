@@ -58,6 +58,8 @@ vi.mock('$lib/server/chat-bots/registry', () => ({
     generatePrepared: mocks.generatePrepared,
     requestTimeoutMs: () => 180_000
   }),
+  // No chooser unless a test gives one, so a turn shows its first build.
+  getSverlinChooser: () => undefined,
   getParticipantIntakeClassifier: () => ({
     config: {
       participantIntake: [{ id: 'algorithm', question: 'Test' }],
@@ -746,6 +748,121 @@ describe('submitProjectFeedback', () => {
     expect(
       buildResults.every(({ payload }) => payload.bundle.mediaType === 'application/json')
     ).toBe(true);
+  });
+
+  it('builds a new source again with the variants the chooser picks from its design space', async () => {
+    mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
+    const choose = vi.fn(async (prompt: { context: { project: { design: unknown } } }) => ({
+      variants: [
+        {
+          values: [
+            { variable: 'root.fill', value: 'amber-100' },
+            { variable: 'root.fill', value: 'not-a-colour' },
+            { variable: 'root.depth', value: 3 }
+          ],
+          randomise: []
+        },
+        { values: [{ variable: 'root.fill', value: 'blue-100' }], randomise: ['root.font'] }
+      ],
+      prompt,
+      generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
+    }));
+    const chooserDependencies: ProjectCommandDependencies = {
+      ...commandDependencies,
+      getChooser: () =>
+        ({
+          preparePrompt: async (request: { project: unknown }) => ({
+            initialPrompt: 'Choose',
+            messages: [],
+            context: { project: request.project },
+            attempt: { number: 1, purpose: 'choosing' },
+            parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
+            responseFormat: { name: 'design_variants', schema: {} }
+          }),
+          generatePrepared: choose,
+          requestTimeoutMs: () => 180_000
+        }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>
+    };
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject({ title: 'Chosen' }, serviceDependencies);
+
+    const result = await submitProjectFeedback(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        content: markdownMessage('Show two alternatives'),
+        focus: [],
+        presentationCount: 2,
+        operationId: '12345678-1234-4123-8123-123456789abc'
+      },
+      chooserDependencies
+    );
+
+    const [{ context }] = choose.mock.calls[0];
+    expect(JSON.stringify(context.project.design)).toContain('"variable":"root.fill"');
+    expect(
+      result.appendedEvents.some(
+        (event) => event.type === 'ai.generation-requested' && event.payload.purpose === 'choosing'
+      )
+    ).toBe(true);
+    // Built once to compile, then again with the chosen variants, which are what is shown.
+    expect(result.appendedEvents.filter((event) => event.type === 'build.requested')).toHaveLength(
+      4
+    );
+    const shown = result.appendedEvents.flatMap((event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1'
+        ? [event.payload.presentation]
+        : []
+    );
+    expect(shown.map(({ variant }) => variant?.['root.fill'])).toEqual(['amber-100', 'blue-100']);
+    expect(shown.map(({ origins }) => origins?.['root.fill'])).toEqual(['chosen', 'chosen']);
+    expect(shown[0].variant).not.toHaveProperty('root.depth');
+  });
+
+  it('shows the first build when choosing fails', async () => {
+    mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
+    const chooserDependencies: ProjectCommandDependencies = {
+      ...commandDependencies,
+      getChooser: () =>
+        ({
+          preparePrompt: async () => ({
+            initialPrompt: 'Choose',
+            messages: [],
+            context: {},
+            attempt: { number: 1, purpose: 'choosing' },
+            parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
+            responseFormat: { name: 'design_variants', schema: {} }
+          }),
+          generatePrepared: vi.fn().mockRejectedValue(new Error('The chooser timed out.')),
+          requestTimeoutMs: () => 180_000
+        }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>
+    };
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject({ title: 'Unchosen' }, serviceDependencies);
+
+    const result = await submitProjectFeedback(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        content: markdownMessage('Show one'),
+        focus: [],
+        presentationCount: 1,
+        operationId: '12345678-1234-4123-8123-123456789abc'
+      },
+      chooserDependencies
+    );
+
+    expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(true);
+    expect(result.appendedEvents.some((event) => event.type === 'system.notified')).toBe(false);
+    expect(result.appendedEvents.filter((event) => event.type === 'build.requested')).toHaveLength(
+      1
+    );
+    expect(
+      result.appendedEvents.filter((event) => event.type === 'visualization.presented')
+    ).toHaveLength(1);
   });
 
   it('repairs a failed component batch using the same two seeds', async () => {
