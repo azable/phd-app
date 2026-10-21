@@ -35,13 +35,13 @@ describe('single-component Svelte assistant', () => {
     expect(() =>
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: '' }],
-        decision: { action: 'respond', sourceArtifactContent: null }
+        decision: { action: 'respond' }
       })
     ).toThrow();
     expect(() =>
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'Update' }],
-        decision: { action: 'revise', sourceArtifactContent: '   ' }
+        decision: { action: 'revise', source: '   ', summary: 'Update' }
       })
     ).toThrow();
   });
@@ -50,7 +50,7 @@ describe('single-component Svelte assistant', () => {
     expect(
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'Here is a simpler version.' }],
-        decision: { action: 'revise', sourceArtifactContent: '<h1>Hello</h1>' },
+        decision: { action: 'revise', source: '<h1>Hello</h1>', summary: 'A simpler view' },
         recovery: {
           struggledWith: 'the dense animated layout',
           simplified: 'the layout while preserving the subject'
@@ -64,79 +64,42 @@ describe('single-component Svelte assistant', () => {
     });
   });
 
-  it('enforces the respond, resample, revise, and edit source contract', () => {
-    expect(aiAssistant.responseFormat.schema).toMatchObject({
-      type: 'object',
-      properties: {
-        decision: {
-          anyOf: [
-            {
-              properties: {
-                action: { enum: ['revise'] },
-                sourceArtifactContent: { type: 'string' },
-                summary: { type: 'string' }
-              }
-            },
-            {
-              properties: {
-                action: { enum: ['edit'] },
-                edits: { type: 'array' },
-                summary: { type: 'string' }
-              }
-            },
-            {
-              properties: {
-                action: { enum: ['respond', 'resample'] },
-                sourceArtifactContent: { type: 'null' }
-              }
-            }
-          ]
-        }
-      }
-    });
-    expect(() =>
+  it('asks for and parses one decision of each kind, as source-decisions.ts defines them', () => {
+    const decision = (aiAssistant.responseFormat.schema as { properties: { decision: unknown } })
+      .properties.decision as { oneOf: { properties: { action: { const: string } } }[] };
+    expect(decision.oneOf.map(({ properties }) => properties.action.const)).toEqual([
+      'respond',
+      'resample',
+      'edit',
+      'revise'
+    ]);
+    const parse = (value: unknown) =>
       aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'I will change it.' }],
-        decision: { action: 'respond', sourceArtifactContent: '<h1>Hello</h1>' },
+        reply: [{ type: 'markdown', text: 'Done.' }],
+        decision: value,
         recovery: null
-      })
-    ).toThrow(/invalid structured response/i);
-    expect(() =>
-      aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'I am updating it.' }],
-        decision: { action: 'revise', sourceArtifactContent: null },
-        recovery: null
-      })
-    ).toThrow(/invalid structured response/i);
+      });
+    expect(parse({ action: 'resample' })).toMatchObject({ decision: { action: 'resample' } });
     expect(
-      aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'I am preparing another pair.' }],
-        decision: { action: 'resample', sourceArtifactContent: null },
-        recovery: null
-      })
-    ).toMatchObject({ action: 'resample' });
-    expect(
-      aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'I am labelling them.' }],
-        decision: {
-          action: 'edit',
-          edits: [{ find: '{v}', replace: '{v} ({k})' }],
-          summary: 'Labels each value with its index'
-        },
-        recovery: null
+      parse({
+        action: 'edit',
+        edits: [{ find: '{v}', replace: '{v} ({k})' }],
+        summary: ' Labels each value with its index '
       })
     ).toMatchObject({
-      action: 'edit',
-      edits: [{ find: '{v}', replace: '{v} ({k})' }],
-      summary: 'Labels each value with its index'
+      decision: {
+        action: 'edit',
+        edits: [{ find: '{v}', replace: '{v} ({k})' }],
+        summary: 'Labels each value with its index'
+      }
     });
-    expect(() =>
-      aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'I am editing it.' }],
-        decision: { action: 'edit', edits: [], summary: 'Nothing' },
-        recovery: null
-      })
-    ).toThrow(/invalid structured response/i);
+    for (const invalid of [
+      { action: 'respond', source: '<h1>Hello</h1>' },
+      { action: 'revise', source: ' ', summary: 'Nothing' },
+      { action: 'edit', edits: [], summary: 'Nothing' },
+      { action: 'rewrite' }
+    ])
+      expect(() => parse(invalid)).toThrow(/invalid structured response/i);
   });
 
   it('rejects unsupported message content in assistant discussion', () => {
@@ -146,7 +109,7 @@ describe('single-component Svelte assistant', () => {
           { type: 'unsupported-content' },
           { type: 'markdown', text: 'Do you prefer this presentation?' }
         ],
-        decision: { action: 'respond', sourceArtifactContent: null },
+        decision: { action: 'respond' },
         recovery: null
       })
     ).toThrow();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseResult } from './openai';
+import { parseResult, strictSchema } from './openai';
 
 describe('parseResult', () => {
   it('accepts the strict source-or-null response shape', () => {
@@ -38,5 +38,24 @@ describe('parseResult', () => {
         message: 'The chatbot refused the request instead of returning structured output.'
       })
     );
+  });
+});
+
+describe('strict response schemas', () => {
+  it('states oneOf as anyOf and const as an enum, without $schema, as strict mode accepts', () => {
+    expect(
+      strictSchema({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        oneOf: [
+          { type: 'object', properties: { action: { const: 'respond' } } },
+          { type: 'object', properties: { action: { const: 'edit' }, edits: { type: 'array' } } }
+        ]
+      })
+    ).toEqual({
+      anyOf: [
+        { type: 'object', properties: { action: { enum: ['respond'] } } },
+        { type: 'object', properties: { action: { enum: ['edit'] }, edits: { type: 'array' } } }
+      ]
+    });
   });
 });

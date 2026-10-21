@@ -179,13 +179,15 @@
                 <pre class="bg-green-500/10 px-3 py-2 whitespace-pre-wrap">{edit.replace}</pre>
               </div>
             {/each}
-            {#if decision.decision?.sourceArtifactContent}
+            {@const rewritten =
+              decision.decision?.source ?? decision.decision?.sourceArtifactContent}
+            {#if rewritten}
               <div>
                 <h3 class="mb-1 text-xs font-medium text-muted-foreground uppercase">
                   Rewritten source
                 </h3>
-                <pre class="rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap">{decision
-                    .decision.sourceArtifactContent}</pre>
+                <pre
+                  class="rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap">{rewritten}</pre>
               </div>
             {/if}
             {#if decision.recovery}

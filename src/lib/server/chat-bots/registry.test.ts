@@ -43,7 +43,7 @@ describe('chatbot registry', () => {
       responseFormat: { name: 'test', schema: {} },
       parseOutput: () => ({
         reply: [{ type: 'markdown', text: 'Done' }],
-        action: 'respond'
+        decision: { action: 'respond' }
       })
     } satisfies ChatBotConfig<Record<string, never>>;
     const chatbot = createChatbot(config, {

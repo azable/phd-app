@@ -54,6 +54,24 @@ function readReasoningSummary(): 'auto' | 'concise' | 'detailed' | undefined {
     : undefined;
 }
 
+/**
+ * A JSON Schema in the subset OpenAI's strict structured outputs accept: oneOf as anyOf, which
+ * matches the same values where the alternatives exclude each other, as decisions do by their
+ * action; const as a one-value enum; and no $schema.
+ */
+export function strictSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  return Object.fromEntries(
+    Object.entries(schema).flatMap(([key, value]): [string, unknown][] => {
+      if (key === '$schema') return [];
+      if (key === 'oneOf') return [['anyOf', strictSchema(value)]];
+      if (key === 'const') return [['enum', [value]]];
+      return [[key, strictSchema(value)]];
+    })
+  );
+}
+
 function readRequestTimeoutMs(): number {
   const configured = Number.parseInt(process.env.CHATBOT_REQUEST_TIMEOUT_MS ?? '', 10);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : defaultRequestTimeoutMs;
@@ -145,7 +163,7 @@ export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<
           type: 'json_schema',
           name: request.responseFormat.name,
           strict: request.responseFormat.strict ?? true,
-          schema: request.responseFormat.schema
+          schema: strictSchema(request.responseFormat.schema) as Record<string, unknown>
         }
       }
     },

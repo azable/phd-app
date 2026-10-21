@@ -34,6 +34,8 @@ export type AgentDecision = {
     action?: string;
     summary?: string;
     edits?: { find: string; replace: string }[];
+    source?: string;
+    /** The rewritten source as recorded before decisions named it source. */
     sourceArtifactContent?: string | null;
   };
   recovery?: unknown;

@@ -632,7 +632,7 @@ describe('submitProjectFeedback', () => {
   it('generates the first candidate pair from accepted blank-project source on request', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('I am preparing two more options.'),
-      action: 'resample',
+      decision: { action: 'resample' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -670,7 +670,7 @@ describe('submitProjectFeedback', () => {
   it('keeps the visible candidate until a complete resampled pair is ready', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('I am preparing another pair.'),
-      action: 'resample',
+      decision: { action: 'resample' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1297,7 +1297,7 @@ describe('submitProjectFeedback', () => {
     const providerResponse = { id: 'response-invalid-reference' };
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: [{ type: 'candidate-ref', slot: 0 }],
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       providerResponse,
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
@@ -1348,7 +1348,7 @@ describe('submitProjectFeedback', () => {
     const presentationId = presentedEvent(created).payload.presentation.presentationId;
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage(`I prefer presentation \`${presentationId}\` here.`),
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1396,7 +1396,7 @@ describe('submitProjectFeedback', () => {
         { type: 'presentation-ref', presentationId: unrelated },
         { type: 'markdown', text: '.' }
       ],
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1430,7 +1430,7 @@ describe('submitProjectFeedback', () => {
   it('resolves focused history into historical source and presentation context', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('No source change needed.'),
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1482,7 +1482,7 @@ describe('submitProjectFeedback', () => {
   it('retains and expands the presentations visible when feedback was submitted', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('Noted.'),
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1567,7 +1567,7 @@ describe('submitProjectFeedback', () => {
   it('traces a referenced element to its node in the presentation source for the assistant', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('Noted.'),
-      action: 'respond',
+      decision: { action: 'respond' },
       prompt: {},
       generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
     });
@@ -1651,19 +1651,22 @@ describe('submitProjectFeedback', () => {
 });
 
 function generation(
-  sourceArtifactContent: string | undefined,
+  source: string | undefined,
   reply: string,
   recovery?: { struggledWith: string; simplified: string }
 ) {
   return {
     reply: markdownMessage(reply),
-    action: sourceArtifactContent === undefined ? ('respond' as const) : ('revise' as const),
-    sourceArtifactContent:
-      sourceArtifactContent === undefined
-        ? undefined
-        : sourceArtifactContent.startsWith('broken')
-          ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-          : `<script lang="sverlin">yield;</script><Node>${sourceArtifactContent}</Node>`,
+    decision:
+      source === undefined
+        ? { action: 'respond' as const }
+        : {
+            action: 'revise' as const,
+            source: source.startsWith('broken')
+              ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
+              : `<script lang="sverlin">yield;</script><Node>${source}</Node>`,
+            summary: reply
+          },
     ...(recovery ? { recovery } : {}),
     prompt: {
       initialPrompt: 'test prompt',
@@ -1941,9 +1944,7 @@ describe('version parents', () => {
 describe('assistant edits', () => {
   const edit = (edits: { find: string; replace: string }[], summary: string) => ({
     ...generation(undefined, 'Edited.'),
-    action: 'edit' as const,
-    edits,
-    summary
+    decision: { action: 'edit' as const, edits, summary }
   });
   const created = async (title: string) => {
     const { createProject } = await import('./service');

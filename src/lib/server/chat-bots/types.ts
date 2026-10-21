@@ -11,7 +11,7 @@ import * as v from 'valibot';
 import { presentationIdSchema } from '$lib/shared/presentations';
 import { textSchema } from '$lib/shared/projects/events/values';
 
-import type { SourceEdit } from './source-edits';
+import type { SourceDecision } from './source-decisions';
 
 /** User or assistant message retained as conversational context. */
 export type ConversationMessage = {
@@ -161,31 +161,12 @@ export type ChatResponseFormat = {
   strict?: boolean;
 };
 
-/** Static behavior and context builder for one chatbot. */
-export type SourceArtifactChatOutput =
-  | {
-      reply: GeneratedMessageContent;
-      action: 'respond' | 'resample';
-      sourceArtifactContent?: never;
-      recovery?: RecoveryExplanation;
-    }
-  | {
-      reply: GeneratedMessageContent;
-      action: 'revise';
-      sourceArtifactContent: string;
-      /** What the revision shows, for a first source, or what it changes. */
-      summary?: string;
-      recovery?: RecoveryExplanation;
-    }
-  | {
-      reply: GeneratedMessageContent;
-      /** A revision made by edits to the source it revises, not a rewrite of it. */
-      action: 'edit';
-      edits: SourceEdit[];
-      summary?: string;
-      sourceArtifactContent?: never;
-      recovery?: RecoveryExplanation;
-    };
+/** What an assistant that authors a source returns: its reply, and its decision (see source-decisions.ts). */
+export type SourceArtifactChatOutput = {
+  reply: GeneratedMessageContent;
+  decision: SourceDecision;
+  recovery?: RecoveryExplanation;
+};
 
 /** Candidate-based modes share one orchestration shape; each mode validates its own manifest. */
 export type CandidateAssistantOutput = {

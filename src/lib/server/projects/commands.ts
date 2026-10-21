@@ -600,8 +600,8 @@ async function runSverlinAssistantTurn(
 
       if (attempt === 1) {
         // A blank reply to a change says what the change does instead.
-        const { reply } = generation.result;
-        const summary = 'summary' in generation.result ? generation.result.summary : undefined;
+        const { reply, decision } = generation.result;
+        const summary = 'summary' in decision ? decision.summary : undefined;
         current = await appendAssistantResponse(
           current,
           resolveAssistantContent(
@@ -616,63 +616,78 @@ async function runSverlinAssistantTurn(
         );
       }
 
-      // Edits apply to the source being revised: the failed candidate when repairing it.
-      let candidate = generation.result.sourceArtifactContent;
-      if (generation.result.action === 'edit') {
-        const base = buildFeedback?.failedSource ?? entrySource(current);
-        const edited = applySourceEdits(base, generation.result.edits);
-        if ('problems' in edited) {
-          const summary = `Attempt ${attempt}: the edits could not be applied. ${edited.problems.join(' ')}`;
-          failureSummaries.push(summary);
-          // Recorded, as a failed build is, so the Timeline holds every candidate set aside.
-          current = await appendProjectEvents(
-            current,
-            [
-              draftEvent({
-                type: 'revision.edits-rejected',
-                actor: { kind: 'system' },
-                operationId,
-                payload: {
-                  attempt,
-                  ...generationReference(current, operationId),
-                  problems: edited.problems
-                }
-              })
-            ],
-            dependencies.projectService
-          );
-          if (attempt === chatbot.config.attemptProfiles.length) {
-            return {
-              document: await appendExhaustedSverlinFailure(
-                current,
-                operationId,
-                summary,
-                dependencies
-              ),
-              done: true
+      // The source each decision asks to build, if any. Edits apply to the source being revised:
+      // the failed candidate when repairing it.
+      const { decision } = generation.result;
+      let candidate: string | undefined;
+      switch (decision.action) {
+        case 'respond':
+        case 'resample':
+          break;
+        case 'revise':
+          candidate = decision.source;
+          break;
+        case 'edit': {
+          const base = buildFeedback?.failedSource ?? entrySource(current);
+          const edited = applySourceEdits(base, decision.edits);
+          if ('problems' in edited) {
+            const summary = `Attempt ${attempt}: the edits could not be applied. ${edited.problems.join(' ')}`;
+            failureSummaries.push(summary);
+            // Recorded, as a failed build is, so the Timeline holds every candidate set aside.
+            current = await appendProjectEvents(
+              current,
+              [
+                draftEvent({
+                  type: 'revision.edits-rejected',
+                  actor: { kind: 'system' },
+                  operationId,
+                  payload: {
+                    attempt,
+                    ...generationReference(current, operationId),
+                    problems: edited.problems
+                  }
+                })
+              ],
+              dependencies.projectService
+            );
+            if (attempt === chatbot.config.attemptProfiles.length) {
+              return {
+                document: await appendExhaustedSverlinFailure(
+                  current,
+                  operationId,
+                  summary,
+                  dependencies
+                ),
+                done: true
+              };
+            }
+            buildFeedback = {
+              attempt,
+              buildEventId: projectHead(current).id,
+              failedSource: base,
+              assistantReply: generatedReplyText(generation.result.reply),
+              diagnostics: edited.problems.map((message) => ({
+                severity: 'error' as const,
+                code: 'edit_not_applied',
+                message,
+                raw: message
+              })),
+              priorFailureSummaries: [...failureSummaries]
             };
+            return { document: current, done: false };
           }
-          buildFeedback = {
-            attempt,
-            buildEventId: projectHead(current).id,
-            failedSource: base,
-            assistantReply: generatedReplyText(generation.result.reply),
-            diagnostics: edited.problems.map((message) => ({
-              severity: 'error' as const,
-              code: 'edit_not_applied',
-              message,
-              raw: message
-            })),
-            priorFailureSummaries: [...failureSummaries]
-          };
-          return { document: current, done: false };
+          candidate = edited.source;
+          break;
         }
-        candidate = edited.source;
+        default:
+          throw new Error(
+            `Unhandled decision ${(decision satisfies never as { action: string }).action}.`
+          );
       }
       if (candidate === undefined) {
         if (attempt === 1) {
           const advanced =
-            generation.result.action === 'resample'
+            decision.action === 'resample'
               ? await advanceCandidatesForAgent(
                   current,
                   presentationCount,
@@ -719,9 +734,7 @@ async function runSverlinAssistantTurn(
               recorded: built.recorded,
               generationEvent: generation.generationEvent,
               candidate,
-              ...('summary' in generation.result && generation.result.summary
-                ? { summary: generation.result.summary }
-                : {}),
+              ...('summary' in decision ? { summary: decision.summary } : {}),
               operationId,
               recovery: generation.result.recovery,
               recoveryReply: generation.result.reply,
@@ -984,8 +997,7 @@ async function runSverlinGeneration(
           options.contextSelection.interactionEventIds?.some(
             (id) => options.document.events[id - 1]?.type === 'visualization.preference-recorded'
           ) &&
-          result.sourceArtifactContent === undefined &&
-          result.action === 'resample'
+          result.decision.action === 'resample'
         ) {
           throw new InvalidChatbotResponseError(
             'A deferred preference adaptation cannot advance candidates itself.',
@@ -994,17 +1006,14 @@ async function runSverlinGeneration(
         }
         validateGeneratedReply(result.reply, 0, result.providerResponse);
         if (
-          (result.action === 'respond' || result.action === 'resample') &&
+          (result.decision.action === 'respond' || result.decision.action === 'resample') &&
           blankReply(result.reply)
         )
           throw new InvalidChatbotResponseError('The reply was blank.', result.providerResponse);
       },
       fallbackResponse: (result) => ({
         reply: result.reply,
-        action: result.action,
-        sourceArtifactContent: result.sourceArtifactContent ?? null,
-        ...(result.action === 'edit' ? { edits: result.edits } : {}),
-        ...('summary' in result && result.summary ? { summary: result.summary } : {}),
+        decision: result.decision,
         recovery: result.recovery ?? null,
         generation: result.generation
       })
