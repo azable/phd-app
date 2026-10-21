@@ -65,6 +65,7 @@ const stateTransitions = {
   'visualization.preference-recorded': null,
   'visualization.runtime-failed': null,
   'assistant.responded': null,
+  'revision.edits-rejected': null,
   'system.notified': null
 } satisfies StateTransitions;
 

@@ -80,6 +80,27 @@ export function agentDecision(request: AgentRequest): AgentDecision | undefined 
   return response;
 }
 
+/**
+ * The summary of the model's reasoning, where the response carries one: its own reasoning is
+ * returned encrypted, but a summary of it can be asked for and recorded with the response.
+ */
+export function agentReasoning(request: AgentRequest): { asked: boolean; summary: string[] } {
+  if (request.outcome?.type !== 'ai.generation-succeeded') return { asked: false, summary: [] };
+  const response = parsed(request.outcome.payload.response.text) as
+    | {
+        reasoning?: { summary?: string | null };
+        output?: { type?: string; summary?: { text?: string }[] }[];
+      }
+    | undefined;
+  return {
+    asked: Boolean(response?.reasoning?.summary),
+    summary: (response?.output ?? [])
+      .filter(({ type }) => type === 'reasoning')
+      .flatMap(({ summary }) => summary ?? [])
+      .flatMap(({ text }) => (text ? [text] : []))
+  };
+}
+
 /** A card's one-line account of a request: what the model decided, and what came of it. */
 export function agentOutcome(request: AgentRequest): string {
   const { outcome, actions, followed } = request;
@@ -100,12 +121,16 @@ export function agentOutcome(request: AgentRequest): string {
   const built = actions.some(({ type }) => type === 'build.succeeded');
   const failed = actions.some(({ type }) => type === 'build.failed');
   const versioned = actions.some(({ type }) => type === 'artifact.version-created');
-  // An edit that could not be placed is not built: the next request is its repair.
+  // Edits that could not be placed are recorded; before they were, they show only as an edit that
+  // was not built and was followed by its repair.
+  const rejected =
+    actions.some(({ type }) => type === 'revision.edits-rejected') ||
+    (action === 'edit' && !built && followed);
   const result = failed
     ? 'build failed'
     : versioned
       ? 'new version'
-      : action === 'edit' && !built && followed
+      : rejected
         ? 'edits did not apply'
         : undefined;
   return result ? `${said} → ${result}` : said;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { agentOutcome, agentRequestAt, agentRequests } from './agent-requests';
+import { agentOutcome, agentReasoning, agentRequestAt, agentRequests } from './agent-requests';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const text = (value: unknown) => ({
@@ -67,5 +67,43 @@ describe('agent requests', () => {
     const [first, second] = agentRequests(events);
     expect(agentOutcome(first)).toBe('Edit · 1 edit → edits did not apply');
     expect(agentOutcome(second)).toBe('Edit · 2 edits');
+  });
+});
+
+describe('agent reasoning', () => {
+  it('reads the summary of the reasoning a response carries, and nothing where it has none', () => {
+    const response: ProjectEvent = {
+      id: 2,
+      type: 'ai.generation-succeeded',
+      ...envelope(operationId),
+      payload: {
+        attempt: 1,
+        adapterId: 'test-adapter',
+        requestedModel: 'test-model',
+        durationMs: 1000,
+        response: text({
+          reasoning: { effort: 'medium', summary: 'detailed' },
+          output: [
+            {
+              type: 'reasoning',
+              encrypted_content: 'hidden',
+              summary: [
+                { type: 'summary_text', text: 'The request is about the checked cell.' },
+                { type: 'summary_text', text: 'An edit to its pointer view is enough.' }
+              ]
+            },
+            { type: 'message', content: [] }
+          ]
+        })
+      }
+    };
+    expect(agentReasoning(agentRequests([requested(1, 1), response])[0])).toEqual({
+      asked: true,
+      summary: ['The request is about the checked cell.', 'An edit to its pointer view is enough.']
+    });
+    expect(agentReasoning(agentRequests([requested(1, 1)])[0])).toEqual({
+      asked: false,
+      summary: []
+    });
   });
 });

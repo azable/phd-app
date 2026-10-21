@@ -10,6 +10,7 @@
     agentDecision,
     agentOutcome,
     agentPrompt,
+    agentReasoning,
     agentTokens,
     type AgentRequest
   } from '$lib/client/timeline/agent-requests';
@@ -30,11 +31,13 @@
   const prompt = $derived(agentPrompt(value));
   const decision = $derived(agentDecision(value));
   const tokens = $derived(agentTokens(value));
+  const reasoning = $derived(agentReasoning(value));
   const outcome = $derived(value.outcome);
   const tabs = [
     ['instructions', 'Instructions'],
     ['conversation', 'Conversation'],
     ['context', 'Context'],
+    ['reasoning', 'Reasoning'],
     ['response', 'Response'],
     ['actions', 'Actions']
   ] as const;
@@ -126,6 +129,22 @@
           ariaLabel="Request context"
         />
       </div>
+    </Tabs.Content>
+
+    <Tabs.Content value="reasoning" class="min-h-0 flex-1">
+      <ScrollArea class="h-full">
+        <div class="flex flex-col gap-3 p-4 text-sm">
+          {#each reasoning.summary as paragraph, index (index)}
+            <p class="whitespace-pre-wrap">{paragraph}</p>
+          {:else}
+            <p class="text-muted-foreground">
+              {reasoning.asked
+                ? 'A summary of the reasoning was asked for, but the model returned none for this request.'
+                : 'This request did not ask for a summary of the reasoning, which the model otherwise returns encrypted.'}
+            </p>
+          {/each}
+        </div>
+      </ScrollArea>
     </Tabs.Content>
 
     <Tabs.Content value="response" class="min-h-0 flex-1">

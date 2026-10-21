@@ -31,7 +31,6 @@ export type TimelineEventPresentation = {
   detail: string;
   icon: TimelineEventIcon;
   progress: string;
-  restorable: boolean;
   tone: 'default' | 'destructive';
 };
 
@@ -55,7 +54,6 @@ const presenters = {
       event.payload.message,
       'failure',
       'Finishing with an error…',
-      false,
       'destructive'
     ),
   'feedback.submitted': (event) =>
@@ -119,7 +117,6 @@ const presenters = {
       event.payload.message,
       'failure',
       'Recording the AI failure…',
-      false,
       'destructive'
     ),
   'build.requested': (event) =>
@@ -144,7 +141,14 @@ const presenters = {
       event.payload.repairEligible
         ? 'Build failed; checking repair…'
         : 'Recording the build failure…',
-      false,
+      'destructive'
+    ),
+  'revision.edits-rejected': (event) =>
+    details(
+      'Edits not applied',
+      event.payload.problems[0] ?? 'The edits could not be placed in the source.',
+      'failure',
+      'Edits did not apply; checking repair…',
       'destructive'
     ),
   'artifact.version-created': (event) =>
@@ -156,8 +160,7 @@ const presenters = {
         )
         .join(', '),
       'code',
-      'Loading the updated artifact…',
-      true
+      'Loading the updated artifact…'
     ),
   'visualization.presented': (event) =>
     details(
@@ -166,8 +169,7 @@ const presenters = {
         ? presentationScenarioKey(event.payload.presentation)
         : event.payload.presentation.stepSignature,
       'visualization',
-      'Loading the visualization…',
-      true
+      'Loading the visualization…'
     ),
   'visualization.preference-recorded': (event) =>
     details(
@@ -189,7 +191,6 @@ const presenters = {
       `${event.payload.step === undefined ? '' : `Step ${event.payload.step + 1} · `}${event.payload.message}`,
       'failure',
       'Recording the failure…',
-      false,
       'destructive'
     ),
   'system.notified': (event) =>
@@ -198,7 +199,6 @@ const presenters = {
       event.payload.message,
       event.payload.severity === 'error' ? 'failure' : 'default',
       event.payload.severity === 'error' ? 'Finishing with an error…' : 'Finishing…',
-      false,
       event.payload.severity === 'error' ? 'destructive' : 'default'
     )
 } satisfies ProjectEventCases<TimelineEventPresentation>;
@@ -213,10 +213,9 @@ function details(
   detail: string,
   icon: TimelineEventIcon,
   progress: string,
-  restorable = false,
   tone: TimelineEventPresentation['tone'] = 'default'
 ): TimelineEventPresentation {
-  return { title, detail, icon, progress, restorable, tone };
+  return { title, detail, icon, progress, tone };
 }
 
 function operationLabel(kind: string): string {

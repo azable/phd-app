@@ -206,6 +206,8 @@ const timelineCases = {
     `Build succeeded in ${event.payload.durationMs} ms; bundle ${shortHash(event.payload.bundle.sha256)}.`,
   'build.failed': (event) =>
     `Build failed (${event.payload.failureKind}) with ${event.payload.diagnostics.length} diagnostic(s).`,
+  'revision.edits-rejected': (event) =>
+    `Rejected the edits of generation attempt ${event.payload.attempt}: ${event.payload.problems.join(' ')}`,
   'artifact.version-created': (event) => {
     const id = entryHash(event);
     return `Created ${event.payload.origin.kind} source version${id ? ` ${id.slice(0, 6)}` : ''}${event.payload.summary ? `: ${event.payload.summary}` : ''}.`;
@@ -236,6 +238,7 @@ const conversationCases = {
   'build.requested': () => [],
   'build.succeeded': () => [],
   'build.failed': () => [],
+  'revision.edits-rejected': () => [],
   'artifact.version-created': () => [],
   'visualization.presented': () => [],
   // Reported by the participant's browser, not written by them; the next revision should fix it.

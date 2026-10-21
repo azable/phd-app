@@ -2007,6 +2007,12 @@ describe('assistant edits', () => {
     expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
       expect.objectContaining({ code: 'edit_not_applied' })
     ]);
+    const rejected = result.document.events.find(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected?.payload).toMatchObject({
+      attempt: 1,
+      problems: [expect.stringContaining('Edit 1')]
+    });
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.buildEventId).toBe(rejected?.id);
     const [change] = version(result.document)?.payload.changes ?? [];
     expect(change?.operation === 'upsert' && change.artifact.content.text).toContain('Corrected');
   });

@@ -624,6 +624,23 @@ async function runSverlinAssistantTurn(
         if ('problems' in edited) {
           const summary = `Attempt ${attempt}: the edits could not be applied. ${edited.problems.join(' ')}`;
           failureSummaries.push(summary);
+          // Recorded, as a failed build is, so the Timeline holds every candidate set aside.
+          current = await appendProjectEvents(
+            current,
+            [
+              draftEvent({
+                type: 'revision.edits-rejected',
+                actor: { kind: 'system' },
+                operationId,
+                payload: {
+                  attempt,
+                  ...generationReference(current, operationId),
+                  problems: edited.problems
+                }
+              })
+            ],
+            dependencies.projectService
+          );
           if (attempt === chatbot.config.attemptProfiles.length) {
             return {
               document: await appendExhaustedSverlinFailure(
@@ -1368,6 +1385,17 @@ function repairedPresentationId(
 }
 
 /** A reply with nothing to read: no references, and only blank text. */
+/** The id of the operation's newest successful generation, which a record can refer to. */
+function generationReference(
+  document: ProjectDocument,
+  operationId: string
+): { generationEventId?: EventId } {
+  const id = document.events.findLast(
+    (event) => event.operationId === operationId && event.type === 'ai.generation-succeeded'
+  )?.id;
+  return id === undefined ? {} : { generationEventId: id };
+}
+
 function blankReply(reply: GeneratedMessageContent): boolean {
   return reply.every((segment) => segment.type === 'markdown' && !segment.text.trim());
 }

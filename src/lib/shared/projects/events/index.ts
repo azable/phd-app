@@ -31,6 +31,7 @@ import {
 } from './operation-lifecycle';
 import { projectCreatedEventSchema } from './project-created';
 import { projectRenamedEventSchema } from './project-renamed';
+import { revisionEditsRejectedEventSchema } from './revision-edits-rejected';
 import { systemNotifiedEventSchema } from './system-notified';
 import { visualizationCandidatesAdvancedEventSchema } from './visualization-candidates-advanced';
 import { visualizationRuntimeFailedEventSchema } from './visualization-runtime-failed';
@@ -56,6 +57,7 @@ export const projectEventSchema = v.variant('type', [
   buildRequestedEventSchema,
   buildSucceededEventSchema,
   buildFailedEventSchema,
+  revisionEditsRejectedEventSchema,
   artifactVersionCreatedEventSchema,
   visualizationPresentedEventSchema,
   visualizationPreferenceRecordedEventSchema,

@@ -46,6 +46,14 @@ function readMaxContextChars() {
   return Number.isSafeInteger(configured) && configured > 0 ? configured : defaultMaxContextChars;
 }
 
+/** How fully the model summarizes its reasoning, or undefined where summaries are off. */
+function readReasoningSummary(): 'auto' | 'concise' | 'detailed' | undefined {
+  const configured = process.env.CHATBOT_REASONING_SUMMARIES?.trim() || 'detailed';
+  return configured === 'concise' || configured === 'detailed' || configured === 'auto'
+    ? configured
+    : undefined;
+}
+
 function readRequestTimeoutMs(): number {
   const configured = Number.parseInt(process.env.CHATBOT_REQUEST_TIMEOUT_MS ?? '', 10);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : defaultRequestTimeoutMs;
@@ -124,8 +132,12 @@ export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<
         ...request.messages
       ],
       max_output_tokens: request.parameters.maxOutputTokens,
+      // A summary of the reasoning, unless turned off, comes back with the response for audit.
       reasoning: request.parameters.reasoningEffort
-        ? { effort: request.parameters.reasoningEffort }
+        ? {
+            effort: request.parameters.reasoningEffort,
+            ...(readReasoningSummary() ? { summary: readReasoningSummary() } : {})
+          }
         : undefined,
       temperature: request.parameters.temperature,
       text: {
