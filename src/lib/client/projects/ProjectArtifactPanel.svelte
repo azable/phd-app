@@ -102,6 +102,8 @@
   let draftSummary = $state('');
   let discardRequested = $state(false);
   let expanded = $state(false);
+  // Which file the panel shows: the source, or the shown presentations' variants.
+  let tab = $state<'source' | 'variant'>('source');
   let editor = $state<{ focus: () => void } | null>(null);
 
   const artifact = $derived(session.snapshot.artifacts[session.snapshot.entryArtifactId]);
@@ -154,6 +156,28 @@
           ? `The ${unmarked[0].label} presentation was`
           : 'This presentation was';
     return `${subject} built ${reason}, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.${remedy}`;
+  });
+  // The shown presentations' variants as JSON, keys in order, one object per presentation of a pair.
+  const variantJson = $derived.by(() => {
+    const sorted = (variant: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(variant).sort(([a], [b]) => a.localeCompare(b)));
+    const shown = drawnSources.filter(({ variant }) => variant);
+    if (!shown.length) return undefined;
+    return JSON.stringify(
+      shown.length === 1
+        ? sorted(shown[0].variant ?? {})
+        : Object.fromEntries(
+            shown.map(({ label, variant }, index) => [
+              label ?? String(index),
+              sorted(variant ?? {})
+            ])
+          ),
+      null,
+      2
+    );
+  });
+  $effect(() => {
+    if (editMode === 'editing' || !variantJson) tab = 'source';
   });
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
@@ -218,7 +242,32 @@
       <header class="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         <EditIcon class="size-4 shrink-0 text-muted-foreground" />
         <div class="mr-auto min-w-0">
-          <p class="truncate font-mono text-sm">{artifact.path}</p>
+          {#if variantJson && editMode === 'readonly'}
+            <div class="flex gap-1" role="tablist" aria-label="Shown file">
+              {#each [['source', artifact.path], ['variant', 'variant.json']] as [id, name] (id)}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  class={[
+                    'truncate rounded-md px-1.5 font-mono text-sm transition-colors',
+                    tab === id
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]}
+                  title={id === 'variant'
+                    ? 'Every variable of the shown presentations’ variants, read-only'
+                    : undefined}
+                  onclick={() => {
+                    tab = id as 'source' | 'variant';
+                    expanded = true;
+                  }}>{name}</button
+                >
+              {/each}
+            </div>
+          {:else}
+            <p class="truncate font-mono text-sm">{artifact.path}</p>
+          {/if}
           {#if !session.atHead}
             <p class="text-sm text-muted-foreground">Artifact at event #{session.snapshot.at}</p>
           {/if}
@@ -351,7 +400,16 @@
         </p>
       {/if}
 
-      {#if expanded}
+      {#if expanded && tab === 'variant' && variantJson}
+        <div class="min-h-48 flex-1 overflow-hidden">
+          <CodeMirrorEditor
+            value={variantJson}
+            language="json"
+            editable={false}
+            ariaLabel="Variants of the shown presentations"
+          />
+        </div>
+      {:else if expanded}
         <div class="min-h-48 flex-1 overflow-hidden">
           <CodeMirrorEditor
             bind:this={editor}
