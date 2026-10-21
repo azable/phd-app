@@ -138,8 +138,26 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'dashed', 'color']
 };
 
+/**
+ * Props a kind only some steps draw a node as, by a tag the state decides, can vary: not those that
+ * move its children or its room, which its base kind gives (see conditionalProps).
+ */
+const layoutProps: ReadonlySet<DesignProp> = new Set(['shown', 'gap', 'align', 'justify']);
+
+/** The props of a kind drawn only under a conditional tag: paint, text, and inset, not layout. */
+export function conditionalProps(role: KindRole): readonly DesignProp[] {
+  return roleProps[role].filter((prop) => !layoutProps.has(prop));
+}
+
 /** Paint shows only where a pointer is; its other props hold in every slot, so slots keep one size. */
 export const paintProps: ReadonlySet<string> = new Set(['fill', 'stroke', 'opacity', 'color']);
+
+/**
+ * The kinds a node is drawn with: the one it is at a step, its base kind (its view and literal
+ * tags), whose layout every kind of its tag takes, and, where tags depend on the state, every kind
+ * its tag can be.
+ */
+export type KindSite = { kind: string; base: string; site?: readonly string[] };
 
 /** The kind a node is of: its view (root outside one) and the tags it has, as Arrow[current]. */
 export function kindKey(view: string, tags: readonly string[]): string {

@@ -41,7 +41,7 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import { activeTags, colourCss, kindKey, paintProps } from './design';
+  import { activeTags, colourCss, kindKey, paintProps, type KindSite } from './design';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
@@ -57,6 +57,8 @@
     curve,
     layoutSeed,
     __view = 'root',
+    __base,
+    __site,
     __over,
     __ref,
     __id,
@@ -103,10 +105,16 @@
     /** Internal: the view this node is in, added by the compiler; root outside one. */
     __view?: string;
     /**
-     * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
+     * Internal, added by the compiler where tags depend on the state: the literal tags, which with
+     * the view make the base kind giving the layout, and every kind the tag can be.
+     */
+    __base?: string;
+    __site?: readonly string[];
+    /**
+     * Internal: the kinds of the pointer drawing this node again, and whether it is at it: its paint
      * shows only where it is, and its other props hold in every slot, so slots keep one size.
      */
-    __over?: { kind: string; active: boolean };
+    __over?: KindSite & { active: boolean };
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
     /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
@@ -132,8 +140,39 @@
   // This node's look: the variant's values for its kind, or for a pointer drawing it again.
   const design = designContext();
   const kind = $derived(kindKey(__view, activeTags(tags)));
-  const look = (prop: string): unknown =>
-    design[`${__over && (__over.active || !paintProps.has(prop)) ? __over.kind : kind}.${prop}`];
+  const own = $derived<KindSite>({
+    kind,
+    base: __base === undefined ? kind : kindKey(__view, activeTags(__base)),
+    site: __site
+  });
+  // A pointer drawing this node again gives its paint where it is, and its base kind's other props.
+  const from = (prop: string): KindSite =>
+    __over && (__over.active || !paintProps.has(prop))
+      ? { ...__over, kind: __over.active ? __over.kind : __over.base }
+      : own;
+  // A kind drawn only at some steps leaves its layout to its base kind.
+  const valueIn = (kinds: KindSite, prop: string, kind = kinds.kind): unknown =>
+    design[`${kind}.${prop}`] ?? design[`${kinds.base}.${prop}`];
+  const look = (prop: string): unknown => valueIn(from(prop), prop);
+  // A node that can be several kinds keeps the largest inset (padding and border, in rem and
+  // pixels) and least size of them all, so its content stays put as its kind changes.
+  const reach = $derived.by(() => {
+    const kinds = from('padding');
+    if (!kinds.site?.length) return undefined;
+    const number = (kind: string, prop: string) => {
+      const value = valueIn(kinds, prop, kind);
+      return typeof value === 'number' ? value : undefined;
+    };
+    const scaled = (kind: string, prop: string) =>
+      (number(kind, prop) ?? 0) * (number(kind, 'size') ?? 1);
+    const border = (kind: string) =>
+      colourCss(valueIn(kinds, 'stroke', kind)) ? (number(kind, 'strokeWidth') ?? 0) : 0;
+    return {
+      padding: Math.max(...kinds.site.map((kind) => scaled(kind, 'padding'))),
+      border: Math.max(...kinds.site.map(border)),
+      minSize: Math.max(...kinds.site.map((kind) => scaled(kind, 'minSize')))
+    };
+  });
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -243,6 +282,8 @@
     curve,
     layoutSeed,
     __view,
+    __base,
+    __site,
     __ref,
     __type,
     __links,
@@ -270,7 +311,9 @@
     return typeof setting === 'number' ? `${setting}${unit}` : undefined;
   };
   const strokeColour = $derived(colourCss(look('stroke')));
-  const strokeWidth = $derived(strokeColour ? measured('strokeWidth', 'px') : '0');
+  const borderWidth = $derived(
+    strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
+  );
   const font = $derived(look('font'));
   const weight = $derived(look('weight'));
   const gap = $derived((look('gap') as number | undefined) ?? 0);
@@ -348,11 +391,19 @@
       style:color={colourCss(look('color'))}
       style:background-color={colourCss(look('fill'))}
       style:border-color={strokeColour}
-      style:border-width={strokeWidth}
+      style:border-width={`${borderWidth}px`}
       style:border-radius={measured('radius', 'px')}
-      style:padding={measured('padding', 'em')}
-      style:min-width={least(measured('minSize', 'em'), reserved?.width)}
-      style:min-height={least(measured('minSize', 'em'), reserved?.height)}
+      style:padding={reach
+        ? `calc(${reach.padding}rem + ${reach.border - borderWidth}px)`
+        : measured('padding', 'em')}
+      style:min-width={least(
+        reach ? `${reach.minSize}rem` : measured('minSize', 'em'),
+        reserved?.width
+      )}
+      style:min-height={least(
+        reach ? `${reach.minSize}rem` : measured('minSize', 'em'),
+        reserved?.height
+      )}
       style:opacity={look('opacity') as number | undefined}
     >
       {#if solved}

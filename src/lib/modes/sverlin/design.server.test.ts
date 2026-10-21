@@ -131,3 +131,33 @@ describe('variants', () => {
     expect(bundle.javascript).toContain('"views.Int":"IntTally"');
   });
 });
+
+describe('kinds a tag the state decides draws', () => {
+  const source = `<script lang="sverlin" domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([3, 8]);</script><script lang="sverlin">yield; yield;</script>
+<Node layout="row">{#each values as value, k}<Node layout="column" tags={k < step && 'checked'}>{value}</Node>{/each}</Node>
+<Node tags={step ? 'late' : 'early'}>text</Node>`;
+  const prepared = prepareSvelteComponent(source);
+  const { space } = prepared.design;
+
+  it('vary paint, text, and inset, leaving layout and what is shown to the base kind', () => {
+    expect(space['root[checked].fill']).toBeDefined();
+    expect(space['root[checked].padding']).toBeDefined();
+    expect(space['root[checked].size']).toBeDefined();
+    expect(space['root[checked].gap']).toBeUndefined();
+    expect(space['root[checked].shown']).toBeUndefined();
+    expect(space['root.gap']).toBeDefined();
+    expect(space['root.shown']).toBeDefined();
+  });
+
+  it('keep a base kind even where no step draws it alone', () => {
+    expect(space['root[early].shown']).toBeUndefined();
+    expect(space['root[late].fill']).toBeDefined();
+    expect(prepared.design.tags['3:1']).toEqual(['root[late]', 'root[early]']);
+    expect(space['root.padding']).toBeDefined();
+  });
+
+  it('stamp a tag with its base tags and every kind it can be', () => {
+    expect(prepared.component).toContain('__site: ["root", "root[checked]"]');
+    expect(prepared.component).toContain("__base: ''");
+  });
+});

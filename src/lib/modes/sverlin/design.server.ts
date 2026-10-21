@@ -8,12 +8,12 @@
 import { keyedRandom } from './algorithm/random.server';
 import {
   colourParts,
+  conditionalProps,
   frameOptions,
   propOptions,
   roleProps,
   starterFrame,
   starterLooks,
-  type DesignProp,
   type DesignValues,
   type KindRole
 } from './library/node/design';
@@ -21,8 +21,15 @@ import {
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
 
-/** A kind of node: its key (as Arrow[current]) and what it is, which gives its props. */
-export type DesignKind = { key: string; role: KindRole };
+/**
+ * A kind of node: its key (as Arrow[current]), what it is, which gives its props, and whether a
+ * node is drawn as it only at some steps, by a tag the state decides, which leaves its layout to
+ * its base kind.
+ */
+export type DesignKind = { key: string; role: KindRole; conditional?: boolean };
+
+const propsOf = ({ role, conditional }: DesignKind) =>
+  conditional ? conditionalProps(role) : roleProps[role];
 
 /** Each variable's options, by key. */
 export type DesignSpace = Readonly<Record<string, readonly DesignValue[]>>;
@@ -60,8 +67,8 @@ export function designSpace(
     ),
     ...frameOptions,
     ...Object.fromEntries(
-      kinds.flatMap(({ key, role }) =>
-        roleProps[role].map((prop) => [`${key}.${prop}`, propOptions[prop]])
+      kinds.flatMap((kind) =>
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, propOptions[prop]])
       )
     )
   };
@@ -78,8 +85,8 @@ export function starterVariant(
     ),
     ...starterFrame,
     ...Object.fromEntries(
-      kinds.flatMap(({ key, role }) =>
-        roleProps[role].map((prop) => [`${key}.${prop}`, starterLooks[role][prop]])
+      kinds.flatMap((kind) =>
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
       )
     )
   };
@@ -226,11 +233,6 @@ function drawOne(
     return pick(options.slice(Math.max(1, at - 2), at + 3).filter((option) => option !== 0));
   }
   return pick(options);
-}
-
-/** The props a role's kinds have, for checking a key's prop. */
-export function propsOf(role: KindRole): readonly DesignProp[] {
-  return roleProps[role];
 }
 
 export type { DesignValues };

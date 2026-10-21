@@ -7,6 +7,8 @@
   measured, it is empty.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   import { activeTags, kindKey } from './design';
   import {
     leaveComponentBox,
@@ -20,21 +22,29 @@
 
   let {
     tags,
-    __view = 'root'
+    __view = 'root',
+    __base,
+    __site
   }: {
     /** Names saying what the pointed element is while pointed at, as on a <Node>. */
     tags?: string | readonly (string | false | null | undefined)[];
     /** Internal: the view this tag is in, added by the compiler. */
     __view?: string;
+    /** Internal, where its tags depend on the state: its literal tags, and every kind it can be. */
+    __base?: string;
+    __site?: readonly string[];
   } = $props();
 
   const pointed = pointedContext();
   // This pointer's kind, under those of the pointers outside it: the pointer written last wins.
+  // Each step mounts afresh, so the props are read once.
   const merged = {
-    __over: {
+    __over: untrack(() => ({
       kind: kindKey(__view, activeTags(tags, 'pointed')),
+      base: kindKey(__view, activeTags(__base ?? tags, 'pointed')),
+      site: __site,
       active: pointed?.active ?? false
-    },
+    })),
     ...pointed?.outer,
     ...(pointed?.placeholder ? { __id: undefined, __ref: undefined, __slot: undefined } : {})
   };

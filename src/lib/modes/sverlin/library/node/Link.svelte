@@ -30,6 +30,7 @@
     curve,
     bend,
     __view = 'root',
+    __base,
     __ref,
     __component,
     __fromPath,
@@ -59,6 +60,8 @@
     bend?: number;
     /** Internal: the view this link is in, added by the compiler. */
     __view?: string;
+    /** Internal, where its tags depend on the state: its literal tags, giving its base kind. */
+    __base?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
@@ -82,7 +85,11 @@
   // an edge, takes the stroke of the kind of the root's pointer at it, as for the current edge, the
   // pointer written last winning.
   const design = designContext();
-  const kind = kindKey(__view, activeTags(tags, 'link'));
+  // Each step mounts afresh, so the props are read once.
+  const { kind, base } = untrack(() => ({
+    kind: kindKey(__view, activeTags(tags, 'link')),
+    base: kindKey(__view, activeTags(__base ?? tags, 'link'))
+  }));
   const pointer = untrack(() => {
     const element = __component ? elementSlot(slotContext()) : undefined;
     if (!element) return undefined;
@@ -98,9 +105,9 @@
     ).__kind as string | undefined;
   });
   const look = (prop: string, over = true) =>
-    design[
-      `${over && pointer && design[`${pointer}.${prop}`] !== undefined ? pointer : kind}.${prop}`
-    ];
+    (over && pointer ? design[`${pointer}.${prop}`] : undefined) ??
+    design[`${kind}.${prop}`] ??
+    design[`${base}.${prop}`];
   const nodeIds = nodeIdsContext();
   const id = untrack(() =>
     __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined

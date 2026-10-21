@@ -914,8 +914,8 @@ const maximumKindsPerTag = 16;
 function tagSets(
   attribute: Attribute | undefined,
   source: string
-): { sets: string[][] } | { problem: string } {
-  if (!attribute) return { sets: [[]] };
+): { sets: string[][]; fixed: string[] } | { problem: string } {
+  if (!attribute) return { sets: [[]], fixed: [] };
   const parts = Array.isArray(attribute.value) ? attribute.value : [];
   const [part] = parts;
   const literal = (expression: Expression | undefined): string | null | undefined =>
@@ -929,7 +929,10 @@ function tagSets(
         ? null
         : undefined;
   const words = (text: string) => text.split(/\s+/u).filter(Boolean);
-  if (parts.length === 1 && part.type === 'Text') return { sets: [words(part.data ?? '')] };
+  if (parts.length === 1 && part.type === 'Text') {
+    const fixed = words(part.data ?? '');
+    return { sets: [fixed], fixed };
+  }
   const expression =
     parts.length === 1 && (part.type === 'MustacheTag' || part.type === 'ExpressionTag')
       ? part.expression
@@ -942,10 +945,14 @@ function tagSets(
         : [];
   // Each item's alternatives: one name, a name or none, or one of several.
   const alternatives: (string | null)[][] = [];
+  // The names every set has, written as literals: with the view, the base kind.
+  const fixed: string[] = [];
   for (const item of items) {
-    const fixed = literal(item);
-    if (typeof fixed === 'string') alternatives.push(...words(fixed).map((word) => [word]));
-    else if (item?.type === 'LogicalExpression' && typeof literal(item.right) === 'string')
+    const literalTag = literal(item);
+    if (typeof literalTag === 'string') {
+      fixed.push(...words(literalTag));
+      alternatives.push(...words(literalTag).map((word) => [word]));
+    } else if (item?.type === 'LogicalExpression' && typeof literal(item.right) === 'string')
       alternatives.push([null, literal(item.right) as string]);
     else if (
       item?.type === 'ConditionalExpression' &&
@@ -967,7 +974,7 @@ function tagSets(
     return {
       problem: `These tags make ${sets.length} kinds of node, more than ${maximumKindsPerTag}: give fewer tags that depend on the state.`
     };
-  return { sets };
+  return { sets, fixed };
 }
 
 /** Template markup other than <Node> and <Link> that a view cannot use, by its parsed type. */
@@ -1124,8 +1131,23 @@ function withNodeRefs(
   // A kind several roles share takes the plainest look, and every prop any of them has.
   const plainest: KindRole[] = ['container', 'text', 'value', 'pointed', 'link'];
   const kinds = new Map<string, KindRole>();
+  // Kinds some tag draws a node as at every step; the rest only some steps, by a conditional tag.
+  const based = new Set<string>();
   // The kinds each tag can be, by its line and column (both from 1), for the editor to show.
   const tagKinds: Record<string, string[]> = {};
+  // A tag with conditional tags: its base tags, and every kind it can be, by where it starts.
+  const sites = new Map<number, { base: string[]; keys: string[] }>();
+  const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
+  const add = (key: string, role: KindRole, start: number) => {
+    const known = kinds.get(key);
+    if (known && apart(known) !== apart(role))
+      reject(
+        `${key} is drawn by a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and by another kind of tag; give one of them a tag of its own.`,
+        'view_tags',
+        start
+      );
+    kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
+  };
   for (const entry of tags) {
     const read = tagSets(
       entry.tag.attributes?.find((attribute) => attribute.name === 'tags'),
@@ -1136,42 +1158,49 @@ function withNodeRefs(
       continue;
     }
     const role = roleOf(entry);
-    for (const set of read.sets) {
-      const key = kindKey(entry.view, set.length ? set : untagged(role));
-      const known = kinds.get(key);
-      const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
-      if (known && apart(known) !== apart(role))
-        reject(
-          `${key} is drawn by a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and by another kind of tag; give one of them a tag of its own.`,
-          'view_tags',
-          entry.start
-        );
-      kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
-      const { line, column } = sourcePosition(source, entry.start);
-      (tagKinds[`${line}:${column + 1}`] ??= []).push(key);
-    }
+    const keyOf = (set: string[]) => kindKey(entry.view, set.length ? set : untagged(role));
+    const base = keyOf(read.fixed);
+    const keys = read.sets.map(keyOf);
+    // The base kind holds the layout of every kind the tag can be, so it is a kind even where no
+    // step draws it alone, as with cond ? 'a' : 'b'.
+    add(base, role, entry.start);
+    based.add(base);
+    for (const key of keys) add(key, role, entry.start);
+    if (keys.some((key) => key !== base)) sites.set(entry.start, { base: read.fixed, keys });
+    const { line, column } = sourcePosition(source, entry.start);
+    tagKinds[`${line}:${column + 1}`] = keys;
   }
   const insertions = tags.map(({ start, name, links, view }): Insertion => {
     const { line, column } = sourcePosition(source, start);
     const root = roots.get(start);
     const type = valueTypes.get(start);
     const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
+    const site = sites.get(start);
+    // A tag that can be several kinds lays out as its base kind, with the largest inset of them all.
+    const conditional = site
+      ? ` __base="${site.base.join(' ')}" __site={${JSON.stringify(site.keys)}}`
+      : '';
     return {
       at: start + name.length + 1,
-      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}${conditional}`
     };
   });
   return {
     insertions,
     problems,
-    kinds: [...kinds].map(([key, role]) => ({ key, role })),
+    kinds: [...kinds].map(([key, role]) => ({
+      key,
+      role,
+      ...(based.has(key) ? {} : { conditional: true })
+    })),
     tagKinds
   };
 }
 
 /**
  * Check the view's components: their types are domain types, their names are free, and they read
- * only their value and other components, never the input or algorithm's variables. Gives each component's type.
+ * only their value and other components, never the input or algorithm's variables. Gives each
+ * component's type.
  */
 function checkComponents(
   found: ReturnType<typeof findComponents>['components'],
