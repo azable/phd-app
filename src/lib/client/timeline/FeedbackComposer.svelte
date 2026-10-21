@@ -36,6 +36,8 @@
     visualSelections?: readonly VisualSelection[];
     onSubmitted?: () => void;
     onDraftChange?: (content: MessageContent, focused: boolean) => void;
+    /** The candidate feedback builds on, where none is shown, as for a source chosen on its own. */
+    base?: string;
   };
 
   let {
@@ -44,7 +46,8 @@
     presentations,
     visualSelections = [],
     onSubmitted = () => {},
-    onDraftChange = (_content: MessageContent, _focused: boolean) => {}
+    onDraftChange = (_content: MessageContent, _focused: boolean) => {},
+    base
   }: Props = $props();
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
@@ -71,7 +74,7 @@
     const editorContent = serializeEditor();
     if (editorContent.length === 0) return;
     const content = feedbackSubmissionContent(editorContent, automaticContext);
-    const from = baseCandidate(presentations);
+    const from = base ?? baseCandidate(presentations);
     const succeeded = await session.runCommand({
       type: 'feedback',
       content,

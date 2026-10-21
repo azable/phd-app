@@ -3,6 +3,7 @@
 
   import EditIcon from '@lucide/svelte/icons/edit-3';
   import SaveIcon from '@lucide/svelte/icons/save';
+  import ShuffleIcon from '@lucide/svelte/icons/shuffle';
   import XIcon from '@lucide/svelte/icons/x';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
@@ -50,9 +51,19 @@
     })[];
     /** Called once a save has built its new candidate, so the stage can show it. */
     onSaved?: () => void;
-    /** The source the shown one was made from, to show the changes from it. */
-    changes?: { original: string; parentHash: string };
-    onCloseChanges?: () => void;
+    /**
+     * A source chosen on its own, rather than a variant of it: the panel fills the stage to show it,
+     * and what it changes from its parent, and editing or resampling starts from it.
+     */
+    chosen?: {
+      source: string;
+      sourceHash: string;
+      /** One of its variants, which names it as a base. */
+      presentationId: string;
+      parent?: { source: string; sourceHash: string };
+    };
+    /** Leave the chosen source, back to its variants. */
+    onLeaveSource?: () => void;
   };
 
   let {
@@ -62,15 +73,25 @@
     selectedSources = [],
     drawnSources = [],
     onSaved = () => {},
-    changes,
-    onCloseChanges = () => {}
+    chosen,
+    onLeaveSource = () => {}
   }: Props = $props();
 
-  // Asking to see a source's changes opens the panel to show them.
+  // Choosing a source opens the panel to show it.
   $effect(() => {
-    if (changes) expanded = true;
+    if (chosen) expanded = true;
   });
-  const showingChanges = $derived(changes !== undefined && editMode === 'readonly');
+  const showingChanges = $derived(chosen?.parent !== undefined && editMode === 'readonly');
+
+  async function anotherVariant() {
+    if (!chosen) return;
+    const made = await session.runCommand({
+      type: 'resample',
+      presentationCount,
+      from: chosen.presentationId
+    });
+    if (made) onSaved();
+  }
 
   let draft = $state('');
   // The source a draft was started from, which its markers keep their places in.
@@ -87,6 +108,7 @@
   // shows it, so their draws can be marked, and editing it builds a new candidate from it.
   const candidateSource = $derived.by(() => {
     if (!session.atHead) return undefined;
+    if (chosen) return chosen.source === artifact?.content.text ? undefined : chosen.source;
     const sources = [...new Set(drawnSources.map(({ source }) => source))];
     return sources.length === 1 && sources[0] !== artifact?.content.text ? sources[0] : undefined;
   });
@@ -118,6 +140,7 @@
   // Why a visible presentation's draws are not marked: it was built from another version of the
   // source, or before draws were kept.
   const unmarkedNotice = $derived.by(() => {
+    if (chosen) return undefined;
     const otherSource = drawnSources.filter((presentation) => !drawn.includes(presentation));
     const unrecorded = drawn.filter((presentation) => presentation.unrecorded);
     const [unmarked, reason, remedy] = otherSource.length
@@ -142,7 +165,9 @@
     if (!artifact || !session.atHead || session.pending || session.readOnly) return;
     draft = baseSource;
     draftBase = baseSource;
-    draftFrom = drawnSources.find(({ source }) => source === baseSource)?.presentationId;
+    draftFrom =
+      chosen?.presentationId ??
+      drawnSources.find(({ source }) => source === baseSource)?.presentationId;
     draftSummary = '';
     expanded = true;
     editMode = 'editing';
@@ -184,7 +209,10 @@
   }
 </script>
 
-<section class="flex max-h-[38vh] min-h-0 flex-col border-t p-2" aria-label="Project artifact">
+<section
+  class={['flex min-h-0 flex-col border-t p-2', chosen ? 'flex-1' : 'max-h-[38vh]']}
+  aria-label="Project artifact"
+>
   {#if artifact}
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
       <header class="flex flex-wrap items-center gap-2 border-b px-4 py-3">
@@ -207,11 +235,15 @@
               : 'problems'}</Badge
           >
         {/if}
-        {#each drawnSources as { candidate, label } (label ?? 'shown')}
-          {#if candidate}<CandidateIdPill {...candidate} {label} />{/if}
+        {#if chosen}
+          <CandidateIdPill {...sourceId(chosen.sourceHash)} />
         {:else}
-          <CandidateIdPill {...sourceId(artifact.content.sha256)} />
-        {/each}
+          {#each drawnSources as { candidate, label } (label ?? 'shown')}
+            {#if candidate}<CandidateIdPill {...candidate} {label} />{/if}
+          {:else}
+            <CandidateIdPill {...sourceId(artifact.content.sha256)} />
+          {/each}
+        {/if}
         <Button
           size="icon-sm"
           variant="ghost"
@@ -249,18 +281,30 @@
         {/if}
       </header>
 
-      {#if expanded && showingChanges && changes}
+      {#if expanded && chosen && editMode === 'readonly'}
         <div
-          class="flex items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+          class="flex flex-wrap items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
         >
-          <span>Changes from</span>
-          <CandidateIdPill {...sourceId(changes.parentHash)} />
+          {#if chosen.parent}
+            <span>Changes from</span>
+            <CandidateIdPill {...sourceId(chosen.parent.sourceHash)} />
+          {:else}
+            <span>The source</span>
+          {/if}
+          <span class="mr-auto">· choose a variant to view it</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onclick={anotherVariant}
+            disabled={!!session.pending || session.readOnly}
+            ><ShuffleIcon data-icon="inline-start" />Another variant</Button
+          >
           <Button
             size="icon-sm"
             variant="ghost"
-            class="ml-auto"
-            aria-label="Stop showing the changes"
-            onclick={onCloseChanges}><XIcon /></Button
+            aria-label="Back to its variants"
+            title="Back to its variants"
+            onclick={onLeaveSource}><XIcon /></Button
           >
         </div>
       {/if}
@@ -312,7 +356,7 @@
             {drawn}
             {drawnTags}
             drawnSource={markedSource}
-            original={showingChanges ? changes?.original : undefined}
+            original={showingChanges ? chosen?.parent?.source : undefined}
             diagnostics={diagnosed}
             onChange={updateDraft}
           />

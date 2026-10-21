@@ -38,6 +38,8 @@
     /** What a presentation's step on screen drew implicitly. */
     onDrawnChange?: (presentationId: string, drawn: DrawnStep) => void;
     disabled?: boolean;
+    /** Kept loaded but out of sight, as while a source is chosen on its own. */
+    hidden?: boolean;
   };
 
   let {
@@ -49,7 +51,8 @@
     onReferenceSelection = () => {},
     onViewChange = () => {},
     onDrawnChange = () => {},
-    disabled = false
+    disabled = false,
+    hidden = false
   }: Props = $props();
   let preferencePending = $state<string>();
 
@@ -274,7 +277,10 @@
   {/if}
 {/snippet}
 
-<section class="flex min-h-0 flex-1 flex-col" aria-label="Visualization presentations">
+<section
+  class={['flex min-h-0 flex-1 flex-col', hidden && 'hidden']}
+  aria-label="Visualization presentations"
+>
   {#if visible.length}
     {#each visible as entry, index (entry.presentation.presentationId)}
       {@const presentationId = entry.presentation.presentationId}

@@ -36,8 +36,10 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
-    /** Show what the chosen source changes from the source it was made from, or nothing. */
-    onShowChanges?: (changes: { sourceHash: string; parentHash: string } | undefined) => void;
+    /** The source chosen on its own, by its card, if any. */
+    chosenSource?: string;
+    /** Choose a source on its own, or none, as when one of its variants is chosen. */
+    onChooseSource?: (source: { sourceHash: string; parentHash?: string } | undefined) => void;
   };
 
   let {
@@ -47,7 +49,8 @@
     onPresentationChange = () => {},
     onReferenceRequest = () => {},
     onElementReference = () => {},
-    onShowChanges = () => {}
+    chosenSource,
+    onChooseSource = () => {}
   }: Props = $props();
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
@@ -70,26 +73,18 @@
     selection.activate(presentation, session.events, layout, event.shiftKey);
   }
 
-  // The source whose card was chosen, rather than one of its variants.
-  let chosenSource = $state<string | undefined>();
-
-  function chooseSource(
-    item: Extract<(typeof items)[number], { kind: 'version' }>,
-    event: MouseEvent
-  ) {
-    const newest = item.variants.at(-1);
-    if (!newest) return;
-    activatePresentation(newest, event);
-    chosenSource = item.sourceHash;
-    onShowChanges(
-      item.parentHash ? { sourceHash: item.sourceHash, parentHash: item.parentHash } : undefined
-    );
+  // Choosing a card chooses its source on its own, showing no visualization; choosing a variant
+  // shows it.
+  function chooseSource(item: Extract<(typeof items)[number], { kind: 'version' }>) {
+    onChooseSource({
+      sourceHash: item.sourceHash,
+      ...(item.parentHash ? { parentHash: item.parentHash } : {})
+    });
   }
 
   function chooseVariant(variant: TimelinePresentation, event: MouseEvent) {
+    onChooseSource(undefined);
     activatePresentation(variant, event);
-    chosenSource = undefined;
-    onShowChanges(undefined);
   }
 
   // The source card a parent link last showed, outlined for a moment so the eye finds it.
@@ -190,26 +185,26 @@
         </div>
       </article>
     {:else if item.kind === 'version'}
-      {@const current = item.variants.some(({ presentation }) =>
-        selectedIds.includes(presentation.presentationId)
-      )}
-      {@const chosen = current && chosenSource === item.sourceHash}
+      {@const current =
+        !chosenSource &&
+        item.variants.some(({ presentation }) => selectedIds.includes(presentation.presentationId))}
+      {@const chosen = chosenSource === item.sourceHash}
       <article
         id={`version-${item.sourceHash}`}
         class={[
           'relative w-full rounded-2xl border bg-card px-4 py-3 shadow-md transition-[border-color,background-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg',
           current && 'border-primary',
-          chosen && 'bg-muted',
+          chosen && 'border-primary bg-muted',
           shown === item.sourceHash && 'ring-2 ring-ring'
         ]}
       >
-        <!-- Choosing the card shows its source: its newest variant, and what it changes. -->
+        <!-- Choosing the card shows its source on its own, and what it changes. -->
         <button
           type="button"
           class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label={`Source ${sourceId(item.sourceHash).source}: ${item.summary}`}
           aria-pressed={chosen}
-          onclick={(event) => chooseSource(item, event)}
+          onclick={() => chooseSource(item)}
         ></button>
         <div class="pointer-events-none relative">
           <div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -233,7 +228,7 @@
           <div class="mt-2 flex flex-wrap justify-end gap-1">
             {#each item.variants as variant (variant.presentation.presentationId)}
               {@const id = variant.presentation.presentationId}
-              {@const selected = selectedIds.includes(id) && !chosen}
+              {@const selected = selectedIds.includes(id) && !chosenSource}
               {@const values = candidateId(variant.presentation).values}
               <span
                 class={[

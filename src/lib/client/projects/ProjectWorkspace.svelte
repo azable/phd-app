@@ -188,22 +188,29 @@
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
 
-  // The changes a source makes from the source it was made from, shown in the source panel while
-  // that source is the one on screen.
-  let changesOf = $state<{ sourceHash: string; parentHash: string } | undefined>();
-  const changes = $derived.by(() => {
-    if (!changesOf) return undefined;
-    const { sourceHash, parentHash } = changesOf;
-    const shown = visiblePresentations.every(
-      ({ presentation }) =>
-        presentation.format === 'browser-bundle-v1' && presentation.source.sha256 === sourceHash
-    );
-    const parent = timelinePresentations(session.events).find(
-      ({ presentation }) =>
-        presentation.format === 'browser-bundle-v1' && presentation.source.sha256 === parentHash
-    )?.presentation;
-    return shown && parent?.format === 'browser-bundle-v1'
-      ? { original: parent.source.text, parentHash }
+  // A source chosen on its own, by its card: no visualization shows, and the source panel fills the
+  // stage with its source and what it changes from its parent, until a variant is chosen.
+  let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
+  const chosen = $derived.by(() => {
+    if (!chosenOf) return undefined;
+    const { sourceHash, parentHash } = chosenOf;
+    const built = (hash: string) =>
+      timelinePresentations(session.events).flatMap(({ presentation }) =>
+        presentation.format === 'browser-bundle-v1' && presentation.source.sha256 === hash
+          ? [presentation]
+          : []
+      );
+    const newest = built(sourceHash).at(-1);
+    const parent = parentHash ? built(parentHash).at(-1) : undefined;
+    return newest
+      ? {
+          source: newest.source.text,
+          sourceHash,
+          presentationId: newest.presentationId,
+          ...(parent && parentHash
+            ? { parent: { source: parent.source.text, sourceHash: parentHash } }
+            : {})
+        }
       : undefined;
   });
 
@@ -578,16 +585,19 @@
                 onReferenceRequest={(presentation) =>
                   feedbackComposer?.referencePresentation(presentation)}
                 onElementReference={showElementReference}
-                onShowChanges={(changes) => (changesOf = changes)}
+                chosenSource={chosenOf?.sourceHash}
+                onChooseSource={(source) => (chosenOf = source)}
               />
               {#if !expired && !session.readOnly}
                 <FeedbackComposer
                   bind:this={feedbackComposer}
                   {session}
                   {presentationCount}
-                  presentations={visiblePresentations}
+                  presentations={chosen ? [] : visiblePresentations}
+                  base={chosen?.presentationId}
                   visualSelections={visualSelections.current}
                   onSubmitted={() => {
+                    chosenOf = undefined;
                     presentationSelection.returnToLatest();
                   }}
                   onDraftChange={recordDraft}
@@ -634,6 +644,7 @@
             </div>
           {/if}
           <PresentationStage
+            hidden={chosen !== undefined}
             {session}
             selection={presentationSelection}
             playback={presentationPlayback}
@@ -652,9 +663,12 @@
               {presentationCount}
               {selectedSources}
               {drawnSources}
-              onSaved={() => presentationSelection.returnToLatest()}
-              {changes}
-              onCloseChanges={() => (changesOf = undefined)}
+              onSaved={() => {
+                chosenOf = undefined;
+                presentationSelection.returnToLatest();
+              }}
+              {chosen}
+              onLeaveSource={() => (chosenOf = undefined)}
               bind:editMode
             />
           </div>
