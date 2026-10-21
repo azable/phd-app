@@ -22,7 +22,11 @@ import {
 } from '$lib/shared/projects/events/message-content';
 import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-ref';
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
-import type { BrowserBundlePresentation, RenderablePresentation } from '$lib/shared/presentations';
+import type {
+  BrowserBundlePresentation,
+  DesignValues,
+  RenderablePresentation
+} from '$lib/shared/presentations';
 import { presentationStepLabels } from '$lib/shared/presentations';
 import { frameOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
 
@@ -107,6 +111,13 @@ export type AiContextSelection = {
   interactionEventIds?: readonly EventId[];
 };
 
+/** One variable a compared pair gave different values: the preferred one's, and the other's. */
+export type VariantDifference = {
+  variable: string;
+  preferred?: DesignValue;
+  other?: DesignValue;
+};
+
 /** Why the current assistant turn was started. */
 export type AiInteraction =
   | { kind: 'feedback'; eventIds: EventId[] }
@@ -117,6 +128,8 @@ export type AiInteraction =
       preferredPresentationId: string;
       alternativePresentationId: string;
       step: number;
+      /** The variables the pair gave different values, the preferred value first. */
+      differences: VariantDifference[];
     }
   | {
       kind: 'batch';
@@ -126,6 +139,7 @@ export type AiInteraction =
         preferredPresentationId: string;
         alternativePresentationId: string;
         step: number;
+        differences: VariantDifference[];
       }>;
     };
 
@@ -274,12 +288,8 @@ const conversationCases = {
       content: `[Reported automatically by the participant’s browser, not written by the participant] ${runtimeFailureText(event)} Fix the view so that every step draws.`
     } as const
   ],
-  'visualization.preference-recorded': (event) => [
-    {
-      role: 'user',
-      content: `I preferred presentation ${event.payload.preferred} over the alternative${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}.`
-    } as const
-  ],
+  // Written with its pair's differences, which need the presentations (projectConversationMessages).
+  'visualization.preference-recorded': () => [],
   'assistant.responded': (event) => [
     {
       role: 'assistant',
@@ -305,9 +315,67 @@ export function projectAiTimelineEntry(event: ProjectEvent): AiTimelineEntry {
 export function projectConversationMessages(
   events: readonly ProjectEvent[]
 ): ConversationMessage[] {
+  const variants = presentedVariants(events);
   return events.flatMap((event) =>
-    matchProjectEvent<ConversationMessage[]>(event, conversationCases)
+    event.type === 'visualization.preference-recorded'
+      ? [{ role: 'user', content: preferenceMessage(event, variants) } as const]
+      : matchProjectEvent<ConversationMessage[]>(event, conversationCases)
   );
+}
+
+/** Each presented presentation's variant, by its id. */
+function presentedVariants(events: readonly ProjectEvent[]): Map<string, DesignValues> {
+  const variants = new Map<string, DesignValues>();
+  for (const event of events)
+    if (
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1' &&
+      event.payload.presentation.variant
+    )
+      variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
+  return variants;
+}
+
+/** The variables two variants give different values, in key order. */
+export function variantDifferences(
+  preferred: DesignValues | undefined,
+  other: DesignValues | undefined
+): VariantDifference[] {
+  if (!preferred || !other) return [];
+  return [...new Set([...Object.keys(preferred), ...Object.keys(other)])]
+    .filter((variable) => preferred[variable] !== other[variable])
+    .sort()
+    .map((variable) => ({
+      variable,
+      ...(variable in preferred ? { preferred: preferred[variable] } : {}),
+      ...(variable in other ? { other: other[variable] } : {})
+    }));
+}
+
+// A preference names at most this many differences in the conversation, the rest counted.
+const namedDifferences = 12;
+
+/** A preference as the participant's message, with what its pair differed in. */
+function preferenceMessage(
+  event: Extract<ProjectEvent, { type: 'visualization.preference-recorded' }>,
+  variants: ReadonlyMap<string, DesignValues>
+): string {
+  const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
+  const differences = variantDifferences(
+    variants.get(event.payload.preferred),
+    other ? variants.get(other) : undefined
+  );
+  const named = differences
+    .slice(0, namedDifferences)
+    .map(
+      ({ variable, preferred, other }) =>
+        `${variable} ${String(preferred ?? 'unset')} (the other: ${String(other ?? 'unset')})`
+    );
+  const more = differences.length - named.length;
+  const differed = named.length
+    ? ` They differed in ${named.join('; ')}${more > 0 ? `; and ${more} more` : ''}.`
+    : '';
+  return `I preferred presentation ${event.payload.preferred} over the alternative${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}.${differed}`;
 }
 
 /** Build the pure, explicitly bounded project context supplied to the AI assistant. */
@@ -367,6 +435,7 @@ function assistantInteraction(
     }
     return event;
   });
+  const variants = presentedVariants(document.events);
   const preferences = interactions.flatMap((event) => {
     if (event.type !== 'visualization.preference-recorded') return [];
     const alternativePresentationId = event.payload.presentations.find(
@@ -380,7 +449,11 @@ function assistantInteraction(
         eventId: event.id,
         preferredPresentationId: event.payload.preferred,
         alternativePresentationId,
-        step: event.payload.step
+        step: event.payload.step,
+        differences: variantDifferences(
+          variants.get(event.payload.preferred),
+          variants.get(alternativePresentationId)
+        )
       }
     ];
   });

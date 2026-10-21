@@ -136,6 +136,63 @@ describe('mode-neutral AI project context', () => {
       { role: 'user', content: expect.stringContaining(presentationId) }
     ]);
   });
+
+  it('says what a preferred pair differed in, for this turn and in the conversation', () => {
+    const value = document();
+    const preferredId = '12345678-1234-4123-8123-123456789ac1';
+    const otherId = '12345678-1234-4123-8123-123456789ac2';
+    const variants = [
+      { 'views.Int': 'IntCell', 'root.fill': 'blue-100', 'root.radius': 4 },
+      { 'views.Int': 'IntTally', 'root.fill': 'amber-100', 'root.radius': 4 }
+    ];
+    for (const [slot, id] of [preferredId, otherId].entries())
+      value.events.push({
+        id: slot + 4,
+        type: 'visualization.presented',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: `2026-01-01T00:00:0${slot + 4}.000Z`,
+        payload: {
+          displaySetId: '12345678-1234-4123-8123-123456789abd',
+          slot: slot as 0 | 1,
+          presentation: {
+            presentationId: id,
+            format: 'browser-bundle-v1',
+            mode: 'sverlin',
+            stepSignature: 'shared',
+            labels: ['Start'],
+            seed: slot + 1,
+            source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
+            html: recorded('', 'text/html'),
+            javascript: recorded('', 'text/javascript'),
+            variant: variants[slot]
+          }
+        }
+      });
+    value.events.push({
+      id: 6,
+      type: 'visualization.preference-recorded',
+      operationId,
+      actor: { kind: 'user' },
+      createdAt: '2026-01-01T00:00:06.000Z',
+      payload: { presentations: [preferredId, otherId], preferred: preferredId, step: 0 }
+    });
+    const differences = [
+      { variable: 'root.fill', preferred: 'blue-100', other: 'amber-100' },
+      { variable: 'views.Int', preferred: 'IntCell', other: 'IntTally' }
+    ];
+    expect(
+      projectAiContext(value, { eventIds: [], interactionEventIds: [6] }).interaction
+    ).toMatchObject({ kind: 'preference', differences });
+    expect(projectConversationMessages(value.events)).toEqual([
+      {
+        role: 'user',
+        content: expect.stringContaining(
+          'They differed in root.fill blue-100 (the other: amber-100); views.Int IntCell (the other: IntTally).'
+        )
+      }
+    ]);
+  });
 });
 
 describe('source versions in the AI context', () => {
