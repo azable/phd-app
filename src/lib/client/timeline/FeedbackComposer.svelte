@@ -38,6 +38,8 @@
     onDraftChange?: (content: MessageContent, focused: boolean) => void;
     /** The candidate feedback builds on, where none is shown, as for a source chosen on its own. */
     base?: string;
+    /** That source's id, which the message says it is viewing. */
+    baseSource?: string;
   };
 
   let {
@@ -47,7 +49,8 @@
     visualSelections = [],
     onSubmitted = () => {},
     onDraftChange = (_content: MessageContent, _focused: boolean) => {},
-    base
+    base,
+    baseSource
   }: Props = $props();
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
@@ -55,7 +58,9 @@
   let hasExplicitReferences = $state(false);
   let editorRevision = $state(0);
   let focused = $state(false);
-  const automaticContext = $derived(automaticFeedbackContext(presentations, visualSelections));
+  const automaticContext = $derived(
+    automaticFeedbackContext(presentations, visualSelections, baseSource)
+  );
 
   export function referencePresentation(presentation: TimelinePresentation): void {
     insertReference({

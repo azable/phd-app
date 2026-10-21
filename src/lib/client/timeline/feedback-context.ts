@@ -5,15 +5,17 @@ import type { MessageContent } from '$lib/shared/projects/events/message-content
 import type { ReferenceSegment } from './reference-labels';
 
 /**
- * Describe the currently visible visualization context with retained inline references: the
- * elements selected in a presentation, if any, or else the presentation itself.
+ * Describe what the participant is viewing with retained inline references: the elements selected
+ * in a presentation, if any, or else the presentation itself; or a source chosen on its own.
  */
 export function automaticFeedbackContext(
   presentations: readonly TimelinePresentation[],
-  selections: readonly VisualSelection[] = []
+  selections: readonly VisualSelection[] = [],
+  source?: string
 ): MessageContent {
   const visible = presentations.slice(0, 2);
-  if (visible.length === 0) return [];
+  if (visible.length === 0)
+    return source ? [{ type: 'markdown', text: `Viewing source \`${source}\`.` }] : [];
   const references = visible.map(({ presentation }) => {
     const selection = selections.find(
       ({ presentationId }) => presentationId === presentation.presentationId

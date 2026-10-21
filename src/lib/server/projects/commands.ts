@@ -599,9 +599,16 @@ async function runSverlinAssistantTurn(
       if (!generation.ok) return { document: current, done: true };
 
       if (attempt === 1) {
+        // A blank reply to a change says what the change does instead.
+        const { reply } = generation.result;
+        const summary = 'summary' in generation.result ? generation.result.summary : undefined;
         current = await appendAssistantResponse(
           current,
-          resolveAssistantContent(current, generation.result.reply, []),
+          resolveAssistantContent(
+            current,
+            blankReply(reply) && summary ? [{ type: 'markdown', text: summary }] : reply,
+            []
+          ),
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
@@ -969,6 +976,11 @@ async function runSverlinGeneration(
           );
         }
         validateGeneratedReply(result.reply, 0, result.providerResponse);
+        if (
+          (result.action === 'respond' || result.action === 'resample') &&
+          blankReply(result.reply)
+        )
+          throw new InvalidChatbotResponseError('The reply was blank.', result.providerResponse);
       },
       fallbackResponse: (result) => ({
         reply: result.reply,
@@ -1353,6 +1365,11 @@ function repairedPresentationId(
     known.toLowerCase().startsWith(`${prefix}-`)
   );
   return prefix.length === 8 && matches.length === 1 ? matches[0] : undefined;
+}
+
+/** A reply with nothing to read: no references, and only blank text. */
+function blankReply(reply: GeneratedMessageContent): boolean {
+  return reply.every((segment) => segment.type === 'markdown' && !segment.text.trim());
 }
 
 function validateGeneratedReply(

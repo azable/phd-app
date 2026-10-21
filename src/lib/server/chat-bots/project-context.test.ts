@@ -137,3 +137,71 @@ describe('mode-neutral AI project context', () => {
     ]);
   });
 });
+
+describe('source versions in the AI context', () => {
+  it('lists each source once, with the version it was made from and what it changes', () => {
+    const value = document();
+    const version = (
+      id: number,
+      hash: string,
+      origin: 'assistant-edit' | 'candidate',
+      parent: number,
+      summary?: string
+    ) => ({
+      id,
+      type: 'artifact.version-created' as const,
+      operationId,
+      actor: { kind: 'system' as const },
+      createdAt: `2026-01-01T00:00:0${id}.000Z`,
+      payload: {
+        origin:
+          origin === 'candidate'
+            ? { kind: origin, presentationId: '12345678-1234-4123-8123-123456789abd' }
+            : { kind: origin },
+        parent,
+        ...(summary ? { summary } : {}),
+        changes: [
+          {
+            operation: 'upsert' as const,
+            artifact: {
+              artifactId: 'main',
+              path: 'Main.svelte',
+              language: 'svelte' as const,
+              content: { text: hash, sha256: hash.repeat(64), mediaType: 'text/x-svelte' }
+            }
+          }
+        ]
+      }
+    });
+    value.events.push(
+      version(4, 'b', 'assistant-edit', 2, 'Shows indices'),
+      // Building on the first source again brings it back: it is not a version of its own.
+      version(5, 'a', 'candidate', 4),
+      version(6, 'c', 'assistant-edit', 5, 'Highlights the target')
+    );
+
+    const context = projectAiContext(value);
+
+    expect(context.versions).toEqual([
+      { id: 'aaaaaa', eventId: 2, madeBy: 'initial' },
+      {
+        id: 'bbbbbb',
+        eventId: 4,
+        parent: 'aaaaaa',
+        madeBy: 'assistant-edit',
+        summary: 'Shows indices'
+      },
+      {
+        id: 'cccccc',
+        eventId: 6,
+        parent: 'aaaaaa',
+        madeBy: 'assistant-edit',
+        summary: 'Highlights the target'
+      }
+    ]);
+    expect(context.base.artifacts[0].sha256).toBe('c'.repeat(64));
+    expect(context.timeline.at(-1)?.summary).toBe(
+      'Created assistant-edit source version cccccc: Highlights the target.'
+    );
+  });
+});

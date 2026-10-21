@@ -610,6 +610,7 @@
                   {presentationCount}
                   presentations={chosen ? [] : visiblePresentations}
                   base={chosen?.presentationId}
+                  baseSource={chosen?.sourceHash.slice(0, 6)}
                   visualSelections={visualSelections.current}
                   onSubmitted={() => {
                     chosenOf = undefined;

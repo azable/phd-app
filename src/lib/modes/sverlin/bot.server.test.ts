@@ -161,7 +161,7 @@ describe('recorded steps in the assistant context', () => {
   const context = (source: string, failedSource?: string) =>
     aiAssistant.buildContext({
       messages: [],
-      project: { currentWorkspace: workspace(source) } as never,
+      project: { base: workspace(source) } as never,
       attempt: { number: 1, purpose: 'initial' },
       ...(failedSource
         ? {

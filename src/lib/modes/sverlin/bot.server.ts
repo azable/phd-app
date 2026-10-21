@@ -86,7 +86,7 @@ export default {
   initialPrompt: [instructions, languageGuide].join('\n\n'),
   buildContext: ({ project, attempt, buildFeedback }) => {
     // A repair reads the steps of the candidate that failed; otherwise those of the current source.
-    const { entryArtifactId, artifacts } = project.currentWorkspace;
+    const { entryArtifactId, artifacts } = project.base;
     const source =
       buildFeedback?.failedSource ??
       artifacts.find(({ artifactId }) => artifactId === entryArtifactId)?.source;

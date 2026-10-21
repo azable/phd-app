@@ -54,6 +54,7 @@
             type="button"
             class="group mx-0.5 inline-flex items-center gap-1 rounded-md align-middle leading-none focus-visible:outline-none"
             class:bg-background={inverted}
+            class:text-foreground={inverted}
             title={referenceChipTitle(reference)}
             onclick={(event) => onReferenceActivate(reference, event.shiftKey)}
           >
@@ -63,6 +64,7 @@
           <span
             class="mx-0.5 inline-flex items-center gap-1 rounded-md align-middle"
             class:bg-background={inverted}
+            class:text-foreground={inverted}
             title={referenceChipTitle(reference)}
           >
             {@render chip(reference)}

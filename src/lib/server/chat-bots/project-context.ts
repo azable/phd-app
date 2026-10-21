@@ -2,8 +2,8 @@
  * AI-owned projections from complete project history into bounded model context.
  *
  * The event document remains lossless. This module deliberately gives the model
- * a compact index, the current source, and details for explicitly selected events,
- * presentations, and elements.
+ * a compact index, the source the turn builds on, every version of the source as a tree, and
+ * details for explicitly selected events, presentations, and elements.
  *
  * @packageDocumentation
  */
@@ -50,6 +50,15 @@ export type AiArtifact = {
 export type AiWorkspace = {
   entryArtifactId: string;
   artifacts: AiArtifact[];
+};
+
+/** One version of the source, named as the participant sees it, by the start of its hash. */
+export type AiSourceVersion = {
+  id: string;
+  eventId: EventId;
+  parent?: string;
+  madeBy: string;
+  summary?: string;
 };
 
 /** Compact identity of one activated visualization. */
@@ -140,7 +149,13 @@ export type AiProjectContext = {
   projectId: string;
   title: string;
   headEventId: EventId;
-  currentWorkspace: AiWorkspace;
+  /** The source this turn builds on: that of the candidate the participant is viewing. */
+  base: AiWorkspace;
+  /**
+   * Every version of the source, oldest first: the version each was made from, so they form a tree
+   * whose branches each hold their own changes, how each was made, and what it shows or changes.
+   */
+  versions: AiSourceVersion[];
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
@@ -191,8 +206,10 @@ const timelineCases = {
     `Build succeeded in ${event.payload.durationMs} ms; bundle ${shortHash(event.payload.bundle.sha256)}.`,
   'build.failed': (event) =>
     `Build failed (${event.payload.failureKind}) with ${event.payload.diagnostics.length} diagnostic(s).`,
-  'artifact.version-created': (event) =>
-    `Created ${event.payload.origin.kind} artifact version with ${event.payload.changes.length} change(s).`,
+  'artifact.version-created': (event) => {
+    const id = entryHash(event);
+    return `Created ${event.payload.origin.kind} source version${id ? ` ${id.slice(0, 6)}` : ''}${event.payload.summary ? `: ${event.payload.summary}` : ''}.`;
+  },
   'visualization.presented': (event) =>
     `Presented ${event.payload.presentation.format} visualization ${event.payload.presentation.presentationId} in display set ${event.payload.displaySetId}.`,
   'visualization.preference-recorded': (event) =>
@@ -277,7 +294,8 @@ export function projectAiContext(
     projectId: document.projectId,
     title: snapshot.title,
     headEventId: projectHead(document).id,
-    currentWorkspace: projectWorkspace(snapshot),
+    base: projectWorkspace(snapshot),
+    versions: sourceVersions(document),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     timelineWindow: {
@@ -407,6 +425,37 @@ function eventDetail(document: ProjectDocument, id: EventId): AiEventDetail {
     workspace: projectWorkspace(snapshot),
     activePresentations: activePresentationSummaries(snapshot)
   };
+}
+
+/** The hash of the source a version made of the entry artifact, the first artifact it changes. */
+function entryHash(event: ProjectEventOf<'artifact.version-created'>): string | undefined {
+  const change = event.payload.changes.find(({ operation }) => operation === 'upsert');
+  return change?.operation === 'upsert' ? change.artifact.content.sha256 : undefined;
+}
+
+/**
+ * The source's versions, once each: a version that brings back an earlier source, to build on it,
+ * is that earlier version. Each names the version it was made from.
+ */
+function sourceVersions(document: ProjectDocument): AiSourceVersion[] {
+  const hashes = new Map<EventId, string>();
+  const versions = new Map<string, AiSourceVersion>();
+  for (const event of document.events) {
+    if (event.type !== 'artifact.version-created') continue;
+    const hash = entryHash(event);
+    if (!hash) continue;
+    hashes.set(event.id, hash);
+    if (versions.has(hash)) continue;
+    const parent = event.payload.parent ? hashes.get(event.payload.parent) : undefined;
+    versions.set(hash, {
+      id: hash.slice(0, 6),
+      eventId: event.id,
+      ...(parent && parent !== hash ? { parent: parent.slice(0, 6) } : {}),
+      madeBy: event.payload.origin.kind,
+      ...(event.payload.summary ? { summary: event.payload.summary } : {})
+    });
+  }
+  return [...versions.values()];
 }
 
 function projectWorkspace(snapshot: ProjectSnapshot): AiWorkspace {
