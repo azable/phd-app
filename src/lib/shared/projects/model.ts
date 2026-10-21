@@ -30,6 +30,7 @@ import {
   operationIdSchema,
   positiveSchema,
   textSchema,
+  versionSummarySchema,
   type ProjectArtifact
 } from './events/values';
 import { messageContentSchema } from './events/message-content';
@@ -106,7 +107,13 @@ export const projectCommandSchema = v.variant('type', [
     type: v.literal('save'),
     artifactId: textSchema,
     source: v.string(),
-    presentationCount: v.picklist([1, 2])
+    presentationCount: v.picklist([1, 2]),
+    /** The candidate whose source the edit started from. */
+    from: v.optional(presentationIdSchema),
+    /** What the edit changes. */
+    summary: v.optional(versionSummarySchema),
+    /** Starts a new tree: the version, written from scratch, has no parent. */
+    root: v.optional(v.literal(true))
   }),
   v.strictObject({
     ...commandBase,

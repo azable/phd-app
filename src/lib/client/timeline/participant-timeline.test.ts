@@ -10,15 +10,15 @@ const presentationIds = [
 ] as const;
 
 describe('participant Timeline projection', () => {
-  it('keeps structured messages, preference actions, and individual presentations', () => {
+  it('keeps structured messages, preference actions, and one card per source', () => {
     const items = participantTimeline(events());
-    expect(items.map(({ kind }) => kind)).toEqual([
-      'message',
-      'message',
-      'presentation',
-      'presentation',
-      'message'
-    ]);
+    expect(items.map(({ kind }) => kind)).toEqual(['message', 'message', 'version', 'message']);
+    // Both presentations were built from one source, so they are two variants of its card.
+    expect(items[2]).toMatchObject({ kind: 'version', sourceHash: 'a'.repeat(64) });
+    expect(
+      items[2].kind === 'version' &&
+        items[2].variants.map(({ presentation }) => presentation.presentationId)
+    ).toEqual(presentationIds.slice(0, 2));
     expect(items[0]).toMatchObject({
       kind: 'message',
       actor: 'user',
@@ -28,7 +28,7 @@ describe('participant Timeline projection', () => {
       kind: 'message',
       actor: 'assistant'
     });
-    expect(items[4]).toMatchObject({
+    expect(items[3]).toMatchObject({
       kind: 'message',
       actor: 'user',
       content: expect.arrayContaining([

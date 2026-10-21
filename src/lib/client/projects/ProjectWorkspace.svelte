@@ -193,6 +193,7 @@
             {
               source: presentation.source.text,
               sourceHash: presentation.source.sha256,
+              presentationId: presentation.presentationId,
               candidate: candidateId(presentation),
               seed: presentation.seed,
               draws: presentation.draws ?? [],

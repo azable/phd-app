@@ -471,12 +471,21 @@ export function updateProjectArtifact(
     source: string;
     presentationCount: 1 | 2;
     operationId: string;
+    /** The candidate whose source the edit started from, which becomes its parent. */
+    from?: string;
+    /** What the edit changes. */
+    summary?: string;
+    /** Starts a new tree, as a version written from scratch. */
+    root?: boolean;
   },
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
     const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
-    const snapshot = projectSnapshotAt(before);
+    const based = options.from
+      ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
+      : before;
+    const snapshot = projectSnapshotAt(based);
     const current = snapshot.artifacts[options.artifactId];
     if (!current) throw new Error(`Unknown artifact ${options.artifactId}.`);
     if (modeCatalog[snapshot.mode].authoring === 'candidates') {
@@ -486,12 +495,14 @@ export function updateProjectArtifact(
     }
     const content = recordText(options.source, current.content.mediaType);
     let document = await appendProjectEvents(
-      before,
+      based,
       [
         artifactVersionEvent({
           operationId: options.operationId,
           origin: { kind: 'manual-edit' },
-          changes: [{ operation: 'upsert', artifact: { ...current, content } }]
+          changes: [{ operation: 'upsert', artifact: { ...current, content } }],
+          ...(options.summary ? { summary: options.summary } : {}),
+          ...(options.root ? { root: true } : {})
         })
       ],
       dependencies
@@ -559,8 +570,34 @@ export async function appendProjectEvents(
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectDocument> {
   return (
-    await dependencies.repository.append(document.projectId, projectHead(document).id, events)
+    await dependencies.repository.append(
+      document.projectId,
+      projectHead(document).id,
+      withVersionParents(document, events)
+    )
   ).document;
+}
+
+/**
+ * Give each new artifact version that names no parent the version newest when it is made: the base
+ * its maker was viewing, since every step first makes the shown candidate's source the newest.
+ */
+const isVersion = (event: NewProjectEvent): event is NewProjectEvent<'artifact.version-created'> =>
+  event.type === 'artifact.version-created';
+
+function withVersionParents(
+  document: ProjectDocument,
+  events: NewProjectEvent[]
+): NewProjectEvent[] {
+  let parent = document.events.findLast(({ type }) => type === 'artifact.version-created')?.id;
+  let id = projectHead(document).id;
+  return events.map((event) => {
+    id += 1;
+    if (!isVersion(event)) return event;
+    const own = 'parent' in event.payload ? event.payload.parent : parent;
+    parent = id;
+    return own === undefined ? event : { ...event, payload: { ...event.payload, parent: own } };
+  });
 }
 
 /** Add a creation timestamp to a typed event before repository insertion. */
@@ -830,6 +867,9 @@ function artifactVersionEvent(options: {
   operationId: string;
   origin: ArtifactVersionOrigin;
   changes: ArtifactChange[];
+  summary?: string;
+  /** A version written from scratch, which names no parent. */
+  root?: boolean;
 }) {
   return draftEvent({
     type: 'artifact.version-created',
@@ -838,7 +878,13 @@ function artifactVersionEvent(options: {
         ? { kind: 'assistant', botId: 'sverlin-assistant' }
         : { kind: 'user' },
     operationId: options.operationId,
-    payload: { origin: options.origin, changes: options.changes }
+    payload: {
+      origin: options.origin,
+      changes: options.changes,
+      ...(options.summary ? { summary: options.summary } : {}),
+      // An explicit absent parent, which withVersionParents keeps, so it is stored without one.
+      ...(options.root ? { parent: undefined } : {})
+    }
   });
 }
 

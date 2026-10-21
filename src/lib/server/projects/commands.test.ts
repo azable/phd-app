@@ -1888,3 +1888,52 @@ describe('building on the candidate shown', () => {
     );
   });
 });
+
+describe('version parents', () => {
+  it('links each version to the one it was made from, unless written from scratch', async () => {
+    const { createProject, updateProjectArtifact } = await import('./service');
+    const created = await createProject(
+      { title: 'Tree', creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const versions = (document: ProjectDocument) =>
+      document.events.filter(
+        (event): event is ProjectEventOf<'artifact.version-created'> =>
+          event.type === 'artifact.version-created'
+      );
+    const [initial] = versions(created);
+    const source =
+      initial.payload.changes[0].operation === 'upsert'
+        ? initial.payload.changes[0].artifact.content.text
+        : '';
+    const save = (document: ProjectDocument, extra: object, operationId: string) =>
+      updateProjectArtifact(
+        {
+          projectId: created.projectId,
+          expectedHead: projectHead(document).id,
+          artifactId: 'main',
+          source: `${source}\n<Node>${operationId.slice(0, 2)}</Node>`,
+          presentationCount: 1,
+          operationId,
+          ...extra
+        },
+        serviceDependencies
+      );
+
+    const child = await save(
+      created,
+      { summary: 'Adds a caption' },
+      '52345678-1234-4123-8123-123456789abc'
+    );
+    const fresh = await save(
+      child.document,
+      { root: true },
+      '62345678-1234-4123-8123-123456789abc'
+    );
+
+    const [, childVersion, freshVersion] = versions(fresh.document);
+    expect(initial.payload.parent).toBeUndefined();
+    expect(childVersion.payload).toMatchObject({ parent: initial.id, summary: 'Adds a caption' });
+    expect(freshVersion.payload.parent).toBeUndefined();
+  });
+});

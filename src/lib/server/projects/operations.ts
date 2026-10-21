@@ -711,7 +711,10 @@ async function executeProjectCommand(options: {
         ...common,
         artifactId: options.command.artifactId,
         source: options.command.source,
-        presentationCount: options.command.presentationCount
+        presentationCount: options.command.presentationCount,
+        ...(options.command.from ? { from: options.command.from } : {}),
+        ...(options.command.summary ? { summary: options.command.summary } : {}),
+        ...(options.command.root ? { root: true } : {})
       });
     case 'restore':
       return restoreProjectArtifacts({

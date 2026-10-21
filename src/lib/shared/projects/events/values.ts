@@ -55,6 +55,9 @@ export const projectArtifactSchema = v.object({
   content: recordedTextSchema
 });
 
+/** Runtime schema for a version's one-line summary: what it shows, or what it changes. */
+export const versionSummarySchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(300));
+
 /** Runtime schema for artifact-version provenance. */
 export const artifactOriginSchema = v.variant('kind', [
   v.object({ kind: v.literal('initial') }),

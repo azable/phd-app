@@ -170,10 +170,6 @@
     }
   }
 
-  function returnToCurrent() {
-    selection.returnToLatest();
-  }
-
   function localStep(entry: (typeof visible)[number]) {
     return localPresentationStep(playbackContext, entry.presentation.presentationId, step);
   }
@@ -240,15 +236,6 @@
           Prefer bottom candidate
         {/if}
       </Button>
-    {/if}
-    {#if !selection.followingLatest}
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-label="Return to current visualizations"
-        onclick={returnToCurrent}
-        {disabled}>Return to current</Button
-      >
     {/if}
     {#if selection.buffered && selection.followingLatest && visible.length}
       <Button

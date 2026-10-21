@@ -1,7 +1,9 @@
 /**
  * The development demo project shown at /dev/demo: one project whose chat collects the examples an
- * agent drops into .demo/inbox, each saved as a candidate of its own, until a .demo/flush marker
- * replaces it with a fresh project. Only the dev server serves it.
+ * agent drops into .demo/inbox, each saved as a version of its own, until a .demo/flush marker
+ * replaces it with a fresh project. An example may begin with `<!-- summary: … -->`, saying what it
+ * shows or changes, and `<!-- parent: name -->`, naming the earlier example it changes; without a
+ * parent it starts a tree of its own. Only the dev server serves it.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -15,11 +17,14 @@ import * as schema from '$lib/server/db/schema';
 import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { projectRepository } from '$lib/server/projects/repository';
 import { createProjectSkeleton } from '$lib/server/projects/service';
+import type { ProjectDocument } from '$lib/shared/projects/model';
 
 const folder = path.resolve('.demo');
 const inbox = path.join(folder, 'inbox');
 const flushMarker = path.join(folder, 'flush');
 const stateFile = path.join(folder, 'state.json');
+// The source of each example saved to the demo project, by name, so a later one can name its parent.
+const sourcesFile = path.join(folder, 'sources.json');
 
 let syncing: Promise<string> | undefined;
 let saving: Promise<void> | undefined;
@@ -39,6 +44,7 @@ async function sync(ownerUserId: string): Promise<string> {
   let projectId = await currentProject();
   if (projectId && (await exists(flushMarker))) {
     await database().delete(schema.projects).where(eq(schema.projects.id, projectId));
+    await rm(sourcesFile, { force: true });
     projectId = undefined;
   }
   await rm(flushMarker, { force: true });
@@ -62,10 +68,16 @@ async function saveWaiting(projectId: string): Promise<void> {
   const examples = (await readdir(inbox)).filter((name) => name.endsWith('.svelte')).sort();
   for (const name of examples) {
     const file = path.join(inbox, name);
-    const source = await readFile(file, 'utf8');
+    const { source, summary, parent } = withoutHeader(await readFile(file, 'utf8'));
     await rm(file);
     const document = await projectRepository.load(projectId);
     const operationId = randomUUID();
+    const sources = await savedSources();
+    const from = parent && sources[parent] ? presentationOf(document, sources[parent]) : undefined;
+    await writeFile(
+      sourcesFile,
+      JSON.stringify({ ...sources, [name.replace(/\.svelte$/u, '')]: source })
+    );
     await projectOperationExecutor.accept({
       projectId,
       operationId,
@@ -76,11 +88,44 @@ async function saveWaiting(projectId: string): Promise<void> {
         expectedHead: document.events.length,
         artifactId: 'main',
         source,
-        presentationCount: 1
+        presentationCount: 1,
+        ...(summary ? { summary } : {}),
+        ...(from ? { from } : { root: true })
       }
     });
     await finished(projectId, operationId, document.events.length);
   }
+}
+
+/** An example's source without its header lines, and what they say. */
+function withoutHeader(text: string): { source: string; summary?: string; parent?: string } {
+  const header: Record<string, string> = {};
+  const source = text.replace(/^(?:\s*<!--\s*(summary|parent):\s*(.*?)\s*-->\s*\n)+/u, (lines) => {
+    for (const [, key, value] of lines.matchAll(/<!--\s*(summary|parent):\s*(.*?)\s*-->/gu))
+      header[key] = value;
+    return '';
+  });
+  return { source, ...header };
+}
+
+async function savedSources(): Promise<Record<string, string>> {
+  try {
+    return JSON.parse(await readFile(sourcesFile, 'utf8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+/** The newest presentation built from a source, if any. */
+function presentationOf(document: ProjectDocument, source: string): string | undefined {
+  for (const event of document.events.toReversed())
+    if (
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1' &&
+      event.payload.presentation.source.text === source
+    )
+      return event.payload.presentation.presentationId;
+  return undefined;
 }
 
 /** Wait until an operation records that it completed or failed, for at most five minutes. */

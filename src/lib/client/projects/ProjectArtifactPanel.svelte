@@ -15,6 +15,7 @@
   import * as AlertDialog from '$lib/client/components/ui/alert-dialog';
   import { Badge } from '$lib/client/components/ui/badge';
   import { Button } from '$lib/client/components/ui/button';
+  import { Input } from '$lib/client/components/ui/input';
   import { Spinner } from '$lib/client/components/ui/spinner';
 
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
@@ -40,6 +41,8 @@
       nodeDefaults?: readonly NodeDefaultsTaken[];
       /** The hash of the source it was built from. */
       sourceHash?: string;
+      /** The presentation, so an edit started from its source names it as its parent. */
+      presentationId?: string;
       /** Its identifier, `<source>/<values>`. */
       candidate?: CandidateId;
       /** Built before draws were kept, so neither its draws nor its page's defaults are known. */
@@ -61,6 +64,9 @@
   let draft = $state('');
   // The source a draft was started from, which its markers keep their places in.
   let draftBase = $state('');
+  // The candidate a draft was started from, and what the participant says the edit changes.
+  let draftFrom = $state<string | undefined>();
+  let draftSummary = $state('');
   let discardRequested = $state(false);
   let expanded = $state(false);
   let editor = $state<{ focus: () => void } | null>(null);
@@ -125,6 +131,8 @@
     if (!artifact || !session.atHead || session.pending || session.readOnly) return;
     draft = baseSource;
     draftBase = baseSource;
+    draftFrom = drawnSources.find(({ source }) => source === baseSource)?.presentationId;
+    draftSummary = '';
     expanded = true;
     editMode = 'editing';
     void tick().then(() => editor?.focus());
@@ -150,7 +158,9 @@
       type: 'save',
       artifactId: artifact.artifactId,
       source: draft,
-      presentationCount
+      presentationCount,
+      ...(draftFrom ? { from: draftFrom } : {}),
+      ...(draftSummary.trim() ? { summary: draftSummary.trim() } : {})
     });
     if (succeeded) {
       editMode = 'readonly';
@@ -228,6 +238,17 @@
         {/if}
       </header>
 
+      {#if editMode === 'editing'}
+        <div class="border-b px-4 py-2">
+          <Input
+            bind:value={draftSummary}
+            maxlength={300}
+            placeholder="What does this change? (optional)"
+            aria-label="What this edit changes"
+          />
+        </div>
+      {/if}
+
       {#if expanded && unmatched}
         <p class="border-b bg-muted px-4 py-2 text-sm text-muted-foreground">
           {editMode === 'editing'
@@ -244,8 +265,7 @@
 
       {#if expanded && !session.atHead}
         <p class="border-b bg-muted px-4 py-2 text-sm text-muted-foreground">
-          Historical source is read-only. Restore this event from the Timeline to make a new current
-          version.
+          Historical source is read-only. Restore this event from the Timeline to build on it.
         </p>
       {/if}
 
