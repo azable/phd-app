@@ -11,6 +11,8 @@ import * as v from 'valibot';
 import { presentationIdSchema } from '$lib/shared/presentations';
 import { textSchema } from '$lib/shared/projects/events/values';
 
+import type { SourceEdit } from './source-edits';
+
 /** User or assistant message retained as conversational context. */
 export type ConversationMessage = {
   role: 'user' | 'assistant';
@@ -171,6 +173,17 @@ export type SourceArtifactChatOutput =
       reply: GeneratedMessageContent;
       action: 'revise';
       sourceArtifactContent: string;
+      /** What the revision shows, for a first source, or what it changes. */
+      summary?: string;
+      recovery?: RecoveryExplanation;
+    }
+  | {
+      reply: GeneratedMessageContent;
+      /** A revision made by edits to the source it revises, not a rewrite of it. */
+      action: 'edit';
+      edits: SourceEdit[];
+      summary?: string;
+      sourceArtifactContent?: never;
       recovery?: RecoveryExplanation;
     };
 

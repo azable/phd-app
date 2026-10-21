@@ -147,6 +147,16 @@
   );
 
   /** After the timeline shows an element reference's presentation, seek its step and select it. */
+  // Choosing one of the chosen source's variants from the source view shows it, as its pill does.
+  function chooseVariant(presentationId: string, extend: boolean) {
+    const variant = timelinePresentations(session.events).find(
+      ({ presentation }) => presentation.presentationId === presentationId
+    );
+    if (!variant) return;
+    chosenOf = undefined;
+    presentationSelection.activate(variant, session.events, layout, extend);
+  }
+
   function showElementReference(reference: ElementReference) {
     const context = presentationPlaybackContext(
       presentationSelection.selected(session.events, layout)
@@ -200,13 +210,18 @@
           ? [presentation]
           : []
       );
-    const newest = built(sourceHash).at(-1);
+    const variants = built(sourceHash);
+    const newest = variants.at(-1);
     const parent = parentHash ? built(parentHash).at(-1) : undefined;
     return newest
       ? {
           source: newest.source.text,
           sourceHash,
           presentationId: newest.presentationId,
+          variants: variants.map((presentation) => ({
+            presentationId: presentation.presentationId,
+            values: candidateId(presentation).values
+          })),
           ...(parent && parentHash
             ? { parent: { source: parent.source.text, sourceHash: parentHash } }
             : {})
@@ -669,6 +684,7 @@
               }}
               {chosen}
               onLeaveSource={() => (chosenOf = undefined)}
+              onChooseVariant={chooseVariant}
               bind:editMode
             />
           </div>

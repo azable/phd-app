@@ -1937,3 +1937,77 @@ describe('version parents', () => {
     expect(freshVersion.payload.parent).toBeUndefined();
   });
 });
+
+describe('assistant edits', () => {
+  const edit = (edits: { find: string; replace: string }[], summary: string) => ({
+    ...generation(undefined, 'Edited.'),
+    action: 'edit' as const,
+    edits,
+    summary
+  });
+  const created = async (title: string) => {
+    const { createProject } = await import('./service');
+    const document = await createProject(
+      { title, creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const snapshot = projectSnapshotAt(document);
+    return { document, source: snapshot.artifacts[snapshot.entryArtifactId].content.text };
+  };
+  const feedback = async (document: ProjectDocument) => {
+    const { submitProjectFeedback } = await import('./commands');
+    return submitProjectFeedback(
+      {
+        projectId: document.projectId,
+        expectedHead: projectHead(document).id,
+        content: markdownMessage('Add a caption.'),
+        focus: [],
+        presentationCount: 1,
+        operationId: '72345678-1234-4123-8123-123456789abc'
+      },
+      commandDependencies
+    );
+  };
+  const version = (document: ProjectDocument) =>
+    document.events.findLast(
+      (event): event is ProjectEventOf<'artifact.version-created'> =>
+        event.type === 'artifact.version-created'
+    );
+
+  it('applies the edits to the source it revises, and records what they change', async () => {
+    const { document, source } = await created('Edited');
+    mocks.generatePrepared
+      .mockReset()
+      .mockResolvedValue(
+        edit([{ find: source, replace: `${source}\n<Node>Caption</Node>` }], 'Adds a caption')
+      );
+
+    const result = await feedback(document);
+
+    const revised = version(result.document);
+    expect(revised?.payload).toMatchObject({
+      origin: { kind: 'assistant-edit' },
+      summary: 'Adds a caption'
+    });
+    const [change] = revised?.payload.changes ?? [];
+    expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(
+      `${source}\n<Node>Caption</Node>`
+    );
+  });
+
+  it('asks again with what kept the edits from applying, and accepts the correction', async () => {
+    const { document } = await created('Misplaced edit');
+    mocks.generatePrepared
+      .mockReset()
+      .mockResolvedValueOnce(edit([{ find: 'text not in the source', replace: '' }], 'Nothing'))
+      .mockResolvedValueOnce(generation('Corrected', 'Corrected.'));
+
+    const result = await feedback(document);
+
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
+      expect.objectContaining({ code: 'edit_not_applied' })
+    ]);
+    const [change] = version(result.document)?.payload.changes ?? [];
+    expect(change?.operation === 'upsert' && change.artifact.content.text).toContain('Corrected');
+  });
+});

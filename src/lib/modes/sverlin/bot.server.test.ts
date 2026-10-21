@@ -64,7 +64,7 @@ describe('single-component Svelte assistant', () => {
     });
   });
 
-  it('enforces the respond, resample, and revise source contract', () => {
+  it('enforces the respond, resample, revise, and edit source contract', () => {
     expect(aiAssistant.responseFormat.schema).toMatchObject({
       type: 'object',
       properties: {
@@ -73,7 +73,15 @@ describe('single-component Svelte assistant', () => {
             {
               properties: {
                 action: { enum: ['revise'] },
-                sourceArtifactContent: { type: 'string' }
+                sourceArtifactContent: { type: 'string' },
+                summary: { type: 'string' }
+              }
+            },
+            {
+              properties: {
+                action: { enum: ['edit'] },
+                edits: { type: 'array' },
+                summary: { type: 'string' }
               }
             },
             {
@@ -92,14 +100,14 @@ describe('single-component Svelte assistant', () => {
         decision: { action: 'respond', sourceArtifactContent: '<h1>Hello</h1>' },
         recovery: null
       })
-    ).toThrow(/action/i);
+    ).toThrow(/invalid structured response/i);
     expect(() =>
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'I am updating it.' }],
         decision: { action: 'revise', sourceArtifactContent: null },
         recovery: null
       })
-    ).toThrow(/action/i);
+    ).toThrow(/invalid structured response/i);
     expect(
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'I am preparing another pair.' }],
@@ -107,6 +115,28 @@ describe('single-component Svelte assistant', () => {
         recovery: null
       })
     ).toMatchObject({ action: 'resample' });
+    expect(
+      aiAssistant.parseOutput({
+        reply: [{ type: 'markdown', text: 'I am labelling them.' }],
+        decision: {
+          action: 'edit',
+          edits: [{ find: '{v}', replace: '{v} ({k})' }],
+          summary: 'Labels each value with its index'
+        },
+        recovery: null
+      })
+    ).toMatchObject({
+      action: 'edit',
+      edits: [{ find: '{v}', replace: '{v} ({k})' }],
+      summary: 'Labels each value with its index'
+    });
+    expect(() =>
+      aiAssistant.parseOutput({
+        reply: [{ type: 'markdown', text: 'I am editing it.' }],
+        decision: { action: 'edit', edits: [], summary: 'Nothing' },
+        recovery: null
+      })
+    ).toThrow(/invalid structured response/i);
   });
 
   it('rejects unsupported message content in assistant discussion', () => {

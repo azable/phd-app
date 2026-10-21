@@ -61,7 +61,11 @@
       /** One of its variants, which names it as a base. */
       presentationId: string;
       parent?: { source: string; sourceHash: string };
+      /** Its variants, oldest first, by their presentation and values. */
+      variants: { presentationId: string; values: string }[];
     };
+    /** Show one of the chosen source's variants, or add it to those compared. */
+    onChooseVariant?: (presentationId: string, extend: boolean) => void;
     /** Leave the chosen source, back to its variants. */
     onLeaveSource?: () => void;
   };
@@ -74,7 +78,8 @@
     drawnSources = [],
     onSaved = () => {},
     chosen,
-    onLeaveSource = () => {}
+    onLeaveSource = () => {},
+    onChooseVariant = () => {}
   }: Props = $props();
 
   // Choosing a source opens the panel to show it.
@@ -291,7 +296,18 @@
           {:else}
             <span>The source</span>
           {/if}
-          <span class="mr-auto">· choose a variant to view it</span>
+          <span>· view a variant:</span>
+          <span class="mr-auto flex flex-wrap gap-1">
+            {#each chosen.variants as { presentationId, values } (presentationId)}
+              <button
+                type="button"
+                class="rounded-md bg-background px-1.5 font-mono text-[11px] leading-5 text-foreground ring-1 ring-border transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                title="View; Shift-click to compare"
+                onclick={(event) => onChooseVariant(presentationId, event.shiftKey)}
+                >{values}</button
+              >
+            {/each}
+          </span>
           <Button
             size="sm"
             variant="outline"

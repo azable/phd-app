@@ -56,6 +56,7 @@ import type {
   RecoveryExplanation,
   SourceArtifactChatOutput
 } from '$lib/server/chat-bots/types';
+import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 
 import { runProjectCommand } from './command-lock';
 import { formatDiagnosticSummary } from './diagnostics';
@@ -608,7 +609,42 @@ async function runSverlinAssistantTurn(
         );
       }
 
-      const candidate = generation.result.sourceArtifactContent;
+      // Edits apply to the source being revised: the failed candidate when repairing it.
+      let candidate = generation.result.sourceArtifactContent;
+      if (generation.result.action === 'edit') {
+        const base = buildFeedback?.failedSource ?? entrySource(current);
+        const edited = applySourceEdits(base, generation.result.edits);
+        if ('problems' in edited) {
+          const summary = `Attempt ${attempt}: the edits could not be applied. ${edited.problems.join(' ')}`;
+          failureSummaries.push(summary);
+          if (attempt === chatbot.config.attemptProfiles.length) {
+            return {
+              document: await appendExhaustedSverlinFailure(
+                current,
+                operationId,
+                summary,
+                dependencies
+              ),
+              done: true
+            };
+          }
+          buildFeedback = {
+            attempt,
+            buildEventId: projectHead(current).id,
+            failedSource: base,
+            assistantReply: generatedReplyText(generation.result.reply),
+            diagnostics: edited.problems.map((message) => ({
+              severity: 'error' as const,
+              code: 'edit_not_applied',
+              message,
+              raw: message
+            })),
+            priorFailureSummaries: [...failureSummaries]
+          };
+          return { document: current, done: false };
+        }
+        candidate = edited.source;
+      }
       if (candidate === undefined) {
         if (attempt === 1) {
           const advanced =
@@ -659,6 +695,9 @@ async function runSverlinAssistantTurn(
               recorded: built.recorded,
               generationEvent: generation.generationEvent,
               candidate,
+              ...('summary' in generation.result && generation.result.summary
+                ? { summary: generation.result.summary }
+                : {}),
               operationId,
               recovery: generation.result.recovery,
               recoveryReply: generation.result.reply,
@@ -935,6 +974,8 @@ async function runSverlinGeneration(
         reply: result.reply,
         action: result.action,
         sourceArtifactContent: result.sourceArtifactContent ?? null,
+        ...(result.action === 'edit' ? { edits: result.edits } : {}),
+        ...('summary' in result && result.summary ? { summary: result.summary } : {}),
         recovery: result.recovery ?? null,
         generation: result.generation
       })
@@ -1137,12 +1178,20 @@ async function buildCandidateBatch(
   return { document: recorded.document, recorded };
 }
 
+/** The entry artifact's source in a project's newest state. */
+function entrySource(document: ProjectDocument): string {
+  const snapshot = projectSnapshotAt(document);
+  return snapshot.artifacts[snapshot.entryArtifactId]?.content.text ?? '';
+}
+
 async function acceptSverlinCandidate(
   options: {
     document: ProjectDocument;
     recorded: RecordedBuildBatch;
     generationEvent: NewProjectEvent<'ai.generation-succeeded'>;
     candidate: string;
+    /** What the revision shows, for a first source, or what it changes. */
+    summary?: string;
     operationId: string;
     recovery?: RecoveryExplanation;
     recoveryReply: GeneratedMessageContent;
@@ -1164,7 +1213,11 @@ async function acceptSverlinCandidate(
         type: 'artifact.version-created',
         actor: options.generationEvent.actor,
         operationId: options.operationId,
-        payload: { origin: { kind: 'assistant-edit' }, changes: [change] }
+        payload: {
+          origin: { kind: 'assistant-edit' },
+          changes: [change],
+          ...(options.summary ? { summary: options.summary } : {})
+        }
       })
     ],
     dependencies.projectService

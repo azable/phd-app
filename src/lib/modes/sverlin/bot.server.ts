@@ -27,6 +27,32 @@ export const languageGuide = promptText(guide);
  */
 const maximumTraceCharacters = 20_000;
 
+/** What a revision shows, for a first source, or what it changes: one short sentence. */
+const summaryJsonSchema = { type: 'string', minLength: 1, maxLength: 300 };
+const summarySchema = v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(300)));
+
+/** What the assistant decided: to rewrite the source, edit it, resample it, or only reply. */
+const decisionSchema = v.variant('action', [
+  v.object({
+    action: v.literal('revise'),
+    sourceArtifactContent: v.pipe(
+      v.string(),
+      v.check((source) => source.trim().length > 0)
+    ),
+    summary: summarySchema
+  }),
+  v.object({
+    action: v.literal('edit'),
+    edits: v.pipe(
+      v.array(v.object({ find: v.pipe(v.string(), v.minLength(1)), replace: v.string() })),
+      v.minLength(1)
+    ),
+    summary: summarySchema
+  }),
+  v.object({ action: v.literal('respond'), sourceArtifactContent: v.null() }),
+  v.object({ action: v.literal('resample'), sourceArtifactContent: v.null() })
+]);
+
 /**
  * The steps a source's algorithm records, for the assistant to check what its algorithm does and
  * to name what a step shows: each step's variables in scope, as many steps as fit, or why there
@@ -87,9 +113,32 @@ export default {
               additionalProperties: false,
               properties: {
                 action: { type: 'string', enum: ['revise'] },
-                sourceArtifactContent: { type: 'string', minLength: 1, pattern: '\\S' }
+                sourceArtifactContent: { type: 'string', minLength: 1, pattern: '\\S' },
+                summary: summaryJsonSchema
               },
-              required: ['action', 'sourceArtifactContent']
+              required: ['action', 'sourceArtifactContent', 'summary']
+            },
+            {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                action: { type: 'string', enum: ['edit'] },
+                edits: {
+                  type: 'array',
+                  minItems: 1,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      find: { type: 'string', minLength: 1 },
+                      replace: { type: 'string' }
+                    },
+                    required: ['find', 'replace']
+                  }
+                },
+                summary: summaryJsonSchema
+              },
+              required: ['action', 'edits', 'summary']
             },
             {
               type: 'object',
@@ -108,41 +157,27 @@ export default {
     }
   },
   parseOutput(value) {
-    const output = value as {
-      reply?: unknown;
-      decision?: {
-        action?: unknown;
-        sourceArtifactContent?: unknown;
-      };
-      recovery?: unknown;
-    };
-    const decision = output?.decision;
-    if (
-      !decision ||
-      (decision.action !== 'respond' &&
-        decision?.action !== 'resample' &&
-        decision?.action !== 'revise') ||
-      !('sourceArtifactContent' in decision) ||
-      (decision.sourceArtifactContent !== null &&
-        (typeof decision.sourceArtifactContent !== 'string' ||
-          !decision.sourceArtifactContent.trim()))
-    ) {
-      throw new Error('The chatbot returned an invalid structured response.');
-    }
-    const hasSource = typeof decision.sourceArtifactContent === 'string';
-    if ((decision.action === 'revise') !== hasSource) {
-      throw new Error('The chatbot action did not match its source artifact content.');
-    }
+    const output = value as { reply?: unknown; decision?: unknown; recovery?: unknown };
+    const parsed = v.safeParse(decisionSchema, output?.decision);
+    if (!parsed.success) throw new Error('The chatbot returned an invalid structured response.');
+    const decision = parsed.output;
     const recovery = parseRecoveryExplanation(output.recovery);
     const reply = v.parse(generatedMessageContentSchema, output.reply);
-    if (decision.action === 'revise') {
+    const given = { reply, ...(recovery ? { recovery } : {}) };
+    if (decision.action === 'revise')
       return {
-        reply,
+        ...given,
         action: 'revise',
-        sourceArtifactContent: decision.sourceArtifactContent as string,
-        ...(recovery ? { recovery } : {})
+        sourceArtifactContent: decision.sourceArtifactContent,
+        ...(decision.summary ? { summary: decision.summary } : {})
       };
-    }
-    return { reply, action: decision.action, ...(recovery ? { recovery } : {}) };
+    if (decision.action === 'edit')
+      return {
+        ...given,
+        action: 'edit',
+        edits: decision.edits,
+        ...(decision.summary ? { summary: decision.summary } : {})
+      };
+    return { ...given, action: decision.action };
   }
 } satisfies ChatBotConfig<AiProjectContext>;
