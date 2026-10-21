@@ -73,20 +73,11 @@ export const selectedElementSchema = v.strictObject({
 });
 
 /**
- * What a Sverlin step on screen drew without a design-block draw: its constraint layouts, and the
- * drawn defaults each node took, by their path in the presentation's recorded defaults.
+ * What a Sverlin step on screen drew from its seed rather than its design values: its constraint
+ * layouts.
  */
 export const drawnStepSchema = v.object({
-  layouts: v.pipe(v.array(elementLayoutSchema), v.maxLength(1000)),
-  defaults: v.pipe(
-    v.array(
-      v.object({
-        node: elementIdSchema,
-        defaults: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20))
-      })
-    ),
-    v.maxLength(5000)
-  )
+  layouts: v.pipe(v.array(elementLayoutSchema), v.maxLength(1000))
 });
 
 /** One element a participant selected in a presentation at a step, referenced in a message. */

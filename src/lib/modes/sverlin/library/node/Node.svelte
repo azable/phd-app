@@ -2,7 +2,7 @@
   One node of a visualization: a primitive `value`, or children content, which makes it a
   collection when it is one {#each} over a collection. A layout arranges its children, so
   annotations such as an index or a pointer are simply nodes beside a value. A shape only picks
-  which of the presentation's drawn looks a node takes; every visual property is also a prop of its own.
+  which of the library's looks a node takes; every visual property is also a prop of its own.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -110,7 +110,7 @@
     value?: Primitive;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /** Which drawn look: 'box' for a value, 'plain' for content and collections, unless given. */
+    /** Which look: 'box' for a value, 'plain' for content and collections, unless given. */
     shape?: NodeShape;
     /** Background colour: a palette name such as 'amber' (a light shade), or any CSS colour. */
     fill?: NodeColor;
@@ -182,8 +182,8 @@
   } = $props();
 
   const types = typeContext();
-  // The presentation's drawn defaults fill in whatever this node's own props leave unset.
-  const drawn = defaultsContext();
+  // The library's defaults fill in whatever this node's own props leave unset.
+  const defaults = defaultsContext();
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -315,14 +315,14 @@
 
   const collection = $derived(__items !== undefined);
   const resolvedShape = $derived(
-    shape ?? (collection ? drawn.collection.shape : children ? 'plain' : 'box')
+    shape ?? (collection ? defaults.collection.shape : children ? 'plain' : 'box')
   );
-  // A collection runs the way the presentation drew, or across the collection around it, as rows
+  // A collection runs as a row, or across the collection around it, as rows
   // in a column do. Links need positions to join, so a node with links and no layout is laid out
   // freely.
   const around = collectionLayoutContext();
   const collectionLayout = $derived(
-    around === 'row' ? 'column' : around === 'column' ? 'row' : drawn.collection.layout
+    around === 'row' ? 'column' : around === 'column' ? 'row' : defaults.collection.layout
   );
   const arrangement = $derived(
     layout ?? (collection ? collectionLayout : __links ? 'free' : undefined)
@@ -331,10 +331,10 @@
     if (arrangement) provideSequence(arrangement !== 'free');
     if (collection) provideCollectionLayout(arrangement);
   });
-  // A plain node has no drawn look: no border, padding, or fill unless its props give them.
+  // A plain node has no look: no border, padding, or fill unless its props give them.
   const look = $derived.by((): Partial<ShapeDefaults> => {
     if (resolvedShape === 'plain') return {};
-    const base = drawn[resolvedShape];
+    const base = defaults[resolvedShape];
     // A framed group keeps the frame but not a cell's text size or weight.
     return arrangement ? { ...base, scale: undefined, weight: undefined } : base;
   });
@@ -349,7 +349,7 @@
   );
   const resolvedWeight = $derived(weight ?? look.weight);
   // stroke="none" or false turns the stroke off whatever its width; otherwise the width
-  // comes from the prop, then the drawn defaults.
+  // comes from the prop, then the library defaults.
   const strokeOff = $derived(stroke === 'none' || stroke === false);
   const strokeColour = $derived(
     strokeOff ? undefined : paletteColor((stroke as NodeColor | undefined) ?? look.stroke, 'stroke')
@@ -363,38 +363,9 @@
       : strokeWidths[width];
   });
   const resolvedAlign = $derived(
-    align ?? (arrangement === 'column' ? drawn.align.column : drawn.align.row)
+    align ?? (arrangement === 'column' ? defaults.align.column : defaults.align.row)
   );
   const alignment = $derived(alignments[resolvedAlign]);
-  // The drawn defaults this node takes, by their path in the presentation's recorded defaults, so
-  // the source editor can show them beside its tag. The page font is the frame's, not a node's.
-  const takenDefaults = $derived(
-    [
-      shape === undefined && collection && 'collection.shape',
-      layout === undefined &&
-        collection &&
-        around !== 'row' &&
-        around !== 'column' &&
-        'collection.layout',
-      resolvedShape !== 'plain' && [
-        radius === undefined && `${resolvedShape}.radius`,
-        strokeWidth === undefined && !strokeOff && `${resolvedShape}.strokeWidth`,
-        padding === undefined && `${resolvedShape}.padding`,
-        fill === undefined && `${resolvedShape}.fill`,
-        stroke === undefined && `${resolvedShape}.stroke`,
-        size === undefined && look.scale !== undefined && `${resolvedShape}.scale`,
-        weight === undefined && look.weight !== undefined && `${resolvedShape}.weight`
-      ],
-      arrangement &&
-        arrangement !== 'free' &&
-        align === undefined &&
-        `align.${arrangement === 'column' ? 'column' : 'row'}`,
-      arrangement && gap === undefined && 'gap'
-    ]
-      .flat()
-      .filter(Boolean)
-      .join(' ')
-  );
   const justification = $derived(justifications[justify ?? 'start']);
   // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
   // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
@@ -452,7 +423,6 @@
     data-sv-type={__type}
     data-sv-shape={resolvedShape}
     data-sv-layout={arrangement}
-    data-sv-defaults={takenDefaults || undefined}
     data-sv-fill={paletteName(fill)}
     data-sv-stroke={paletteName(stroke)}
     data-sv-color={paletteName(color)}
@@ -485,7 +455,7 @@
         {form}
         {curve}
         {layoutSeed}
-        gap={gap ?? drawn.gap}
+        gap={gap ?? defaults.gap}
         scope={id ?? 'node'}
       >
         {@render contents()}
@@ -497,7 +467,7 @@
         class="items {arrangement}"
         class:uniform={collection}
         data-sv-collection={collection ? id : undefined}
-        style:gap={measure(spacings, gap ?? drawn.gap)}
+        style:gap={measure(spacings, gap ?? defaults.gap)}
         style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
         style:justify-items={collection
           ? arrangement === 'column'

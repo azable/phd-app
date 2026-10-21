@@ -55,18 +55,43 @@ export const htmlFramesPresentationSchema = v.strictObject({
   generationEventId: v.optional(positiveSchema)
 });
 
-/** One draw a presentation's seed made in its source's design block. */
+/** One declaration in a presentation's design block, and the value it took. */
 export const designDrawSchema = v.strictObject({
-  /** The draw's place in the block, such as look.radius; with the seed, it alone decides the value. */
+  /** The declaration's place in the block, such as look.radius, which names its value. */
   key: v.string(),
   call: v.picklist(['pick', 'int', 'real', 'chance']),
   /** The evaluated arguments: pick's choices, int's or real's bounds, or chance's probability. */
   args: v.array(v.unknown()),
   value: v.unknown(),
+  /**
+   * Where the value came from: chosen for this build, by a person or an agent, or kept from the
+   * variant it was built on. Absent, it was randomised.
+   */
+  origin: v.optional(v.picklist(['chosen', 'kept'])),
   /** The call's span in the presentation's source. */
   start: naturalSchema,
   end: naturalSchema
 });
+
+/** Values for a design's declarations, by key. */
+export const designValuesSchema = v.record(v.string(), v.unknown());
+export type DesignValues = v.InferOutput<typeof designValuesSchema>;
+
+/**
+ * The values a build starts from. Chosen values must each name a declaration and lie in its
+ * domain. A base variant's values are kept where the source still declares them in domain. The
+ * rest are randomised.
+ */
+export const variantRequestSchema = v.strictObject({
+  chosen: v.optional(designValuesSchema),
+  base: v.optional(designValuesSchema)
+});
+export type VariantRequest = v.InferOutput<typeof variantRequestSchema>;
+
+/** A presentation's values, by key. */
+export function variantValues(draws: readonly { key: string; value: unknown }[]): DesignValues {
+  return Object.fromEntries(draws.map(({ key, value }) => [key, value]));
+}
 
 /** Self-contained JavaScript bundle executed only inside an isolated presentation iframe. */
 export const browserBundlePresentationSchema = v.strictObject({

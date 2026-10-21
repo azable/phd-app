@@ -24,8 +24,34 @@ export const sourceDecisions = {
   /** A reply alone: the source and its presentations stay as they are. */
   respond: v.strictObject({ action: v.literal('respond') }),
 
-  /** New presentations of the source as it is, from fresh seeds. */
+  /** New presentations of the source as it is, every value randomised. */
   resample: v.strictObject({ action: v.literal('resample') }),
+
+  /**
+   * New presentations of the source as it is, with values for some of its variables: the rest keep
+   * the viewed variant's values in the first presentation, except those to randomise.
+   */
+  vary: v.strictObject({
+    action: v.literal('vary'),
+    values: v.array(
+      v.strictObject({
+        variable: v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description('A variable from project.variables, by its key.')
+        ),
+        value: v.pipe(
+          v.union([v.string(), v.number(), v.boolean()]),
+          v.description('A value in the variable’s domain.')
+        )
+      })
+    ),
+    randomise: v.pipe(
+      v.array(v.string()),
+      v.description('Variables, by key, to give fresh random values.')
+    ),
+    summary
+  }),
 
   /**
    * Edits to the source being revised, applied in order: each replaces text that occurs in it

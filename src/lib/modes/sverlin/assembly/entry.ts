@@ -14,7 +14,6 @@ import {
   motionCss,
   Frame,
   settleSpans,
-  stepDefaults,
   stepLayouts,
   themeCss,
   widestInteger,
@@ -356,8 +355,7 @@ function show(step: number) {
         {
           type: 'sverlin:drawn',
           step,
-          layouts: stepLayouts(shown.layer),
-          defaults: stepDefaults(shown.layer)
+          layouts: stepLayouts(shown.layer)
         },
         '*'
       );

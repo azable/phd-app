@@ -34,7 +34,7 @@ export type { LayoutMemory } from './type-context';
 export { providePointers } from './type-context';
 export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
-export { arrangementLayout, describeFrame, describeStep, stepDefaults, stepLayouts } from './scene';
+export { arrangementLayout, describeFrame, describeStep, stepLayouts } from './scene';
 export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,

@@ -256,13 +256,6 @@
                   return tag ? [{ line: tag.line, column: tag.column, seed, form, curve }] : [];
                 }
               ),
-              nodeDefaults: (drawnSteps[presentation.presentationId]?.defaults ?? []).flatMap(
-                ({ node, defaults }) => {
-                  const tag = locateElement(presentation.source.text, node);
-                  return tag ? [{ line: tag.line, column: tag.column, defaults }] : [];
-                }
-              ),
-              defaults: presentation.parameters?.__defaults,
               ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
             }
           ]

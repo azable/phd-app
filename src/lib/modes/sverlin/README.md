@@ -3,17 +3,18 @@ The Sverlin language guide. bot.server.ts sends this file to the assistant after
 in assistant.md, with these HTML comments removed, so every other word here is model guidance.
 Comments are notes for maintainers. guide.server.test.ts builds every complete example and checks
 the documented Node and Link props and their named values against the compiler. Update this guide
-in the same change as the language, the library props, or the drawn defaults.
+in the same change as the language, the library props, or the library defaults.
 -->
 
 # The Sverlin language
 
 A Sverlin component is one Svelte file that describes an algorithm/program
 visualization. It records the steps of an algorithm or program and draws a view
-of each step. A presentation is one build of the component from its own seed:
-every presentation shows the same input and algorithm, with its own drawn design
-values and drawn defaults. Participants compare presentations in pairs, so the
-two presentations of a pair should differ in how they show the algorithm.
+of each step. The design block declares variables, and a presentation is one
+variant of the component: every presentation shows the same input and algorithm,
+with its own value for each variable. Participants compare presentations in
+pairs, so the two presentations of a pair should differ in how they show the
+algorithm.
 
 ## Blocks
 
@@ -22,7 +23,7 @@ A component describes its visualization in `<script lang="sverlin">` blocks, wri
 1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, and marks steps with `yield`. It runs once.
-4. `<script lang="sverlin" design>`: choices drawn from each presentation's seed. Each top-level `const` is a design value (see Design values).
+4. `<script lang="sverlin" design>`: the variables presentations differ in, and values computed from them. Each top-level `const` is a design value (see Design values).
 
 ## View
 
@@ -38,7 +39,7 @@ A node that writes text around nodes or views, with no `layout`, reads as a line
 
 A view is a snippet that draws one value of one domain type: its one parameter has that type, as in `{#snippet IntCard(value: Int)}<Node {value} shape="card" />{/snippet}`, and the node showing that value, as `<Node {value} />` does, shows the type's unit too. A view reads only its value, design values, and other views, never the input or algorithm variables, except a pointer (see Pointers): how two values relate is drawn where both are in scope, in the view that holds them or by a pointer. Define views at the top level of the markup.
 
-A design value named after a type chooses its view: `const Int = pick([IntText, IntCard]);` draws one per presentation, and `const Int = IntCard;` fixes one. `{@render Int(value)}` draws a value with whichever was chosen. A view named after its type, `{#snippet Int(value: Int)}`, is that type's only view. Rendering a type nothing draws is an error. In the view, a type's name is its view, never a constructor: draw values the state holds, made in the input and algorithm blocks, and show a loop's own index, as `k` in `{#each list as v, k}`, as text, `{k}`.
+A design value named after a type chooses its view: `const Int = pick([IntText, IntCard]);` declares a variable, so each presentation shows one, and `const Int = IntCard;` fixes one. `{@render Int(value)}` draws a value with whichever was chosen. A view named after its type, `{#snippet Int(value: Int)}`, is that type's only view. Rendering a type nothing draws is an error. In the view, a type's name is its view, never a constructor: draw values the state holds, made in the input and algorithm blocks, and show a loop's own index, as `k` in `{#each list as v, k}`, as text, `{k}`.
 
 A view of a collection or record draws its parts through their types' views:
 
@@ -169,9 +170,9 @@ The view receives plain arrays and objects, drawn by the views of their types: a
 
 ## Design values
 
-- Draws are `pick(['row', 'column'])`, `int(3, 6)` (inclusive), `real(0.5, 1.5)`, and `chance(0.3)`, each only in the value of a top-level `const`, either the whole value or inside its object and array literals, such as `const layout = pick(['row', 'column']);` or `const look = { radius: pick(['medium', 'full']), sizes: [int(1, 3)] };`. Other design constants may combine earlier ones. A seed always draws the same values.
+- Draws are `pick(['row', 'column'])`, `int(3, 6)` (inclusive), `real(0.5, 1.5)`, and `chance(0.3)`, each only in the value of a top-level `const`, either the whole value or inside its object and array literals, such as `const layout = pick(['row', 'column']);` or `const look = { radius: pick(['medium', 'full']), sizes: [int(1, 3)] };`. Each declares a variable, named by its place (`layout`, `look.radius`, `look.sizes[0]`), and its domain; each presentation gives every variable a value in its domain, chosen or random. Other design constants may combine earlier ones.
 - Use design values for styling, layout, wording, and library component props. The input and algorithm cannot see them, so steps never depend on the seed.
-- The design value `frame` shapes the page frame that holds the view's top-level nodes: a ratio such as `const frame = '4:3';`, or an object with any of `ratio` (`'16:9'`, the default, `'4:3'`, `'3:2'`, `'1:1'`, `'3:4'`, or `'9:16'`), `justify`, `align`, `padding` (default `'large'`), `layout` (`'column'`, the default, or `'row'`), as `const frame = { ratio: '4:3', align: 'center' };`. Unset `justify` and `align` are drawn (see Start unopinionated). The frame only stacks its top-level nodes: to place nodes freely, relate them, or join them with links, put them in a `<Node layout="free">` (see Free layout, links, and relations).
+- The design value `frame` shapes the page frame that holds the view's top-level nodes: a ratio such as `const frame = '4:3';`, or an object with any of `ratio` (`'16:9'`, the default, `'4:3'`, `'3:2'`, `'1:1'`, `'3:4'`, or `'9:16'`), `justify`, `align`, `padding` (default `'large'`), `layout` (`'column'`, the default, or `'row'`), as `const frame = { ratio: '4:3', align: 'center' };`. Unset, `justify` and `align` are `'center'`. The frame only stacks its top-level nodes: to place nodes freely, relate them, or join them with links, put them in a `<Node layout="free">` (see Free layout, links, and relations).
 - Design names must differ from input and algorithm names.
 
 ## The subset
@@ -194,15 +195,15 @@ A node is one of three things:
 
 - a value: `<Node value={7} />` shows a number, string, or boolean, as a view's own node does with its value;
 - content: `<Node>any text or markup</Node>` shows its children, for titles, explanations, captions, indices, and pointer names, and with `layout` arranges them, as a view of a collection arranges its elements' views;
-- a shape: `<Node shape="box" radius="full" fill="currentColor" stroke="none" padding="none" minSize={0.6} />` has no value or children, and draws only its box, for marks such as dots and bars; set the props that make the shape, since a drawn look can leave a box without a border or tint.
+- a shape: `<Node shape="box" radius="full" fill="currentColor" stroke="none" padding="none" minSize={0.6} />` has no value or children, and draws only its box, for marks such as dots and bars; set the props that make the shape.
 
 Titles and annotations are nodes too: `<Node>Linear search</Node>` makes a title, and arranging a node's children with `layout` puts an index, caption, or pointer name beside or above a value: `<Node layout="column">{@render Int(v)}<Node color="neutral">{k}</Node></Node>`. Without `layout`, children flow as ordinary text.
 
 ### Props
 
-Props starting with `__` are reserved for the library. `shape` picks which of the presentation's drawn looks a node takes (see Start unopinionated), and every value that look sets can be overridden by the matching prop:
+Props starting with `__` are reserved for the library. `shape` picks which of the library's looks a node takes (see Declare what varies), and every value that look sets can be overridden by the matching prop:
 
-- `shape`: `'box'` (a cell: a drawn border, padding, fill, minimum size, and text size and weight; the default for a value), `'card'` (a surface with a drawn border, padding, and fill), or `'plain'` (no border, padding, or fill; the default for content). A bordered node with a layout draws its border around the whole group.
+- `shape`: `'box'` (a cell: a border, padding, fill, minimum size, and larger, bold text; the default for a value), `'card'` (a surface with a border, padding, and fill), or `'plain'` (no border, padding, or fill; the default for content). A bordered node with a layout draws its border around the whole group.
 
 Arrangement:
 
@@ -227,27 +228,19 @@ Text:
 - `size`: `'small'`, `'medium'`, `'large'`, `'xlarge'`, or a number of rem such as `1.2`, so it can come from `pick([...])` or `real(0.9, 1.4)`; nested nodes scale with it.
 - `weight`: `'normal'` or `'bold'`.
 
-### Start unopinionated
+### Declare what varies
 
-Every prop a view leaves unset has a default, and these defaults are drawn, so they differ between presentations:
+A prop a view leaves unset takes one fixed look, the same in every presentation:
 
-- on cells (`'box'`): radius, border width (sometimes none), padding, a pale fill and border tint (sometimes none), and text size and weight;
-- on cards: radius, border width, padding, and tint;
-- on collections: whether they run as a row or a column (one inside another runs across it), and now and then a card around the items;
-- on every arrangement: the gap, and how rows and columns align their items;
-- on the page: the font, and how the page frame spreads and aligns the top-level nodes;
-- in free layouts: the form, the positions, and the curves; on links: the width and the curve.
+- cells (`'box'`): a medium radius, a thin border, small padding, a pale surface fill, and larger, bold text;
+- cards: a medium radius, a thin border, medium padding, and the same fill;
+- collections: a row (one inside another runs across it), with no card around the items;
+- every arrangement: a medium gap, with its items centred across it;
+- the page: a sans-serif font, with the top-level nodes centred.
 
-The tints stay pale so they never compete with the palette colours you give meaning. Other defaults are fixed, such as colours, opacity, a node's layout, and the size of content such as titles.
+Only free layouts vary by themselves: each presentation gives them their own form, positions, and curves (see Free layout, links, and relations).
 
-<!--
-The drawing policy, with its options and weights, is defaultsPolicy in library/node/defaults.ts.
-Tints keep low saturation and high lightness so they stay unlike the saturated palette colours
-authors use for meaning, such as 'amber' for the current element; a quarter of presentations
-draw no tint at all.
--->
-
-A node's own props win over drawn defaults, so every prop you set takes a choice away from the presentations. Write the structure, and set only the props that carry meaning, such as a colour that shows which element is current; unset, drawn props vary more widely than a pick between a few values would. Draw meaningful colours in the design block from the palette, so which colour shows "current" varies while staying consistent within a presentation. Use design picks for choices the library does not draw, such as which annotation nodes to show. Which view draws a type is such a choice too: pick among views that show the value differently (see Views of types), so presentations differ in what they show as well as how it looks. When the participant asks for a consistent or plainer look, set the props that should stay the same; liking one presentation is not such a request.
+Everything else presentations differ in, the design block declares. Write the structure, then declare the choices worth comparing: which view draws a type (see Views of types), which annotations show, and looks such as radius, padding, gap, and fill, as `const look = { radius: pick(['small', 'full']), gap: pick(['small', 'large']) };` with `radius={look.radius}` on the nodes that take it. Prefer a few variables whose options look clearly different to many small ones. Choose meaningful colours from the palette with a pick, so which colour shows "current" varies while staying consistent within a presentation. When the participant asks for a consistent or plainer look, remove or narrow the declarations that should stay the same; liking one presentation is not such a request.
 
 Example, with domain, input, algorithm, design, and a script-free view:
 
@@ -332,7 +325,7 @@ Leave `form` unset (a pick between a few forms only narrows the draw), set `flow
 - `directed`: `false` for a plain line instead of an arrow.
 - `dashed`: `true` for a dashed line.
 - `stroke`: the line's colour, a palette name or any CSS colour.
-- `strokeWidth`: the line's width, `'thin'`, `'thick'`, or a number of pixels; unset, it is drawn.
+- `strokeWidth`: the line's width, `'thin'`, `'thick'`, or a number of pixels; unset, 2 pixels.
 - `label`: a short text shown at the middle of the link, such as `next` or `head`.
 - `curve`: `'straight'` or `'curved'` for this link alone; unset, it draws its own, whatever its siblings do.
 - `bend`: an exact curve, how far the link bows to one side as a fraction of its length (`0` straight, `0.3` a clear arc, negative the other side). A selected link reports the bend it drew; when the participant likes a curve, set `bend` on that `<Link>` to the reported value.

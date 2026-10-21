@@ -8,8 +8,6 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
-  import DrawnDefaults from '$lib/client/artifacts/DrawnDefaults.svelte';
-  import { tagDefaults, type NodeDefaultsTaken } from '$lib/client/artifacts/drawn-defaults';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
@@ -38,15 +36,13 @@
     /** What the visible presentations drew, with the source each was built from. */
     drawnSources?: readonly (DrawnPresentation & {
       source: string;
-      defaults?: unknown;
-      nodeDefaults?: readonly NodeDefaultsTaken[];
       /** The hash of the source it was built from. */
       sourceHash?: string;
       /** The presentation, so an edit started from its source names it as its parent. */
       presentationId?: string;
       /** Its identifier, `<source>/<values>`. */
       candidate?: CandidateId;
-      /** Built before draws were kept, so neither its draws nor its page's defaults are known. */
+      /** Built before draws were kept, so its draws are not known. */
       unrecorded?: boolean;
     })[];
     /** Called once a save has built its new candidate, so the stage can show it. */
@@ -141,7 +137,6 @@
   // Draws are marked in the source shown, and keep their places in a draft made from it.
   const markedSource = $derived(editMode === 'editing' ? draftBase : baseSource);
   const drawn = $derived(drawnSources.filter(({ source }) => source === markedSource));
-  const drawnTags = $derived(tagDefaults(drawn));
   // Why a visible presentation's draws are not marked: it was built from another version of the
   // source, or before draws were kept.
   const unmarkedNotice = $derived.by(() => {
@@ -357,7 +352,6 @@
       {/if}
 
       {#if expanded}
-        <DrawnDefaults presentations={drawn} />
         <div class="min-h-48 flex-1 overflow-hidden">
           <CodeMirrorEditor
             bind:this={editor}
@@ -370,7 +364,6 @@
             ariaLabel="Project visualization source"
             {highlights}
             {drawn}
-            {drawnTags}
             drawnSource={markedSource}
             original={showingChanges ? chosen?.parent?.source : undefined}
             diagnostics={diagnosed}

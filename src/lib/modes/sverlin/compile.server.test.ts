@@ -7,8 +7,6 @@ import {
   prepareSvelteComponent
 } from './compile.server';
 import { linearSearchSource } from './contract';
-import { keyedRandom } from './algorithm/random.server';
-import { drawDefaults as drawWith } from './library/node/defaults';
 
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
@@ -374,15 +372,28 @@ describe('single-component Svelte compilation', () => {
     ).rejects.toThrow('"Node" names a library component');
   });
 
-  it('records drawn defaults with the design values, which cannot opt out of them', async () => {
-    const source = '<script lang="sverlin">yield;</script><Node value={1} />';
-    const drawn = await compileSvelteComponent(source, 3);
-    expect(drawn.parameters.__defaults).toEqual(drawWith((key) => keyedRandom(3, key)));
+  it('takes chosen values, keeps base values still in domain, and randomises the rest', async () => {
+    const prepared = prepareSvelteComponent(
+      "<script lang=\"sverlin\">yield;</script><Node value={1} radius={look.radius} /><script lang=\"sverlin\" design>const look = { radius: pick(['small', 'full']), gap: pick(['small', 'large']), size: int(1, 3) };</script>"
+    );
+    const built = await bundlePresentation(prepared, 3, {
+      chosen: { 'look.radius': 'full' },
+      // Removed and out-of-domain base values are randomised instead.
+      base: { 'look.gap': 'large', 'look.size': 9, 'look.width': 2 }
+    });
+    expect(built.parameters).toMatchObject({ look: { radius: 'full', gap: 'large' } });
+    expect(built.draws?.map(({ key, origin }) => [key, origin])).toEqual([
+      ['look.radius', 'chosen'],
+      ['look.gap', 'kept'],
+      ['look.size', undefined]
+    ]);
+    expect(built.parameters).not.toHaveProperty('__defaults');
     await expect(
-      compileSvelteComponent(
-        `${source}<script lang="sverlin" design>const defaults = 'fixed';</script>`
-      )
-    ).rejects.toThrow('The design value defaults is no longer supported');
+      bundlePresentation(prepared, 3, { chosen: { 'look.radius': 'round' } })
+    ).rejects.toThrow('look.radius is "round", which is not one of its choices');
+    await expect(bundlePresentation(prepared, 3, { chosen: { 'look.width': 2 } })).rejects.toThrow(
+      'The design declares no look.width'
+    );
   });
 
   it('resolves the page frame from the design value frame', async () => {

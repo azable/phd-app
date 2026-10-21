@@ -70,6 +70,7 @@ describe('single-component Svelte assistant', () => {
     expect(decision.oneOf.map(({ properties }) => properties.action.const)).toEqual([
       'respond',
       'resample',
+      'vary',
       'edit',
       'revise'
     ]);
@@ -80,6 +81,14 @@ describe('single-component Svelte assistant', () => {
         recovery: null
       });
     expect(parse({ action: 'resample' })).toMatchObject({ decision: { action: 'resample' } });
+    expect(
+      parse({
+        action: 'vary',
+        values: [{ variable: 'look.radius', value: 'full' }],
+        randomise: ['Int'],
+        summary: 'Rounds every cell'
+      })
+    ).toMatchObject({ decision: { action: 'vary', randomise: ['Int'] } });
     expect(
       parse({
         action: 'edit',

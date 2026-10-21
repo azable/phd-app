@@ -71,6 +71,6 @@ describe('Sverlin language guide and assistant instructions', () => {
     expect(aiAssistant.initialPrompt).not.toContain('<!--');
     expect(aiAssistant.initialPrompt).not.toContain('-->');
     // The prompt refers the assistant to this section by name.
-    expect(guide).toContain('\n### Start unopinionated\n');
+    expect(guide).toContain('\n### Declare what varies\n');
   });
 });

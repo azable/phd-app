@@ -5,7 +5,7 @@ import {
   markdownMessage,
   type ElementReference
 } from '$lib/shared/projects/events/message-content';
-import type { ProjectEventOf } from '$lib/shared/projects/events';
+import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 
@@ -2016,5 +2016,90 @@ describe('assistant edits', () => {
     expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.buildEventId).toBe(rejected?.id);
     const [change] = version(result.document)?.payload.changes ?? [];
     expect(change?.operation === 'upsert' && change.artifact.content.text).toContain('Corrected');
+  });
+
+  it('varies the viewed variant: chosen values in both, the rest kept in the first', async () => {
+    const { createProject } = await import('./service');
+    const { runQueuedAssistantTurn } = await import('./commands');
+    const document = await createProject(
+      { title: 'Varied', creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    const presented = (events: readonly ProjectEvent[]) =>
+      events.flatMap((event) =>
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.format === 'browser-bundle-v1'
+          ? [event.payload.presentation]
+          : []
+      );
+    // The older of the pair, so the newest presentation cannot stand in for it.
+    const [viewed] = presented(document.events);
+    const before = Object.fromEntries((viewed.draws ?? []).map(({ key, value }) => [key, value]));
+    const head = projectHead(document).id;
+    const feedbackOperationId = '82345678-1234-4123-8123-123456789abc';
+    const assistantOperationId = '82345678-1234-4123-8123-123456789abd';
+    await serviceDependencies.repository.append(document.projectId, head, [
+      {
+        type: 'feedback.submitted',
+        actor: { kind: 'user' },
+        operationId: feedbackOperationId,
+        createdAt: '2026-08-30T12:00:00.000Z',
+        payload: {
+          content: markdownMessage('Try circles.'),
+          focus: [],
+          presentationCount: 2,
+          viewing: viewed.presentationId
+        }
+      },
+      {
+        type: 'assistant.turn-requested',
+        actor: { kind: 'system' },
+        operationId: feedbackOperationId,
+        createdAt: '2026-08-30T12:00:01.000Z',
+        payload: { interactionEventId: head + 1, presentationCount: 2 }
+      },
+      {
+        type: 'operation.accepted',
+        actor: { kind: 'system' },
+        operationId: assistantOperationId,
+        createdAt: '2026-08-30T12:00:02.000Z',
+        payload: { kind: 'assistant-turn' }
+      },
+      {
+        type: 'assistant.turn-started',
+        actor: { kind: 'system' },
+        operationId: assistantOperationId,
+        createdAt: '2026-08-30T12:00:03.000Z',
+        payload: { requestEventIds: [head + 2], interactionEventIds: [head + 1] }
+      }
+    ]);
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      ...generation(undefined, 'Varied.'),
+      decision: {
+        action: 'vary' as const,
+        values: [{ variable: 'Int', value: 'IntCircle' }],
+        randomise: ['showIndices'],
+        summary: 'Draws every value as a circle'
+      }
+    });
+
+    const result = await runQueuedAssistantTurn(
+      { projectId: document.projectId, operationId: assistantOperationId },
+      commandDependencies
+    );
+
+    expect(result.appendedEvents.map(({ type }) => type)).not.toContain('artifact.version-created');
+    const [first, second] = presented(result.appendedEvents);
+    const origins = (presentation: BrowserBundlePresentation) =>
+      Object.fromEntries(
+        (presentation.draws ?? []).map(({ key, value, origin }) => [key, { value, origin }])
+      );
+    expect(origins(first).Int).toEqual({ value: 'IntCircle', origin: 'chosen' });
+    expect(origins(second).Int).toEqual({ value: 'IntCircle', origin: 'chosen' });
+    expect(origins(first).showIndices.origin).toBeUndefined();
+    for (const [key, { value, origin }] of Object.entries(origins(first)))
+      if (key !== 'Int' && key !== 'showIndices')
+        expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
+    expect(Object.values(origins(second)).filter(({ origin }) => origin === 'kept')).toEqual([]);
   });
 });

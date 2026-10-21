@@ -22,7 +22,7 @@ import {
 } from '$lib/shared/projects/events/message-content';
 import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-ref';
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
-import type { RenderablePresentation } from '$lib/shared/presentations';
+import type { BrowserBundlePresentation, RenderablePresentation } from '$lib/shared/presentations';
 import { presentationStepLabels } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
@@ -50,6 +50,18 @@ export type AiArtifact = {
 export type AiWorkspace = {
   entryArtifactId: string;
   artifacts: AiArtifact[];
+};
+
+/**
+ * One variable the base declares in its design block: its key, its declaration with the domain
+ * evaluated, as pick(["small", "full"]) or int(1, 3), and the value it takes in the viewed variant,
+ * with where that value came from (absent when randomised).
+ */
+export type AiVariable = {
+  variable: string;
+  declared: string;
+  value: unknown;
+  origin?: 'chosen' | 'kept';
 };
 
 /** One version of the source, named as the participant sees it, by the start of its hash. */
@@ -156,6 +168,11 @@ export type AiProjectContext = {
    * whose branches each hold their own changes, how each was made, and what it shows or changes.
    */
   versions: AiSourceVersion[];
+  /**
+   * The variables the base declares, with the values of the variant the participant is viewing.
+   * Empty when no presentation of the base recorded its values.
+   */
+  variables: AiVariable[];
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
@@ -299,6 +316,7 @@ export function projectAiContext(
     headEventId: projectHead(document).id,
     base: projectWorkspace(snapshot),
     versions: sourceVersions(document),
+    variables: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     timelineWindow: {
@@ -507,4 +525,47 @@ function activePresentationSummaries(snapshot: ProjectSnapshot): AiPresentationS
 
 function shortHash(sha256: string): string {
   return sha256.slice(0, 12);
+}
+
+/**
+ * The presentation the participant was viewing when they started a turn: the one their feedback
+ * was given on, the one they preferred, or the one that failed; otherwise the newest presentation of
+ * the newest source.
+ */
+export function viewedPresentation(
+  document: ProjectDocument,
+  interactionEventIds: readonly EventId[]
+): BrowserBundlePresentation | undefined {
+  const viewed = interactionEventIds
+    .flatMap((id) => {
+      const event = document.events.find((candidate) => candidate.id === id);
+      if (event?.type === 'feedback.submitted') return event.payload.viewing ?? [];
+      if (event?.type === 'visualization.preference-recorded') return [event.payload.preferred];
+      if (event?.type === 'visualization.runtime-failed') return [event.payload.presentationId];
+      return [];
+    })
+    .at(-1);
+  const snapshot = projectSnapshotAt(document);
+  const source = snapshot.artifacts[snapshot.entryArtifactId]?.content.sha256;
+  const presented = document.events.findLast(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      (viewed
+        ? event.payload.presentation.presentationId === viewed
+        : event.payload.presentation.format === 'browser-bundle-v1' &&
+          event.payload.presentation.source.sha256 === source)
+  );
+  return presented?.type === 'visualization.presented' &&
+    presented.payload.presentation.format === 'browser-bundle-v1'
+    ? presented.payload.presentation
+    : undefined;
+}
+
+function designVariables(presentation: BrowserBundlePresentation | undefined): AiVariable[] {
+  return (presentation?.draws ?? []).map(({ key, call, args, value, origin }) => ({
+    variable: key,
+    declared: `${call}(${args.map((arg) => JSON.stringify(arg)).join(', ')})`,
+    value,
+    ...(origin ? { origin } : {})
+  }));
 }

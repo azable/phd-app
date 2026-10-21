@@ -47,7 +47,7 @@
 
   provideNodeIds();
   provideSeed(untrack(() => (typeof props.seed === 'number' ? props.seed : 1)));
-  const drawn = defaultsContext();
+  const defaults = defaultsContext();
   const memory = layoutMemoryContext();
 
   let frameElement = $state<HTMLDivElement>();
@@ -507,8 +507,8 @@
     style:height="{height}px"
     style:transform="translate(-50%, -50%) translate({panX}px, {panY}px) scale({shown})"
     style:padding={measure(spacings, settings.padding)}
-    style:justify-content={justifications[settings.justify ?? drawn.frame.justify]}
-    style:align-items={alignments[settings.align ?? drawn.frame.align]}
+    style:justify-content={justifications[settings.justify ?? defaults.frame.justify]}
+    style:align-items={alignments[settings.align ?? defaults.frame.align]}
   >
     <div
       class="sv-root"
@@ -521,9 +521,9 @@
         <div
           class="sv-flow"
           style:flex-direction={settings.layout ?? 'column'}
-          style:gap={measure(spacings, drawn.gap)}
-          style:justify-content={justifications[settings.justify ?? drawn.frame.justify]}
-          style:align-items={alignments[settings.align ?? drawn.frame.align]}
+          style:gap={measure(spacings, defaults.gap)}
+          style:justify-content={justifications[settings.justify ?? defaults.frame.justify]}
+          style:align-items={alignments[settings.align ?? defaults.frame.align]}
           style:min-width={flowLeast
             ? `${flowLeast.width}px`
             : `calc(${width}px - 2 * ${measure(spacings, settings.padding)})`}

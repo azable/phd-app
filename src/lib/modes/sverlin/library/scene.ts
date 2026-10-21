@@ -2,7 +2,7 @@
  * Scene data: what one step of a presentation draws, as plain data, so render targets can draw it
  * again outside the page. Every node and link is placed in the frame's logical coordinates (pixels
  * of the frame, from its top left corner, whatever the zoom), with its look as the page computed
- * it, drawn defaults included, and the palette names the view gave, so a target can keep what a
+ * it, library defaults included, and the palette names the view gave, so a target can keep what a
  * colour means. The app checks what the page sends against ../scene.ts.
  */
 
@@ -128,19 +128,6 @@ export function arrangementLayout(arranged: HTMLElement): ArrangementLayout | un
 export function stepLayouts(layer: HTMLElement): ArrangementLayout[] {
   return [...layer.querySelectorAll<HTMLElement>('.sv-arranged')].flatMap(
     (arranged) => arrangementLayout(arranged) ?? []
-  );
-}
-
-/** The drawn defaults a node took (see Node.svelte), by their path in the recorded defaults. */
-export type NodeDefaultsTaken = { node: string; defaults: string[] };
-
-/** The drawn defaults every node in a layer took, once its step has settled. */
-export function stepDefaults(layer: HTMLElement): NodeDefaultsTaken[] {
-  return [...layer.querySelectorAll<HTMLElement>('[data-sv-node][data-sv-defaults]')].map(
-    (element) => ({
-      node: element.dataset.svNode as string,
-      defaults: (element.dataset.svDefaults as string).split(' ')
-    })
   );
 }
 

@@ -31,8 +31,12 @@ import {
   projectCreationMode,
   type ProjectCreation
 } from '$lib/shared/projects/creation';
-import type { BrowserBundlePresentation } from '$lib/shared/presentations';
-import { isSverlinPresentation, presentationMode } from '$lib/shared/presentations';
+import type {
+  BrowserBundlePresentation,
+  DesignValues,
+  VariantRequest
+} from '$lib/shared/presentations';
+import { isSverlinPresentation, presentationMode, variantValues } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
@@ -43,7 +47,7 @@ import { recordText } from './fingerprints';
 import { projectRepository } from './repository';
 import { resolveProjectTemplate } from './starter-catalog';
 import { stepSignature } from '$lib/modes/signature.server';
-import { modeBuilders, type ModeBuildResult } from '$lib/modes/server';
+import { modeBuilders, type BuildRequest, type ModeBuildResult } from '$lib/modes/server';
 import { modeCatalog } from '$lib/modes/catalog';
 
 const minSeed = 1;
@@ -512,7 +516,8 @@ export function updateProjectArtifact(
       freshPresentationSeeds(options.presentationCount),
       'manual-edit',
       options.operationId,
-      dependencies
+      dependencies,
+      options.from ? presentedValues(before, options.from) : undefined
     );
     return commandResult(before, document);
   });
@@ -612,7 +617,8 @@ async function buildDocument(
   seeds: readonly number[],
   purpose: BuildPurpose,
   operationId: string,
-  dependencies: ProjectServiceDependencies
+  dependencies: ProjectServiceDependencies,
+  base?: DesignValues
 ) {
   const snapshot = projectSnapshotAt(document);
   const artifact = snapshot.artifacts[snapshot.entryArtifactId];
@@ -643,7 +649,7 @@ async function buildDocument(
       sourceContent: artifact.content.text,
       source: artifact.content,
       sourceLabel: artifact.path,
-      seeds,
+      requests: basedRequests(seeds, base),
       purpose,
       input: 'committed-artifact',
       operationId
@@ -660,14 +666,14 @@ export type RecordedBuildBatch = {
   builds: RecordedBuild[];
 };
 
-/** Build one component for several seeds and record each requested presentation. */
+/** Build one component for several requests and record each requested presentation. */
 export async function buildProjectSourceBatch(
   options: {
     document: ProjectDocument;
     sourceContent: string;
     source: RecordedText;
     sourceLabel: string;
-    seeds: readonly number[];
+    requests: readonly BuildRequest[];
     purpose: BuildPurpose;
     input: 'committed-artifact' | 'assistant-candidate';
     operationId: string;
@@ -675,14 +681,14 @@ export async function buildProjectSourceBatch(
   },
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<RecordedBuildBatch> {
-  if (options.seeds.length === 0) throw new Error('At least one seed is required.');
+  if (options.requests.length === 0) throw new Error('At least one build is required.');
   const mode = projectSnapshotAt(options.document).mode;
   if (options.sourceLabel !== modeCatalog[mode].starter.path)
     throw new Error(`Mode ${mode} has an unexpected source artifact.`);
   const builder = modeBuilders[mode].buildBatch;
   if (!builder) throw new Error(`Mode ${mode} has no source builder.`);
   const buildId = randomUUID();
-  const requests = options.seeds.map((seed, batchIndex) =>
+  const requests = options.requests.map(({ seed, variant }, batchIndex) =>
     draftEvent<'build.requested'>({
       type: 'build.requested',
       actor: { kind: 'system' },
@@ -693,9 +699,10 @@ export async function buildProjectSourceBatch(
         source: options.source,
         sourceLabel: options.sourceLabel,
         seed,
+        ...(variant ? { variant } : {}),
         buildId,
         batchIndex,
-        batchSize: options.seeds.length,
+        batchSize: options.requests.length,
         ...(options.attempt ? { attempt: options.attempt } : {})
       }
     })
@@ -703,7 +710,7 @@ export async function buildProjectSourceBatch(
   let document = await appendProjectEvents(options.document, requests, dependencies);
   const results = await builder(
     options.sourceContent,
-    options.seeds,
+    options.requests,
     currentProjectOperationSignal()
   );
   if (
@@ -713,10 +720,10 @@ export async function buildProjectSourceBatch(
   ) {
     throw new Error('The mode builder returned a bundle for a different playback contract.');
   }
-  if (results.length !== options.seeds.length) {
+  if (results.length !== options.requests.length) {
     throw new Error('The visualization service returned an incomplete batch.');
   }
-  if (results.some((result, index) => result.seed !== options.seeds[index])) {
+  if (results.some((result, index) => result.seed !== options.requests[index].seed)) {
     throw new Error('The visualization service returned an incorrectly correlated batch.');
   }
   const builds: RecordedBuild[] = [];
@@ -727,11 +734,11 @@ export async function buildProjectSourceBatch(
         result,
         source: options.source,
         sourceLabel: options.sourceLabel,
-        seed: options.seeds[index],
+        seed: options.requests[index].seed,
         operationId: options.operationId,
         buildId,
         batchIndex: index,
-        batchSize: options.seeds.length
+        batchSize: options.requests.length
       },
       dependencies
     );
@@ -915,4 +922,40 @@ async function checkedDocument(
     throw error;
   }
   return document;
+}
+
+/**
+ * The builds for a batch of seeds. Every one takes the chosen values. The first also keeps the base
+ * variant's, so a change shows on the variant it was made from; the rest randomise everything
+ * else, so there is still a variant to compare it with.
+ */
+export function basedRequests(
+  seeds: readonly number[],
+  base?: DesignValues,
+  chosen?: DesignValues
+): BuildRequest[] {
+  return seeds.map((seed, index) => {
+    const variant: VariantRequest = {
+      ...(index === 0 && base ? { base } : {}),
+      ...(chosen ? { chosen } : {})
+    };
+    return Object.keys(variant).length > 0 ? { seed, variant } : { seed };
+  });
+}
+
+/** The values a presentation's declarations took, when it recorded them. */
+export function presentedValues(
+  document: ProjectDocument,
+  presentationId: string
+): DesignValues | undefined {
+  const presented = document.events.findLast(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === presentationId
+  );
+  const presentation =
+    presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
+  return presentation?.format === 'browser-bundle-v1' && presentation.draws
+    ? variantValues(presentation.draws)
+    : undefined;
 }

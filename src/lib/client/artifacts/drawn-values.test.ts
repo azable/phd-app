@@ -3,7 +3,15 @@ import { EditorState } from '@codemirror/state';
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import { drawnMarkers, ghostSummary, tagGhosts, unchosenViews, valueText } from './drawn-values';
+import {
+  drawnMarkers,
+  drawnValues,
+  ghostSummary,
+  setDrawnValues,
+  tagGhosts,
+  unchosenViews,
+  valueText
+} from './drawn-values';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -41,47 +49,66 @@ describe('drawn value markers', () => {
     ]);
   });
 
+  it('says how each value came about', () => {
+    const markers = drawnMarkers(EditorState.create({ doc }), [
+      {
+        seed: 7,
+        draws: [
+          { ...accent('red'), origin: 'chosen' },
+          { ...size, origin: 'kept' }
+        ]
+      },
+      { seed: 8, draws: [accent('blue'), size] }
+    ]);
+    expect(markers.flatMap(({ values }) => values.map(({ title }) => title))).toEqual([
+      'accent = "red", chosen',
+      'accent = "blue", drawn by seed 8',
+      'size = 1.23456, kept from the viewed variant',
+      'size = 1.23456, drawn by seed 8'
+    ]);
+  });
+
+  it('drops the markers of calls a replaced document no longer has', () => {
+    const marked = EditorState.create({ doc, extensions: [drawnValues] }).update({
+      effects: setDrawnValues.of({ presentations: [{ seed: 1, draws: [accent('red'), size] }] })
+    }).state;
+    expect(() =>
+      marked.update({ changes: { from: 0, to: marked.doc.length, insert: 'yield;' } })
+    ).not.toThrow();
+  });
+
   it('skips draws that do not fit the document', () => {
     const state = EditorState.create({ doc: 'const accent = 1;' });
     expect(drawnMarkers(state, [{ seed: 1, draws: [accent('red'), size] }])).toEqual([]);
   });
 
-  it('writes a tag’s defaults and layout as ghost props before its >, pinning single values', () => {
+  it('writes a tag’s layout as ghost props before its >, pinning single values', () => {
     const view =
       '<Node layout="free">\n  {#each items as item}<Node layout="free" />{/each}\n</Node>';
     const state = EditorState.create({ doc: view });
     const outer = { line: 1, column: 1 };
     const inner = { line: 2, column: 24 };
-    const ghosts = tagGhosts(
-      state,
-      [
-        {
-          label: 'top',
-          seed: 1,
-          draws: [],
-          layouts: [
-            { ...outer, seed: 11, form: 'tree-down', curve: 'curved' },
-            { ...inner, seed: 12, form: 'radial' },
-            { ...inner, seed: 13, form: 'radial' }
-          ]
-        },
-        {
-          label: 'bottom',
-          seed: 2,
-          draws: [],
-          layouts: [
-            { ...outer, seed: 21, form: 'tree-down', curve: 'curved' },
-            { ...inner, seed: 22, form: 'layers-right' }
-          ]
-        }
-      ],
-      [
-        {
-          ...outer,
-          props: [{ name: 'gap', values: [{ text: 'small', title: '' }], differs: false }]
-        }
-      ]
-    );
+    const ghosts = tagGhosts(state, [
+      {
+        label: 'top',
+        seed: 1,
+        draws: [],
+        layouts: [
+          { ...outer, seed: 11, form: 'tree-down', curve: 'curved' },
+          { ...inner, seed: 12, form: 'radial' },
+          { ...inner, seed: 13, form: 'radial' }
+        ]
+      },
+      {
+        label: 'bottom',
+        seed: 2,
+        draws: [],
+        layouts: [
+          { ...outer, seed: 21, form: 'tree-down', curve: 'curved' },
+          { ...inner, seed: 22, form: 'layers-right' }
+        ]
+      }
+    ]);
     expect(
       ghosts.map(({ at, props }) => ({
         before: view.slice(0, at).split('\n').at(-1),
@@ -96,7 +123,6 @@ describe('drawn value markers', () => {
       {
         before: '<Node layout="free"',
         props: [
-          { name: 'gap', texts: ['small'], pins: [undefined], differs: false },
           {
             name: 'form',
             texts: ['tree-down', 'tree-down'],

@@ -19,11 +19,12 @@ import {
 import type { ArtifactChange, RecordedText } from '$lib/shared/projects/events/values';
 import type { ProjectCommandResult, ProjectDocument } from '$lib/shared/projects/model';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
-import type { RenderablePresentation } from '$lib/shared/presentations';
+import type { DesignValues, RenderablePresentation } from '$lib/shared/presentations';
 import {
   isSverlinPresentation,
   presentationMode,
-  presentationStepLabels
+  presentationStepLabels,
+  variantValues
 } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
@@ -34,7 +35,7 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
-import { modeBuilders } from '$lib/modes/server';
+import { modeBuilders, type BuildRequest } from '$lib/modes/server';
 import {
   nextParticipantIntakeStep,
   participantIntakeStep,
@@ -43,6 +44,7 @@ import {
 import {
   projectAiContext,
   projectConversationMessages,
+  viewedPresentation,
   type AiContextSelection,
   type AiProjectContext
 } from '$lib/server/chat-bots/project-context';
@@ -56,6 +58,7 @@ import type {
   RecoveryExplanation,
   SourceArtifactChatOutput
 } from '$lib/server/chat-bots/types';
+import type { SourceDecisionOf } from '$lib/server/chat-bots/source-decisions';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 
 import { runProjectCommand } from './command-lock';
@@ -72,6 +75,7 @@ import {
   activateBuiltPresentations,
   appendProjectEvents,
   baseOnPresentation,
+  basedRequests,
   buildProjectSourceBatch,
   defaultProjectServiceDependencies,
   draftEvent,
@@ -135,7 +139,12 @@ export function queueProjectFeedback(
           type: 'feedback.submitted',
           actor: { kind: 'user' },
           operationId: options.operationId,
-          payload: { content, focus, presentationCount: options.presentationCount }
+          payload: {
+            content,
+            focus,
+            presentationCount: options.presentationCount,
+            ...(options.from ? { viewing: options.from } : {})
+          }
         }),
         draftEvent({
           type: 'assistant.turn-requested',
@@ -573,6 +582,12 @@ async function runSverlinAssistantTurn(
   inReplyTo: readonly EventId[] = []
 ): Promise<ProjectDocument> {
   const chatbot = dependencies.getChatbot(projectSnapshotAt(document).assistantId);
+  // The first presentation keeps the viewed variant's values; every attempt builds the same seeds.
+  const viewedDraws = viewedPresentation(
+    document,
+    contextSelection.interactionEventIds ?? []
+  )?.draws;
+  const viewed = viewedDraws ? variantValues(viewedDraws) : undefined;
   let seeds: readonly number[] | undefined;
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
@@ -620,12 +635,17 @@ async function runSverlinAssistantTurn(
       // the failed candidate when repairing it.
       const { decision } = generation.result;
       let candidate: string | undefined;
+      let variant: { base?: DesignValues; chosen?: DesignValues } = { base: viewed };
       switch (decision.action) {
         case 'respond':
         case 'resample':
           break;
         case 'revise':
           candidate = decision.source;
+          break;
+        case 'vary':
+          candidate = buildFeedback?.failedSource ?? entrySource(current);
+          variant = variedValues(viewed, decision);
           break;
         case 'edit': {
           const base = buildFeedback?.failedSource ?? entrySource(current);
@@ -720,8 +740,9 @@ async function runSverlinAssistantTurn(
       }
 
       seeds ??= freshPresentationSeeds(presentationCount);
+      const requests = basedRequests(seeds, variant.base, variant.chosen);
       const built = await buildCandidateBatch(
-        { document: current, candidate, seeds, operationId, attempt },
+        { document: current, candidate, requests, operationId, attempt },
         dependencies
       );
       current = built.document;
@@ -1189,7 +1210,7 @@ async function buildCandidateBatch(
   options: {
     document: ProjectDocument;
     candidate: string;
-    seeds: readonly number[];
+    requests: readonly BuildRequest[];
     operationId: string;
     attempt: number;
   },
@@ -1205,7 +1226,7 @@ async function buildCandidateBatch(
       sourceContent: options.candidate,
       source,
       sourceLabel: entry.path,
-      seeds: options.seeds,
+      requests: options.requests,
       purpose: 'assistant-edit',
       input: 'assistant-candidate',
       operationId: options.operationId,
@@ -1244,20 +1265,24 @@ async function acceptSverlinCandidate(
     operation: 'upsert',
     artifact: { ...current, content: recordText(options.candidate, current.content.mediaType) }
   };
+  // New variants of an unchanged source join its version.
+  const unchanged = options.candidate === current.content.text;
   let document = await appendProjectEvents(
     options.document,
-    [
-      draftEvent({
-        type: 'artifact.version-created',
-        actor: options.generationEvent.actor,
-        operationId: options.operationId,
-        payload: {
-          origin: { kind: 'assistant-edit' },
-          changes: [change],
-          ...(options.summary ? { summary: options.summary } : {})
-        }
-      })
-    ],
+    unchanged
+      ? []
+      : [
+          draftEvent({
+            type: 'artifact.version-created',
+            actor: options.generationEvent.actor,
+            operationId: options.operationId,
+            payload: {
+              origin: { kind: 'assistant-edit' },
+              changes: [change],
+              ...(options.summary ? { summary: options.summary } : {})
+            }
+          })
+        ],
     dependencies.projectService
   );
   document = await activateBuiltPresentations(
@@ -1301,7 +1326,9 @@ async function advanceCandidatesForAgent(
         sourceContent: artifact.content.text,
         source: artifact.content,
         sourceLabel: artifact.path,
-        seeds: freshPresentationSeeds((presentationCount - remaining.length) as 1 | 2),
+        requests: freshPresentationSeeds((presentationCount - remaining.length) as 1 | 2).map(
+          (seed) => ({ seed })
+        ),
         purpose: 'seed-change',
         input: 'committed-artifact',
         operationId
@@ -1818,4 +1845,21 @@ function generationErrorDetails(error: unknown) {
 
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * The values a vary decision builds from: the viewed variant's, less those it asks to randomise,
+ * with the values it chose.
+ */
+function variedValues(
+  viewed: DesignValues | undefined,
+  decision: SourceDecisionOf<'vary'>
+): { base?: DesignValues; chosen: DesignValues } {
+  const randomised = new Set(decision.randomise);
+  return {
+    ...(viewed
+      ? { base: Object.fromEntries(Object.entries(viewed).filter(([key]) => !randomised.has(key))) }
+      : {}),
+    chosen: Object.fromEntries(decision.values.map(({ variable, value }) => [variable, value]))
+  };
 }

@@ -8,7 +8,6 @@
   import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
-  import type { TagDefaults } from './drawn-defaults';
   import { drawnValues, setDrawnValues, type DrawnPresentation } from './drawn-values';
   import { editorDiagnostics } from './source-diagnostics';
   import {
@@ -27,8 +26,6 @@
     highlights?: readonly SourceHighlight[];
     /** Values the shown presentations drew in the design block, marked where they were drawn. */
     drawn?: readonly DrawnPresentation[];
-    /** The drawn defaults each <Node> tag takes in the shown presentations. */
-    drawnTags?: readonly TagDefaults[];
     /** The source the drawn values were made in. */
     drawnSource?: string;
     /** Build problems to underline, with the source they were found in. */
@@ -45,7 +42,6 @@
     ariaLabel = 'Source code editor',
     highlights = [],
     drawn = [],
-    drawnTags = [],
     drawnSource = '',
     diagnostics = { source: '', items: [] },
     original,
@@ -121,7 +117,7 @@
   // moves them with the edits, so ghost props can still be written in, until it is that text again.
   $effect(() => {
     void value;
-    const shown = { presentations: [...drawn], tags: [...drawnTags] };
+    const shown = { presentations: [...drawn] };
     if (view && view.state.doc.toString() === drawnSource)
       view.dispatch({ effects: setDrawnValues.of(shown) });
   });

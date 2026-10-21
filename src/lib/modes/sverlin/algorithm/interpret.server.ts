@@ -21,7 +21,7 @@ import {
   type AtomRegistry,
   type AtomType
 } from './atoms.server';
-import { drawFunctions, drawKeys, drawValue, keyedDraws } from './random.server';
+import { checkedValue, drawFunctions, drawKeys, drawValue, keyedRandom } from './random.server';
 import {
   AlgorithmError,
   describe,
@@ -105,52 +105,92 @@ export function interpretInput(body: string, domain: DomainRegistry = noDomain):
 }
 
 /**
- * Interpret the design block with keyed draws from the presentation seed (see random.server.ts).
- * The view's components are in scope by name, so a design value can choose one, as in
- * const Number = pick([NumberText, NumberDots]); the value is the chosen component's name.
+ * The values a design starts from, by key: chosen values must each name a declaration and lie in
+ * its domain; a base variant's values are kept where they still do.
+ */
+export type DesignVariant = {
+  chosen?: Readonly<Record<string, unknown>>;
+  base?: Readonly<Record<string, unknown>>;
+};
+
+/**
+ * Interpret the design block with the variant's values for its declarations, by key, and keyed
+ * draws from the presentation seed for the rest (see random.server.ts). The view's components are
+ * in scope by name, so a design value can choose one, as in const Number = pick([NumberText,
+ * NumberDots]); the value is the chosen component's name.
  */
 export function interpretDesign(
   body: string,
   seed: number,
-  components: readonly string[] = []
+  components: readonly string[] = [],
+  variant: DesignVariant = {}
 ): TraceState {
-  return interpretDesignDraws(body, seed, components).values;
+  return interpretDesignDraws(body, seed, components, variant).values;
 }
 
 /**
- * One draw a seed made in the design block: its key (see random.server.ts), the draw function and
- * its evaluated arguments, the value it drew, and the call's span in the block's body.
+ * One declaration in the design block and the value it took: its key (see random.server.ts), the
+ * declaring function and its evaluated arguments (the domain), the value, where it came from
+ * (absent when randomised), and the call's span in the block's body.
  */
 export type DesignDraw = {
   key: string;
   call: 'pick' | 'int' | 'real' | 'chance';
   args: unknown[];
   value: unknown;
+  origin?: 'chosen' | 'kept';
 } & Span;
 
-/** Interpret the design block as interpretDesign does, also recording each draw it makes. */
+/**
+ * Interpret the design block as interpretDesign does, also recording each declaration's value. A
+ * chosen value outside its declaration's domain, or for no declaration, is an error naming it.
+ */
 export function interpretDesignDraws(
   body: string,
   seed: number,
-  components: readonly string[] = []
+  components: readonly string[] = [],
+  { chosen = {}, base = {} }: DesignVariant = {}
 ): { values: TraceState; draws: DesignDraw[] } {
   const { root, offset } = parseBlock(body, 'design');
   const keys = drawKeys(root);
+  const declared = new Set(keys.values());
+  const undeclared = Object.keys(chosen).filter((key) => !declared.has(key));
+  if (undeclared.length > 0)
+    throw new AlgorithmError(
+      `The design declares no ${undeclared.join(', ')}; its declarations are ${[...declared].join(', ') || 'none'}.`
+    );
   const draws: DesignDraw[] = [];
   const values = new Interpreter(root, offset, {
     kind: 'design',
-    random: keyedDraws(root, seed),
-    onDraw: (node, args, value) =>
+    choose: (node, name, args) => {
+      const key = keys.get(node) ?? '';
+      const [value, origin] = Object.hasOwn(chosen, key)
+        ? [checkedValue(key, name, args, chosen[key]), 'chosen' as const]
+        : Object.hasOwn(base, key) && fits(key, name, args, base[key])
+          ? [base[key], 'kept' as const]
+          : [drawValue(name, args, () => keyedRandom(seed, key)), undefined];
       draws.push({
-        key: keys.get(node) ?? '',
-        call: (node.callee as { name: DesignDraw['call'] }).name,
+        key,
+        call: name as DesignDraw['call'],
         args,
         value,
+        ...(origin ? { origin } : {}),
         ...offset(node)
-      }),
+      });
+      return value as Value;
+    },
     names: components
   }).bindings().state;
   return { values, draws };
+}
+
+function fits(key: string, name: string, args: readonly unknown[], value: unknown): boolean {
+  try {
+    checkedValue(key, name, args, value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -294,6 +334,8 @@ type Value = undefined | null | boolean | number | string | Atom | Value[] | Obj
  */
 type Binding = { value: Value; constant: boolean; type?: string; target?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
+/** The value a design declaration takes, from its call, function name, and evaluated arguments. */
+type Choose = (draw: CallExpression, name: string, args: unknown[]) => Value;
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
   abs: Math.abs,
@@ -327,8 +369,7 @@ class Interpreter {
   readonly #topLevelNames: string[];
   readonly #kind: BlockKind;
   /** The random number for one design draw. */
-  readonly #random?: (draw: AnyNode) => number;
-  readonly #onDraw?: (draw: CallExpression, args: Value[], value: Value) => void;
+  readonly #choose?: Choose;
   readonly #domain: DomainRegistry;
   readonly #atoms: AtomRegistry;
   /** The record or collection type of every array and object an input or algorithm made. */
@@ -344,9 +385,8 @@ class Interpreter {
     options: {
       kind: BlockKind;
       initial?: TypedState;
-      random?: (draw: AnyNode) => number;
-      /** Called with each design draw's call, evaluated arguments, and drawn value. */
-      onDraw?: (draw: CallExpression, args: Value[], value: Value) => void;
+      /** The value of a design declaration, from its call, function name, and evaluated arguments. */
+      choose?: Choose;
       domain?: DomainRegistry;
       /** Names in scope whose values are themselves, such as the view's components in the design. */
       names?: readonly string[];
@@ -355,8 +395,7 @@ class Interpreter {
     this.#root = root;
     this.#offset = offset;
     this.#kind = options.kind;
-    this.#random = options.random;
-    this.#onDraw = options.onDraw;
+    this.#choose = options.choose;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
     for (const name of options.names ?? [])
@@ -1230,7 +1269,7 @@ class Interpreter {
 
   #call(node: CallExpression, scope: Scope): Value {
     const callee = node.callee;
-    if (callee.type === 'Identifier' && this.#random && drawFunctions.has(callee.name))
+    if (callee.type === 'Identifier' && this.#choose && drawFunctions.has(callee.name))
       return this.#draw(callee.name, node, scope);
     if (
       callee.type === 'Identifier' &&
@@ -1303,7 +1342,7 @@ class Interpreter {
     }
   }
 
-  /** A design draw: its arguments, and exactly one number from its own keyed stream. */
+  /** A design declaration: its evaluated arguments, and the value it takes. */
   #draw(name: string, node: CallExpression, scope: Scope): Value {
     const args = node.arguments.map((argument) => {
       if (argument.type === 'SpreadElement')
@@ -1311,11 +1350,7 @@ class Interpreter {
       return unwrap(this.#expression(argument, scope));
     });
     try {
-      const value = drawValue(name, args, () =>
-        (this.#random as (draw: AnyNode) => number)(node)
-      ) as Value;
-      this.#onDraw?.(node, args, value);
-      return value;
+      return (this.#choose as Choose)(node, name, args);
     } catch (cause) {
       return this.#fail(node, cause instanceof Error ? cause.message : String(cause));
     }

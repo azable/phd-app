@@ -1,4 +1,4 @@
-/** Every prop type of a Node, the props a type renderer receives, and the shape of drawn defaults. */
+/** Every prop type of a Node, the props a type renderer receives, and the shape of the library defaults. */
 
 /** A single value a node can display. */
 export type Primitive = string | number | boolean | null;
@@ -18,9 +18,9 @@ export type FrameRatio = '16:9' | '4:3' | '3:2' | '1:1' | '3:4' | '9:16';
 /** How the page frame is shaped and arranges the view's top-level nodes (resolved from the design value `frame`). */
 export type FrameSettings = {
   ratio: FrameRatio;
-  /** Unset, it comes from the drawn defaults. */
+  /** Unset, it is centred. */
   justify?: Justify;
-  /** Unset, it comes from the drawn defaults. */
+  /** Unset, it is centred. */
   align?: Align;
   padding: Spacing;
   /** How the view's top-level nodes are arranged; unset, a column. */
@@ -30,7 +30,7 @@ export type FrameSettings = {
 /** The arrangements the page frame offers its top-level nodes. */
 export type FrameLayout = 'column' | 'row';
 
-/** Which of the presentation's drawn looks a node takes: a cell, a card, or none. */
+/** Which of the library's looks a node takes: a cell, a card, or none. */
 export type NodeShape = 'box' | 'card' | 'plain';
 
 /** A theme palette colour, giving a light shade as a fill and a strong shade as a stroke or text. */
@@ -95,9 +95,9 @@ export type ShapeDefaults = {
 };
 
 /**
- * Defaults one presentation drew: per framed shape, how a frame spreads and aligns its children,
- * a collection's shape and direction, how rows and columns align their items, the gap between items, the page
- * font, and the width of links in pixels.
+ * The library's look for unset props: per framed shape, how a frame spreads and aligns its
+ * children, a collection's shape and direction, how rows and columns align their items, the gap
+ * between items, the page font, and the width of links in pixels.
  */
 export type NodeDefaults = {
   box: ShapeDefaults;

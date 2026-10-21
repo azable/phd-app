@@ -14,6 +14,7 @@ import {
   designChoices,
   interpretAlgorithm,
   interpretDesignDraws,
+  type DesignVariant,
   interpretDomain,
   interpretInput,
   type BlockKind,
@@ -46,7 +47,7 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
-import { drawDefaults } from './library/node/defaults';
+import { libraryDefaults } from './library/node/defaults';
 import { forms } from './library/node/forms';
 import {
   alignments,
@@ -59,7 +60,6 @@ import {
   strokeWidths
 } from './library/node/scales';
 import type { FrameSettings, NodeShape } from './library/node/props';
-import { keyedRandom } from './algorithm/random.server';
 import { stepSignature } from '../signature.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
@@ -591,10 +591,14 @@ function standInsFor(
   return standIn;
 }
 
-/** Draw one seed's design and bundle the presentation with every step's state. */
+/**
+ * Give the design's declarations their values, from the variant and the rest drawn from the seed,
+ * and bundle the presentation with every step's state.
+ */
 export async function bundlePresentation(
   prepared: PreparedComponent,
-  seed: number
+  seed: number,
+  variant: DesignVariant = {}
 ): Promise<SvelteBundle> {
   const { master } = prepared;
   const design = prepared.design;
@@ -603,21 +607,15 @@ export async function bundlePresentation(
         interpretDesignDraws(
           body,
           seed,
-          prepared.components.map(({ name }) => name)
+          prepared.components.map(({ name }) => name),
+          variant
         )
       )
     : { values: {}, draws: [] };
-  // Unspecified Node props are always drawn from the seed (see library/node/defaults.ts).
-  if (parameters.defaults !== undefined)
-    throw new InvalidSvelteSourceError(
-      'The design value defaults is no longer supported: every presentation draws the props a view leaves unset. Remove it, and set the props that should stay the same.',
-      { code: 'design_value', start: designAt(prepared, 'defaults') }
-    );
-  const defaults = drawDefaults((key) => keyedRandom(seed, key));
   const frame = located(() => frameSettings(parameters.frame), designAt(prepared, 'frame'));
   // Every presentation shows every master step until steps can be mapped to frames.
   const masterSteps = master.map((_, index) => index);
-  // Each step's state carries its atomic types, the page frame, and the drawn defaults for the view,
+  // Each step's state carries its atomic types, the page frame, and the library defaults for the view,
   // under keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
   const states = masterSteps.map((index) => {
     const standIn = standInsFor(master, index);
@@ -632,7 +630,7 @@ export async function bundlePresentation(
       __copies: master[index].identities?.copies ?? {},
       __refs: master[index].identities?.refs ?? {},
       __frame: frame,
-      __defaults: defaults
+      __defaults: libraryDefaults
     };
   });
   const result = await bundle(
@@ -653,8 +651,7 @@ export async function bundlePresentation(
       master.map(({ identities: _identities, ...step }) => JSON.stringify(step))
     ),
     masterSteps,
-    // Drawn defaults are recorded with the design values, so analysis sees each side's full look.
-    parameters: { ...parameters, __defaults: defaults },
+    parameters,
     draws: draws.map((draw) => ({
       ...draw,
       start: (design?.offset ?? 0) + draw.start,

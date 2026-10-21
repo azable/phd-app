@@ -14,7 +14,20 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
-import { propText, type GhostProp, type TagDefaults } from './drawn-defaults';
+/**
+ * One prop a tag left to the seed, such as its layoutSeed, and what each visible presentation drew
+ * for it; `pin` is the prop as the view would write it to keep that value, where one can.
+ */
+export type GhostProp = {
+  name: string;
+  values: { label?: string; text: string; color?: string; title: string; pin?: string }[];
+  differs: boolean;
+};
+
+/** A prop as a view writes it: a text value quoted, anything else in braces. */
+export function propText(name: string, value: unknown): string {
+  return typeof value === 'string' ? `${name}="${value}"` : `${name}={${JSON.stringify(value)}}`;
+}
 import { tagEnd } from './selection-highlights';
 
 /**
@@ -39,10 +52,9 @@ export type DrawnPresentation = {
   layouts?: readonly DrawnLayout[];
 };
 
-/** Replace the shown presentations' drawn values, and the defaults each tag takes in them. */
+/** Replace the shown presentations' drawn values. */
 export const setDrawnValues = StateEffect.define<{
   presentations: readonly DrawnPresentation[];
-  tags: readonly TagDefaults[];
 }>();
 
 /** Remove one ghost prop, once it has been written into the source. */
@@ -125,6 +137,13 @@ function snippetBlocks(doc: string): Map<string, { from: number; to: number }> {
   return blocks;
 }
 
+/** How a draw's value came about, for its hover text. */
+const drawSource = {
+  chosen: () => 'chosen',
+  kept: () => 'kept from the viewed variant',
+  random: (seed: number) => `drawn by seed ${seed}`
+};
+
 /** One marker per draw call in the document, skipping spans it does not hold. */
 export function drawnMarkers(
   state: EditorState,
@@ -144,7 +163,7 @@ export function drawnMarkers(
       marker.values.push({
         label,
         text: valueText(draw.value),
-        title: `${draw.key} = ${JSON.stringify(draw.value)}, drawn by seed ${seed}`
+        title: `${draw.key} = ${JSON.stringify(draw.value)}, ${drawSource[draw.origin ?? 'random'](seed)}`
       });
       marker.compared.add(JSON.stringify(draw.value));
       marker.differs = marker.compared.size > 1;
@@ -156,21 +175,19 @@ export function drawnMarkers(
 }
 
 /**
- * The ghost props of every <Node> tag in the document: the defaults it takes, then the layout it
- * arranged (its form, curve, and layoutSeed). A tag rendered more than once, as in an {#each},
+ * The ghost props of every <Node> tag in the document: the layout it arranged (its form, curve,
+ * and layoutSeed). A tag rendered more than once, as in an {#each},
  * shows each value it drew once, and can be pinned only where it drew one.
  */
 export function tagGhosts(
   state: EditorState,
-  presentations: readonly DrawnPresentation[],
-  tags: readonly TagDefaults[]
+  presentations: readonly DrawnPresentation[]
 ): TagGhosts[] {
   const ghosts = new Map<number, GhostProp[]>();
   const add = (line: number, column: number, props: GhostProp[]) => {
     const at = closingAt(state, line, column);
     if (at !== undefined && props.length) ghosts.set(at, [...(ghosts.get(at) ?? []), ...props]);
   };
-  for (const { line, column, props } of tags) add(line, column, props);
   const arranged = new Map<string, { line: number; column: number }>();
   for (const { layouts = [] } of presentations)
     for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
@@ -423,11 +440,14 @@ const drawnField = StateField.define<DrawnState>({
     const { changes } = transaction;
     let next: DrawnState = transaction.docChanged
       ? {
-          markers: value.markers.map((marker) => ({
-            ...marker,
-            from: changes.mapPos(marker.from),
-            to: changes.mapPos(marker.to)
-          })),
+          // A call the edit removed, as when the whole text is replaced, leaves no marker.
+          markers: value.markers
+            .map((marker) => ({
+              ...marker,
+              from: changes.mapPos(marker.from),
+              to: changes.mapPos(marker.to)
+            }))
+            .filter(({ from, to }) => from < to),
           ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) })),
           open: value.open.map((at) => changes.mapPos(at, 1)),
           unchosen: value.unchosen.map((view) => ({
@@ -439,7 +459,7 @@ const drawnField = StateField.define<DrawnState>({
       : value;
     for (const effect of transaction.effects) {
       if (effect.is(setDrawnValues)) {
-        const ghosts = tagGhosts(transaction.state, effect.value.presentations, effect.value.tags);
+        const ghosts = tagGhosts(transaction.state, effect.value.presentations);
         next = {
           markers: drawnMarkers(transaction.state, effect.value.presentations),
           ghosts,

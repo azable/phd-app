@@ -1,4 +1,4 @@
-/** Prepare a single component once, then bundle each requested seed's design and steps. */
+/** Prepare a single component once, then bundle each request's design and steps. */
 
 import {
   bundlePresentation,
@@ -6,11 +6,11 @@ import {
   prepareSvelteComponent,
   type PreparedComponent
 } from './compile.server';
-import type { ModeBuildResult } from '../server';
+import type { BuildRequest, ModeBuildResult } from '../server';
 
 export async function buildBatch(
   source: string,
-  seeds: readonly number[],
+  requests: readonly BuildRequest[],
   signal?: AbortSignal
 ): Promise<ModeBuildResult[]> {
   const start = performance.now();
@@ -21,13 +21,13 @@ export async function buildBatch(
     prepared = prepareSvelteComponent(source);
   } catch (cause) {
     if (signal?.aborted) throw cause;
-    return seeds.map((seed) => failure(seed, cause, elapsed()));
+    return requests.map(({ seed }) => failure(seed, cause, elapsed()));
   }
   const results: ModeBuildResult[] = [];
-  for (const seed of seeds) {
+  for (const { seed, variant } of requests) {
     throwIfAborted(signal);
     try {
-      const bundle = await bundlePresentation(prepared, seed);
+      const bundle = await bundlePresentation(prepared, seed, variant);
       results.push({
         ok: true,
         seed,

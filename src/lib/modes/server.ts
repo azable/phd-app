@@ -4,7 +4,8 @@ import { modeCatalog } from './catalog';
 import type {
   DesignDraw,
   VisualizationMode,
-  RenderablePresentation
+  RenderablePresentation,
+  VariantRequest
 } from '$lib/shared/presentations';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
@@ -40,9 +41,12 @@ export type ModeBuildResult =
       failureKind: 'source' | 'infrastructure';
     };
 
+/** One presentation to build: the seed that places its layouts, and the values it starts from. */
+export type BuildRequest = { seed: number; variant?: VariantRequest };
+
 export type SourceBatchBuilder = (
   source: string,
-  seeds: readonly number[],
+  requests: readonly BuildRequest[],
   signal?: AbortSignal
 ) => Promise<ModeBuildResult[]>;
 

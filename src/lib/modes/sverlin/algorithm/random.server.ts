@@ -34,16 +34,6 @@ function mix32(value: number): number {
   return (mixed ^ (mixed >>> 16)) >>> 0;
 }
 
-/**
- * The random number for each draw of a parsed design block. Each draw is keyed by its place, such
- * as `flow` or `look.cells`, and takes its value from the seed and that key alone, so adding,
- * removing, or reordering other draws never changes it.
- */
-export function keyedDraws(root: BlockStatement, seed: number): (draw: AnyNode) => number {
-  const keys = drawKeys(root);
-  return (draw) => keyedRandom(seed, keys.get(draw) ?? '');
-}
-
 /** One random number in [0, 1) for a seed and a key, independent of every other key. */
 export function keyedRandom(seed: number, key: string): number {
   return seededRandom(seed, drawStream(key))();
@@ -123,4 +113,42 @@ export function drawValue(name: string, args: readonly unknown[], random: () => 
   }
   if (name === 'real') return min + random() * (max - min);
   throw new Error(`${name}() is not a draw function.`);
+}
+
+/**
+ * A value given for a declaration, if it is in the declaration's domain: one of pick's choices, an
+ * integer within int's bounds, a number within real's, or a boolean for chance. Otherwise an error
+ * naming the declaration and what it takes.
+ */
+export function checkedValue(
+  key: string,
+  name: string,
+  args: readonly unknown[],
+  value: unknown
+): unknown {
+  // The domain's own checks, such as pick's non-empty choices, apply as they do to a draw.
+  drawValue(name, args, () => 0);
+  const [first, second] = args;
+  if (name === 'pick') {
+    const choices = first as unknown[];
+    if (!choices.some((choice) => Object.is(choice, value)))
+      throw new Error(
+        `${key} is ${JSON.stringify(value)}, which is not one of its choices: ${choices.map((choice) => JSON.stringify(choice)).join(', ')}.`
+      );
+    return value;
+  }
+  if (name === 'chance') {
+    if (typeof value !== 'boolean') throw new Error(`${key} is a chance, so true or false.`);
+    return value;
+  }
+  const [min, max] = [first as number, second as number];
+  if (
+    typeof value !== 'number' ||
+    !(value >= min && value <= max) ||
+    (name === 'int' && !Number.isInteger(value))
+  )
+    throw new Error(
+      `${key} is ${JSON.stringify(value)}, outside its ${name === 'int' ? 'integers' : 'numbers'} from ${min} to ${max}.`
+    );
+  return value;
 }

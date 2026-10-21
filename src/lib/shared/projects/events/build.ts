@@ -12,6 +12,7 @@ import {
   buildPurposeSchema,
   textSchema
 } from './values';
+import { variantRequestSchema } from '$lib/shared/presentations';
 
 /** Runtime schema for a source-build request. */
 export const buildRequestedEventSchema = v.object({
@@ -23,6 +24,8 @@ export const buildRequestedEventSchema = v.object({
     source: recordedTextSchema,
     sourceLabel: textSchema,
     seed: v.pipe(integerSchema, v.minValue(1)),
+    /** The values the build starts from; absent, every declaration is randomised. */
+    variant: v.optional(variantRequestSchema),
     attempt: v.optional(positiveSchema),
     buildId: v.optional(v.pipe(v.string(), v.uuid())),
     batchIndex: v.optional(naturalSchema),
