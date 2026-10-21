@@ -1,11 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { tick } from 'svelte';
-  import { fly } from 'svelte/transition';
 
   import { Button } from '$lib/client/components/ui/button';
   import { ScrollArea } from '$lib/client/components/ui/scroll-area';
-  import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
   import type { PresentationLayout } from '$lib/shared/presentations';
@@ -13,13 +11,10 @@
   import type { ElementReference } from '$lib/shared/projects/events/message-content';
 
   import ParticipantTimeline from './ParticipantTimeline.svelte';
-  import TimelineEventCard from './TimelineEventCard.svelte';
-  import { presentProjectEvent } from './event-presentation';
 
   /** Public properties for the project Timeline. */
   type Props = {
     session: ProjectSession;
-    seed: number;
     selection: PresentationSelection;
     layout: PresentationLayout;
     inspect?: boolean;
@@ -38,11 +33,13 @@
     chosenSource?: string;
     /** Choose a source on its own, or none, as when one of its variants is chosen. */
     onChooseSource?: (source: { sourceHash: string; parentHash?: string } | undefined) => void;
+    /** The model request chosen for audit, if any, by its event id. */
+    chosenRequest?: number;
+    onChooseRequest?: (eventId: number | undefined) => void;
   };
 
   let {
     session,
-    seed,
     selection,
     layout,
     inspect = false,
@@ -51,18 +48,13 @@
     onReferenceRequest = () => {},
     onElementReference = () => {},
     chosenSource,
-    onChooseSource = () => {}
+    onChooseSource = () => {},
+    chosenRequest,
+    onChooseRequest = () => {}
   }: Props = $props();
   let viewport = $state<HTMLElement | null>(null);
   let timelineEnd = $state<HTMLElement | null>(null);
   let following = $state(true);
-  const activityProgress = $derived.by(() => {
-    const pendingEvent = session.pendingEvent;
-    if (pendingEvent) return presentProjectEvent(pendingEvent).progress;
-    if (session.assistantResponding) return 'Assistant is responding…';
-    if (session.pending) return 'Recording the update…';
-    return 'Generating more visualizations…';
-  });
   const projectPath = $derived(
     `${resolve('/projects/[projectId]', { projectId: session.projectId })}${inspect ? '?dev=1' : ''}`
   );
@@ -105,61 +97,21 @@
     </div>
   {/if}
   <ScrollArea bind:viewportRef={viewport} class="min-h-0 flex-1">
-    <ol class:timeline={inspect} class="flex flex-col gap-3 p-4" class:pr-6={inspect}>
-      {#if inspect}
-        {#each session.events as event (event.id)}
-          <li class="timeline-event relative pl-8" in:fly={{ y: 12, duration: 180 }}>
-            <TimelineEventCard {event} {seed} {session} {inspect} />
-          </li>
-        {/each}
-        {#if session.pending || session.assistantResponding || session.refillPending}
-          <li class="timeline-event relative pl-8" in:fly={{ y: 12, duration: 180 }}>
-            <div
-              class="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-base text-muted-foreground shadow-md"
-              role="status"
-            >
-              <Spinner />
-              <span>{activityProgress}</span>
-            </div>
-          </li>
-        {/if}
-      {:else}
-        <ParticipantTimeline
-          {session}
-          {selection}
-          {layout}
-          {onPresentationChange}
-          {onReferenceRequest}
-          {onElementReference}
-          {chosenSource}
-          {onChooseSource}
-        />
-      {/if}
+    <ol class="flex flex-col gap-3 p-4">
+      <ParticipantTimeline
+        {session}
+        {selection}
+        {layout}
+        {onPresentationChange}
+        {onReferenceRequest}
+        {onElementReference}
+        {chosenSource}
+        {onChooseSource}
+        audit={inspect}
+        {chosenRequest}
+        {onChooseRequest}
+      />
       <li class="h-px" aria-hidden="true"><span bind:this={timelineEnd}></span></li>
     </ol>
   </ScrollArea>
 </section>
-
-<style>
-  .timeline {
-    --timeline-stalk: color-mix(in oklab, var(--primary) 42%, var(--border));
-  }
-
-  .timeline-event::before {
-    position: absolute;
-    top: -0.75rem;
-    bottom: -0.75rem;
-    left: 0.72rem;
-    width: 2px;
-    content: '';
-    background: var(--timeline-stalk);
-  }
-
-  .timeline-event:first-child::before {
-    top: 1rem;
-  }
-
-  .timeline-event:nth-last-child(2)::before {
-    bottom: calc(100% - 1rem);
-  }
-</style>

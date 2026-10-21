@@ -23,6 +23,7 @@
   import StudyTimer from '$lib/client/study/StudyTimer.svelte';
   import FeedbackComposer from '$lib/client/timeline/FeedbackComposer.svelte';
   import Timeline from '$lib/client/timeline/Timeline.svelte';
+  import { agentRequestAt } from '$lib/client/timeline/agent-requests';
   import PresentationStage from '$lib/client/visualization/PresentationStage.svelte';
   import {
     presentationPlaybackContext,
@@ -34,11 +35,7 @@
     timelinePresentations
   } from '$lib/client/visualization/presentation-history';
   import { VisualSelections } from '$lib/client/visualization/visual-selection.svelte';
-  import {
-    isSverlinPresentation,
-    presentationViewSeed,
-    type PresentationLayout
-  } from '$lib/shared/presentations';
+  import type { PresentationLayout } from '$lib/shared/presentations';
   import type { ProjectTemplateSummary } from '$lib/shared/projects/creation';
   import type { EventId } from '$lib/shared/projects/events';
   import type {
@@ -54,6 +51,7 @@
   } from '$lib/shared/study/interactions';
 
   import NewProjectDialog from './NewProjectDialog.svelte';
+  import AgentRequestAudit from './AgentRequestAudit.svelte';
   import ProjectArtifactPanel, {
     type ProjectArtifactEditMode
   } from './ProjectArtifactPanel.svelte';
@@ -198,6 +196,14 @@
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
 
+  // A request to a model chosen for audit, in developer view: its details fill the stage.
+  let chosenRequestId = $state<number | undefined>();
+  const auditedRequest = $derived(
+    developerView && chosenRequestId !== undefined
+      ? agentRequestAt(session.events, chosenRequestId)
+      : undefined
+  );
+
   // A source chosen on its own, by its card: no visualization shows, and the source panel fills the
   // stage with its source and what it changes from its parent, until a variant is chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
@@ -264,18 +270,6 @@
     )
   );
   const playbackContext = $derived(presentationPlaybackContext(visiblePresentations));
-  const activeSeed = $derived.by(() => {
-    const presentation = session.loaded
-      ? session.snapshot.activePresentationSet?.presentations[0]
-      : undefined;
-    if (
-      presentation?.type === 'visualization.presented' &&
-      isSverlinPresentation(presentation.payload.presentation)
-    ) {
-      return presentationViewSeed(presentation.payload.presentation);
-    }
-    return 1;
-  });
 
   onMount(() => {
     void session.open();
@@ -592,7 +586,6 @@
               {/if}
               <Timeline
                 {session}
-                seed={activeSeed}
                 selection={presentationSelection}
                 {layout}
                 inspect={developerView}
@@ -601,7 +594,15 @@
                   feedbackComposer?.referencePresentation(presentation)}
                 onElementReference={showElementReference}
                 chosenSource={chosenOf?.sourceHash}
-                onChooseSource={(source) => (chosenOf = source)}
+                onChooseSource={(source) => {
+                  chosenOf = source;
+                  chosenRequestId = undefined;
+                }}
+                chosenRequest={auditedRequest ? chosenRequestId : undefined}
+                onChooseRequest={(eventId) => {
+                  chosenRequestId = eventId;
+                  if (eventId !== undefined) chosenOf = undefined;
+                }}
               />
               {#if !expired && !session.readOnly}
                 <FeedbackComposer
@@ -660,7 +661,7 @@
             </div>
           {/if}
           <PresentationStage
-            hidden={chosen !== undefined}
+            hidden={chosen !== undefined || auditedRequest !== undefined}
             {session}
             selection={presentationSelection}
             playback={presentationPlayback}
@@ -673,7 +674,17 @@
               (drawnSteps = { ...drawnSteps, [presentationId]: drawn })}
             disabled={mutationsDisabled}
           />
-          <div class="contents" data-replay-region="artifact">
+          {#if auditedRequest}
+            <AgentRequestAudit
+              value={auditedRequest}
+              onClose={() => (chosenRequestId = undefined)}
+            />
+          {/if}
+          <div
+            class="contents"
+            style:display={auditedRequest ? 'none' : undefined}
+            data-replay-region="artifact"
+          >
             <ProjectArtifactPanel
               {session}
               {presentationCount}

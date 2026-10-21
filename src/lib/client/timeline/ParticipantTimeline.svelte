@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
 
+  import BotIcon from '@lucide/svelte/icons/bot';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
 
@@ -26,6 +27,7 @@
 
   import MessageContent from './MessageContent.svelte';
   import { presentProjectEvent } from './event-presentation';
+  import { agentOutcome, agentTokens } from './agent-requests';
   import { participantTimeline } from './participant-timeline';
 
   type Props = {
@@ -40,6 +42,11 @@
     chosenSource?: string;
     /** Choose a source on its own, or none, as when one of its variants is chosen. */
     onChooseSource?: (source: { sourceHash: string; parentHash?: string } | undefined) => void;
+    /** Show each request to a model, for audit, as in developer view. */
+    audit?: boolean;
+    /** The request chosen for audit, if any, by its event id. */
+    chosenRequest?: number;
+    onChooseRequest?: (eventId: number | undefined) => void;
   };
 
   let {
@@ -50,11 +57,14 @@
     onReferenceRequest = () => {},
     onElementReference = () => {},
     chosenSource,
-    onChooseSource = () => {}
+    onChooseSource = () => {},
+    audit = false,
+    chosenRequest,
+    onChooseRequest = () => {}
   }: Props = $props();
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
-  const items = $derived(participantTimeline(session.events));
+  const items = $derived(participantTimeline(session.events, { audit }));
   const activityProgress = $derived.by(() => {
     const pendingEvent = session.pendingEvent;
     if (pendingEvent) return presentProjectEvent(pendingEvent).progress;
@@ -184,6 +194,32 @@
           <span class="mt-1 block text-sm text-muted-foreground"> Click to view </span>
         </div>
       </article>
+    {:else if item.kind === 'request'}
+      {@const request = item.value.request}
+      {@const tokens = agentTokens(item.value)}
+      {@const outcome = item.value.outcome}
+      {@const chosen = chosenRequest === request.id}
+      <!-- A request to a model, for audit: one compact line; choosing it shows its details. -->
+      <button
+        type="button"
+        class={[
+          'ml-6 flex w-[calc(100%-1.5rem)] min-w-0 items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          chosen && 'border-solid border-primary bg-muted text-foreground'
+        ]}
+        aria-label={`Agent request ${request.id}: ${agentOutcome(item.value)}`}
+        aria-pressed={chosen}
+        onclick={() => onChooseRequest(chosen ? undefined : request.id)}
+      >
+        <BotIcon class="size-3.5 shrink-0" />
+        <span class="shrink-0">{request.payload.attempt} · {request.payload.purpose}</span>
+        <span class="truncate text-foreground">{agentOutcome(item.value)}</span>
+        <span class="ml-auto shrink-0 font-mono">
+          {outcome ? `${(outcome.payload.durationMs / 1000).toFixed(1)} s` : '…'}{tokens.read !==
+          undefined
+            ? ` · ${tokens.read.toLocaleString()}→${tokens.written?.toLocaleString() ?? '?'}`
+            : ''}
+        </span>
+      </button>
     {:else if item.kind === 'version'}
       {@const current =
         !chosenSource &&

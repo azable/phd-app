@@ -12,6 +12,8 @@ import {
   type TimelinePresentation
 } from '$lib/client/visualization/presentation-history';
 
+import { agentRequests, type AgentRequest } from './agent-requests';
+
 export type ParticipantTimelineItem =
   | {
       id: string;
@@ -34,10 +36,15 @@ export type ParticipantTimelineItem =
       /** Its presentations, each a variant of its random values, oldest first. */
       variants: TimelinePresentation[];
     }
-  | { id: string; kind: 'error'; text: string; eventId: number };
+  | { id: string; kind: 'error'; text: string; eventId: number }
+  /** A request to a model, shown for audit in developer view. */
+  | { id: string; kind: 'request'; value: AgentRequest };
 
 /** Keep research data lossless while deriving a concise participant conversation locally. */
-export function participantTimeline(events: readonly ProjectEvent[]): ParticipantTimelineItem[] {
+export function participantTimeline(
+  events: readonly ProjectEvent[],
+  options: { audit?: boolean } = {}
+): ParticipantTimelineItem[] {
   const presentations = new Map(
     timelinePresentations(events).map((entry) => [entry.eventId, entry] as const)
   );
@@ -78,6 +85,9 @@ export function participantTimeline(events: readonly ProjectEvent[]): Participan
           );
         }
       }
+      if (options.audit)
+        for (const value of agentRequests(related))
+          items.push({ id: `request-${value.request.id}`, kind: 'request', value });
       for (const event of related) {
         if (event.type === 'assistant.responded') {
           items.push(
