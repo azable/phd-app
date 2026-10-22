@@ -30,6 +30,7 @@ import {
   type BlockKind,
   type Span
 } from './block.server';
+import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './events.server';
 import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { parseBlock } from './parse.server';
 import {
@@ -78,12 +79,18 @@ export type TypedState = {
   declared?: Record<string, string>;
 };
 
-/** One step of the master trace that every presentation of a source shares. */
+/**
+ * One step of the master trace that every presentation of a source shares, with the events since
+ * the step before (see events.server.ts).
+ */
 export type MasterStep = {
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
   identities?: StepIdentities;
+  events?: TraceEvent[];
+  dropped?: number;
+  counts?: EventCounts;
 };
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
@@ -209,6 +216,12 @@ class Interpreter {
   /** The scope of the running call's parameters, or the top level outside every call. */
   #frame: Scope = this.#topLevel;
   #depth = 0;
+  readonly #log = new EventLog();
+  /** The place each collection and record was last reached by, as values or edges[2]. */
+  readonly #places = new WeakMap<object, string>();
+  /** What the last element or field read read from, and by which key. */
+  #readFrom: Value;
+  #readKey: string | number = '';
 
   constructor(
     root: BlockStatement,
@@ -366,6 +379,43 @@ class Interpreter {
         (topLevel) => this.#topLevel.bindings.get(topLevel)?.value === collection
       ) ?? name
     );
+  }
+
+  /** Log an event of the algorithm, at a node of its block or of an operation's body. */
+  #emit(
+    kind: EventKind,
+    node: AnyNode,
+    details?: Pick<TraceEvent, 'place' | 'name' | 'index' | 'held' | 'method'> & {
+      value?: Value;
+    }
+  ): void {
+    if (this.#kind === 'algorithm')
+      this.#log.add(kind, node, this.#bodies > 0, details?.place, details?.value, details);
+  }
+
+  /** Log a read or write, the events the algorithm logs most. */
+  #access(kind: 'read' | 'write', node: AnyNode, place: string | undefined, value: Value): void {
+    if (this.#kind === 'algorithm') this.#log.add(kind, node, this.#bodies > 0, place, value);
+  }
+
+  /** The place a collection or record holds, by the name a step records it under. */
+  #placed(object: Value, place: string | undefined): void {
+    if (
+      place &&
+      object !== null &&
+      typeof object === 'object' &&
+      !(object instanceof Atom) &&
+      this.#places.get(object) !== place
+    )
+      this.#places.set(object, place);
+  }
+
+  /** The place of an element or field of a value whose place is known, as values[3]. */
+  #within(object: Value, key: string | number): string | undefined {
+    const place =
+      object !== null && typeof object === 'object' ? this.#places.get(object) : undefined;
+    if (place === undefined) return undefined;
+    return typeof key === 'number' ? `${place}[${key}]` : `${place}.${key}`;
   }
 
   /** Conditions read an atom's underlying value, so Bool(false) is false. */
@@ -750,19 +800,16 @@ class Interpreter {
             ...(type ? { type } : {}),
             ...(target ? { target } : {})
           });
+          this.#access('write', declarator, name, value);
         }
         return 'normal';
       case 'IfStatement':
-        if (this.#truthy(this.#expression(node.test, scope)))
-          return this.#statement(node.consequent, scope);
+        if (this.#test(node.test, scope)) return this.#statement(node.consequent, scope);
         return node.alternate ? this.#statement(node.alternate, scope) : 'normal';
       case 'WhileStatement':
-        while (this.#truthy(this.#expression(node.test, scope))) {
-          const completion = this.#statement(node.body, scope);
-          if (completion === 'return') return completion;
-          if (completion === 'break') break;
-        }
-        return 'normal';
+        return this.#loop(node, (index) =>
+          this.#test(node.test, scope) ? this.#pass(node, index, scope) : 'break'
+        );
       case 'FunctionDeclaration':
         return 'normal';
       case 'ForStatement': {
@@ -772,7 +819,11 @@ class Interpreter {
         const test = node.test as BinaryExpression;
         const counter = (test.left as { name: string }).name;
         let bound: number | undefined;
-        for (;;) {
+        return this.#loop(node, (index) => {
+          if (index > 0) {
+            this.#expression(node.update as Expression, loopScope);
+            this.#charge(node);
+          }
           const limit = this.#expression(test.right, loopScope);
           const value = this.#number(limit, test.right);
           if (bound !== undefined && value !== bound)
@@ -782,14 +833,11 @@ class Interpreter {
             );
           bound = value;
           const counted = loopScope.lookup(counter)?.value as Value;
-          if (!this.#truthy(this.#binary(test.operator, counted, limit, test))) break;
-          const completion = this.#statement(node.body, loopScope);
-          if (completion === 'return') return completion;
-          if (completion === 'break') break;
-          this.#expression(node.update as Expression, loopScope);
-          this.#charge(node);
-        }
-        return 'normal';
+          this.#access('read', test.left, counter, counted);
+          const held = this.#truthy(this.#binary(test.operator, counted, limit, test));
+          this.#emit('test', test, { held });
+          return held ? this.#pass(node, index, loopScope) : 'break';
+        });
       }
       case 'ForOfStatement': {
         const items = this.#expression(node.right as Expression, scope);
@@ -799,29 +847,63 @@ class Interpreter {
         this.#checkUnique(name, scope, node.left);
         // The loop variable has the collection's element type, which can be a union.
         const element = (this.#shapes.get(items) as CollectionType | undefined)?.element;
-        for (let index = 0; index < items.length; index++) {
+        const place = this.#places.get(items);
+        return this.#loop(node, (index) => {
+          if (index >= items.length) return 'break';
           const loopScope = new Scope(scope);
           loopScope.bindings.set(name, {
             value: items[index],
             constant: declaration.kind === 'const',
             ...(element ? { type: element } : {})
           });
-          const completion = this.#statement(node.body, loopScope);
-          if (completion === 'return') return completion;
-          if (completion === 'break') break;
-        }
-        return 'normal';
+          this.#placed(items[index], place && `${place}[${index}]`);
+          this.#access('write', node.left, name, items[index]);
+          return this.#pass(node, index, loopScope);
+        });
       }
       case 'ReturnStatement':
         if (node.argument) this.#returned = this.#expression(node.argument, scope);
+        this.#emit('return', node, { value: node.argument ? this.#returned : undefined });
         return 'return';
       case 'BreakStatement':
+        this.#emit('break', node);
         return 'break';
       case 'ContinueStatement':
+        this.#emit('continue', node);
         return 'continue';
       default:
         return this.#fail(node, `${describe(node.type)} is not supported in algorithm blocks.`);
     }
+  }
+
+  /** A condition, logged with whether it held. */
+  #test(node: Expression, scope: Scope): boolean {
+    const held = this.#truthy(this.#expression(node, scope));
+    this.#emit('test', node, { held });
+    return held;
+  }
+
+  /**
+   * Run a loop, logged as entered and left: each pass, numbered from 0, gives what the loop does
+   * next, 'break' once it ends.
+   */
+  #loop(node: Statement, pass: (index: number) => Completion): Completion {
+    this.#emit('enter', node);
+    let completion: Completion = 'normal';
+    for (let index = 0; ; index++) {
+      const next = pass(index);
+      if (next === 'return') completion = 'return';
+      if (next === 'return' || next === 'break') break;
+    }
+    this.#emit('exit', node);
+    return completion;
+  }
+
+  /** One iteration of a loop's body: 'normal' to go on, also after continue. */
+  #pass(node: Statement & { body: Statement }, index: number, scope: Scope): Completion {
+    this.#emit('iteration', node, { index });
+    const completion = this.#statement(node.body, scope);
+    return completion === 'continue' ? 'normal' : completion;
   }
 
   /**
@@ -849,7 +931,18 @@ class Interpreter {
           ['history', { value: this.#history, constant: true }]
         ]
       : [];
-    this.#trace.push(this.#state(node, scope, recorded));
+    this.#emit('yield', node);
+    this.#trace.push({
+      ...this.#state(node, scope, recorded),
+      ...this.#log.step(this.#offset, (value) => {
+        const single = unwrap(value as Value);
+        return typeof single === 'number' ||
+          typeof single === 'string' ||
+          typeof single === 'boolean'
+          ? single
+          : undefined;
+      })
+    });
     for (const name of Object.keys(this.#event)) this.#event[name] = [];
   }
 
@@ -912,6 +1005,14 @@ class Interpreter {
       case 'Identifier': {
         const binding = scope.lookup(node.name);
         if (!binding) this.#fail(node, `"${node.name}" is not defined.`);
+        if (binding === this.#globals.bindings.get(node.name)) return binding.value;
+        // Inside a call, a collection is named as the top level holds it.
+        const place =
+          this.#frame !== this.#topLevel && Array.isArray(binding.value)
+            ? this.#shown(node.name, scope)
+            : node.name;
+        this.#placed(binding.value, place);
+        this.#access('read', node, place, binding.value);
         return binding.value;
       }
       case 'TemplateLiteral': {
@@ -995,6 +1096,7 @@ class Interpreter {
         // Resolve the target once so a[i++] += 1 evaluates i++ a single time, as in JavaScript.
         const target = this.#reference(node.left as Expression, scope);
         const right = this.#expression(node.right, scope);
+        if (node.operator !== '=') this.#access('read', node.left, target.place, target.get());
         const value = target.prepare(
           node.operator === '='
             ? right
@@ -1002,11 +1104,13 @@ class Interpreter {
         );
         this.#typed(value, node.right, targetName(node.left as Expression));
         target.set(value);
+        this.#access('write', node, target.place, value);
         return value;
       }
       case 'UpdateExpression': {
         const target = this.#reference(node.argument, scope);
         const current = target.get();
+        this.#access('read', node.argument, target.place, current);
         const before = this.#number(current, node);
         const after = target.prepare(
           this.#numeric(
@@ -1018,6 +1122,7 @@ class Interpreter {
         );
         this.#typed(after, node, targetName(node.argument));
         target.set(after);
+        this.#access('write', node, target.place, after);
         return node.prefix ? after : current;
       }
       default:
@@ -1032,7 +1137,12 @@ class Interpreter {
   #reference(
     target: Expression,
     scope: Scope
-  ): { get(): Value; prepare(value: Value): Value; set(value: Value): void } {
+  ): {
+    get(): Value;
+    prepare(value: Value): Value;
+    set(value: Value): void;
+    place?: string;
+  } {
     if (target.type === 'Identifier') {
       const binding = scope.lookup(target.name);
       if (!binding || binding === this.#globals.bindings.get(target.name))
@@ -1047,7 +1157,9 @@ class Interpreter {
             : value,
         set: (value) => {
           binding.value = value;
-        }
+          this.#placed(value, target.name);
+        },
+        place: target.name
       };
     }
     if (target.type !== 'MemberExpression') this.#fail(target, 'Invalid assignment target.');
@@ -1055,6 +1167,7 @@ class Interpreter {
     let key = this.#key(target, scope);
     if (object instanceof Atom && object.type.index && key === 'value')
       [object, key] = this.#pointedAt(object, target, scope);
+    const place = this.#within(object, key as string | number);
     const slot =
       object !== null && typeof object === 'object' && !(object instanceof Atom)
         ? this.#slotType(object, key as string | number, target)
@@ -1076,7 +1189,9 @@ class Interpreter {
         set: (value) => {
           this.#checkLength(key + 1, target);
           object[key] = value;
-        }
+          this.#placed(value, place);
+        },
+        place
       };
     }
     if (
@@ -1094,7 +1209,9 @@ class Interpreter {
       set: (value) => {
         if (!(name in object)) this.#checkLength(Object.keys(object).length + 1, target);
         object[name] = value;
-      }
+        this.#placed(value, place);
+      },
+      place
     };
   }
 
@@ -1106,9 +1223,11 @@ class Interpreter {
     const name =
       position.collection ??
       this.#onlyCollection(position.type, node, targetName(node.object as Expression));
-    const collection = (this.#callSite ?? scope).lookup(name)?.value;
+    const site = this.#callSite ?? scope;
+    const collection = site.lookup(name)?.value;
     if (!Array.isArray(collection))
       this.#fail(node, `${targetName(node)} reads ${name}, which is out of scope here.`);
+    this.#placed(collection, this.#shown(name, site));
     return [collection, position.value as number];
   }
 
@@ -1120,8 +1239,20 @@ class Interpreter {
     return key;
   }
 
+  /** An element or field read, logged with its place, which its value holds if it is a part. */
   #read(target: Value, node: MemberExpression, scope: Scope): Value {
-    let key = this.#key(node, scope);
+    const value = this.#readValue(target, node, scope);
+    const place =
+      this.#readFrom === mathMarker ? undefined : this.#within(this.#readFrom, this.#readKey);
+    if (place === undefined) return value;
+    this.#placed(value, place);
+    this.#access('read', node, place, value);
+    return value;
+  }
+
+  /** The value an element or field read gives, noting what it was read from and by which key. */
+  #readValue(target: Value, node: MemberExpression, scope: Scope): Value {
+    let key = this.#key(node, scope) as string | number;
     // Typed text reads like text; other atoms have no properties, but a position's value is the
     // element it points at.
     let object = target instanceof Atom && target.type.base === 'text' ? target.value : target;
@@ -1130,19 +1261,21 @@ class Interpreter {
     if (object instanceof Atom)
       this.#fail(node, `A ${object.type.name} value has no "${String(key)}".`);
     if (object === mathMarker) {
-      if (typeof key === 'string' && key in mathConstants) return mathConstants[key];
+      if (typeof key === 'string' && key in mathConstants)
+        return this.#readAt(mathConstants[key], object, key);
       return this.#fail(node, `Math.${String(key)} can only be called, or does not exist.`);
     }
     if (Array.isArray(object) || typeof object === 'string') {
-      if (key === 'length') return object.length;
+      if (key === 'length') return this.#readAt(object.length, object, key);
       if (typeof key === 'number' && Number.isInteger(key) && Array.isArray(object)) {
-        if (key >= 0 && key < object.length) return object[key];
+        if (key >= 0 && key < object.length) return this.#readAt(object[key], object, key);
         return this.#fail(
           node,
           `${targetName(node)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}${object.length ? `, at 0 to ${object.length - 1}` : ''}.`
         );
       }
-      if (typeof key === 'number' && Number.isInteger(key) && key >= 0) return object[key];
+      if (typeof key === 'number' && Number.isInteger(key) && key >= 0)
+        return this.#readAt(object[key], object, key);
       return this.#fail(node, `Unsupported element or property "${String(key)}".`);
     }
     if (object !== null && typeof object === 'object') {
@@ -1150,9 +1283,15 @@ class Interpreter {
       if (forbiddenProperties.has(name)) this.#fail(node, 'That property name is not allowed.');
       // Reading a field a record does not have is a mistake, not a missing value.
       this.#slotType(object, name, node);
-      return object[name];
+      return this.#readAt(object[name], object, name);
     }
     return this.#fail(node, `Cannot read "${String(key)}" of ${String(object)}.`);
+  }
+
+  #readAt(value: Value, object: Value, key: string | number): Value {
+    this.#readFrom = object;
+    this.#readKey = key;
+    return value;
   }
 
   #call(node: CallExpression, scope: Scope): Value {
@@ -1195,6 +1334,11 @@ class Interpreter {
       args.forEach((argument, index) => this.#typed(argument, node.arguments[index], added));
     }
     this.#charge(node, object.length);
+    const place = this.#places.get(object);
+    if (place !== undefined) {
+      const changes = ['push', 'pop', 'shift', 'unshift', 'reverse'].includes(name);
+      this.#emit(changes ? 'write' : 'read', node, { place, method: name });
+    }
     switch (name) {
       case 'push':
         this.#checkLength(object.length + args.length, node);
@@ -1270,18 +1414,24 @@ class Interpreter {
     }
     const callSite = this.#callSite;
     this.#callSite ??= scope;
+    this.#emit('open', node, { name: operation.name });
     this.#bodies += 1;
+    let result: Value;
     try {
       const arrow = operation.operation.body;
-      if (arrow.body.type !== 'BlockStatement') return this.#expression(arrow.body, body);
-      this.#returned = undefined;
-      this.#block(arrow.body.body, body);
-      return this.#returned;
+      if (arrow.body.type !== 'BlockStatement') result = this.#expression(arrow.body, body);
+      else {
+        this.#returned = undefined;
+        this.#block(arrow.body.body, body);
+        result = this.#returned as Value;
+      }
     } finally {
       this.#returned = undefined;
       this.#bodies -= 1;
       this.#callSite = callSite;
     }
+    this.#emit('close', node, { name: operation.name, value: result });
+    return result;
   }
 
   /**
@@ -1332,13 +1482,24 @@ class Interpreter {
       return type;
     });
     if (!types) this.#parameterTypes.set(name, given);
+    this.#emit('call', node, { name });
+    declared.params.forEach((param, index) => {
+      const { value } = frame.bindings.get(parameters[index]) as Binding;
+      this.#placed(
+        value,
+        Array.isArray(value) ? this.#shown(parameters[index], frame) : parameters[index]
+      );
+      this.#access('write', param, parameters[index], value);
+    });
     const outer = this.#frame;
     const returned = this.#returned;
     this.#frame = frame;
     this.#depth += 1;
     this.#returned = undefined;
     try {
-      this.#block(declared.body.body, frame);
+      const completion = this.#block(declared.body.body, frame);
+      const end = declared.body.end;
+      if (completion !== 'return') this.#emit('return', { ...declared.body, start: end - 1, end });
       const result = this.#returned as Value;
       const back = new Map([...renamed].map(([argument, parameter]) => [parameter, argument]));
       return result instanceof Atom && result.collection && back.has(result.collection)

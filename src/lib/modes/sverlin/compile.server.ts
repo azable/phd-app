@@ -676,9 +676,9 @@ export async function bundlePresentation(
   return {
     javascript: output.text,
     labels: masterSteps.map((index) => `Step ${index + 1}`),
-    // Identities say how values move between steps, not what a step shows.
+    // What a step shows: not how values move between steps, nor the events that led to it.
     masterSignature: stepSignature(
-      master.map(({ identities: _identities, ...step }) => JSON.stringify(step))
+      master.map(({ state, types, targets }) => JSON.stringify({ state, types, targets }))
     ),
     masterSteps,
     variant: values,

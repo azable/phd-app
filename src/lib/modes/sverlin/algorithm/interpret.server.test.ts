@@ -17,7 +17,9 @@ const interpretInput = (body: string) => interpretTypedInput(body, atoms);
 const plain = <T extends { types: unknown }>(step: T) => ({
   ...step,
   types: undefined,
-  identities: undefined
+  identities: undefined,
+  events: undefined,
+  counts: undefined
 });
 
 describe('algorithm interpretation', () => {
