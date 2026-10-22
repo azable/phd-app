@@ -129,9 +129,12 @@ async function savedSources(): Promise<Record<string, string>> {
   }
 }
 
-/** The newest presentation built from a source, if any. */
+/**
+ * The first presentation built from a source, if any: an example's child builds from the example as
+ * it was first shown, so variants of one example do not carry each other's values.
+ */
 function presentationOf(document: ProjectDocument, source: string): string | undefined {
-  for (const event of document.events.toReversed())
+  for (const event of document.events)
     if (
       event.type === 'visualization.presented' &&
       event.payload.presentation.format === 'browser-bundle-v1' &&
