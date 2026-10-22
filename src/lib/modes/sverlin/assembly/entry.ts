@@ -89,6 +89,9 @@ function valueAt(state: Record<string, unknown>, path: string): unknown {
 const pastEnds = new Map<string, { before: number; after: number }>();
 const endsKey = (collection: string, path?: string) =>
   `${path === undefined ? '' : anyIndex(path)}>${collection}`;
+// The view keeps room at most this far past either end, as each place is an empty slot; a pointer
+// further out points nowhere, drawing nothing, as one outside its collection does.
+const maximumPastEnd = 4;
 for (const step of states as StepState[])
   for (const [path, target] of Object.entries(step.__targets ?? {})) {
     const standsIn = (at: string) => step.__absent?.includes(at.split(/[.[]/u)[0]) ?? false;
@@ -99,8 +102,8 @@ for (const step of states as StepState[])
     for (const key of [endsKey(target, path), endsKey(target)]) {
       const ends = pastEnds.get(key) ?? { before: 0, after: 0 };
       pastEnds.set(key, {
-        before: Math.max(ends.before, -position),
-        after: Math.max(ends.after, position - collection.length + 1)
+        before: Math.min(maximumPastEnd, Math.max(ends.before, -position)),
+        after: Math.min(maximumPastEnd, Math.max(ends.after, position - collection.length + 1))
       });
     }
   }

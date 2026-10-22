@@ -317,3 +317,67 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+const far = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+</script>
+<script lang="sverlin" input>
+  const values = Values([3, 8]);
+</script>
+<script lang="sverlin">
+  let i = Index(0);
+  yield;
+  i = 9;
+  yield;
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Here(at: Index)}<Pointed tags="current" />{/snippet}
+{@render Row(values)}
+{@render Here(i)}`;
+
+it.skipIf(!enabled)(
+  'keeps room at most 4 past an end, a pointer further out drawing nothing',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(far);
+    const { javascript } = await bundlePresentation(prepared, 1);
+    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    const step = (index: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelector('iframe')
+          ?.contentWindow?.postMessage({ type: 'sverlin:step', step: index }, '*');
+      }, index);
+    const drawn = () =>
+      frame.evaluate(() => {
+        const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)');
+        const items = layer?.querySelector('[data-sv-kind="Row"] > .items');
+        return {
+          slots: items?.children.length,
+          // The element the pointer is at is drawn in its kind.
+          pointers: [
+            ...(layer?.querySelectorAll<HTMLElement>('[data-sv-kind="Here[current]"]') ?? [])
+          ].filter((node) => getComputedStyle(node).visibility !== 'hidden').length
+        };
+      });
+    await step(0);
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    expect(await drawn()).toEqual({ slots: 6, pointers: 1 });
+    await step(1);
+    await page.waitForTimeout(800);
+    expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);

@@ -82,12 +82,6 @@ export type MasterStep = {
   identities?: StepIdentities;
 };
 
-/**
- * How far past an end a recorded position can be. The view keeps room for every place one reaches,
- * as an empty slot, so striding by a few needs only a few; further is no example to draw.
- */
-const maximumPastEnd = 4;
-
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
 export const algorithmLimits = {
   maximumSteps: 200,
@@ -281,14 +275,12 @@ class Interpreter {
     const types: TypeMap = {};
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
-    const positions: [string, number][] = [];
     const inScope = this.#inScope(scope);
     for (const [name, binding] of inScope) {
       state[name] = this.#snapshot(binding.value, node, name, {
         types,
         targets,
-        placed,
-        positions
+        placed
       });
       if (binding.target) targets[name] = binding.target;
       // A reference is no place of its own: it records which element of a collection of its
@@ -308,9 +300,6 @@ class Interpreter {
         placed.push([name, binding.value as object, 'ref', element]);
       }
     }
-    if (this.#kind === 'algorithm')
-      for (const [path, value] of positions)
-        if (targets[path]) this.#checkDrawable(path, value, targets[path], node, scope);
     return {
       state,
       types,
@@ -389,21 +378,6 @@ class Interpreter {
       names.length
         ? `${path} could point into ${names.join(' or ')}; say which, as in ${type.name}(${names[0]}, 0).`
         : `${path} is a ${type.name}, which points into a ${type.index}, and there is none yet; declare one first.`
-    );
-  }
-
-  /**
-   * A position a step records is drawn at its place, past an end too, where room is kept for it;
-   * one far past an end would keep that much empty room, so it is no example to draw.
-   */
-  #checkDrawable(path: string, value: number, target: string, node: AnyNode, scope: Scope): void {
-    const collection = scope.lookup(target)?.value;
-    const length = Array.isArray(collection) ? collection.length : 0;
-    const past = value < 0 ? -value : value - (length - 1);
-    if (past <= maximumPastEnd) return;
-    this.#fail(
-      node,
-      `${path} is ${value}, ${past} past the ${value < 0 ? 'start' : 'end'} of ${target}, too far to draw: a step can show a position at most ${maximumPastEnd} places past either end.`
     );
   }
 
@@ -803,10 +777,9 @@ class Interpreter {
       types: TypeMap;
       targets: Record<string, string>;
       placed: Placed[];
-      positions: [string, number][];
     }
   ): TraceValue {
-    const { types, targets, placed, positions } = into;
+    const { types, targets, placed } = into;
     this.#traceValues += 1;
     if (this.#traceValues > algorithmLimits.maximumTraceValues)
       this.#fail(node, 'The recorded steps are too large; use smaller state or fewer steps.');
@@ -819,7 +792,6 @@ class Interpreter {
         value.type.index && !value.collection ? this.#collectionsOf(value.type) : [];
       const collection = value.collection ?? (others.length ? undefined : only);
       if (collection) targets[path] = collection;
-      if (value.type.index) positions.push([path, value.value as number]);
       // A collection or record holds it, or a variable, after them (see identities.server.ts).
       placed.push([path, value, path.includes('[') || path.includes('.') ? 'held' : 'variable']);
       return value.value;

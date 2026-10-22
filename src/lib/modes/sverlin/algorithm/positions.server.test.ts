@@ -46,7 +46,7 @@ describe('positions', () => {
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
-  it('hold any whole number, and a step shows one at most 4 past an end', () => {
+  it('hold any whole number, however far past an end', () => {
     const trace = run(`
       const values = Values([3, 8, 5]);
       let i = Position(-2);
@@ -58,11 +58,8 @@ describe('positions', () => {
       yield;
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4, 0]);
-    expect(() =>
-      run('const values = Values([3, 8, 5]); let i = Position(0); i = 7; yield;')
-    ).toThrow(
-      'i is 7, 5 past the end of values, too far to draw: a step can show a position at most 4 places past either end.'
-    );
+    const [far] = run('const values = Values([3, 8, 5]); let i = Position(0); i = 7; yield;');
+    expect(far.state.i).toBe(7);
   });
 
   it('record the collection each one points into at every step', () => {
@@ -87,9 +84,7 @@ describe('positions', () => {
       domain
     );
     expect(interpretAlgorithm('yield;', input, domain)[0].targets).toEqual({ i: 'right' });
-    expect(() => interpretAlgorithm('i = 9; yield;', input, domain)).toThrow(
-      'past the end of right'
-    );
+    expect(interpretAlgorithm('i = 1; yield;', input, domain)[0].targets).toEqual({ i: 'right' });
   });
 
   describe('keep their collection wherever they are stored', () => {
@@ -187,11 +182,6 @@ describe('positions', () => {
       'naming something other than its collection',
       'const values = Values([1]); const n = Int(1); let i = Position(n, 0); yield;',
       'Position(…, …) names the Values it points into first, as in Position(values, 0).'
-    ],
-    [
-      'a record pointing too far past its collection',
-      'const vertices = Names(["A"]); const edges = Edges([{ from: 9, to: 0, weight: 1 }]); yield;',
-      'edges[0].from is 9, 9 past the end of vertices, too far to draw'
     ]
   ])('reject %s', (_name, body, message) => {
     expect(() => run(body)).toThrow(message);
