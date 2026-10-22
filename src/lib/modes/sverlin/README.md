@@ -23,7 +23,7 @@ A component describes its visualization in `<script lang="sverlin">` blocks, wri
 
 1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operations the algorithm calls (see Atomic types, Collections, records, and unions, and Operations).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
-3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, and marks steps with `yield`. It runs once.
+3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and marks steps with `yield`. It runs once.
 
 There is no design block: what presentations differ in is the design space (see Design).
 
@@ -115,6 +115,56 @@ Between steps, the key leaves the row for its box, the larger values slide right
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
 - Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable the view draws, as insertion sort's `key`, holds a value while no collection does, so the value moves into it and back; while a collection also holds it, the variable shows a copy. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
+
+## Loops and functions
+
+The algorithm's loops and branches are a fixed set that every programming language and pseudocode can write, so the algorithm reads the same in any of them:
+
+- a counted loop, `for (let i = Index(a); i < b; i++)`: one variable from a start to a bound, with `<` or `<=`, counting down with `i--` and `>` or `>=`, or by a constant step, as `i += 2`. Only the loop's header changes the variable, and the bound is fixed when the loop starts: write a loop whose bound changes, such as one over a growing queue, or one that changes its variable inside, as a `while` loop;
+- `for (const v of values)`, `while (condition)`, `if` and `else`, `break`, and `continue`. There is no `do ... while`.
+
+A function is declared at the top level of the algorithm block, as `function search(a, target) { ... }`, and sees only its parameters: give it the collections it works on, and it changes them in place. Each call gives its parameters values of the types the first call gave them. `return i;` gives a value back, and a position into a collection the call was given points into the caller's. A function may call itself. A `yield` inside a call records the call's variables, its parameters among them, and the top level's; the caller's are out of scope there, so with recursion a step shows the innermost call's `lo` and `hi`. A parameter hides a top-level variable of the same name. A position into a collection the call was given is drawn on that collection wherever the view draws it under its top-level name.
+
+Binary search, written recursively:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int);
+  const Index = index(Values);
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([2, 5, 8, 12, 16, 23, 38]);
+  const target = Int(23);
+</script>
+
+<script lang="sverlin">
+  function search(a, target, lo, hi) {
+    if (lo > hi) return Index(-1);
+    const mid = Index(Math.floor((lo + hi) / 2));
+    yield;
+    if (a[mid] === target) return mid;
+    if (a[mid] < target) return search(a, target, mid + 1, hi);
+    return search(a, target, lo, mid - 1);
+  }
+  const found = search(values, target, Index(0), Index(values.length - 1));
+  yield;
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Low(p: Index)}<Node layout="column"><Pointed tags="bound" /><Node tags="label">lo</Node></Node>{/snippet}
+{#snippet High(p: Index)}<Node layout="column"><Pointed tags="bound" /><Node tags="label">hi</Node></Node>{/snippet}
+{#snippet Middle(p: Index)}<Pointed tags="middle" />{/snippet}
+{#snippet Found(p: Index)}<Node layout="column"><Pointed tags="found" /><Node tags="label">found</Node></Node>{/snippet}
+
+<Node tags="title">Binary search for {@render Int(target)}</Node>
+<Node>{#each values as v}{@render Int(v)}{/each}</Node>
+{@render Low(lo)}
+{@render High(hi)}
+{@render Middle(mid)}
+{@render Found(found)}
+```
 
 ## Atomic types
 
@@ -302,8 +352,8 @@ Example, with domain, input, algorithm, and a script-free view:
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: `null` and `undefined`, functions other than an operation's body, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
+- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, counted `for` loops, `for (const x of array)`, `while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
+- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, except an operation's body, `do ... while`, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library

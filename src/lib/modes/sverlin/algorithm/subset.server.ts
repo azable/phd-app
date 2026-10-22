@@ -1,6 +1,6 @@
 /** Static subset check: everything outside this list is rejected before any statement of a block runs. */
 
-import type { AnyNode, BlockStatement } from 'acorn';
+import type { AnyNode, BlockStatement, ForStatement } from 'acorn';
 
 import {
   AlgorithmError,
@@ -18,14 +18,22 @@ const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
 /**
  * `constructors` names the types and operations the block may call; `operations` the operations
  * among them. An operation's body, in the domain block, is held to the algorithm's subset.
+ * `functions` holds where each function the parser read as a generator starts: one written with
+ * `*` is not among them.
  */
 export function checkSubset(
   root: BlockStatement,
   offset: (node: AnyNode) => Span,
   blockKind: BlockKind,
   constructors: ReadonlySet<string>,
-  operations: ReadonlySet<string> = new Set()
+  operations: ReadonlySet<string> = new Set(),
+  functions: ReadonlySet<number> = new Set()
 ): void {
+  const functionNames = new Set(
+    root.body.flatMap((statement) =>
+      statement.type === 'FunctionDeclaration' ? [statement.id.name] : []
+    )
+  );
   const reject = (node: AnyNode, message: string): never => {
     throw new AlgorithmError(message, offset(node));
   };
@@ -33,13 +41,12 @@ export function checkSubset(
     const parent = ancestors.at(-1);
     const inOperation = ancestors.some((ancestor) => ancestor.type === 'ArrowFunctionExpression');
     const kind: BlockKind = inOperation ? 'algorithm' : blockKind;
+    const inFunction = ancestors.some((ancestor) => ancestor.type === 'FunctionDeclaration');
     switch (node.type) {
       case 'BlockStatement':
       case 'ExpressionStatement':
       case 'IfStatement':
-      case 'ForStatement':
       case 'WhileStatement':
-      case 'DoWhileStatement':
       case 'EmptyStatement':
       case 'SpreadElement':
       case 'ConditionalExpression':
@@ -77,13 +84,42 @@ export function checkSubset(
             'Functions are not supported here; an operation, defined in the domain block, is the body of operation(...).'
           );
         break;
+      case 'FunctionDeclaration': {
+        const name = node.id?.name ?? '';
+        if (blockKind !== 'algorithm' || parent !== root)
+          reject(node, 'Functions are declared at the top level of the algorithm block.');
+        if (node.async || !functions.has(node.start))
+          reject(node, `Write function ${name}(...), without * or async: it may yield as it is.`);
+        if (constructors.has(name) || reservedNames.has(name) || name === 'Math')
+          reject(node, `"${name}" is taken; give the function another name.`);
+        for (const param of node.params)
+          if (param.type !== 'Identifier')
+            reject(param, `${name}'s parameters are plain names, given a value by each call.`);
+        break;
+      }
+      case 'ForStatement':
+        if (!counter(node))
+          reject(
+            node,
+            'A for loop counts one variable from a start to a bound: for (let i = Index(0); i < n; i++), down with i-- and > or >=, or by a constant step, as i += 2. Write any other loop as a while loop.'
+          );
+        break;
+      case 'DoWhileStatement':
+        reject(
+          node,
+          'do...while is not supported, as Python has no such loop: write while (true) { ... if (!condition) break; }, or the body once before a while loop.'
+        );
+        break;
       case 'ObjectPattern':
         if (parent?.type !== 'ArrowFunctionExpression')
           reject(node, 'Destructuring is not supported.');
         break;
       case 'ReturnStatement':
-        if (node.argument && !inOperation)
-          reject(node, 'return stops the algorithm and cannot return a value.');
+        if (node.argument && !inOperation && !inFunction)
+          reject(
+            node,
+            'return stops the algorithm and cannot return a value; a function can, as in return i;.'
+          );
         break;
       case 'BreakStatement':
       case 'ContinueStatement':
@@ -149,10 +185,12 @@ export function checkSubset(
           reject(node, `The ${node.operator} operator is not supported.`);
         if (node.left.type !== 'Identifier' && node.left.type !== 'MemberExpression')
           reject(node, 'Only variables, elements, and properties can be assigned.');
+        if (node.left.type === 'Identifier') checkCounter(node, node.left.name, ancestors);
         break;
       case 'UpdateExpression':
         if (node.argument.type !== 'Identifier' && node.argument.type !== 'MemberExpression')
           reject(node, 'Only variables, elements, and properties can be incremented.');
+        if (node.argument.type === 'Identifier') checkCounter(node, node.argument.name, ancestors);
         break;
       case 'YieldExpression':
         if (kind !== 'algorithm')
@@ -210,8 +248,25 @@ export function checkSubset(
     }
     return false;
   };
+  /**
+   * A counted loop's variable changes only in its header, as Python's range and pseudocode's
+   * "for i = 1 to n" have no other way to change it.
+   */
+  const checkCounter = (node: AnyNode, name: string, ancestors: readonly AnyNode[]): void => {
+    for (let index = ancestors.length - 1; index >= 0; index--) {
+      const ancestor = ancestors[index];
+      if (ancestor.type !== 'ForStatement' || counter(ancestor) !== name) continue;
+      if ((ancestors[index + 1] ?? node) !== ancestor.body) return;
+      reject(
+        node,
+        `${name} counts its loop, so only the loop's header changes it; write the loop as a while loop to change it here.`
+      );
+    }
+  };
   const checkBuiltin = (node: AnyNode, name: string, kind: BlockKind): void => {
-    if (domainFunctions.has(name)) {
+    if (functionNames.has(name)) {
+      if (kind !== 'algorithm') reject(node, `${name}(...) is a function of the algorithm block.`);
+    } else if (domainFunctions.has(name)) {
       if (kind !== 'domain')
         reject(node, `${name}() defines a type and belongs in the domain block.`);
     } else if (operations.has(name)) {
@@ -228,4 +283,41 @@ export function checkSubset(
     }
   };
   root.body.forEach((statement) => visit(statement, [root]));
+}
+
+/**
+ * A counted loop's variable, or none: for (let i = a; i < b; i++), with <=, counting down with --
+ * and > or >=, or by a positive whole number with += or -=.
+ */
+function counter(node: ForStatement): string | undefined {
+  const { init, test, update } = node;
+  if (init?.type !== 'VariableDeclaration' || init.kind !== 'let' || init.declarations.length !== 1)
+    return undefined;
+  const [{ id, init: start }] = init.declarations;
+  if (id.type !== 'Identifier' || !start) return undefined;
+  const name = id.name;
+  if (
+    test?.type !== 'BinaryExpression' ||
+    test.left.type !== 'Identifier' ||
+    test.left.name !== name ||
+    !['<', '<=', '>', '>='].includes(test.operator)
+  )
+    return undefined;
+  const up = test.operator === '<' || test.operator === '<=';
+  if (update?.type === 'UpdateExpression')
+    return update.argument.type === 'Identifier' &&
+      update.argument.name === name &&
+      update.operator === (up ? '++' : '--')
+      ? name
+      : undefined;
+  return update?.type === 'AssignmentExpression' &&
+    update.left.type === 'Identifier' &&
+    update.left.name === name &&
+    update.operator === (up ? '+=' : '-=') &&
+    update.right.type === 'Literal' &&
+    typeof update.right.value === 'number' &&
+    Number.isInteger(update.right.value) &&
+    update.right.value > 0
+    ? name
+    : undefined;
 }

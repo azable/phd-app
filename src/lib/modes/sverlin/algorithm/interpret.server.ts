@@ -2,9 +2,11 @@
 
 import type {
   AnyNode,
+  BinaryExpression,
   BlockStatement,
   CallExpression,
   Expression,
+  FunctionDeclaration,
   MemberExpression,
   Pattern,
   SpreadElement,
@@ -88,6 +90,7 @@ export type MasterStep = {
 export const algorithmLimits = {
   maximumSteps: 200,
   maximumOperations: 1_000_000,
+  maximumCallDepth: 100,
   maximumCollectionLength: 10_000,
   maximumStringLength: 10_000,
   maximumTraceValues: 200_000
@@ -101,7 +104,7 @@ export function interpretInput(body: string, domain: DomainRegistry = noDomain):
 
 /**
  * Names a block declares, read without running it: at its top level, and in the algorithm in any
- * block, as a step records every variable in scope.
+ * block and as a function's parameters, as a step records every variable in scope.
  */
 export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegistry): string[] {
   const { root } = parseBlock(body, kind, domain);
@@ -109,9 +112,15 @@ export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegi
   const visit = (node: unknown): void => {
     if (Array.isArray(node)) return node.forEach(visit);
     if (node === null || typeof node !== 'object') return;
-    const part = node as { type?: string; declarations?: { id: { name: string } }[] };
+    const part = node as {
+      type?: string;
+      declarations?: { id: { name: string } }[];
+      params?: { name: string }[];
+    };
     if (part.type === 'VariableDeclaration')
       for (const declarator of part.declarations ?? []) names.add(declarator.id.name);
+    if (part.type === 'FunctionDeclaration')
+      for (const param of part.params ?? []) names.add(param.name);
     if (kind === 'algorithm')
       for (const [key, child] of Object.entries(node)) if (key !== 'loc') visit(child);
   };
@@ -194,6 +203,12 @@ class Interpreter {
   #callSite: Scope | undefined;
   /** The value a running body's return statement gave. */
   #returned: Value;
+  /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
+  readonly #functions = new Map<string, FunctionDeclaration>();
+  readonly #parameterTypes = new Map<string, (string | undefined)[]>();
+  /** The scope of the running call's parameters, or the top level outside every call. */
+  #frame: Scope = this.#topLevel;
+  #depth = 0;
 
   constructor(
     root: BlockStatement,
@@ -228,6 +243,9 @@ class Interpreter {
         type: options.initial?.declared?.[name] ?? initialTypes[name],
         ...(initialTargets[name] ? { target: initialTargets[name] } : {})
       });
+    for (const statement of root.body)
+      if (statement.type === 'FunctionDeclaration')
+        this.#functions.set(statement.id.name, statement);
     this.#topLevelNames = [
       ...initial.map(([name]) => name),
       ...root.body.flatMap((statement) =>
@@ -271,20 +289,22 @@ class Interpreter {
 
   /**
    * The variables in scope, by name: the top level's in the order of their declarations, then each
-   * enclosing block's, outermost first. One not declared yet, or whose block has ended, is not.
+   * enclosing block's, outermost first, up to the running call's parameters, which hide top-level
+   * variables of the same name. One not declared yet, or whose block has ended, is not.
    */
   #inScope(scope: Scope): [string, Binding][] {
     const blocks: Scope[] = [];
     for (
       let block: Scope | undefined = scope;
-      block && block !== this.#topLevel;
+      block && block !== this.#topLevel && block !== this.#globals;
       block = block.parent
     )
       blocks.unshift(block);
+    const hidden = new Set(blocks.flatMap((block) => [...block.bindings.keys()]));
     return [
       ...this.#topLevelNames.flatMap((name): [string, Binding][] => {
         const binding = this.#topLevel.bindings.get(name);
-        return binding ? [[name, binding]] : [];
+        return binding && !hidden.has(name) ? [[name, binding]] : [];
       }),
       ...blocks.flatMap((block) => [...block.bindings])
     ];
@@ -324,12 +344,28 @@ class Interpreter {
         placed.push([name, binding.value as object, 'ref', element]);
       }
     }
+    if (this.#frame !== this.#topLevel)
+      for (const [path, name] of Object.entries(targets)) targets[path] = this.#shown(name, scope);
     return {
       state,
       types,
       ...(Object.keys(targets).length ? { targets } : {}),
       ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed) } : {})
     };
+  }
+
+  /**
+   * Inside a call, the name a step records a collection under: the top-level variable holding the
+   * same collection, as the view draws it, if any; otherwise the call's own name for it.
+   */
+  #shown(name: string, scope: Scope): string {
+    const collection = scope.lookup(name)?.value;
+    if (!Array.isArray(collection)) return name;
+    return (
+      this.#topLevelNames.find(
+        (topLevel) => this.#topLevel.bindings.get(topLevel)?.value === collection
+      ) ?? name
+    );
   }
 
   /** Conditions read an atom's underlying value, so Bool(false) is false. */
@@ -388,9 +424,14 @@ class Interpreter {
     return Array.isArray(value) && this.#shapes.get(value)?.name === type.index;
   }
 
-  /** The top-level variables holding a collection a position type points into. */
+  /**
+   * The variables holding a collection a position type points into: the top level's, or inside a
+   * call, its parameters and the variables at the top of its body.
+   */
   #collectionsOf(type: AtomType): string[] {
-    return [...this.#topLevel.bindings.keys()].filter((name) => this.#holdsCollection(name, type));
+    return [...this.#frame.bindings.keys()].filter((name) =>
+      this.#holdsCollection(name, type, this.#frame)
+    );
   }
 
   /** The one collection a position can point into, when it does not name one. */
@@ -591,6 +632,16 @@ class Interpreter {
   }
 
   #typed(value: Value, node: AnyNode, name: string): void {
+    if (
+      value === undefined &&
+      node.type === 'CallExpression' &&
+      node.callee.type === 'Identifier' &&
+      this.#functions.has(node.callee.name)
+    )
+      this.#fail(
+        node,
+        `${node.callee.name}(...) gave no value here: give it one with return, as in return i;.`
+      );
     if (value === null || value === undefined) this.#noValue(node, name);
     const plain = untypedPart(value, name, (object) => this.#shapes.has(object));
     if (!plain) return;
@@ -712,24 +763,30 @@ class Interpreter {
           if (completion === 'break') break;
         }
         return 'normal';
-      case 'DoWhileStatement':
-        do {
-          const completion = this.#statement(node.body, scope);
-          if (completion === 'return') return completion;
-          if (completion === 'break') break;
-        } while (this.#truthy(this.#expression(node.test, scope)));
+      case 'FunctionDeclaration':
         return 'normal';
       case 'ForStatement': {
+        // The subset allows only counted loops: let i = a; i < b (or <=, >, >=); i++ (or the like).
         const loopScope = new Scope(scope);
-        if (node.init) {
-          if (node.init.type === 'VariableDeclaration') this.#statement(node.init, loopScope);
-          else this.#expression(node.init, loopScope);
-        }
-        while (!node.test || this.#truthy(this.#expression(node.test, loopScope))) {
+        this.#statement(node.init as Statement, loopScope);
+        const test = node.test as BinaryExpression;
+        const counter = (test.left as { name: string }).name;
+        let bound: number | undefined;
+        for (;;) {
+          const limit = this.#expression(test.right, loopScope);
+          const value = this.#number(limit, test.right);
+          if (bound !== undefined && value !== bound)
+            this.#fail(
+              test.right,
+              `The bound of the ${counter} loop changed from ${bound} to ${value}, but a counted loop's bound is fixed when it starts; write the loop as a while loop.`
+            );
+          bound = value;
+          const counted = loopScope.lookup(counter)?.value as Value;
+          if (!this.#truthy(this.#binary(test.operator, counted, limit, test))) break;
           const completion = this.#statement(node.body, loopScope);
           if (completion === 'return') return completion;
           if (completion === 'break') break;
-          if (node.update) this.#expression(node.update, loopScope);
+          this.#expression(node.update as Expression, loopScope);
           this.#charge(node);
         }
         return 'normal';
@@ -1104,6 +1161,8 @@ class Interpreter {
       callee.type === 'Identifier' ? this.#domain.structures[callee.name] : undefined;
     if (operation?.kind === 'record' && operation.operation)
       return this.#operate(node, operation as OperationType, scope);
+    const declared = callee.type === 'Identifier' ? this.#functions.get(callee.name) : undefined;
+    if (declared) return this.#invoke(node, declared, scope);
     if (
       callee.type === 'Identifier' &&
       (Object.hasOwn(this.#atoms, callee.name) ||
@@ -1222,6 +1281,73 @@ class Interpreter {
       this.#returned = undefined;
       this.#bodies -= 1;
       this.#callSite = callSite;
+    }
+  }
+
+  /**
+   * A call of one of the algorithm's functions. Its body sees only its parameters, each declared
+   * from its argument as a variable is from its starting value, with the type the first call gave
+   * it. A position given with the collection it points into points into that parameter in the
+   * body, and one returned into a collection given points back into the caller's.
+   */
+  #invoke(node: CallExpression, declared: FunctionDeclaration, scope: Scope): Value {
+    const name = declared.id.name;
+    const parameters = declared.params.map((param) => (param as { name: string }).name);
+    if (node.arguments.length !== parameters.length)
+      this.#fail(
+        node,
+        `${name} takes ${parameters.length === 1 ? 'one argument' : `${parameters.length} arguments`}${parameters.length ? `: ${parameters.join(', ')}` : ''}.`
+      );
+    if (this.#depth >= algorithmLimits.maximumCallDepth)
+      this.#fail(node, `Calls nest more than ${algorithmLimits.maximumCallDepth} deep.`);
+    const types = this.#parameterTypes.get(name);
+    const frame = new Scope(this.#globals);
+    // A collection given by its variable's name, by the parameter that names it in the body.
+    const renamed = new Map<string, string>();
+    node.arguments.forEach((argument, index) => {
+      if (argument.type === 'Identifier' && Array.isArray(scope.lookup(argument.name)?.value))
+        renamed.set(argument.name, parameters[index]);
+    });
+    const given = node.arguments.map((argument, index) => {
+      if (argument.type === 'SpreadElement')
+        this.#fail(argument, 'Spread arguments are not supported.');
+      const parameter = parameters[index];
+      let value = this.#expression(argument, scope);
+      this.#typed(value, argument, parameter);
+      const type = this.#declaredType(argument, value);
+      if (types && types[index] !== type)
+        this.#fail(
+          argument,
+          `${name}'s ${parameter} is a ${types[index] ?? 'plain value'}, as its first call gave it, so it cannot be given a ${type ?? 'plain value'}.`
+        );
+      if (value instanceof Atom && value.collection && renamed.has(value.collection))
+        value = this.#pointingInto(value, renamed.get(value.collection) as string);
+      const target = value instanceof Atom && value.type.index ? value.collection : undefined;
+      frame.bindings.set(parameter, {
+        value,
+        constant: false,
+        ...(type ? { type } : {}),
+        ...(target ? { target } : {})
+      });
+      return type;
+    });
+    if (!types) this.#parameterTypes.set(name, given);
+    const outer = this.#frame;
+    const returned = this.#returned;
+    this.#frame = frame;
+    this.#depth += 1;
+    this.#returned = undefined;
+    try {
+      this.#block(declared.body.body, frame);
+      const result = this.#returned as Value;
+      const back = new Map([...renamed].map(([argument, parameter]) => [parameter, argument]));
+      return result instanceof Atom && result.collection && back.has(result.collection)
+        ? this.#pointingInto(result, back.get(result.collection) as string)
+        : result;
+    } finally {
+      this.#frame = outer;
+      this.#depth -= 1;
+      this.#returned = returned;
     }
   }
 

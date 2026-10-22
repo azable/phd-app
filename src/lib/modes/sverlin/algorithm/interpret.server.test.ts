@@ -27,13 +27,15 @@ describe('algorithm interpretation', () => {
       let i = Int(-1);
       let found = Flag(false);
       yield;
-      for (i = Int(0); i < values.length; i++) {
+      i = Int(0);
+      while (i < values.length) {
         yield;
         if (values[i] === 8) {
           found = Flag(true);
           yield;
           break;
         }
+        i++;
       }
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 1]);
@@ -87,7 +89,9 @@ describe('algorithm interpretation', () => {
   });
 
   it.each([
-    ['functions', 'function f() {} yield;', /Function Declaration is not supported/],
+    ['nested functions', 'if (true) { function f() {} } yield;', /at the top level/],
+    ['loops that do not count', 'for (let i = Int(0); i < 3; i = i * 2) yield;', /while loop/],
+    ['do...while', 'do { yield; } while (false);', /Python has no such loop/],
     ['arrow functions', 'const f = () => 1; yield;', /Functions are not supported here/],
     ['global access', 'const w = globalThis; yield;', /"globalThis" is not defined/],
     ['constructor escapes', 'const a = Ints([]); const c = a.constructor; yield;', /not allowed/],

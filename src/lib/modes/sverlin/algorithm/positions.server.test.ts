@@ -21,7 +21,8 @@ describe('positions', () => {
       const values = Values([3, 8, 5]);
       let i = Position(-1);
       yield;
-      for (i = Position(0); i < values.length; i++) yield;
+      i = Position(0);
+      while (i < values.length) { yield; i++; }
       yield;
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
@@ -51,7 +52,8 @@ describe('positions', () => {
       const values = Values([3, 8, 5]);
       let i = Position(-2);
       yield;
-      for (i = Position(0); i < values.length; i += 2) yield;
+      i = Position(0);
+      while (i < values.length) { yield; i += 2; }
       yield;
       i = 50;
       i = 0;
