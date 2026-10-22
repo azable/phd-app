@@ -381,3 +381,52 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+const cursors = taken.replace(
+  '{@render Taken(take.from)}',
+  `{#snippet ICursor(at: Index)}<Node layout="column"><Node tags="cursor">i</Node><Pointed tags="next" /></Node>{/snippet}
+{#snippet JCursor(at: Index)}<Node layout="column"><Node tags="cursor">j</Node><Pointed tags="next" /></Node>{/snippet}
+{@render ICursor(i)}
+{@render JCursor(j)}
+{@render Taken(take.from)}`
+);
+
+it.skipIf(!enabled)(
+  'leaves out a pointer whose view a variant hides, drawing the elements as without it',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(cursors);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: { 'ICursor.shown': false, 'JCursor.shown': false }
+    });
+    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    await page.evaluate(() =>
+      document
+        .querySelector('iframe')
+        ?.contentWindow?.postMessage({ type: 'sverlin:step', step: 0 }, '*')
+    );
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    // Every value is drawn, and right keeps no end slot for j, which is not drawn.
+    const rows = await frame.evaluate(() =>
+      [
+        ...document.querySelectorAll(
+          '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind="Row"] > .items'
+        )
+      ].map((items) => ({
+        slots: items.children.length,
+        values: (items as HTMLElement).innerText.match(/\d/gu)
+      }))
+    );
+    expect(rows).toEqual([
+      { slots: 3, values: ['1', '4', '6'] },
+      { slots: 3, values: ['2', '3', '5'] }
+    ]);
+    await page.close();
+  }
+);

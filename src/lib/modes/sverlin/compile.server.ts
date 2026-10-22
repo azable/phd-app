@@ -406,6 +406,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             : 'undefined';
       return `const __paint_${name} = (${parameter}: any) => ({ __kind: __sverlinKind(${JSON.stringify(name)}, __sverlinTags(${value}, 'pointed')) });`;
     });
+    // The base kinds of the nodes around a pointer view's <Pointed>: one a variant leaves out
+    // would take the element drawn inside it along, so the pointer is then not drawn at all.
+    const enclosing = (view: string): string[] => {
+      const pointed = found.pointed.get(view)?.tag;
+      const root = found.components.find((component) => component.name === view)?.node;
+      return nodesAround(root, pointed).flatMap((node) => {
+        const read = tagSets(
+          node.attributes?.find((attribute) => attribute.name === 'tags'),
+          svelteSource
+        );
+        return 'problem' in read ? [] : [kindKey(view, read.fixed)];
+      });
+    };
     const pointers = pointerCalls(
       ast.html,
       svelteSource,
@@ -432,6 +445,9 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
                   }
                 : { into: domain.atoms[type]?.index ?? '' }),
               paint,
+              hides: found.pointers.has(name)
+                ? `() => ${JSON.stringify(enclosing(name))}`
+                : `() => (${JSON.stringify(Object.fromEntries(chosen[name].map((option) => [option, enclosing(option)])))} as Record<string, string[]>)[__choice_${name}] ?? []`,
               ...(reads.length ? { reads: [...new Set(reads)] } : {})
             }
           ];
@@ -905,6 +921,24 @@ function possibleValues(expression: Expression | undefined): (string | number)[]
 
 /** The most kinds one tag may make, as each tag that depends on the state doubles them. */
 const maximumKindsPerTag = 16;
+
+/** The <Node> tags enclosing a tag in some markup, outermost first. */
+function nodesAround(markup: unknown, target: unknown): { attributes?: Attribute[] }[] {
+  const around: { attributes?: Attribute[] }[] = [];
+  const walk = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    if (node === target) return true;
+    if (Array.isArray(node)) return node.some(walk);
+    const part = node as { type?: string; name?: string; attributes?: Attribute[] };
+    const isNode = part.type === 'InlineComponent' && part.name === 'Node';
+    if (isNode) around.push(part);
+    if (Object.values(part).some(walk)) return true;
+    if (isNode) around.pop();
+    return false;
+  };
+  walk(markup);
+  return around;
+}
 
 /**
  * The sets of tags a tags prop can give, in order: a name, names separated by spaces, or a list

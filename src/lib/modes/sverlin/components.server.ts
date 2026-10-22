@@ -390,12 +390,12 @@ export function pointerCalls(
   stateNames: ReadonlySet<string>,
   /**
    * Each pointer view, with the collection type its index type points into, the code of a
-   * function giving its <Pointed>'s props for a position, which links it points at take, and the
-   * scoped variables its view reads.
+   * function giving its <Pointed>'s props for a position, which links it points at take, the code of
+   * a function giving the kinds around its <Pointed>, and the scoped variables its view reads.
    */
   pointers: ReadonlyMap<
     string,
-    { into: string; ref?: boolean; paint: string; reads?: readonly string[] }
+    { into: string; ref?: boolean; paint: string; hides?: string; reads?: readonly string[] }
   >,
   /** The state variables out of scope at some step, which a pointer reading one names. */
   scoped: ReadonlySet<string> = new Set()
@@ -451,7 +451,7 @@ export function pointerCalls(
         const pointer = pointers.get(name);
         const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint} }`
+          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.hides ? `, hides: ${pointer.hides}` : ''} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }

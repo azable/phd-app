@@ -200,6 +200,11 @@ export type PointerCall = {
   shown?: () => boolean;
   /** A reference's pointer: it points at the element the reference refers to, wherever it is. */
   ref?: boolean;
+  /**
+   * The base kinds of the nodes around its <Pointed>: where the variant leaves one out, the pointer
+   * is not drawn, as the element drawn inside it would go too.
+   */
+  hides?: () => readonly string[];
 };
 
 /** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
@@ -218,7 +223,9 @@ export type Pointer = {
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
 export function providePointers(calls: readonly PointerCall[]): void {
   const types = typeContext();
+  const design = designContext();
   const pointers = calls.flatMap((call, order): Pointer[] => {
+    if (call.hides?.().some((kind) => design[`${kind}.shown`] === false)) return [];
     // A position read through one that points nowhere, as edges[e].to with e at -1, points at
     // nothing this step, but keeps its room in the only collection of its type; so does one read
     // from a variable out of scope, which stands in with another step's value.
