@@ -490,6 +490,8 @@ export function updateProjectArtifact(
     summary?: string;
     /** Starts a new tree, as a version written from scratch. */
     root?: boolean;
+    /** Values to build the presentations with, each an option of its variable. */
+    variant?: DesignValues;
   },
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
@@ -526,7 +528,9 @@ export function updateProjectArtifact(
       'manual-edit',
       options.operationId,
       dependencies,
-      options.from ? presentedValues(before, options.from) : undefined
+      options.from ? presentedValues(before, options.from) : undefined,
+      false,
+      options.variant
     );
     return commandResult(before, document);
   });
@@ -628,7 +632,8 @@ async function buildDocument(
   operationId: string,
   dependencies: ProjectServiceDependencies,
   base?: DesignValues,
-  randomiseAll = false
+  randomiseAll = false,
+  chosen?: DesignValues
 ) {
   const snapshot = projectSnapshotAt(document);
   const artifact = snapshot.artifacts[snapshot.entryArtifactId];
@@ -659,7 +664,7 @@ async function buildDocument(
       sourceContent: artifact.content.text,
       source: artifact.content,
       sourceLabel: artifact.path,
-      requests: basedRequests(seeds, base, undefined, randomiseAll),
+      requests: basedRequests(seeds, base, chosen, randomiseAll),
       purpose,
       input: 'committed-artifact',
       operationId

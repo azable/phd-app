@@ -2,8 +2,9 @@
  * The development demo project shown at /dev/demo: one project whose chat collects the examples an
  * agent drops into .demo/inbox, each saved as a version of its own, until a .demo/flush marker
  * replaces it with a fresh project. An example may begin with `<!-- summary: … -->`, saying what it
- * shows or changes, and `<!-- parent: name -->`, naming the earlier example it changes; without a
- * parent it starts a tree of its own. Only the dev server serves it.
+ * shows or changes, `<!-- parent: name -->`, naming the earlier example it changes (without a
+ * parent it starts a tree of its own), and `<!-- variant: {"Here.shown": false} -->`, values to build
+ * it with. Only the dev server serves it.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -17,6 +18,7 @@ import * as schema from '$lib/server/db/schema';
 import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { projectRepository } from '$lib/server/projects/repository';
 import { createProjectSkeleton } from '$lib/server/projects/service';
+import type { DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 const folder = path.resolve('.demo');
@@ -68,7 +70,7 @@ async function saveWaiting(projectId: string): Promise<void> {
   const examples = (await readdir(inbox)).filter((name) => name.endsWith('.svelte')).sort();
   for (const name of examples) {
     const file = path.join(inbox, name);
-    const { source, summary, parent } = withoutHeader(await readFile(file, 'utf8'));
+    const { source, summary, parent, variant } = withoutHeader(await readFile(file, 'utf8'));
     await rm(file);
     const document = await projectRepository.load(projectId);
     const operationId = randomUUID();
@@ -90,6 +92,7 @@ async function saveWaiting(projectId: string): Promise<void> {
         source,
         presentationCount: 1,
         ...(summary ? { summary } : {}),
+        ...(variant ? { variant: JSON.parse(variant) as DesignValues } : {}),
         ...(from ? { from } : { root: true })
       }
     });
@@ -98,13 +101,23 @@ async function saveWaiting(projectId: string): Promise<void> {
 }
 
 /** An example's source without its header lines, and what they say. */
-function withoutHeader(text: string): { source: string; summary?: string; parent?: string } {
+function withoutHeader(text: string): {
+  source: string;
+  summary?: string;
+  parent?: string;
+  variant?: string;
+} {
   const header: Record<string, string> = {};
-  const source = text.replace(/^(?:\s*<!--\s*(summary|parent):\s*(.*?)\s*-->\s*\n)+/u, (lines) => {
-    for (const [, key, value] of lines.matchAll(/<!--\s*(summary|parent):\s*(.*?)\s*-->/gu))
-      header[key] = value;
-    return '';
-  });
+  const source = text.replace(
+    /^(?:\s*<!--\s*(summary|parent|variant):\s*(.*?)\s*-->\s*\n)+/u,
+    (lines) => {
+      for (const [, key, value] of lines.matchAll(
+        /<!--\s*(summary|parent|variant):\s*(.*?)\s*-->/gu
+      ))
+        header[key] = value;
+      return '';
+    }
+  );
   return { source, ...header };
 }
 

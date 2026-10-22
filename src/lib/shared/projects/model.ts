@@ -11,6 +11,7 @@ import * as v from 'valibot';
 
 import type { AssistantId } from '$lib/shared/assistants';
 import {
+  designValuesSchema,
   presentationLayoutSchema,
   presentationIdSchema,
   visualizationModeSchema,
@@ -113,7 +114,9 @@ export const projectCommandSchema = v.variant('type', [
     /** What the edit changes. */
     summary: v.optional(versionSummarySchema),
     /** Starts a new tree: the version, written from scratch, has no parent. */
-    root: v.optional(v.literal(true))
+    root: v.optional(v.literal(true)),
+    /** Values to build the presentations with, each an option of its variable, as a tool sets them. */
+    variant: v.optional(designValuesSchema)
   }),
   v.strictObject({
     ...commandBase,
