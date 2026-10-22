@@ -88,7 +88,7 @@ describe('algorithm interpretation', () => {
 
   it.each([
     ['functions', 'function f() {} yield;', /Function Declaration is not supported/],
-    ['arrow functions', 'const f = () => 1; yield;', /Arrow Function Expression/],
+    ['arrow functions', 'const f = () => 1; yield;', /Functions are not supported here/],
     ['global access', 'const w = globalThis; yield;', /"globalThis" is not defined/],
     ['constructor escapes', 'const a = Ints([]); const c = a.constructor; yield;', /not allowed/],
     [

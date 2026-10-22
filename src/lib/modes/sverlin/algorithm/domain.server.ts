@@ -1,14 +1,14 @@
 /**
- * The domain block: atomic types built from primitive kinds, refinements, and enumerations, and the
- * unions, records, and collections built from them.
+ * The domain block: atomic types built from primitive kinds, refinements, and enumerations, the
+ * unions, records, and collections built from them, and the operations an algorithm does on them.
  */
 
-import type { AnyNode, CallExpression, Expression, Pattern } from 'acorn';
+import type { AnyNode, ArrowFunctionExpression, CallExpression, Expression, Pattern } from 'acorn';
 
 import { atomBases, type AtomBase, type AtomType } from './atoms.server';
 import { AlgorithmError, domainFunctions } from './block.server';
 import { parseBlock } from './parse.server';
-import type { DomainRegistry, StructureType } from './structures.server';
+import type { DomainRegistry, RecordType, StructureType } from './structures.server';
 
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
@@ -30,6 +30,8 @@ export function interpretDomain(body: string): DomainRegistry {
       return fail(node ?? root, `${role} must name a type defined earlier in the domain block.`);
     if (!Object.hasOwn(atoms, node.name) && !Object.hasOwn(structures, node.name))
       fail(node, `Unknown type ${node.name}; define it earlier in the domain block.`);
+    if ((structures[node.name] as RecordType | undefined)?.operation)
+      fail(node, `${node.name} is an operation, which is called, not a type values have.`);
     return node.name;
   };
   for (const statement of root.body) {
@@ -48,7 +50,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), ref(...), or operation(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
         );
       const call = init as CallExpression;
       if (name in atoms || name in structures)
@@ -59,6 +61,10 @@ export function interpretDomain(body: string): DomainRegistry {
       }
       if (kind === 'ref') {
         structures[name] = defineRef(name, call);
+        continue;
+      }
+      if (kind === 'operation') {
+        structures[name] = defineOperation(name, call);
         continue;
       }
       if (kind !== 'type') {
@@ -154,6 +160,49 @@ export function interpretDomain(body: string): DomainRegistry {
         `ref() refers to elements that are single values, and ${collection} holds ${element}s; refer to one of its fields' collections, or use an index(${collection}).`
       );
     return { kind: 'ref', name, collection, element };
+  }
+
+  /**
+   * An operation, as in operation({ at: Index, target: Int }, ({ at, target }) => at.value === target):
+   * its operands and their types, as a record's fields, and a body that sees only its operands.
+   */
+  function defineOperation(name: string, call: CallExpression): RecordType {
+    const example = `operation({ at: Index, target: Int }, ({ at, target }) => at.value === target)`;
+    const [operands, body, extra] = call.arguments as Expression[];
+    if (operands?.type !== 'ObjectExpression' || body?.type !== 'ArrowFunctionExpression' || extra)
+      fail(
+        call,
+        `operation() takes its operands and their types, then a function of them, as in ${example}.`
+      );
+    const { fields } = defineStructure(name, 'record', {
+      ...call,
+      arguments: [operands]
+    }) as RecordType;
+    const arrow = body as ArrowFunctionExpression;
+    const [parameter, ...others] = arrow.params;
+    const named =
+      parameter?.type === 'ObjectPattern'
+        ? parameter.properties.map((property) =>
+            property.type === 'Property' &&
+            property.key.type === 'Identifier' &&
+            property.value.type === 'Identifier' &&
+            property.key.name === property.value.name
+              ? property.key.name
+              : undefined
+          )
+        : [];
+    const operandNames = Object.keys(fields);
+    if (
+      arrow.async ||
+      others.length ||
+      named.length !== operandNames.length ||
+      !operandNames.every((operand) => named.includes(operand))
+    )
+      fail(
+        parameter ?? arrow,
+        `The body of ${name} takes its operands by name, as ({ ${operandNames.join(', ')} }) => ….`
+      );
+    return { kind: 'record', name, fields, operation: { body: arrow } };
   }
 
   function defineStructure(

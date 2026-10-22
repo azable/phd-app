@@ -6,17 +6,21 @@
  */
 export type BlockKind = 'domain' | 'input' | 'algorithm';
 
-/** Names the view receives from the application rather than from a block. */
-export const reservedNames: ReadonlySet<string> = new Set(['step', 'seed']);
+/**
+ * Names the view receives from the application rather than from a block, and those each step
+ * records for operations: the calls since the last step, and every call so far by operation.
+ */
+export const reservedNames: ReadonlySet<string> = new Set(['step', 'seed', 'event', 'history']);
 
-/** The domain block's functions, each defining one type. */
+/** The domain block's functions, each defining one type or operation. */
 export const domainFunctions: ReadonlySet<string> = new Set([
   'type',
   'union',
   'record',
   'collection',
   'index',
-  'ref'
+  'ref',
+  'operation'
 ]);
 
 /** Property names no block may read, write, or declare. */
@@ -36,10 +40,13 @@ export type Span = { start: number; end: number };
 export class AlgorithmError extends Error {
   readonly offset?: number;
   readonly end?: number;
+  /** The block the problem is in, when not the one being run, as an operation's body is. */
+  readonly block?: BlockKind;
 
-  constructor(message: string, at?: number | Span) {
+  constructor(message: string, at?: number | Span, block?: BlockKind) {
     super(message);
     this.name = 'AlgorithmError';
+    if (block) this.block = block;
     if (typeof at === 'number') this.offset = at;
     else if (at) {
       this.offset = at.start;

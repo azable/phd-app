@@ -2,7 +2,7 @@
 
 import { parse, type AnyNode, type BlockStatement, type FunctionDeclaration } from 'acorn';
 
-import { typeNames, type DomainRegistry } from './structures.server';
+import { operationNames, typeNames, type DomainRegistry } from './structures.server';
 import { AlgorithmError, type BlockKind, type Span } from './block.server';
 import { checkSubset } from './subset.server';
 
@@ -11,7 +11,8 @@ const wrapperPrefix = "function* algorithm() {'use strict';";
 
 /**
  * Parse a block's body and check its subset. Offsets are relative to the body; the domain
- * names the type constructors the block may call.
+ * names the type constructors and operations the block may call, and in the domain block itself,
+ * where operations' bodies call them, its own declarations do.
  */
 export function parseBlock(
   body: string,
@@ -36,6 +37,32 @@ export function parseBlock(
     start: node.start - wrapperPrefix.length,
     end: node.end - wrapperPrefix.length
   });
-  checkSubset(root, offset, kind, new Set(domain ? typeNames(domain) : []));
+  const declared = kind === 'domain' ? ownDeclarations(root) : undefined;
+  checkSubset(
+    root,
+    offset,
+    kind,
+    new Set(declared?.names ?? (domain ? typeNames(domain) : [])),
+    new Set(declared?.operations ?? (domain ? operationNames(domain) : []))
+  );
   return { root, offset };
+}
+
+/** The names the domain block declares, and those of them it declares as operations. */
+function ownDeclarations(root: BlockStatement): { names: string[]; operations: string[] } {
+  const names: string[] = [];
+  const operations: string[] = [];
+  for (const statement of root.body)
+    if (statement.type === 'VariableDeclaration')
+      for (const { id, init } of statement.declarations) {
+        if (id.type !== 'Identifier') continue;
+        names.push(id.name);
+        if (
+          init?.type === 'CallExpression' &&
+          init.callee.type === 'Identifier' &&
+          init.callee.name === 'operation'
+        )
+          operations.push(id.name);
+      }
+  return { names, operations };
 }

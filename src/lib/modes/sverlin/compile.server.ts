@@ -21,6 +21,7 @@ import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
   noDomain,
+  operationNames,
   typeNames,
   type DomainRegistry
 } from './algorithm/structures.server';
@@ -216,8 +217,11 @@ export function recordedTrace(source: string): MasterStep[] {
   const input = blocks.input
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
-  return interpretBlock(source, blocks.algorithm, (body) =>
-    interpretAlgorithm(body, input, domain)
+  return interpretBlock(
+    source,
+    blocks.algorithm,
+    (body) => interpretAlgorithm(body, input, domain),
+    blocks
   );
 }
 
@@ -312,8 +316,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // Names are checked before any block runs, so a clash is reported before what it causes.
     const declared = (block: Block | undefined, kind: 'input' | 'algorithm') =>
       block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
+    // With operations, every step also records their calls (see interpretAlgorithm).
     const stateNames = [
-      ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
+      ...new Set([
+        ...declared(blocks.input, 'input'),
+        ...declared(blocks.algorithm, 'algorithm'),
+        ...(operationNames(domain).length ? ['event', 'history'] : [])
+      ])
     ];
     const typeName = stateNames.find((name) => definesType(domain, name));
     if (typeName)
@@ -378,8 +387,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
-    const master = interpretBlock(source, blocks.algorithm, (body) =>
-      interpretAlgorithm(body, input, domain)
+    const master = interpretBlock(
+      source,
+      blocks.algorithm,
+      (body) => interpretAlgorithm(body, input, domain),
+      blocks
     );
     // Variables out of scope at some step: what the view draws from one is hidden there.
     const scoped = new Set(
@@ -708,14 +720,23 @@ function extractBlocks(source: string): {
   return { svelteSource, blocks };
 }
 
-/** Interpret one block, reporting failures at their position in the authored source. */
-function interpretBlock<T>(source: string, block: Block, run: (body: string) => T): T {
+/**
+ * Interpret one block, reporting failures at their position in the authored source: in the block
+ * run, or in another of `blocks` a failure names, as an operation's body is in the domain block.
+ */
+function interpretBlock<T>(
+  source: string,
+  block: Block,
+  run: (body: string) => T,
+  blocks: Partial<Record<string, Block>> = {}
+): T {
   try {
     return run(block.body);
   } catch (cause) {
     if (!(cause instanceof AlgorithmError)) throw cause;
+    const where = (cause.block && blocks[cause.block]) || block;
     const at = (offset: number | undefined) =>
-      offset === undefined ? undefined : sourcePosition(source, block.offset + offset);
+      offset === undefined ? undefined : sourcePosition(source, where.offset + offset);
     throw new InvalidSvelteSourceError(cause.message, {
       code: 'algorithm_error',
       start: at(cause.offset),

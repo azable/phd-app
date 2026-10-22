@@ -21,7 +21,7 @@ they show the algorithm.
 
 A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required, even for a single step (`yield;`); the domain and input blocks are optional.
 
-1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
+1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operations the algorithm calls (see Atomic types, Collections, records, and unions, and Operations).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, and marks steps with `yield`. It runs once.
 
@@ -29,7 +29,7 @@ There is no design block: what presentations differ in is the design space (see 
 
 ## View
 
-The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope; never write `import`, and never declare names `Node`, `Link`, or `Pointed`.
+The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope, as are `event` and `history` when the domain declares operations (see Operations); never write `import`, and never declare names `Node`, `Link`, or `Pointed`.
 
 Draw every value of a domain type through a view of its type, as `{@render Int(target)}` (see Views of types), and every position through a pointer (see Pointers); the markup around them arranges, labels, and explains. For a value used more than once or too long to read inline, use `{@const name = expression}` as the first child of the nearest component or block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`.
 
@@ -164,6 +164,55 @@ if (
 
 The view receives plain arrays and objects, drawn by the views of their types: a record's view draws its fields through theirs (see Views of types).
 
+## Operations
+
+An operation names a step of the algorithm worth showing, such as a comparison or a swap, so the view can draw each time it happens. Define it in the domain block with its operands and their types, then its body, a function that takes the operands by name:
+
+```js
+const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
+const Swap = operation({ a: Index, b: Index }, ({ a, b }) => {
+  const moved = a.value;
+  a.value = b.value;
+  b.value = moved;
+});
+```
+
+A position's `.value` is the element it points at, read or written, in an operation's body and in the algorithm alike. A body follows the algorithm's subset, sees only its operands, may call other operations, and gives back a value with `return` (or, written without braces, its expression); it cannot `yield`. The algorithm calls an operation with its operands as one object, as `Matches({ at: i, target })`; the operands take their types as a record's fields do, and a position keeps its collection. An operation is not a type of values: it cannot be a field's or element's type, and the input block cannot call it.
+
+When the domain declares operations, every step also records the calls, by operation, each with its operands: `event`, the calls since the step before, as `event.Matches`, and `history`, every call so far, as `history.Matches`. The view draws a call through a view of its operation, which reads its operands as a record's fields, and a pointer can take a call's position, as `{@render Here(event.Matches[0].at)}`; at a step with no such call it points nowhere. Linear search, showing what each step asks:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Found = type('boolean');
+  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([3, 8, 5, 2, 7]);
+  const target = Int(2);
+</script>
+
+<script lang="sverlin">
+  for (let i = Index(0); i < values.length; i++) {
+    const found = Found(Matches({ at: i, target }));
+    yield;
+    if (found) break;
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Asked(m: Matches)}<Node layout="row"><Node tags="label">is it</Node>{@render Int(m.target)}</Node>{/snippet}
+{#snippet Here(p: Index)}<Pointed tags="current" />{/snippet}
+
+<Node tags="title">Linear search</Node>
+<Node>{#each values as v}{@render Int(v)}{/each}</Node>
+{#each event.Matches as m}{@render Matches(m)}{/each}
+{@render Here(event.Matches[0].at)}
+```
+
 ## Design
 
 The design space is every variable of a component's look, found in its markup:
@@ -254,7 +303,7 @@ Example, with domain, input, algorithm, and a script-free view:
 ## The subset
 
 - Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do`, `break`, `continue`; arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: `null` and `undefined`, functions of any kind, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
+- Not allowed: `null` and `undefined`, functions other than an operation's body, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field. Write helper logic inline.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library

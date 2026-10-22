@@ -32,8 +32,10 @@ import { Identities, type Placed, type StepIdentities } from './identities.serve
 import { parseBlock } from './parse.server';
 import {
   noDomain,
+  operationNames,
   type CollectionType,
   type DomainRegistry,
+  type Operation,
   type RecordType,
   type RefType,
   type UnionType
@@ -117,7 +119,11 @@ export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegi
   return [...names];
 }
 
-/** Interpret the algorithm from the input state; the variables in scope are recorded at each yield. */
+/**
+ * Interpret the algorithm from the input state; the variables in scope are recorded at each yield,
+ * and where the domain declares operations, by operation, the calls since the last yield (event)
+ * and every call so far (history).
+ */
 export function interpretAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
@@ -139,6 +145,7 @@ type Value = undefined | null | boolean | number | string | Atom | Value[] | Obj
  */
 type Binding = { value: Value; constant: boolean; type?: string; target?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
+type OperationType = RecordType & { operation: Operation };
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
   abs: Math.abs,
@@ -179,6 +186,14 @@ class Interpreter {
   readonly #identities = new Identities();
   #operations = 0;
   #traceValues = 0;
+  /** By operation, the calls since the last yield and every call so far, each a record of its operands. */
+  #event = Object.create(null) as Record<string, ObjectValue[]>;
+  readonly #history = Object.create(null) as Record<string, ObjectValue[]>;
+  /** How many operations' bodies are running, and the algorithm's scope at the outermost call. */
+  #bodies = 0;
+  #callSite: Scope | undefined;
+  /** The value a running body's return statement gave. */
+  #returned: Value;
 
   constructor(
     root: BlockStatement,
@@ -194,6 +209,11 @@ class Interpreter {
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
+    if (this.#kind === 'algorithm')
+      for (const name of operationNames(this.#domain)) {
+        this.#event[name] = [];
+        this.#history[name] = [];
+      }
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
     this.#globals.bindings.set('NaN', { value: NaN, constant: true });
@@ -270,13 +290,17 @@ class Interpreter {
     ];
   }
 
-  #state(node: AnyNode, scope: Scope = this.#topLevel): TypedState {
+  #state(
+    node: AnyNode,
+    scope: Scope = this.#topLevel,
+    recorded: [string, Binding][] = []
+  ): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
     const inScope = this.#inScope(scope);
-    for (const [name, binding] of inScope) {
+    for (const [name, binding] of [...inScope, ...recorded]) {
       state[name] = this.#snapshot(binding.value, node, name, {
         types,
         targets,
@@ -612,7 +636,7 @@ class Interpreter {
   }
 
   #fail(node: AnyNode, message: string): never {
-    throw new AlgorithmError(message, this.#offset(node));
+    throw new AlgorithmError(message, this.#offset(node), this.#bodies ? 'domain' : undefined);
   }
 
   #charge(node: AnyNode, amount = 1): void {
@@ -732,6 +756,7 @@ class Interpreter {
         return 'normal';
       }
       case 'ReturnStatement':
+        if (node.argument) this.#returned = this.#expression(node.argument, scope);
         return 'return';
       case 'BreakStatement':
         return 'break';
@@ -761,7 +786,14 @@ class Interpreter {
   #yield(node: AnyNode, scope: Scope): void {
     if (this.#trace.length >= algorithmLimits.maximumSteps)
       this.#fail(node, `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`);
-    this.#trace.push(this.#state(node, scope));
+    const recorded: [string, Binding][] = Object.keys(this.#history).length
+      ? [
+          ['event', { value: this.#event, constant: true }],
+          ['history', { value: this.#history, constant: true }]
+        ]
+      : [];
+    this.#trace.push(this.#state(node, scope, recorded));
+    for (const name of Object.keys(this.#event)) this.#event[name] = [];
   }
 
   /**
@@ -962,8 +994,10 @@ class Interpreter {
       };
     }
     if (target.type !== 'MemberExpression') this.#fail(target, 'Invalid assignment target.');
-    const object = this.#expression(target.object as Expression, scope);
-    const key = this.#key(target, scope);
+    let object = this.#expression(target.object as Expression, scope);
+    let key = this.#key(target, scope);
+    if (object instanceof Atom && object.type.index && key === 'value')
+      [object, key] = this.#pointedAt(object, target, scope);
     const slot =
       object !== null && typeof object === 'object' && !(object instanceof Atom)
         ? this.#slotType(object, key as string | number, target)
@@ -1007,6 +1041,20 @@ class Interpreter {
     };
   }
 
+  /**
+   * The collection a position points into and its index there, for its value: in an operation's
+   * body, the collection in scope where the algorithm called it.
+   */
+  #pointedAt(position: Atom, node: MemberExpression, scope: Scope): [Value[], number] {
+    const name =
+      position.collection ??
+      this.#onlyCollection(position.type, node, targetName(node.object as Expression));
+    const collection = (this.#callSite ?? scope).lookup(name)?.value;
+    if (!Array.isArray(collection))
+      this.#fail(node, `${targetName(node)} reads ${name}, which is out of scope here.`);
+    return [collection, position.value as number];
+  }
+
   #key(node: MemberExpression, scope: Scope): Value {
     if (!node.computed) return (node.property as { name: string }).name;
     const key = unwrap(this.#expression(node.property as Expression, scope));
@@ -1016,9 +1064,12 @@ class Interpreter {
   }
 
   #read(target: Value, node: MemberExpression, scope: Scope): Value {
-    const key = this.#key(node, scope);
-    // Typed text reads like text; other atoms have no properties.
-    const object = target instanceof Atom && target.type.base === 'text' ? target.value : target;
+    let key = this.#key(node, scope);
+    // Typed text reads like text; other atoms have no properties, but a position's value is the
+    // element it points at.
+    let object = target instanceof Atom && target.type.base === 'text' ? target.value : target;
+    if (object instanceof Atom && object.type.index && key === 'value')
+      [object, key] = this.#pointedAt(object, node, scope);
     if (object instanceof Atom)
       this.#fail(node, `A ${object.type.name} value has no "${String(key)}".`);
     if (object === mathMarker) {
@@ -1049,6 +1100,10 @@ class Interpreter {
 
   #call(node: CallExpression, scope: Scope): Value {
     const callee = node.callee;
+    const operation =
+      callee.type === 'Identifier' ? this.#domain.structures[callee.name] : undefined;
+    if (operation?.kind === 'record' && operation.operation)
+      return this.#operate(node, operation as OperationType, scope);
     if (
       callee.type === 'Identifier' &&
       (Object.hasOwn(this.#atoms, callee.name) ||
@@ -1117,6 +1172,56 @@ class Interpreter {
       }
       default:
         return this.#fail(callee, `Array method .${name}() is not available.`);
+    }
+  }
+
+  /**
+   * Call an operation: the one object it is given becomes a record of its operands, all its body
+   * sees, recorded for the step's event and the operation's history before the body runs; its
+   * value is the body's.
+   */
+  #operate(node: CallExpression, operation: OperationType, scope: Scope): Value {
+    const [argument, ...others] = node.arguments;
+    const given =
+      argument && argument.type !== 'SpreadElement' && !others.length
+        ? this.#expression(argument, scope)
+        : undefined;
+    if (!isPlainObject(given) || this.#shapes.has(given))
+      this.#fail(
+        node,
+        `${operation.name}(...) takes its operands as one object, as in ${operation.name}({ ${Object.keys(operation.fields).join(', ')} }).`
+      );
+    const operands = this.#asRecord(
+      Object.assign(Object.create(null) as ObjectValue, given),
+      operation,
+      argument,
+      operation.name
+    );
+    this.#event[operation.name].push(operands);
+    this.#history[operation.name].push(operands);
+    const body = new Scope(this.#globals);
+    for (const [name, type] of Object.entries(operation.fields)) {
+      const target = collectionOf(operands[name]);
+      body.bindings.set(name, {
+        value: operands[name],
+        constant: true,
+        type,
+        ...(target ? { target } : {})
+      });
+    }
+    const callSite = this.#callSite;
+    this.#callSite ??= scope;
+    this.#bodies += 1;
+    try {
+      const arrow = operation.operation.body;
+      if (arrow.body.type !== 'BlockStatement') return this.#expression(arrow.body, body);
+      this.#returned = undefined;
+      this.#block(arrow.body.body, body);
+      return this.#returned;
+    } finally {
+      this.#returned = undefined;
+      this.#bodies -= 1;
+      this.#callSite = callSite;
     }
   }
 
