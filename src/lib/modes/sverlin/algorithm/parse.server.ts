@@ -44,10 +44,7 @@ export function parseBlock(
     );
   }
   const root = (program.body[0] as FunctionDeclaration).body;
-  const offset = (node: AnyNode): Span => ({
-    start: node.start - wrapperPrefix.length,
-    end: node.end - wrapperPrefix.length
-  });
+  const offset = spanOf;
   const declared = kind === 'domain' ? ownDeclarations(root) : undefined;
   checkSubset(
     root,
@@ -58,6 +55,11 @@ export function parseBlock(
     functions
   );
   return { root, offset };
+}
+
+/** A node's span in its block's body, the same for every block. */
+export function spanOf(node: AnyNode): Span {
+  return { start: node.start - wrapperPrefix.length, end: node.end - wrapperPrefix.length };
 }
 
 /**

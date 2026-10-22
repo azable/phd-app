@@ -13,10 +13,13 @@ import {
   interpretAlgorithm,
   interpretDomain,
   interpretInput,
+  traceAlgorithm,
   type BlockKind,
   type MasterStep,
   type TraceState
 } from './algorithm/interpret.server';
+import { listingLanguages } from './listing/languages';
+import { renderListing, type Listing } from './listing/render.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
@@ -222,6 +225,33 @@ export function recordedTrace(source: string): MasterStep[] {
     blocks.algorithm,
     (body) => interpretAlgorithm(body, input, domain),
     blocks
+  );
+}
+
+/** The algorithm as a listing in each of the library's languages (see listing/render.server.ts). */
+export function listingsOf(source: string): Record<string, Listing> {
+  const { blocks } = extractBlocks(source);
+  if (!blocks.algorithm)
+    throw new InvalidSvelteSourceError('There is no algorithm block, so there is no listing.', {
+      code: 'missing_algorithm'
+    });
+  const domain = blocks.domain
+    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+    : noDomain;
+  const input = blocks.input
+    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
+    : { state: {}, types: {} };
+  const { root, hints } = interpretBlock(
+    source,
+    blocks.algorithm,
+    (body) => traceAlgorithm(body, input, domain),
+    blocks
+  );
+  return Object.fromEntries(
+    Object.entries(listingLanguages).map(([name, language]) => [
+      name,
+      renderListing(root, domain, hints, language)
+    ])
   );
 }
 

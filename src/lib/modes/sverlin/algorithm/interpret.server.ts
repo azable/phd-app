@@ -145,8 +145,34 @@ export function interpretAlgorithm(
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain
 ): MasterStep[] {
+  return traceAlgorithm(body, input, domain).steps;
+}
+
+/**
+ * What a listing needs from a run, which reading the source cannot tell: the collection each
+ * position points into where the source uses it, by the block and span of the use (see spanKey).
+ */
+export type ListingHints = {
+  /** By an operation call, the collection each of its position operands points into. */
+  operands: Record<string, Record<string, string>>;
+  /** By a position's .value in the algorithm, the collection it reads or writes. */
+  values: Record<string, string>;
+};
+
+/** A node's place in its block, as a key: "algorithm:12:30". */
+export function spanKey(block: 'algorithm' | 'domain', { start, end }: Span): string {
+  return `${block}:${start}:${end}`;
+}
+
+/** Interpret the algorithm, keeping its tree and what a listing of it needs. */
+export function traceAlgorithm(
+  body: string,
+  input: TypedState = { state: {}, types: {} },
+  domain: DomainRegistry = noDomain
+): { steps: MasterStep[]; root: BlockStatement; hints: ListingHints } {
   const { root, offset } = parseBlock(body, 'algorithm', domain);
-  return new Interpreter(root, offset, { kind: 'algorithm', initial: input, domain }).run();
+  const interpreter = new Interpreter(root, offset, { kind: 'algorithm', initial: input, domain });
+  return { steps: interpreter.run(), root, hints: interpreter.hints };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -217,6 +243,7 @@ class Interpreter {
   #frame: Scope = this.#topLevel;
   #depth = 0;
   readonly #log = new EventLog();
+  readonly hints: ListingHints = { operands: {}, values: {} };
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
   /** What the last element or field read read from, and by which key. */
@@ -1225,6 +1252,7 @@ class Interpreter {
       this.#onlyCollection(position.type, node, targetName(node.object as Expression));
     const site = this.#callSite ?? scope;
     const collection = site.lookup(name)?.value;
+    if (!this.#bodies) this.hints.values[spanKey('algorithm', this.#offset(node))] ??= name;
     if (!Array.isArray(collection))
       this.#fail(node, `${targetName(node)} reads ${name}, which is out of scope here.`);
     this.#placed(collection, this.#shown(name, site));
@@ -1402,6 +1430,11 @@ class Interpreter {
     );
     this.#event[operation.name].push(operands);
     this.#history[operation.name].push(operands);
+    const call = spanKey(this.#bodies ? 'domain' : 'algorithm', this.#offset(node));
+    const pointed = (this.hints.operands[call] ??= {});
+    for (const [name, value] of Object.entries(operands))
+      if (value instanceof Atom && value.type.index && value.collection)
+        pointed[name] ??= value.collection;
     const body = new Scope(this.#globals);
     for (const [name, type] of Object.entries(operation.fields)) {
       const target = collectionOf(operands[name]);
