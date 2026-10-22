@@ -213,8 +213,13 @@
   );
   // The end slots, as far past each end as any step puts one of the pointers' positions: none
   // where the trace never goes past.
-  const endsOf = (into: readonly Pointer[], count: number) => {
-    const ends = into.map((pointer) => types?.pastEnds(pointer.collection));
+  const endsOf = (into: readonly Pointer[], count: number, collection?: string) => {
+    // A pointer reaching this collection at some step keeps its end slots here at every step.
+    const ends = into.map((pointer) =>
+      types?.pastEnds(
+        collection && pointer.reaches?.has(collection) ? collection : pointer.collection
+      )
+    );
     const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
     const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
     return {
@@ -237,9 +242,9 @@
   );
   if (eachItem && itemPointers.length) provideItemEnds(eachItem.collection);
   const itemLength = untrack(() => (eachItem ? (types?.lengthOf(eachItem.collection) ?? 0) : 0));
-  const itemEnds = untrack(() => endsOf(itemPointers, itemLength));
+  const itemEnds = untrack(() => endsOf(itemPointers, itemLength, eachItem?.collection));
   const { before, after } = untrack(() =>
-    endsOf(itemEndsContext() === element?.collection ? [] : pointers, length)
+    endsOf(itemEndsContext() === element?.collection ? [] : pointers, length, element?.collection)
   );
   // Inside an item's copy at an end slot, the element draws only the pointers there.
   const atEnd =

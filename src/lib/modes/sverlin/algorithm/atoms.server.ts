@@ -33,7 +33,9 @@ export const noAtoms: AtomRegistry = {};
 export class Atom {
   constructor(
     readonly type: AtomType,
-    readonly value: string | number | boolean
+    readonly value: string | number | boolean,
+    /** For a position, the variable holding the collection it points into, kept wherever it goes. */
+    readonly collection?: string
   ) {}
 }
 
@@ -93,10 +95,14 @@ export function combinedType(
  * Wrap a computed number in a numeric type. A result that is no longer whole leaves an integer
  * type and stays untyped; a result outside the type's range is an error.
  */
-export function numericResult(type: AtomType | undefined, value: number): Atom | number {
+export function numericResult(
+  type: AtomType | undefined,
+  value: number,
+  collection?: string
+): Atom | number {
   if (!type) return value;
   if (type.base === 'integer' && !Number.isInteger(value)) return value;
   const problem = atomProblem(type, value);
   if (problem) throw new Error(problem);
-  return new Atom(type, value);
+  return new Atom(type, value, type.index ? collection : undefined);
 }

@@ -65,6 +65,14 @@ for (const { __identities: identities = {} } of states as StepState[])
   for (const [path, identity] of Object.entries(identities))
     if (!/[[.]/u.test(path)) held.set(path, (held.get(path) ?? new Set()).add(identity));
 
+// Every collection a position at a path points into at any step, the indices left out, as a
+// position stored in a record points into whichever collection it came from.
+const reached = new Map<string, Set<string>>();
+const anyIndex = (path: string) => path.replace(/\[\d+\]/gu, '[]');
+for (const step of states as StepState[])
+  for (const [path, target] of Object.entries(step.__targets ?? {}))
+    reached.set(anyIndex(path), (reached.get(anyIndex(path)) ?? new Set()).add(target));
+
 /** The value at a path of a step's state, as edges[0].to. */
 function valueAt(state: Record<string, unknown>, path: string): unknown {
   const [name, ...keys] = path.split(/[.[\]]+/u).filter(Boolean);
@@ -247,6 +255,7 @@ function mountStep(
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
             heldBy: (name: string) => held.get(name),
+            reachedFrom: (path: string) => reached.get(anyIndex(path)),
             pastEnds: (collection: string) => pastEnds.get(collection) ?? { before: 0, after: 0 },
             lengthOf: (path: string) => {
               const collection = containers.get(path);

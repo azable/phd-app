@@ -237,3 +237,76 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+const taken = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Take = record({ from: Index });
+</script>
+<script lang="sverlin" input>
+  const left = Values([1, 4, 6]);
+  const right = Values([2, 3, 5]);
+</script>
+<script lang="sverlin">
+  let i = Index(left, 0);
+  let j = Index(right, 0);
+  let take = Take({ from: j });
+  yield;
+  while (i < left.length && j < right.length) {
+    if (left[i] < right[j]) {
+      take = Take({ from: i });
+      i++;
+    } else {
+      take = Take({ from: j });
+      j++;
+    }
+    yield;
+  }
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Taken(at: Index)}
+  <Node layout="column"><Pointed tags="taken" /><Node tags="label">taken</Node></Node>
+{/snippet}
+{@render Row(left)}
+{@render Row(right)}
+{@render Taken(take.from)}`;
+
+it.skipIf(!enabled)(
+  'keeps every element in place as a pointer moves between collections',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(taken);
+    const { javascript } = await bundlePresentation(prepared, 1);
+    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    const step = (index: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelector('iframe')
+          ?.contentWindow?.postMessage({ type: 'sverlin:step', step: index }, '*');
+      }, index);
+    await step(0);
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    const first = await placed(frame);
+    for (let index = 1; index < prepared.master.length; index++) {
+      await step(index);
+      await page.waitForTimeout(800);
+      await frame.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      const now = await placed(frame);
+      // The pointer moves; the elements, and their values, stay where they are.
+      for (const [identity, at] of Object.entries(first))
+        if (now[identity] && !identity.startsWith('pointer'))
+          expect(now[identity], `step ${index + 1}, identity ${identity}`).toEqual(at);
+    }
+    await page.close();
+  }
+);

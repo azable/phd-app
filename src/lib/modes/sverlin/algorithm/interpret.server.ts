@@ -209,7 +209,7 @@ class Interpreter {
     const initialTargets = options.initial?.targets ?? {};
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
-        value: this.#fromTrace(value, name, initialTypes),
+        value: this.#fromTrace(value, name, initialTypes, initialTargets),
         constant: false,
         type: options.initial?.declared?.[name] ?? initialTypes[name],
         ...(initialTargets[name] ? { target: initialTargets[name] } : {})
@@ -359,7 +359,15 @@ class Interpreter {
         collection,
         `${type.name}(…, …) names the ${type.index} it points into first, as in ${type.name}(${this.#collectionsOf(type)[0] ?? 'values'}, 0).`
       );
-    return this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
+    const made = this.#construct({ ...node, arguments: [number] }, type.name, scope) as Atom;
+    return new Atom(made.type, made.value, name);
+  }
+
+  /** A position as one pointing into the given collection; any other value as it is. */
+  #pointingInto(value: Value, collection: string): Value {
+    if (!(value instanceof Atom) || !value.type.index || value.collection === collection)
+      return value;
+    return new Atom(value.type, value.value, collection);
   }
 
   #holdsCollection(name: string, type: AtomType, scope: Scope = this.#topLevel): boolean {
@@ -409,10 +417,12 @@ class Interpreter {
     const atom = this.#atoms[typeName];
     if (atom) {
       const made = this.#asAtom(value, atom, node, path);
+      if (!atom.index) return made;
       // A position a variable holds points into the variable's collection; one an element or field
-      // holds, into the only collection of its type.
-      if (atom.index && target === undefined) this.#onlyCollection(atom, node, path);
-      return made;
+      // holds keeps the collection it came from, as a variable's or Position(left, 0)'s, and a
+      // number stored there points into the only collection of its type.
+      const collection = target ?? made.collection ?? this.#onlyCollection(atom, node, path);
+      return this.#pointingInto(made, collection);
     }
     const structure = this.#domain.structures[typeName];
     if (structure.kind === 'union') return this.#asMember(value, structure, node, path);
@@ -545,17 +555,14 @@ class Interpreter {
   }
 
   /**
-   * The collection a position variable points into, fixed at its declaration: the one its
-   * constructor names, as in Position(left, 0), or the only one of its type.
+   * The collection a position variable points into, fixed at its declaration: its starting value's,
+   * as Position(left, 0)'s, a bound variable's, or a field's, or else the only one of its type.
    */
-  #targetOf(init: Expression, type: AtomType, name: string): string {
-    const named =
-      init.type === 'CallExpression' &&
-      init.arguments.length === 2 &&
-      init.arguments[0].type === 'Identifier'
-        ? init.arguments[0].name
-        : undefined;
-    return named ?? this.#onlyCollection(type, init, name);
+  #targetOf(init: Expression, type: AtomType, name: string, value: Value): string {
+    return (
+      (value instanceof Atom ? value.collection : undefined) ??
+      this.#onlyCollection(type, init, name)
+    );
   }
 
   /** The type a stored element or field must have: a collection's element or a record's field. */
@@ -684,13 +691,15 @@ class Interpreter {
           const value = this.#expression(declarator.init, scope);
           this.#typed(value, declarator.init, name);
           const type = this.#declaredType(declarator.init, value);
+          const target =
+            type && this.#atoms[type]?.index
+              ? this.#targetOf(declarator.init, this.#atoms[type], name, value)
+              : undefined;
           scope.bindings.set(name, {
-            value,
+            value: target ? this.#pointingInto(value, target) : value,
             constant: node.kind === 'const',
             ...(type ? { type } : {}),
-            ...(type && this.#atoms[type]?.index
-              ? { target: this.#targetOf(declarator.init, this.#atoms[type], name) }
-              : {})
+            ...(target ? { target } : {})
           });
         }
         return 'normal';
@@ -804,9 +813,12 @@ class Interpreter {
     if (value === undefined) return null;
     if (value instanceof Atom) {
       types[path] = value.type.name;
-      // A position an element or field holds points into the only collection of its type.
-      const [only, ...others] = value.type.index ? this.#collectionsOf(value.type) : [];
-      if (only && !others.length) targets[path] = only;
+      // A position points into the collection it was bound to where it was made or stored, or
+      // else the only collection of its type.
+      const [only, ...others] =
+        value.type.index && !value.collection ? this.#collectionsOf(value.type) : [];
+      const collection = value.collection ?? (others.length ? undefined : only);
+      if (collection) targets[path] = collection;
       if (value.type.index) positions.push([path, value.value as number]);
       // A collection or record holds it, or a variable, after them (see identities.server.ts).
       placed.push([path, value, path.includes('[') || path.includes('.') ? 'held' : 'variable']);
@@ -886,7 +898,12 @@ class Interpreter {
         if (node.operator === '!') return !this.#truthy(value);
         const number = this.#number(value, node);
         return node.operator === '-'
-          ? this.#numeric(value instanceof Atom ? value.type : undefined, -number, node)
+          ? this.#numeric(
+              value instanceof Atom ? value.type : undefined,
+              -number,
+              node,
+              collectionOf(value)
+            )
           : value;
       }
       case 'BinaryExpression':
@@ -934,7 +951,8 @@ class Interpreter {
           this.#numeric(
             current instanceof Atom ? current.type : undefined,
             node.operator === '++' ? before + 1 : before - 1,
-            node
+            node,
+            collectionOf(current)
           )
         );
         this.#typed(after, node, targetName(node.argument));
@@ -1191,7 +1209,8 @@ class Interpreter {
     else if (operator === '%') result = a % b;
     else if (operator === '**') result = a ** b;
     else return this.#fail(node, `The ${operator} operator is not supported.`);
-    return this.#numeric(type, result, node);
+    // A position moved by a number keeps its collection, as i + 1 does.
+    return this.#numeric(type, result, node, collectionOf(left) ?? collectionOf(right));
   }
 
   /** The result type of two operands, failing for unrelated types. */
@@ -1208,9 +1227,9 @@ class Interpreter {
   }
 
   /** Wrap a computed number in a type, failing when it leaves the type's range. */
-  #numeric(type: AtomType | undefined, value: number, node: AnyNode): Value {
+  #numeric(type: AtomType | undefined, value: number, node: AnyNode, collection?: string): Value {
     try {
-      return numericResult(type, value);
+      return numericResult(type, value, collection);
     } catch (cause) {
       return this.#fail(node, cause instanceof Error ? cause.message : String(cause));
     }
@@ -1271,17 +1290,22 @@ class Interpreter {
    * Rebuild interpreter values from recorded input state: null-prototype objects, atoms wherever
    * the recorded types name one, and records and collections wherever they name one of those.
    */
-  #fromTrace(value: TraceValue, path: string, types: TypeMap): Value {
+  #fromTrace(
+    value: TraceValue,
+    path: string,
+    types: TypeMap,
+    targets: Record<string, string>
+  ): Value {
     const typeName = types[path];
     if (typeName && this.#atoms[typeName] && (value === null || typeof value !== 'object'))
-      return value === null ? null : new Atom(this.#atoms[typeName], value);
+      return value === null ? null : new Atom(this.#atoms[typeName], value, targets[path]);
     let made: Value[] | ObjectValue | undefined;
     if (Array.isArray(value))
-      made = value.map((item, index) => this.#fromTrace(item, `${path}[${index}]`, types));
+      made = value.map((item, index) => this.#fromTrace(item, `${path}[${index}]`, types, targets));
     else if (value !== null && typeof value === 'object') {
       const object = Object.create(null) as ObjectValue;
       for (const [key, item] of Object.entries(value))
-        object[key] = this.#fromTrace(item, `${path}.${key}`, types);
+        object[key] = this.#fromTrace(item, `${path}.${key}`, types, targets);
       made = object;
     }
     if (!made) return value as Value;
@@ -1337,6 +1361,11 @@ function isPlainObject(value: Value): value is ObjectValue {
     !(value instanceof Atom) &&
     value !== mathMarker
   );
+}
+
+/** The collection a position points into, if the value is one bound to a collection. */
+function collectionOf(value: Value): string | undefined {
+  return value instanceof Atom ? value.collection : undefined;
 }
 
 /** How an assignment target reads in the source, such as distances[neighbor]. */

@@ -12,6 +12,11 @@ import type { SpanInput, SpanLayout } from './node/span';
 export type TypeContext = {
   /** The atomic type name of item `index` of a container taken from the props, if typed. */
   itemType(container: unknown, index: number): string | undefined;
+  /**
+   * Every collection a position at a path points into at any step, its indices left out, so
+   * edges[2].to reaches what any edge's to does.
+   */
+  reachedFrom(path: string): ReadonlySet<string> | undefined;
   /** The identity of the value at a path, the same at every step the value stays itself. */
   identityOf(path: string): number | undefined;
   /** Whether a variable is out of scope at this step, standing in hidden with another's value. */
@@ -203,6 +208,8 @@ export type Pointer = {
   position: number;
   order: number;
   paint?: (position: number) => Record<string, unknown>;
+  /** Every collection it points into at any step, where it keeps its room. */
+  reaches?: ReadonlySet<string>;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -213,9 +220,9 @@ export function providePointers(calls: readonly PointerCall[]): void {
     // nothing this step, but keeps its room in the only collection of its type; so does one read
     // from a variable out of scope, which stands in with another step's value.
     let found: { collection?: string; position?: number } = {};
+    let path: string | undefined;
     try {
-      const path =
-        call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
+      path = call.path ?? (call.of && call.at ? elementOf(types, call.of(), call.at()) : undefined);
       const absent =
         (call.reads?.some((name) => types?.absent(name)) ?? false) ||
         (call.shown ? !call.shown() : false);
@@ -245,7 +252,8 @@ export function providePointers(calls: readonly PointerCall[]): void {
             collection,
             position: found.position ?? Number.NaN,
             order,
-            paint: call.paint
+            paint: call.paint,
+            reaches: path === undefined ? undefined : types?.reachedFrom(path)
           }
         ]
       : [];
@@ -392,7 +400,7 @@ export function reachesInto(
   pointer: Pointer,
   collection: string
 ): boolean {
-  if (pointer.collection === collection) return true;
+  if (pointer.collection === collection || pointer.reaches?.has(collection)) return true;
   const held = types?.heldBy(pointer.collection);
   if (!held) return false;
   const parent = elementSlot(collection)?.collection;

@@ -92,6 +92,66 @@ describe('positions', () => {
     );
   });
 
+  describe('keep their collection wherever they are stored', () => {
+    const stored = interpretDomain(`
+      const Int = type('integer', { min: 0, max: 9 });
+      const Values = collection(Int);
+      const Position = index(Values);
+      const Positions = collection(Position);
+      const Take = record({ from: Position });
+    `);
+
+    it('in records, collections, and the variables made from them', () => {
+      const [step] = interpretAlgorithm(
+        `
+        const left = Values([1, 4]);
+        const right = Values([2, 3]);
+        let i = Position(left, 1);
+        let j = Position(right, 0);
+        const take = Take({ from: j });
+        const seen = Positions([i, j + 1, Position(right, 0)]);
+        let k = Position(left, 0);
+        k = j;
+        const moved = take.from;
+        yield;
+      `,
+        undefined,
+        stored
+      );
+      expect(step.targets).toEqual({
+        i: 'left',
+        j: 'right',
+        'take.from': 'right',
+        'seen[0]': 'left',
+        'seen[1]': 'right',
+        'seen[2]': 'right',
+        // A variable keeps its own collection; one declared from a stored position takes its.
+        k: 'left',
+        moved: 'right'
+      });
+    });
+
+    it('from the input into the algorithm', () => {
+      const input = interpretInput(
+        `const left = Values([1]); const right = Values([2, 3]);
+         const take = Take({ from: Position(right, 1) });`,
+        stored
+      );
+      const [step] = interpretAlgorithm('const at = take.from; yield;', input, stored);
+      expect(step.targets).toMatchObject({ 'take.from': 'right', at: 'right' });
+    });
+
+    it('asking which collection a number stored with several to point into means', () => {
+      expect(() =>
+        interpretAlgorithm(
+          'const left = Values([1]); const right = Values([2]); const take = Take({ from: 0 }); yield;',
+          undefined,
+          stored
+        )
+      ).toThrow('Take.from could point into left or right; say which, as in Position(left, 0).');
+    });
+  });
+
   it('point into the only collection of their type from records', () => {
     const [step] = run(`
       const vertices = Names(['A', 'B', 'C']);
