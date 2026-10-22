@@ -71,6 +71,14 @@ export function colourCss(name: unknown): string | undefined {
   return `oklch(${lightness[shade]} ${c} ${hueAngles[hue]})`;
 }
 
+/** A stroke's style when it is broken, dashed or dotted, or undefined for solid and anything else. */
+export function strokeStyleCss(name: unknown): 'dashed' | 'dotted' | undefined {
+  return name === 'dashed' || name === 'dotted' ? name : undefined;
+}
+
+/** A link's dashes and gaps by its stroke style, in the units of a curve 1.5 wide, its dots round. */
+export const linkDashes = { dashed: [6, 4], dotted: [0, 4] } as const;
+
 /** A colour's shade and hue, for a chooser keeping a colour's lightness as it changes its hue. */
 export function colourParts(name: string): { hue: string; shade: number } | undefined {
   const match = /^([a-z]+)-(\d+)$/u.exec(name);
@@ -96,7 +104,7 @@ export const propOptions = {
   gap: spacing,
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
-  dashed: [false, true],
+  strokeStyle: ['solid', 'dashed', 'dotted'],
   overflow: ['shown', 'hidden', 'included', 'excluded']
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
@@ -120,7 +128,7 @@ const nodeProps: readonly DesignProp[] = [
   'fill',
   'stroke',
   'strokeWidth',
-  'dashed',
+  'strokeStyle',
   'opacity',
   'color',
   'font',
@@ -137,7 +145,7 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   value: nodeProps,
   text: nodeProps,
   pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
-  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'dashed', 'color']
+  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color']
 };
 
 /**
@@ -179,7 +187,7 @@ export function conditionalProps(role: KindRole): readonly DesignProp[] {
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
   'stroke',
-  'dashed',
+  'strokeStyle',
   'opacity',
   'color'
 ]);
@@ -221,7 +229,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'none',
     stroke: 'none',
     strokeWidth: 0,
-    dashed: false,
+    strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -240,7 +248,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'white',
     stroke: 'neutral-300',
     strokeWidth: 1.5,
-    dashed: false,
+    strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -255,7 +263,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'none',
     stroke: 'none',
     strokeWidth: 0,
-    dashed: false,
+    strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-600',
     font: 'sans',
@@ -269,7 +277,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'amber-100',
     stroke: 'amber-500',
     strokeWidth: 1.5,
-    dashed: false,
+    strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -285,7 +293,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     stroke: 'neutral-500',
     strokeWidth: 2,
     opacity: 1,
-    dashed: false,
+    strokeStyle: 'solid',
     color: 'neutral-600'
   }
 };

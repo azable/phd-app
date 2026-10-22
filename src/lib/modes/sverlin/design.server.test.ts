@@ -45,7 +45,7 @@ describe('design space', () => {
     expect(space['Current[current,found].overflow']).toBeUndefined();
     expect(space['Row.overflow']).toEqual(['included', 'excluded']);
     expect(space['IntCell.overflow']).toBeUndefined();
-    expect(space['IntCell.dashed']).toEqual([false, true]);
+    expect(space['IntCell.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
   });
 
   it('records the kinds each tag can be, by its line and column', () => {
@@ -152,7 +152,7 @@ describe('kinds a tag the state decides draws', () => {
     expect(space['root[checked].size']).toBeDefined();
     expect(space['root[checked].gap']).toBeUndefined();
     expect(space['root[checked].shown']).toBeUndefined();
-    expect(space['root[checked].dashed']).toBeDefined();
+    expect(space['root[checked].strokeStyle']).toBeDefined();
     expect(space['root.gap']).toBeDefined();
     expect(space['root.shown']).toBeDefined();
   });

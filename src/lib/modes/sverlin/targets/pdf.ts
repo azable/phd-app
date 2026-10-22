@@ -8,6 +8,7 @@
 import { GState, jsPDF } from 'jspdf';
 
 import type { SceneLink, SceneNode, SceneText } from '../library';
+import { linkDashes } from '../library/node/design';
 import type { SverlinScene } from '../scene';
 
 export type FontFamily = 'sans' | 'serif' | 'mono';
@@ -145,6 +146,9 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       setOpacity(opacity * a);
       doc.setDrawColor(r, g, b);
       doc.setLineWidth(px(look.strokeWidth));
+      // A browser's dashes and dots grow with the border's width, near these.
+      const width = look.strokeWidth;
+      setStrokeStyle(look.strokeStyle, { dashed: [3 * width, 2 * width], dotted: [0, 2 * width] });
       const [x, y, w, h] = [
         box.x + inset,
         box.y + inset,
@@ -154,6 +158,7 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       const corner = Math.max(0, radius - inset);
       if (corner) doc.roundedRect(px(x), px(y), px(w), px(h), px(corner), px(corner), 'S');
       else doc.rect(px(x), px(y), px(w), px(h), 'S');
+      setStrokeStyle(undefined);
     }
     for (const run of node.runs ?? []) {
       const [r, g, b, a] = resources.colour(run.color);
@@ -164,6 +169,15 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     }
   }
 
+  /** Dash the lines drawn next, dots with round caps, by a pattern in frame pixels; solid without. */
+  function setStrokeStyle(
+    style: 'dashed' | 'dotted' | undefined,
+    patterns?: Record<'dashed' | 'dotted', readonly number[]>
+  ) {
+    doc.setLineDashPattern(style && patterns ? patterns[style].map(px) : [], 0);
+    doc.setLineCap(style === 'dotted' ? 'round' : 'butt');
+  }
+
   function drawLink(link: SceneLink) {
     const [start, first, second, end] = link.curve;
     const [r, g, b, a] = resources.colour(link.stroke);
@@ -171,13 +185,16 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     doc.setDrawColor(r, g, b);
     doc.setFillColor(r, g, b);
     doc.setLineWidth(px(link.strokeWidth));
-    // The page's dashes are 6 and 4 units of the curve, which grow with its stroke.
+    // The page's dashes are in units of the curve, which grow with its stroke.
     const unit = link.strokeWidth / 1.5;
-    doc.setLineDashPattern(link.dashed ? [px(6 * unit), px(4 * unit)] : [], 0);
+    setStrokeStyle(link.strokeStyle, {
+      dashed: linkDashes.dashed.map((length) => length * unit),
+      dotted: linkDashes.dotted.map((length) => length * unit)
+    });
     doc.moveTo(px(start.x), px(start.y));
     doc.curveTo(px(first.x), px(first.y), px(second.x), px(second.y), px(end.x), px(end.y));
     doc.stroke();
-    doc.setLineDashPattern([], 0);
+    setStrokeStyle(undefined);
     if (link.directed && link.arrowSize) {
       // The head points along the curve where it ends: from the last control point that differs.
       const from = [second, first, start].find(({ x, y }) => x !== end.x || y !== end.y) ?? start;

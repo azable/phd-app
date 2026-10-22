@@ -18,7 +18,7 @@
     slotContext,
     typeContext
   } from '../type-context';
-  import { activeTags, colourCss, kindKey } from './design';
+  import { activeTags, colourCss, kindKey, strokeStyleCss } from './design';
   import { designContext } from '../type-context';
 
   let {
@@ -121,7 +121,7 @@
   data-from={ends.from}
   data-to={ends.to}
   data-directed={directed ? 'true' : 'false'}
-  data-dashed={look('dashed', false) ? 'true' : undefined}
+  data-stroke-style={strokeStyleCss(look('strokeStyle', false))}
   data-label={label}
   data-label-colour={colourCss(look('color', false))}
   data-stroke={colourCss(look('stroke'))}

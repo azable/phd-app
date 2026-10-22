@@ -498,3 +498,51 @@ it.skipIf(!enabled)(
     expect(steps.at(-1)!.j).toBeUndefined();
   }
 );
+
+it.skipIf(!enabled)(
+  'draws broken strokes on nodes and links, and keeps them in the scene',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(
+      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin">yield;</script><Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>`
+    );
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: {
+        'root.stroke': 'neutral-500',
+        'root.strokeWidth': 1.5,
+        'root.strokeStyle': 'dashed',
+        'root[link].strokeStyle': 'dotted'
+      }
+    });
+    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    const scene = await page.evaluate(
+      () =>
+        new Promise<{ steps: { nodes: { look: object }[]; links: object[] }[] }>((resolve) => {
+          addEventListener('message', ({ data }) => {
+            if (data?.type === 'sverlin:scene') resolve(data);
+          });
+          const target = document.querySelector('iframe')?.contentWindow;
+          target?.postMessage({ type: 'sverlin:step', step: 0 }, '*');
+          target?.postMessage({ type: 'sverlin:describe', request: 'strokes' }, '*');
+        })
+    );
+    const drawn = await frame.evaluate(() => {
+      const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
+      const path = layer.querySelector('path.link')!;
+      return {
+        border: getComputedStyle(layer.querySelector('[data-sv-kind="root"]')!).borderTopStyle,
+        dashes: path.getAttribute('stroke-dasharray'),
+        cap: path.getAttribute('stroke-linecap')
+      };
+    });
+    expect(drawn).toEqual({ border: 'dashed', dashes: '0 4', cap: 'round' });
+    const [step] = scene.steps;
+    expect(step.nodes.filter(({ look }) => 'strokeStyle' in look).length).toBeGreaterThan(0);
+    expect(step.links).toEqual([expect.objectContaining({ strokeStyle: 'dotted' })]);
+    await page.close();
+  }
+);

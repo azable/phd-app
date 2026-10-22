@@ -839,7 +839,7 @@ const designProps = new Set([
   'radius',
   'strokeWidth',
   'minSize',
-  'dashed'
+  'strokeStyle'
 ]);
 
 /**

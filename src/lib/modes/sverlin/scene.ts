@@ -20,6 +20,7 @@ const coordinate = v.pipe(v.number(), v.minValue(-1_000_000), v.maxValue(1_000_0
 const length = v.pipe(v.number(), v.minValue(0), v.maxValue(1_000_000));
 const point = v.strictObject({ x: coordinate, y: coordinate });
 const colourName = v.pipe(v.string(), v.maxLength(40));
+const strokeStyle = v.picklist(['dashed', 'dotted']);
 const box = v.strictObject({ x: coordinate, y: coordinate, width: length, height: length });
 const font = v.pipe(v.string(), v.maxLength(500));
 const fontWeight = v.pipe(v.number(), v.minValue(1), v.maxValue(1000));
@@ -50,6 +51,7 @@ const sceneNodeSchema = v.strictObject({
     fill: v.optional(colour),
     stroke: v.optional(colour),
     strokeWidth: v.optional(length),
+    strokeStyle: v.optional(strokeStyle),
     radius: v.optional(length),
     padding: v.optional(v.tuple([length, length, length, length])),
     color: colour,
@@ -73,7 +75,7 @@ const sceneLinkSchema = v.strictObject({
   to: text,
   directed: v.boolean(),
   arrowSize: v.optional(length),
-  dashed: v.optional(v.literal(true)),
+  strokeStyle: v.optional(strokeStyle),
   stroke: colour,
   strokeWidth: length,
   curve: v.tuple([point, point, point, point]),

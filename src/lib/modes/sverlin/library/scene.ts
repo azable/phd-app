@@ -6,6 +6,7 @@
  */
 
 import { linkSpecOf } from './node/arrange';
+import { strokeStyleCss } from './node/design';
 import type { Layout } from './node/props';
 
 export type ScenePoint = { x: number; y: number };
@@ -16,6 +17,8 @@ export type SceneLook = {
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  /** A broken border; a missing one is solid. */
+  strokeStyle?: 'dashed' | 'dotted';
   radius?: number;
   /** Top, right, bottom, and left. */
   padding?: [number, number, number, number];
@@ -73,7 +76,7 @@ export type SceneLink = {
   directed: boolean;
   /** An arrow's head, as long as it is wide, its tip at the curve's end. */
   arrowSize?: number;
-  dashed?: true;
+  strokeStyle?: 'dashed' | 'dotted';
   stroke: string;
   strokeWidth: number;
   /** A cubic curve: its start, two control points, and end. */
@@ -92,6 +95,12 @@ export type SceneStep = {
 export type SceneFrame = { width: number; height: number; background: string };
 
 const round = (value: number) => Math.round(value * 100) / 100;
+
+/** A drawn stroke's style, kept only when it is broken. */
+function broken(css: string | undefined): { strokeStyle?: 'dashed' | 'dotted' } {
+  const strokeStyle = strokeStyleCss(css);
+  return strokeStyle ? { strokeStyle } : {};
+}
 const layouts: readonly string[] = ['row', 'column', 'free'] satisfies Layout[];
 const nodeSelector = 'div[data-sv-node]';
 
@@ -185,7 +194,7 @@ function describeNode(
   const look: SceneLook = {
     ...(transparent(style.backgroundColor) ? {} : { fill: style.backgroundColor }),
     ...(strokeWidth && !transparent(style.borderTopColor)
-      ? { stroke: style.borderTopColor, strokeWidth }
+      ? { stroke: style.borderTopColor, strokeWidth, ...broken(style.borderTopStyle) }
       : {}),
     ...(radius ? { radius: round(radius) } : {}),
     ...(padding.some(Boolean) ? { padding } : {}),
@@ -353,7 +362,7 @@ function describeLink(
     to: spec.to,
     directed: !!head,
     ...(head ? { arrowSize: round(head.markerWidth.baseVal.value * scale) } : {}),
-    ...(path.hasAttribute('stroke-dasharray') ? { dashed: true as const } : {}),
+    ...broken(path.dataset.strokeStyle),
     stroke: style.stroke,
     strokeWidth: round((parseFloat(style.strokeWidth) || 0) * scale),
     curve: [at(x0, y0), at(x1, y1), at(x2, y2), at(x3, y3)],

@@ -22,6 +22,7 @@
     type LinkSpec,
     type Template
   } from './arrange';
+  import { linkDashes, strokeStyleCss } from './design';
   import type { Form } from './forms';
   import type { Align, Spacing } from './props';
 
@@ -57,7 +58,7 @@
 
   /** How a link component is drawn: its kind's look, as CSS (see Link.svelte). */
   type LinkStyle = {
-    dashed: boolean;
+    strokeStyle?: 'dashed' | 'dotted';
     label?: string;
     stroke?: string;
     strokeWidth?: string;
@@ -180,7 +181,7 @@
               [
                 dataset.svLink,
                 {
-                  dashed: dataset.dashed === 'true',
+                  strokeStyle: strokeStyleCss(dataset.strokeStyle),
                   label: dataset.label,
                   stroke: dataset.stroke,
                   strokeWidth: dataset.strokeWidth,
@@ -351,7 +352,11 @@
           style:stroke={colour}
           style:stroke-width={widthOf(style)}
           style:opacity={style?.shown === false ? 0 : style?.opacity}
-          stroke-dasharray={style?.dashed ? '6 4' : undefined}
+          data-stroke-style={style?.strokeStyle}
+          stroke-dasharray={style?.strokeStyle
+            ? linkDashes[style.strokeStyle].join(' ')
+            : undefined}
+          stroke-linecap={style?.strokeStyle === 'dotted' ? 'round' : undefined}
           marker-end={edge.directed ? `url(#${markerId}-${colours.indexOf(colour)})` : undefined}
         />
         {#if edge.id}

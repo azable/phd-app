@@ -179,7 +179,7 @@ const kept = new Set<string>([
   'opacity',
   'align',
   'justify',
-  'dashed',
+  'strokeStyle',
   'minSize',
   'overflow'
 ]);

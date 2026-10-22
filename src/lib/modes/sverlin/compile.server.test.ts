@@ -216,7 +216,7 @@ describe('single-component Svelte compilation', () => {
     expect(design.space['root.gap']).toBeDefined();
     expect(design.space['IntCell.gap']).toBeUndefined();
     expect(design.space['Arrow[current].shown']).toBeUndefined();
-    expect(design.space['root[link].dashed']).toEqual([false, true]);
+    expect(design.space['root[link].strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
     expect(design.space['views.Int']).toEqual(['IntCell', 'none']);
   });
 

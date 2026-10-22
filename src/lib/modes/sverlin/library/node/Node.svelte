@@ -44,7 +44,14 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import { activeTags, colourCss, kindKey, paintProps, type KindSite } from './design';
+  import {
+    activeTags,
+    colourCss,
+    kindKey,
+    paintProps,
+    strokeStyleCss,
+    type KindSite
+  } from './design';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
@@ -424,7 +431,7 @@
       style:color={colourCss(look('color'))}
       style:background-color={colourCss(look('fill'))}
       style:border-color={strokeColour}
-      style:border-style={look('dashed') === true ? 'dashed' : undefined}
+      style:border-style={strokeStyleCss(look('strokeStyle'))}
       style:border-width={`${borderWidth}px`}
       style:border-radius={measured('radius', 'px')}
       style:padding={reach
