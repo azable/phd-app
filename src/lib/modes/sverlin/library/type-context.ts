@@ -35,9 +35,10 @@ export type TypeContext = {
   lengthOf(path: string): number | undefined;
   /**
    * How far before the start and past the end of a collection variable any step records a position
-   * bound to it: the end slots its pointers keep, none where none goes past.
+   * bound to it, at a path (as take.from, or edges[2].to for any edge's) or at all: the end slots
+   * a pointer drawing it keeps, none where none goes past.
    */
-  pastEnds(collection: string): { before: number; after: number };
+  pastEnds(collection: string, path?: string): { before: number; after: number };
   /** The variables holding a value of a type, such as the Values collections. */
   variablesOf(typeName: string): string[];
   /** The type a type refines, if any. */
@@ -210,6 +211,8 @@ export type Pointer = {
   paint?: (position: number) => Record<string, unknown>;
   /** Every collection it points into at any step, where it keeps its room. */
   reaches?: ReadonlySet<string>;
+  /** The path its position is read from this step, as take.from: its end slots are that path's. */
+  path?: string;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -253,7 +256,8 @@ export function providePointers(calls: readonly PointerCall[]): void {
             position: found.position ?? Number.NaN,
             order,
             paint: call.paint,
-            reaches: path === undefined ? undefined : types?.reachedFrom(path)
+            reaches: path === undefined ? undefined : types?.reachedFrom(path),
+            path
           }
         ]
       : [];

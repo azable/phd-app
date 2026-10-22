@@ -83,9 +83,12 @@ function valueAt(state: Record<string, unknown>, path: string): unknown {
 }
 
 // How far before the start and past the end of each collection variable any step records a
-// position bound to it, so its pointers keep end slots only as far as the trace goes. A variable
-// out of scope at a step only stands in there, so it records nothing.
+// position bound to it, by the position's path (its indices left out) and over all of them, so a
+// pointer keeps end slots only as far as the positions it draws go. A variable out of scope at a
+// step only stands in there, so it records nothing.
 const pastEnds = new Map<string, { before: number; after: number }>();
+const endsKey = (collection: string, path?: string) =>
+  `${path === undefined ? '' : anyIndex(path)}>${collection}`;
 for (const step of states as StepState[])
   for (const [path, target] of Object.entries(step.__targets ?? {})) {
     const standsIn = (at: string) => step.__absent?.includes(at.split(/[.[]/u)[0]) ?? false;
@@ -93,11 +96,13 @@ for (const step of states as StepState[])
     const position = valueAt(step, path);
     const collection = valueAt(step, target);
     if (typeof position !== 'number' || !Array.isArray(collection)) continue;
-    const ends = pastEnds.get(target) ?? { before: 0, after: 0 };
-    pastEnds.set(target, {
-      before: Math.max(ends.before, -position),
-      after: Math.max(ends.after, position - collection.length + 1)
-    });
+    for (const key of [endsKey(target, path), endsKey(target)]) {
+      const ends = pastEnds.get(key) ?? { before: 0, after: 0 };
+      pastEnds.set(key, {
+        before: Math.max(ends.before, -position),
+        after: Math.max(ends.after, position - collection.length + 1)
+      });
+    }
   }
 
 /** A type's unit, or that of the nearest type it refines. */
@@ -256,7 +261,8 @@ function mountStep(
               Object.keys(state).filter((name) => types[name] === typeName),
             heldBy: (name: string) => held.get(name),
             reachedFrom: (path: string) => reached.get(anyIndex(path)),
-            pastEnds: (collection: string) => pastEnds.get(collection) ?? { before: 0, after: 0 },
+            pastEnds: (collection: string, path?: string) =>
+              pastEnds.get(endsKey(collection, path)) ?? { before: 0, after: 0 },
             lengthOf: (path: string) => {
               const collection = containers.get(path);
               return Array.isArray(collection) ? collection.length : undefined;

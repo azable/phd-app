@@ -217,7 +217,8 @@
     // A pointer reaching this collection at some step keeps its end slots here at every step.
     const ends = into.map((pointer) =>
       types?.pastEnds(
-        collection && pointer.reaches?.has(collection) ? collection : pointer.collection
+        collection && pointer.reaches?.has(collection) ? collection : pointer.collection,
+        pointer.path
       )
     );
     const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
@@ -324,9 +325,12 @@
   const gap = $derived((look('gap') as number | undefined) ?? 0);
   const resolvedAlign = $derived((look('align') as Align | undefined) ?? 'center');
   const alignment = $derived(alignments[resolvedAlign]);
-  const justification = $derived(
-    justifications[(look('justify') as Justify | undefined) ?? 'start']
-  );
+  const justify = $derived((look('justify') as Justify | undefined) ?? 'start');
+  const justification = $derived(justifications[justify]);
+  // A row of a collection given more room than its tracks need, as a view keeping the widest box
+  // any of its renders reaches, keeps its tracks and puts the room where justify says; between,
+  // around, and evenly spread the tracks over it instead.
+  const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
   // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
   // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
   const solved = $derived<Template | undefined>(
@@ -440,6 +444,13 @@
               : 'center'
             : undefined}
           style:justify-content={justification}
+          style:width={collection && arrangement === 'row' && packed ? 'max-content' : undefined}
+          style:margin-inline-start={collection && arrangement === 'row' && justify !== 'start'
+            ? 'auto'
+            : undefined}
+          style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
+            ? 'auto'
+            : undefined}
         >
           {@render contents()}
         </div>

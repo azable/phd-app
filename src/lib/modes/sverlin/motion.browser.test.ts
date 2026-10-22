@@ -295,6 +295,13 @@ it.skipIf(!enabled)(
       timeout: 60_000
     });
     const first = await placed(frame);
+    // No row keeps an end slot: j goes one past the end of right, but nothing draws j.
+    const slots = await frame.evaluate(() =>
+      [...document.querySelectorAll('.sv-layer:not(.pending) [data-sv-kind="Row"] > .items')].map(
+        (items) => items.children.length
+      )
+    );
+    expect(slots).toEqual([3, 3]);
     for (let index = 1; index < prepared.master.length; index++) {
       await step(index);
       await page.waitForTimeout(800);
