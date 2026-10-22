@@ -39,6 +39,13 @@ describe('design space', () => {
     expect(space['IntCell.gap']).toBeUndefined();
     expect(space['Current[current].shown']).toBeUndefined();
     expect(space['Current[current].fill']).toContain('amber-100');
+    // Overflow: a pointer's, drawn past the ends or not; a collection's, its end slots in its box
+    // or hanging outside it. Dashed borders are paint, for any node.
+    expect(space['Current[current].overflow']).toEqual(['shown', 'hidden']);
+    expect(space['Current[current,found].overflow']).toBeUndefined();
+    expect(space['Row.overflow']).toEqual(['included', 'excluded']);
+    expect(space['IntCell.overflow']).toBeUndefined();
+    expect(space['IntCell.dashed']).toEqual([false, true]);
   });
 
   it('records the kinds each tag can be, by its line and column', () => {
@@ -145,6 +152,7 @@ describe('kinds a tag the state decides draws', () => {
     expect(space['root[checked].size']).toBeDefined();
     expect(space['root[checked].gap']).toBeUndefined();
     expect(space['root[checked].shown']).toBeUndefined();
+    expect(space['root[checked].dashed']).toBeDefined();
     expect(space['root.gap']).toBeDefined();
     expect(space['root.shown']).toBeDefined();
   });

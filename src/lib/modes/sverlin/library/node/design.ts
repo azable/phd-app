@@ -96,7 +96,8 @@ export const propOptions = {
   gap: spacing,
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
-  dashed: [false, true]
+  dashed: [false, true],
+  overflow: ['shown', 'hidden', 'included', 'excluded']
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;
@@ -119,6 +120,7 @@ const nodeProps: readonly DesignProp[] = [
   'fill',
   'stroke',
   'strokeWidth',
+  'dashed',
   'opacity',
   'color',
   'font',
@@ -131,18 +133,42 @@ const nodeProps: readonly DesignProp[] = [
 
 /** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
-  container: [...nodeProps, 'gap', 'align', 'justify'],
+  container: [...nodeProps, 'gap', 'align', 'justify', 'overflow'],
   value: nodeProps,
   text: nodeProps,
-  pointed: nodeProps.filter((prop) => prop !== 'shown'),
+  pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
   link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'dashed', 'color']
 };
+
+/**
+ * A prop's options for a role: overflow says, for a pointer, whether it is drawn past its
+ * collection's ends, and for a collection's node, whether its end slots are inside its box or hang
+ * outside it.
+ */
+export const overflowOptions = {
+  pointer: ['shown', 'hidden'],
+  collection: ['included', 'excluded']
+} as const;
+
+export function optionsOf(
+  role: KindRole,
+  prop: DesignProp
+): readonly (string | number | boolean)[] {
+  if (prop !== 'overflow') return propOptions[prop];
+  return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
+}
 
 /**
  * Props a kind only some steps draw a node as, by a tag the state decides, can vary: not those that
  * move its children or its room, which its base kind gives (see conditionalProps).
  */
-const layoutProps: ReadonlySet<DesignProp> = new Set(['shown', 'gap', 'align', 'justify']);
+const layoutProps: ReadonlySet<DesignProp> = new Set([
+  'shown',
+  'gap',
+  'align',
+  'justify',
+  'overflow'
+]);
 
 /** The props of a kind drawn only under a conditional tag: paint, text, and inset, not layout. */
 export function conditionalProps(role: KindRole): readonly DesignProp[] {
@@ -150,7 +176,13 @@ export function conditionalProps(role: KindRole): readonly DesignProp[] {
 }
 
 /** Paint shows only where a pointer is; its other props hold in every slot, so slots keep one size. */
-export const paintProps: ReadonlySet<string> = new Set(['fill', 'stroke', 'opacity', 'color']);
+export const paintProps: ReadonlySet<string> = new Set([
+  'fill',
+  'stroke',
+  'dashed',
+  'opacity',
+  'color'
+]);
 
 /**
  * The kinds a node is drawn with: the one it is at a step, its base kind (its view and literal
@@ -189,6 +221,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'none',
     stroke: 'none',
     strokeWidth: 0,
+    dashed: false,
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -199,13 +232,15 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     minSize: 0,
     gap: 0.5,
     align: 'center',
-    justify: 'start'
+    justify: 'start',
+    overflow: 'included'
   },
   value: {
     shown: true,
     fill: 'white',
     stroke: 'neutral-300',
     strokeWidth: 1.5,
+    dashed: false,
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -220,6 +255,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'none',
     stroke: 'none',
     strokeWidth: 0,
+    dashed: false,
     opacity: 1,
     color: 'neutral-600',
     font: 'sans',
@@ -233,6 +269,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     fill: 'amber-100',
     stroke: 'amber-500',
     strokeWidth: 1.5,
+    dashed: false,
     opacity: 1,
     color: 'neutral-900',
     font: 'sans',
@@ -240,7 +277,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'bold',
     padding: 0.375,
     radius: 8,
-    minSize: 2.5
+    minSize: 2.5,
+    overflow: 'shown'
   },
   link: {
     shown: true,

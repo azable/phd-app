@@ -12,6 +12,7 @@
   import type { Form } from './forms';
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
+  import Overhang from './Overhang.svelte';
   import Pointing from './Pointing.svelte';
   import {
     designContext,
@@ -25,6 +26,8 @@
     keyedRef,
     layoutMemoryContext,
     nodeIdsContext,
+    overhangContext,
+    provideOverhang,
     elementSlot,
     pointerIdentityContext,
     pointersContext,
@@ -214,13 +217,16 @@
   // The end slots, as far past each end as any step puts one of the pointers' positions: none
   // where the trace never goes past.
   const endsOf = (into: readonly Pointer[], count: number, collection?: string) => {
-    // A pointer reaching this collection at some step keeps its end slots here at every step.
-    const ends = into.map((pointer) =>
-      types?.pastEnds(
-        collection && pointer.reaches?.has(collection) ? collection : pointer.collection,
-        pointer.path
-      )
-    );
+    // A pointer reaching this collection at some step keeps its end slots here at every step; one
+    // left out past the ends keeps none.
+    const ends = into
+      .filter((pointer) => !pointer.inside)
+      .map((pointer) =>
+        types?.pastEnds(
+          collection && pointer.reaches?.has(collection) ? collection : pointer.collection,
+          pointer.path
+        )
+      );
     const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
     const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
     return {
@@ -252,6 +258,8 @@
     endSlot && element?.collection === endSlot.collection ? endSlot.position : undefined;
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
+  // Where the collection this node is an item or element of hangs its end slots, if outside it.
+  const overhang = overhangContext();
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   const hidden = hiddenContext();
   // A node keeps a least size so that changing content never moves anything around it. A typed
@@ -331,6 +339,16 @@
   // any of its renders reaches, keeps its tracks and puts the room where justify says; between,
   // around, and evenly spread the tracks over it instead.
   const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
+  // A collection whose overflow is excluded hangs its end slots outside its box (see Overhang).
+  const excluded = $derived(collection && look('overflow') === 'excluded');
+  untrack(() => {
+    if (collection)
+      provideOverhang(
+        excluded && (arrangement === 'row' || arrangement === 'column')
+          ? { layout: arrangement, gap }
+          : undefined
+      );
+  });
   // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
   // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
   const solved = $derived<Template | undefined>(
@@ -357,26 +375,32 @@
 {#if look('shown') === false}
   <!-- Left out of this variant: drawn nowhere, keeping no room. -->
 {:else}
-  {#if eachItem && eachItem.index === 0 && inSequence}
-    {#each itemEnds.before as end (end)}
-      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-    {/each}
+  {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
+    <Overhang {overhang} side="before">
+      {#each itemEnds.before as end (end)}
+        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+      {/each}
+    </Overhang>
   {/if}
   {#if atEnd !== undefined}
     {#if pointers.length}
       <Pointing {pointers} position={atEnd} name={slot ?? ''} draw={pointed} placeholder />
     {/if}
   {:else if pointers.length}
-    {#if position === 0 && inSequence}
-      {#each before as end (end)}
-        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-      {/each}
+    {#if position === 0 && inSequence && before.length}
+      <Overhang {overhang} side="before">
+        {#each before as end (end)}
+          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+        {/each}
+      </Overhang>
     {/if}
     <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
-    {#if position === length - 1 && inSequence}
-      {#each after as end (end)}
-        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-      {/each}
+    {#if position === length - 1 && inSequence && after.length}
+      <Overhang {overhang} side="after">
+        {#each after as end (end)}
+          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+        {/each}
+      </Overhang>
     {/if}
   {:else}
     <div
@@ -400,6 +424,7 @@
       style:color={colourCss(look('color'))}
       style:background-color={colourCss(look('fill'))}
       style:border-color={strokeColour}
+      style:border-style={look('dashed') === true ? 'dashed' : undefined}
       style:border-width={`${borderWidth}px`}
       style:border-radius={measured('radius', 'px')}
       style:padding={reach
@@ -451,6 +476,7 @@
           style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
             ? 'auto'
             : undefined}
+          style:position={excluded ? 'relative' : undefined}
         >
           {@render contents()}
         </div>
@@ -466,10 +492,12 @@
       <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
     </div>
   {/if}
-  {#if eachItem && eachItem.index === itemLength - 1 && inSequence}
-    {#each itemEnds.after as end (end)}
-      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-    {/each}
+  {#if eachItem && eachItem.index === itemLength - 1 && inSequence && itemEnds.after.length}
+    <Overhang {overhang} side="after">
+      {#each itemEnds.after as end (end)}
+        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+      {/each}
+    </Overhang>
   {/if}
 {/if}
 

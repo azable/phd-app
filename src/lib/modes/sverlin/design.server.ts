@@ -10,7 +10,7 @@ import {
   colourParts,
   conditionalProps,
   frameOptions,
-  propOptions,
+  optionsOf,
   roleProps,
   starterFrame,
   starterLooks,
@@ -68,7 +68,7 @@ export function designSpace(
     ...frameOptions,
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, propOptions[prop]])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
       )
     )
   };
@@ -174,7 +174,15 @@ function propOf(key: string): string {
 }
 
 /** Props a random variant leaves as they were: what is shown, how things line up, the frame. */
-const kept = new Set<string>(['shown', 'opacity', 'align', 'justify', 'dashed', 'minSize']);
+const kept = new Set<string>([
+  'shown',
+  'opacity',
+  'align',
+  'justify',
+  'dashed',
+  'minSize',
+  'overflow'
+]);
 const colourProps = new Set<string>(['fill', 'stroke', 'color']);
 const lengthProps = new Set<string>(['strokeWidth', 'size', 'padding', 'radius', 'gap']);
 

@@ -176,10 +176,11 @@ Tags are names, written as one name (`tags="label"`), names separated by spaces,
 
 Every kind of node has these props, each with a fixed set of options:
 
-- `shown`: whether its nodes are drawn at all; one left out takes its children with it and keeps no room. A `<Pointed>` kind has none: to drop a pointer, its type's view is `none`, or render it in `{#if}`.
+- `shown`: whether its nodes are drawn at all; one left out takes its children with it and keeps no room. A `<Pointed>` kind has none: to drop a pointer, leave out a node around its `<Pointed>`, give its type's view `none`, or render it in `{#if}`; the elements it would point at are then drawn as without it.
 - `fill` and `stroke`: `none` or a colour.
 - `color`: the text's colour.
 - `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels.
+- `dashed`: whether its border is dashed, as for a place rather than a value.
 - `opacity`: 0.25, 0.5, 0.75, or 1.
 - `font`: sans, serif, or mono.
 - `size`: the text's size, 0.75, 0.875, 1, 1.125, 1.25, 1.5, or 2 rem.
@@ -188,7 +189,7 @@ Every kind of node has these props, each with a fixed set of options:
 - `radius`: 0, 2, 4, 6, 8, or 12 pixels, or 999 for a circle or pill.
 - `minSize`: the least width and height, 0, 1, 1.5, 2, 2.5, 3, or 4 em.
 
-A kind that arranges its children, with a `layout`, a collection, or links, also has `gap` (as `padding`), `align` (start, center, or end, across the layout), and `justify` (start, center, end, between, around, or evenly, along it). Where a collection's node has more room than its items' tracks need, as when every render of a view keeps the widest box any of them reaches, `justify` start, center, or end puts the room after, around, or before them, and between, around, or evenly spreads the tracks over it. A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, `dashed`, and `color` for its label. A kind a node is drawn as only at some steps, by a tag the state decides (`found && 'found'`), has every prop but `shown`, `gap`, `align`, and `justify`, which its base kind gives: the node's view and its literal tags, as `Here[current]` for `Here[current,found]`. Such a node keeps the largest padding, border, and least size of every kind its tag can be, at every step, so its content never moves as the state changes its kind; its colours and text change in place. The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, and rose) in 11 shades from 50, the lightest, to 950, the darkest, as `blue-600`.
+A kind that arranges its children, with a `layout`, a collection, or links, also has `gap` (as `padding`), `align` (start, center, or end, across the layout), and `justify` (start, center, end, between, around, or evenly, along it). Where a collection's node has more room than its items' tracks need, as when every render of a view keeps the widest box any of them reaches, `justify` start, center, or end puts the room after, around, or before them, and between, around, or evenly spreads the tracks over it. Positions past a collection's ends are drawn in end slots beside it, kept only as far as the drawn positions go: a collection's kind has `overflow`, included (its end slots are tracks of its box) or excluded (they hang outside its box, so centring it centres its elements); a `<Pointed>` kind has `overflow` too, shown (drawn past the ends) or hidden (drawing nothing there, keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, `dashed`, and `color` for its label. A kind a node is drawn as only at some steps, by a tag the state decides (`found && 'found'`), has every prop but `shown`, `gap`, `align`, `justify`, and `overflow`, which its base kind gives: the node's view and its literal tags, as `Here[current]` for `Here[current,found]`. Such a node keeps the largest padding, border, and least size of every kind its tag can be, at every step, so its content never moves as the state changes its kind; its colours and text change in place. The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, and rose) in 11 shades from 50, the lightest, to 950, the darkest, as `blue-600`.
 
 ### Variants
 

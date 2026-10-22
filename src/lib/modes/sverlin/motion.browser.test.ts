@@ -430,3 +430,71 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+/** The cursors merge drawn with a variant, stepped to each step: its rows' boxes and the j label. */
+async function cursorRows(chosen: Record<string, string>) {
+  const prepared = prepareSvelteComponent(cursors);
+  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+  const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+  await page.setContent(
+    `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+  );
+  const frame = page.frames()[1];
+  const steps = [];
+  for (let index = 0; index < prepared.master.length; index++) {
+    await page.evaluate((index) => {
+      document
+        .querySelector('iframe')
+        ?.contentWindow?.postMessage({ type: 'sverlin:step', step: index }, '*');
+    }, index);
+    if (index === 0)
+      await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+        timeout: 60_000
+      });
+    await page.waitForTimeout(800);
+    steps.push(
+      await frame.evaluate(() => {
+        const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
+        const box = (node: Element) => {
+          const { left, right } = node.getBoundingClientRect();
+          return [Math.round(left), Math.round(right)];
+        };
+        const j = [...layer.querySelectorAll<HTMLElement>('[data-sv-kind="JCursor[cursor]"]')].find(
+          (node) => getComputedStyle(node).visibility !== 'hidden'
+        );
+        return {
+          rows: [...layer.querySelectorAll('[data-sv-kind="Row"] > .items')].map(box),
+          j: j ? box(j) : undefined
+        };
+      })
+    );
+  }
+  await page.close();
+  return steps;
+}
+
+it.skipIf(!enabled)(
+  'hangs the end slots of a collection whose overflow is excluded outside its box',
+  { timeout: 120_000 },
+  async () => {
+    const steps = await cursorRows({ 'Row.overflow': 'excluded' });
+    const [first] = steps;
+    // Both rows are their cells alone, the same box at every step; j, one past the end of right
+    // at the last step, is drawn beyond that box.
+    expect(first.rows[0]).toEqual(first.rows[1]);
+    for (const step of steps) expect(step.rows).toEqual(first.rows);
+    expect(steps.at(-1)!.j![0]).toBeGreaterThan(first.rows[1][1]);
+  }
+);
+
+it.skipIf(!enabled)(
+  'leaves a pointer whose overflow is hidden undrawn past the ends, keeping no room there',
+  { timeout: 120_000 },
+  async () => {
+    const steps = await cursorRows({ 'JCursor[next].overflow': 'hidden' });
+    const [first] = steps;
+    expect(first.rows[0]).toEqual(first.rows[1]);
+    expect(first.j).toBeDefined();
+    expect(steps.at(-1)!.j).toBeUndefined();
+  }
+);

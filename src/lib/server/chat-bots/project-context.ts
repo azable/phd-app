@@ -28,7 +28,7 @@ import type {
   RenderablePresentation
 } from '$lib/shared/presentations';
 import { presentationStepLabels } from '$lib/shared/presentations';
-import { frameOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
+import { frameOptions, overflowOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
 
 type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -651,8 +651,20 @@ export function designVariables(
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
     const view = key.startsWith('views.') ? key.slice('views.'.length) : undefined;
-    const set = key.startsWith('frame.') ? key : key.slice(key.lastIndexOf('.') + 1);
-    const known: Record<string, readonly DesignValue[]> = { ...propOptions, ...frameOptions };
+    const prop = key.startsWith('frame.') ? key : key.slice(key.lastIndexOf('.') + 1);
+    // A pointer's overflow and a collection's have options of their own.
+    const set =
+      prop === 'overflow'
+        ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
+          ? 'overflow.pointer'
+          : 'overflow.collection'
+        : prop;
+    const known: Record<string, readonly DesignValue[]> = {
+      ...propOptions,
+      ...frameOptions,
+      'overflow.pointer': overflowOptions.pointer,
+      'overflow.collection': overflowOptions.collection
+    };
     if (!view && Object.hasOwn(known, set)) options[set] = known[set];
     return {
       variable: key,

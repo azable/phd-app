@@ -201,10 +201,11 @@ export type PointerCall = {
   /** A reference's pointer: it points at the element the reference refers to, wherever it is. */
   ref?: boolean;
   /**
-   * The base kinds of the nodes around its <Pointed>: where the variant leaves one out, the pointer
-   * is not drawn, as the element drawn inside it would go too.
+   * Its view's base kinds: those of the nodes around its <Pointed>, where the variant leaving one
+   * out leaves the pointer undrawn, as the element drawn inside it would go too; and its
+   * <Pointed>'s, whose overflow says whether it is drawn past its collection's ends.
    */
-  hides?: () => readonly string[];
+  kinds?: () => { around: readonly string[]; pointed: string } | undefined;
 };
 
 /** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
@@ -218,6 +219,8 @@ export type Pointer = {
   reaches?: ReadonlySet<string>;
   /** The path its position is read from this step, as take.from: its end slots are that path's. */
   path?: string;
+  /** Whether it is left out past its collection's ends, keeping no end slots there. */
+  inside?: boolean;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -225,7 +228,9 @@ export function providePointers(calls: readonly PointerCall[]): void {
   const types = typeContext();
   const design = designContext();
   const pointers = calls.flatMap((call, order): Pointer[] => {
-    if (call.hides?.().some((kind) => design[`${kind}.shown`] === false)) return [];
+    const kinds = call.kinds?.();
+    if (kinds?.around.some((kind) => design[`${kind}.shown`] === false)) return [];
+    const inside = kinds !== undefined && design[`${kinds.pointed}.overflow`] === 'hidden';
     // A position read through one that points nowhere, as edges[e].to with e at -1, points at
     // nothing this step, but keeps its room in the only collection of its type; so does one read
     // from a variable out of scope, which stands in with another step's value.
@@ -255,16 +260,23 @@ export function providePointers(calls: readonly PointerCall[]): void {
     }
     const [only, ...others] = types?.variablesOf(call.into) ?? [];
     const collection = found.collection ?? (others.length ? undefined : only);
+    // One left out past the ends points nowhere there.
+    const length = collection === undefined ? 0 : (types?.lengthOf(collection) ?? 0);
+    const position =
+      found.position === undefined || (inside && (found.position < 0 || found.position >= length))
+        ? Number.NaN
+        : found.position;
     return collection
       ? [
           {
             view: call.view(),
             collection,
-            position: found.position ?? Number.NaN,
+            position,
             order,
             paint: call.paint,
             reaches: path === undefined ? undefined : types?.reachedFrom(path),
-            path
+            path,
+            ...(inside ? { inside } : {})
           }
         ]
       : [];
@@ -361,6 +373,18 @@ export function endSlotContext(): { collection: string; position: number } | und
  * Inside an {#each} item's node, which keeps the end slots of the collection it is an item of:
  * the element inside keeps none of its own.
  */
+/** How a collection whose overflow is excluded hangs its end slots outside its box. */
+export type Overhang = { layout: 'row' | 'column'; gap: number };
+
+/** Tell a collection's items whether its end slots hang outside its box, and how. */
+export function provideOverhang(overhang: Overhang | undefined): void {
+  setContext('sverlin:overhang', overhang);
+}
+
+export function overhangContext(): Overhang | undefined {
+  return getContext<Overhang | undefined>('sverlin:overhang');
+}
+
 export function provideItemEnds(collection: string): void {
   setContext('sverlin:item-ends', collection);
 }

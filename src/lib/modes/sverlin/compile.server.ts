@@ -406,18 +406,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             : 'undefined';
       return `const __paint_${name} = (${parameter}: any) => ({ __kind: __sverlinKind(${JSON.stringify(name)}, __sverlinTags(${value}, 'pointed')) });`;
     });
-    // The base kinds of the nodes around a pointer view's <Pointed>: one a variant leaves out
-    // would take the element drawn inside it along, so the pointer is then not drawn at all.
-    const enclosing = (view: string): string[] => {
-      const pointed = found.pointed.get(view)?.tag;
+    // A pointer view's base kinds: those of the nodes around its <Pointed>, one of which a variant
+    // leaving out would take the element drawn inside it along, so the pointer is then not drawn
+    // at all; and its <Pointed>'s own, which says whether it is drawn past its collection's ends.
+    const pointerKinds = (view: string) => {
+      const pointed = found.pointed.get(view)?.tag as { attributes?: Attribute[] } | undefined;
       const root = found.components.find((component) => component.name === view)?.node;
-      return nodesAround(root, pointed).flatMap((node) => {
+      const base = (node: { attributes?: Attribute[] } | undefined, untagged: string[]) => {
         const read = tagSets(
-          node.attributes?.find((attribute) => attribute.name === 'tags'),
+          node?.attributes?.find((attribute) => attribute.name === 'tags'),
           svelteSource
         );
-        return 'problem' in read ? [] : [kindKey(view, read.fixed)];
-      });
+        return 'problem' in read
+          ? undefined
+          : kindKey(view, read.fixed.length ? read.fixed : untagged);
+      };
+      return {
+        around: nodesAround(root, pointed).flatMap((node) => base(node, []) ?? []),
+        pointed: base(pointed, ['pointed']) ?? kindKey(view, ['pointed'])
+      };
     };
     const pointers = pointerCalls(
       ast.html,
@@ -445,9 +452,9 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
                   }
                 : { into: domain.atoms[type]?.index ?? '' }),
               paint,
-              hides: found.pointers.has(name)
-                ? `() => ${JSON.stringify(enclosing(name))}`
-                : `() => (${JSON.stringify(Object.fromEntries(chosen[name].map((option) => [option, enclosing(option)])))} as Record<string, string[]>)[__choice_${name}] ?? []`,
+              kinds: found.pointers.has(name)
+                ? `() => (${JSON.stringify(pointerKinds(name))})`
+                : `() => (${JSON.stringify(Object.fromEntries(chosen[name].map((option) => [option, pointerKinds(option)])))} as Record<string, { around: string[]; pointed: string }>)[__choice_${name}]`,
               ...(reads.length ? { reads: [...new Set(reads)] } : {})
             }
           ];
