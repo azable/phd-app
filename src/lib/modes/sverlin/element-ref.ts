@@ -1,10 +1,11 @@
 /**
- * Where a selected element came from: the <Node> or <Link> tag its id names in the presentation's source
+ * Where a selected element came from: the <Node>, <Link>, or <Listing> tag its id names in the
+ * presentation's source; a listing's line is keyed by its number, as L3
  * (see provideNodeIds in library/type-context.ts for how ids are formed).
  */
 
 export type ElementLocation = {
-  /** Line and column (both from 1) of the element's <Node> or <Link> tag. */
+  /** Line and column (both from 1) of the element's <Node>, <Link>, or <Listing> tag. */
   line: number;
   column: number;
   /** A keyed node's key, which names the element whichever render of the tag drew it. */
@@ -22,14 +23,14 @@ const elementId =
   /^(\d{1,5}):(\d{1,5})(?:@([\w.!~*'()%-]{1,24}))?(?:#(\d{1,5}))?((?:\/\d{1,5}){0,8})$/u;
 const maxMarkup = 200;
 
-/** Locate an element id in a Sverlin source, or undefined if it names no <Node> or <Link> there. */
+/** Locate an element id in a Sverlin source, or undefined if it names no library tag there. */
 export function locateElement(source: string, id: string): ElementLocation | undefined {
   const match = elementId.exec(id);
   if (!match) return undefined;
   const line = Number(match[1]);
   const column = Number(match[2]);
   const text = source.split('\n')[line - 1];
-  if (text === undefined || !/^<(?:Node|Link)(?:[\s/>]|$)/u.test(text.slice(column - 1)))
+  if (text === undefined || !/^<(?:Node|Link|Listing)(?:[\s/>]|$)/u.test(text.slice(column - 1)))
     return undefined;
   let key: string | undefined;
   try {

@@ -5,6 +5,7 @@
 
 export { default as Frame } from './Frame.svelte';
 export { default as Link } from './node/Link.svelte';
+export { default as Listing } from './listing/Listing.svelte';
 export { default as Node } from './node/Node.svelte';
 export { default as Pointed } from './node/Pointed.svelte';
 export { default as SverlinSlot } from './node/Slot.svelte';

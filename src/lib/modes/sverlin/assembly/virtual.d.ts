@@ -41,4 +41,9 @@ declare module 'virtual:components' {
     range?: { min: number; max: number };
   }[];
   export const placements: { path: string; step: number; values: unknown[] }[];
+  /** The listing in the variant's language, and what each step lights, if the view places one. */
+  export const listing: {
+    text: string;
+    lit: { current: [number, number][]; earlier: [number, number][] }[];
+  } | null;
 }

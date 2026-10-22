@@ -324,6 +324,49 @@ describe('single-component Svelte compilation', () => {
     ).resolves.toBeDefined();
   });
 
+  it('lists the algorithm where the view places a <Listing />, its language a variable', async () => {
+    const source = [
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script>',
+      '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
+      '<script lang="sverlin">for (let i = Index(0); i < values.length; i++) yield;</script>',
+      '<Node layout="row"><Listing /><Node>{#each values as v}<Node value={v} />{/each}</Node></Node>'
+    ].join('\n');
+    const prepared = prepareSvelteComponent(source);
+    expect(prepared.design.space['listing.language']).toEqual([
+      'python',
+      'pseudocode',
+      'javascript',
+      'none'
+    ]);
+    expect(prepared.design.starter['listing.language']).toBe('python');
+    expect(prepared.listings?.python.text).toBe('for i in range(len(values)):\n    pass');
+    expect(prepared.listings?.javascript.text).toBe(
+      'for (let i = Index(0); i < values.length; i++) yield;'
+    );
+    expect(prepared.listings?.python.lit).toHaveLength(2);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: { 'listing.language': 'pseudocode' }
+    });
+    expect(javascript).toContain('for i = 0 to values.length - 1');
+    // Without a <Listing />, the design has no listing variables.
+    expect(prepareSvelteComponent(linearSearchSource).design.space).not.toHaveProperty(
+      'listing.language'
+    );
+  });
+
+  it('rejects a <Listing /> with props or children, or inside a view', () => {
+    const blocks =
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">const n = Int(1); yield;</script>\n';
+    expect(() => prepareSvelteComponent(`${blocks}<Listing language="python" />`)).toThrow(
+      'takes no props or children'
+    );
+    expect(() =>
+      prepareSvelteComponent(
+        `${blocks}{#snippet Code(value: Int)}<Node {value} /><Listing />{/snippet}{@render Code(n)}`
+      )
+    ).toThrow('place <Listing /> outside views');
+  });
+
   it('rejects view scripts and values that shadow library components', async () => {
     await expect(
       compileSvelteComponent(

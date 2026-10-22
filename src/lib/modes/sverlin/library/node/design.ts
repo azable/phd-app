@@ -120,6 +120,22 @@ export const frameOptions = {
   'frame.layout': ['column', 'row']
 } satisfies Record<string, readonly (string | number)[]>;
 
+/**
+ * A listing's settings, variables of the whole presentation when the view places a <Listing />:
+ * its language, and the fill of the text the step's latest event ran and of its earlier events.
+ */
+export const listingOptions = {
+  'listing.language': ['python', 'pseudocode', 'javascript', 'none'],
+  'listing.current.fill': ['none', ...colours],
+  'listing.earlier.fill': ['none', ...colours]
+} satisfies Record<string, readonly string[]>;
+
+export const starterListing: Record<keyof typeof listingOptions, string> = {
+  'listing.language': 'python',
+  'listing.current.fill': 'amber-200',
+  'listing.earlier.fill': 'neutral-200'
+};
+
 /** What a kind of node is, which says the props it has. */
 export type KindRole = 'container' | 'value' | 'text' | 'pointed' | 'link';
 

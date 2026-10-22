@@ -29,7 +29,7 @@ There is no design block: what presentations differ in is the design space (see 
 
 ## View
 
-The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope, as are `event` and `history` when the domain declares operations (see Operations); never write `import`, and never declare names `Node`, `Link`, or `Pointed`.
+The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, a `<Listing />` of the algorithm (see Listing), text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope, as are `event` and `history` when the domain declares operations (see Operations); never write `import`, and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
 Draw every value of a domain type through a view of its type, as `{@render Int(target)}` (see Views of types), and every position through a pointer (see Pointers); the markup around them arranges, labels, and explains. For a value used more than once or too long to read inline, use `{@const name = expression}` as the first child of the nearest component or block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`.
 
@@ -251,6 +251,7 @@ When the domain declares operations, every step also records the calls, by opera
     yield;
     if (found) break;
   }
+  yield;
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -363,6 +364,46 @@ Nodes say nothing about what a structure means by themselves: nodes laid out as 
 ### Page frame
 
 Every view sits in a page frame, a canvas laid out at a fixed logical size (1200 pixels wide) and scaled to fit, so every presentation renders identically whatever the pane size. Its ratio is the variable `frame.ratio` (16:9, 4:3, 3:2, 1:1, 3:4, or 9:16), 16:9 in the starter; keep 16:9 unless the participant asks for another shape. Participants select nodes by clicking or dragging a box, to point at them in feedback; they scroll to zoom, drag with the middle button or with Space held to pan, and double-click empty space to reset, and the view is kept as they step through. Every node is selectable, so draw each thing a participant might want to point at, such as a cell, a pointer name, or a caption, as a node of its own. The page frame stacks the view's top-level nodes in a column or a row (`frame.layout`), `frame.gap` apart, spread and aligned by `frame.justify` and `frame.align`, as between to put a title at the top and a note at the bottom, with `frame.padding` inside its edge. To place nodes freely, relate them, or join them with links, put them in a `<Node layout="free">` (see Free layout, links, and relations). Use the frame's width: lay sequences out across it rather than down it. Write the top-level nodes directly rather than wrapping the whole view in one node.
+
+### Listing
+
+`<Listing />` shows the algorithm as code beside the view, lighting what each step ran: the text of the step's latest event most strongly, and the rest of what ran since the step before more faintly. Place it in the markup like a node, outside views, as `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes no props or children. Its language is the variable `listing.language`: `python`, `pseudocode` (counting from 0, as the view's positions do), `javascript` (the algorithm as written), or `none`, python in the starter; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. The listing is the algorithm block, not the input. An operation whose body is one expression is written where it is called, its operands put in, as `values[i] == target` for `Matches({ at: i, target })`; one with a block body is written as a call, with its definition above the algorithm. Each line is a node participants can select.
+
+Linear search, with its code beside it:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Found = type('boolean');
+  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([3, 8, 5, 2, 7]);
+  const target = Int(2);
+</script>
+
+<script lang="sverlin">
+  for (let i = Index(0); i < values.length; i++) {
+    const found = Found(Matches({ at: i, target }));
+    yield;
+    if (found) break;
+  }
+  yield;
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Here(p: Index)}<Node layout="column"><Pointed tags="current" /><Node tags="label">i</Node></Node>{/snippet}
+
+<Node tags="title">Linear search for {@render Int(target)}</Node>
+<Node layout="row">
+  <Listing />
+  <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+</Node>
+{@render Here(i)}
+```
 
 ## Node
 

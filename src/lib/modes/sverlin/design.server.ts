@@ -10,9 +10,11 @@ import {
   colourParts,
   conditionalProps,
   frameOptions,
+  listingOptions,
   optionsOf,
   roleProps,
   starterFrame,
+  starterListing,
   starterLooks,
   type DesignValues,
   type KindRole
@@ -56,16 +58,21 @@ export class DesignValueError extends Error {
   }
 }
 
-/** Every variable of a source: each type's views, the frame's settings, and each kind's props. */
+/**
+ * Every variable of a source: each type's views, the frame's settings, a listing's if the view
+ * places one, and each kind's props.
+ */
 export function designSpace(
   kinds: readonly DesignKind[],
-  views: Readonly<Record<string, readonly string[]>>
+  views: Readonly<Record<string, readonly string[]>>,
+  listing = false
 ): DesignSpace {
   return {
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, [...options, 'none']])
     ),
     ...frameOptions,
+    ...(listing ? listingOptions : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
@@ -77,13 +84,15 @@ export function designSpace(
 /** The first variant of a source: each type in its first view, and each kind in its role's look. */
 export function starterVariant(
   kinds: readonly DesignKind[],
-  views: Readonly<Record<string, readonly string[]>>
+  views: Readonly<Record<string, readonly string[]>>,
+  listing = false
 ): Record<string, DesignValue> {
   return {
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
     ),
     ...starterFrame,
+    ...(listing ? starterListing : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
@@ -105,7 +114,12 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       : `The design has no variable ${key}; its kinds of node are ${[
           ...new Set(
             Object.keys(space)
-              .filter((other) => !other.startsWith('views.') && !other.startsWith('frame.'))
+              .filter(
+                (other) =>
+                  !other.startsWith('views.') &&
+                  !other.startsWith('frame.') &&
+                  !other.startsWith('listing.')
+              )
               .map((other) => other.slice(0, other.lastIndexOf('.')))
           )
         ].join(', ')}.`;
@@ -173,8 +187,12 @@ function propOf(key: string): string {
   return key.slice(key.lastIndexOf('.') + 1);
 }
 
-/** Props a random variant leaves as they were: what is shown, how things line up, the frame. */
+/**
+ * Props a random variant leaves as they were: what is shown, how things line up, the frame, and a
+ * listing's language.
+ */
 const kept = new Set<string>([
+  'language',
   'shown',
   'opacity',
   'align',

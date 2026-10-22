@@ -19,6 +19,7 @@ import {
   type TraceState
 } from './algorithm/interpret.server';
 import { listingLanguages } from './listing/languages';
+import { lightSteps, writtenListing, type Lit } from './listing/light.server';
 import { renderListing, type Listing } from './listing/render.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
@@ -147,7 +148,12 @@ export type PreparedComponent = {
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
+  /** Where the view places a <Listing />, the algorithm in each language, and what each step lights. */
+  listings?: Record<string, LitListing>;
 };
+
+/** A listing's text and what each step lights in it. */
+export type LitListing = { text: string; lit: Lit[] };
 
 export class InvalidSvelteSourceError extends Error {
   readonly code?: string;
@@ -228,7 +234,27 @@ export function recordedTrace(source: string): MasterStep[] {
   );
 }
 
-/** The algorithm as a listing in each of the library's languages (see listing/render.server.ts). */
+/**
+ * The algorithm as a listing in each language: the library's (see listing/render.server.ts), and
+ * as written.
+ */
+function listingsFrom(
+  { root, hints }: ReturnType<typeof traceAlgorithm>,
+  domain: DomainRegistry,
+  body: string
+): Record<string, Listing> {
+  return {
+    ...Object.fromEntries(
+      Object.entries(listingLanguages).map(([name, language]) => [
+        name,
+        renderListing(root, domain, hints, language)
+      ])
+    ),
+    javascript: writtenListing(body, root)
+  };
+}
+
+/** The algorithm as a listing in each language. */
 export function listingsOf(source: string): Record<string, Listing> {
   const { blocks } = extractBlocks(source);
   if (!blocks.algorithm)
@@ -241,18 +267,14 @@ export function listingsOf(source: string): Record<string, Listing> {
   const input = blocks.input
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
-  const { root, hints } = interpretBlock(
+  const algorithm = blocks.algorithm;
+  const traced = interpretBlock(
     source,
-    blocks.algorithm,
+    algorithm,
     (body) => traceAlgorithm(body, input, domain),
     blocks
   );
-  return Object.fromEntries(
-    Object.entries(listingLanguages).map(([name, language]) => [
-      name,
-      renderListing(root, domain, hints, language)
-    ])
-  );
+  return listingsFrom(traced, domain, algorithm.body);
 }
 
 /**
@@ -298,7 +320,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, every type a choice of its views. Remove the block, and say what nodes are with tags, as <Node tags="current">.',
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
-    const { insertions, problems, kinds, tagKinds } = withNodeRefs(
+    const { insertions, problems, kinds, tagKinds, listing } = withNodeRefs(
       svelteSource,
       ast,
       source,
@@ -417,12 +439,22 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
-    const master = interpretBlock(
+    const algorithm = blocks.algorithm;
+    const traced = interpretBlock(
       source,
-      blocks.algorithm,
-      (body) => interpretAlgorithm(body, input, domain),
+      algorithm,
+      (body) => traceAlgorithm(body, input, domain),
       blocks
     );
+    const master = traced.steps;
+    const listings = listing
+      ? Object.fromEntries(
+          Object.entries(listingsFrom(traced, domain, algorithm.body)).map(([name, written]) => [
+            name,
+            { text: written.text, lit: lightSteps(written, master) }
+          ])
+        )
+      : undefined;
     // Variables out of scope at some step: what the view draws from one is hidden there.
     const scoped = new Set(
       stateNames.filter((name) => master.some(({ state }) => !(name in state)))
@@ -596,9 +628,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       design: {
         views: chosen,
         tags: tagKinds,
-        space: designSpace(kinds, chosen),
-        starter: starterVariant(kinds, chosen)
-      }
+        space: designSpace(kinds, chosen, listing),
+        starter: starterVariant(kinds, chosen, listing)
+      },
+      ...(listings ? { listings } : {})
     };
   } catch (cause) {
     const error =
@@ -693,11 +726,13 @@ export async function bundlePresentation(
       __design: values
     };
   });
+  const language = values['listing.language'];
+  const listing = typeof language === 'string' ? (prepared.listings?.[language] ?? null) : null;
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),
     JSON.stringify(prepared.atoms),
-    JSON.stringify({ components: prepared.components, placements: prepared.placements })
+    JSON.stringify({ components: prepared.components, placements: prepared.placements, listing })
   );
   const output = result.outputFiles[0];
   if (output.contents.byteLength > maximumBundleBytes) {
@@ -1104,8 +1139,12 @@ function withNodeRefs(
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
   tagKinds: Record<string, string[]>;
+  /** Whether the view places a <Listing />. */
+  listing: boolean;
 } {
   const problems: InvalidSvelteSourceError[] = [];
+  // Where each <Listing /> starts, given its source position as the others are.
+  const listings: number[] = [];
   type Tag = {
     type?: string;
     name?: string;
@@ -1134,6 +1173,25 @@ function withNodeRefs(
       return;
     }
     const tag = value as Tag & Record<string, unknown> & { data?: string };
+    if (tag.type === 'InlineComponent' && tag.name === 'Listing') {
+      const content = (tag.children ?? []).some(
+        (child) => !(child.type === 'Text' && !child.data?.trim())
+      );
+      if (tag.attributes?.length || content)
+        reject(
+          "<Listing /> takes no props or children: its language and looks are the design's, as listing.language.",
+          'view_markup',
+          tag.start
+        );
+      else if (view !== 'root')
+        reject(
+          'A view draws only its value, so place <Listing /> outside views, in the markup at the top level or in a node there.',
+          'view_markup',
+          tag.start
+        );
+      else if (tag.start !== undefined) listings.push(tag.start);
+      return;
+    }
     const library =
       tag.type === 'InlineComponent' &&
       (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
@@ -1277,7 +1335,12 @@ function withNodeRefs(
       text: ` __view="${view}"${ref}${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}${conditional}`
     };
   });
+  for (const start of listings) {
+    const { line, column } = sourcePosition(source, start);
+    insertions.push({ at: start + 'Listing'.length + 1, text: ` __ref="${line}:${column + 1}"` });
+  }
   return {
+    listing: listings.length > 0,
     insertions,
     problems,
     kinds: [...kinds].map(([key, role]) => ({

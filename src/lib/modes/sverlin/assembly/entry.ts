@@ -25,7 +25,7 @@ import {
 } from 'sverlin';
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
-import { components, placements } from 'virtual:components';
+import { components, listing, placements } from 'virtual:components';
 import states from 'virtual:trace';
 
 // The page theme every node draws on: colour tokens, the canvas, and spacing for the page itself.
@@ -238,6 +238,7 @@ function mountStep(
       context: new Map<string, unknown>([
         ['sverlin:design', design],
         ['sverlin:layout-memory', memory],
+        ['sverlin:listing', listing ? { text: listing.text, ...listing.lit[step] } : undefined],
         [
           'sverlin:types',
           {

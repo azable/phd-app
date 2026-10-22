@@ -28,7 +28,12 @@ import type {
   RenderablePresentation
 } from '$lib/shared/presentations';
 import { presentationStepLabels } from '$lib/shared/presentations';
-import { frameOptions, overflowOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
+import {
+  frameOptions,
+  listingOptions,
+  overflowOptions,
+  propOptions
+} from '$lib/modes/sverlin/library/node/design';
 
 type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -651,7 +656,10 @@ export function designVariables(
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
     const view = key.startsWith('views.') ? key.slice('views.'.length) : undefined;
-    const prop = key.startsWith('frame.') ? key : key.slice(key.lastIndexOf('.') + 1);
+    const prop =
+      key.startsWith('frame.') || key === 'listing.language'
+        ? key
+        : key.slice(key.lastIndexOf('.') + 1);
     // A pointer's overflow and a collection's have options of their own.
     const set =
       prop === 'overflow'
@@ -662,6 +670,7 @@ export function designVariables(
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
+      'listing.language': listingOptions['listing.language'],
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection
     };

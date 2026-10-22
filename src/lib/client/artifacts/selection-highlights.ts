@@ -32,9 +32,9 @@ export function highlightRanges(
   for (const { line, column } of highlights) {
     if (line < 1 || line > state.doc.lines) continue;
     const from = state.doc.line(line).from + column - 1;
-    // A selection names a node or a link component.
-    const tag = state.doc.sliceString(from, from + 5);
-    if (tag !== '<Node' && tag !== '<Link') continue;
+    // A selection names a node, link, or listing component.
+    const tag = state.doc.sliceString(from, from + 8);
+    if (!/^<(?:Node|Link|Listing)\b/u.test(tag)) continue;
     ranges.set(from, { from, to: tagEnd(state.doc.sliceString(from, from + 4000)) + from });
   }
   return [...ranges.values()].sort((a, b) => a.from - b.from);
