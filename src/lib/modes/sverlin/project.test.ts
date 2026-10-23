@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">let n = Int(0); /* @step */ n = Int(1); /* @step */ n = Int(2);</script><Node>{step}</Node>';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script><Node>{step}</Node>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -39,7 +39,10 @@ describe('Svelte-backed project lifecycle', () => {
     expect(presentations.every((presentation) => presentation.format === 'browser-bundle-v1')).toBe(
       true
     );
-    expect(presentations[0]).toMatchObject({ mode: 'sverlin', labels: ['Step 1', 'Step 2'] });
+    expect(presentations[0]).toMatchObject({
+      mode: 'sverlin',
+      labels: ['Step 1', 'Step 2', 'Step 3']
+    });
 
     const rebuilt = await buildProjectPresentations(
       {
@@ -81,14 +84,14 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
     expect(left.masterSteps).toEqual(right.masterSteps);
-    expect(left.masterSteps).toHaveLength(5);
+    expect(left.masterSteps).toHaveLength(6);
     // The first is the starter; the second is randomised from it.
     expect(left.variant?.['views.Int']).toBe('IntCell');
     expect(left.origins?.['IntCell.fill']).toBe('starter');
     expect(right.variant).not.toEqual(left.variant);
     expect(right.views).toEqual({ Int: ['IntCell', 'IntTally'], Index: ['IndexText'] });
     const frames = alignPresentationFrames([left, right]);
-    expect(frames).toHaveLength(5);
+    expect(frames).toHaveLength(6);
     const document = await appendProjectPreference(
       result.document,
       {

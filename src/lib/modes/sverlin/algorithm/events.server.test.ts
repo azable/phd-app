@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { maximumStepEvents, type TraceEvent } from './events.server';
-import { interpretAlgorithm, interpretDomain } from './interpret.server';
+import { interpretAlgorithm, interpretDomain, traceAlgorithm } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9999 });
@@ -102,10 +102,12 @@ describe('the event log', () => {
   });
 
   it('keeps each step’s latest events, counting every one', () => {
-    const trace = run(`const values = Values([]);
-      for (let i = Int(0); i < 1000; i++) values.push(i);
-      const a = Int(1); // @mark
-      const b = Int(2); // @mark`);
+    // Stepping at each mark, the loop leads up to the first.
+    const body = `@fill[const values = Values([]);
+      for (let i = Int(0); i < 1000; i++) values.push(i);]
+      @mark[const a = Int(1);]
+      @mark[const b = Int(2);]`;
+    const { steps: trace } = traceAlgorithm(body, undefined, domain, 'mark');
     expect(trace).toHaveLength(2);
     expect(trace[0].events).toHaveLength(maximumStepEvents);
     expect(trace[0].events?.at(-1)?.kind).toBe('write');

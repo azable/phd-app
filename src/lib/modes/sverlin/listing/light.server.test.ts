@@ -14,17 +14,19 @@ const domain = interpretDomain(`
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(8);', domain);
 const body = `
-  for (let i = Index(0); i < values.length; i++) { // @loop
-    const found = Flag(Matches({ at: i, target })); // @check
-    if (found) break; // @test; stop: break
+  for (let i = Index(0); @loop[i < values.length]; i++) {
+    @check[const found = Flag(Matches({ at: i, target }));]
+    @test[if (found) {
+      @stop[break;]
+    }]
   }
 `;
-const text = `for [loop: i = 0 to n - 1]
-    [check: found = [Matches: A[i] == x]]
-    if [test: found then [stop: stop]]`;
+const text = `for @loop[i = 0 to n - 1]
+    @check[found = @Matches[A[i] == x]]
+    if @test[found then @stop[stop]]`;
 // Stepping by check: each step leads up to the check, then makes it.
 const traced = traceAlgorithm(body, input, domain, 'check');
-const { listing, problems } = mappedListing({ body: text }, { ...traced, body }, domain);
+const { listing, problems } = mappedListing({ body: text }, traced, domain);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
   current: current.map(([start, end]) => text.slice(start, end)),
@@ -44,14 +46,12 @@ describe('lighting', () => {
     );
   });
 
-  it('lights the last step, after the last labelled code, only faintly: it has no code of its own', () => {
+  it('lights the last step, after the last step’s code, only faintly: it has no code of its own', () => {
     const lit = lightSteps(listing, traced.steps);
     // Found at the second check; the last step holds the test that held, the stop, and the exit.
     expect(lit).toHaveLength(3);
     expect(shown(listing, lit[2]).current).toEqual([]);
-    expect(shown(listing, lit[2]).earlier).toEqual(
-      expect.arrayContaining(['i = 0 to n - 1', 'found then stop'])
-    );
+    expect(shown(listing, lit[2]).earlier).toEqual(['found then stop']);
   });
 
   it('keeps the lighting of the step before where a step lights nothing', () => {

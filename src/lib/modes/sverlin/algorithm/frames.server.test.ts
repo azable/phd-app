@@ -12,17 +12,30 @@ const domain = interpretDomain(`
 `);
 const input = interpretInput('const values = Values([3, 8, 5, 2]); const target = Int(5);', domain);
 const search = `
-  let checked = Int(0);
-  for (let i = Index(0); i < values.length; i++) { // @pass
-    checked = checked + 1; // @count
-    if (Matches({ at: i, target })) break;
+  @start[let checked = Int(0);]
+  for (let i = Index(0); i < values.length; i++) @pass{
+    @count[checked = checked + 1;]
+    @check[if (Matches({ at: i, target })) break;]
   }
 `;
-const steps = (body: string, label?: string) => traceAlgorithm(body, input, domain, label).steps;
+const steps = (body: string, frames?: string) => traceAlgorithm(body, input, domain, frames).steps;
+const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
 
 describe('frames', () => {
+  it('offer the top level, each label with its prefix, the labels inside one, and operations', () => {
+    expect(traceAlgorithm(search, input, domain).options).toEqual([
+      '*',
+      'start',
+      'pass',
+      'pass.*',
+      'pass.count',
+      'pass.check',
+      'Matches'
+    ]);
+  });
+
   it('step at each run of the code a label marks, from the state before it to the state after', () => {
-    const trace = steps(search, 'count');
+    const trace = steps(search, 'pass.count');
     expect(
       trace.slice(0, 3).map(({ before, state }) => [before?.state.checked, state.checked])
     ).toEqual([
@@ -35,28 +48,37 @@ describe('frames', () => {
     expect(first.events?.slice(first.gap).map(({ kind }) => kind)).toEqual(['read', 'write']);
   });
 
-  it('step at every label of a group, a dotted label’s prefix, which the labels offer too', () => {
-    const sort = `
-      for (let i = Index(0); i < values.length - 1; i++) {
-        if (values[i + 1] < values[i]) { // @move.compare: values[i + 1] < values[i]
-          const moved = values[i];
-          values[i] = values[i + 1];
-          values[i + 1] = moved; // @move.swap
-        }
-      }
+  it('step at each run of a label at the top, and of each label inside one', () => {
+    // [3, 8, 5, 2], looking for 5: the start, three passes, and the end, out of the loop.
+    expect(checked(steps(search))).toEqual([0, 1, 2, 3, 3]);
+    expect(steps(search).at(-1)?.state.i).toBeUndefined();
+    // Each count and each check.
+    expect(checked(steps(search, 'pass.*')).slice(0, 6)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it('step once at each pass of a labelled loop, its test leading up to the pass', () => {
+    const loop = `
+      @start[let checked = Int(0);]
+      @loop[for (let i = Index(0); i < values.length; i++) {
+        checked = checked + 1;
+        if (Matches({ at: i, target })) break;
+      }]
     `;
-    const traced = traceAlgorithm(sort, input, domain, 'move');
-    expect(traced.labels).toEqual(['move.compare', 'move.swap', 'move']);
-    // [3, 8, 5, 2]: compare 0 and 1; compare 1 and 2, swap; compare 2 and 3, swap; the end.
-    expect(traced.steps.map(({ state }) => (state.values as number[]).join(''))).toEqual([
-      '3852',
-      '3852',
-      '3582',
-      '3582',
-      '3528',
-      '3528'
+    expect(
+      steps(loop, 'loop').map(({ before, state }) => [before?.state.i, state.checked])
+    ).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      // The loop's exit, after the pass that broke out of it, is the last step, out of the loop.
+      [undefined, 3]
     ]);
-    expect(steps(sort, 'move.swap')).toHaveLength(3);
+  });
+
+  it('step once over statements in a row a label marks together', () => {
+    const trace = steps('@both[let a = Int(1);\nlet b = Int(2);]\n@last[a = b;]', 'both');
+    expect(trace[0].before?.state).not.toHaveProperty('a');
+    expect(trace[0].state).toMatchObject({ a: 1, b: 2 });
   });
 
   it('step at each call of an operation, its name a label of its calls', () => {
@@ -70,34 +92,20 @@ describe('frames', () => {
     ]);
   });
 
-  it('step once at each pass of a labelled loop', () => {
-    const trace = steps(search, 'pass');
-    expect(trace.map(({ before, state }) => [before?.state.i, state.checked])).toEqual([
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      // The loop's exit, after the pass that broke out of it, is the last step, out of the loop.
-      [undefined, 3]
-    ]);
-  });
-
-  it('end with a step for what runs after the last labelled code', () => {
+  it('end with a step for what runs after the last step, only where it changes the state', () => {
+    // The break after the last call, and the loop's exit, leave the loop's variable behind.
     const trace = steps(search, 'Matches');
-    // The break after the last call, and the loop's exit, are a step of their own.
     expect(trace).toHaveLength(4);
     expect(trace.at(-1)?.events?.map(({ kind }) => kind)).toEqual(
       expect.arrayContaining(['test', 'break', 'exit'])
     );
+    // A loop's last test changes nothing.
+    const counting = '@start[let n = Int(0);]\nwhile (n < 2) @up{\n  n = n + 1;\n}';
+    expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
   });
 
-  it('step by the first label written where none is chosen', () => {
-    expect(steps(search).map(({ state }) => state.checked)).toEqual(
-      steps(search, 'pass').map(({ state }) => state.checked)
-    );
-  });
-
-  it('number every step by its moment, the same whichever label steps are by', () => {
-    const byCount = steps(search, 'count');
+  it('number every step by its moment, the same whichever rule steps are by', () => {
+    const byCount = steps(search, 'pass.count');
     const byCall = steps(search, 'Matches');
     const moments = (trace: typeof byCall) => trace.map(({ moment }) => moment as number);
     // Each count comes before the call it leads to.
@@ -106,7 +114,7 @@ describe('frames', () => {
       .forEach((moment, index) => {
         expect(moment).toBeLessThan(moments(byCall)[index]);
       });
-    // Presentations stepping by different labels line up by moment, one holding its step where
+    // Presentations stepping by different rules line up by moment, one holding its step where
     // the other has one of its own.
     const presentation = (id: string, trace: typeof byCall) => ({
       presentationId: id,
@@ -126,7 +134,7 @@ describe('frames', () => {
 
   it('reject a label whose code never runs', () => {
     expect(() =>
-      steps('const n = Int(1);\nif (n > 5) {\n  const m = Int(2); // @never\n}', 'never')
+      steps('@start[const n = Int(1);]\nif (n > 5) @never{\n  const m = Int(2);\n}', 'never')
     ).toThrow('The code labelled never never runs, so there are no steps.');
   });
 

@@ -14,11 +14,11 @@ const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 describe('scope', () => {
   it('records the variables in scope at each step, and none out of it', () => {
     const trace = run(`
-      const values = Values([3, 1]); // @step
+      @start[const values = Values([3, 1]);]
       for (let i = Position(0); i < values.length; i++) {
-        const seen = values[i]; // @step
+        @see[const seen = values[i];]
       }
-      let done = Int(1); // @step
+      @done[let done = Int(1);]
     `);
     expect(trace.map(({ state }) => Object.keys(state))).toEqual([
       ['values'],
@@ -46,11 +46,11 @@ describe('scope', () => {
   });
 
   it('points a position into a collection a block holds', () => {
-    const [step] = run(`
-      const paths = Table([[1, 2], [3, 4]]);
+    const [, step] = run(`
+      @start[const paths = Table([[1, 2], [3, 4]]);]
       for (let r = RowIndex(0); r < 1; r++) {
-        const row = paths[r];
-        let c = Position(row, 1); // @step
+        @point[const row = paths[r];
+        let c = Position(row, 1);]
       }
     `);
     expect(step.targets).toMatchObject({ c: 'row' });

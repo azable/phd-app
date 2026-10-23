@@ -25,7 +25,7 @@ it.skipIf(!enabled)(
   'plays a step forward as the state before its code, then the state after it',
   { timeout: 120_000 },
   async () => {
-    // Each step is the write of 7; the write of 3 before it leads up to it.
+    // Stepping by write, each step is the write of 7; the write of 3 before it leads up to it.
     const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
@@ -36,16 +36,16 @@ it.skipIf(!enabled)(
 </script>
 <script lang="sverlin">
   for (let i = Index(0); i < values.length; i++) {
-    values[i] = 3;
-    values[i] = 7; // @write
+    @lead[values[i] = 3;]
+    @write[values[i] = 7;]
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 <Node>{#each values as v}{@render Int(v)}{/each}</Node>`;
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.master[0].before?.state.values).toEqual([3, 1, 1]);
-    expect(prepared.master[0].state.values).toEqual([7, 1, 1]);
-    const { javascript } = await bundlePresentation(prepared, 1);
+    expect(prepared.masters.write[0].before?.state.values).toEqual([3, 1, 1]);
+    expect(prepared.masters.write[0].state.values).toEqual([7, 1, 1]);
+    const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'write' } });
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

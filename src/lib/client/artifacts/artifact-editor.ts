@@ -11,6 +11,8 @@ import { javascript } from '@codemirror/lang-javascript';
 import type { Extension } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
 
+import { sverlinLabelMarks } from './label-marks';
+
 /** Source languages supported by the project artifact editor. */
 export type ArtifactLanguage = 'svelte' | 'json';
 
@@ -122,6 +124,7 @@ export function artifactEditorExtensions({
     basicSetup,
     artifactLanguageSupport(language),
     syntaxHighlighting(sverlinHighlightStyle),
+    ...(language === 'svelte' ? [sverlinLabelMarks()] : []),
     artifactTheme()
   ];
 }

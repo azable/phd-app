@@ -247,7 +247,7 @@ export function recordedTrace(source: string): MasterStep[] {
  */
 function listingsFrom(
   source: string,
-  { root, comments }: ReturnType<typeof traceAlgorithm>,
+  traced: ReturnType<typeof traceAlgorithm>,
   domain: DomainRegistry,
   algorithm: Block,
   own: readonly ListingBlock[]
@@ -270,7 +270,7 @@ function listingsFrom(
       );
       continue;
     }
-    const mapped = mappedListing(block, { root, comments, body: algorithm.body }, domain);
+    const mapped = mappedListing(block, traced, domain);
     listings[block.name] = mapped.listing;
     maps[block.name] = mapped.maps;
     for (const { message, block: where, at: offset } of mapped.problems)
@@ -285,8 +285,8 @@ function listingsFrom(
 }
 
 /**
- * The algorithm's steps by every label it can step by (see stepLabels), the one it starts with
- * first, leaving out one whose code never runs or runs more often than the step limit.
+ * The algorithm's steps by every frame rule it can step by (see stepLabels), the one it starts
+ * with first, leaving out one whose code never runs or runs more often than the step limit.
  */
 function framings(
   source: string,
@@ -297,10 +297,10 @@ function framings(
 ): Record<string, ReturnType<typeof traceAlgorithm>> {
   const trace = (label?: string) =>
     interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label), blocks);
-  // The label it starts with; any problem here is the algorithm's or its labels'.
+  // The rule it starts with; any problem here is the algorithm's or its labels'.
   const first = trace();
-  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.labels[0]]: first };
-  for (const label of first.labels.slice(1))
+  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.options[0]]: first };
+  for (const label of first.options.slice(1))
     try {
       runs[label] = trace(label);
     } catch {
@@ -311,10 +311,14 @@ function framings(
 
 /**
  * Each step as two, the state just before its code and just after it, as the page plays it: the
- * events up to the code, then the code itself.
+ * events up to the code, then the code itself. The first step is never played into, a page
+ * opening on its after, so its before is its after, as the variables it declares are.
  */
 function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
-  return steps.flatMap((step) => [{ ...step, ...(step.before ?? {}) }, step]);
+  return steps.flatMap((step, index) => [
+    index === 0 ? step : { ...step, ...(step.before ?? {}) },
+    step
+  ]);
 }
 
 /** The algorithm as a listing in each language. */
@@ -559,7 +563,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
-          'A <Listing /> shows a listing of the source\'s own: add its text in a <script lang="sverlin" listing="code"> block, marking each part to light as [label: text], and label the algorithm\'s code with the same labels, as // @label at the end of its line (see Listing).',
+          'A <Listing /> shows a listing of the source\'s own: add its text in a <script lang="sverlin" listing="code"> block, marking each part to light as @label[text], and label the algorithm\'s code the same way, as @label[…] around it (see Listing).',
           { code: 'view_markup', start: sourcePosition(source, listingAt ?? 0) }
         )
       );

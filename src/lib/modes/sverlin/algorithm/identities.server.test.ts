@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { StepIdentities } from './identities.server';
-import { interpretAlgorithm, interpretDomain } from './interpret.server';
+import { interpretDomain, traceAlgorithm } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
@@ -18,14 +18,17 @@ const idsOf = (identities: StepIdentities | undefined, paths: string[]) => ({
 
 /** Each step's ids of the given paths after its code, and its copies there. */
 function identities(body: string, paths: string[]) {
-  return interpretAlgorithm(body, undefined, domain).map(({ identities }) =>
+  return traceAlgorithm(body, undefined, domain).steps.map(({ identities }) =>
     idsOf(identities, paths)
   );
 }
 
-/** The ids of the given paths as they are shown: each step's before its code, then its after. */
-function shown(body: string, paths: string[]) {
-  return interpretAlgorithm(body, undefined, domain).flatMap(({ before, identities }) => [
+/**
+ * The ids of the given paths as they are shown, stepping by a frame rule: each step's before its
+ * code, then its after.
+ */
+function shown(body: string, paths: string[], frames?: string) {
+  return traceAlgorithm(body, undefined, domain, frames).steps.flatMap(({ before, identities }) => [
     ...(before ? [idsOf(before.identities, paths)] : []),
     idsOf(identities, paths)
   ]);
@@ -36,15 +39,14 @@ describe('identities', () => {
     const swap = 'const moved = values[0]; values[0] = values[1]; values[1] = moved;';
     // The whole swap is one step's code.
     const [before, after] = identities(
-      `/* @step */ const values = Values([7, 3, 9]); /* @step */ if (values.length > 0) { ${swap} }`,
+      `@start[const values = Values([7, 3, 9]);] @swap[if (values.length > 0) { ${swap} }]`,
       ['values[0]', 'values[1]', 'values[2]']
     );
     const [seven, three, nine] = before.ids;
     expect(after).toEqual({ ids: [three, seven, nine], copies: {} });
 
-    // The swap at the top level runs after the last labelled code, leading up to the end's step, so
-    // its before shows it.
-    const [, , inScope] = shown(`/* @step */ const values = Values([7, 3, 9]); ${swap}`, [
+    // The swap's statements at the top level, one step, leave its temporary in scope.
+    const [, , , inScope] = shown(`@start[const values = Values([7, 3, 9]);] @swap[${swap}]`, [
       'values[0]',
       'values[1]',
       'moved'
@@ -55,15 +57,15 @@ describe('identities', () => {
 
   it('make a copy where one value sits in two places, and keep the copy a variable holds', () => {
     // The first step's before is empty: its code declares the values.
-    const [, start, picked, shifted, , inserted] = shown(
-      `const values = Values([5, 2, 4]); // @step
-       const key = values[1];
-       values[1] = values[0]; // @step
-       values[0] = key; // @step`,
+    const [, start, , picked, , shifted, , inserted] = shown(
+      `@start[const values = Values([5, 2, 4]);]
+       @pick[const key = values[1];]
+       @shift[values[1] = values[0];]
+       @put[values[0] = key;]`,
       ['values[0]', 'values[1]', 'values[2]', 'key']
     );
     const [five, two, four] = start.ids;
-    // The key is picked up leading up to the shift, so it shows as a copy before the shift's code.
+    // The key picked up is a copy of the value it was picked from.
     const key = picked.ids[3];
     expect(picked).toEqual({ ids: [five, two, four, key], copies: { [key!]: two } });
     // Every after is matched with the before shown just ahead of it.
@@ -77,20 +79,21 @@ describe('identities', () => {
 
   it('never bring back a value once it is no longer shown', () => {
     const paths = ['values[0]', 'values[1]', 'values[2]', 'values[3]', 'key'];
-    // Each pass of the shifting loop is a step, so the key picked up and the value put back lead
-    // up to one.
+    // Stepping only at each pass of the shifting loop, the key picked up and the value put back
+    // lead up to one.
     const snapshots = shown(
-      `const values = Values([5, 2, 4, 1]);
+      `@start[const values = Values([5, 2, 4, 1]);]
        for (let i = Count(1); i < values.length; i++) {
-         const key = values[i];
-         let j = i;
-         while (j > 0 && values[j - 1] > key) { // @shift
+         @pick[const key = values[i];
+         let j = i;]
+         @shift[while (j > 0 && values[j - 1] > key) {
            values[j] = values[j - 1];
            j--;
-         }
-         values[j] = key;
+         }]
+         @place[values[j] = key;]
        }`,
-      paths
+      paths,
+      'shift'
     );
     const gone = new Set<number>();
     let previous = new Set<number>();
@@ -104,9 +107,9 @@ describe('identities', () => {
 
   it('copy a value pushed from one collection into another', () => {
     const [start, merged] = identities(
-      `const left = Values([1, 4]);
-       let merged = Values([]); // @step
-       merged.push(left[0]); // @step`,
+      `@start[const left = Values([1, 4]);
+       let merged = Values([]);]
+       @push[merged.push(left[0]);]`,
       ['left[0]', 'merged[0]']
     );
     const one = start.ids[0];
@@ -116,8 +119,8 @@ describe('identities', () => {
 
   it('give a value written anew a new identity', () => {
     const [before, after] = identities(
-      `const values = Values([7, 3]); // @step
-       values[0] = 0; // @step`,
+      `@start[const values = Values([7, 3]);]
+       @write[values[0] = 0;]`,
       ['values[0]', 'values[1]']
     );
     expect(after.ids[0]).not.toBe(before.ids[0]);
@@ -127,8 +130,8 @@ describe('identities', () => {
 
   it('keep the rest when the front leaves', () => {
     const [before, after] = identities(
-      `const queue = Values([1, 2, 3]); // @step
-       queue.shift(); // @step`,
+      `@start[const queue = Values([1, 2, 3]);]
+       @leave[queue.shift();]`,
       ['queue[0]', 'queue[1]', 'queue[2]']
     );
     expect(after.ids).toEqual([before.ids[1], before.ids[2], undefined]);
@@ -145,11 +148,11 @@ describe('identities', () => {
   });
 
   it('go to a variable only while no collection holds its value', () => {
-    const [, aside, back] = identities(
-      `const values = Values([5, 2, 4]); // @step
-       const key = values[1];
-       values[1] = values[0]; // @step
-       values[0] = key; // @step`,
+    const [, , aside, back] = identities(
+      `@start[const values = Values([5, 2, 4]);]
+       @pick[const key = values[1];]
+       @shift[values[1] = values[0];]
+       @put[values[0] = key;]`,
       ['values[0]', 'key']
     );
     const two = aside.ids[1];

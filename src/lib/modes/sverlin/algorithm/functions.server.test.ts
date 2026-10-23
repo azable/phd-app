@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { declaredNames, interpretAlgorithm, interpretDomain } from './interpret.server';
+import { declaredNames, interpretDomain, traceAlgorithm } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 99 });
@@ -9,7 +9,8 @@ const domain = interpretDomain(`
   const Flag = type('boolean');
   const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
 `);
-const run = (body: string) => interpretAlgorithm(body, undefined, domain);
+const run = (body: string, frames?: string) =>
+  traceAlgorithm(body, undefined, domain, frames).steps;
 
 describe('functions', () => {
   it('are called with their arguments, giving back a position into the caller’s collection', () => {
@@ -48,7 +49,7 @@ describe('functions', () => {
   it('hide top-level variables of the same name with their parameters', () => {
     const [inside] = run(`
       function first(values) {
-        const v = values[0]; // @step
+        @step[const v = values[0];]
       }
       const values = Values([4, 2]);
       first(values.slice(1));
@@ -57,14 +58,17 @@ describe('functions', () => {
   });
 
   it('recur, each call seeing only its own variables', () => {
-    const trace = run(`
+    const trace = run(
+      `
       function count(a, lo) {
-        if (lo === a.length) return Int(0); // @step
-        return a[lo] + count(a, lo + 1);
+        @test[if (lo === a.length) return Int(0);]
+        @add[return a[lo] + count(a, lo + 1);]
       }
       const values = Values([3, 8, 5]);
       const total = count(values, Index(0));
-    `);
+    `,
+      'test'
+    );
     // Each call's test is a step, the innermost's too, where it returns; then the end.
     expect(trace.map(({ state }) => state.lo)).toEqual([0, 1, 2, 3, undefined]);
     expect(trace.at(-1)?.state.total).toBe(16);
@@ -129,42 +133,43 @@ describe('functions', () => {
 
 describe('loops', () => {
   it('count up, down, and by a constant step, and skip on with continue', () => {
-    const trace = run(`
-      const values = Values([1, 2, 3, 4, 5]);
-      for (let i = Index(4); i >= 0; i -= 2) {} // @step
+    const loops = `
+      @start[const values = Values([1, 2, 3, 4, 5]);]
+      @down[for (let i = Index(4); i >= 0; i -= 2) {}]
       for (let j = Index(0); j < values.length; j++) {
-        if (values[j] % 2 === 0) continue;
-        const odd = values[j]; // @step
+        @skip[if (values[j] % 2 === 0) continue;]
+        @take[const odd = values[j];]
       }
-    `);
+    `;
     // A labelled loop steps once per pass; the end, with neither in scope, is the last.
-    expect(trace.map(({ state }) => state.i ?? state.j)).toEqual([4, 2, 0, 0, 2, 4, undefined]);
+    expect(run(loops, 'down').map(({ state }) => state.i)).toEqual([4, 2, 0, undefined]);
+    expect(run(loops, 'take').map(({ state }) => state.j)).toEqual([0, 2, 4, undefined]);
   });
 
   it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
     const trace = run(`
-      const values = Values([1]);
-      let i = Index(0);
+      @start[const values = Values([1]);
+      let i = Index(0);]
       for (i = Index(0); i < values.length; i++) {
-        if (values.length < 3) values.push(1); // @step
+        @grow[if (values.length < 3) values.push(1);]
       }
       for (let k = Int(1); k < 10; k = k * 3) {
-        k++; // @step
+        @bump[k++;]
       }
     `);
-    // The end is a step too, after the last test.
-    expect(trace.map(({ state }) => state.i)).toEqual([0, 1, 2, 3, 3, 3]);
-    expect(trace.slice(3).map(({ state }) => state.k)).toEqual([2, 7, undefined]);
+    // The end is a step too, after the last test, which leaves k behind.
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3, 3]);
+    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7, undefined]);
   });
 
   it('run a do...while body once before its test', () => {
     const trace = run(`
-      let n = Int(0);
+      @start[let n = Int(0);]
       do {
-        n++; // @step
+        @up[n++;]
       } while (n < 0);
     `);
-    // The body's step, then the end after the test that fails.
-    expect(trace.map(({ state }) => state.n)).toEqual([1, 1]);
+    // The start, then the body's step; the test that fails after it changes nothing, so no end.
+    expect(trace.map(({ state }) => state.n)).toEqual([0, 1]);
   });
 });

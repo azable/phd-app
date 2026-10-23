@@ -31,8 +31,8 @@ import {
 } from './block.server';
 import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './events.server';
 import { Identities, type Placed, type StepIdentities } from './identities.server';
-import { readLabels, type LabelProblem } from './labels.server';
-import { parseBlock, type BlockComment } from './parse.server';
+import { readLabels, type Label, type LabelProblem } from './labels.server';
+import { parseBlock } from './parse.server';
 import {
   noDomain,
   operationNames,
@@ -99,6 +99,8 @@ export type MasterStep = {
   moment?: number;
   before?: StepSnapshot;
   gap?: number;
+  /** The code the step is a run of, where it is a label's or a call's, not the end. */
+  unit?: Span;
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -169,18 +171,28 @@ export function spanKey(block: 'algorithm' | 'domain', { start, end }: Span): st
 }
 
 /**
- * The labels a source can step by, in the order written: those in its comments, then each group
- * of them, a dotted label's prefix (move for move.swap and move.compare), which steps at every
- * label in it, then the operations it calls, which are labels of their own calls; and the problems
- * with its labels.
+ * The code a frame rule steps at: single nodes (a statement, a block, an expression, a call; a
+ * loop at each pass), and statements in a row, by their first and last.
+ */
+export type FrameUnits = { nodes: ReadonlySet<AnyNode>; ranges: ReadonlyMap<AnyNode, AnyNode> };
+
+/**
+ * What a source can step by (see labels.server.ts): `*`, at each run of a label at the top, then
+ * each label in the order written, at each run of its code, followed by `x.*`, at each run of a
+ * label inside it, where it has any; then the operations it calls, at each call. Also its labels,
+ * and the problems with them.
  */
 export function stepLabels(
-  root: BlockStatement,
-  comments: readonly BlockComment[],
-  body: string,
+  parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'comments' | 'code'>,
   domain: DomainRegistry
-): { labels: string[]; nodes: (label: string) => Set<AnyNode>; problems: LabelProblem[] } {
-  const read = readLabels(root, comments, body);
+): {
+  options: string[];
+  units: (frames: string) => FrameUnits;
+  labels: Label[];
+  problems: LabelProblem[];
+} {
+  const { root, markers, comments, code } = parsed;
+  const read = readLabels(root, markers, comments, code);
   const calls = new Map<string, AnyNode[]>();
   const visit = (node: unknown): void => {
     if (Array.isArray(node)) return node.forEach(visit);
@@ -196,30 +208,34 @@ export function stepLabels(
     for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
   };
   root.body.forEach(visit);
-  const groups = read.order.flatMap((label) =>
-    label
-      .split('.')
-      .slice(0, -1)
-      .map((_, index, parts) => parts.slice(0, index + 1).join('.'))
-  );
-  const inLabel = (name: string, label: string) => name === label || name.startsWith(`${label}.`);
-  return {
-    labels: [...new Set([...read.order, ...groups, ...calls.keys()])],
-    nodes: (label) =>
-      new Set([
-        ...[...read.labels].flatMap(([node, names]) =>
-          names.some((name) => inLabel(name, label)) ? [node] : []
-        ),
-        ...(calls.get(label) ?? [])
-      ]),
-    problems: read.problems
+  const { labels } = read;
+  const options = [
+    ...(labels.length ? ['*'] : []),
+    ...labels.flatMap(({ full, children }) => (children.length ? [full, `${full}.*`] : [full])),
+    ...calls.keys()
+  ];
+  const units = (frames: string): FrameUnits => {
+    const chosen = labels.filter(({ full, parent }) =>
+      frames === '*'
+        ? !parent
+        : frames.endsWith('.*')
+          ? parent?.full === frames.slice(0, -2)
+          : full === frames
+    );
+    const nodes = new Set<AnyNode>(calls.get(frames) ?? []);
+    const ranges = new Map<AnyNode, AnyNode>();
+    for (const { nodes: marked } of chosen)
+      if (marked.length === 1) nodes.add(marked[0]);
+      else ranges.set(marked[0], marked[marked.length - 1]);
+    return { nodes, ranges };
   };
+  return { options: [...new Set(options)], units, labels, problems: read.problems };
 }
 
 /**
- * Interpret the algorithm, stepping by the code a label marks: the one given, or the first the
- * source has; with none, its one step is its end. Keeps its tree and comments, which its labels are
- * in.
+ * Interpret the algorithm, stepping by a frame rule (see stepLabels): the one given, or the first
+ * the source has; with none, its one step is its end. Keeps its tree, labels, and code as parsed,
+ * which its listings are mapped by.
  */
 export function traceAlgorithm(
   body: string,
@@ -229,21 +245,32 @@ export function traceAlgorithm(
 ): {
   steps: MasterStep[];
   root: BlockStatement;
-  comments: BlockComment[];
-  labels: string[];
+  labels: Label[];
+  options: string[];
+  code: string;
 } {
-  const { root, offset, comments } = parseBlock(body, 'algorithm', domain);
-  const labelled = stepLabels(root, comments, body, domain);
+  const parsed = parseBlock(body, 'algorithm', domain);
+  const { root, offset, code } = parsed;
+  const labelled = stepLabels(parsed, domain);
   const [problem] = labelled.problems;
   if (problem) throw new AlgorithmError(problem.message, problem.at);
-  const label = frames ?? labelled.labels[0];
+  const rule = frames ?? labelled.options[0];
   const interpreter = new Interpreter(root, offset, {
     kind: 'algorithm',
     initial: input,
     domain,
-    frames: { label: label ?? '', nodes: label === undefined ? new Set() : labelled.nodes(label) }
+    frames: {
+      label: rule ?? '',
+      ...(rule === undefined ? { nodes: new Set(), ranges: new Map() } : labelled.units(rule))
+    }
   });
-  return { steps: interpreter.run(), root, comments, labels: labelled.labels };
+  return {
+    steps: interpreter.run(),
+    root,
+    labels: labelled.labels,
+    options: labelled.options,
+    code
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -309,13 +336,15 @@ class Interpreter {
   #returned: Value;
   /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
   readonly #functions = new Map<string, FunctionDeclaration>();
+  /** The functions holding code the frame rule steps at, whose calls end a step around them. */
+  readonly #stepping = new Set<FunctionDeclaration>();
   readonly #parameterTypes = new Map<string, (string | undefined)[]>();
   /** The scope of the running call's parameters, or the top level outside every call. */
   #frame: Scope = this.#topLevel;
   #depth = 0;
   readonly #log = new EventLog();
   /** The label steps are by, and the code it marks. */
-  readonly #frames: { label: string; nodes: ReadonlySet<AnyNode> };
+  readonly #frames: { label: string } & FrameUnits;
   /** The step whose code is running: its node, the state before it, and the events leading up. */
   #open: { node: AnyNode; before: StepSnapshot; gap: number } | undefined;
   /** The place each collection and record was last reached by, as values or edges[2]. */
@@ -331,11 +360,11 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       domain?: DomainRegistry;
-      frames?: { label: string; nodes: ReadonlySet<AnyNode> };
+      frames?: { label: string } & FrameUnits;
     }
   ) {
     this.#root = root;
-    this.#frames = options.frames ?? { label: '', nodes: new Set() };
+    this.#frames = options.frames ?? { label: '', nodes: new Set(), ranges: new Map() };
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -362,6 +391,10 @@ class Interpreter {
     for (const statement of root.body)
       if (statement.type === 'FunctionDeclaration')
         this.#functions.set(statement.id.name, statement);
+    const units = [...this.#frames.nodes, ...this.#frames.ranges.keys()];
+    for (const declared of this.#functions.values())
+      if (units.some(({ start, end }) => declared.start <= start && end <= declared.end))
+        this.#stepping.add(declared);
     this.#topLevelNames = [
       ...initial.map(([name]) => name),
       ...root.body.flatMap((statement) =>
@@ -379,11 +412,16 @@ class Interpreter {
       throw new AlgorithmError(
         `The code labelled ${this.#frames.label} never runs, so there are no steps.`
       );
-    // What runs after the last labelled code is a step of its own; without labels, the only one.
-    if (this.#log.since || this.#trace.length === 0) {
-      this.#begin(this.#root, this.#topLevel);
-      this.#end(this.#root, this.#topLevel);
-    }
+    // What runs after the last step is a step of its own where it changes the state or calls an
+    // operation; without labels, it is the only one.
+    const last = this.#trace.at(-1);
+    const called = Object.values(this.#event).some((calls) => calls.length);
+    this.#begin(this.#root, this.#topLevel);
+    this.#end(this.#root, this.#topLevel);
+    // The calls since a step are cleared after it, so they are left out of the comparison.
+    const without = ({ event: _, ...state }: TraceState) => JSON.stringify(state);
+    if (last && !called && without(this.#trace.at(-1)!.state) === without(last.state))
+      this.#trace.pop();
     return this.#trace;
   }
 
@@ -860,9 +898,23 @@ class Interpreter {
   }
 
   #block(statements: readonly Statement[], scope: Scope): Completion {
-    for (const statement of statements) {
-      const completion = this.#statement(statement, scope);
+    for (let index = 0; index < statements.length; index++) {
+      const statement = statements[index];
+      const last = this.#open ? undefined : this.#frames.ranges.get(statement);
+      if (!last) {
+        const completion = this.#statement(statement, scope);
+        if (completion !== 'normal') return completion;
+        continue;
+      }
+      // Statements in a row marked together are one step.
+      const end = statements.indexOf(last as Statement);
+      this.#begin(statement, scope);
+      let completion: Completion = 'normal';
+      for (; index <= end && completion === 'normal'; index++)
+        completion = this.#statement(statements[index], scope);
+      this.#end(last, scope);
       if (completion !== 'normal') return completion;
+      index = end;
     }
     return 'normal';
   }
@@ -1078,6 +1130,7 @@ class Interpreter {
       moment: Math.max(this.#log.seen, (this.#trace.at(-1)?.moment ?? -1) + 1),
       before: open.before,
       gap: Math.max(open.gap - (logged.dropped ?? 0), 0),
+      ...(open.node === this.#root ? {} : { unit: this.#offset(open.node) }),
       ...after,
       ...logged
     });
@@ -1654,13 +1707,19 @@ class Interpreter {
       );
       this.#access('write', param, parameters[index], value);
     });
+    // A step's code stops where it calls a function with steps of its own, which follow.
+    if (this.#open && this.#stepping.has(declared)) this.#end(this.#open.node, scope);
     const outer = this.#frame;
     const returned = this.#returned;
     this.#frame = frame;
     this.#depth += 1;
     this.#returned = undefined;
     try {
+      const stepping = !this.#open && this.#frames.nodes.has(declared.body);
+      if (stepping) this.#begin(declared.body, frame);
       const completion = this.#block(declared.body.body, frame);
+      // Unless a call inside it ended it first.
+      if (stepping && this.#open?.node === declared.body) this.#end(declared.body, frame);
       const end = declared.body.end;
       if (completion !== 'return') this.#emit('return', { ...declared.body, start: end - 1, end });
       const result = this.#returned as Value;

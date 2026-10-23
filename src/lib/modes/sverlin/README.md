@@ -79,14 +79,14 @@ Insertion sort, with the key drawn beside the row:
 </script>
 
 <script lang="sverlin">
-  for (let i = Position(1); i < values.length; i++) {
-    const key = values[i];
-    let j = i; // @step
-    while (j > 0 && values[j - 1] > key) { // @step
+  for (let i = Position(1); i < values.length; i++) @insert{
+    @pick[const key = values[i];
+    let j = i;]
+    @shift[while (j > 0 && values[j - 1] > key) {
       values[j] = values[j - 1];
       j--;
-    }
-    values[j] = key; // @step
+    }]
+    @place[values[j] = key;]
   }
 </script>
 
@@ -104,16 +104,18 @@ Insertion sort, with the key drawn beside the row:
 {@render Hole(j)}
 ```
 
-Between steps, the key leaves the row for its box, the larger values slide right, and the key drops into its place (see Steps). A reference follows its element as it moves: with `const Tracked = ref(Values);` and `const tracked = Tracked(values[3]);`, `{@render Follow(tracked)}` marks that value wherever the sort takes it.
+Each step inserts one key: it is copied into its box, the larger values slide right, and the key drops into its place; with `frames` set to `insert.*`, each of these is a step of its own (see Steps). A reference follows its element as it moves: with `const Tracked = ref(Values);` and `const tracked = Tracked(values[3]);`, `{@render Follow(tracked)}` marks that value wherever the sort takes it.
 
 ## Steps
 
-- A step is a run of the code a label marks. Label the code each step is about in a comment: `// @step` at the end of its line labels the last statement starting there, `/* @step */` before code labels the statement right after it, and either alone on its line labels the next line's first statement. Each time that code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass. What runs after the last labelled code is a step of its own, so the end of the algorithm, as a `break`, is shown; an algorithm with no labels has that one step, its end, for a picture that does not move.
-- An operation's name is a label of its calls, so `if (Matches({ at: i, target })) break;` steps at each comparison with no comment. Where a source has several labels, the variable `frames` says which one a presentation steps by, the first written in the starter; a variant keeps it unless the participant asks for another, and presentations stepping by different labels step together, one holding its step while the other shows the code between. A label can sit on several statements, so one choice of `frames` can step at all of them, and labels can be grouped by a dotted name: with `// @move.compare: values[i + 1] < values[i]` and `// @move.swap`, `frames` offers `move.compare`, `move.swap`, and the group `move`, which steps at both.
-- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A step labelled on a declaration has the variable only after it, so label the code after the declarations a view reads directly. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
+- A step is a run of the code a label marks. Write the label around the code: `@name[…]` around a statement, statements in a row, or an expression, as `@place[values[j] = key;]` or `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`. A name is one word, without dots. The algorithm runs as if the marks were spaces. Each time the code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass, its test leading up to the pass.
+- A label inside another takes its name as a prefix: `@shift[…]` inside `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's body has labelled statements, every statement in it is inside one of them or contains one, so each step is one label's code and only loops' headers and tests run between steps; a statement left out is an error naming the labels beside it. A label on part of a statement, as `@test[…]`, asks nothing of the code around it. An algorithm with no labels has one step, its end, for a picture that does not move.
+- The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; `insert.*`, each run of a label inside `insert`; or an operation's name, each of its calls, so `if (Matches({ at: i, target })) break;` steps at each comparison with no label (see Operations). A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes the state or calls an operation, so the end of the algorithm is shown.
+- A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
+- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
-- Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable the view draws, as insertion sort's `key`, holds a value while no collection does, so the value moves into it and back; while a collection also holds it, the variable shows a copy. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
+- Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
 
 ## Loops and functions
 
@@ -136,9 +138,9 @@ Binary search, written recursively:
 </script>
 
 <script lang="sverlin">
-  function search(a, target, lo, hi) {
+  function search(a, target, lo, hi) @call{
     if (lo > hi) return Index(-1);
-    const mid = Index(Math.floor((lo + hi) / 2)); // @step
+    const mid = Index(Math.floor((lo + hi) / 2));
     if (a[mid] === target) return mid;
     if (a[mid] < target) return search(a, target, mid + 1, hi);
     return search(a, target, lo, mid - 1);
@@ -311,7 +313,7 @@ Example, with domain, input, algorithm, and a script-free view:
 </script>
 
 <script lang="sverlin">
-  for (let i = Index(0); i < values.length; i++) {} // @step
+  for (let i = Index(0); i < values.length; i++) @visit{}
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -357,7 +359,7 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 `<Listing />` shows a text of the algorithm beside the view, such as the code or pseudocode the participant knows or a textbook's, exactly as written, lighting what each step ran: the text of the step's latest event most strongly, and the rest of what ran since the step before more faintly. Place it in the markup like a node, outside views, as `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes no props or children, and each of its lines is a node participants can select.
 
-Write the text in a `<script lang="sverlin" listing="textbook">` block, with any name but none; a source may have several, and the variable `listing.language` chooses which one a presentation shows, the first in the starter, or `none`; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. Mark each part of the text that should light as a region, `[label: text]`, nested as finely as needed, as `while [test: [bound: j > 0] and [cmp: A[j] > key]]`; a `[` that opens no region, as in `A[i]`, is text, and the marks are not shown. Then label the algorithm's code with the same labels, in a comment at the end of a statement's line or alone on the line above it: `// @shift` labels the statement, and `// @test; bound: j > 0; cmp: values[j - 1] > key` also names parts of it by their text, exactly as written in that line, with `#2` for a text's second occurrence. A call of an operation lights the region named after the operation without a label. The code inside a labelled part lights it too, and an unlabelled statement lights nothing; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every region must have a label, and a label without a region only marks steps; the context's listingMaps says what each region is mapped to and whether a step lights it.
+Write the text in a `<script lang="sverlin" listing="textbook">` block, with any name but none; a source may have several, and the variable `listing.language` chooses which one a presentation shows, the first in the starter, or `none`; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. Mark each part of the text that should light as a region with the algorithm's labels, written as they are there (see Steps): `@name[text]`, nested as finely as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside another taking its name as a prefix, so the names line up with the algorithm's. A `[` without a name, as in `A[i]`, is text, and the marks are not shown. A call of an operation lights the region named after the operation inside the region of the label around the call, as `@check[if @Matches[A[i] == target]]`. The code inside a labelled part lights it too; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every region must have a label, and a label without a region only marks steps; the context's listingMaps says what each region is mapped to and whether a step lights it.
 
 Insertion sort, beside a textbook's pseudocode:
 
@@ -373,27 +375,27 @@ Insertion sort, beside a textbook's pseudocode:
 </script>
 
 <script lang="sverlin">
-  for (let i = Position(1); i < values.length; i++) { // @outer
-    const key = values[i]; // @key
-    let j = i; // @init
-    while (j > 0 && values[j - 1] > key) { // @test; bound: j > 0; cmp: values[j - 1] > key
-      values[j] = values[j - 1]; // @shift
-      j--; // @down
+  for (let i = Position(1); i < values.length; i++) @insert{
+    @key[const key = values[i];]
+    @init[let j = i;]
+    while (@test[@bound[j > 0] && @cmp[values[j - 1] > key]]) @shift{
+      @copy[values[j] = values[j - 1];]
+      @down[j--;]
     }
-    values[j] = key; // @place
+    @place[values[j] = key;]
   }
 </script>
 
 <script lang="sverlin" listing="textbook">
   INSERTION-SORT(A, n)
-  1  for [outer: i = 2 to n]
-  2      [key: key = A[i]]
+  1  for i = 2 to n
+  2      @insert[@key[key = A[i]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
-  4      [init: j = i - 1]
-  5      while [test: [bound: j > 0] and [cmp: A[j] > key]]
-  6          [shift: A[j + 1] = A[j]]
-  7          [down: j = j - 1]
-  8      [place: A[j + 1] = key]
+  4      @init[j = i - 1]
+  5      while @test[@bound[j > 0] and @cmp[A[j] > key]]
+  6          @shift[@copy[A[j + 1] = A[j]]
+  7          @down[j = j - 1]]
+  8      @place[A[j + 1] = key]]
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -500,12 +502,12 @@ Breadth-first search, with the vertex being visited and the edge being examined 
 </script>
 
 <script lang="sverlin">
-  let queue = Queue([0]);
-  vertices[0].seen = true; // @step
-  while (queue.length > 0) {
-    const current = VertexRef(queue.shift()); // @step
-    for (let e = EdgeIndex(0); e < edges.length; e++) {
-      if (edges[e].from === current) { // @step
+  @start[let queue = Queue([0]);
+  vertices[0].seen = true;]
+  while (queue.length > 0) @visit{
+    @take[const current = VertexRef(queue.shift());]
+    for (let e = EdgeIndex(0); e < edges.length; e++) @edge{
+      if (edges[e].from === current) {
         if (!vertices[edges[e].to].seen) {
           vertices[edges[e].to].seen = true;
           queue.push(edges[e].to);

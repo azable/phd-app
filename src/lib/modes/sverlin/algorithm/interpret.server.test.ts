@@ -27,29 +27,29 @@ const plain = <T extends { types: unknown }>(step: T) => ({
 
 describe('algorithm interpretation', () => {
   it('records every top-level binding at each step', () => {
-    // The last step holds what runs after the last labelled code: the loop's exit.
+    // Each label at the top is a step, the loop's too, its body being no label of its own.
     const trace = interpretAlgorithm(`
-      const values = Ints([3, 8, 5]);
+      @start[const values = Ints([3, 8, 5]);
       let i = Int(-1);
-      let found = Flag(false); // @step
-      i = Int(0);
+      let found = Flag(false);]
+      @first[i = Int(0);]
       while (i < values.length) {
-        if (values[i] === 8) { // @step
+        @check[if (values[i] === 8) {
           found = Flag(true);
           break;
-        }
-        i++;
+        }]
+        @next[i++;]
       }
     `);
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 1]);
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 0, 1, 1]);
     expect(trace[0].state).toEqual({ values: [3, 8, 5], i: -1, found: false });
-    expect(trace[3].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
+    expect(trace[4].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
   });
 
   it('snapshots state so later mutations do not change earlier steps', () => {
     const trace = interpretAlgorithm(`
-      const a = Ints([2, 1]); // @step
-      const t = a[0]; a[0] = a[1]; a[1] = t; // @step
+      @start[const a = Ints([2, 1]);]
+      @swap[const t = a[0]; a[0] = a[1]; a[1] = t;]
     `);
     expect(trace[0].state.a).toEqual([2, 1]);
     expect(trace[1].state.a).toEqual([1, 2]);
@@ -127,12 +127,12 @@ describe('algorithm interpretation', () => {
     ).toThrow(/entries/);
     expect(() =>
       interpretAlgorithm(
-        'let a = Ints([1]); for (let i = Int(0); i < 13; i++) a = Ints([...a, ...a]); for (let j = Int(0); j < 30; j++) {} // @step'
+        '@grow[let a = Ints([1]); for (let i = Int(0); i < 13; i++) a = Ints([...a, ...a]);] @loop[for (let j = Int(0); j < 30; j++) {}]'
       )
     ).toThrow(/too large/);
     expect(() =>
       interpretAlgorithm(
-        `for (let i = Int(0); i <= ${algorithmLimits.maximumSteps}; i++) {} // @step`
+        `@loop[for (let i = Int(0); i <= ${algorithmLimits.maximumSteps}; i++) {}]`
       )
     ).toThrow(/more than/);
   });
@@ -157,7 +157,7 @@ describe('input and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
     const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
-      '/* @step */ values.reverse(); let swapped = Flag(true);',
+      '@reverse[values.reverse();] @flag[let swapped = Flag(true);]',
       input
     );
     expect(trace[0].before?.state).toEqual({ values: [2, 1], label: 'pair' });

@@ -11,6 +11,7 @@ import {
 
 import { operationNames, typeNames, type DomainRegistry } from './structures.server';
 import { AlgorithmError, type BlockKind, type Span } from './block.server';
+import { readMarkers, type Marker } from './labels.server';
 import { checkSubset } from './subset.server';
 
 // A strict-mode generator wrapper lets acorn parse top-level yield; it shares the body's first line.
@@ -20,18 +21,29 @@ const options: Options = { ecmaVersion: 2022, sourceType: 'script' };
 /**
  * Parse a block's body and check its subset. Offsets are relative to the body; the domain
  * names the type constructors and operations the block may call, and in the domain block itself,
- * where operations' bodies call them, its own declarations do.
+ * where operations' bodies call them, its own declarations do. The algorithm's label markers are
+ * read first and blanked (see labels.server.ts): `code` is the body as parsed.
  */
 export function parseBlock(
   body: string,
   kind: BlockKind,
   domain?: DomainRegistry
-): { root: BlockStatement; offset: (node: AnyNode) => Span; comments: BlockComment[] } {
+): {
+  root: BlockStatement;
+  offset: (node: AnyNode) => Span;
+  comments: BlockComment[];
+  markers: Marker[];
+  code: string;
+} {
   let program;
   let functions = new Set<number>();
   const comments: BlockComment[] = [];
+  const { code, markers, problems } =
+    kind === 'algorithm' ? readMarkers(body) : { code: body, markers: [], problems: [] };
+  const [problem] = problems;
+  if (problem) throw new AlgorithmError(problem.message, problem.at);
   try {
-    let wrapped = `${wrapperPrefix}${body}\n}`;
+    let wrapped = `${wrapperPrefix}${code}\n}`;
     if (kind === 'algorithm') [wrapped, functions] = asGenerators(wrapped);
     program = parse(wrapped, {
       ...options,
@@ -63,7 +75,7 @@ export function parseBlock(
     new Set(declared?.operations ?? (domain ? operationNames(domain) : [])),
     functions
   );
-  return { root, offset, comments };
+  return { root, offset, comments, markers, code };
 }
 
 /** A comment in a block, its text without its markers, at its span in the block's body. */

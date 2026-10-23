@@ -1,9 +1,10 @@
 /**
- * What each step lights in a listing: its code's own events most strongly, and the events since
- * the step before that led up to it more faintly. A step whose events light nothing keeps the
- * lighting of the step before.
+ * What each step lights in a listing: its code's own events, and the regions of the label it is a
+ * run of, most strongly, and the events since the step before that led up to it more faintly. A
+ * step whose events light nothing keeps the lighting of the step before.
  */
 
+import type { Span } from '../algorithm/block.server';
 import type { TraceEvent } from '../algorithm/events.server';
 import { spanKey } from '../algorithm/interpret.server';
 import type { Listing, Mark } from './listing';
@@ -15,12 +16,12 @@ export type Lit = { current: Range[]; earlier: Range[] };
 
 export function lightSteps(
   listing: Listing,
-  steps: readonly { events?: readonly TraceEvent[]; gap?: number }[]
+  steps: readonly { events?: readonly TraceEvent[]; gap?: number; unit?: Span }[]
 ): Lit[] {
   const marks = new Map<string, Mark[]>();
   for (const mark of listing.marks) marks.set(mark.key, [...(marks.get(mark.key) ?? []), mark]);
   const lit: Lit[] = [];
-  for (const { events = [], gap = 0 } of steps) {
+  for (const { events = [], gap = 0, unit } of steps) {
     // The operations open around each event, so an operation's body written at its call lights
     // there, or the call itself where its body is not written.
     const open: string[] = [];
@@ -34,16 +35,18 @@ export function lightSteps(
       );
       if (event.kind === 'open') open.push(key);
     });
+    // A label on a block or on statements in a row has no events of its own.
+    if (unit) latest.push(...(marks.get(spanKey('algorithm', unit)) ?? []));
     if (!latest.length && !leading.length) {
       lit.push(lit.at(-1) ?? { current: [], earlier: [] });
       continue;
     }
     const lighted = [leading, latest];
-    // A region inside a lit one that ran nothing this step is left out of it, as the comparison
-    // in while [test: [bound: j > 0] and [cmp: A[j] > key]] once j > 0 fails.
+    // A region inside a lit one that ran nothing this step, nor anything inside it, is left out of
+    // it, as the comparison in while @test[@bound[j > 0] and @cmp[A[j] > key]] once j > 0 fails.
     const ran = lighted.flat();
     const quiet = (listing.regions ?? []).filter(
-      (region) => !ran.some((mark) => mark.start === region.start && mark.end === region.end)
+      (region) => !ran.some((mark) => region.start <= mark.start && mark.end <= region.end)
     );
     const without = (ranges: Range[]) =>
       ranges.flatMap((range) => holed(range, quiet, listing.text));

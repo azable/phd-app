@@ -20,13 +20,13 @@ export const linearSearchSource = `<script lang="sverlin" domain>
   const target = Int(2);
 </script>
 <script lang="sverlin">
-  let found = Flag(false);
-  let searching = Flag(true);
-  for (let i = Index(0); i < values.length; i++) {
-    found = values[i] === target; // @step
+  @start[let found = Flag(false);
+  let searching = Flag(true);]
+  for (let i = Index(0); i < values.length; i++) @check{
+    found = values[i] === target;
     if (found) break;
   }
-  searching = false;
+  @finish[searching = false;]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}

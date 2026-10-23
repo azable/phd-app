@@ -24,18 +24,18 @@ const merge = `<script lang="sverlin" domain>
   const right = Values([2, 3, 9]);
 </script>
 <script lang="sverlin">
-  let merged = Values([]);
+  @start[let merged = Values([]);
   let i = Position(left, 0);
-  let j = Position(right, 0); // @step
+  let j = Position(right, 0);]
   while (i < left.length || j < right.length) {
-    if (j === right.length || (i < left.length && left[i] < right[j])) {
+    @take[if (j === right.length || (i < left.length && left[i] < right[j])) {
       merged.push(left[i]);
       i++;
     } else {
       merged.push(right[j]);
       j++;
-    }
-    const k = Position(merged, merged.length - 1); // @step
+    }]
+    @step[const k = Position(merged, merged.length - 1);]
   }
 </script>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
@@ -100,15 +100,19 @@ it.skipIf(!enabled)(
   { timeout: 180_000 },
   async () => {
     const prepared = prepareSvelteComponent(merge);
+    // Stepping by step, each value taken leads up to marking where it was placed.
+    const master = prepared.masters.step;
     // Copies start where the value they were copied from was (identities.server.ts): into a
     // step's before from the step before, then into its after from its before.
-    const copies = prepared.master.map(({ before, identities }) => [
+    const copies = master.map(({ before, identities }) => [
       before?.identities?.copies ?? {},
       identities?.copies ?? {}
     ]);
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
-        const { javascript } = await bundlePresentation(prepared, seed);
+        const { javascript } = await bundlePresentation(prepared, seed, {
+          chosen: { frames: 'step' }
+        });
         return sandboxDocument('', javascript, 0, seed);
       })
     );
@@ -150,7 +154,7 @@ it.skipIf(!enabled)(
             .querySelector('.sv-layer:not(.pending):not(.sv-leaving)')
             ?.setAttribute('data-checked', '')
         );
-      for (let index = 1; index < prepared.master.length; index++) {
+      for (let index = 1; index < master.length; index++) {
         const from = await Promise.all(panes.map(placed));
         await Promise.all(panes.map(seen));
         await step(index);
@@ -210,7 +214,7 @@ const walk = `<script lang="sverlin" domain>
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
 </script>
 <script lang="sverlin">
-  for (let e = EdgeIndex(0); e < edges.length; e++) {} // @step
+  @step[for (let e = EdgeIndex(0); e < edges.length; e++) {}]
 </script>
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
@@ -278,10 +282,10 @@ const taken = `<script lang="sverlin" domain>
   const right = Values([2, 3, 5]);
 </script>
 <script lang="sverlin">
-  let i = Index(left, 0);
+  @start[let i = Index(left, 0);
   let j = Index(right, 0);
-  let take = Take({ from: j }); // @step
-  while (i < left.length && j < right.length) { // @step
+  let take = Take({ from: j });]
+  @step[while (i < left.length && j < right.length) {
     if (left[i] < right[j]) {
       take = Take({ from: i });
       i++;
@@ -289,7 +293,7 @@ const taken = `<script lang="sverlin" domain>
       take = Take({ from: j });
       j++;
     }
-  }
+  }]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
@@ -355,8 +359,8 @@ const far = `<script lang="sverlin" domain>
   const values = Values([3, 8]);
 </script>
 <script lang="sverlin">
-  let i = Index(0); // @step
-  i = 9; // @step
+  @start[let i = Index(0);]
+  @far[i = 9;]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}

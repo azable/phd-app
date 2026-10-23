@@ -149,7 +149,7 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">for (let n = Count(0); n < ${to}; n++) {} // @step</script><Node>x</Node>`;
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@step[for (let n = Count(0); n < ${to}; n++) {}]</script><Node>x</Node>`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
     // A step per pass, then the end, where n is out of scope.

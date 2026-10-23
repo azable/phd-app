@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret.server';
+import {
+  interpretAlgorithm,
+  interpretDomain,
+  interpretInput,
+  traceAlgorithm
+} from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
@@ -13,51 +18,55 @@ const domain = interpretDomain(`
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
   const Edges = collection(Edge);
 `);
-const run = (body: string) => interpretAlgorithm(body, undefined, domain);
+const run = (body: string, frames?: string) =>
+  traceAlgorithm(body, undefined, domain, frames).steps;
 
 describe('positions', () => {
   it('point into the only collection of their type', () => {
     const trace = run(`
-      const values = Values([3, 8, 5]);
-      let i = Position(-1); // @step
-      i = Position(0); // @step
+      @start[const values = Values([3, 8, 5]);
+      let i = Position(-1);]
+      @zero[i = Position(0);]
       while (i < values.length) {
-        i++; // @step
+        @up[i++;]
       }
     `);
-    // The last step holds the loop's last test, after the last i++.
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3, 3]);
+    // The loop's last test, after the last i++, changes nothing, so it is no step.
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
     expect(trace[0].types.i).toBe('Position');
   });
 
   it('name their collection when there are several, and combine across collections', () => {
-    const trace = run(`
-      const left = Values([1, 4]);
+    const trace = run(
+      `
+      @start[const left = Values([1, 4]);
       const right = Values([2, 3]);
       let merged = Values([]);
       let i = Position(left, 0);
       let j = Position(right, 0);
-      let k = Position(merged, -1);
+      let k = Position(merged, -1);]
       while (i < left.length && j < right.length) {
-        if (left[i] < right[j]) { merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }
-        k = i + j - 1; // @step
+        @take[if (left[i] < right[j]) { merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }]
+        @count[k = i + j - 1;]
       }
-    `);
-    // The last step holds the loop's last test.
-    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3], [1, 2, 3]]);
+    `,
+      'count'
+    );
+    // The loop's last test changes nothing, so the last count is the last step.
+    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
   it('hold any whole number, however far past an end', () => {
     const trace = run(`
-      const values = Values([3, 8, 5]);
-      let i = Position(-2); // @step
-      i = Position(0); // @step
+      @start[const values = Values([3, 8, 5]);
+      let i = Position(-2);]
+      @zero[i = Position(0);]
       while (i < values.length) {
-        i += 2; // @step
+        @up[i += 2;]
       }
-      i = 50;
-      i = 0;
+      @far[i = 50;
+      i = 0;]
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4, 0]);
     const [far] = run('const values = Values([3, 8, 5]); let i = Position(0); i = 7;');
