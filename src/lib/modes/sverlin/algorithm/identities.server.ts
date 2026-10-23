@@ -5,8 +5,8 @@
  * a literal makes anew, so the same value can sit in two places, as after values[j] = values[j - 1];
  * the place that held it at the previous step keeps its id, and the other is a copy. Collections
  * and records hold values first: a variable holding a value one of them holds is a copy of it, so
- * a swap through a temporary moves both values, and a variable has the value's own id only while
- * it alone holds it, as insertion sort's key.
+ * a swap through a temporary moves both values. A variable has the value's own id only while it
+ * alone holds it; once a copy, as insertion sort's key as its step begins, it stays that copy.
  */
 
 /**
@@ -45,12 +45,11 @@ export class Identities {
   #previous = new Map<string, { value: object; id: number }>();
 
   /**
-   * Ids for one step's places: collections and records, then the values they hold, then variables.
-   * A step's before is placed against the after before it without being kept (`keep` false), so
-   * each after is still matched with the after before it, as a value parked in a temporary and put
-   * back stays one value; new ids are still new.
+   * Ids for one snapshot's places, matched with the snapshot before it, a step's before with the
+   * after before it and its after with its before: collections and records, then the values they
+   * hold, then variables.
    */
-  step(placed: readonly Placed[], keep = true): StepIdentities {
+  step(placed: readonly Placed[]): StepIdentities {
     const claiming: Claiming = { ids: {}, copies: {}, claimed: new Set() };
     const { ids, copies, claimed } = claiming;
     for (const [path, value, kind] of placed)
@@ -81,12 +80,10 @@ export class Identities {
     }
     this.#claim(alone, claiming);
 
-    if (keep) {
-      const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
-      for (const [path, value] of values)
-        if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
-      this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
-    }
+    const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
+    for (const [path, value] of values)
+      if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
+    this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
     return { ids, copies, refs };
   }
 

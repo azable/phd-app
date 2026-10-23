@@ -436,8 +436,7 @@ class Interpreter {
   #state(
     node: AnyNode,
     scope: Scope = this.#topLevel,
-    recorded: [string, Binding][] = [],
-    keep = true
+    recorded: [string, Binding][] = []
   ): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
@@ -474,7 +473,7 @@ class Interpreter {
       state,
       types,
       ...(Object.keys(targets).length ? { targets } : {}),
-      ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed, keep) } : {})
+      ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed) } : {})
     };
   }
 
@@ -1050,7 +1049,7 @@ class Interpreter {
         node,
         `The code labelled ${this.#frames.label} runs more than ${algorithmLimits.maximumSteps} times, each a step; label code that runs less often.`
       );
-    const { state, types, targets, identities } = this.#state(node, scope, this.#calls(), false);
+    const { state, types, targets, identities } = this.#state(node, scope, this.#calls());
     this.#open = {
       node,
       before: {
