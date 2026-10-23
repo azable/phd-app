@@ -85,7 +85,8 @@ function merged(marks: readonly Mark[]): Range[] {
 
 /**
  * The algorithm as written, without the indentation its lines share, marking every node at its
- * text, so it lights as the other listings do.
+ * text, so it lights as the other listings do: a loop, branch, or function at its head, up to its
+ * body.
  */
 export function writtenListing(body: string, root: BlockStatement): Listing {
   const lines = body.split('\n');
@@ -117,14 +118,30 @@ export function writtenListing(body: string, root: BlockStatement): Listing {
     if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
       return;
     const span = spanOf(node as AnyNode);
-    if (span.start >= 0 && span.end <= body.length)
-      marks.push({
-        key: spanKey('algorithm', span),
-        start: place(span.start),
-        end: place(span.end)
-      });
+    if (span.start >= 0 && span.end <= body.length) {
+      const inner = innerOf(node as AnyNode);
+      const end = inner
+        ? span.start + body.slice(span.start, spanOf(inner).start).replace(/[\s{]*$/u, '').length
+        : span.end;
+      marks.push({ key: spanKey('algorithm', span), start: place(span.start), end: place(end) });
+    }
     for (const [key, child] of Object.entries(node)) if (key !== 'loc') visit(child);
   };
   root.body.forEach(visit);
   return { text: kept.map((line, index) => line.slice(starts[index].cut)).join('\n'), marks };
+}
+
+/** The body a loop, branch, or function heads, whose text its head ends before. */
+function innerOf(node: AnyNode): AnyNode | undefined {
+  switch (node.type) {
+    case 'IfStatement':
+      return node.consequent;
+    case 'WhileStatement':
+    case 'ForStatement':
+    case 'ForOfStatement':
+    case 'FunctionDeclaration':
+      return node.body;
+    default:
+      return undefined;
+  }
 }

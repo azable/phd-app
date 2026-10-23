@@ -113,7 +113,8 @@ class Renderer {
         return [];
       case 'ExpressionStatement':
         if (node.expression.type === 'YieldExpression') return [];
-        return line(this.#effect(node.expression, context));
+        // Marked as its expression too, as an assignment's write is at the assignment.
+        return line(this.#expression(node.expression, context).text);
       case 'VariableDeclaration':
         return node.declarations.map((declarator) => ({
           depth,

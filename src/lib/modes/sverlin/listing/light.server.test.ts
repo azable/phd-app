@@ -54,6 +54,26 @@ describe('lighting', () => {
     expect(shown(listing, lit[2]).current).toEqual(['break;']);
   });
 
+  it('lights a statement that writes as a whole, and a loop as written at its head', () => {
+    const shifting = `
+      let j = Index(2);
+      while (j > 0 && values[j - 1] > Int(4)) {
+        values[j] = values[j - 1];
+        j--;
+        yield;
+      }
+    `;
+    const traced = traceAlgorithm(shifting, input, domain);
+    const inPython = renderListing(traced.root, domain, traced.hints, python);
+    const [first] = lightSteps(inPython, traced.steps);
+    expect(shown(inPython, first).current).toEqual(['j -= 1']);
+    expect(shown(inPython, first).earlier).toContain('values[j] = values[j - 1]');
+    const written = writtenListing(shifting, traced.root);
+    expect(shown(written, lightSteps(written, traced.steps)[0]).earlier).toContain(
+      'while (j > 0 && values[j - 1] > Int(4))'
+    );
+  });
+
   it('keeps the lighting of the step before where a step lights nothing', () => {
     const listing: Listing = { text: 'x', marks: [] };
     expect(lightSteps(listing, [{ events: [] }, { events: [] }])).toEqual([
