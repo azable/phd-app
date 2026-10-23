@@ -119,10 +119,7 @@ Between steps, the key leaves the row for its box, the larger values slide right
 
 ## Loops and functions
 
-The algorithm's loops and branches are a fixed set that every programming language and pseudocode can write, so the algorithm reads the same in any of them:
-
-- a counted loop, `for (let i = Index(a); i < b; i++)`: one variable from a start to a bound, with `<` or `<=`, counting down with `i--` and `>` or `>=`, or by a constant step, as `i += 2`. Only the loop's header changes the variable, and the bound is fixed when the loop starts: write a loop whose bound changes, such as one over a growing queue, or one that changes its variable inside, as a `while` loop;
-- `for (const v of values)`, `while (condition)`, `if` and `else`, `break`, and `continue`. There is no `do ... while`.
+The algorithm's loops and branches are JavaScript's: `for`, `for (const v of values)`, `while`, `do ... while`, `if` and `else`, `break`, and `continue`.
 
 A function is declared at the top level of the algorithm block, as `function search(a, target) { ... }`, and sees only its parameters: give it the collections it works on, and it changes them in place. Each call gives its parameters values of the types the first call gave them. `return i;` gives a value back, and a position into a collection the call was given points into the caller's. A function may call itself. A `yield` inside a call records the call's variables, its parameters among them, and the top level's; the caller's are out of scope there, so with recursion a step shows the innermost call's `lo` and `hi`. A parameter hides a top-level variable of the same name. A position into a collection the call was given is drawn on that collection wherever the view draws it under its top-level name.
 
@@ -354,8 +351,8 @@ Example, with domain, input, algorithm, and a script-free view:
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, counted `for` loops, `for (const x of array)`, `while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, except an operation's body, `do ... while`, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
+- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
+- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, except an operation's body, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library

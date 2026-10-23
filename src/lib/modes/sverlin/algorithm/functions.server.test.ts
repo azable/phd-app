@@ -141,7 +141,7 @@ describe('functions', () => {
   });
 });
 
-describe('counted loops', () => {
+describe('loops', () => {
   it('count up, down, and by a constant step, and skip on with continue', () => {
     const trace = run(`
       const values = Values([1, 2, 3, 4, 5]);
@@ -154,28 +154,23 @@ describe('counted loops', () => {
     expect(trace.map(({ state }) => state.i ?? state.j)).toEqual([4, 2, 0, 0, 2, 4]);
   });
 
-  it.each([
-    [
-      'a bound that changes',
-      'const values = Values([1]); for (let i = Index(0); i < values.length; i++) { values.push(1); yield; }',
-      'The bound of the i loop changed from 1 to 2'
-    ],
-    [
-      'a counter changed in the body',
-      'const values = Values([1]); for (let i = Index(0); i < 3; i++) { i++; yield; }',
-      "i counts its loop, so only the loop's header changes it"
-    ],
-    [
-      'a counter declared outside',
-      'const values = Values([1]); let i = Index(0); for (i = Index(0); i < 1; i++) yield;',
-      'A for loop counts one variable'
-    ],
-    [
-      'a step that goes the wrong way',
-      'const values = Values([1]); for (let i = Index(0); i < 1; i--) yield;',
-      'A for loop counts one variable'
-    ]
-  ])('reject %s', (_name, body, message) => {
-    expect(() => run(body)).toThrow(message);
+  it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
+    const trace = run(`
+      const values = Values([1]);
+      let i = Index(0);
+      for (i = Index(0); i < values.length; i++) {
+        if (values.length < 3) values.push(1);
+        yield;
+      }
+      for (let k = Int(1); k < 10; k = k * 3) { k++; yield; }
+    `);
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 1, 2, 3, 3]);
+    expect(trace.slice(3).map(({ state }) => state.k)).toEqual([2, 7]);
+  });
+
+  it('run a do...while body once before its test', () => {
+    const [step, ...rest] = run('let n = Int(0); do { n++; yield; } while (n < 0);');
+    expect(step.state.n).toBe(1);
+    expect(rest).toEqual([]);
   });
 });

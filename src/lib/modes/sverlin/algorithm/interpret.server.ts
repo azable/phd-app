@@ -2,7 +2,6 @@
 
 import type {
   AnyNode,
-  BinaryExpression,
   BlockStatement,
   CallExpression,
   Expression,
@@ -860,31 +859,22 @@ class Interpreter {
         );
       case 'FunctionDeclaration':
         return 'normal';
+      case 'DoWhileStatement':
+        // The body first, then the test before each pass after it.
+        return this.#loop(node, (index) =>
+          index > 0 && !this.#test(node.test, scope) ? 'break' : this.#pass(node, index, scope)
+        );
       case 'ForStatement': {
-        // The subset allows only counted loops: let i = a; i < b (or <=, >, >=); i++ (or the like).
         const loopScope = new Scope(scope);
-        this.#statement(node.init as Statement, loopScope);
-        const test = node.test as BinaryExpression;
-        const counter = (test.left as { name: string }).name;
-        let bound: number | undefined;
+        if (node.init?.type === 'VariableDeclaration') this.#statement(node.init, loopScope);
+        else if (node.init) this.#expression(node.init, loopScope);
         return this.#loop(node, (index) => {
-          if (index > 0) {
-            this.#expression(node.update as Expression, loopScope);
+          if (index > 0 && node.update) {
+            this.#expression(node.update, loopScope);
             this.#charge(node);
           }
-          const limit = this.#expression(test.right, loopScope);
-          const value = this.#number(limit, test.right);
-          if (bound !== undefined && value !== bound)
-            this.#fail(
-              test.right,
-              `The bound of the ${counter} loop changed from ${bound} to ${value}, but a counted loop's bound is fixed when it starts; write the loop as a while loop.`
-            );
-          bound = value;
-          const counted = loopScope.lookup(counter)?.value as Value;
-          this.#access('read', test.left, counter, counted);
-          const held = this.#truthy(this.#binary(test.operator, counted, limit, test));
-          this.#emit('test', test, { held });
-          return held ? this.#pass(node, index, loopScope) : 'break';
+          if (node.test && !this.#test(node.test, loopScope)) return 'break';
+          return this.#pass(node, index, loopScope);
         });
       }
       case 'ForOfStatement': {

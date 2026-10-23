@@ -93,8 +93,6 @@ describe('algorithm interpretation', () => {
 
   it.each([
     ['nested functions', 'if (true) { function f() {} } yield;', /at the top level/],
-    ['loops that do not count', 'for (let i = Int(0); i < 3; i = i * 2) yield;', /while loop/],
-    ['do...while', 'do { yield; } while (false);', /Python has no such loop/],
     ['arrow functions', 'const f = () => 1; yield;', /Functions are not supported here/],
     ['global access', 'const w = globalThis; yield;', /"globalThis" is not defined/],
     ['constructor escapes', 'const a = Ints([]); const c = a.constructor; yield;', /not allowed/],

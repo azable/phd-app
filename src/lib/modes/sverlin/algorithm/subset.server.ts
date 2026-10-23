@@ -1,6 +1,6 @@
 /** Static subset check: everything outside this list is rejected before any statement of a block runs. */
 
-import type { AnyNode, BlockStatement, ForStatement } from 'acorn';
+import type { AnyNode, BlockStatement } from 'acorn';
 
 import {
   AlgorithmError,
@@ -47,6 +47,8 @@ export function checkSubset(
       case 'ExpressionStatement':
       case 'IfStatement':
       case 'WhileStatement':
+      case 'DoWhileStatement':
+      case 'ForStatement':
       case 'EmptyStatement':
       case 'SpreadElement':
       case 'ConditionalExpression':
@@ -97,19 +99,6 @@ export function checkSubset(
             reject(param, `${name}'s parameters are plain names, given a value by each call.`);
         break;
       }
-      case 'ForStatement':
-        if (!counter(node))
-          reject(
-            node,
-            'A for loop counts one variable from a start to a bound: for (let i = Index(0); i < n; i++), down with i-- and > or >=, or by a constant step, as i += 2. Write any other loop as a while loop.'
-          );
-        break;
-      case 'DoWhileStatement':
-        reject(
-          node,
-          'do...while is not supported, as Python has no such loop: write while (true) { ... if (!condition) break; }, or the body once before a while loop.'
-        );
-        break;
       case 'ObjectPattern':
         if (parent?.type !== 'ArrowFunctionExpression')
           reject(node, 'Destructuring is not supported.');
@@ -185,12 +174,10 @@ export function checkSubset(
           reject(node, `The ${node.operator} operator is not supported.`);
         if (node.left.type !== 'Identifier' && node.left.type !== 'MemberExpression')
           reject(node, 'Only variables, elements, and properties can be assigned.');
-        if (node.left.type === 'Identifier') checkCounter(node, node.left.name, ancestors);
         break;
       case 'UpdateExpression':
         if (node.argument.type !== 'Identifier' && node.argument.type !== 'MemberExpression')
           reject(node, 'Only variables, elements, and properties can be incremented.');
-        if (node.argument.type === 'Identifier') checkCounter(node, node.argument.name, ancestors);
         break;
       case 'YieldExpression':
         if (kind !== 'algorithm')
@@ -248,21 +235,6 @@ export function checkSubset(
     }
     return false;
   };
-  /**
-   * A counted loop's variable changes only in its header, as Python's range and pseudocode's
-   * "for i = 1 to n" have no other way to change it.
-   */
-  const checkCounter = (node: AnyNode, name: string, ancestors: readonly AnyNode[]): void => {
-    for (let index = ancestors.length - 1; index >= 0; index--) {
-      const ancestor = ancestors[index];
-      if (ancestor.type !== 'ForStatement' || counter(ancestor) !== name) continue;
-      if ((ancestors[index + 1] ?? node) !== ancestor.body) return;
-      reject(
-        node,
-        `${name} counts its loop, so only the loop's header changes it; write the loop as a while loop to change it here.`
-      );
-    }
-  };
   const checkBuiltin = (node: AnyNode, name: string, kind: BlockKind): void => {
     if (functionNames.has(name)) {
       if (kind !== 'algorithm') reject(node, `${name}(...) is a function of the algorithm block.`);
@@ -283,41 +255,4 @@ export function checkSubset(
     }
   };
   root.body.forEach((statement) => visit(statement, [root]));
-}
-
-/**
- * A counted loop's variable, or none: for (let i = a; i < b; i++), with <=, counting down with --
- * and > or >=, or by a positive whole number with += or -=.
- */
-function counter(node: ForStatement): string | undefined {
-  const { init, test, update } = node;
-  if (init?.type !== 'VariableDeclaration' || init.kind !== 'let' || init.declarations.length !== 1)
-    return undefined;
-  const [{ id, init: start }] = init.declarations;
-  if (id.type !== 'Identifier' || !start) return undefined;
-  const name = id.name;
-  if (
-    test?.type !== 'BinaryExpression' ||
-    test.left.type !== 'Identifier' ||
-    test.left.name !== name ||
-    !['<', '<=', '>', '>='].includes(test.operator)
-  )
-    return undefined;
-  const up = test.operator === '<' || test.operator === '<=';
-  if (update?.type === 'UpdateExpression')
-    return update.argument.type === 'Identifier' &&
-      update.argument.name === name &&
-      update.operator === (up ? '++' : '--')
-      ? name
-      : undefined;
-  return update?.type === 'AssignmentExpression' &&
-    update.left.type === 'Identifier' &&
-    update.left.name === name &&
-    update.operator === (up ? '+=' : '-=') &&
-    update.right.type === 'Literal' &&
-    typeof update.right.value === 'number' &&
-    Number.isInteger(update.right.value) &&
-    update.right.value > 0
-    ? name
-    : undefined;
 }
