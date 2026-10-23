@@ -12,7 +12,6 @@ import {
   finishMotion,
   leaveLayer,
   motionCss,
-  motionDuration,
   Frame,
   settleSpans,
   stepLayouts,
@@ -219,6 +218,8 @@ function mountStep(
 
   const layer = document.createElement('div');
   layer.className = 'sv-layer pending';
+  // Which of its step's two states the layer shows, for whoever looks on, as the tests do.
+  layer.dataset.svPhase = step % 2 ? 'after' : 'before';
   root.append(layer);
   const shown: Shown = { step, layer, changes: 0, copies };
   const memory: LayoutMemory = {
@@ -339,16 +340,28 @@ function remove(shown: Shown) {
  */
 let pendingTiming: ReturnType<typeof timePass> | undefined;
 let leaving: Shown | undefined;
-// A step played forward shows its before, then its after once the move into the before ends.
-let following: ReturnType<typeof setTimeout> | undefined;
+// A step played forward shows its before, then its after once the moves into the before end; a
+// newer request replaces it.
+let following: object | undefined;
 
-/** Show a step: forward by one, its before and then its after; otherwise its after at once. */
+/**
+ * Show a step: forward by one, its before and then its after, once whatever the before set moving
+ * has finished, or at once where nothing moved; otherwise its after at once.
+ */
 function showStep(step: number) {
-  clearTimeout(following);
+  following = undefined;
   const at = (pending ?? current)?.step;
   if (at !== undefined && at === afterOf(step - 1)) {
+    const token = (following = {});
     show(afterOf(step) - 1, () => {
-      following = setTimeout(() => show(afterOf(step)), motionDuration);
+      void Promise.all(document.getAnimations().map((animation) => animation.finished)).then(
+        () => {
+          if (following === token) show(afterOf(step));
+        },
+        () => {
+          if (following === token) show(afterOf(step));
+        }
+      );
     });
   } else show(afterOf(step));
 }

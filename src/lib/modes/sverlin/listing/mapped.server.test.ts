@@ -102,12 +102,6 @@ describe('listings of the source’s own', () => {
 
   it.each([
     [
-      'a label with no region',
-      '  const n = Int(1); // @count',
-      '[size: n]',
-      'The algorithm labels code count, but the listing has no region [count: …].'
-    ],
-    [
       'a region labelled on no code',
       '  const n = Int(1); // @size',
       '[size: n] [spare: m]',

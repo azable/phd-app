@@ -151,11 +151,14 @@ it.skipIf(!enabled)(
             ?.setAttribute('data-checked', '')
         );
       for (let index = 1; index < prepared.master.length; index++) {
-        let from = await Promise.all(panes.map(placed));
+        const from = await Promise.all(panes.map(placed));
         await Promise.all(panes.map(seen));
         await step(index);
-        for (const [part, name] of ['before', 'after'].entries()) {
+        // The step's before shows first, unless it would set nothing moving, then its after.
+        const reached = panes.map(() => false);
+        while (reached.includes(false)) {
           for (const [pane, frame] of panes.entries()) {
+            if (reached[pane]) continue;
             await frame.waitForFunction(
               () =>
                 document.querySelector(
@@ -164,6 +167,15 @@ it.skipIf(!enabled)(
               null,
               { timeout: 20_000 }
             );
+            // Claimed as it is read, so a layer the page replaces at once is not marked unseen.
+            const name = await frame.evaluate(() => {
+              const layer = document.querySelector(
+                '.sv-layer:not(.pending):not(.sv-leaving):not([data-checked])'
+              ) as HTMLElement;
+              layer.setAttribute('data-checked', '');
+              return layer.dataset.svPhase as 'before' | 'after';
+            });
+            const part = name === 'before' ? 0 : 1;
             for (const { identity, at } of await starts(frame)) {
               const was = from[pane][identity] ?? from[pane][copies[index][part][Number(identity)]];
               expect(
@@ -174,9 +186,9 @@ it.skipIf(!enabled)(
             await frame.evaluate(() => {
               for (const animation of document.getAnimations()) animation.finish();
             });
+            from[pane] = await placed(frame);
+            if (name === 'after') reached[pane] = true;
           }
-          from = await Promise.all(panes.map(placed));
-          await Promise.all(panes.map(seen));
         }
       }
       expect(errors).toEqual([]);

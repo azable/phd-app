@@ -78,7 +78,8 @@ describe('the event log', () => {
     const [step, last] = run(
       'const values = Values([4, 2]); const less = Flag(Less({ a: Index(0), b: Index(1) }));'
     );
-    expect(step.before?.state).toMatchObject({ values: [4, 2], event: { Less: [] } });
+    // The step starts once the call is recorded, so its before already shows what it is about.
+    expect(step.before?.state).toMatchObject({ values: [4, 2], event: { Less: [{ a: 0, b: 1 }] } });
     const events = step.events ?? [];
     // The events leading up to the call, then the call's own.
     expect(step.gap).toBe(events.findIndex(({ kind }) => kind === 'open'));

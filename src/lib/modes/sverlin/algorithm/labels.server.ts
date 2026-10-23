@@ -94,8 +94,19 @@ export function readLabels(
       }
       const written = excerptParts.join(':').trim();
       const [, excerpt, occurrence] = /^(.*?)(?:#(\d+))?$/su.exec(written) ?? [];
-      const matches = partsOf(statement).filter(
+      const same = partsOf(statement).filter(
         (node) => squeezed(body.slice(spanOf(node).start, spanOf(node).end)) === squeezed(excerpt)
+      );
+      // A part and one wrapping it with the same text, as a call and its statement, are one: the
+      // outer.
+      const matches = same.filter(
+        (node) =>
+          !same.some(
+            (other) =>
+              other !== node &&
+              spanOf(other).start <= spanOf(node).start &&
+              spanOf(node).end <= spanOf(other).end
+          )
       );
       const chosen = occurrence
         ? matches[Number(occurrence) - 1]

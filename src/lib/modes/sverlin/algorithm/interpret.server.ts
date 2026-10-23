@@ -169,8 +169,10 @@ export function spanKey(block: 'algorithm' | 'domain', { start, end }: Span): st
 }
 
 /**
- * The labels a source can step by, in the order written: those in its comments, then the
- * operations it calls, which are labels of their own calls; and the problems with its labels.
+ * The labels a source can step by, in the order written: those in its comments, then each group
+ * of them, a dotted label's prefix (move for move.swap and move.compare), which steps at every
+ * label in it, then the operations it calls, which are labels of their own calls; and the problems
+ * with its labels.
  */
 export function stepLabels(
   root: BlockStatement,
@@ -194,11 +196,20 @@ export function stepLabels(
     for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
   };
   root.body.forEach(visit);
+  const groups = read.order.flatMap((label) =>
+    label
+      .split('.')
+      .slice(0, -1)
+      .map((_, index, parts) => parts.slice(0, index + 1).join('.'))
+  );
+  const inLabel = (name: string, label: string) => name === label || name.startsWith(`${label}.`);
   return {
-    labels: [...new Set([...read.order, ...calls.keys()])],
+    labels: [...new Set([...read.order, ...groups, ...calls.keys()])],
     nodes: (label) =>
       new Set([
-        ...[...read.labels].flatMap(([node, names]) => (names.includes(label) ? [node] : [])),
+        ...[...read.labels].flatMap(([node, names]) =>
+          names.some((name) => inLabel(name, label)) ? [node] : []
+        ),
         ...(calls.get(label) ?? [])
       ]),
     problems: read.problems
@@ -1128,7 +1139,9 @@ class Interpreter {
 
   /** An expression, as a step of its own where the label steps are by marks it. */
   #expression(node: Expression | SpreadElement, scope: Scope): Value {
-    if (this.#open || !this.#frames.nodes.has(node)) return this.#evaluate(node, scope);
+    // An operation's call opens its step once the call is recorded (see #operate).
+    if (this.#open || !this.#frames.nodes.has(node) || this.#isOperationCall(node))
+      return this.#evaluate(node, scope);
     this.#begin(node, scope);
     const value = this.#evaluate(node, scope);
     this.#end(node, scope);
@@ -1552,6 +1565,10 @@ class Interpreter {
     }
     const callSite = this.#callSite;
     this.#callSite ??= scope;
+    // A step at this call starts here, its operands known and the call recorded, so its before
+    // shows what it is about to do.
+    const stepping = !this.#open && this.#frames.nodes.has(node);
+    if (stepping) this.#begin(node, scope);
     this.#emit('open', node, { name: operation.name });
     this.#bodies += 1;
     let result: Value;
@@ -1569,7 +1586,16 @@ class Interpreter {
       this.#callSite = callSite;
     }
     this.#emit('close', node, { name: operation.name, value: result });
+    if (stepping) this.#end(node, scope);
     return result;
+  }
+
+  #isOperationCall(node: AnyNode): boolean {
+    return (
+      node.type === 'CallExpression' &&
+      node.callee.type === 'Identifier' &&
+      Boolean((this.#domain.structures[node.callee.name] as RecordType | undefined)?.operation)
+    );
   }
 
   /**

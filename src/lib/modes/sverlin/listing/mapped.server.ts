@@ -1,7 +1,7 @@
 /**
  * A listing of the source's own: a fixed text, such as a textbook's pseudocode, in a
  * <script lang="sverlin" listing="name"> block, whose regions, marked [label: …], light when the
- * algorithm runs the code with that label. The algorithm labels its code in comments at the end of a
+ * algorithm runs the code with that label; every region needs a label, while a label may only mark steps. The algorithm labels its code in comments at the end of a
  * statement's line, or on the line above it: `// @test` labels the statement, and
  * `// @test; cmp: values[j - 1] > key` also a part of it, named by its text (with #2 for its second
  * occurrence). A call of an operation is labelled with the operation's name where the text has a
@@ -27,7 +27,7 @@ export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; 
 /** What each region is mapped to: the source each node with its label has, by line. */
 export type RegionMap = { label: string; text: string; sources: { text: string; line: number }[] };
 
-const regionOpen = /^\[([A-Za-z_][\w-]*): ?/u;
+const regionOpen = /^\[([A-Za-z_][\w.-]*): ?/u;
 
 /**
  * The text a listing shows, without its region marks and the indentation its lines share, and its
@@ -149,13 +149,6 @@ export function mappedListing(
     for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child, labels);
   };
   root.body.forEach((statement) => visit(statement, []));
-  for (const label of used)
-    if (!regionLabels.has(label))
-      problems.push({
-        message: `The algorithm labels code ${label}, but the listing has no region [${label}: …].`,
-        block: 'algorithm',
-        at: comments.find(({ text }) => text.includes(label))?.start ?? 0
-      });
   for (const region of regions)
     if (!used.has(region.label))
       problems.push({

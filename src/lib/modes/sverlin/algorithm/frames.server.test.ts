@@ -35,10 +35,39 @@ describe('frames', () => {
     expect(first.events?.slice(first.gap).map(({ kind }) => kind)).toEqual(['read', 'write']);
   });
 
+  it('step at every label of a group, a dotted label’s prefix, which the labels offer too', () => {
+    const sort = `
+      for (let i = Index(0); i < values.length - 1; i++) {
+        if (values[i + 1] < values[i]) { // @move.compare: values[i + 1] < values[i]
+          const moved = values[i];
+          values[i] = values[i + 1];
+          values[i + 1] = moved; // @move.swap
+        }
+      }
+    `;
+    const traced = traceAlgorithm(sort, input, domain, 'move');
+    expect(traced.labels).toEqual(['move.compare', 'move.swap', 'move']);
+    // [3, 8, 5, 2]: compare 0 and 1; compare 1 and 2, swap; compare 2 and 3, swap; the end.
+    expect(traced.steps.map(({ state }) => (state.values as number[]).join(''))).toEqual([
+      '3852',
+      '3852',
+      '3582',
+      '3582',
+      '3528',
+      '3528'
+    ]);
+    expect(steps(sort, 'move.swap')).toHaveLength(3);
+  });
+
   it('step at each call of an operation, its name a label of its calls', () => {
     const trace = steps(search, 'Matches');
     expect(trace.slice(0, 3).map(({ state }) => state.i)).toEqual([0, 1, 2]);
-    expect(trace[0].events?.slice(trace[0].gap)[0]?.kind).toBe('read');
+    // Its operands are read leading up to it; the step's own code starts as the call opens, the
+    // call already recorded in its before.
+    expect(trace[0].events?.slice(trace[0].gap)[0]?.kind).toBe('open');
+    expect((trace[0].before?.state.event as { Matches: unknown[] }).Matches).toEqual([
+      { at: 0, target: 5 }
+    ]);
   });
 
   it('step once at each pass of a labelled loop', () => {
