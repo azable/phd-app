@@ -32,6 +32,8 @@ export type ModeBuildResult =
         variant?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
         views?: Record<string, string[]>;
+        // The events a presentation can step by, the options of its frames variable.
+        frames?: string[];
         // The kinds each tag can be, by its line:column.
         kinds?: Record<string, string[]>;
       };

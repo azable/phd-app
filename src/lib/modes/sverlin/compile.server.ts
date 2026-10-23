@@ -10,13 +10,14 @@ import preludeSource from './assembly/prelude.ts?raw';
 import {
   AlgorithmError,
   declaredNames,
-  interpretAlgorithm,
   interpretDomain,
   interpretInput,
+  frameRuleOf,
   traceAlgorithm,
   type BlockKind,
   type MasterStep,
-  type TraceState
+  type TraceState,
+  type TypedState
 } from './algorithm/interpret.server';
 import { listingLanguages } from './listing/languages';
 import { lightSteps, writtenListing, type Lit } from './listing/light.server';
@@ -132,12 +133,20 @@ type Block = { body: string; offset: number };
 export type PreparedComponent = {
   source: string;
   component: string;
+  /** The steps of the frame rule the source starts with: yield where it yields. */
   master: MasterStep[];
+  /** The steps of every frame rule the source can step by, by its name (see FrameRule). */
+  masters: Record<string, MasterStep[]>;
+  /** The source's identity, shared by its presentations whichever events they step by. */
+  signature: string;
   atoms: AtomRegistry;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
-  /** Values the root reads for placement, measured with every value of their types. */
-  placements: Placement[];
+  /**
+   * Values the root reads for placement, measured with every value of their types, by frame rule,
+   * as each names a step of its own.
+   */
+  placements: Record<string, Placement[]>;
   /**
    * The design space, the views each type rendered by name chooses among, the kinds each tag can
    * be (by its line:column), and the first variant.
@@ -152,8 +161,8 @@ export type PreparedComponent = {
   listings?: Record<string, LitListing>;
 };
 
-/** A listing's text and what each step lights in it. */
-export type LitListing = { text: string; lit: Lit[] };
+/** A listing's text and what each step lights in it, by frame rule. */
+export type LitListing = { text: string; lit: Record<string, Lit[]> };
 
 export class InvalidSvelteSourceError extends Error {
   readonly code?: string;
@@ -226,12 +235,9 @@ export function recordedTrace(source: string): MasterStep[] {
   const input = blocks.input
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
-  return interpretBlock(
-    source,
-    blocks.algorithm,
-    (body) => interpretAlgorithm(body, input, domain),
-    blocks
-  );
+  // By the frame rule the source starts with: yield where it yields.
+  const runs = framings(source, blocks.algorithm, blocks, input, domain);
+  return Object.values(runs)[0].steps;
 }
 
 /**
@@ -252,6 +258,45 @@ function listingsFrom(
     ),
     javascript: writtenListing(body, root)
   };
+}
+
+/**
+ * The algorithm's steps by every frame rule it can step by, the one it starts with first: yield
+ * where it yields, else the first that takes steps; then each operation it calls and its loops'
+ * iterations, leaving out one that takes no steps or more than the limit.
+ */
+function framings(
+  source: string,
+  algorithm: Block,
+  blocks: Partial<Record<BlockKind, Block>>,
+  input: TypedState,
+  domain: DomainRegistry
+): Record<string, ReturnType<typeof traceAlgorithm>> {
+  const trace = (rule: string) =>
+    interpretBlock(
+      source,
+      algorithm,
+      (body) => traceAlgorithm(body, input, domain, frameRuleOf(rule)),
+      blocks
+    );
+  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = {};
+  let unyielded: unknown;
+  try {
+    runs.yield = trace('yield');
+  } catch (cause) {
+    // Without a yield, the algorithm steps by its events; any other problem is the algorithm's.
+    if (!(cause instanceof Error) || !cause.message.includes('must yield at least one step'))
+      throw cause;
+    unyielded = cause;
+  }
+  for (const rule of [...operationNames(domain), 'iteration'])
+    try {
+      runs[rule] = trace(rule);
+    } catch {
+      // A rule the algorithm takes no steps by, or too many, is no option.
+    }
+  if (!Object.keys(runs).length) throw unyielded;
+  return runs;
 }
 
 /** The algorithm as a listing in each language. */
@@ -368,7 +413,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // Names are checked before any block runs, so a clash is reported before what it causes.
     const declared = (block: Block | undefined, kind: 'input' | 'algorithm') =>
       block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
-    // With operations, every step also records their calls (see interpretAlgorithm).
+    // With operations, every step also records their calls (see traceAlgorithm).
     const stateNames = [
       ...new Set([
         ...declared(blocks.input, 'input'),
@@ -440,24 +485,31 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
     const algorithm = blocks.algorithm;
-    const traced = interpretBlock(
-      source,
-      algorithm,
-      (body) => traceAlgorithm(body, input, domain),
-      blocks
-    );
+    const runs = framings(source, algorithm, blocks, input, domain);
+    const primary = Object.keys(runs)[0];
+    const traced = runs[primary];
     const master = traced.steps;
+    const masters = Object.fromEntries(
+      Object.entries(runs).map(([rule, run]) => [rule, run.steps])
+    );
+    const everyStep = Object.values(masters).flat();
     const listings = listing
       ? Object.fromEntries(
           Object.entries(listingsFrom(traced, domain, algorithm.body)).map(([name, written]) => [
             name,
-            { text: written.text, lit: lightSteps(written, master) }
+            {
+              text: written.text,
+              lit: Object.fromEntries(
+                Object.entries(masters).map(([rule, steps]) => [rule, lightSteps(written, steps)])
+              )
+            }
           ])
         )
       : undefined;
-    // Variables out of scope at some step: what the view draws from one is hidden there.
+    // Variables out of scope at some step, of any frame rule: what the view draws from one is
+    // hidden there.
     const scoped = new Set(
-      stateNames.filter((name) => master.some(({ state }) => !(name in state)))
+      stateNames.filter((name) => everyStep.some(({ state }) => !(name in state)))
     );
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
     const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
@@ -596,17 +648,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       components,
       chosen,
       domain,
-      master
+      everyStep
     );
-    const placements = rootPlacements(
-      (ast.html?.children ?? []).filter(
-        (node: { type?: string; expression?: { name?: string } }) =>
-          !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
-      ),
-      stateNames,
-      viewNames,
-      domain,
-      master
+    const rootMarkup = (ast.html?.children ?? []).filter(
+      (node: { type?: string; expression?: { name?: string } }) =>
+        !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
+    );
+    const placements = Object.fromEntries(
+      Object.entries(masters).map(([rule, steps]) => [
+        rule,
+        rootPlacements(rootMarkup, stateNames, viewNames, domain, steps)
+      ])
     );
     if (probeProblems.length)
       throw InvalidSvelteSourceError.combine(
@@ -618,18 +670,26 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             })
         )
       );
+    const rules = Object.keys(masters);
     return {
       source,
       component,
       master,
+      masters,
+      // Steps line up by their moments, so the identity tells presentations aligned that way from
+      // those that number steps by their place.
+      signature: stepSignature([
+        'moments',
+        ...master.map(({ state, types, targets }) => JSON.stringify({ state, types, targets }))
+      ]),
       atoms,
       components: probes,
       placements,
       design: {
         views: chosen,
         tags: tagKinds,
-        space: designSpace(kinds, chosen, listing),
-        starter: starterVariant(kinds, chosen, listing)
+        space: designSpace(kinds, chosen, listing, rules),
+        starter: starterVariant(kinds, chosen, listing, rules)
       },
       ...(listings ? { listings } : {})
     };
@@ -685,7 +745,7 @@ export async function bundlePresentation(
   seed: number,
   request: VariantRequest = {}
 ): Promise<SvelteBundle> {
-  const { master, design } = prepared;
+  const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
   try {
     variant = buildVariant(design.space, design.starter, request, seed);
@@ -706,8 +766,11 @@ export async function bundlePresentation(
   const views = Object.fromEntries(
     Object.keys(design.views).map((type) => [type, values[`views.${type}`]])
   );
-  // Every presentation shows every master step until steps can be mapped to frames.
+  // The steps of the frame rule the variant chose, each placed by its moment.
+  const rule = typeof values.frames === 'string' ? values.frames : Object.keys(prepared.masters)[0];
+  const master = prepared.masters[rule] ?? prepared.master;
   const masterSteps = master.map((_, index) => index);
+  const moments = master.map(({ moment }, index) => moment ?? index);
   // Each step's state carries its atomic types, the page frame, and the variant for the view, under
   // keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
   const states = masterSteps.map((index) => {
@@ -727,12 +790,17 @@ export async function bundlePresentation(
     };
   });
   const language = values['listing.language'];
-  const listing = typeof language === 'string' ? (prepared.listings?.[language] ?? null) : null;
+  const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
+  const listing = listed ? { text: listed.text, lit: listed.lit[rule] } : null;
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),
     JSON.stringify(prepared.atoms),
-    JSON.stringify({ components: prepared.components, placements: prepared.placements, listing })
+    JSON.stringify({
+      components: prepared.components,
+      placements: prepared.placements[rule] ?? [],
+      listing
+    })
   );
   const output = result.outputFiles[0];
   if (output.contents.byteLength > maximumBundleBytes) {
@@ -741,11 +809,8 @@ export async function bundlePresentation(
   return {
     javascript: output.text,
     labels: masterSteps.map((index) => `Step ${index + 1}`),
-    // What a step shows: not how values move between steps, nor the events that led to it.
-    masterSignature: stepSignature(
-      master.map(({ state, types, targets }) => JSON.stringify({ state, types, targets }))
-    ),
-    masterSteps,
+    masterSignature: prepared.signature,
+    masterSteps: moments,
     variant: values,
     origins: variant.origins
   };

@@ -69,6 +69,7 @@ export class EventLog {
   readonly #slots: Slot[] = [];
   #next = 0;
   #total = 0;
+  #seen = 0;
   readonly #counts: EventCounts = { events: {}, operations: {}, calls: {} };
 
   add(
@@ -92,11 +93,22 @@ export class EventLog {
     slot.method = details?.method;
     this.#next = (this.#next + 1) % maximumStepEvents;
     this.#total += 1;
+    this.#seen += 1;
     const { events, operations, calls } = this.#counts;
     events[kind] = (events[kind] ?? 0) + 1;
     if (kind === 'open' && details?.name)
       operations[details.name] = (operations[details.name] ?? 0) + 1;
     if (kind === 'call' && details?.name) calls[details.name] = (calls[details.name] ?? 0) + 1;
+  }
+
+  /** How many events the algorithm has logged so far, which numbers the moment of a step. */
+  get seen(): number {
+    return this.#seen;
+  }
+
+  /** Whether any event was logged since the last step. */
+  get since(): boolean {
+    return this.#total > 0;
   }
 
   /**

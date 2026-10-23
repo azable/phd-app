@@ -60,14 +60,17 @@ export class DesignValueError extends Error {
 
 /**
  * Every variable of a source: each type's views, the frame's settings, a listing's if the view
- * places one, and each kind's props.
+ * places one, which events are steps if it can step by more than one (frames, its options the
+ * source's frame rules, the first where it starts), and each kind's props.
  */
 export function designSpace(
   kinds: readonly DesignKind[],
   views: Readonly<Record<string, readonly string[]>>,
-  listing = false
+  listing = false,
+  frames: readonly string[] = []
 ): DesignSpace {
   return {
+    ...(frames.length > 1 ? { frames: [...frames] } : {}),
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, [...options, 'none']])
     ),
@@ -85,9 +88,11 @@ export function designSpace(
 export function starterVariant(
   kinds: readonly DesignKind[],
   views: Readonly<Record<string, readonly string[]>>,
-  listing = false
+  listing = false,
+  frames: readonly string[] = []
 ): Record<string, DesignValue> {
   return {
+    ...(frames.length > 1 ? { frames: frames[0] } : {}),
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
     ),
@@ -118,7 +123,8 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
                 (other) =>
                   !other.startsWith('views.') &&
                   !other.startsWith('frame.') &&
-                  !other.startsWith('listing.')
+                  !other.startsWith('listing.') &&
+                  other !== 'frames'
               )
               .map((other) => other.slice(0, other.lastIndexOf('.')))
           )
@@ -192,6 +198,7 @@ function propOf(key: string): string {
  * listing's language.
  */
 const kept = new Set<string>([
+  'frames',
   'language',
   'shown',
   'opacity',

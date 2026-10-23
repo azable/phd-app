@@ -19,11 +19,11 @@ they show the algorithm.
 
 ## Blocks
 
-A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required, even for a single step (`yield;`); the domain and input blocks are optional.
+A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required; the domain and input blocks are optional.
 
 1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operations the algorithm calls (see Atomic types, Collections, records, and unions, and Operations).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
-3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and marks steps with `yield`. It runs once.
+3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and marks steps with `yield`, or steps by its events (see Steps). It runs once.
 
 There is no design block: what presentations differ in is the design space (see Design).
 
@@ -111,6 +111,7 @@ Between steps, the key leaves the row for its box, the larger values slide right
 
 ## Steps
 
+- Which events are steps is the variable `frames`, where the algorithm can step more than one way: `yield`, each `yield;`, where the algorithm yields, as the starter; an operation's name, as `Matches`, each call the algorithm makes of it; or `iteration`, each pass of a loop. Stepping by events, the algorithm's end is a step too, holding what it did after the last one, so a source can test inline, as `if (Matches({ at: i, target })) break;`, and its `break` is still a step's. An algorithm with operations or loops needs no `yield`. A variant keeps `frames` unless the participant asks for another, and presentations stepping by different events step together, one holding its step while the other shows the events between.
 - `yield;` records a step: a copy of every variable in scope there, the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.

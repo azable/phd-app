@@ -19,7 +19,8 @@ const plain = <T extends { types: unknown }>(step: T) => ({
   types: undefined,
   identities: undefined,
   events: undefined,
-  counts: undefined
+  counts: undefined,
+  moment: undefined
 });
 
 describe('algorithm interpretation', () => {

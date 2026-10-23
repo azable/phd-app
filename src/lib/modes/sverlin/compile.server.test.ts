@@ -13,7 +13,7 @@ const kindsOf = (space: Record<string, unknown>) =>
   [
     ...new Set(
       Object.keys(space)
-        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.'))
+        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.') && key !== 'frames')
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     )
   ].sort();
@@ -56,13 +56,14 @@ describe('single-component Svelte compilation', () => {
     for (const bundle of bundles) {
       expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
       expect(bundle.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5']);
-      expect(bundle.masterSteps).toEqual([0, 1, 2, 3, 4]);
+      expect(bundle.masterSteps).toEqual(prepared.master.map(({ moment }) => moment));
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
       new Set(['IntCell', 'IntTally'])
     );
     expect(bundles[0].javascript).toContain('[3,8,5,2,7]');
-    expect(bundles[0].javascript).not.toContain('yield');
+    // The algorithm runs when the source is built, not in the page; frames: 'yield' may name it.
+    expect(bundles[0].javascript).not.toMatch(/yield\s*;/u);
     const again = await bundlePresentation(prepared, 1, { randomise: true });
     expect(again.variant).toEqual(bundles[0].variant);
     expect((await bundlePresentation(prepared, 1)).variant).toEqual(prepared.design.starter);
@@ -343,7 +344,7 @@ describe('single-component Svelte compilation', () => {
     expect(prepared.listings?.javascript.text).toBe(
       'for (let i = Index(0); i < values.length; i++) yield;'
     );
-    expect(prepared.listings?.python.lit).toHaveLength(2);
+    expect(prepared.listings?.python.lit.yield).toHaveLength(2);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: { 'listing.language': 'pseudocode' }
     });
@@ -661,14 +662,14 @@ describe('typed view components', () => {
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">let i = Index(-1); yield; i = Index(0); yield;</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
-    expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.placements.yield).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('measures a position with every place in its collection, and as far past it as the trace goes', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">let i = Position(-1); yield; i = Position(0); yield;</script><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
-    expect(prepared.placements).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.placements.yield).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {

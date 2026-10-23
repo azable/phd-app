@@ -80,10 +80,24 @@ export type TypedState = {
 };
 
 /**
- * One step of the master trace that every presentation of a source shares, with the events since
- * the step before (see events.server.ts).
+ * Which events are a source's steps: each yield; each call of an operation the algorithm makes;
+ * or each iteration of a loop. Steps by events also end with the algorithm, so what it does after
+ * the last of them is a step too.
+ */
+export type FrameRule = 'yield' | 'iteration' | { operation: string };
+
+/** A frame rule by the name a variant chooses it by: yield, iteration, or an operation's name. */
+export function frameRuleOf(name: string): FrameRule {
+  return name === 'yield' || name === 'iteration' ? name : { operation: name };
+}
+
+/**
+ * One step of a source's trace, with the events since the step before (see events.server.ts) and
+ * its moment: how many events the algorithm had logged by then, the same whichever events are
+ * steps, so presentations stepping by different events line up by it.
  */
 export type MasterStep = {
+  moment?: number;
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -168,10 +182,16 @@ export function spanKey(block: 'algorithm' | 'domain', { start, end }: Span): st
 export function traceAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
-  domain: DomainRegistry = noDomain
+  domain: DomainRegistry = noDomain,
+  frames: FrameRule = 'yield'
 ): { steps: MasterStep[]; root: BlockStatement; hints: ListingHints } {
   const { root, offset } = parseBlock(body, 'algorithm', domain);
-  const interpreter = new Interpreter(root, offset, { kind: 'algorithm', initial: input, domain });
+  const interpreter = new Interpreter(root, offset, {
+    kind: 'algorithm',
+    initial: input,
+    domain,
+    frames
+  });
   return { steps: interpreter.run(), root, hints: interpreter.hints };
 }
 
@@ -243,6 +263,7 @@ class Interpreter {
   #frame: Scope = this.#topLevel;
   #depth = 0;
   readonly #log = new EventLog();
+  readonly #frames: FrameRule;
   readonly hints: ListingHints = { operands: {}, values: {} };
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
@@ -257,9 +278,11 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       domain?: DomainRegistry;
+      frames?: FrameRule;
     }
   ) {
     this.#root = root;
+    this.#frames = options.frames ?? 'yield';
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -299,8 +322,14 @@ class Interpreter {
   /** Run the algorithm block and return its master trace. */
   run(): MasterStep[] {
     this.#execute();
+    if (this.#frames !== 'yield' && this.#trace.length && this.#log.since)
+      this.#step(this.#root, this.#topLevel);
     if (this.#trace.length === 0)
-      throw new AlgorithmError('The algorithm must yield at least one step, as in yield;');
+      throw new AlgorithmError(
+        this.#frames === 'yield'
+          ? 'The algorithm must yield at least one step, as in yield;'
+          : 'The algorithm never makes the calls or iterations its steps are.'
+      );
     return this.#trace;
   }
 
@@ -929,6 +958,7 @@ class Interpreter {
   /** One iteration of a loop's body: 'normal' to go on, also after continue. */
   #pass(node: Statement & { body: Statement }, index: number, scope: Scope): Completion {
     this.#emit('iteration', node, { index });
+    if (this.#frames === 'iteration') this.#step(node, scope);
     const completion = this.#statement(node.body, scope);
     return completion === 'continue' ? 'normal' : completion;
   }
@@ -950,16 +980,27 @@ class Interpreter {
   }
 
   #yield(node: AnyNode, scope: Scope): void {
+    this.#emit('yield', node);
+    if (this.#frames === 'yield') this.#step(node, scope);
+  }
+
+  /** Record a step: the variables in scope, and the events since the step before. */
+  #step(node: AnyNode, scope: Scope): void {
     if (this.#trace.length >= algorithmLimits.maximumSteps)
-      this.#fail(node, `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`);
+      this.#fail(
+        node,
+        this.#frames === 'yield'
+          ? `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`
+          : `The algorithm takes more than ${algorithmLimits.maximumSteps} steps this way.`
+      );
     const recorded: [string, Binding][] = Object.keys(this.#history).length
       ? [
           ['event', { value: this.#event, constant: true }],
           ['history', { value: this.#history, constant: true }]
         ]
       : [];
-    this.#emit('yield', node);
     this.#trace.push({
+      moment: this.#log.seen,
       ...this.#state(node, scope, recorded),
       ...this.#log.step(this.#offset, (value) => {
         const single = unwrap(value as Value);
@@ -1464,6 +1505,9 @@ class Interpreter {
       this.#callSite = callSite;
     }
     this.#emit('close', node, { name: operation.name, value: result });
+    const frames = this.#frames;
+    if (typeof frames === 'object' && frames.operation === operation.name && !this.#bodies)
+      this.#step(node, scope);
     return result;
   }
 

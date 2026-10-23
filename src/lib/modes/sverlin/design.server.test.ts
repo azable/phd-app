@@ -14,7 +14,7 @@ describe('design space', () => {
     expect(space['frame.ratio']).toContain('4:3');
     const kinds = new Set(
       Object.keys(space)
-        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.'))
+        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.') && key !== 'frames')
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     );
     expect([...kinds].sort()).toEqual(

@@ -650,7 +650,9 @@ export function viewedPresentation(
 
 /** A presentation's design space and variant, each prop's options named once. */
 export function designVariables(
-  presentation: Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views'> | undefined
+  presentation:
+    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'frames'>
+    | undefined
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
@@ -677,7 +679,11 @@ export function designVariables(
     if (!view && Object.hasOwn(known, set)) options[set] = known[set];
     return {
       variable: key,
-      options: view ? [...(presentation?.views?.[view] ?? []), 'none'] : set,
+      options: view
+        ? [...(presentation?.views?.[view] ?? []), 'none']
+        : key === 'frames'
+          ? (presentation?.frames ?? [])
+          : set,
       value,
       ...(origin ? { origin } : {})
     };
