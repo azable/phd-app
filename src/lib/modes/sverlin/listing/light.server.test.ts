@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { interpretDomain, interpretInput, traceAlgorithm } from '../algorithm/interpret.server';
-import { lightSteps, writtenListing, type Lit } from './light.server';
-import { python } from './python';
-import { renderListing, type Listing } from './render.server';
+import { lightSteps, type Lit } from './light.server';
+import type { Listing } from './listing';
+import { mappedListing } from './mapped.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 99 });
@@ -14,14 +14,18 @@ const domain = interpretDomain(`
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(8);', domain);
 const body = `
-  for (let i = Index(0); i < values.length; i++) {
-    const found = Flag(Matches({ at: i, target }));
+  for (let i = Index(0); i < values.length; i++) { // @loop
+    const found = Flag(Matches({ at: i, target })); // @check
     yield;
-    if (found) break;
+    if (found) break; // @test; stop: break
   }
   yield;
 `;
-const { steps, root, hints } = traceAlgorithm(body, input, domain);
+const text = `for [loop: i = 0 to n - 1]
+    [check: found = [Matches: A[i] == x]]
+    if [test: found then [stop: stop]]`;
+const traced = traceAlgorithm(body, input, domain);
+const { listing, problems } = mappedListing({ body: text }, { ...traced, body }, domain);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
   current: current.map(([start, end]) => text.slice(start, end)),
@@ -29,54 +33,27 @@ const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
 });
 
 describe('lighting', () => {
-  it('lights what each step ran, the latest strongest, an inlined operation at its call', () => {
-    const listing = renderListing(root, domain, hints, python);
-    const lit = lightSteps(listing, steps);
-    expect(shown(listing, lit[0]).current).toEqual(['found = values[i] == target']);
-    expect(shown(listing, lit[0]).earlier).toEqual(
-      expect.arrayContaining(['for i in range(len(values)):'])
-    );
-    // The second step tests found, goes round the loop, and calls Matches again.
+  it('lights what each step ran, the latest strongest, an operation’s body at its call', () => {
+    expect(problems).toEqual([]);
+    const lit = lightSteps(listing, traced.steps);
+    expect(shown(listing, lit[0]).current).toEqual(['found = A[i] == x']);
+    expect(shown(listing, lit[0]).earlier).toEqual(expect.arrayContaining(['i = 0 to n - 1']));
+    // The second step tests found and goes round the loop; the stop inside the test ran nothing,
+    // so it stays dark.
     expect(shown(listing, lit[1]).earlier).toEqual(
-      expect.arrayContaining(['found', 'for i in range(len(values)):'])
+      expect.arrayContaining(['i = 0 to n - 1', 'found then'])
     );
-    expect(shown(listing, lit[2])).toEqual({
-      current: ['break'],
-      earlier: ['for i in range(len(values)):', 'found']
-    });
   });
 
-  it('lights the algorithm as written, without its shared indentation', () => {
-    const listing = writtenListing(body, root);
-    expect(listing.text.split('\n')[0]).toBe('for (let i = Index(0); i < values.length; i++) {');
-    const lit = lightSteps(listing, steps);
-    expect(shown(listing, lit[0]).current).toEqual(['found = Flag(Matches({ at: i, target }))']);
-    expect(shown(listing, lit[2]).current).toEqual(['break;']);
-  });
-
-  it('lights a statement that writes as a whole, and a loop as written at its head', () => {
-    const shifting = `
-      let j = Index(2);
-      while (j > 0 && values[j - 1] > Int(4)) {
-        values[j] = values[j - 1];
-        j--;
-        yield;
-      }
-    `;
-    const traced = traceAlgorithm(shifting, input, domain);
-    const inPython = renderListing(traced.root, domain, traced.hints, python);
-    const [first] = lightSteps(inPython, traced.steps);
-    expect(shown(inPython, first).current).toEqual(['j -= 1']);
-    expect(shown(inPython, first).earlier).toContain('values[j] = values[j - 1]');
-    const written = writtenListing(shifting, traced.root);
-    expect(shown(written, lightSteps(written, traced.steps)[0]).earlier).toContain(
-      'while (j > 0 && values[j - 1] > Int(4))'
-    );
+  it('never makes a loop’s exit the latest, as what left it is', () => {
+    const lit = lightSteps(listing, traced.steps);
+    expect(shown(listing, lit[2]).current).toEqual(['stop']);
+    expect(shown(listing, lit[2]).earlier).toEqual(expect.arrayContaining(['i = 0 to n - 1']));
   });
 
   it('keeps the lighting of the step before where a step lights nothing', () => {
-    const listing: Listing = { text: 'x', marks: [] };
-    expect(lightSteps(listing, [{ events: [] }, { events: [] }])).toEqual([
+    const unlit: Listing = { text: 'x', marks: [] };
+    expect(lightSteps(unlit, [{ events: [] }, { events: [] }])).toEqual([
       { current: [], earlier: [] },
       { current: [], earlier: [] }
     ]);

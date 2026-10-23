@@ -15,8 +15,7 @@ import type { AnyNode, BlockStatement } from 'acorn';
 import { spanKey } from '../algorithm/interpret.server';
 import { spanOf, type BlockComment } from '../algorithm/parse.server';
 import type { DomainRegistry, RecordType } from '../algorithm/structures.server';
-import type { Listing } from './render.server';
-import type { Mark } from './text';
+import type { Listing, Mark } from './listing';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
 export type Region = { label: string; start: number; end: number; at: number };
@@ -209,7 +208,8 @@ function partsOf(statement: AnyNode): AnyNode[] {
   });
 }
 
-const squeezed = (text: string) => text.replace(/\s+/gu, '');
+/** Text as an excerpt is matched: without spaces, or a statement's closing semicolon. */
+const squeezed = (text: string) => text.replace(/\s+/gu, '').replace(/;$/u, '');
 
 const isStatement = (node: AnyNode) =>
   node.type.endsWith('Statement') || node.type.endsWith('Declaration');

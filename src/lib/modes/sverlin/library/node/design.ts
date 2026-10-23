@@ -122,16 +122,17 @@ export const frameOptions = {
 
 /**
  * A listing's settings, variables of the whole presentation when the view places a <Listing />:
- * its language, and the fill of the text the step's latest event ran and of its earlier events.
+ * which of the source's listings it shows (they come first; see design.server.ts), and the fill
+ * of the text the step's latest event ran and of its earlier events.
  */
 export const listingOptions = {
-  'listing.language': ['python', 'pseudocode', 'javascript', 'none'],
+  'listing.language': ['none'],
   'listing.current.fill': ['none', ...colours],
   'listing.earlier.fill': ['none', ...colours]
 } satisfies Record<string, readonly string[]>;
 
 export const starterListing: Record<keyof typeof listingOptions, string> = {
-  'listing.language': 'python',
+  'listing.language': 'none',
   'listing.current.fill': 'amber-200',
   'listing.earlier.fill': 'neutral-200'
 };

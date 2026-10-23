@@ -368,45 +368,9 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 ### Listing
 
-`<Listing />` shows the algorithm as code beside the view, lighting what each step ran: the text of the step's latest event most strongly, and the rest of what ran since the step before more faintly. Place it in the markup like a node, outside views, as `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes no props or children. Its language is the variable `listing.language`: `python`, `pseudocode` (counting from 0, as the view's positions do), `javascript` (the algorithm as written), or `none`, python in the starter; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. The listing is the algorithm block, not the input. An operation whose body is one expression is written where it is called, its operands put in, as `values[i] == target` for `Matches({ at: i, target })`; one with a block body is written as a call, with its definition above the algorithm. Each line is a node participants can select.
+`<Listing />` shows a text of the algorithm beside the view, such as the code or pseudocode the participant knows or a textbook's, exactly as written, lighting what each step ran: the text of the step's latest event most strongly, and the rest of what ran since the step before more faintly. Place it in the markup like a node, outside views, as `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes no props or children, and each of its lines is a node participants can select.
 
-Linear search, with its code beside it:
-
-```svelte
-<script lang="sverlin" domain>
-  const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
-  const Index = index(Values);
-  const Found = type('boolean');
-  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
-</script>
-
-<script lang="sverlin" input>
-  const values = Values([3, 8, 5, 2, 7]);
-  const target = Int(2);
-</script>
-
-<script lang="sverlin">
-  for (let i = Index(0); i < values.length; i++) {
-    const found = Found(Matches({ at: i, target }));
-    yield;
-    if (found) break;
-  }
-  yield;
-</script>
-
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Here(p: Index)}<Node layout="column"><Pointed tags="current" /><Node tags="label">i</Node></Node>{/snippet}
-
-<Node tags="title">Linear search for {@render Int(target)}</Node>
-<Node layout="row">
-  <Listing />
-  <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-</Node>
-{@render Here(i)}
-```
-
-A listing can also be a text of the source's own, such as a textbook's pseudocode or the code a participant wrote, shown exactly as written: put it in a `<script lang="sverlin" listing="textbook">` block, any name but the library's, and it becomes the first option of `listing.language`, the one a presentation starts with. Mark each part of the text that should light as a region, `[label: text]`, nested as finely as needed, as `while [test: [bound: j > 0] and [cmp: A[j] > key]]`; a `[` that opens no region, as in `A[i]`, is text, and the marks are not shown. Then label the algorithm's code with the same labels, in a comment at the end of a statement's line or alone on the line above it: `// @shift` labels the statement, and `// @test; bound: j > 0; cmp: values[j - 1] > key` also names parts of it by their text, exactly as written in that line, with `#2` for a text's second occurrence. A call of an operation lights the region named after the operation without a label. The code inside a labelled part lights it too, and an unlabelled statement lights nothing; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every label must have a region and every region a label; the context's listingMaps says what each region is mapped to and whether a step lights it.
+Write the text in a `<script lang="sverlin" listing="textbook">` block, with any name but none; a source may have several, and the variable `listing.language` chooses which one a presentation shows, the first in the starter, or `none`; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. Mark each part of the text that should light as a region, `[label: text]`, nested as finely as needed, as `while [test: [bound: j > 0] and [cmp: A[j] > key]]`; a `[` that opens no region, as in `A[i]`, is text, and the marks are not shown. Then label the algorithm's code with the same labels, in a comment at the end of a statement's line or alone on the line above it: `// @shift` labels the statement, and `// @test; bound: j > 0; cmp: values[j - 1] > key` also names parts of it by their text, exactly as written in that line, with `#2` for a text's second occurrence. A call of an operation lights the region named after the operation without a label. The code inside a labelled part lights it too, and an unlabelled statement lights nothing; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every label must have a region and every region a label; the context's listingMaps says what each region is mapped to and whether a step lights it.
 
 Insertion sort, beside a textbook's pseudocode:
 

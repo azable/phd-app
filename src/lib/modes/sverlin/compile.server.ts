@@ -19,10 +19,9 @@ import {
   type TraceState,
   type TypedState
 } from './algorithm/interpret.server';
-import { listingLanguages } from './listing/languages';
-import { lightSteps, writtenListing, type Lit } from './listing/light.server';
+import { lightSteps, type Lit } from './listing/light.server';
+import type { Listing } from './listing/listing';
 import { mappedListing, type RegionMap } from './listing/mapped.server';
-import { renderListing, type Listing } from './listing/render.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
@@ -243,17 +242,13 @@ export function recordedTrace(source: string): MasterStep[] {
   return Object.values(runs)[0].steps;
 }
 
-/** The names of the listings the library writes, which a listing of the source's own cannot take. */
-const writtenNames = [...Object.keys(listingLanguages), 'javascript', 'none'];
-
 /**
- * The algorithm as a listing in each language: the source's own (see listing/mapped.server.ts),
- * the library's (see listing/render.server.ts), and as written; with the problems with the
- * source's own, and what each of their regions is mapped to.
+ * The source's listings (see listing/mapped.server.ts), by name; with the problems with them, and
+ * what each of their regions is mapped to.
  */
 function listingsFrom(
   source: string,
-  { root, hints, comments }: ReturnType<typeof traceAlgorithm>,
+  { root, comments }: ReturnType<typeof traceAlgorithm>,
   domain: DomainRegistry,
   algorithm: Block,
   own: readonly ListingBlock[]
@@ -267,10 +262,10 @@ function listingsFrom(
   const problems: InvalidSvelteSourceError[] = [];
   for (const block of own) {
     const at = (offset: number) => sourcePosition(source, offset);
-    if (writtenNames.includes(block.name) || Object.hasOwn(listings, block.name)) {
+    if (block.name === 'none' || Object.hasOwn(listings, block.name)) {
       problems.push(
         new InvalidSvelteSourceError(
-          `A listing cannot be named ${block.name}: ${writtenNames.includes(block.name) ? 'the library writes one by that name' : 'another has that name'}.`,
+          `A listing cannot be named ${block.name}: ${block.name === 'none' ? 'listing.language none shows none' : 'another has that name'}.`,
           { code: 'sverlin_block', start: at(block.start) }
         )
       );
@@ -287,9 +282,6 @@ function listingsFrom(
         })
       );
   }
-  for (const [name, language] of Object.entries(listingLanguages))
-    listings[name] = renderListing(root, domain, hints, language);
-  listings.javascript = writtenListing(algorithm.body, root);
   return { listings, maps, problems };
 }
 
@@ -441,7 +433,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, every type a choice of its views. Remove the block, and say what nodes are with tags, as <Node tags="current">.',
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
-    const { insertions, problems, kinds, tagKinds, listing } = withNodeRefs(
+    const { insertions, problems, kinds, tagKinds, listing, listingAt } = withNodeRefs(
       svelteSource,
       ast,
       source,
@@ -570,6 +562,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     const everyStep = Object.values(masters).flat();
     const written = listingsFrom(source, traced, domain, algorithm, listingBlocks);
+    if (listing && !listingBlocks.length)
+      written.problems.push(
+        new InvalidSvelteSourceError(
+          'A <Listing /> shows a listing of the source\'s own: add its text in a <script lang="sverlin" listing="code"> block, marking each part to light as [label: text], and label the algorithm\'s code with the same labels, as // @label at the end of its line (see Listing).',
+          { code: 'view_markup', start: sourcePosition(source, listingAt ?? 0) }
+        )
+      );
     if (written.problems.length) throw InvalidSvelteSourceError.combine(written.problems);
     const ownListings = listingBlocks.map(({ name }) => name);
     const listings = listing
@@ -1304,8 +1303,9 @@ function withNodeRefs(
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
   tagKinds: Record<string, string[]>;
-  /** Whether the view places a <Listing />. */
+  /** Whether the view places a <Listing />, and where the first starts. */
   listing: boolean;
+  listingAt?: number;
 } {
   const problems: InvalidSvelteSourceError[] = [];
   // Where each <Listing /> starts, given its source position as the others are.
@@ -1506,6 +1506,7 @@ function withNodeRefs(
   }
   return {
     listing: listings.length > 0,
+    ...(listings.length ? { listingAt: listings[0] } : {}),
     insertions,
     problems,
     kinds: [...kinds].map(([key, role]) => ({

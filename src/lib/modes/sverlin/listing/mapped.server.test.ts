@@ -61,13 +61,7 @@ describe('listings of the source’s own', () => {
   it('light each region where the algorithm runs the code with its label, parts of a line apart', () => {
     const prepared = prepareSvelteComponent(insertion);
     expect(prepared.design.starter['listing.language']).toBe('textbook');
-    expect(prepared.design.space['listing.language']).toEqual([
-      'textbook',
-      'python',
-      'pseudocode',
-      'javascript',
-      'none'
-    ]);
+    expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
     const { text, lit } = prepared.listings!.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
     const shown = lit.yield.map(({ current, earlier }) => ({
@@ -134,14 +128,15 @@ describe('listings of the source’s own', () => {
       'one: 1 matches 2 parts of its line; name one, as one: 1#2.'
     ],
     [
-      'a listing named as the library’s',
+      'a listing named none',
       '  const n = Int(1); // @size\n  yield;',
       '[size: n]',
-      'A listing cannot be named python'
+      'A listing cannot be named none'
     ]
   ])('reject %s', (name, algorithm, listing, message) => {
     let source = blocks(algorithm, listing);
-    if (name.includes('library')) source = source.replace('listing="textbook"', 'listing="python"');
+    if (name.includes('named none'))
+      source = source.replace('listing="textbook"', 'listing="none"');
     expect(() => prepareSvelteComponent(source)).toThrow(message);
   });
 

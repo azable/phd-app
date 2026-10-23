@@ -105,7 +105,7 @@ export function starterVariant(
       Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
     ),
     ...starterFrame,
-    // A listing of the source's own is the one it starts with.
+    // The source's first listing is the one it starts with.
     ...(listing
       ? {
           ...starterListing,

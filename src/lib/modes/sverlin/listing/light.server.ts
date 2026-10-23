@@ -5,13 +5,9 @@
  * lighting of the step before.
  */
 
-import type { AnyNode, BlockStatement } from 'acorn';
-
 import type { TraceEvent } from '../algorithm/events.server';
 import { spanKey } from '../algorithm/interpret.server';
-import { spanOf } from '../algorithm/parse.server';
-import type { Listing } from './render.server';
-import type { Mark } from './text';
+import type { Listing, Mark } from './listing';
 
 export type Range = readonly [start: number, end: number];
 
@@ -119,67 +115,4 @@ function merged(marks: readonly Mark[]): Range[] {
     else ranges.push([start, end]);
   }
   return ranges;
-}
-
-/**
- * The algorithm as written, without the indentation its lines share, marking every node at its
- * text, so it lights as the other listings do: a loop, branch, or function at its head, up to its
- * body.
- */
-export function writtenListing(body: string, root: BlockStatement): Listing {
-  const lines = body.split('\n');
-  const first = lines.findIndex((line) => line.trim());
-  const last = lines.findLastIndex((line) => line.trim());
-  if (first < 0) return { text: '', marks: [] };
-  const kept = lines.slice(first, last + 1);
-  const indent = Math.min(
-    ...kept.filter((line) => line.trim()).map((line) => line.length - line.trimStart().length)
-  );
-  // Where each kept line starts in the body, and in the listing.
-  const starts: { from: number; to: number; cut: number }[] = [];
-  let from = lines.slice(0, first).reduce((total, line) => total + line.length + 1, 0);
-  let to = 0;
-  for (const line of kept) {
-    const cut = Math.min(indent, line.length);
-    starts.push({ from, to, cut });
-    from += line.length + 1;
-    to += line.length - cut + 1;
-  }
-  const place = (offset: number): number => {
-    let line = starts[0];
-    for (const start of starts) if (start.from <= offset) line = start;
-    return line.to + Math.max(offset - line.from - line.cut, 0);
-  };
-  const marks: Mark[] = [];
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(visit);
-    if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
-      return;
-    const span = spanOf(node as AnyNode);
-    if (span.start >= 0 && span.end <= body.length) {
-      const inner = innerOf(node as AnyNode);
-      const end = inner
-        ? span.start + body.slice(span.start, spanOf(inner).start).replace(/[\s{]*$/u, '').length
-        : span.end;
-      marks.push({ key: spanKey('algorithm', span), start: place(span.start), end: place(end) });
-    }
-    for (const [key, child] of Object.entries(node)) if (key !== 'loc') visit(child);
-  };
-  root.body.forEach(visit);
-  return { text: kept.map((line, index) => line.slice(starts[index].cut)).join('\n'), marks };
-}
-
-/** The body a loop, branch, or function heads, whose text its head ends before. */
-function innerOf(node: AnyNode): AnyNode | undefined {
-  switch (node.type) {
-    case 'IfStatement':
-      return node.consequent;
-    case 'WhileStatement':
-    case 'ForStatement':
-    case 'ForOfStatement':
-    case 'FunctionDeclaration':
-      return node.body;
-    default:
-      return undefined;
-  }
 }
