@@ -180,16 +180,10 @@ export function checkSubset(
           reject(node, 'Only variables, elements, and properties can be incremented.');
         break;
       case 'YieldExpression':
-        if (kind !== 'algorithm')
-          reject(node, `yield belongs in the algorithm block, not the ${kind} block.`);
-        if (node.delegate) reject(node, 'yield* is not supported.');
-        if (parent?.type !== 'ExpressionStatement')
-          reject(node, 'yield must be a statement of its own: yield;');
-        if (node.argument)
-          reject(
-            node,
-            'yield takes nothing: write yield; and show what the step is about in the view, from the state and step.'
-          );
+        reject(
+          node,
+          'Steps are marked by labels, not yield: label the code each step is about, as // @step at the end of its line, and each time it runs is a step.'
+        );
         break;
       default:
         reject(node, `${describe(node.type)} is not supported in ${kind} blocks.`);

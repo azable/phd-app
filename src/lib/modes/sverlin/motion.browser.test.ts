@@ -26,8 +26,7 @@ const merge = `<script lang="sverlin" domain>
 <script lang="sverlin">
   let merged = Values([]);
   let i = Position(left, 0);
-  let j = Position(right, 0);
-  yield;
+  let j = Position(right, 0); // @step
   while (i < left.length || j < right.length) {
     if (j === right.length || (i < left.length && left[i] < right[j])) {
       merged.push(left[i]);
@@ -36,8 +35,7 @@ const merge = `<script lang="sverlin" domain>
       merged.push(right[j]);
       j++;
     }
-    const k = Position(merged, merged.length - 1);
-    yield;
+    const k = Position(merged, merged.length - 1); // @step
   }
 </script>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
@@ -98,12 +96,16 @@ function starts(
 }
 
 it.skipIf(!enabled)(
-  'starts every move between steps where the node was, in both of two stacked frames',
+  'starts every move where the node was, into a step’s before and then its after, in both of two stacked frames',
   { timeout: 180_000 },
   async () => {
     const prepared = prepareSvelteComponent(merge);
-    // Copies start where the value they were copied from was (identities.server.ts).
-    const copies = prepared.master.map(({ identities }) => identities?.copies ?? {});
+    // Copies start where the value they were copied from was (identities.server.ts): into a
+    // step's before from the step before, then into its after from its before.
+    const copies = prepared.master.map(({ before, identities }) => [
+      before?.identities?.copies ?? {},
+      identities?.copies ?? {}
+    ]);
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
         const { javascript } = await bundlePresentation(prepared, seed);
@@ -141,25 +143,40 @@ it.skipIf(!enabled)(
           timeout: 60_000
         });
 
+      // The layer shown is marked once checked, so the next one to show is told apart.
+      const seen = (frame: Frame) =>
+        frame.evaluate(() =>
+          document
+            .querySelector('.sv-layer:not(.pending):not(.sv-leaving)')
+            ?.setAttribute('data-checked', '')
+        );
       for (let index = 1; index < prepared.master.length; index++) {
-        const before = await Promise.all(panes.map(placed));
+        let from = await Promise.all(panes.map(placed));
+        await Promise.all(panes.map(seen));
         await step(index);
-        for (const [pane, frame] of panes.entries()) {
-          await frame.waitForFunction(
-            () =>
-              document
-                .querySelector('.sv-layer:not(.pending):not(.sv-leaving)')
-                ?.getAnimations({ subtree: true }).length,
-            null,
-            { timeout: 20_000 }
-          );
-          for (const { identity, at } of await starts(frame)) {
-            const from = before[pane][identity] ?? before[pane][copies[index][Number(identity)]];
-            expect(at, `step ${index + 1}, frame ${pane + 1}, identity ${identity}`).toEqual(from);
+        for (const [part, name] of ['before', 'after'].entries()) {
+          for (const [pane, frame] of panes.entries()) {
+            await frame.waitForFunction(
+              () =>
+                document.querySelector(
+                  '.sv-layer:not(.pending):not(.sv-leaving):not([data-checked])'
+                ),
+              null,
+              { timeout: 20_000 }
+            );
+            for (const { identity, at } of await starts(frame)) {
+              const was = from[pane][identity] ?? from[pane][copies[index][part][Number(identity)]];
+              expect(
+                at,
+                `step ${index + 1} ${name}, frame ${pane + 1}, identity ${identity}`
+              ).toEqual(was);
+            }
+            await frame.evaluate(() => {
+              for (const animation of document.getAnimations()) animation.finish();
+            });
           }
-          await frame.evaluate(() => {
-            for (const animation of document.getAnimations()) animation.finish();
-          });
+          from = await Promise.all(panes.map(placed));
+          await Promise.all(panes.map(seen));
         }
       }
       expect(errors).toEqual([]);
@@ -181,8 +198,7 @@ const walk = `<script lang="sverlin" domain>
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
 </script>
 <script lang="sverlin">
-  yield;
-  for (let e = EdgeIndex(0); e < edges.length; e++) yield;
+  for (let e = EdgeIndex(0); e < edges.length; e++) {} // @step
 </script>
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
@@ -232,7 +248,8 @@ it.skipIf(!enabled)(
         { timeout: 20_000, polling: 5 }
       );
       expect(await check.jsonValue(), `step ${index + 1}`).toEqual({ foreign: 0 });
-      await page.waitForTimeout(600);
+      // A step forward plays its before, then its after.
+      await page.waitForTimeout(1200);
     }
     await page.close();
   }
@@ -251,9 +268,8 @@ const taken = `<script lang="sverlin" domain>
 <script lang="sverlin">
   let i = Index(left, 0);
   let j = Index(right, 0);
-  let take = Take({ from: j });
-  yield;
-  while (i < left.length && j < right.length) {
+  let take = Take({ from: j }); // @step
+  while (i < left.length && j < right.length) { // @step
     if (left[i] < right[j]) {
       take = Take({ from: i });
       i++;
@@ -261,7 +277,6 @@ const taken = `<script lang="sverlin" domain>
       take = Take({ from: j });
       j++;
     }
-    yield;
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -304,7 +319,8 @@ it.skipIf(!enabled)(
     expect(slots).toEqual([3, 3]);
     for (let index = 1; index < prepared.master.length; index++) {
       await step(index);
-      await page.waitForTimeout(800);
+      // A step forward plays its before, then its after.
+      await page.waitForTimeout(1500);
       await frame.evaluate(() => {
         for (const animation of document.getAnimations()) animation.finish();
       });
@@ -327,10 +343,8 @@ const far = `<script lang="sverlin" domain>
   const values = Values([3, 8]);
 </script>
 <script lang="sverlin">
-  let i = Index(0);
-  yield;
-  i = 9;
-  yield;
+  let i = Index(0); // @step
+  i = 9; // @step
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
@@ -375,7 +389,8 @@ it.skipIf(!enabled)(
     });
     expect(await drawn()).toEqual({ slots: 6, pointers: 1 });
     await step(1);
-    await page.waitForTimeout(800);
+    // A step forward plays its before, then its after.
+    await page.waitForTimeout(1500);
     expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
     expect(errors).toEqual([]);
     await page.close();
@@ -451,7 +466,8 @@ async function cursorRows(chosen: Record<string, string>) {
       await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
         timeout: 60_000
       });
-    await page.waitForTimeout(800);
+    // A step forward plays its before, then its after.
+    await page.waitForTimeout(1500);
     steps.push(
       await frame.evaluate(() => {
         const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
@@ -504,7 +520,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin">yield;</script><Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>`
+      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin"></script><Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {

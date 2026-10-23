@@ -33,11 +33,11 @@ describe('operations', () => {
       for (let i = Index(0); i < values.length; i++) {
         if (Matches({ at: i, target })) { found = i; break; }
       }
-      yield;
     `,
       'const values = Values([3, 8, 5, 2]); const target = Int(5);'
     );
-    expect(trace[0].state.found).toBe(2);
+    // Its calls are its steps; the last step, after them, holds where the search ended.
+    expect(trace.at(-1)?.state.found).toBe(2);
   });
 
   it('record the calls since the last step as its event, and every call by operation', () => {
@@ -45,16 +45,16 @@ describe('operations', () => {
       `
       for (let i = Index(0); i < values.length; i++) {
         if (Matches({ at: i, target })) break;
-        yield;
       }
-      yield;
     `,
       'const values = Values([3, 8, 5]); const target = Int(5);'
     );
+    // A step at each call, and a last one after them, for the break, with no call of its own.
     expect(trace.map(({ state }) => (state.event as Record<string, unknown>).Matches)).toEqual([
       [{ at: 0, target: 5 }],
       [{ at: 1, target: 5 }],
-      [{ at: 2, target: 5 }]
+      [{ at: 2, target: 5 }],
+      []
     ]);
     expect(trace[0].state.event).toMatchObject({ Swap: [], Less: [], Order: [] });
     expect(trace[2].state.history).toEqual({
@@ -76,12 +76,15 @@ describe('operations', () => {
   });
 
   it('write through their operands, and nest', () => {
-    const [step] = run(
-      'Order({ a: Index(0), b: Index(1) }); Order({ a: Index(1), b: Index(2) }); yield;',
+    const trace = run(
+      'Order({ a: Index(0), b: Index(1) }); Order({ a: Index(1), b: Index(2) });',
       'const values = Values([3, 1, 2]);'
     );
+    // Each call of Order is a step; the calls inside it are recorded with it.
+    expect(trace).toHaveLength(2);
+    const step = trace[1];
     expect(step.state.values).toEqual([1, 2, 3]);
-    expect(step.state.event).toEqual({
+    expect(step.state.history).toEqual({
       Matches: [],
       Swap: [
         { a: 0, b: 1 },
@@ -100,7 +103,7 @@ describe('operations', () => {
 
   it('read and write the element a position points at as its value, in the algorithm too', () => {
     const [step] = run(
-      'let i = Index(1); i.value = Int(7); const seen = i.value; yield;',
+      'let i = Index(1); i.value = Int(7); const seen = i.value;',
       'const values = Values([3, 8]);'
     );
     expect(step.state).toMatchObject({ values: [3, 7], seen: 7 });
@@ -108,24 +111,24 @@ describe('operations', () => {
 
   it('leave sources without operations recording no event or history', () => {
     const plain = interpretDomain("const Int = type('integer', { min: 0, max: 9 });");
-    const [step] = interpretAlgorithm('const n = Int(1); yield;', undefined, plain);
+    const [step] = interpretAlgorithm('const n = Int(1);', undefined, plain);
     expect(step.state).toEqual({ n: 1 });
   });
 
   it.each([
     [
       'operands not given as one object',
-      'const values = Values([1]); Matches(Index(0), Int(1)); yield;',
+      'const values = Values([1]); Matches(Index(0), Int(1));',
       'Matches(...) takes its operands as one object, as in Matches({ at, target }).'
     ],
     [
       'a missing operand',
-      'const values = Values([1]); Matches({ at: Index(0) }); yield;',
+      'const values = Values([1]); Matches({ at: Index(0) });',
       'Matches needs target, a Int.'
     ],
     [
       'reading past the end through a position',
-      'const values = Values([1]); Matches({ at: Index(3), target: Int(1) }); yield;',
+      'const values = Values([1]); Matches({ at: Index(3), target: Int(1) });',
       'at.value is outside the collection: it has 1 element, at 0 to 0.'
     ]
   ])('reject %s', (_name, body, message) => {
@@ -134,7 +137,7 @@ describe('operations', () => {
 
   it('report a problem in a body in the domain block', () => {
     try {
-      run('const values = Values([1]); Matches({ at: Index(3), target: Int(1) }); yield;');
+      run('const values = Values([1]); Matches({ at: Index(3), target: Int(1) });');
       expect.unreachable();
     } catch (cause) {
       expect(cause).toBeInstanceOf(AlgorithmError);
@@ -179,6 +182,6 @@ describe('operations', () => {
   });
 
   it('reserve event and history for the steps', () => {
-    expect(() => run('const event = Int(1); yield;')).toThrow('"event" is reserved for the view.');
+    expect(() => run('const event = Int(1);')).toThrow('"event" is reserved for the view.');
   });
 });

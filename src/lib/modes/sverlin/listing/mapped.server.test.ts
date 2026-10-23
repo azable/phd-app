@@ -34,7 +34,6 @@ const insertion = blocks(
     }
     // @place
     values[j] = key;
-    yield;
   }`,
   `INSERTION-SORT(A, n)
 1  for [outer: i = 2 to n]
@@ -64,7 +63,8 @@ describe('listings of the source’s own', () => {
     expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
     const { text, lit } = prepared.listings!.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
-    const shown = lit.yield.map(({ current, earlier }) => ({
+    // Stepping by place, each step leads up to placing the key and then places it.
+    const shown = lit.place.map(({ current, earlier }) => ({
       current: current.map(([start, end]) => text.slice(start, end)),
       earlier: earlier.map(([start, end]) => text.slice(start, end))
     }));
@@ -76,60 +76,58 @@ describe('listings of the source’s own', () => {
   });
 
   it('light the bound alone where the comparison never runs', () => {
-    // A step inside the loop, so the next holds only the test that fails at j = 0.
-    const prepared = prepareSvelteComponent(
-      insertion
-        .replace('      j--; // @down', '      j--; // @down\n      yield;')
-        .replace('    // @place', '    yield;\n    // @place')
-    );
-    const { text, lit } = prepared.listings!.textbook;
-    const leaving = lit.yield[1];
-    expect(leaving.current.map(([start, end]) => text.slice(start, end))).toEqual(['j > 0 and']);
-    expect(leaving.earlier.map(([start, end]) => text.slice(start, end))).not.toContain(
-      'A[j] > key'
-    );
+    // Stepping by down, the last step leads up from it: the test that fails at j = 0, its
+    // comparison never run, then placing the key.
+    const { text, lit } = prepareSvelteComponent(insertion).listings!.textbook;
+    const leaving = lit.down.at(-1)!;
+    const earlier = leaving.earlier.map(([start, end]) => text.slice(start, end));
+    expect(earlier).toContain('j > 0 and');
+    expect(earlier).not.toContain('A[j] > key');
   });
 
   it('label calls of an operation by its name', () => {
     const source = blocks(
-      `  if (values[1] < values[0]) Swap({ a: Position(0), b: Position(1) }); // @check
-  yield;`,
+      `  if (values[1] < values[0]) Swap({ a: Position(0), b: Position(1) }); // @check`,
       `[check: if A[2] < A[1]] then [Swap: exchange A[1] with A[2]]`
     );
     const { text, lit } = prepareSvelteComponent(source).listings!.textbook;
-    expect(lit.yield[0].current.map(([start, end]) => text.slice(start, end))).toEqual([
+    // Stepping by Swap, the step is the call, led up to by the check.
+    expect(lit.Swap[0].current.map(([start, end]) => text.slice(start, end))).toEqual([
       'exchange A[1] with A[2]'
+    ]);
+    expect(lit.Swap[0].earlier.map(([start, end]) => text.slice(start, end))).toEqual([
+      'if A[2] < A[1]'
     ]);
   });
 
   it.each([
     [
       'a label with no region',
-      '  const n = Int(1); // @count\n  yield;',
+      '  const n = Int(1); // @count',
       '[size: n]',
       'The algorithm labels code count, but the listing has no region [count: …].'
     ],
     [
       'a region labelled on no code',
-      '  const n = Int(1); // @size\n  yield;',
+      '  const n = Int(1); // @size',
       '[size: n] [spare: m]',
       'The listing’s region [spare: …] is labelled on no code'.replace('’', "'")
     ],
     [
       'a part that matches nothing',
-      '  const n = Int(1 + 1); // @size; sum: 2 + 2\n  yield;',
+      '  const n = Int(1 + 1); // @size; sum: 2 + 2',
       '[size: n] [sum: 1 + 1]',
       'sum: 2 + 2 matches no part of its line, which reads const n = Int(1 + 1);'
     ],
     [
       'a part that matches twice',
-      '  const n = Int(1 + 1); // @size; one: 1\n  yield;',
+      '  const n = Int(1 + 1); // @size; one: 1',
       '[size: n] [one: 1]',
       'one: 1 matches 2 parts of its line; name one, as one: 1#2.'
     ],
     [
       'a listing named none',
-      '  const n = Int(1); // @size\n  yield;',
+      '  const n = Int(1); // @size',
       '[size: n]',
       'A listing cannot be named none'
     ]

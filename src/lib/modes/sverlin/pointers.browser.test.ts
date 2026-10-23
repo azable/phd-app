@@ -36,7 +36,6 @@ it.skipIf(!enabled)(
 <script lang="sverlin">
   const i = Index(1);
   const j = Index(0);
-  yield;
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet First(p: Index)}<Pointed tags="first" />{/snippet}

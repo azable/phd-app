@@ -24,16 +24,14 @@ describe('references', () => {
   it('stay with their element as it moves, and read as it', () => {
     const trace = run(`
       const queue = Values([4, 7, 9]);
-      const front = Front(queue[1]);
-      yield;
-      queue.shift();
-      yield;
+      const front = Front(queue[1]); // @step
+      queue.shift(); // @step
     `);
     expect(trace.map(({ state }) => state.front)).toEqual([7, 7]);
     expect(trace[0].types.front).toBe('Front');
     expect(
       whereIs(
-        `const queue = Values([4, 7, 9]); const front = Front(queue[1]); yield; queue.shift(); yield;`,
+        `const queue = Values([4, 7, 9]); /* @step */ const front = Front(queue[1]); /* @step */ queue.shift();`,
         'front'
       )
     ).toEqual(['queue[1]', 'queue[0]']);
@@ -42,7 +40,7 @@ describe('references', () => {
   it('refer to nothing once their element is gone', () => {
     expect(
       whereIs(
-        `const queue = Values([4, 7]); const front = Front(queue[0]); yield; queue.shift(); yield;`,
+        `const queue = Values([4, 7]); /* @step */ const front = Front(queue[0]); /* @step */ queue.shift();`,
         'front'
       )
     ).toEqual(['queue[0]', undefined]);
@@ -51,14 +49,14 @@ describe('references', () => {
   it('follow the original of a copied value, not the copy', () => {
     expect(
       whereIs(
-        `const values = Values([5, 2]); const r = Front(values[0]); yield; values[1] = values[0]; yield;`,
+        `const values = Values([5, 2]); /* @step */ const r = Front(values[0]); /* @step */ values[1] = values[0];`,
         'r'
       )
     ).toEqual(['values[0]', 'values[0]']);
   });
 
   it('are made from an element of a collection of their type', () => {
-    expect(() => run(`const values = Values([5]); const r = Front(Int(5)); yield;`)).toThrow(
+    expect(() => run(`const values = Values([5]); const r = Front(Int(5));`)).toThrow(
       'A Front refers to an element of a Values, so make it from one, as in Front(values[0]).'
     );
   });
@@ -95,8 +93,7 @@ describe('references to positions', () => {
        const edges = Edges([{ from: 0, to: 2 }]);
        let queue = Queue([]);
        queue.push(edges[0].to);
-       const front = Front(queue[0]);
-       yield;`,
+       const front = Front(queue[0]);`,
       undefined,
       graph
     );

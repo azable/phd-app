@@ -111,6 +111,11 @@ export class EventLog {
     return this.#total > 0;
   }
 
+  /** How many events were logged since the last step. */
+  get pending(): number {
+    return this.#total;
+  }
+
   /**
    * The events since the last step, the latest kept, each placed in its block's source and with its
    * value if a single one; how many were dropped; and the totals.

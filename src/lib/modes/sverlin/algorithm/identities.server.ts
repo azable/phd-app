@@ -44,8 +44,13 @@ export class Identities {
   readonly #last = new WeakMap<object, number>();
   #previous = new Map<string, { value: object; id: number }>();
 
-  /** Ids for one step's places: collections and records, then the values they hold, then variables. */
-  step(placed: readonly Placed[]): StepIdentities {
+  /**
+   * Ids for one step's places: collections and records, then the values they hold, then variables.
+   * A step's before is placed against the after before it without being kept (`keep` false), so
+   * each after is still matched with the after before it, as a value parked in a temporary and put
+   * back stays one value; new ids are still new.
+   */
+  step(placed: readonly Placed[], keep = true): StepIdentities {
     const claiming: Claiming = { ids: {}, copies: {}, claimed: new Set() };
     const { ids, copies, claimed } = claiming;
     for (const [path, value, kind] of placed)
@@ -76,10 +81,12 @@ export class Identities {
     }
     this.#claim(alone, claiming);
 
-    const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
-    for (const [path, value] of values)
-      if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
-    this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
+    if (keep) {
+      const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
+      for (const [path, value] of values)
+        if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
+      this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
+    }
     return { ids, copies, refs };
   }
 

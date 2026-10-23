@@ -13,6 +13,7 @@
 import type { AnyNode, BlockStatement } from 'acorn';
 
 import { spanKey } from '../algorithm/interpret.server';
+import { isStatement, readLabels } from '../algorithm/labels.server';
 import { spanOf, type BlockComment } from '../algorithm/parse.server';
 import type { DomainRegistry, RecordType } from '../algorithm/structures.server';
 import type { Listing, Mark } from './listing';
@@ -97,123 +98,6 @@ export function readRegions(body: string): {
   };
 }
 
-/** The algorithm's labels: the labels each node has of its own. */
-function readLabels(
-  root: BlockStatement,
-  comments: readonly BlockComment[],
-  body: string
-): { labels: Map<AnyNode, string[]>; problems: MappingProblem[]; used: Set<string> } {
-  const labels = new Map<AnyNode, string[]>();
-  const problems: MappingProblem[] = [];
-  const used = new Set<string>();
-  const lineOf = (offset: number) => body.slice(0, Math.max(offset, 0)).split('\n').length;
-  const statements: AnyNode[] = [];
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(visit);
-    if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
-      return;
-    const part = node as AnyNode;
-    if (isStatement(part) && part.type !== 'BlockStatement' && spanOf(part).start >= 0)
-      statements.push(part);
-    for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
-  };
-  root.body.forEach(visit);
-  const label = (node: AnyNode, name: string) => {
-    labels.set(node, [...(labels.get(node) ?? []), name]);
-    used.add(name);
-  };
-  for (const comment of comments) {
-    const content = comment.text.trim();
-    if (!content.startsWith('@')) continue;
-    const line = lineOf(comment.start);
-    // A comment alone on its line labels the statement on the next line with code.
-    const alone = !body.slice(body.lastIndexOf('\n', comment.start - 1) + 1, comment.start).trim();
-    const lines = body.split('\n');
-    let target = line;
-    if (alone) while (target < lines.length && !lines[target]?.trim()) target++;
-    if (alone) target++;
-    const starting = statements.filter((node) => lineOf(spanOf(node).start) === target);
-    const statement = starting.reduce<AnyNode | undefined>(
-      (outer, node) =>
-        !outer || spanOf(node).end - spanOf(node).start > spanOf(outer).end - spanOf(outer).start
-          ? node
-          : outer,
-      undefined
-    );
-    if (!statement) {
-      problems.push({
-        message: `No statement starts on the line of the label ${content}: put it at the end of its statement's line, or alone on the line above.`,
-        block: 'algorithm',
-        at: comment.start
-      });
-      continue;
-    }
-    for (const item of content.slice(1).split(';')) {
-      const [name, ...excerptParts] = item.split(':');
-      const labelName = name.trim();
-      if (!labelName) continue;
-      if (!excerptParts.length) {
-        label(statement, labelName);
-        continue;
-      }
-      const written = excerptParts.join(':').trim();
-      const [, excerpt, occurrence] = /^(.*?)(?:#(\d+))?$/su.exec(written) ?? [];
-      const matches = partsOf(statement).filter(
-        (node) => squeezed(body.slice(spanOf(node).start, spanOf(node).end)) === squeezed(excerpt)
-      );
-      const chosen = occurrence
-        ? matches[Number(occurrence) - 1]
-        : matches.length === 1
-          ? matches[0]
-          : undefined;
-      if (!chosen) {
-        const statementText = body
-          .slice(spanOf(statement).start, spanOf(statement).end)
-          .split('\n')[0];
-        problems.push({
-          message: matches.length
-            ? `${labelName}: ${written} matches ${matches.length} parts of its line; name one, as ${labelName}: ${excerpt}#2.`
-            : `${labelName}: ${written} matches no part of its line, which reads ${statementText.trim()}.`,
-          block: 'algorithm',
-          at: comment.start
-        });
-        continue;
-      }
-      label(chosen, labelName);
-    }
-  }
-  return { labels, problems, used };
-}
-
-/** A statement's parts on its own line: its head, not the bodies of blocks inside it. */
-function partsOf(statement: AnyNode): AnyNode[] {
-  const parts: AnyNode[] = [];
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(visit);
-    if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
-      return;
-    const part = node as AnyNode;
-    if (part.type === 'BlockStatement') return;
-    parts.push(part);
-    for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
-  };
-  visit(statement);
-  // A node and one wrapping it with the same text are one part.
-  const seen = new Set<string>();
-  return parts.filter((part) => {
-    const key = `${part.start}:${part.end}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/** Text as an excerpt is matched: without spaces, or a statement's closing semicolon. */
-const squeezed = (text: string) => text.replace(/\s+/gu, '').replace(/;$/u, '');
-
-const isStatement = (node: AnyNode) =>
-  node.type.endsWith('Statement') || node.type.endsWith('Declaration');
-
 /**
  * A mapped listing: its text, marked for each node with a label by the regions with that label, and
  * the problems with its labels; also what each region is mapped to.
@@ -226,7 +110,10 @@ export function mappedListing(
   const { text, regions, problems } = readRegions(block.body);
   const { root, comments, body } = algorithm;
   const read = readLabels(root, comments, body);
-  problems.push(...read.problems);
+  problems.push(
+    ...read.problems.map(({ message, at }) => ({ message, at, block: 'algorithm' as const }))
+  );
+  const used = new Set(read.order);
   const regionLabels = new Set(regions.map(({ label }) => label));
   const own = read.labels;
   const marks: Mark[] = [];
@@ -244,7 +131,7 @@ export function mappedListing(
       regionLabels.has(part.callee.name)
         ? [part.callee.name]
         : [];
-    if (operation.length) read.used.add(operation[0]);
+    if (operation.length) used.add(operation[0]);
     const mine = [...(own.get(part) ?? []), ...operation];
     const labels = mine.length ? mine : isStatement(part) ? [] : inherited;
     const span = spanOf(part);
@@ -262,7 +149,7 @@ export function mappedListing(
     for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child, labels);
   };
   root.body.forEach((statement) => visit(statement, []));
-  for (const label of read.used)
+  for (const label of used)
     if (!regionLabels.has(label))
       problems.push({
         message: `The algorithm labels code ${label}, but the listing has no region [${label}: …].`,
@@ -270,7 +157,7 @@ export function mappedListing(
         at: comments.find(({ text }) => text.includes(label))?.start ?? 0
       });
   for (const region of regions)
-    if (!read.used.has(region.label))
+    if (!used.has(region.label))
       problems.push({
         message: `The listing's region [${region.label}: …] is labelled on no code; label the code it shows, as // @${region.label} at the end of its line.`,
         block: 'listing',

@@ -16,15 +16,14 @@ const input = interpretInput('const values = Values([3, 8, 5]); const target = I
 const body = `
   for (let i = Index(0); i < values.length; i++) { // @loop
     const found = Flag(Matches({ at: i, target })); // @check
-    yield;
     if (found) break; // @test; stop: break
   }
-  yield;
 `;
 const text = `for [loop: i = 0 to n - 1]
     [check: found = [Matches: A[i] == x]]
     if [test: found then [stop: stop]]`;
-const traced = traceAlgorithm(body, input, domain);
+// Stepping by check: each step leads up to the check, then makes it.
+const traced = traceAlgorithm(body, input, domain, 'check');
 const { listing, problems } = mappedListing({ body: text }, { ...traced, body }, domain);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
@@ -33,7 +32,7 @@ const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
 });
 
 describe('lighting', () => {
-  it('lights what each step ran, the latest strongest, an operation’s body at its call', () => {
+  it('lights a step’s code strongly, what led up to it faintly, an operation’s body at its call', () => {
     expect(problems).toEqual([]);
     const lit = lightSteps(listing, traced.steps);
     expect(shown(listing, lit[0]).current).toEqual(['found = A[i] == x']);
@@ -45,10 +44,14 @@ describe('lighting', () => {
     );
   });
 
-  it('never makes a loop’s exit the latest, as what left it is', () => {
+  it('lights the last step, after the last labelled code, only faintly: it has no code of its own', () => {
     const lit = lightSteps(listing, traced.steps);
-    expect(shown(listing, lit[2]).current).toEqual(['stop']);
-    expect(shown(listing, lit[2]).earlier).toEqual(expect.arrayContaining(['i = 0 to n - 1']));
+    // Found at the second check; the last step holds the test that held, the stop, and the exit.
+    expect(lit).toHaveLength(3);
+    expect(shown(listing, lit[2]).current).toEqual([]);
+    expect(shown(listing, lit[2]).earlier).toEqual(
+      expect.arrayContaining(['i = 0 to n - 1', 'found then stop'])
+    );
   });
 
   it('keeps the lighting of the step before where a step lights nothing', () => {

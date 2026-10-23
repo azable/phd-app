@@ -30,8 +30,8 @@ describe('the event log', () => {
       for (const v of values) {
         if (v === 1) continue;
         if (v === 3) break;
-      }
-      yield;`;
+      }`;
+    // Without labels, the algorithm's one step is its end, holding all of its events.
     const [step] = run(body);
     expect(read(body, step.events).filter((line) => !line.startsWith('read'))).toEqual([
       'write values    const values = Values([1, 2, 3])'.replace('const ', ''),
@@ -49,16 +49,14 @@ describe('the event log', () => {
       'test   false  v === 1',
       'test   true  v === 3',
       'break     break;',
-      'exit     for (const v of values) {\n        if (v === 1) continue;\n        if (v === 3) break;\n      }',
-      'yield     yield;'
+      'exit     for (const v of values) {\n        if (v === 1) continue;\n        if (v === 3) break;\n      }'
     ]);
   });
 
   it('reads and writes places by the names a step records, inside calls too', () => {
     const body = `function swap(a, i, j) { const t = a[i]; a[i] = a[j]; a[j] = t; }
       const values = Values([5, 7]);
-      swap(values, Index(0), Index(1));
-      yield;`;
+      swap(values, Index(0), Index(1));`;
     const [step] = run(body);
     expect(read(body, step.events)).toEqual(
       expect.arrayContaining([
@@ -76,10 +74,14 @@ describe('the event log', () => {
   });
 
   it('opens and closes each operation with its result, its body’s events in the domain block', () => {
-    const [step] = run(
-      'const values = Values([4, 2]); const less = Flag(Less({ a: Index(0), b: Index(1) })); yield;'
+    // The call of Less is a step, and the write of its result is the last step, after it.
+    const [step, last] = run(
+      'const values = Values([4, 2]); const less = Flag(Less({ a: Index(0), b: Index(1) }));'
     );
+    expect(step.before?.state).toMatchObject({ values: [4, 2], event: { Less: [] } });
     const events = step.events ?? [];
+    // The events leading up to the call, then the call's own.
+    expect(step.gap).toBe(events.findIndex(({ kind }) => kind === 'open'));
     const open = events.findIndex(({ kind }) => kind === 'open');
     expect(
       events
@@ -91,32 +93,35 @@ describe('the event log', () => {
       { kind: 'read', place: 'values[0]', value: 4, name: undefined, block: 'domain' },
       { kind: 'read', place: 'b', value: 1, name: undefined, block: 'domain' },
       { kind: 'read', place: 'values[1]', value: 2, name: undefined, block: 'domain' },
-      { kind: 'close', name: 'Less', value: false, place: undefined, block: undefined },
-      { kind: 'write', place: 'less', value: false, name: undefined, block: undefined },
-      { kind: 'yield', place: undefined, name: undefined, value: undefined, block: undefined }
+      { kind: 'close', name: 'Less', value: false, place: undefined, block: undefined }
+    ]);
+    expect(last.events?.map(({ kind, place, value }) => ({ kind, place, value }))).toEqual([
+      { kind: 'write', place: 'less', value: false }
     ]);
   });
 
   it('keeps each step’s latest events, counting every one', () => {
     const trace = run(`const values = Values([]);
       for (let i = Int(0); i < 1000; i++) values.push(i);
-      yield;
-      yield;`);
+      const a = Int(1); // @mark
+      const b = Int(2); // @mark`);
+    expect(trace).toHaveLength(2);
     expect(trace[0].events).toHaveLength(maximumStepEvents);
-    expect(trace[0].events?.at(-1)?.kind).toBe('yield');
+    expect(trace[0].events?.at(-1)?.kind).toBe('write');
     expect(trace[0].dropped).toBeGreaterThan(4000);
+    // The kept events are all the loop's but the last, the step's own write.
+    expect(trace[0].gap).toBe(maximumStepEvents - 1);
     expect(trace[0].counts?.events.iteration).toBe(1000);
-    expect(trace[1].events?.map(({ kind }) => kind)).toEqual(['yield']);
+    expect(trace[1].events?.map(({ kind }) => kind)).toEqual(['write']);
     expect(trace[1].dropped).toBeUndefined();
-    expect(trace[1].counts?.events.yield).toBe(2);
+    expect(trace[1].counts?.events.iteration).toBe(1000);
   });
 
   it('counts calls by function and operation', () => {
-    const [step] = run(`function f(a) { return Flag(Less({ a: Index(0), b: Index(1) })); }
+    const trace = run(`function f(a) { return Flag(Less({ a: Index(0), b: Index(1) })); }
       const values = Values([1, 2]);
       const x = f(values);
-      const y = f(values);
-      yield;`);
-    expect(step.counts).toMatchObject({ operations: { Less: 2 }, calls: { f: 2 } });
+      const y = f(values);`);
+    expect(trace.at(-1)?.counts).toMatchObject({ operations: { Less: 2 }, calls: { f: 2 } });
   });
 });

@@ -19,13 +19,14 @@ describe('positions', () => {
   it('point into the only collection of their type', () => {
     const trace = run(`
       const values = Values([3, 8, 5]);
-      let i = Position(-1);
-      yield;
-      i = Position(0);
-      while (i < values.length) { yield; i++; }
-      yield;
+      let i = Position(-1); // @step
+      i = Position(0); // @step
+      while (i < values.length) {
+        i++; // @step
+      }
     `);
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
+    // The last step holds the loop's last test, after the last i++.
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3, 3]);
     expect(trace[0].types.i).toBe('Position');
   });
 
@@ -39,28 +40,27 @@ describe('positions', () => {
       let k = Position(merged, -1);
       while (i < left.length && j < right.length) {
         if (left[i] < right[j]) { merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }
-        k = i + j - 1;
-        yield;
+        k = i + j - 1; // @step
       }
     `);
-    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3]]);
+    // The last step holds the loop's last test.
+    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
   it('hold any whole number, however far past an end', () => {
     const trace = run(`
       const values = Values([3, 8, 5]);
-      let i = Position(-2);
-      yield;
-      i = Position(0);
-      while (i < values.length) { yield; i += 2; }
-      yield;
+      let i = Position(-2); // @step
+      i = Position(0); // @step
+      while (i < values.length) {
+        i += 2; // @step
+      }
       i = 50;
       i = 0;
-      yield;
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-2, 0, 2, 4, 0]);
-    const [far] = run('const values = Values([3, 8, 5]); let i = Position(0); i = 7; yield;');
+    const [far] = run('const values = Values([3, 8, 5]); let i = Position(0); i = 7;');
     expect(far.state.i).toBe(7);
   });
 
@@ -71,7 +71,6 @@ describe('positions', () => {
       let i = Position(right, 0);
       const vertices = Names(['A', 'B']);
       const edges = Edges([{ from: 0, to: 1, weight: 4 }]);
-      yield;
     `);
     expect(step.targets).toEqual({
       i: 'right',
@@ -85,8 +84,8 @@ describe('positions', () => {
       'const left = Values([1, 2, 3]); const right = Values([4]); let i = Position(right, 0);',
       domain
     );
-    expect(interpretAlgorithm('yield;', input, domain)[0].targets).toEqual({ i: 'right' });
-    expect(interpretAlgorithm('i = 1; yield;', input, domain)[0].targets).toEqual({ i: 'right' });
+    expect(interpretAlgorithm('', input, domain)[0].targets).toEqual({ i: 'right' });
+    expect(interpretAlgorithm('i = 1;', input, domain)[0].targets).toEqual({ i: 'right' });
   });
 
   describe('keep their collection wherever they are stored', () => {
@@ -110,7 +109,6 @@ describe('positions', () => {
         let k = Position(left, 0);
         k = j;
         const moved = take.from;
-        yield;
       `,
         undefined,
         stored
@@ -134,14 +132,14 @@ describe('positions', () => {
          const take = Take({ from: Position(right, 1) });`,
         stored
       );
-      const [step] = interpretAlgorithm('const at = take.from; yield;', input, stored);
+      const [step] = interpretAlgorithm('const at = take.from;', input, stored);
       expect(step.targets).toMatchObject({ 'take.from': 'right', at: 'right' });
     });
 
     it('asking which collection a number stored with several to point into means', () => {
       expect(() =>
         interpretAlgorithm(
-          'const left = Values([1]); const right = Values([2]); const take = Take({ from: 0 }); yield;',
+          'const left = Values([1]); const right = Values([2]); const take = Take({ from: 0 });',
           undefined,
           stored
         )
@@ -153,7 +151,6 @@ describe('positions', () => {
     const [step] = run(`
       const vertices = Names(['A', 'B', 'C']);
       const edges = Edges([{ from: 0, to: 2, weight: 4 }]);
-      yield;
     `);
     expect(step.state.edges).toEqual([{ from: 0, to: 2, weight: 4 }]);
     expect(step.types['edges[0].from']).toBe('VertexRef');
@@ -162,27 +159,27 @@ describe('positions', () => {
   it.each([
     [
       'reading outside the collection',
-      'const values = Values([3, 8]); let i = Position(0); i = 2; const x = values[i]; yield;',
+      'const values = Values([3, 8]); let i = Position(0); i = 2; const x = values[i];',
       'values[i] is outside the collection: it has 2 elements, at 0 to 1.'
     ],
     [
       'writing past its length',
-      'const values = Values([3, 8]); let i = Position(0); i = 3; values[i] = 1; yield;',
+      'const values = Values([3, 8]); let i = Position(0); i = 3; values[i] = 1;',
       'values[i] is outside the collection: it has 2 elements, so write at 0 to 2, where 2 adds one.'
     ],
     [
       'more than one collection to point into',
-      'const left = Values([1]); const right = Values([2]); let i = Position(0); yield;',
+      'const left = Values([1]); const right = Values([2]); let i = Position(0);',
       'i could point into left or right; say which, as in Position(left, 0).'
     ],
     [
       'no collection to point into',
-      'let i = Position(0); yield;',
+      'let i = Position(0);',
       'i is a Position, which points into a Values, and there is none yet; declare one first.'
     ],
     [
       'naming something other than its collection',
-      'const values = Values([1]); const n = Int(1); let i = Position(n, 0); yield;',
+      'const values = Values([1]); const n = Int(1); let i = Position(n, 0);',
       'Position(…, …) names the Values it points into first, as in Position(values, 0).'
     ]
   ])('reject %s', (_name, body, message) => {

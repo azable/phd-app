@@ -23,7 +23,7 @@ A component describes its visualization in `<script lang="sverlin">` blocks, wri
 
 1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operations the algorithm calls (see Atomic types, Collections, records, and unions, and Operations).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
-3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and marks steps with `yield`, or steps by its events (see Steps). It runs once.
+3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and labels the code its steps are about (see Steps). It runs once.
 
 There is no design block: what presentations differ in is the design space (see Design).
 
@@ -81,15 +81,12 @@ Insertion sort, with the key drawn beside the row:
 <script lang="sverlin">
   for (let i = Position(1); i < values.length; i++) {
     const key = values[i];
-    let j = i;
-    yield;
-    while (j > 0 && values[j - 1] > key) {
+    let j = i; // @step
+    while (j > 0 && values[j - 1] > key) { // @step
       values[j] = values[j - 1];
       j--;
-      yield;
     }
-    values[j] = key;
-    yield;
+    values[j] = key; // @step
   }
 </script>
 
@@ -111,8 +108,9 @@ Between steps, the key leaves the row for its box, the larger values slide right
 
 ## Steps
 
-- Which events are steps is the variable `frames`, where the algorithm can step more than one way: `yield`, each `yield;`, where the algorithm yields, as the starter; an operation's name, as `Matches`, each call the algorithm makes of it; or `iteration`, each pass of a loop. Stepping by events, the algorithm's end is a step too, holding what it did after the last one, so a source can test inline, as `if (Matches({ at: i, target })) break;`, and its `break` is still a step's. An algorithm with operations or loops needs no `yield`. A variant keeps `frames` unless the participant asks for another, and presentations stepping by different events step together, one holding its step while the other shows the events between.
-- `yield;` records a step: a copy of every variable in scope there, the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
+- A step is a run of the code a label marks. Label the code each step is about in a comment: `// @step` at the end of its line labels the last statement starting there, `/* @step */` before code labels the statement right after it, and either alone on its line labels the next line's first statement. Each time that code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass. What runs after the last labelled code is a step of its own, so the end of the algorithm, as a `break`, is shown; an algorithm with no labels has that one step, its end, for a picture that does not move.
+- An operation's name is a label of its calls, so `if (Matches({ at: i, target })) break;` steps at each comparison with no comment. Where a source has several labels, the variable `frames` says which one a presentation steps by, the first written in the starter; a variant keeps it unless the participant asks for another, and presentations stepping by different labels step together, one holding its step while the other shows the code between. A label can sit on several statements, so one choice of `frames` can step at all of them.
+- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A step labelled on a declaration has the variable only after it, so label the code after the declarations a view reads directly. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
 - Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable the view draws, as insertion sort's `key`, holds a value while no collection does, so the value moves into it and back; while a collection also holds it, the variable shows a copy. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
@@ -121,7 +119,7 @@ Between steps, the key leaves the row for its box, the larger values slide right
 
 The algorithm's loops and branches are JavaScript's: `for`, `for (const v of values)`, `while`, `do ... while`, `if` and `else`, `break`, and `continue`.
 
-A function is declared at the top level of the algorithm block, as `function search(a, target) { ... }`, and sees only its parameters: give it the collections it works on, and it changes them in place. Each call gives its parameters values of the types the first call gave them. `return i;` gives a value back, and a position into a collection the call was given points into the caller's. A function may call itself. A `yield` inside a call records the call's variables, its parameters among them, and the top level's; the caller's are out of scope there, so with recursion a step shows the innermost call's `lo` and `hi`. A parameter hides a top-level variable of the same name. A position into a collection the call was given is drawn on that collection wherever the view draws it under its top-level name.
+A function is declared at the top level of the algorithm block, as `function search(a, target) { ... }`, and sees only its parameters: give it the collections it works on, and it changes them in place. Each call gives its parameters values of the types the first call gave them. `return i;` gives a value back, and a position into a collection the call was given points into the caller's. A function may call itself. A step inside a call records the call's variables, its parameters among them, and the top level's; the caller's are out of scope there, so with recursion a step shows the innermost call's `lo` and `hi`. A parameter hides a top-level variable of the same name. A position into a collection the call was given is drawn on that collection wherever the view draws it under its top-level name.
 
 Binary search, written recursively:
 
@@ -140,14 +138,12 @@ Binary search, written recursively:
 <script lang="sverlin">
   function search(a, target, lo, hi) {
     if (lo > hi) return Index(-1);
-    const mid = Index(Math.floor((lo + hi) / 2));
-    yield;
+    const mid = Index(Math.floor((lo + hi) / 2)); // @step
     if (a[mid] === target) return mid;
     if (a[mid] < target) return search(a, target, mid + 1, hi);
     return search(a, target, lo, mid - 1);
   }
   const found = search(values, target, Index(0), Index(values.length - 1));
-  yield;
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -225,7 +221,7 @@ const Swap = operation({ a: Index, b: Index }, ({ a, b }) => {
 });
 ```
 
-A position's `.value` is the element it points at, read or written, in an operation's body and in the algorithm alike. A body follows the algorithm's subset, sees only its operands, may call other operations, and gives back a value with `return` (or, written without braces, its expression); it cannot `yield`. The algorithm calls an operation with its operands as one object, as `Matches({ at: i, target })`; the operands take their types as a record's fields do, and a position keeps its collection. An operation is not a type of values: it cannot be a field's or element's type, and the input block cannot call it.
+A position's `.value` is the element it points at, read or written, in an operation's body and in the algorithm alike. A body follows the algorithm's subset, sees only its operands, may call other operations, and gives back a value with `return` (or, written without braces, its expression). The algorithm calls an operation with its operands as one object, as `Matches({ at: i, target })`; the operands take their types as a record's fields do, and a position keeps its collection. An operation is not a type of values: it cannot be a field's or element's type, and the input block cannot call it.
 
 When the domain declares operations, every step also records the calls, by operation, each with its operands: `event`, the calls since the step before, as `event.Matches`, and `history`, every call so far, as `history.Matches`. The view draws a call through a view of its operation, which reads its operands as a record's fields, and a pointer can take a call's position, as `{@render Here(event.Matches[0].at)}`; at a step with no such call it points nowhere. Linear search, showing what each step asks:
 
@@ -245,11 +241,8 @@ When the domain declares operations, every step also records the calls, by opera
 
 <script lang="sverlin">
   for (let i = Index(0); i < values.length; i++) {
-    const found = Found(Matches({ at: i, target }));
-    yield;
-    if (found) break;
+    if (Matches({ at: i, target })) break;
   }
-  yield;
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -318,10 +311,7 @@ Example, with domain, input, algorithm, and a script-free view:
 </script>
 
 <script lang="sverlin">
-  yield;
-  for (let i = Index(0); i < values.length; i++) {
-    yield;
-  }
+  for (let i = Index(0); i < values.length; i++) {} // @step
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -386,14 +376,11 @@ Insertion sort, beside a textbook's pseudocode:
   for (let i = Position(1); i < values.length; i++) { // @outer
     const key = values[i]; // @key
     let j = i; // @init
-    yield;
     while (j > 0 && values[j - 1] > key) { // @test; bound: j > 0; cmp: values[j - 1] > key
       values[j] = values[j - 1]; // @shift
       j--; // @down
-      yield;
     }
     values[j] = key; // @place
-    yield;
   }
 </script>
 
@@ -514,18 +501,15 @@ Breadth-first search, with the vertex being visited and the edge being examined 
 
 <script lang="sverlin">
   let queue = Queue([0]);
-  vertices[0].seen = true;
-  yield;
+  vertices[0].seen = true; // @step
   while (queue.length > 0) {
-    const current = VertexRef(queue.shift());
-    yield;
+    const current = VertexRef(queue.shift()); // @step
     for (let e = EdgeIndex(0); e < edges.length; e++) {
-      if (edges[e].from === current) {
+      if (edges[e].from === current) { // @step
         if (!vertices[edges[e].to].seen) {
           vertices[edges[e].to].seen = true;
           queue.push(edges[e].to);
         }
-        yield;
       }
     }
   }

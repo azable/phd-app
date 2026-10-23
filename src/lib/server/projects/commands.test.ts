@@ -1781,7 +1781,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script lang="sverlin">yield;</script><Node>${source}</Node>`,
+              : `<script lang="sverlin"></script><Node>${source}</Node>`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),

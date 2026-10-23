@@ -31,6 +31,7 @@ import {
 } from './block.server';
 import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './events.server';
 import { Identities, type Placed, type StepIdentities } from './identities.server';
+import { readLabels, type LabelProblem } from './labels.server';
 import { parseBlock, type BlockComment } from './parse.server';
 import {
   noDomain,
@@ -78,25 +79,26 @@ export type TypedState = {
   declared?: Record<string, string>;
 };
 
-/**
- * Which events are a source's steps: each yield; each call of an operation the algorithm makes;
- * or each iteration of a loop. Steps by events also end with the algorithm, so what it does after
- * the last of them is a step too.
- */
-export type FrameRule = 'yield' | 'iteration' | { operation: string };
-
-/** A frame rule by the name a variant chooses it by: yield, iteration, or an operation's name. */
-export function frameRuleOf(name: string): FrameRule {
-  return name === 'yield' || name === 'iteration' ? name : { operation: name };
-}
+/** The variables in scope at one moment, as a step records them before and after its code. */
+export type StepSnapshot = {
+  state: TraceState;
+  types: TypeMap;
+  targets?: Record<string, string>;
+  identities?: StepIdentities;
+};
 
 /**
- * One step of a source's trace, with the events since the step before (see events.server.ts) and
- * its moment: how many events the algorithm had logged by then, the same whichever events are
- * steps, so presentations stepping by different events line up by it.
+ * One step of a source's trace: each run of the code a label marks (see labels.server.ts), as the
+ * state just before it and just after it; a labelled loop's steps are its passes. Its events are
+ * those since the step before, the first `gap` of them leading up to its code and the rest its
+ * code's own. Its moment is how many events the algorithm had logged by its end, the same whichever
+ * label the steps are by, so presentations stepping by different labels line up by it. What runs
+ * after the last labelled code is a step of its own, with no code of its own.
  */
 export type MasterStep = {
   moment?: number;
+  before?: StepSnapshot;
+  gap?: number;
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -166,25 +168,71 @@ export function spanKey(block: 'algorithm' | 'domain', { start, end }: Span): st
   return `${block}:${start}:${end}`;
 }
 
-/** Interpret the algorithm, keeping its tree and comments, which a listing's labels are in. */
+/**
+ * The labels a source can step by, in the order written: those in its comments, then the
+ * operations it calls, which are labels of their own calls; and the problems with its labels.
+ */
+export function stepLabels(
+  root: BlockStatement,
+  comments: readonly BlockComment[],
+  body: string,
+  domain: DomainRegistry
+): { labels: string[]; nodes: (label: string) => Set<AnyNode>; problems: LabelProblem[] } {
+  const read = readLabels(root, comments, body);
+  const calls = new Map<string, AnyNode[]>();
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
+      return;
+    const part = node as AnyNode;
+    if (
+      part.type === 'CallExpression' &&
+      part.callee.type === 'Identifier' &&
+      (domain.structures[part.callee.name] as RecordType | undefined)?.operation
+    )
+      calls.set(part.callee.name, [...(calls.get(part.callee.name) ?? []), part]);
+    for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
+  };
+  root.body.forEach(visit);
+  return {
+    labels: [...new Set([...read.order, ...calls.keys()])],
+    nodes: (label) =>
+      new Set([
+        ...[...read.labels].flatMap(([node, names]) => (names.includes(label) ? [node] : [])),
+        ...(calls.get(label) ?? [])
+      ]),
+    problems: read.problems
+  };
+}
+
+/**
+ * Interpret the algorithm, stepping by the code a label marks: the one given, or the first the
+ * source has; with none, its one step is its end. Keeps its tree and comments, which its labels are
+ * in.
+ */
 export function traceAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain,
-  frames: FrameRule = 'yield'
+  frames?: string
 ): {
   steps: MasterStep[];
   root: BlockStatement;
   comments: BlockComment[];
+  labels: string[];
 } {
   const { root, offset, comments } = parseBlock(body, 'algorithm', domain);
+  const labelled = stepLabels(root, comments, body, domain);
+  const [problem] = labelled.problems;
+  if (problem) throw new AlgorithmError(problem.message, problem.at);
+  const label = frames ?? labelled.labels[0];
   const interpreter = new Interpreter(root, offset, {
     kind: 'algorithm',
     initial: input,
     domain,
-    frames
+    frames: { label: label ?? '', nodes: label === undefined ? new Set() : labelled.nodes(label) }
   });
-  return { steps: interpreter.run(), root, comments };
+  return { steps: interpreter.run(), root, comments, labels: labelled.labels };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -255,7 +303,10 @@ class Interpreter {
   #frame: Scope = this.#topLevel;
   #depth = 0;
   readonly #log = new EventLog();
-  readonly #frames: FrameRule;
+  /** The label steps are by, and the code it marks. */
+  readonly #frames: { label: string; nodes: ReadonlySet<AnyNode> };
+  /** The step whose code is running: its node, the state before it, and the events leading up. */
+  #open: { node: AnyNode; before: StepSnapshot; gap: number } | undefined;
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
   /** What the last element or field read read from, and by which key. */
@@ -269,11 +320,11 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       domain?: DomainRegistry;
-      frames?: FrameRule;
+      frames?: { label: string; nodes: ReadonlySet<AnyNode> };
     }
   ) {
     this.#root = root;
-    this.#frames = options.frames ?? 'yield';
+    this.#frames = options.frames ?? { label: '', nodes: new Set() };
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -313,14 +364,15 @@ class Interpreter {
   /** Run the algorithm block and return its master trace. */
   run(): MasterStep[] {
     this.#execute();
-    if (this.#frames !== 'yield' && this.#trace.length && this.#log.since)
-      this.#step(this.#root, this.#topLevel);
-    if (this.#trace.length === 0)
+    if (this.#trace.length === 0 && this.#frames.label)
       throw new AlgorithmError(
-        this.#frames === 'yield'
-          ? 'The algorithm must yield at least one step, as in yield;'
-          : 'The algorithm never makes the calls or iterations its steps are.'
+        `The code labelled ${this.#frames.label} never runs, so there are no steps.`
       );
+    // What runs after the last labelled code is a step of its own; without labels, the only one.
+    if (this.#log.since || this.#trace.length === 0) {
+      this.#begin(this.#root, this.#topLevel);
+      this.#end(this.#root, this.#topLevel);
+    }
     return this.#trace;
   }
 
@@ -373,7 +425,8 @@ class Interpreter {
   #state(
     node: AnyNode,
     scope: Scope = this.#topLevel,
-    recorded: [string, Binding][] = []
+    recorded: [string, Binding][] = [],
+    keep = true
   ): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
@@ -410,7 +463,7 @@ class Interpreter {
       state,
       types,
       ...(Object.keys(targets).length ? { targets } : {}),
-      ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed) } : {})
+      ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed, keep) } : {})
     };
   }
 
@@ -804,7 +857,16 @@ class Interpreter {
     return 'normal';
   }
 
+  /** A statement, as a step of its own where the label steps are by marks it (not a loop's). */
   #statement(node: Statement, scope: Scope): Completion {
+    if (this.#open || !this.#frames.nodes.has(node) || isLoop(node)) return this.#run(node, scope);
+    this.#begin(node, scope);
+    const completion = this.#run(node, scope);
+    this.#end(node, scope);
+    return completion;
+  }
+
+  #run(node: Statement, scope: Scope): Completion {
     this.#charge(node);
     switch (node.type) {
       case 'BlockStatement':
@@ -812,11 +874,7 @@ class Interpreter {
       case 'EmptyStatement':
         return 'normal';
       case 'ExpressionStatement':
-        if (node.expression.type === 'YieldExpression') {
-          this.#yield(node, scope);
-        } else {
-          this.#expression(node.expression, scope);
-        }
+        this.#expression(node.expression, scope);
         return 'normal';
       case 'VariableDeclaration':
         for (const declarator of node.declarations) {
@@ -940,8 +998,11 @@ class Interpreter {
   /** One iteration of a loop's body: 'normal' to go on, also after continue. */
   #pass(node: Statement & { body: Statement }, index: number, scope: Scope): Completion {
     this.#emit('iteration', node, { index });
-    if (this.#frames === 'iteration') this.#step(node, scope);
+    // A labelled loop's steps are its passes.
+    const stepping = !this.#open && this.#frames.nodes.has(node);
+    if (stepping) this.#begin(node, scope);
     const completion = this.#statement(node.body, scope);
+    if (stepping) this.#end(node, scope);
     return completion === 'continue' ? 'normal' : completion;
   }
 
@@ -961,38 +1022,56 @@ class Interpreter {
         );
   }
 
-  #yield(node: AnyNode, scope: Scope): void {
-    this.#emit('yield', node);
-    if (this.#frames === 'yield') this.#step(node, scope);
-  }
-
-  /** Record a step: the variables in scope, and the events since the step before. */
-  #step(node: AnyNode, scope: Scope): void {
-    if (this.#trace.length >= algorithmLimits.maximumSteps)
-      this.#fail(
-        node,
-        this.#frames === 'yield'
-          ? `The algorithm yielded more than ${algorithmLimits.maximumSteps} steps.`
-          : `The algorithm takes more than ${algorithmLimits.maximumSteps} steps this way.`
-      );
-    const recorded: [string, Binding][] = Object.keys(this.#history).length
+  /** The calls by operation, recorded with each snapshot where the domain declares operations. */
+  #calls(): [string, Binding][] {
+    return Object.keys(this.#history).length
       ? [
           ['event', { value: this.#event, constant: true }],
           ['history', { value: this.#history, constant: true }]
         ]
       : [];
-    this.#trace.push({
-      moment: this.#log.seen,
-      ...this.#state(node, scope, recorded),
-      ...this.#log.step(this.#offset, (value) => {
-        const single = unwrap(value as Value);
-        return typeof single === 'number' ||
-          typeof single === 'string' ||
-          typeof single === 'boolean'
-          ? single
-          : undefined;
-      })
+  }
+
+  /** Open a step as its code starts: the state before it, and how many events led up to it. */
+  #begin(node: AnyNode, scope: Scope): void {
+    if (this.#trace.length >= algorithmLimits.maximumSteps)
+      this.#fail(
+        node,
+        `The code labelled ${this.#frames.label} runs more than ${algorithmLimits.maximumSteps} times, each a step; label code that runs less often.`
+      );
+    const { state, types, targets, identities } = this.#state(node, scope, this.#calls(), false);
+    this.#open = {
+      node,
+      before: {
+        state,
+        types,
+        ...(targets ? { targets } : {}),
+        ...(identities ? { identities } : {})
+      },
+      gap: this.#log.pending
+    };
+  }
+
+  /** Close the step whose code has just run: the state after it, and the events since the last. */
+  #end(node: AnyNode, scope: Scope): void {
+    const open = this.#open;
+    if (!open) return;
+    const after = this.#state(node, scope, this.#calls());
+    const logged = this.#log.step(this.#offset, (value) => {
+      const single = unwrap(value as Value);
+      return typeof single === 'number' || typeof single === 'string' || typeof single === 'boolean'
+        ? single
+        : undefined;
     });
+    this.#trace.push({
+      // Strictly later than the step before, though no event came between them.
+      moment: Math.max(this.#log.seen, (this.#trace.at(-1)?.moment ?? -1) + 1),
+      before: open.before,
+      gap: Math.max(open.gap - (logged.dropped ?? 0), 0),
+      ...after,
+      ...logged
+    });
+    this.#open = undefined;
     for (const name of Object.keys(this.#event)) this.#event[name] = [];
   }
 
@@ -1047,7 +1126,16 @@ class Interpreter {
     return typeof value === 'number' && !Number.isFinite(value) ? null : value;
   }
 
+  /** An expression, as a step of its own where the label steps are by marks it. */
   #expression(node: Expression | SpreadElement, scope: Scope): Value {
+    if (this.#open || !this.#frames.nodes.has(node)) return this.#evaluate(node, scope);
+    this.#begin(node, scope);
+    const value = this.#evaluate(node, scope);
+    this.#end(node, scope);
+    return value;
+  }
+
+  #evaluate(node: Expression | SpreadElement, scope: Scope): Value {
     this.#charge(node);
     switch (node.type) {
       case 'Literal':
@@ -1481,9 +1569,6 @@ class Interpreter {
       this.#callSite = callSite;
     }
     this.#emit('close', node, { name: operation.name, value: result });
-    const frames = this.#frames;
-    if (typeof frames === 'object' && frames.operation === operation.name && !this.#bodies)
-      this.#step(node, scope);
     return result;
   }
 
@@ -1813,4 +1898,10 @@ function unwrap(value: Value): Value {
 
 function atomBase(type: AtomType): AtomBase {
   return type.base;
+}
+
+function isLoop(node: AnyNode): boolean {
+  return ['ForStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement'].includes(
+    node.type
+  );
 }

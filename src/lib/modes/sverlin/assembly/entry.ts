@@ -12,6 +12,7 @@ import {
   finishMotion,
   leaveLayer,
   motionCss,
+  motionDuration,
   Frame,
   settleSpans,
   stepLayouts,
@@ -56,7 +57,12 @@ const playback = window as typeof window & {
   __sverlinSeed?: number;
   __sverlinSelection?: unknown;
 };
-const clampStep = (step: number) => Math.min(Math.max(step, 0), states.length - 1);
+// Each step is two states, the one before its code runs and the one after (see phasesOf in
+// compile.server.ts): step k is states 2k and 2k + 1. The page rests on a step's after.
+const stepCount = states.length / 2;
+const clampStep = (step: number) => Math.min(Math.max(step, 0), stepCount - 1);
+const afterOf = (step: number) => 2 * step + 1;
+const stepOf = (phase: number) => Math.floor(phase / 2);
 
 // Every collection or record each variable holds at any step, by identity, so a pointer through a
 // variable, as c into row = paths[r], keeps room in every row it can point into.
@@ -238,7 +244,10 @@ function mountStep(
       context: new Map<string, unknown>([
         ['sverlin:design', design],
         ['sverlin:layout-memory', memory],
-        ['sverlin:listing', listing ? { text: listing.text, ...listing.lit[step] } : undefined],
+        [
+          'sverlin:listing',
+          listing ? { text: listing.text, ...listing.lit[stepOf(step)] } : undefined
+        ],
         [
           'sverlin:types',
           {
@@ -330,7 +339,21 @@ function remove(shown: Shown) {
  */
 let pendingTiming: ReturnType<typeof timePass> | undefined;
 let leaving: Shown | undefined;
-function show(step: number) {
+// A step played forward shows its before, then its after once the move into the before ends.
+let following: ReturnType<typeof setTimeout> | undefined;
+
+/** Show a step: forward by one, its before and then its after; otherwise its after at once. */
+function showStep(step: number) {
+  clearTimeout(following);
+  const at = (pending ?? current)?.step;
+  if (at !== undefined && at === afterOf(step - 1)) {
+    show(afterOf(step) - 1, () => {
+      following = setTimeout(() => show(afterOf(step)), motionDuration);
+    });
+  } else show(afterOf(step));
+}
+
+function show(step: number, shownBefore?: () => void) {
   if (pending) remove(pending);
   pendingTiming?.cancel();
   let mounted: Shown | undefined;
@@ -358,12 +381,17 @@ function show(step: number) {
       });
     }
     current = shown;
+    if (shownBefore) {
+      shownBefore();
+      pending = undefined;
+      return;
+    }
     // What the step drew implicitly, so the app can show it beside the tags that drew it.
     if (window.parent !== window)
       window.parent.postMessage(
         {
           type: 'sverlin:drawn',
-          step,
+          step: stepOf(step),
           layouts: stepLayouts(shown.layer)
         },
         '*'
@@ -536,11 +564,11 @@ async function recordSteps() {
 async function describeSteps(): Promise<{ frame?: SceneFrame; steps: SceneStep[] }> {
   let frame: SceneFrame | undefined;
   const steps: SceneStep[] = [];
-  for (let step = 0; step < states.length; step++) {
+  for (let step = 0; step < stepCount; step++) {
     await whenShown();
     steps.push(
       await new Promise<SceneStep>((done) => {
-        mountStep(step, 'showing', (shown) => {
+        mountStep(afterOf(step), 'showing', (shown) => {
           frame ??= describeFrame(shown.layer);
           done(describeStep(shown.layer));
           remove(shown);
@@ -583,7 +611,7 @@ addEventListener('message', (event: MessageEvent) => {
   const step = clampStep(data.step);
   playback.__sverlinSelection = Array.isArray(data.selection) ? data.selection : [];
   requested = step;
-  if (recorded && step !== (pending ?? current)?.step) show(step);
+  if (recorded && afterOf(step) !== (pending ?? current)?.step) showStep(step);
 });
 
 // The page says it will report when its first step is shown, however long laying out every step
@@ -592,7 +620,7 @@ if (window.parent !== window)
   window.parent.postMessage({ type: 'sverlin:loaded', reportsReady: true, describes: true }, '*');
 void recording.then(() => {
   recorded = true;
-  show(requested);
+  showStep(requested);
 });
 
 /** A step's state with the value at a path, such as i or edge.from, replaced. */

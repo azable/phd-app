@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script lang="sverlin">\n  yield;\n</script>\n<Node tags="title">Start your visualization</Node>\n<Node tags="caption">Step {step + 1} · seed {seed}</Node>\n'
+    '<script lang="sverlin">\n</script>\n<Node tags="title">Start your visualization</Node>\n<Node tags="caption">Step {step + 1} · seed {seed}</Node>\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
@@ -22,14 +22,11 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 <script lang="sverlin">
   let found = Flag(false);
   let searching = Flag(true);
-  yield;
   for (let i = Index(0); i < values.length; i++) {
-    found = values[i] === target;
-    yield;
+    found = values[i] === target; // @step
     if (found) break;
   }
   searching = false;
-  if (!found) yield;
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}

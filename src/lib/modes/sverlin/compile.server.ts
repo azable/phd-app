@@ -12,7 +12,6 @@ import {
   declaredNames,
   interpretDomain,
   interpretInput,
-  frameRuleOf,
   traceAlgorithm,
   type BlockKind,
   type MasterStep,
@@ -286,9 +285,8 @@ function listingsFrom(
 }
 
 /**
- * The algorithm's steps by every frame rule it can step by, the one it starts with first: yield
- * where it yields, else the first that takes steps; then each operation it calls and its loops'
- * iterations, leaving out one that takes no steps or more than the limit.
+ * The algorithm's steps by every label it can step by (see stepLabels), the one it starts with
+ * first, leaving out one whose code never runs or runs more often than the step limit.
  */
 function framings(
   source: string,
@@ -297,31 +295,26 @@ function framings(
   input: TypedState,
   domain: DomainRegistry
 ): Record<string, ReturnType<typeof traceAlgorithm>> {
-  const trace = (rule: string) =>
-    interpretBlock(
-      source,
-      algorithm,
-      (body) => traceAlgorithm(body, input, domain, frameRuleOf(rule)),
-      blocks
-    );
-  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = {};
-  let unyielded: unknown;
-  try {
-    runs.yield = trace('yield');
-  } catch (cause) {
-    // Without a yield, the algorithm steps by its events; any other problem is the algorithm's.
-    if (!(cause instanceof Error) || !cause.message.includes('must yield at least one step'))
-      throw cause;
-    unyielded = cause;
-  }
-  for (const rule of [...operationNames(domain), 'iteration'])
+  const trace = (label?: string) =>
+    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label), blocks);
+  // The label it starts with; any problem here is the algorithm's or its labels'.
+  const first = trace();
+  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.labels[0]]: first };
+  for (const label of first.labels.slice(1))
     try {
-      runs[rule] = trace(rule);
+      runs[label] = trace(label);
     } catch {
-      // A rule the algorithm takes no steps by, or too many, is no option.
+      // A label whose code never runs, or runs too often, is no option.
     }
-  if (!Object.keys(runs).length) throw unyielded;
   return runs;
+}
+
+/**
+ * Each step as two, the state just before its code and just after it, as the page plays it: the
+ * events up to the code, then the code itself.
+ */
+function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
+  return steps.flatMap((step) => [{ ...step, ...(step.before ?? {}) }, step]);
 }
 
 /** The algorithm as a listing in each language. */
@@ -560,7 +553,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const masters = Object.fromEntries(
       Object.entries(runs).map(([rule, run]) => [rule, run.steps])
     );
-    const everyStep = Object.values(masters).flat();
+    // Every state a presentation shows: each step's before and after, by every label.
+    const everyStep = Object.values(masters).flatMap(phasesOf);
     const written = listingsFrom(source, traced, domain, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
@@ -732,10 +726,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       (node: { type?: string; expression?: { name?: string } }) =>
         !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
     );
+    // By the page's states, each step's before and after (see phasesOf).
     const placements = Object.fromEntries(
       Object.entries(masters).map(([rule, steps]) => [
         rule,
-        rootPlacements(rootMarkup, stateNames, viewNames, domain, steps)
+        rootPlacements(rootMarkup, stateNames, viewNames, domain, phasesOf(steps))
       ])
     );
     if (probeProblems.length)
@@ -845,25 +840,27 @@ export async function bundlePresentation(
   const views = Object.fromEntries(
     Object.keys(design.views).map((type) => [type, values[`views.${type}`]])
   );
-  // The steps of the frame rule the variant chose, each placed by its moment.
+  // The steps of the label the variant chose, each placed by its moment.
   const rule = typeof values.frames === 'string' ? values.frames : Object.keys(prepared.masters)[0];
   const master = prepared.masters[rule] ?? prepared.master;
   const masterSteps = master.map((_, index) => index);
   const moments = master.map(({ moment }, index) => moment ?? index);
-  // Each step's state carries its atomic types, the page frame, and the variant for the view, under
-  // keys no variable can use; a variable out of scope at a step stands in hidden (__absent).
-  const states = masterSteps.map((index) => {
-    const standIn = standInsFor(master, index);
+  // The page shows each step as two states, before its code and after it (see phasesOf). Each
+  // carries its atomic types, the page frame, and the variant for the view, under keys no variable
+  // can use; a variable out of scope at one stands in hidden (__absent).
+  const phases = phasesOf(master);
+  const states = phases.map((phase, index) => {
+    const standIn = standInsFor(phases, index);
     return {
       ...standIn.state,
-      ...master[index].state,
+      ...phase.state,
       ...views,
-      __types: { ...standIn.types, ...master[index].types },
-      __targets: { ...standIn.targets, ...master[index].targets },
+      __types: { ...standIn.types, ...phase.types },
+      __targets: { ...standIn.targets, ...phase.targets },
       __absent: Object.keys(standIn.state),
-      __identities: master[index].identities?.ids ?? {},
-      __copies: master[index].identities?.copies ?? {},
-      __refs: master[index].identities?.refs ?? {},
+      __identities: phase.identities?.ids ?? {},
+      __copies: phase.identities?.copies ?? {},
+      __refs: phase.identities?.refs ?? {},
       __frame: frame,
       __design: values
     };

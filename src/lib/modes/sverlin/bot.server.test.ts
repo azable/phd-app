@@ -149,25 +149,31 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">for (let n = Count(0); n < ${to}; n++) yield;</script><Node>x</Node>`;
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">for (let n = Count(0); n < ${to}; n++) {} // @step</script><Node>x</Node>`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
+    // A step per pass, then the end, where n is out of scope.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
         { step: 1, state: { n: 0 } },
-        { step: 2, state: { n: 1 } }
+        { step: 2, state: { n: 1 } },
+        { step: 3, state: {} }
       ]
     });
   });
 
   it('gives a repair the steps of the candidate that failed, and why there are none', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
-      steps: [{ step: 1, state: { n: 0 } }]
+      steps: [
+        { step: 1, state: { n: 0 } },
+        { step: 2, state: {} }
+      ]
     });
     expect(
       (
-        context(counting(2), '<script lang="sverlin">let n = Nope(1); yield;</script>')
-          .recordedSteps as { problem: string }
+        context(counting(2), '<script lang="sverlin">let n = Nope(1);</script>').recordedSteps as {
+          problem: string;
+        }
       ).problem
     ).toMatch(/Nope/u);
   });
