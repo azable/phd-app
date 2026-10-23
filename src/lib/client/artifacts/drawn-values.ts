@@ -1,10 +1,11 @@
 /**
  * CodeMirror markers for what a presentation drew: inside each <Node>, <Pointed>, and <Link> tag, a
  * chip naming its kind, which opens under the tag its kind's values in each shown presentation's
- * variant, and the layout it arranged from the seed as ghost props, written as the view would write
+ * variant (and inside a <Listing />, its language and fills), and the layout it arranged from the seed as ghost props, written as the view would write
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
  * type, as {@render Flag(seen)}, the view each shown variant draws it with; the first top-level
- * node's chip also holds the page frame, which shows above the source where there is no such node.
+ * node's chip also holds the page frame, with which events are steps (frames), which shows above
+ * the source where there is no such node.
  * Views of a type that no shown presentation's variant chose are greyed out. A presentation built
  * while sources had design blocks also marks each draw call with the value each shown presentation
  * drew there.
@@ -15,7 +16,12 @@
 import { StateEffect, StateField, type EditorState, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 
-import { colourCss, frameOptions, propOptions } from '$lib/modes/sverlin/library/node/design';
+import {
+  colourCss,
+  frameOptions,
+  listingOptions,
+  propOptions
+} from '$lib/modes/sverlin/library/node/design';
 import type { DesignDraw, DesignValues } from '$lib/shared/presentations';
 
 /**
@@ -181,6 +187,7 @@ const originText: Record<string, string> = {
 // Variables in a fixed order, as stored variants may come back with their keys reordered.
 const propOrder = Object.keys(propOptions);
 const frameOrder = Object.keys(frameOptions);
+const listingOrder = Object.keys(listingOptions);
 const byOrder = (order: readonly string[], of: (key: string) => string) => (a: string, b: string) =>
   order.indexOf(of(a)) - order.indexOf(of(b)) || a.localeCompare(b);
 
@@ -245,6 +252,14 @@ export function tagGhosts(
     );
     add(line, column, props, [...keys]);
   }
+  // A listing's settings are its tag's, as a kind's are its nodes'.
+  const doc = state.doc.toString();
+  const listingProps = listingSettings(presentations);
+  if (listingProps.length)
+    for (const match of doc.matchAll(/<Listing\b/gu)) {
+      const line = state.doc.lineAt(match.index);
+      add(line.number, match.index - line.from + 1, listingProps, ['listing']);
+    }
   // The page frame belongs to no tag: it goes with the first top-level node, as page.
   const [first] = [...tagged]
     .filter(([, keys]) => [...keys].some((kind) => kind === 'root' || kind.startsWith('root[')))
@@ -288,16 +303,33 @@ export function tagGhosts(
     .sort((a, b) => a.at - b.at);
 }
 
-/** The page frame's settings in each shown presentation's variant, each named by its setting. */
+/**
+ * The page frame's settings in each shown presentation's variant, each named by its setting, and
+ * which events are steps, where the source can step more than one way.
+ */
 export function frameProps(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('frame.'))
+      Object.keys(variant).filter((key) => key.startsWith('frame.') || key === 'frames')
     )
   );
   return [...keys]
     .sort(byOrder(frameOrder, (key) => key))
-    .map((key) => variable(presentations, key, key.slice('frame.'.length)));
+    .map((key) =>
+      variable(presentations, key, key === 'frames' ? key : key.slice('frame.'.length))
+    );
+}
+
+/** A listing's settings in each shown presentation's variant: its language, then its fills. */
+function listingSettings(presentations: readonly DrawnPresentation[]): GhostProp[] {
+  const keys = new Set(
+    presentations.flatMap(({ variant = {} }) =>
+      Object.keys(variant).filter((key) => key.startsWith('listing.'))
+    )
+  );
+  return [...keys]
+    .sort(byOrder(listingOrder, (key) => key))
+    .map((key) => variable(presentations, key, key.slice('listing.'.length)));
 }
 
 /**
@@ -332,13 +364,14 @@ export function viewMarkers(
 }
 
 /**
- * Where a <Node>, <Pointed>, or <Link> tag's props end, before its closing > or />, or undefined
- * if none is there.
+ * Where a <Node>, <Pointed>, <Link>, or <Listing> tag's props end, before its closing > or />, or
+ * undefined if none is there.
  */
 function closingAt(state: EditorState, line: number, column: number): number | undefined {
   if (line < 1 || line > state.doc.lines) return undefined;
   const from = state.doc.line(line).from + column - 1;
-  if (!/^<(?:Node|Pointed|Link)\b/u.test(state.doc.sliceString(from, from + 9))) return undefined;
+  if (!/^<(?:Node|Pointed|Link|Listing)\b/u.test(state.doc.sliceString(from, from + 9)))
+    return undefined;
   const end = from + tagEnd(state.doc.sliceString(from, from + 4000));
   if (state.doc.sliceString(end - 1, end) !== '>') return undefined;
   let at = state.doc.sliceString(end - 2, end - 1) === '/' ? end - 2 : end - 1;

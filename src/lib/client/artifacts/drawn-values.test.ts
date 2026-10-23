@@ -281,6 +281,32 @@ describe('variant markers', () => {
     expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
   });
 
+  it('gives a <Listing /> its language and fills, and the page which events are steps', () => {
+    const listed = `${source}\n<Node layout="row"><Listing /></Node>`;
+    const withListing = presentations.map((presentation, index) => ({
+      ...presentation,
+      variant: {
+        ...presentation.variant,
+        frames: index ? 'Matches' : 'yield',
+        'listing.language': index ? 'pseudocode' : 'python',
+        'listing.current.fill': 'amber-200',
+        'listing.earlier.fill': 'neutral-200'
+      }
+    }));
+    const ghosts = tagGhosts(EditorState.create({ doc: listed }), withListing);
+    const listing = ghosts.find(({ kinds }) => kinds.includes('listing'));
+    expect(listing?.props.map(({ name, differs }) => [name, differs])).toEqual([
+      ['language', true],
+      ['current.fill', false],
+      ['earlier.fill', false]
+    ]);
+    expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
+    expect(frameProps(withListing).map(({ name, differs }) => [name, differs])).toEqual([
+      ['frames', true],
+      ['ratio', false]
+    ]);
+  });
+
   it('gives the first top-level node the page frame', () => {
     const [, title] = tagGhosts(EditorState.create({ doc: source }), presentations);
     expect(title.kinds).toEqual(['root[title]', 'page']);
