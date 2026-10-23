@@ -36,16 +36,19 @@
   } = $props();
 
   const pointed = pointedContext();
-  // This pointer's kind, under those of the pointers outside it: the pointer written last wins.
-  // Each step mounts afresh, so the props are read once.
+  // This pointer's kind, under those of the pointers outside it: of those at the element, the
+  // pointer written last wins, so one elsewhere never hides one here. Each step mounts afresh, so
+  // the props are read once.
+  const own = untrack(() => ({
+    kind: kindKey(__view, activeTags(tags, 'pointed')),
+    base: kindKey(__view, activeTags(__base ?? tags, 'pointed')),
+    site: __site,
+    active: pointed?.active ?? false
+  }));
+  const outer = pointed?.outer as { __over?: { active?: boolean } } | undefined;
   const merged = {
-    __over: untrack(() => ({
-      kind: kindKey(__view, activeTags(tags, 'pointed')),
-      base: kindKey(__view, activeTags(__base ?? tags, 'pointed')),
-      site: __site,
-      active: pointed?.active ?? false
-    })),
     ...pointed?.outer,
+    __over: outer?.__over && (outer.__over.active || !own.active) ? outer.__over : own,
     ...(pointed?.placeholder ? { __id: undefined, __ref: undefined, __slot: undefined } : {})
   };
   providePointed(undefined);
