@@ -406,6 +406,64 @@ Linear search, with its code beside it:
 {@render Here(i)}
 ```
 
+A listing can also be a text of the source's own, such as a textbook's pseudocode or the code a participant wrote, shown exactly as written: put it in a `<script lang="sverlin" listing="textbook">` block, any name but the library's, and it becomes the first option of `listing.language`, the one a presentation starts with. Mark each part of the text that should light as a region, `[label: text]`, nested as finely as needed, as `while [test: [bound: j > 0] and [cmp: A[j] > key]]`; a `[` that opens no region, as in `A[i]`, is text, and the marks are not shown. Then label the algorithm's code with the same labels, in a comment at the end of a statement's line or alone on the line above it: `// @shift` labels the statement, and `// @test; bound: j > 0; cmp: values[j - 1] > key` also names parts of it by their text, exactly as written in that line, with `#2` for a text's second occurrence. A call of an operation lights the region named after the operation without a label. The code inside a labelled part lights it too, and an unlabelled statement lights nothing; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every label must have a region and every region a label; the context's listingMaps says what each region is mapped to and whether a step lights it.
+
+Insertion sort, beside a textbook's pseudocode:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+
+<script lang="sverlin">
+  for (let i = Position(1); i < values.length; i++) { // @outer
+    const key = values[i]; // @key
+    let j = i; // @init
+    yield;
+    while (j > 0 && values[j - 1] > key) { // @test; bound: j > 0; cmp: values[j - 1] > key
+      values[j] = values[j - 1]; // @shift
+      j--; // @down
+      yield;
+    }
+    values[j] = key; // @place
+    yield;
+  }
+</script>
+
+<script lang="sverlin" listing="textbook">
+  INSERTION-SORT(A, n)
+  1  for [outer: i = 2 to n]
+  2      [key: key = A[i]]
+  3      // Insert A[i] into the sorted subarray A[1 : i - 1].
+  4      [init: j = i - 1]
+  5      while [test: [bound: j > 0] and [cmp: A[j] > key]]
+  6          [shift: A[j + 1] = A[j]]
+  7          [down: j = j - 1]
+  8      [place: A[j + 1] = key]
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Next(p: Position)}<Node layout="column"><Pointed tags="next" /><Node tags="label">i</Node></Node>{/snippet}
+{#snippet Hole(p: Position)}<Node layout="column"><Pointed tags="shifting" /><Node tags="label">j</Node></Node>{/snippet}
+
+<Node tags="title">Insertion sort</Node>
+<Node layout="row">
+  <Listing />
+  <Node layout="column">
+    <Node tags="key">key {@render Int(key)}</Node>
+    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+  </Node>
+</Node>
+{@render Next(i)}
+{@render Hole(j)}
+```
+
 ## Node
 
 A node is one of three things:

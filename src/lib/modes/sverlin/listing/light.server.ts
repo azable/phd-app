@@ -46,10 +46,20 @@ export function lightSteps(
       lit.push(lit.at(-1) ?? { current: [], earlier: [] });
       continue;
     }
+    // A region inside a lit one that ran nothing this step is left out of it, as the comparison
+    // in while [test: [bound: j > 0] and [cmp: A[j] > key]] once j > 0 fails.
+    const ran = lighted.flat();
+    const quiet = (listing.regions ?? []).filter(
+      (region) => !ran.some((mark) => mark.start === region.start && mark.end === region.end)
+    );
+    const without = (ranges: Range[]) =>
+      ranges.flatMap((range) => holed(range, quiet, listing.text));
     lit.push({
-      current: merged(latest),
-      earlier: merged(lighted.filter((marks) => marks !== latest).flat()).filter(
-        (range) => !latest.some((mark) => mark.start <= range[0] && range[1] <= mark.end)
+      current: without(merged(latest)),
+      earlier: without(
+        merged(lighted.filter((marks) => marks !== latest).flat()).filter(
+          (range) => !latest.some((mark) => mark.start <= range[0] && range[1] <= mark.end)
+        )
       )
     });
   }
@@ -70,6 +80,34 @@ function textOf(key: string, open: readonly string[], marks: ReadonlyMap<string,
     if (found) return found;
   }
   return open.length ? (marks.get(open[0]) ?? []) : [];
+}
+
+/** A range without the regions strictly inside it, its pieces trimmed of spaces at their ends. */
+function holed(
+  range: Range,
+  holes: readonly { start: number; end: number }[],
+  text: string
+): Range[] {
+  const inside = holes
+    .filter(
+      ({ start, end }) =>
+        range[0] <= start && end <= range[1] && (start !== range[0] || end !== range[1])
+    )
+    .sort((a, b) => a.start - b.start);
+  if (!inside.length) return [range];
+  const pieces: Range[] = [];
+  let from = range[0];
+  for (const { start, end } of inside) {
+    if (start > from) pieces.push([from, start]);
+    from = Math.max(from, end);
+  }
+  if (from < range[1]) pieces.push([from, range[1]]);
+  return pieces.flatMap(([start, end]) => {
+    const piece = text.slice(start, end);
+    const lead = piece.length - piece.trimStart().length;
+    const trail = piece.length - piece.trimEnd().length;
+    return end - trail > start + lead ? [[start + lead, end - trail] as Range] : [];
+  });
 }
 
 function merged(marks: readonly Mark[]): Range[] {

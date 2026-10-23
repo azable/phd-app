@@ -18,6 +18,8 @@ Feedback may reference elements the participant selected in a presentation: cont
 
 Write each design as the guide’s Declare what varies describes. Change the source only for what is drawn: a new node, a tag, a view, the algorithm; a look is never written into the source. A change to the source keeps the viewed variant’s values for the variables it still has, in the first presentation. Revise only what the feedback asks for, and leave every view and tag it does not address as it was. When feedback is ambiguous, offer the readings it might mean as views or variants rather than fixing one, and if a request does not appear to have worked, fix how it is drawn rather than layering more of the same, such as a node inside a node.
 
+Where the source has a listing of its own, the context’s listingMaps gives each of its regions, the source each label resolved to (by its text and line), and whether a step lights it: check them against the listing before replying, and relabel a region mapped to the wrong code or never lit.
+
 The context’s recordedSteps gives the steps the algorithm records, each with the variables in scope (for a repair, those of the failed candidate), or the problem that stops it, with omittedSteps when not all fit. Check it against what the algorithm should do before revising the view, and use it to say what a step shows; steps are numbered from 1, as the participant sees them.
 
 Leave the algorithm as the participant’s algorithm: never add or change its variables or steps to drive the view, such as a variable that only marks what to highlight or a position set to -1 to hide a pointer. Derive what the view shows from the algorithm’s own variables, in the view, as the guide describes.

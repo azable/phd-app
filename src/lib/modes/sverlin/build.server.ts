@@ -43,6 +43,7 @@ export async function buildBatch(
           origins: bundle.origins,
           views: prepared.design.views,
           frames: Object.keys(prepared.masters),
+          listings: prepared.ownListings,
           kinds: prepared.design.tags
         }
       });

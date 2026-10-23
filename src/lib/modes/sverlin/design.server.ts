@@ -60,14 +60,16 @@ export class DesignValueError extends Error {
 
 /**
  * Every variable of a source: each type's views, the frame's settings, a listing's if the view
- * places one, which events are steps if it can step by more than one (frames, its options the
- * source's frame rules, the first where it starts), and each kind's props.
+ * places one (its languages the source's own listings first, then the library's), which events are
+ * steps if it can step by more than one (frames, its options the source's frame rules, the first
+ * where it starts), and each kind's props.
  */
 export function designSpace(
   kinds: readonly DesignKind[],
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
-  frames: readonly string[] = []
+  frames: readonly string[] = [],
+  ownListings: readonly string[] = []
 ): DesignSpace {
   return {
     ...(frames.length > 1 ? { frames: [...frames] } : {}),
@@ -75,7 +77,12 @@ export function designSpace(
       Object.entries(views).map(([type, options]) => [`views.${type}`, [...options, 'none']])
     ),
     ...frameOptions,
-    ...(listing ? listingOptions : {}),
+    ...(listing
+      ? {
+          ...listingOptions,
+          'listing.language': [...ownListings, ...listingOptions['listing.language']]
+        }
+      : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
@@ -89,7 +96,8 @@ export function starterVariant(
   kinds: readonly DesignKind[],
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
-  frames: readonly string[] = []
+  frames: readonly string[] = [],
+  ownListings: readonly string[] = []
 ): Record<string, DesignValue> {
   return {
     ...(frames.length > 1 ? { frames: frames[0] } : {}),
@@ -97,7 +105,13 @@ export function starterVariant(
       Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
     ),
     ...starterFrame,
-    ...(listing ? starterListing : {}),
+    // A listing of the source's own is the one it starts with.
+    ...(listing
+      ? {
+          ...starterListing,
+          'listing.language': ownListings[0] ?? starterListing['listing.language']
+        }
+      : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])

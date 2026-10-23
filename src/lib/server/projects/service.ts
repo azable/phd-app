@@ -862,6 +862,7 @@ export async function activateBuiltPresentations(
       ...(bundle.origins ? { origins: bundle.origins } : {}),
       ...(bundle.views ? { views: bundle.views } : {}),
       ...(bundle.frames ? { frames: bundle.frames } : {}),
+      ...(bundle.listings?.length ? { listings: bundle.listings } : {}),
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
       seed: item.seed,
       source: item.source,

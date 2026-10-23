@@ -25,7 +25,15 @@ import type { DomainRegistry, RecordType } from '../algorithm/structures.server'
 import type { Definition, Operator } from './definition';
 import { filled, joined, Marked, type Mark } from './text';
 
-export type Listing = { text: string; marks: readonly Mark[] };
+/**
+ * A listing's text and its marks; a listing of the source's own also has its regions, so a lit
+ * region can leave out the regions inside it that did not run (see light.server.ts).
+ */
+export type Listing = {
+  text: string;
+  marks: readonly Mark[];
+  regions?: readonly { start: number; end: number }[];
+};
 
 type Rendered = { text: Marked; precedence: number };
 type Line = { depth: number; text: Marked };

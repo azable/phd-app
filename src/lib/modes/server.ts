@@ -34,6 +34,8 @@ export type ModeBuildResult =
         views?: Record<string, string[]>;
         // The events a presentation can step by, the options of its frames variable.
         frames?: string[];
+        // The source's own listings, the first options of its listing.language variable.
+        listings?: string[];
         // The kinds each tag can be, by its line:column.
         kinds?: Record<string, string[]>;
       };

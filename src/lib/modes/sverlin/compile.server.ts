@@ -21,6 +21,7 @@ import {
 } from './algorithm/interpret.server';
 import { listingLanguages } from './listing/languages';
 import { lightSteps, writtenListing, type Lit } from './listing/light.server';
+import { mappedListing, type RegionMap } from './listing/mapped.server';
 import { renderListing, type Listing } from './listing/render.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
@@ -135,6 +136,8 @@ export type PreparedComponent = {
   component: string;
   /** The steps of the frame rule the source starts with: yield where it yields. */
   master: MasterStep[];
+  /** The names of the source's own listings (see listing/mapped.server.ts). */
+  ownListings: string[];
   /** The steps of every frame rule the source can step by, by its name (see FrameRule). */
   masters: Record<string, MasterStep[]>;
   /** The source's identity, shared by its presentations whichever events they step by. */
@@ -240,24 +243,54 @@ export function recordedTrace(source: string): MasterStep[] {
   return Object.values(runs)[0].steps;
 }
 
+/** The names of the listings the library writes, which a listing of the source's own cannot take. */
+const writtenNames = [...Object.keys(listingLanguages), 'javascript', 'none'];
+
 /**
- * The algorithm as a listing in each language: the library's (see listing/render.server.ts), and
- * as written.
+ * The algorithm as a listing in each language: the source's own (see listing/mapped.server.ts),
+ * the library's (see listing/render.server.ts), and as written; with the problems with the
+ * source's own, and what each of their regions is mapped to.
  */
 function listingsFrom(
-  { root, hints }: ReturnType<typeof traceAlgorithm>,
+  source: string,
+  { root, hints, comments }: ReturnType<typeof traceAlgorithm>,
   domain: DomainRegistry,
-  body: string
-): Record<string, Listing> {
-  return {
-    ...Object.fromEntries(
-      Object.entries(listingLanguages).map(([name, language]) => [
-        name,
-        renderListing(root, domain, hints, language)
-      ])
-    ),
-    javascript: writtenListing(body, root)
-  };
+  algorithm: Block,
+  own: readonly ListingBlock[]
+): {
+  listings: Record<string, Listing>;
+  maps: Record<string, RegionMap[]>;
+  problems: InvalidSvelteSourceError[];
+} {
+  const listings: Record<string, Listing> = {};
+  const maps: Record<string, RegionMap[]> = {};
+  const problems: InvalidSvelteSourceError[] = [];
+  for (const block of own) {
+    const at = (offset: number) => sourcePosition(source, offset);
+    if (writtenNames.includes(block.name) || Object.hasOwn(listings, block.name)) {
+      problems.push(
+        new InvalidSvelteSourceError(
+          `A listing cannot be named ${block.name}: ${writtenNames.includes(block.name) ? 'the library writes one by that name' : 'another has that name'}.`,
+          { code: 'sverlin_block', start: at(block.start) }
+        )
+      );
+      continue;
+    }
+    const mapped = mappedListing(block, { root, comments, body: algorithm.body }, domain);
+    listings[block.name] = mapped.listing;
+    maps[block.name] = mapped.maps;
+    for (const { message, block: where, at: offset } of mapped.problems)
+      problems.push(
+        new InvalidSvelteSourceError(message, {
+          code: 'listing_label',
+          start: at((where === 'listing' ? block.offset : algorithm.offset) + offset)
+        })
+      );
+  }
+  for (const [name, language] of Object.entries(listingLanguages))
+    listings[name] = renderListing(root, domain, hints, language);
+  listings.javascript = writtenListing(algorithm.body, root);
+  return { listings, maps, problems };
 }
 
 /**
@@ -301,7 +334,7 @@ function framings(
 
 /** The algorithm as a listing in each language. */
 export function listingsOf(source: string): Record<string, Listing> {
-  const { blocks } = extractBlocks(source);
+  const { blocks, listings: listingBlocks } = extractBlocks(source);
   if (!blocks.algorithm)
     throw new InvalidSvelteSourceError('There is no algorithm block, so there is no listing.', {
       code: 'missing_algorithm'
@@ -319,7 +352,50 @@ export function listingsOf(source: string): Record<string, Listing> {
     (body) => traceAlgorithm(body, input, domain),
     blocks
   );
-  return listingsFrom(traced, domain, algorithm.body);
+  return listingsFrom(source, traced, domain, algorithm, listingBlocks).listings;
+}
+
+/**
+ * What each region of the source's own listings is mapped to, and whether a step of the starting
+ * frame rule lights it, for the assistant to check its labels against; none without such a listing.
+ */
+export function listingMapsOf(
+  source: string
+): Record<string, (RegionMap & { lit: boolean })[]> | undefined {
+  const { blocks, listings: listingBlocks } = extractBlocks(source);
+  if (!listingBlocks.length || !blocks.algorithm) return undefined;
+  const domain = blocks.domain
+    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+    : noDomain;
+  const input = blocks.input
+    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
+    : { state: {}, types: {} };
+  const traced = Object.values(framings(source, blocks.algorithm, blocks, input, domain))[0];
+  const { listings, maps } = listingsFrom(source, traced, domain, blocks.algorithm, listingBlocks);
+  return Object.fromEntries(
+    Object.entries(maps).map(([name, regions]) => {
+      const lit = lightSteps(listings[name], traced.steps).flatMap(({ current, earlier }) => [
+        ...current,
+        ...earlier
+      ]);
+      // A region lit at some step, or a region inside it lit, which lights within it.
+      // Lines in the source, rather than in the algorithm block.
+      const before = source.slice(0, blocks.algorithm!.offset).split('\n').length - 1;
+      let from = 0;
+      const marked = regions.map((region) => {
+        const start = listings[name].text.indexOf(region.text, from);
+        from = start >= 0 ? start : from;
+        return {
+          ...region,
+          sources: region.sources.map(({ text, line }) => ({ text, line: line + before })),
+          lit: lit.some(
+            ([litStart, litEnd]) => litStart < start + region.text.length && litEnd > start
+          )
+        };
+      });
+      return [name, marked];
+    })
+  );
 }
 
 /**
@@ -332,7 +408,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
   }
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
-    const { svelteSource, blocks } = extractBlocks(source);
+    const { svelteSource, blocks, listings: listingBlocks } = extractBlocks(source);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -493,9 +569,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       Object.entries(runs).map(([rule, run]) => [rule, run.steps])
     );
     const everyStep = Object.values(masters).flat();
+    const written = listingsFrom(source, traced, domain, algorithm, listingBlocks);
+    if (written.problems.length) throw InvalidSvelteSourceError.combine(written.problems);
+    const ownListings = listingBlocks.map(({ name }) => name);
     const listings = listing
       ? Object.fromEntries(
-          Object.entries(listingsFrom(traced, domain, algorithm.body)).map(([name, written]) => [
+          Object.entries(written.listings).map(([name, written]) => [
             name,
             {
               text: written.text,
@@ -676,6 +755,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       component,
       master,
       masters,
+      ownListings,
       // Steps line up by their moments, so the identity tells presentations aligned that way from
       // those that number steps by their place.
       signature: stepSignature([
@@ -688,8 +768,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       design: {
         views: chosen,
         tags: tagKinds,
-        space: designSpace(kinds, chosen, listing, rules),
-        starter: starterVariant(kinds, chosen, listing, rules)
+        space: designSpace(kinds, chosen, listing, rules, ownListings),
+        starter: starterVariant(kinds, chosen, listing, rules, ownListings)
       },
       ...(listings ? { listings } : {})
     };
@@ -818,16 +898,36 @@ export async function bundlePresentation(
 
 const sverlinBlock =
   /<script\s+lang\s*=\s*(["'])sverlin\1(?:\s+(domain|input|design))?\s*>([\s\S]*?)<\/script\s*>/giu;
+const listingBlock =
+  /<script\s+lang\s*=\s*(["'])sverlin\1\s+listing\s*=\s*(["'])([\w-]*)\2\s*>([\s\S]*?)<\/script\s*>/giu;
+
+/** A listing of the source's own: its name, its text, where the text starts, and the block. */
+type ListingBlock = Block & { name: string; start: number };
 
 /** Remove the Sverlin blocks for Svelte, keeping every offset and line in place. */
 function extractBlocks(source: string): {
   svelteSource: string;
   // A design block is found only to say that sources have none.
   blocks: Partial<Record<BlockKind | 'design', Block>>;
+  listings: ListingBlock[];
 } {
   const blocks: Partial<Record<BlockKind | 'design', Block>> = {};
   let svelteSource = source;
-  for (const match of source.matchAll(sverlinBlock)) {
+  const listings: ListingBlock[] = [];
+  for (const match of source.matchAll(listingBlock)) {
+    const start = match.index;
+    listings.push({
+      name: match[3],
+      body: match[4],
+      offset: start + match[0].indexOf('>') + 1,
+      start
+    });
+    svelteSource =
+      svelteSource.slice(0, start) +
+      match[0].replace(/[^\n]/gu, ' ') +
+      svelteSource.slice(start + match[0].length);
+  }
+  for (const match of svelteSource.matchAll(sverlinBlock)) {
     const kind = (match[2] ?? 'algorithm') as BlockKind | 'design';
     if (blocks[kind])
       throw new InvalidSvelteSourceError(`A component can have only one ${kind} block.`, {
@@ -847,7 +947,7 @@ function extractBlocks(source: string): {
       `Unrecognized sverlin block ${unrecognized[0]}; use <script lang="sverlin">, or add domain, input, or design, as in <script lang="sverlin" input>.`,
       { code: 'sverlin_block', start: sourcePosition(source, unrecognized.index) }
     );
-  return { svelteSource, blocks };
+  return { svelteSource, blocks, listings };
 }
 
 /**

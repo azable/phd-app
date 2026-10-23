@@ -32,7 +32,7 @@ import {
 } from './block.server';
 import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './events.server';
 import { Identities, type Placed, type StepIdentities } from './identities.server';
-import { parseBlock } from './parse.server';
+import { parseBlock, type BlockComment } from './parse.server';
 import {
   noDomain,
   operationNames,
@@ -184,15 +184,20 @@ export function traceAlgorithm(
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain,
   frames: FrameRule = 'yield'
-): { steps: MasterStep[]; root: BlockStatement; hints: ListingHints } {
-  const { root, offset } = parseBlock(body, 'algorithm', domain);
+): {
+  steps: MasterStep[];
+  root: BlockStatement;
+  hints: ListingHints;
+  comments: BlockComment[];
+} {
+  const { root, offset, comments } = parseBlock(body, 'algorithm', domain);
   const interpreter = new Interpreter(root, offset, {
     kind: 'algorithm',
     initial: input,
     domain,
     frames
   });
-  return { steps: interpreter.run(), root, hints: interpreter.hints };
+  return { steps: interpreter.run(), root, hints: interpreter.hints, comments };
 }
 
 // ---------------------------------------------------------------------------------------------

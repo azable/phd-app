@@ -18,7 +18,7 @@ import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
 
 import assistant from './assistant.md?raw';
 import guide from './README.md?raw';
-import { recordedTrace } from './compile.server';
+import { listingMapsOf, recordedTrace } from './compile.server';
 
 /** Prompt text from a Markdown file: its HTML comments are notes for maintainers. */
 const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu, '').trim();
@@ -57,6 +57,18 @@ export function recordedSteps(source: string): Record<string, unknown> {
   };
 }
 
+/**
+ * What each region of the source's own listings is mapped to, so the assistant can check its labels;
+ * the problem, where the source has one, is in the recorded steps or the build's feedback.
+ */
+function listingMaps(source: string): Record<string, unknown> | undefined {
+  try {
+    return listingMapsOf(source);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Primary visualization-authoring chatbot definition. */
 export default {
   id: 'sverlin-assistant',
@@ -68,11 +80,13 @@ export default {
     const source =
       buildFeedback?.failedSource ??
       artifacts.find(({ artifactId }) => artifactId === entryArtifactId)?.source;
+    const maps = source ? listingMaps(source) : undefined;
     return {
       project,
       attemptContext: attempt,
       ...(buildFeedback ? { buildFeedback } : {}),
-      ...(source ? { recordedSteps: recordedSteps(source) } : {})
+      ...(source ? { recordedSteps: recordedSteps(source) } : {}),
+      ...(maps ? { listingMaps: maps } : {})
     };
   },
   attemptProfiles: visualizationAttemptProfiles(12000),

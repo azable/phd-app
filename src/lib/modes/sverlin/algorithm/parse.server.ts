@@ -26,13 +26,22 @@ export function parseBlock(
   body: string,
   kind: BlockKind,
   domain?: DomainRegistry
-): { root: BlockStatement; offset: (node: AnyNode) => Span } {
+): { root: BlockStatement; offset: (node: AnyNode) => Span; comments: BlockComment[] } {
   let program;
   let functions = new Set<number>();
+  const comments: BlockComment[] = [];
   try {
     let wrapped = `${wrapperPrefix}${body}\n}`;
     if (kind === 'algorithm') [wrapped, functions] = asGenerators(wrapped);
-    program = parse(wrapped, options);
+    program = parse(wrapped, {
+      ...options,
+      onComment: (_block, text, start, end) =>
+        comments.push({
+          text,
+          start: start - wrapperPrefix.length,
+          end: end - wrapperPrefix.length
+        })
+    });
   } catch (cause) {
     const position = (cause as { pos?: unknown }).pos;
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -54,8 +63,11 @@ export function parseBlock(
     new Set(declared?.operations ?? (domain ? operationNames(domain) : [])),
     functions
   );
-  return { root, offset };
+  return { root, offset, comments };
 }
+
+/** A comment in a block, its text without its markers, at its span in the block's body. */
+export type BlockComment = { text: string } & Span;
 
 /** A node's span in its block's body, the same for every block. */
 export function spanOf(node: AnyNode): Span {
