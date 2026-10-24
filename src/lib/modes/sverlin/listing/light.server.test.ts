@@ -50,8 +50,18 @@ describe('lighting', () => {
   });
 
   it('lights the last step, after the last step’s code, only faintly: it has no code of its own', () => {
-    const lit = lightSteps(listing, traced.steps);
-    // Found at the second check; the last step holds the test that held, the stop, and the exit.
+    // The loop's exit only drops found and i, so it is no step: the page rests on the check that
+    // found 8.
+    expect(lightSteps(listing, traced.steps)).toHaveLength(2);
+    // A declaration after the loop makes the end a step, holding the test that held, the stop,
+    // and the exit.
+    const ending = traceAlgorithm(
+      `${body}\n  @done[const done = Flag(true);]`,
+      input,
+      domain,
+      'check'
+    );
+    const lit = lightSteps(mappedListing({ body: text }, ending).listing, ending.steps);
     expect(lit).toHaveLength(3);
     expect(shown(listing, lit[2]).current).toEqual([]);
     expect(shown(listing, lit[2]).earlier).toEqual(['found then stop']);

@@ -422,12 +422,21 @@ class Interpreter {
       throw new AlgorithmError(
         `The code labelled ${this.#frames.label} never runs, so there are no steps.`
       );
-    // What runs after the last step is a step of its own where it changes the state; without
+    // What runs after the last step is a step of its own where it changes a value still in scope,
+    // declares one, or applies an operator; variables only leaving scope are no step. Without
     // labels, it is the only one.
     const last = this.#trace.at(-1);
     this.#begin(this.#root, this.#topLevel);
     this.#end(this.#root, this.#topLevel);
-    if (last && JSON.stringify(this.#trace.at(-1)!.state) === JSON.stringify(last.state))
+    const end = this.#trace.at(-1)!;
+    if (
+      last &&
+      !end.applied &&
+      Object.entries(end.state).every(
+        ([name, value]) =>
+          name in last.state && JSON.stringify(last.state[name]) === JSON.stringify(value)
+      )
+    )
       this.#trace.pop();
     // The page opens on the state before the first step where that step changes what was there
     // already, so its change plays; a first step that only declares opens on its after.

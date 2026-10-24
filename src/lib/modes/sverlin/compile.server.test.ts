@@ -192,8 +192,8 @@ describe('single-component Svelte compilation', () => {
       '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (const v of values) {\n  @add[total = Add(total, v);]\n}</script>\n<Node layout="column">{@const doubled = total * 2}<Node tags="sum">{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
-    // The start, a step per addition, then the end.
-    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4']);
+    // The start and a step per addition; the loop's end only drops v, so it is no step.
+    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3']);
     expect(result.variant['root[sum].fill']).toBeDefined();
   });
 
@@ -316,8 +316,8 @@ describe('single-component Svelte compilation', () => {
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
     expect(prepared.design.starter['listing.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n');
-    // A step per pass, then the end.
-    expect(prepared.listings?.code.lit.loop).toHaveLength(3);
+    // A step per pass; the loop's end only drops i, so it is no step.
+    expect(prepared.listings?.code.lit.loop).toHaveLength(2);
     const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n');
     // Without a <Listing />, the design has no listing variables.
@@ -727,12 +727,13 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Position(v.length)); const Before = binop((a: Position, b: Position) => Flag(a < b)); const Next = unop((p: Position) => Position(p + 1));</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {\n  @key[const key = values[i];]\n}</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Position(v.length)); const Before = binop((a: Position, b: Position) => Flag(a < b)); const Next = unop((p: Position) => Position(p + 1));</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(source('{@render Int(key)}'));
     const { javascript } = await bundlePresentation(prepared, 1);
-    expect(javascript).toContain('{i:1,key:2,values:[5,2]');
+    // After the loop, i and key are out of scope: they stand in from the step that had them.
+    expect(javascript).toContain('values:[5,2],i:1,key:2');
     expect(javascript).toContain('__absent:["i","key"]');
   });
 

@@ -61,10 +61,10 @@ describe('frames', () => {
   });
 
   it('step at each run of a label at the top, and of each label inside one', () => {
-    // [3, 8, 5, 2], looking for 5: the start, three passes, and the end, out of the loop.
-    expect(checked(steps(search))).toEqual([0, 1, 2, 3, 3]);
-    expect(steps(search).at(-1)?.state.i).toBeUndefined();
-    // Each count and each check.
+    // [3, 8, 5, 2], looking for 5: the start and three passes; the loop's exit only drops i, so it
+    // is no step, and the page rests on the pass that found 5.
+    expect(checked(steps(search))).toEqual([0, 1, 2, 3]);
+    expect(steps(search).at(-1)?.state.i).toBe(2);
     // Each count and each check, after the state before the first count.
     expect(checked(steps(search, 'pass.*')).slice(0, 7)).toEqual([0, 1, 1, 2, 2, 3, 3]);
   });
@@ -84,9 +84,8 @@ describe('frames', () => {
       [0, 0],
       [0, 1],
       [1, 2],
-      [2, 3],
-      // The loop's exit, after the pass that broke out of it, is the last step, out of the loop.
-      [undefined, 3]
+      // The pass that breaks out; the loop's exit after it only drops i, so it is no step.
+      [2, 3]
     ]);
   });
 
@@ -96,11 +95,19 @@ describe('frames', () => {
     expect(trace[0].state).toMatchObject({ a: 1, b: 2 });
   });
 
-  it('end with a step for what runs after the last step, only where it changes the state', () => {
-    // The loop's exit after the last check leaves the loop's variable behind.
+  it('end with a step for what runs after the last step, only where it changes a value in scope', () => {
+    // The loop's exit after the last check only drops the loop's variable: no step.
     const trace = steps(search, 'pass.check');
-    expect(trace).toHaveLength(4);
-    expect(trace.at(-1)?.events?.map(({ kind }) => kind)).toEqual(['exit']);
+    expect(trace).toHaveLength(3);
+    expect(trace.at(-1)?.state.i).toBe(2);
+    // A write after the loop, labelled but not stepped at, makes the end a step, the exit in it.
+    const after = steps(`${search}\n@more[checked = Up(checked);]`, 'pass.check');
+    expect(after).toHaveLength(4);
+    expect(after.at(-1)?.state).not.toHaveProperty('i');
+    expect(after.at(-1)?.state.checked).toBe(4);
+    expect(after.at(-1)?.events?.map(({ kind }) => kind)).toEqual(
+      expect.arrayContaining(['exit', 'apply', 'write'])
+    );
     // A loop's last test changes nothing.
     const counting = '@start[let n = Int(0);]\nwhile (Less(n, 2)) @up{\n  n = Up(n);\n}';
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);

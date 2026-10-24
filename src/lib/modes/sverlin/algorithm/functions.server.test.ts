@@ -154,9 +154,10 @@ describe('loops', () => {
         @take[const odd = values[j];]
       }
     `;
-    // A labelled loop steps once per pass; the end, with neither in scope, is the last.
-    expect(run(loops, 'down').map(({ state }) => state.i)).toEqual([4, 2, 0, undefined]);
-    expect(run(loops, 'take').map(({ state }) => state.j)).toEqual([0, 2, 4, undefined]);
+    // A labelled loop steps once per pass; the end only drops the loop's variable, so it is no
+    // step.
+    expect(run(loops, 'down').map(({ state }) => state.i)).toEqual([4, 2, 0]);
+    expect(run(loops, 'take').map(({ state }) => state.j)).toEqual([0, 2, 4]);
   });
 
   it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
@@ -170,9 +171,9 @@ describe('loops', () => {
         @bump[k = Up(k);]
       }
     `);
-    // The end is a step too, after the last test, which leaves k behind.
-    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3, 3]);
-    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7, undefined]);
+    // The last test only drops k, so the end is no step: the last is the bump to 7.
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3]);
+    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7]);
   });
 
   it('run a do...while body once before its test', () => {
