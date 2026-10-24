@@ -16,17 +16,14 @@ const allowedBinary = new Set(['+', '-', '*', '/', '%', '**', '<', '<=', '>', '>
 const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
 
 /**
- * `constructors` names the types and operations the block may call; `operations` the operations
- * among them. An operation's body, in the domain block, is held to the algorithm's subset.
- * `functions` holds where each function the parser read as a generator starts: one written with
+ * `constructors` names the types the block may call. `functions` holds where each function the parser read as a generator starts: one written with
  * `*` is not among them.
  */
 export function checkSubset(
   root: BlockStatement,
   offset: (node: AnyNode) => Span,
-  blockKind: BlockKind,
+  kind: BlockKind,
   constructors: ReadonlySet<string>,
-  operations: ReadonlySet<string> = new Set(),
   functions: ReadonlySet<number> = new Set()
 ): void {
   const functionNames = new Set(
@@ -39,8 +36,6 @@ export function checkSubset(
   };
   const visit = (node: AnyNode, ancestors: readonly AnyNode[]): void => {
     const parent = ancestors.at(-1);
-    const inOperation = ancestors.some((ancestor) => ancestor.type === 'ArrowFunctionExpression');
-    const kind: BlockKind = inOperation ? 'algorithm' : blockKind;
     const inFunction = ancestors.some((ancestor) => ancestor.type === 'FunctionDeclaration');
     switch (node.type) {
       case 'BlockStatement':
@@ -74,21 +69,14 @@ export function checkSubset(
         if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name, kind);
         break;
       case 'ArrowFunctionExpression':
-        if (
-          blockKind !== 'domain' ||
-          parent?.type !== 'CallExpression' ||
-          parent.callee.type !== 'Identifier' ||
-          parent.callee.name !== 'operation' ||
-          parent.arguments[1] !== node
-        )
-          reject(
-            node,
-            'Functions are not supported here; an operation, defined in the domain block, is the body of operation(...).'
-          );
+        reject(
+          node,
+          'Arrow functions are not supported; declare function name(...) { … } at the top level of the algorithm block.'
+        );
         break;
       case 'FunctionDeclaration': {
         const name = node.id?.name ?? '';
-        if (blockKind !== 'algorithm' || parent !== root)
+        if (kind !== 'algorithm' || parent !== root)
           reject(node, 'Functions are declared at the top level of the algorithm block.');
         if (node.async || !functions.has(node.start))
           reject(node, `Write function ${name}(...), without * or async: it may yield as it is.`);
@@ -100,11 +88,10 @@ export function checkSubset(
         break;
       }
       case 'ObjectPattern':
-        if (parent?.type !== 'ArrowFunctionExpression')
-          reject(node, 'Destructuring is not supported.');
+        reject(node, 'Destructuring is not supported.');
         break;
       case 'ReturnStatement':
-        if (node.argument && !inOperation && !inFunction)
+        if (node.argument && !inFunction)
           reject(
             node,
             'return stops the algorithm and cannot return a value; a function can, as in return i;.'
@@ -235,9 +222,6 @@ export function checkSubset(
     } else if (domainFunctions.has(name)) {
       if (kind !== 'domain')
         reject(node, `${name}() defines a type and belongs in the domain block.`);
-    } else if (operations.has(name)) {
-      if (kind !== 'algorithm')
-        reject(node, `${name}(...) is an operation, which the algorithm calls.`);
     } else if (constructors.has(name)) {
       if (kind !== 'input' && kind !== 'algorithm')
         reject(node, `${name}(...) creates a typed value in the input or algorithm block.`);

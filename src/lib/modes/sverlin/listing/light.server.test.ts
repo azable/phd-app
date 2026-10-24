@@ -10,23 +10,22 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(8);', domain);
 const body = `
   for (let i = Index(0); @loop[i < values.length]; i++) {
-    @check[const found = Flag(Matches({ at: i, target }));]
+    @check[const found = Flag(@matches[values[i] === target]);]
     @test[if (found) {
       @stop[break;]
     }]
   }
 `;
 const text = `for @loop[i = 0 to n - 1]
-    @check[found = @Matches[A[i] == x]]
+    @check[found = @matches[A[i] == x]]
     if @test[found then @stop[stop]]`;
 // Stepping by check: each step leads up to the check, then makes it.
 const traced = traceAlgorithm(body, input, domain, 'check');
-const { listing, problems } = mappedListing({ body: text }, traced, domain);
+const { listing, problems } = mappedListing({ body: text }, traced);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
   current: current.map(([start, end]) => text.slice(start, end)),
@@ -34,7 +33,7 @@ const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
 });
 
 describe('lighting', () => {
-  it('lights a step’s code strongly, what led up to it faintly, an operation’s body at its call', () => {
+  it('lights a step’s code strongly, and what led up to it faintly', () => {
     expect(problems).toEqual([]);
     const lit = lightSteps(listing, traced.steps);
     expect(shown(listing, lit[0]).current).toEqual(['found = A[i] == x']);

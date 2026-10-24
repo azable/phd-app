@@ -8,7 +8,6 @@ const domain = interpretDomain(`
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Less = operation({ a: Index, b: Index }, ({ a, b }) => a.value < b.value);
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 /** Each event as its kind and what it names, with the source it is at. */
@@ -73,34 +72,6 @@ describe('the event log', () => {
     expect(step.state.values).toEqual([7, 5]);
   });
 
-  it('opens and closes each operation with its result, its body’s events in the domain block', () => {
-    // The call of Less is a step, and the write of its result is the last step, after it.
-    const [step, last] = run(
-      'const values = Values([4, 2]); const less = Flag(Less({ a: Index(0), b: Index(1) }));'
-    );
-    // The step starts once the call is recorded, so its before already shows what it is about.
-    expect(step.before?.state).toMatchObject({ values: [4, 2], event: { Less: [{ a: 0, b: 1 }] } });
-    const events = step.events ?? [];
-    // The events leading up to the call, then the call's own.
-    expect(step.gap).toBe(events.findIndex(({ kind }) => kind === 'open'));
-    const open = events.findIndex(({ kind }) => kind === 'open');
-    expect(
-      events
-        .slice(open)
-        .map(({ kind, place, name, value, block }) => ({ kind, place, name, value, block }))
-    ).toEqual([
-      { kind: 'open', name: 'Less', place: undefined, value: undefined, block: undefined },
-      { kind: 'read', place: 'a', value: 0, name: undefined, block: 'domain' },
-      { kind: 'read', place: 'values[0]', value: 4, name: undefined, block: 'domain' },
-      { kind: 'read', place: 'b', value: 1, name: undefined, block: 'domain' },
-      { kind: 'read', place: 'values[1]', value: 2, name: undefined, block: 'domain' },
-      { kind: 'close', name: 'Less', value: false, place: undefined, block: undefined }
-    ]);
-    expect(last.events?.map(({ kind, place, value }) => ({ kind, place, value }))).toEqual([
-      { kind: 'write', place: 'less', value: false }
-    ]);
-  });
-
   it('keeps each step’s latest events, counting every one', () => {
     // Stepping at each mark, the loop leads up to the first.
     const body = `@fill[const values = Values([]);
@@ -120,11 +91,11 @@ describe('the event log', () => {
     expect(trace[1].counts?.events.iteration).toBe(1000);
   });
 
-  it('counts calls by function and operation', () => {
-    const trace = run(`function f(a) { return Flag(Less({ a: Index(0), b: Index(1) })); }
+  it('counts calls by function', () => {
+    const trace = run(`function f(a) { return Flag(a[0] < a[1]); }
       const values = Values([1, 2]);
       const x = f(values);
       const y = f(values);`);
-    expect(trace.at(-1)?.counts).toMatchObject({ operations: { Less: 2 }, calls: { f: 2 } });
+    expect(trace.at(-1)?.counts).toMatchObject({ calls: { f: 2 } });
   });
 });

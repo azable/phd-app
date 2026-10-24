@@ -9,7 +9,7 @@ import {
   type Options
 } from 'acorn';
 
-import { operationNames, typeNames, type DomainRegistry } from './structures.server';
+import { typeNames, type DomainRegistry } from './structures.server';
 import { AlgorithmError, type BlockKind, type Span } from './block.server';
 import { readMarkers, type Marker } from './labels.server';
 import { checkSubset } from './subset.server';
@@ -20,9 +20,8 @@ const options: Options = { ecmaVersion: 2022, sourceType: 'script' };
 
 /**
  * Parse a block's body and check its subset. Offsets are relative to the body; the domain
- * names the type constructors and operations the block may call, and in the domain block itself,
- * where operations' bodies call them, its own declarations do. The algorithm's label markers are
- * read first and blanked (see labels.server.ts): `code` is the body as parsed.
+ * names the type constructors the block may call. The algorithm's label markers are read first
+ * and blanked (see labels.server.ts): `code` is the body as parsed.
  */
 export function parseBlock(
   body: string,
@@ -66,15 +65,7 @@ export function parseBlock(
   }
   const root = (program.body[0] as FunctionDeclaration).body;
   const offset = spanOf;
-  const declared = kind === 'domain' ? ownDeclarations(root) : undefined;
-  checkSubset(
-    root,
-    offset,
-    kind,
-    new Set(declared?.names ?? (domain ? typeNames(domain) : [])),
-    new Set(declared?.operations ?? (domain ? operationNames(domain) : [])),
-    functions
-  );
+  checkSubset(root, offset, kind, new Set(domain ? typeNames(domain) : []), functions);
   return { root, offset, comments, markers, code };
 }
 
@@ -102,23 +93,4 @@ function asGenerators(source: string): [string, Set<number>] {
     starts.add(token.start);
   }
   return [read, starts];
-}
-
-/** The names the domain block declares, and those of them it declares as operations. */
-function ownDeclarations(root: BlockStatement): { names: string[]; operations: string[] } {
-  const names: string[] = [];
-  const operations: string[] = [];
-  for (const statement of root.body)
-    if (statement.type === 'VariableDeclaration')
-      for (const { id, init } of statement.declarations) {
-        if (id.type !== 'Identifier') continue;
-        names.push(id.name);
-        if (
-          init?.type === 'CallExpression' &&
-          init.callee.type === 'Identifier' &&
-          init.callee.name === 'operation'
-        )
-          operations.push(id.name);
-      }
-  return { names, operations };
 }

@@ -89,7 +89,7 @@ describe('algorithm interpretation', () => {
 
   it.each([
     ['nested functions', 'if (true) { function f() {} }', /at the top level/],
-    ['arrow functions', 'const f = () => 1;', /Functions are not supported here/],
+    ['arrow functions', 'const f = () => 1;', /Arrow functions are not supported/],
     ['global access', 'const w = globalThis;', /"globalThis" is not defined/],
     ['constructor escapes', 'const a = Ints([]); const c = a.constructor;', /not allowed/],
     ['prototype keys', 'const o = Point({ x: 1, y: 2 }); o["__proto__"] = 1;', /not allowed/],

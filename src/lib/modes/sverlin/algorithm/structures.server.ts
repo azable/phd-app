@@ -4,23 +4,10 @@
  * they make up a component's domain; every input and algorithm value belongs to one of them.
  */
 
-import type { ArrowFunctionExpression } from 'acorn';
-
 import { noAtoms, type AtomRegistry } from './atoms.server';
 
 export type UnionType = { kind: 'union'; name: string; members: readonly string[] };
-/**
- * A record type, or an operation, whose fields are its operands: a call runs its body with them and
- * is recorded as a record of them, so views draw a call as they draw a record.
- */
-export type RecordType = {
-  kind: 'record';
-  name: string;
-  fields: Readonly<Record<string, string>>;
-  operation?: Operation;
-};
-/** An operation's body, an arrow function of its operands, parsed from the domain block. */
-export type Operation = { body: ArrowFunctionExpression };
+export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record<string, string>> };
 export type CollectionType = { kind: 'collection'; name: string; element: string };
 /**
  * A reference to an element of a collection type, as in ref(Queue): it reads as the element, and
@@ -41,13 +28,6 @@ export const noDomain: DomainRegistry = { atoms: noAtoms, structures: {} };
 /** Every type name a domain defines. */
 export function typeNames(domain: DomainRegistry): string[] {
   return [...Object.keys(domain.atoms), ...Object.keys(domain.structures)];
-}
-
-/** The operations a domain declares, which are record types with a body. */
-export function operationNames(domain: DomainRegistry): string[] {
-  return Object.values(domain.structures).flatMap((structure) =>
-    structure.kind === 'record' && structure.operation ? [structure.name] : []
-  );
 }
 
 /** Whether a domain defines a type by this name. */

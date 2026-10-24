@@ -22,21 +22,13 @@ export function lightSteps(
   for (const mark of listing.marks) marks.set(mark.key, [...(marks.get(mark.key) ?? []), mark]);
   const lit: Lit[] = [];
   for (const { events = [], gap = 0, unit } of steps) {
-    // The operations open around each event, so an operation's body written at its call lights
-    // there, or the call itself where its body is not written.
-    const open: string[] = [];
     const leading: Mark[] = [];
     const latest: Mark[] = [];
-    events.forEach((event, index) => {
-      const key = spanKey(event.block ?? 'algorithm', event.at);
-      if (event.kind === 'close') open.pop();
-      (index < gap ? leading : latest).push(
-        ...textOf(key, event.block === 'domain' ? open : [], marks)
-      );
-      if (event.kind === 'open') open.push(key);
-    });
+    events.forEach((event, index) =>
+      (index < gap ? leading : latest).push(...(marks.get(spanKey(event.at)) ?? []))
+    );
     // A label on a block or on statements in a row has no events of its own.
-    if (unit) latest.push(...(marks.get(spanKey('algorithm', unit)) ?? []));
+    if (unit) latest.push(...(marks.get(spanKey(unit)) ?? []));
     if (!latest.length && !leading.length) {
       lit.push(lit.at(-1) ?? { current: [], earlier: [] });
       continue;
@@ -60,22 +52,6 @@ export function lightSteps(
     });
   }
   return lit;
-}
-
-/**
- * The text an event's node became: within the calls open around it, innermost first, then on its
- * own, as a body defined above the algorithm is written once; else the outermost call's.
- */
-function textOf(key: string, open: readonly string[], marks: ReadonlyMap<string, Mark[]>): Mark[] {
-  for (let from = 0; from <= open.length; from++) {
-    const within = open
-      .slice(from)
-      .map((call) => `${call}>`)
-      .join('');
-    const found = marks.get(`${within}${key}`);
-    if (found) return found;
-  }
-  return open.length ? (marks.get(open[0]) ?? []) : [];
 }
 
 /** A range without the regions strictly inside it, its pieces trimmed of spaces at their ends. */

@@ -8,29 +8,27 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
-  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
 `);
 const input = interpretInput('const values = Values([3, 8, 5, 2]); const target = Int(5);', domain);
 const search = `
   @start[let checked = Int(0);]
   for (let i = Index(0); i < values.length; i++) @pass{
     @count[checked = checked + 1;]
-    @check[if (Matches({ at: i, target })) break;]
+    @check[if (values[i] === target) break;]
   }
 `;
 const steps = (body: string, frames?: string) => traceAlgorithm(body, input, domain, frames).steps;
 const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
 
 describe('frames', () => {
-  it('offer the top level, each label with its prefix, the labels inside one, and operations', () => {
+  it('offer the top level, each label with its prefix, and the labels inside one', () => {
     expect(traceAlgorithm(search, input, domain).options).toEqual([
       '*',
       'start',
       'pass',
       'pass.*',
       'pass.count',
-      'pass.check',
-      'Matches'
+      'pass.check'
     ]);
   });
 
@@ -61,7 +59,7 @@ describe('frames', () => {
       @start[let checked = Int(0);]
       @loop[for (let i = Index(0); i < values.length; i++) {
         checked = checked + 1;
-        if (Matches({ at: i, target })) break;
+        if (values[i] === target) break;
       }]
     `;
     expect(
@@ -81,24 +79,11 @@ describe('frames', () => {
     expect(trace[0].state).toMatchObject({ a: 1, b: 2 });
   });
 
-  it('step at each call of an operation, its name a label of its calls', () => {
-    const trace = steps(search, 'Matches');
-    expect(trace.slice(0, 3).map(({ state }) => state.i)).toEqual([0, 1, 2]);
-    // Its operands are read leading up to it; the step's own code starts as the call opens, the
-    // call already recorded in its before.
-    expect(trace[0].events?.slice(trace[0].gap)[0]?.kind).toBe('open');
-    expect((trace[0].before?.state.event as { Matches: unknown[] }).Matches).toEqual([
-      { at: 0, target: 5 }
-    ]);
-  });
-
   it('end with a step for what runs after the last step, only where it changes the state', () => {
-    // The break after the last call, and the loop's exit, leave the loop's variable behind.
-    const trace = steps(search, 'Matches');
+    // The loop's exit after the last check leaves the loop's variable behind.
+    const trace = steps(search, 'pass.check');
     expect(trace).toHaveLength(4);
-    expect(trace.at(-1)?.events?.map(({ kind }) => kind)).toEqual(
-      expect.arrayContaining(['test', 'break', 'exit'])
-    );
+    expect(trace.at(-1)?.events?.map(({ kind }) => kind)).toEqual(['exit']);
     // A loop's last test changes nothing.
     const counting = '@start[let n = Int(0);]\nwhile (n < 2) @up{\n  n = n + 1;\n}';
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
@@ -106,17 +91,17 @@ describe('frames', () => {
 
   it('number every step by its moment, the same whichever rule steps are by', () => {
     const byCount = steps(search, 'pass.count');
-    const byCall = steps(search, 'Matches');
-    const moments = (trace: typeof byCall) => trace.map(({ moment }) => moment as number);
-    // Each count comes before the call it leads to.
+    const byCheck = steps(search, 'pass.check');
+    const moments = (trace: typeof byCheck) => trace.map(({ moment }) => moment as number);
+    // Each count comes before the check it leads to.
     moments(byCount)
       .slice(0, 3)
       .forEach((moment, index) => {
-        expect(moment).toBeLessThan(moments(byCall)[index]);
+        expect(moment).toBeLessThan(moments(byCheck)[index]);
       });
     // Presentations stepping by different rules line up by moment, one holding its step where
     // the other has one of its own.
-    const presentation = (id: string, trace: typeof byCall) => ({
+    const presentation = (id: string, trace: typeof byCheck) => ({
       presentationId: id,
       format: 'browser-bundle-v1' as const,
       stepSignature: 'one source',
@@ -125,10 +110,10 @@ describe('frames', () => {
     });
     const frames = alignPresentationFrames([
       presentation('counts', byCount),
-      presentation('calls', byCall)
+      presentation('checks', byCheck)
     ] as never);
-    expect(frames).toHaveLength(new Set([...moments(byCount), ...moments(byCall)]).size);
-    expect(frames.some(({ held }) => held.includes('calls'))).toBe(true);
+    expect(frames).toHaveLength(new Set([...moments(byCount), ...moments(byCheck)]).size);
+    expect(frames.some(({ held }) => held.includes('checks'))).toBe(true);
     expect(frames.some(({ held }) => held.includes('counts'))).toBe(true);
   });
 

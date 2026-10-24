@@ -161,27 +161,6 @@ describe('single-component Svelte compilation', () => {
     });
   });
 
-  it('reports a problem in an operation, met as the algorithm calls it, in the domain block', async () => {
-    const source = [
-      '<script lang="sverlin" domain>',
-      '  const Int = type("integer", { min: 0, max: 9 });',
-      '  const Values = collection(Int);',
-      '  const Index = index(Values);',
-      '  const Peek = operation({ at: Index }, ({ at }) =>',
-      '    at.value);',
-      '</script>',
-      '<script lang="sverlin" input>const values = Values([1]);</script>',
-      '<script lang="sverlin">Peek({ at: Index(3) });</script>',
-      '<Node>{values}</Node>'
-    ].join('\n');
-    await expect(compileSvelteComponent(source)).rejects.toMatchObject({
-      code: 'algorithm_error',
-      line: 6,
-      column: 5,
-      message: expect.stringContaining('at.value is outside the collection')
-    });
-  });
-
   it('keeps Svelte error positions after removing the algorithm block', async () => {
     await expect(
       compileSvelteComponent('<script lang="sverlin">\n\n</script>\n\n{#if}')

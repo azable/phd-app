@@ -25,7 +25,6 @@ import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
   noDomain,
-  operationNames,
   typeNames,
   type DomainRegistry
 } from './algorithm/structures.server';
@@ -248,7 +247,6 @@ export function recordedTrace(source: string): MasterStep[] {
 function listingsFrom(
   source: string,
   traced: ReturnType<typeof traceAlgorithm>,
-  domain: DomainRegistry,
   algorithm: Block,
   own: readonly ListingBlock[]
 ): {
@@ -270,7 +268,7 @@ function listingsFrom(
       );
       continue;
     }
-    const mapped = mappedListing(block, traced, domain);
+    const mapped = mappedListing(block, traced);
     listings[block.name] = mapped.listing;
     maps[block.name] = mapped.maps;
     for (const { message, block: where, at: offset } of mapped.problems)
@@ -296,7 +294,7 @@ function framings(
   domain: DomainRegistry
 ): Record<string, ReturnType<typeof traceAlgorithm>> {
   const trace = (label?: string) =>
-    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label), blocks);
+    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label));
   // The rule it starts with; any problem here is the algorithm's or its labels'.
   const first = trace();
   const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.options[0]]: first };
@@ -335,13 +333,8 @@ export function listingsOf(source: string): Record<string, Listing> {
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
   const algorithm = blocks.algorithm;
-  const traced = interpretBlock(
-    source,
-    algorithm,
-    (body) => traceAlgorithm(body, input, domain),
-    blocks
-  );
-  return listingsFrom(source, traced, domain, algorithm, listingBlocks).listings;
+  const traced = interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain));
+  return listingsFrom(source, traced, algorithm, listingBlocks).listings;
 }
 
 /**
@@ -360,7 +353,7 @@ export function listingMapsOf(
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
   const traced = Object.values(framings(source, blocks.algorithm, blocks, input, domain))[0];
-  const { listings, maps } = listingsFrom(source, traced, domain, blocks.algorithm, listingBlocks);
+  const { listings, maps } = listingsFrom(source, traced, blocks.algorithm, listingBlocks);
   return Object.fromEntries(
     Object.entries(maps).map(([name, regions]) => {
       const lit = lightSteps(listings[name], traced.steps).flatMap(({ current, earlier }) => [
@@ -478,13 +471,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // Names are checked before any block runs, so a clash is reported before what it causes.
     const declared = (block: Block | undefined, kind: 'input' | 'algorithm') =>
       block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
-    // With operations, every step also records their calls (see traceAlgorithm).
     const stateNames = [
-      ...new Set([
-        ...declared(blocks.input, 'input'),
-        ...declared(blocks.algorithm, 'algorithm'),
-        ...(operationNames(domain).length ? ['event', 'history'] : [])
-      ])
+      ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
     ];
     const typeName = stateNames.find((name) => definesType(domain, name));
     if (typeName)
@@ -559,7 +547,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     // Every state a presentation shows: each step's before and after, by every label.
     const everyStep = Object.values(masters).flatMap(phasesOf);
-    const written = listingsFrom(source, traced, domain, algorithm, listingBlocks);
+    const written = listingsFrom(source, traced, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
@@ -950,23 +938,14 @@ function extractBlocks(source: string): {
   return { svelteSource, blocks, listings };
 }
 
-/**
- * Interpret one block, reporting failures at their position in the authored source: in the block
- * run, or in another of `blocks` a failure names, as an operation's body is in the domain block.
- */
-function interpretBlock<T>(
-  source: string,
-  block: Block,
-  run: (body: string) => T,
-  blocks: Partial<Record<string, Block>> = {}
-): T {
+/** Interpret one block, reporting failures at their position in the authored source. */
+function interpretBlock<T>(source: string, block: Block, run: (body: string) => T): T {
   try {
     return run(block.body);
   } catch (cause) {
     if (!(cause instanceof AlgorithmError)) throw cause;
-    const where = (cause.block && blocks[cause.block]) || block;
     const at = (offset: number | undefined) =>
-      offset === undefined ? undefined : sourcePosition(source, where.offset + offset);
+      offset === undefined ? undefined : sourcePosition(source, block.offset + offset);
     throw new InvalidSvelteSourceError(cause.message, {
       code: 'algorithm_error',
       start: at(cause.offset),

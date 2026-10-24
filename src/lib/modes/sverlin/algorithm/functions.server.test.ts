@@ -7,7 +7,6 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
 `);
 const run = (body: string, frames?: string) =>
   traceAlgorithm(body, undefined, domain, frames).steps;
@@ -27,23 +26,23 @@ describe('functions', () => {
   });
 
   it('record their own variables and the top level’s at a step, under the top level’s names', () => {
-    // Each Matches call is a step, and the end another.
+    // Each check is a step, and the end another.
     const trace = run(`
       function search(a, target) {
         for (let i = Index(0); i < a.length; i++) {
-          if (Matches({ at: i, target })) return i;
+          @check[if (a[i] === target) return i;]
         }
-        return Index(-1);
+        @miss[return Index(-1);]
       }
       const values = Values([3, 8, 5]);
       const found = search(values, Int(8));
     `);
     expect(trace.map(({ state }) => Object.keys(state))).toEqual([
-      ['values', 'a', 'target', 'i', 'event', 'history'],
-      ['values', 'a', 'target', 'i', 'event', 'history'],
-      ['values', 'found', 'event', 'history']
+      ['values', 'a', 'target', 'i'],
+      ['values', 'a', 'target', 'i'],
+      ['values', 'found']
     ]);
-    expect(trace[1].targets).toMatchObject({ i: 'values', 'event.Matches[0].at': 'values' });
+    expect(trace[1].targets).toMatchObject({ i: 'values' });
   });
 
   it('hide top-level variables of the same name with their parameters', () => {

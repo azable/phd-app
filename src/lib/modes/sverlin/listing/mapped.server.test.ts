@@ -7,11 +7,6 @@ const blocks = (algorithm: string, listing: string) => `<script lang="sverlin" d
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
-  const Swap = operation({ a: Position, b: Position }, ({ a, b }) => {
-    const moved = a.value;
-    a.value = b.value;
-    b.value = moved;
-  });
 </script>
 <script lang="sverlin" input>
   const values = Values([2, 1]);
@@ -85,21 +80,6 @@ describe('listings of the source’s own', () => {
     expect(earlier).not.toContain('A[j] > key');
   });
 
-  it('label calls of an operation by its name, inside the label around them', () => {
-    const source = blocks(
-      `  @check[if (values[1] < values[0]) Swap({ a: Position(0), b: Position(1) });]`,
-      `@check[if A[2] < A[1] then @Swap[exchange A[1] with A[2]]]`
-    );
-    const { text, lit } = prepareSvelteComponent(source).listings!.textbook;
-    // Stepping by Swap, the step is the call, led up to by the check around it.
-    expect(lit.Swap[0].current.map(([start, end]) => text.slice(start, end))).toEqual([
-      'exchange A[1] with A[2]'
-    ]);
-    expect(lit.Swap[0].earlier.map(([start, end]) => text.slice(start, end))).toEqual([
-      'if A[2] < A[1] then exchange A[1] with A[2]'
-    ]);
-  });
-
   it.each([
     [
       'a region labelled on no code',
@@ -131,11 +111,11 @@ describe('listings of the source’s own', () => {
     expect(maps?.textbook.find(({ label }) => label === 'test.cmp')).toEqual({
       label: 'test.cmp',
       text: 'A[j] > key',
-      sources: [{ text: 'values[j - 1] > key', line: 18 }],
+      sources: [{ text: 'values[j - 1] > key', line: 13 }],
       lit: true
     });
     expect(maps?.textbook.find(({ label }) => label === 'place')?.sources).toEqual([
-      { text: 'values[j] = key;', line: 22 }
+      { text: 'values[j] = key;', line: 17 }
     ]);
   });
 });

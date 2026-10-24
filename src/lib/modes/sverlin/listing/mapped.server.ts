@@ -3,9 +3,8 @@
  * <script lang="sverlin" listing="name"> block, whose regions, marked @name[…], light when the
  * algorithm runs the code with that label (see algorithm/labels.server.ts). A region inside
  * another takes its name as a prefix, as a label does, so names line up with the algorithm's.
- * Every region needs a label, while a label may only mark steps. A call of an operation is
- * labelled with the operation's name, inside the label around it (check.Matches). A node without
- * a label of its own takes that of the nearest labelled node around it.
+ * Every region needs a label, while a label may only mark steps. A node without a label of its
+ * own takes that of the nearest labelled node around it.
  */
 
 import type { AnyNode, BlockStatement } from 'acorn';
@@ -13,7 +12,6 @@ import type { AnyNode, BlockStatement } from 'acorn';
 import { spanKey } from '../algorithm/interpret.server';
 import type { Label } from '../algorithm/labels.server';
 import { spanOf } from '../algorithm/parse.server';
-import type { DomainRegistry, RecordType } from '../algorithm/structures.server';
 import type { Listing, Mark } from './listing';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
@@ -120,8 +118,7 @@ export function readRegions(body: string): {
  */
 export function mappedListing(
   block: { body: string },
-  algorithm: { root: BlockStatement; labels: readonly Label[]; code: string },
-  domain: DomainRegistry
+  algorithm: { root: BlockStatement; labels: readonly Label[]; code: string }
 ): { listing: Listing; problems: MappingProblem[]; maps: RegionMap[] } {
   const { text, regions, problems } = readRegions(block.body);
   const { root, labels, code } = algorithm;
@@ -129,7 +126,6 @@ export function mappedListing(
   for (const { full, nodes } of labels)
     for (const node of nodes) own.set(node, [...(own.get(node) ?? []), full]);
   const used = new Set(labels.map(({ full }) => full));
-  const regionLabels = new Set(regions.map(({ label }) => label));
   const marks: Mark[] = [];
   const mapped = new Map<string, { text: string; line: number }[]>();
   const lineOf = (offset: number) => code.slice(0, Math.max(offset, 0)).split('\n').length;
@@ -138,27 +134,14 @@ export function mappedListing(
     if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
       return;
     const part = node as AnyNode;
-    const mine = [...(own.get(part) ?? [])];
-    if (
-      part.type === 'CallExpression' &&
-      part.callee.type === 'Identifier' &&
-      (domain.structures[part.callee.name] as RecordType | undefined)?.operation
-    ) {
-      // The deepest label around the call is the one it is inside.
-      const around = [...inherited].sort((a, b) => b.length - a.length)[0];
-      const name = around ? `${around}.${part.callee.name}` : part.callee.name;
-      if (regionLabels.has(name)) {
-        mine.push(name);
-        used.add(name);
-      }
-    }
+    const mine = own.get(part) ?? [];
     const names = mine.length ? mine : inherited;
     const span = spanOf(part);
     if (span.start >= 0) {
       for (const label of names)
         for (const region of regions)
           if (region.label === label)
-            marks.push({ key: spanKey('algorithm', span), start: region.start, end: region.end });
+            marks.push({ key: spanKey(span), start: region.start, end: region.end });
       for (const label of mine) {
         const source = code.slice(span.start, span.end).split('\n')[0].trim();
         mapped.set(label, [

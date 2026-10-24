@@ -21,7 +21,7 @@ they show the algorithm.
 
 A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required; the domain and input blocks are optional.
 
-1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operations the algorithm calls (see Atomic types, Collections, records, and unions, and Operations).
+1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and labels the code its steps are about (see Steps). It runs once.
 
@@ -29,7 +29,7 @@ There is no design block: what presentations differ in is the design space (see 
 
 ## View
 
-The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, a `<Listing />` of the algorithm (see Listing), text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope, as are `event` and `history` when the domain declares operations (see Operations); never write `import`, and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
+The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components, a `<Listing />` of the algorithm (see Listing), text inside nodes, and Svelte blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`. It has no `<script>` or `<style>` of its own, and no HTML or SVG elements: every visible thing is a node or a link, so participants can select it and presentations can vary it. Nodes take no props that set a look: a node's `tags` say what it is, as `<Node tags="caption">`, and the design gives each kind of node its look (see Design). Text belongs inside a node, such as `<Node tags="title">Linear search</Node>`. Every input and algorithm variable in scope at the selected step, `step`, `seed`, and the library components are already in scope; never write `import`, and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
 Draw every value of a domain type through a view of its type, as `{@render Int(target)}` (see Views of types), and every position through a pointer (see Pointers); the markup around them arranges, labels, and explains. For a value used more than once or too long to read inline, use `{@const name = expression}` as the first child of the nearest component or block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`.
 
@@ -110,7 +110,7 @@ Each step inserts one key: it is copied into its box, the larger values slide ri
 
 - A step is a run of the code a label marks. Write the label around the code: `@name[…]` around a statement, statements in a row, or an expression, as `@place[values[j] = key;]` or `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`. A name is one word, without dots. The algorithm runs as if the marks were spaces. Each time the code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass, its test leading up to the pass.
 - A label inside another takes its name as a prefix: `@shift[…]` inside `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's body has labelled statements, every statement in it is inside one of them or contains one, so each step is one label's code and only loops' headers and tests run between steps; a statement left out is an error naming the labels beside it. A label on part of a statement, as `@test[…]`, asks nothing of the code around it. An algorithm with no labels has one step, its end, for a picture that does not move.
-- The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; `insert.*`, each run of a label inside `insert`; or an operation's name, each of its calls, so `if (Matches({ at: i, target })) break;` steps at each comparison with no label (see Operations). A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes the state or calls an operation, so the end of the algorithm is shown.
+- The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; or `insert.*`, each run of a label inside `insert`. A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes the state, so the end of the algorithm is shown.
 - A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
 - Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
@@ -210,53 +210,6 @@ if (
 
 The view receives plain arrays and objects, drawn by the views of their types: a record's view draws its fields through theirs (see Views of types).
 
-## Operations
-
-An operation names a step of the algorithm worth showing, such as a comparison or a swap, so the view can draw each time it happens. Define it in the domain block with its operands and their types, then its body, a function that takes the operands by name:
-
-```js
-const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
-const Swap = operation({ a: Index, b: Index }, ({ a, b }) => {
-  const moved = a.value;
-  a.value = b.value;
-  b.value = moved;
-});
-```
-
-A position's `.value` is the element it points at, read or written, in an operation's body and in the algorithm alike. A body follows the algorithm's subset, sees only its operands, may call other operations, and gives back a value with `return` (or, written without braces, its expression). The algorithm calls an operation with its operands as one object, as `Matches({ at: i, target })`; the operands take their types as a record's fields do, and a position keeps its collection. An operation is not a type of values: it cannot be a field's or element's type, and the input block cannot call it.
-
-When the domain declares operations, every step also records the calls, by operation, each with its operands: `event`, the calls since the step before, as `event.Matches`, and `history`, every call so far, as `history.Matches`. The view draws a call through a view of its operation, which reads its operands as a record's fields, and a pointer can take a call's position, as `{@render Here(event.Matches[0].at)}`; at a step with no such call it points nowhere. Linear search, showing what each step asks:
-
-```svelte
-<script lang="sverlin" domain>
-  const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
-  const Index = index(Values);
-  const Found = type('boolean');
-  const Matches = operation({ at: Index, target: Int }, ({ at, target }) => at.value === target);
-</script>
-
-<script lang="sverlin" input>
-  const values = Values([3, 8, 5, 2, 7]);
-  const target = Int(2);
-</script>
-
-<script lang="sverlin">
-  for (let i = Index(0); i < values.length; i++) {
-    if (Matches({ at: i, target })) break;
-  }
-</script>
-
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Asked(m: Matches)}<Node layout="row"><Node tags="label">is it</Node>{@render Int(m.target)}</Node>{/snippet}
-{#snippet Here(p: Index)}<Pointed tags="current" />{/snippet}
-
-<Node tags="title">Linear search</Node>
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>
-{#each event.Matches as m}{@render Matches(m)}{/each}
-{@render Here(event.Matches[0].at)}
-```
-
 ## Design
 
 The design space is every variable of a component's look, found in its markup:
@@ -344,7 +297,7 @@ Example, with domain, input, algorithm, and a script-free view:
 ## The subset
 
 - Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, except an operation's body, `new`, classes, `this`, `==`, string methods, other globals, the names `step`, `seed`, `event`, and `history`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
+- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library
@@ -359,7 +312,7 @@ Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 
 `<Listing />` shows a text of the algorithm beside the view, such as the code or pseudocode the participant knows or a textbook's, exactly as written, lighting what each step ran: the text of the step's latest event most strongly, and the rest of what ran since the step before more faintly. Place it in the markup like a node, outside views, as `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes no props or children, and each of its lines is a node participants can select.
 
-Write the text in a `<script lang="sverlin" listing="textbook">` block, with any name but none; a source may have several, and the variable `listing.language` chooses which one a presentation shows, the first in the starter, or `none`; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. Mark each part of the text that should light as a region with the algorithm's labels, written as they are there (see Steps): `@name[text]`, nested as finely as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside another taking its name as a prefix, so the names line up with the algorithm's. A `[` without a name, as in `A[i]`, is text, and the marks are not shown. A call of an operation lights the region named after the operation inside the region of the label around the call, as `@check[if @Matches[A[i] == target]]`. The code inside a labelled part lights it too; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every region must have a label, and a label without a region only marks steps; the context's listingMaps says what each region is mapped to and whether a step lights it.
+Write the text in a `<script lang="sverlin" listing="textbook">` block, with any name but none; a source may have several, and the variable `listing.language` chooses which one a presentation shows, the first in the starter, or `none`; a variant keeps it unless the participant asks for another. The lit text's fills are `listing.current.fill` and `listing.earlier.fill`. Mark each part of the text that should light as a region with the algorithm's labels, written as they are there (see Steps): `@name[text]`, nested as finely as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside another taking its name as a prefix, so the names line up with the algorithm's. A `[` without a name, as in `A[i]`, is text, and the marks are not shown. The code inside a labelled part lights it too; a region lights without the regions inside it that did not run, so once `j > 0` fails, `A[j] > key` stays dark. Every region must have a label, and a label without a region only marks steps; the context's listingMaps says what each region is mapped to and whether a step lights it.
 
 Insertion sort, beside a textbook's pseudocode:
 
