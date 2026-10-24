@@ -71,7 +71,7 @@ import {
   type DesignValue,
   type VariantRequest
 } from './design.server';
-import { hiddenAt, leftOutModel, leftOutSites, type LeftOutModel } from './left-out';
+import { hiddenAt, leftOutModel, leftOutSites, outsideNodes, type LeftOutModel } from './left-out';
 import { kindKey, type KindRole } from './library/node/design';
 import { forms } from './library/node/forms';
 import type { FrameSettings } from './library/node/props';
@@ -852,6 +852,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ({ name, start }) =>
             new InvalidSvelteSourceError(
               `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
+    const unhidden = outsideNodes(ast.html, openingReads);
+    if (unhidden.length)
+      throw InvalidSvelteSourceError.combine(
+        unhidden.map(
+          ({ name, start }) =>
+            new InvalidSvelteSourceError(
+              `The view reads ${asWritten(name)} itself outside any <Node>, but ${asWritten(name)} is not declared yet at step 0, the input as given, so there is nothing to show there. Put the read inside a <Node>, which hides until ${asWritten(name)} is declared.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )

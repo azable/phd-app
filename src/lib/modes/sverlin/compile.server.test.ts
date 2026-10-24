@@ -763,6 +763,13 @@ describe('scope', () => {
       'The view reads key itself, but key is out of scope at some steps'
     );
   });
+
+  it('takes a variable declared later read itself only inside a node, which hides at step 0', () => {
+    expect(() => prepareSvelteComponent(source('<Node>{#if done}Done{/if}</Node>'))).not.toThrow();
+    expect(() => prepareSvelteComponent(source('{#if done}<Node>Done</Node>{/if}'))).toThrow(
+      'The view reads done itself outside any <Node>'
+    );
+  });
 });
 
 describe('views', () => {

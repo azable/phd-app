@@ -129,6 +129,26 @@ export function leftOutModel(
   return model;
 }
 
+/** The reads among `reads` in no <Node>, which no node can hide where their variable is absent. */
+export function outsideNodes<Read extends { start: number }>(
+  markup: unknown,
+  reads: readonly Read[]
+): Read[] {
+  const spans: { start: number; end: number }[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as Part;
+    if (part.type === 'InlineComponent' && part.name === 'Node' && part.start !== undefined)
+      spans.push({ start: part.start, end: part.end ?? part.start });
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child);
+  };
+  walk(markup);
+  return reads.filter(
+    ({ start }) => !spans.some((span) => span.start <= start && start < span.end)
+  );
+}
+
 /**
  * The sites a presentation leaves out: nodes and renders. `views` gives each type rendered by name
  * the view the variant chose, `components` the snippets that are views, and `phases` the
