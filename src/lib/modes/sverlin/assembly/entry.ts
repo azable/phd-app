@@ -243,7 +243,7 @@ function mountStep(
       target: layer,
       props: {
         view: Main as Component<Record<string, unknown>>,
-        props: { ...state, step, seed: playback.__sverlinSeed ?? 1, ...extra },
+        props: { ...state, step: stepOf(step), seed: playback.__sverlinSeed ?? 1, ...extra },
         settings: frame,
         onsettled: () => settled(shown),
         onchanged: () => shown.changes++

@@ -46,7 +46,9 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{@render Cells()}`;
+{#snippet Count()}<Node>step {step}</Node>{/snippet}
+{@render Cells()}
+{@render Count()}`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.masters.write[0].state.values).toEqual([1, 1, 1]);
@@ -69,6 +71,16 @@ it.skipIf(!enabled)(
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
     expect(await shown()).toEqual(['1', '1', '1']);
+    // The view's step counts steps, whatever state of one is drawn.
+    const count = () =>
+      page.evaluate(() =>
+        document
+          .querySelector<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind="Count"]'
+          )
+          ?.innerText.trim()
+      );
+    expect(await count()).toBe('step 0');
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
     await page.waitForFunction(
       () =>
@@ -80,6 +92,7 @@ it.skipIf(!enabled)(
           .map((node) => node.innerText.trim())
           .join(' ') === '7 1 1'
     );
+    expect(await count()).toBe('step 1');
     // Stepping forward shows the next step's before first, then its after.
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 2 }, '*'));
     await page.waitForFunction(
