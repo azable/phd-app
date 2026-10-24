@@ -12,6 +12,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { eq } from 'drizzle-orm';
+import * as v from 'valibot';
 
 import { database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
@@ -19,7 +20,7 @@ import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { projectRepository } from '$lib/server/projects/repository';
 import { createProjectSkeleton } from '$lib/server/projects/service';
 import type { DesignValues } from '$lib/shared/presentations';
-import type { ProjectDocument } from '$lib/shared/projects/model';
+import { projectCommandSchema, type ProjectDocument } from '$lib/shared/projects/model';
 
 const folder = path.resolve('.demo');
 const inbox = path.join(folder, 'inbox');
@@ -80,21 +81,27 @@ async function saveWaiting(projectId: string): Promise<void> {
       sourcesFile,
       JSON.stringify({ ...sources, [name.replace(/\.svelte$/u, '')]: source })
     );
+    // Checked as the API checks a command, so an example the project could not load is refused.
+    const command = v.safeParse(projectCommandSchema, {
+      type: 'save',
+      operationId,
+      expectedHead: document.events.length,
+      artifactId: 'main',
+      source,
+      presentationCount: 1,
+      ...(summary ? { summary } : {}),
+      ...(variant ? { variant: JSON.parse(variant) as DesignValues } : {}),
+      ...(from ? { from } : { root: true })
+    });
+    if (!command.success) {
+      console.error(`The demo example ${name} was not saved: ${v.summarize(command.issues)}`);
+      continue;
+    }
     await projectOperationExecutor.accept({
       projectId,
       operationId,
       expectedHead: document.events.length,
-      command: {
-        type: 'save',
-        operationId,
-        expectedHead: document.events.length,
-        artifactId: 'main',
-        source,
-        presentationCount: 1,
-        ...(summary ? { summary } : {}),
-        ...(variant ? { variant: JSON.parse(variant) as DesignValues } : {}),
-        ...(from ? { from } : { root: true })
-      }
+      command: command.output
     });
     await finished(projectId, operationId, document.events.length);
   }
