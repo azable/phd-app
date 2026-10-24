@@ -320,7 +320,7 @@ describe('writes', () => {
       input,
       domain
     ).steps;
-    const [joined, left] = steps;
+    const [, joined, left] = steps;
     expect(joined.state.values).toEqual([3, 8, 5, 5]);
     expect(left.state.values).toEqual([8, 5, 5]);
     const ids = (step: (typeof steps)[number]) => step.identities!.ids;

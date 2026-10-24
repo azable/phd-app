@@ -70,8 +70,10 @@ describe('listings of the source’s own', () => {
       earlier: earlier.map(([start, end]) => text.slice(start, end))
     }));
     // [2, 1]: the 1 shifts once, then j reaches 0 and the comparison never runs.
-    expect(shown[0].current).toEqual(['A[j + 1] = key']);
-    expect(shown[0].earlier).toEqual(
+    // Step 0, the state before the first placing, lights nothing.
+    expect(shown[0]).toEqual({ current: [], earlier: [] });
+    expect(shown[1].current).toEqual(['A[j + 1] = key']);
+    expect(shown[1].earlier).toEqual(
       expect.arrayContaining(['j > 0 and A[j] > key', 'A[j + 1] = A[j]', 'j = j - 1'])
     );
   });

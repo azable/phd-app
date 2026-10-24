@@ -61,7 +61,8 @@ describe('positions', () => {
       'count'
     );
     // The loop's last test changes nothing, so the last count is the last step.
-    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3]]);
+    // The state before the first step, which changes merged, then each step.
+    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1], [1, 2], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 

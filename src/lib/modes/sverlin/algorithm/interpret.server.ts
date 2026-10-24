@@ -419,6 +419,20 @@ class Interpreter {
     this.#end(this.#root, this.#topLevel);
     if (last && JSON.stringify(this.#trace.at(-1)!.state) === JSON.stringify(last.state))
       this.#trace.pop();
+    // The page opens on the state before the first step where that step changes what was there
+    // already, so its change plays; a first step that only declares opens on its after.
+    const [first] = this.#trace;
+    const before = first?.before;
+    if (
+      before &&
+      Object.entries(before.state).some(
+        ([name, value]) => JSON.stringify(first.state[name]) !== JSON.stringify(value)
+      )
+    ) {
+      if ((first.moment ?? 0) <= 0)
+        for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
+      this.#trace.unshift({ moment: 0, ...before, before, gap: 0, events: [] });
+    }
     return this.#trace;
   }
 

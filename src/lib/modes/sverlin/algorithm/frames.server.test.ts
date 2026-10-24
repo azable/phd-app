@@ -40,7 +40,10 @@ describe('frames', () => {
   });
 
   it('step at each run of the code a label marks, from the state before it to the state after', () => {
-    const trace = steps(search, 'pass.count');
+    // The page opens on the state before the first count, as the count changes what was there.
+    const [opening, ...trace] = steps(search, 'pass.count');
+    expect(opening.state).toEqual(trace[0].before?.state);
+    expect(opening.events).toEqual([]);
     expect(
       trace.slice(0, 3).map(({ before, state }) => [before?.state.checked, state.checked])
     ).toEqual([
@@ -62,7 +65,8 @@ describe('frames', () => {
     expect(checked(steps(search))).toEqual([0, 1, 2, 3, 3]);
     expect(steps(search).at(-1)?.state.i).toBeUndefined();
     // Each count and each check.
-    expect(checked(steps(search, 'pass.*')).slice(0, 6)).toEqual([1, 1, 2, 2, 3, 3]);
+    // Each count and each check, after the state before the first count.
+    expect(checked(steps(search, 'pass.*')).slice(0, 7)).toEqual([0, 1, 1, 2, 2, 3, 3]);
   });
 
   it('step once at each pass of a labelled loop, its test leading up to the pass', () => {
@@ -76,6 +80,8 @@ describe('frames', () => {
     expect(
       steps(loop, 'loop').map(({ before, state }) => [before?.state.i, state.checked])
     ).toEqual([
+      // The state before the first pass, which changes checked.
+      [0, 0],
       [0, 1],
       [1, 2],
       [2, 3],
@@ -126,6 +132,16 @@ describe('frames', () => {
     expect(frames).toHaveLength(new Set([...moments(byCount), ...moments(byCheck)]).size);
     expect(frames.some(({ held }) => held.includes('checks'))).toBe(true);
     expect(frames.some(({ held }) => held.includes('counts'))).toBe(true);
+  });
+
+  it('open on the state before the first step only where it changes what was there', () => {
+    // The first step only declares, so the page opens on its after.
+    expect(checked(steps(search))[0]).toBe(0);
+    expect(steps(search)[0].before?.state).not.toHaveProperty('checked');
+    // A first step changing an input variable opens on the input before it.
+    const [opening, first] = steps('@bump[values[0] = target;]');
+    expect(opening.state.values).toEqual([3, 8, 5, 2]);
+    expect(first.state.values).toEqual([5, 8, 5, 2]);
   });
 
   it('reject a label whose code never runs', () => {

@@ -47,8 +47,10 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 <Node>{#each values as v}{@render Int(v)}{/each}</Node>`;
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.masters.write[0].before?.state.values).toEqual([3, 1, 1]);
-    expect(prepared.masters.write[0].state.values).toEqual([7, 1, 1]);
+    // Step 0 is the state before the first write's code, which changes values.
+    expect(prepared.masters.write[0].state.values).toEqual([3, 1, 1]);
+    expect(prepared.masters.write[1].before?.state.values).toEqual([3, 1, 1]);
+    expect(prepared.masters.write[1].state.values).toEqual([7, 1, 1]);
     const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'write' } });
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
@@ -65,9 +67,20 @@ it.skipIf(!enabled)(
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    expect(await shown()).toEqual(['7', '1', '1']);
-    // Stepping forward shows the next step's before first, then its after.
+    expect(await shown()).toEqual(['3', '1', '1']);
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
+    await page.waitForFunction(
+      () =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind="IntCell"]'
+          )
+        ]
+          .map((node) => node.innerText.trim())
+          .join(' ') === '7 1 1'
+    );
+    // Stepping forward shows the next step's before first, then its after.
+    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 2 }, '*'));
     await page.waitForFunction(
       () =>
         document.querySelectorAll('.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind]')

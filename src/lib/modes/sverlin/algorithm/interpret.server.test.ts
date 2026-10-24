@@ -173,8 +173,9 @@ describe('input and step selection', () => {
       '@reverse[values = Flip(values);] @flag[let swapped = Flag(true);]',
       input
     );
-    expect(trace[0].before?.state).toEqual({ values: [2, 1], label: 'pair' });
+    // The first step changes values, so the page opens on the input before it.
     expect(trace.map(({ state }) => state)).toEqual([
+      { values: [2, 1], label: 'pair' },
       { values: [1, 2], label: 'pair' },
       { values: [1, 2], label: 'pair', swapped: true }
     ]);
