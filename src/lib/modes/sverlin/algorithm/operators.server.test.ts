@@ -415,3 +415,40 @@ describe('structural operators', () => {
     );
   });
 });
+
+describe('applications kept for the view', () => {
+  it('keep a step’s own applications by operator, in order, named by the operator’s parameters', () => {
+    const [step] = run('@add[const total = Add(Add(Int(1), Int(2)), Int(3));]');
+    expect(step.applied).toEqual({
+      Add: [
+        { state: { a: 1, b: 2, value: 3 }, types: { a: 'Int', b: 'Int', value: 'Int' } },
+        { state: { a: 3, b: 3, value: 6 }, types: { a: 'Int', b: 'Int', value: 'Int' } }
+      ]
+    });
+  });
+
+  it('leave out the applications leading up to a step', () => {
+    // The loop's test leads up to each pass; only the pass's own Equal is the step's.
+    const steps = run(`
+      for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
+        if (Equal(values[i], target)) break;
+      }
+    `);
+    expect(steps[0].applied).toEqual({
+      Equal: [{ state: { a: 3, b: 5, value: false }, types: { a: 'Int', b: 'Int', value: 'Flag' } }]
+    });
+  });
+
+  it('copy a collection given or given back, so later writes leave it as it was', () => {
+    const [step] = run('@join[let more = Append(values, target); more[0] = Int(0);]');
+    expect(step.applied?.Append?.[0].state).toEqual({ c: [3, 8, 5], x: 5, value: [3, 8, 5, 5] });
+    expect(step.state.more).toEqual([0, 8, 5, 5]);
+    expect(step.applied?.Append?.[0].types).toMatchObject({ c: 'Values', 'c[0]': 'Int', x: 'Int' });
+  });
+
+  it('refuse an operand named value, which names the result', () => {
+    expect(() =>
+      interpretDomain(`${types} const Keep = binop((value: Int, b: Int) => Int(b));`)
+    ).toThrow("value names an application's result");
+  });
+});

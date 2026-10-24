@@ -13,6 +13,7 @@ import {
   interpretDomain,
   interpretInput,
   traceAlgorithm,
+  type Application,
   type BlockKind,
   type MasterStep,
   type TraceState,
@@ -25,14 +26,17 @@ import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
   noDomain,
+  operatorNames,
   typeNames,
-  type DomainRegistry
+  type DomainRegistry,
+  type RecordType
 } from './algorithm/structures.server';
 import {
   componentProbes,
   findComponents,
   probeMarkup,
   pointerCalls,
+  probeValues,
   readsOf,
   rootPlacements,
   scopedReadsOf,
@@ -159,6 +163,11 @@ export type PreparedComponent = {
   };
   /** Where the view places a <Listing />, the algorithm in each language, and what each step lights. */
   listings?: Record<string, LitListing>;
+  /**
+   * The operators the root renders by name, as {@render Greater()}, each with an application from
+   * some step, which stands in hidden where a step has none or several of them.
+   */
+  applied?: Record<string, Application>;
 };
 
 /** A listing's text and what each step lights in it, by frame rule. */
@@ -449,6 +458,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
       : noDomain;
     const { atoms } = domain;
+    // Views see an operator as a record of its operands and its result (see viewDomainOf), unless a
+    // view has its name, as a pointer view called Next, which a render of Next then draws.
+    const viewNamed = new Set(found.components.map(({ name }) => name));
+    const operators = new Set(operatorNames(domain).filter((name) => !viewNamed.has(name)));
+    const viewing = viewDomainOf(domain, operators);
     // Where a block declares a name, so a clash points at the declaration.
     const at = (name: string, ...candidates: (Block | undefined)[]) => {
       for (const block of candidates) {
@@ -489,7 +503,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const components = checkComponents(
       found.components,
       found.pointers,
-      domain,
+      viewing,
       stateNames,
       stateNames,
       source
@@ -503,7 +517,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `${ownName.name} is a view named after its type: name it after how it draws, as ${ownName.name}Cell, and {@render ${ownName.name}(…)} draws whichever view of ${ownName.name} the design chooses.`,
         { code: 'view_component', start: sourcePosition(source, ownName.start) }
       );
-    const rendered = renderedNames(ast.html).filter(({ name }) => definesType(domain, name));
+    const rendered = renderedNames(ast.html).filter(({ name }) => definesType(viewing, name));
+    const appliedRenders = operatorRendersOf(ast.html, operators);
+    const wrongRender = appliedRenders.find(({ argued, inView }) => argued || inView);
+    if (wrongRender)
+      throw new InvalidSvelteSourceError(
+        wrongRender.argued
+          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}()}, with nothing between the brackets, draws the one a step's own code makes.`
+          : `{@render ${wrongRender.name}()} draws the application of ${wrongRender.name} a step makes, which only the root knows: render it there, outside any view.`,
+        { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
+      );
+    const appliedNames = [...new Set(appliedRenders.map(({ name }) => name))];
     const undrawn = rendered.find(({ name }) => !views[name]?.length);
     if (undrawn)
       throw new InvalidSvelteSourceError(
@@ -547,6 +571,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     // Every state a presentation shows: each step's before and after, by every label.
     const everyStep = Object.values(masters).flatMap(phasesOf);
+    // An application of each operator the root renders, from any step, to stand in hidden; for one
+    // no step applies, as a branch this input never takes, its widest value, drawn hidden throughout.
+    const applied: Record<string, Application> = {};
+    const widest = probeValues(viewing, everyStep);
+    for (const name of appliedNames) {
+      const made = Object.values(masters)
+        .flat()
+        .find((step) => step.applied?.[name]?.length)?.applied?.[name][0];
+      const value = made ? undefined : (widest(name)?.widest[0] as TraceState | undefined);
+      applied[name] = made ?? { state: value ?? {}, types: typesOf(viewing, name, value) };
+    }
     const written = listingsFrom(source, traced, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
@@ -693,13 +728,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         new Set(stateNames),
         new Set([...viewNames].filter((name) => !pointerViews.has(name))),
         new Set(Object.keys(components)),
-        scoped
+        scoped,
+        operators
       )
     ]);
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
-        [...stateNames, ...Object.keys(chosen)],
+        [...stateNames, ...appliedNames.map(appliedKey), ...Object.keys(chosen)],
         chosen,
         pointerViews,
         pointers.calls,
@@ -711,7 +747,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       found.components,
       components,
       chosen,
-      domain,
+      viewing,
       everyStep
     );
     const rootMarkup = (ast.html?.children ?? []).filter(
@@ -722,7 +758,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const placements = Object.fromEntries(
       Object.entries(masters).map(([rule, steps]) => [
         rule,
-        rootPlacements(rootMarkup, stateNames, viewNames, domain, phasesOf(steps))
+        rootPlacements(rootMarkup, stateNames, viewNames, viewing, phasesOf(steps))
       ])
     );
     if (probeProblems.length)
@@ -757,7 +793,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         space: designSpace(kinds, chosen, listing, rules, ownListings),
         starter: starterVariant(kinds, chosen, listing, rules, ownListings)
       },
-      ...(listings ? { listings } : {})
+      ...(listings ? { listings } : {}),
+      ...(appliedNames.length ? { applied } : {})
     };
   } catch (cause) {
     const error =
@@ -843,11 +880,25 @@ export async function bundlePresentation(
   const phases = phasesOf(master);
   const states = phases.map((phase, index) => {
     const standIn = standInsFor(phases, index);
+    const ownApplied: TraceState = {};
+    const ownTypes: Record<string, string> = {};
+    // A step's after holds the one application of each operator rendered its own code made; where
+    // it made none or several, as at its before, one from another step stands in hidden.
+    for (const [name, sample] of Object.entries(prepared.applied ?? {})) {
+      const made = index % 2 === 1 ? phase.applied?.[name] : undefined;
+      const own = made?.length === 1;
+      const application = own ? made[0] : sample;
+      const key = appliedKey(name);
+      (own ? ownApplied : standIn.state)[key] = application.state;
+      for (const [path, type] of Object.entries(application.types))
+        (own ? ownTypes : standIn.types)[`${key}.${path}`] = type;
+    }
     return {
       ...standIn.state,
       ...phase.state,
+      ...ownApplied,
       ...views,
-      __types: { ...standIn.types, ...phase.types },
+      __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets },
       __absent: Object.keys(standIn.state),
       __identities: phase.identities?.ids ?? {},
@@ -1684,4 +1735,82 @@ function renderedNames(markup: unknown): { name: string; start: number }[] {
   };
   walk(markup);
   return names;
+}
+
+/** The prop holding an operator's application at a step, which no variable can be named. */
+function appliedKey(operator: string): string {
+  return `__applied_${operator}`;
+}
+
+/**
+ * The domain as views see it: each operator a record of its operands, named by its parameters, and
+ * its result as value, so a view of an application is a view of a record.
+ */
+function viewDomainOf(domain: DomainRegistry, viewed: ReadonlySet<string>): DomainRegistry {
+  const operators = Object.values(domain.operators ?? {}).filter(({ name }) => viewed.has(name));
+  if (!operators.length) return domain;
+  const records = operators.map(({ name, operands, parameters, result }): [string, RecordType] => [
+    name,
+    {
+      kind: 'record',
+      name,
+      fields: {
+        ...Object.fromEntries(parameters.map((parameter, index) => [parameter, operands[index]])),
+        value: result
+      }
+    }
+  ]);
+  return { ...domain, structures: { ...domain.structures, ...Object.fromEntries(records) } };
+}
+
+/** Each render of an operator by name: whether it is given a value, and whether it is in a view. */
+function operatorRendersOf(
+  markup: unknown,
+  operators: ReadonlySet<string>
+): { name: string; start: number; argued: boolean; inView: boolean }[] {
+  const found: { name: string; start: number; argued: boolean; inView: boolean }[] = [];
+  const walk = (node: unknown, inView: boolean): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView));
+    const part = node as {
+      type?: string;
+      start?: number;
+      expression?: { callee?: { name?: string }; arguments?: unknown[] };
+    };
+    const name = part.type === 'RenderTag' ? part.expression?.callee?.name : undefined;
+    if (name && operators.has(name))
+      found.push({
+        name,
+        start: part.start ?? 0,
+        argued: (part.expression?.arguments ?? []).length > 0,
+        inView
+      });
+    const within = inView || part.type === 'SnippetBlock';
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child, within);
+  };
+  walk(markup, false);
+  return found;
+}
+
+/** The types of a value's parts by path, as a step records them, from the type it has. */
+function typesOf(
+  domain: DomainRegistry,
+  type: string,
+  value: unknown,
+  path = ''
+): Record<string, string> {
+  const types: Record<string, string> = path ? { [path]: type } : {};
+  const structure = domain.structures[type];
+  const at = (part: string) => (path ? path + part : part.replace(/^\./u, ''));
+  if (structure?.kind === 'record' && value && typeof value === 'object')
+    for (const [field, fieldType] of Object.entries(structure.fields))
+      Object.assign(
+        types,
+        typesOf(domain, fieldType, (value as Record<string, unknown>)[field], at('.' + field))
+      );
+  if (structure?.kind === 'collection' && Array.isArray(value))
+    value.forEach((item, index) =>
+      Object.assign(types, typesOf(domain, structure.element, item, at('[' + index + ']')))
+    );
+  return types;
 }

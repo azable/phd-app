@@ -494,7 +494,12 @@ export function slotInsertions(
   views: ReadonlySet<string>,
   componentNames: ReadonlySet<string>,
   /** The state variables out of scope at some step, which a slot reading one names. */
-  scoped: ReadonlySet<string> = new Set()
+  scoped: ReadonlySet<string> = new Set(),
+  /**
+   * The operators: rendered by name with nothing between the brackets, one draws the application a
+   * step made, given as the prop __applied_Name, hidden where that step made none or several.
+   */
+  operators: ReadonlySet<string> = new Set()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -546,6 +551,19 @@ export function slotInsertions(
     if (part.type === 'RenderTag') {
       const call = part.expression as Part;
       const callee = call?.callee as Part | undefined;
+      if (
+        typeof callee?.name === 'string' &&
+        operators.has(callee.name) &&
+        !((call.arguments as Part[] | undefined) ?? []).length
+      ) {
+        const key = `__applied_${callee.name}`;
+        insertions.push(
+          { at: part.start ?? 0, text: `<SverlinSlot path="${key}" reads={["${key}"]}>` },
+          { at: (call.end ?? 1) - 1, text: key },
+          { at: part.end ?? 0, text: '</SverlinSlot>' }
+        );
+        return;
+      }
       if (typeof callee?.name === 'string' && views.has(callee.name)) {
         const [argument] = (call.arguments as Part[] | undefined) ?? [];
         // The state variables the value comes from, through an {#each} item too: it is drawn

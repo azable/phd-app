@@ -115,7 +115,15 @@ export type MasterStep = {
   events?: TraceEvent[];
   dropped?: number;
   counts?: EventCounts;
+  /** The operators the step's own code applied, by name, each application in order. */
+  applied?: Record<string, Application[]>;
 };
+
+/**
+ * An application of an operator, its operands named by the operator's parameters and its result as
+ * `value`, each copied when it was made, with the types of their parts by path.
+ */
+export type Application = { state: TraceState; types: TypeMap };
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
 export const algorithmLimits = {
@@ -332,6 +340,8 @@ class Interpreter {
   readonly #log = new EventLog();
   /** The label steps are by, and the code it marks. */
   readonly #frames: { label: string } & FrameUnits;
+  /** The applications the running step's own code has made, by operator. */
+  #applied: Record<string, Application[]> = {};
   /** The step whose code is running: its node, the state before it, and the events leading up. */
   #open: { node: AnyNode; before: StepSnapshot; gap: number } | undefined;
   /** The place each collection and record was last reached by, as values or edges[2]. */
@@ -1118,6 +1128,7 @@ class Interpreter {
       },
       gap: this.#log.pending
     };
+    this.#applied = {};
   }
 
   /** Close the step whose code has just run: the state after it, and the events since the last. */
@@ -1138,9 +1149,11 @@ class Interpreter {
       gap: Math.max(open.gap - (logged.dropped ?? 0), 0),
       ...(open.node === this.#root ? {} : { unit: this.#offset(open.node) }),
       ...after,
-      ...logged
+      ...logged,
+      ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {})
     });
     this.#open = undefined;
+    this.#applied = {};
   }
 
   /**
@@ -1689,6 +1702,16 @@ class Interpreter {
       value: result,
       operands: values.map((value) => single(value) ?? null)
     });
+    // An application in a step's own code is kept for the view, copied as a step's state is.
+    if (this.#open) {
+      const application: Application = { state: {}, types: {} };
+      const into = { types: application.types, targets: {}, placed: [] };
+      parameters.forEach((parameter, index) => {
+        application.state[parameter] = this.#snapshot(values[index], node, parameter, into);
+      });
+      application.state.value = this.#snapshot(result, node, 'value', into);
+      (this.#applied[name] ??= []).push(application);
+    }
     if (result !== null && typeof result === 'object' && !(result instanceof Atom))
       this.#computed.add(result);
     return result;

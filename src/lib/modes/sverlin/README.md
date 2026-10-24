@@ -272,6 +272,57 @@ Use `for (const v of values)` where a loop only reads the values and the view po
 - An operator giving a collection or record only rearranges its operands: each element or field it builds is an operand, a read of one or of its parts (`v[p]`, `e.to`), or a spread of one or of a slice of one (`...q`, `...q.slice(1)`), as `Queue([...q, x])` or `Edge({ from: e.to, to: e.from })`. A new element, computed or literal, is refused, as in `Values([...v.slice(0, p), Int(v[p] + 1), ...v.slice(p + 1)])`: compute it with a value operator and write it, `values[p] = Inc(values[p])`, or pass it in as an operand. A collection filled at run time is built in a loop: `for (const v of vertices) dist = Append(dist, unreached);`.
 - An operator is one primitive step, one a learner takes as a single action (compare, add, take the next position, append), never a loop or a library algorithm: a merge by `Values([...a, ...b].sort(…))` is refused, as `sort` is an algorithm, and merging is written out in the algorithm block. Its function is one expression of its operands, reading only them and `Math`, without braces, nested functions, other operators, methods outside the subset, or the state, and changing nothing, where JavaScript's operators and the collection methods work on typed values as described under Atomic types. It gives a typed value: wrap what it computes in a type, as `Flag(a > b)`, which is the operator's result type.
 
+## Views of what a step computed
+
+An operator is a type a view can take: `{#snippet Ask(g: Greater)}` is a view of an application of `Greater`, its operands named by the operator's parameters (`g.a`, `g.b`) and its result `g.value`, each drawn through its type's view. `{@render Greater()}` in the root, with nothing between the brackets, draws the application of `Greater` a step's own code made, the code its label marks, not what leads up to it, through the view `views.Greater` chooses. A step that made none, or several, draws nothing there, keeping its room, so a whole sweep (`frames` at `*`) shows no comparison while each comparison step shows its own. Bubble sort, the comparison labelled so that, at `sweep.pair.*`, each comparison and each swap is a step:
+
+```svelte
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Flag = type('boolean');
+  const Values = collection(Int);
+  const Index = index(Values);
+
+  // walking the collection
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+
+  // what the algorithm does
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([5, 1, 4, 2, 3]);
+</script>
+
+<script lang="sverlin">
+  for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
+    for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
+      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
+        const moved = values[Prev(i)];
+        values[Prev(i)] = values[i];
+        values[i] = moved;
+      }
+    }
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet FlagWord(value: Flag)}<Node tags="answer">{value ? 'yes' : 'no'}</Node>{/snippet}
+{#snippet Ask(g: Greater)}
+  <Node tags="caption">is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+{/snippet}
+
+<Node layout="column">
+  <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+  {@render Greater()}
+</Node>
+```
+
+At a comparison step the caption reads "is 5 > 1? yes"; at the swap after it, nothing. An operator is rendered only from the root, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, keeps its room hidden throughout. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is what a render of that name draws.
+
 ## Design
 
 The design space is every variable of a component's look, found in its markup:

@@ -224,6 +224,14 @@ export function interpretDomain(body: string): DomainRegistry {
     const parameters = arrow.params.map((parameter) => (parameter as { name: string }).name);
     if (new Set(parameters).size !== parameters.length)
       fail(arrow, `${name}'s operands need names of their own.`);
+    const named = arrow.params.find(
+      (parameter) => (parameter as { name: string }).name === 'value'
+    );
+    if (named)
+      fail(
+        named,
+        `value names an application's result, as a view of ${name} reads it; call the operand something else.`
+      );
     const operands = arrow.params.map((parameter) => {
       const written = parameterTypes.get(offset(parameter).end);
       if (!written)

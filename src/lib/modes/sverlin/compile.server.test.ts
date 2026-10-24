@@ -774,3 +774,97 @@ describe('view choices and prop values', () => {
     ).toThrow(`layout={step ? 'row' : 'stack'} can be "stack"`);
   });
 });
+
+describe('views of what a step computed', () => {
+  const bubble = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Flag = type('boolean');
+  const Values = collection(Int);
+  const Index = index(Values);
+
+  // walking the collection
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+
+  // what the algorithm does
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([5, 1, 4, 2, 3]);
+</script>
+
+<script lang="sverlin">
+  for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
+    for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
+      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
+        const moved = values[Prev(i)];
+        values[Prev(i)] = values[i];
+        values[i] = moved;
+      }
+    }
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet FlagWord(value: Flag)}<Node tags="answer">{value ? 'yes' : 'no'}</Node>{/snippet}
+{#snippet Ask(g: Greater)}
+  <Node tags="caption">is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+{/snippet}
+
+<Node tags="title">Bubble sort</Node>
+<Node layout="column">
+  <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+  {@render Greater()}
+</Node>`;
+
+  it('take an operator as a type, its views a choice, and keep an application to stand in', () => {
+    const prepared = prepareSvelteComponent(bubble);
+    expect(prepared.design.space['views.Greater']).toEqual(['Ask', 'none']);
+    expect(prepared.applied?.Greater).toEqual({
+      state: { a: 5, b: 1, value: true },
+      types: { a: 'Int', b: 'Int', value: 'Flag' }
+    });
+  });
+
+  it('give a step’s after its one application, and stand one in hidden elsewhere', async () => {
+    const prepared = prepareSvelteComponent(bubble);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: { frames: 'sweep.pair.*' }
+    });
+    expect(javascript).toContain('__applied_Greater');
+  });
+
+  it('reject an operator rendered with a value, or inside a view', () => {
+    expect(() =>
+      prepareSvelteComponent(bubble.replace('{@render Greater()}', '{@render Greater(values)}'))
+    ).toThrow('draws a value of Greater, an operator, whose values are its applications');
+    expect(() =>
+      prepareSvelteComponent(
+        bubble.replace(
+          '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
+          '{#snippet IntCell(value: Int)}<Node {value} />{@render Greater()}{/snippet}'
+        )
+      )
+    ).toThrow('which only the root knows: render it there');
+  });
+
+  it('stand in an operator no step applies with its widest value, hidden throughout', () => {
+    const prepared = prepareSvelteComponent(
+      bubble
+        .replace(
+          '  // what the algorithm does',
+          '  const Less = binop((a: Int, b: Int) => Flag(a < b));\n  // what the algorithm does'
+        )
+        .replace('{@render Greater()}', '{@render Greater()}{@render Less()}')
+        .replace(
+          '{#snippet FlagWord',
+          '{#snippet Tell(l: Less)}<Node>{@render Flag(l.value)}</Node>{/snippet}\n{#snippet FlagWord'
+        )
+    );
+    expect(Object.keys(prepared.applied?.Less?.state ?? {})).toEqual(['a', 'b', 'value']);
+    expect(prepared.applied?.Less?.types).toEqual({ a: 'Int', b: 'Int', value: 'Flag' });
+  });
+});
