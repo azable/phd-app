@@ -360,10 +360,58 @@ describe('writes', () => {
       'Bad computes a value and changes nothing.'
     );
     const changing = interpretDomain(
-      `${types}const Grow = unop((c: Values) => Values(c.push(1) ? c : c));`
+      `${types}const Grow = unop((c: Values) => Flag(c.push(1) > 0));`
     );
     expect(() => traceAlgorithm('const v = Grow(values);', input, changing)).toThrow(
       'An operator computes a new value and changes nothing: write the new collection, as [...c, x] or c.slice(1), not c.push().'
+    );
+  });
+});
+
+describe('structural operators', () => {
+  const shapes = `${types}
+    const Edge = record({ from: Index, to: Index });
+    const Edges = collection(Edge);
+  `;
+  const declares = (operator: string) => () => interpretDomain(`${shapes}${operator}`);
+
+  it('build a collection or record from their operands and the parts of them', () => {
+    for (const operator of [
+      'const Same = unop((v: Values) => Values(v));',
+      'const Pick = binop((v: Values, p: Index) => Values([v[p]]));',
+      'const Ends = unop((e: Edges) => Values([e[0].from]));',
+      'const Append = binop((v: Values, x: Int) => Values([...v, x]));',
+      'const Rest = unop((v: Values) => Values(v.slice(1)));',
+      'const Tail = unop((v: Values) => Values([...v.slice(1), v[0]]));',
+      'const Backwards = unop((v: Values) => Values(v.slice().reverse()));',
+      'const Empty = unop((v: Values) => Values([]));',
+      'const Flip = unop((e: Edge) => Edge({ from: e.to, to: e.from }));',
+      'const Join = binop((a: Index, b: Index) => Edge({ from: a, to: b }));'
+    ])
+      expect(declares(operator)).not.toThrow();
+  });
+
+  it('refuse a new element or field, computed or literal, naming the fix', () => {
+    expect(
+      declares(
+        'const Bump = binop((v: Values, p: Index) => Values([...v.slice(0, p), Int(v[p] + 1), ...v.slice(p + 1)]));'
+      )
+    ).toThrow(
+      'Bump builds a Values with a new element, Int(v[p] + 1); an operator building a collection only rearranges its operands. Compute the value with an operator and write it into its place, as values[p] = Inc(values[p]).'
+    );
+    expect(declares('const Zero = unop((v: Values) => Values([Int(0), ...v]));')).toThrow(
+      'Zero builds a Values with a new element, Int(0); an operator building a collection only rearranges its operands. Pass it in as an operand, as binop((v: Values, x: Int) => Values([x, ...v])).'
+    );
+    expect(declares('const Two = unop((v: Values) => Values([...v, 2]));')).toThrow(
+      'Two builds a Values with a new element, 2;'
+    );
+    expect(
+      declares('const Skip = unop((e: Edge) => Edge({ from: e.from, to: Index(e.to + 1) }));')
+    ).toThrow('Skip builds an Edge with a new field, Index(e.to + 1);');
+    expect(
+      declares('const Start = unop((e: Edge) => Edge({ from: Index(0), to: e.to }));')
+    ).toThrow(
+      'Start builds an Edge with a new field, Index(0); an operator building a record only rearranges its operands. Pass it in as an operand.'
     );
   });
 });

@@ -263,7 +263,11 @@ export function interpretDomain(body: string): DomainRegistry {
         fail(part, `${name} computes a value and changes nothing.`);
       if (part.type === 'Identifier') {
         const property =
-          parent?.type === 'MemberExpression' && parent.property === part && !parent.computed;
+          (parent?.type === 'MemberExpression' && parent.property === part && !parent.computed) ||
+          (parent?.type === 'Property' &&
+            parent.key === part &&
+            !parent.computed &&
+            !parent.shorthand);
         const typeCall =
           parent?.type === 'CallExpression' &&
           parent.callee === part &&
@@ -279,7 +283,101 @@ export function interpretDomain(body: string): DomainRegistry {
       for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child, part);
     };
     visit(body);
+    checkStructural(name, result as string, body as CallExpression, parameters, textOf);
     return { name, operands, parameters, result: result as string, body };
+  }
+
+  /**
+   * An operator giving a collection or record only rearranges its operands: each element or field
+   * of what it builds is an operand, a read of one or of its parts, or a spread of one or of a
+   * slice of one; the whole may be a slice of an operand or empty. A new element, computed or
+   * literal, is a value operator's to make, so every new value is an application of its own.
+   */
+  function checkStructural(
+    name: string,
+    result: string,
+    body: CallExpression,
+    parameters: readonly string[],
+    textOf: (node: AnyNode) => string
+  ): void {
+    const structure = structures[result];
+    if (structure?.kind !== 'collection' && structure?.kind !== 'record') return;
+    const what = structure.kind;
+    const article = /^[AEIOU]/u.test(result) ? 'an' : 'a';
+    /** An operand, or a read of one or of its parts. */
+    const part = (node: AnyNode): boolean =>
+      (node.type === 'Identifier' && parameters.includes(node.name)) ||
+      (node.type === 'MemberExpression' && part(node.object as AnyNode));
+    const method = (node: AnyNode, name: string): AnyNode | undefined =>
+      node.type === 'CallExpression' &&
+      node.callee.type === 'MemberExpression' &&
+      !node.callee.computed &&
+      node.callee.property.type === 'Identifier' &&
+      node.callee.property.name === name
+        ? (node.callee.object as AnyNode)
+        : undefined;
+    /** A slice of a part, or a slice of one reversed: its elements, rearranged. */
+    const slice = (node: AnyNode): boolean => {
+      const sliced = method(node, 'slice');
+      if (sliced) return part(sliced) || slice(sliced);
+      const reversed = method(node, 'reverse');
+      return Boolean(reversed && method(reversed, 'slice') && slice(reversed));
+    };
+    const literal = (node: AnyNode): boolean =>
+      node.type === 'Literal' ||
+      node.type === 'TemplateLiteral' ||
+      (node.type === 'UnaryExpression' && literal(node.argument as AnyNode)) ||
+      (node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.arguments.length > 0 &&
+        node.arguments.every((argument) => literal(argument as AnyNode)));
+    const refuse = (node: AnyNode, type: string | undefined): never => {
+      const shown = textOf(node);
+      const kind = what === 'collection' ? 'element' : 'field';
+      const lead = `${name} builds ${article} ${result} with a new ${kind}, ${shown}; an operator building a ${what} only rearranges its operands.`;
+      if (literal(node))
+        return fail(
+          node,
+          what === 'collection'
+            ? `${lead} Pass it in as an operand, as binop((v: ${result}, x: ${type ?? 'Int'}) => ${result}([x, ...v])).`
+            : `${lead} Pass it in as an operand.`
+        );
+      return fail(
+        node,
+        what === 'collection'
+          ? `${lead} Compute the value with an operator and write it into its place, as values[p] = Inc(values[p]).`
+          : `${lead} Compute the value with an operator, and pass it in or write it into its place.`
+      );
+    };
+    const [argument, ...rest] = body.arguments as AnyNode[];
+    if (!argument || rest.length) return;
+    if (what === 'collection') {
+      const element = (structure as { element: string }).element;
+      if (part(argument) || slice(argument)) return;
+      if (argument.type !== 'ArrayExpression') return refuse(argument, element);
+      for (const item of argument.elements) {
+        if (!item) continue;
+        if (item.type === 'SpreadElement') {
+          const spread = item.argument as AnyNode;
+          if (!part(spread) && !slice(spread)) refuse(spread, element);
+        } else if (!part(item as AnyNode)) refuse(item as AnyNode, element);
+      }
+      return;
+    }
+    const fields = (structure as { fields: Readonly<Record<string, string>> }).fields;
+    if (part(argument)) return;
+    if (argument.type !== 'ObjectExpression') return refuse(argument, undefined);
+    for (const property of argument.properties) {
+      if (property.type === 'SpreadElement') {
+        if (!part(property.argument as AnyNode)) refuse(property.argument as AnyNode, undefined);
+        continue;
+      }
+      const key =
+        property.key.type === 'Identifier'
+          ? property.key.name
+          : String((property.key as { value?: unknown }).value);
+      if (!part(property.value as AnyNode)) refuse(property.value as AnyNode, fields[key]);
+    }
   }
 
   function defineStructure(
