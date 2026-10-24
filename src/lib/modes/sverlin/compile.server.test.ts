@@ -826,7 +826,8 @@ describe('views of what a step computed', () => {
     expect(prepared.design.space['views.Greater']).toEqual(['Ask', 'none']);
     expect(prepared.applied?.Greater).toEqual({
       state: { a: 5, b: 1, value: true },
-      types: { a: 'Int', b: 'Int', value: 'Flag' }
+      types: { a: 'Int', b: 'Int', value: 'Flag' },
+      at: expect.any(Number)
     });
   });
 

@@ -39,6 +39,16 @@ describe('frames', () => {
     ]);
   });
 
+  it('offer the top level only where there are several labels at it', () => {
+    // One label at the top: its own option is the top level, and the first.
+    const one = traceAlgorithm(
+      'for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @pass{\n  @look[const v = values[i];]\n}',
+      input,
+      domain
+    ).options;
+    expect(one).toEqual(['pass', 'pass.*', 'pass.look']);
+  });
+
   it('step at each run of the code a label marks, from the state before it to the state after', () => {
     // The page opens on the state before the first count, as the count changes what was there.
     const [opening, ...trace] = steps(search, 'pass.count');

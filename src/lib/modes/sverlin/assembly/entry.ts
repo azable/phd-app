@@ -51,6 +51,8 @@ type StepState = Record<string, unknown> & {
   __frame: FrameSettings;
   /** The <Node> tags and renders it leaves out, by their line:column (see left-out.ts). */
   __leftOut?: string[];
+  /** The <Node> tags hidden at this step, keeping their room (see hiddenAt in left-out.ts). */
+  __hiddenSites?: string[];
 };
 
 const playback = window as typeof window & {
@@ -204,6 +206,7 @@ function mountStep(
     __design: design,
     __frame: frame,
     __leftOut: leftOut = [],
+    __hiddenSites: hiddenSites = [],
     ...state
   } = substituted ?? (states[step] as StepState);
   // Arrays and objects in the props, by path and the other way round, so a node can find the types
@@ -248,6 +251,7 @@ function mountStep(
       context: new Map<string, unknown>([
         ['sverlin:design', design],
         ['sverlin:left-out', new Set(leftOut)],
+        ['sverlin:hidden-sites', new Set(hiddenSites)],
         ['sverlin:layout-memory', memory],
         [
           'sverlin:listing',

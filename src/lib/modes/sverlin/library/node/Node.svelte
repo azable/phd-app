@@ -22,6 +22,8 @@
     itemEndsContext,
     provideItemEnds,
     hiddenContext,
+    hiddenSitesContext,
+    provideHidden,
     insideComponentBox,
     leftOutContext,
     keyedRef,
@@ -269,7 +271,12 @@
   // Where the collection this node is an item or element of hangs its end slots, if outside it.
   const overhang = overhangContext();
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
-  const hidden = hiddenContext();
+  // Hidden at this step with every render it holds, keeping its room, its children with it.
+  const hiddenHere = untrack(
+    () => __ref !== undefined && (hiddenSitesContext()?.has(__ref) ?? false)
+  );
+  if (hiddenHere) provideHidden(true);
+  const hidden = hiddenHere ? true : hiddenContext();
   // Left out of the presentation, as its kind's shown false leaves it out (see left-out.ts).
   const leftOut = untrack(() => __ref !== undefined && (leftOutContext()?.has(__ref) ?? false));
   // A node keeps a least size so that changing content never moves anything around it. A typed

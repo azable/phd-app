@@ -12,14 +12,25 @@ import {
   declaredNames,
   interpretDomain,
   interpretInput,
+  stepLabels,
   traceAlgorithm,
   type Application,
   type BlockKind,
+  type LabelRun,
   type MasterStep,
   type TraceState,
   type TypedState
 } from './algorithm/interpret.server';
+import { parseBlock } from './algorithm/parse.server';
 import { lightSteps, type Lit } from './listing/light.server';
+import {
+  isLabelKey,
+  isRunsKey,
+  labelSpan,
+  markLabels,
+  resolveLabel,
+  written as asWritten
+} from './label-values';
 import type { Listing } from './listing/listing';
 import { mappedListing, type RegionMap } from './listing/mapped.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
@@ -60,7 +71,7 @@ import {
   type DesignValue,
   type VariantRequest
 } from './design.server';
-import { leftOutModel, leftOutSites, type LeftOutModel } from './left-out';
+import { hiddenAt, leftOutModel, leftOutSites, type LeftOutModel } from './left-out';
 import { kindKey, type KindRole } from './library/node/design';
 import { forms } from './library/node/forms';
 import type { FrameSettings } from './library/node/props';
@@ -171,6 +182,15 @@ export type PreparedComponent = {
    * some step, which stands in hidden where a step has none or several of them.
    */
   applied?: Record<string, Application>;
+  /** Of those, the renders taking only applications made inside a label, as {@render Greater(@inner)}. */
+  appliedIn?: Record<string, { operator: string; start: number; end: number }>;
+  /**
+   * The labels the root reads, by key (see label-values.ts): a label's value at a step, or its
+   * values so far; each with its full name and a value from some step to stand in.
+   */
+  labelled?: Record<string, { label: string; sample?: LabelRun }>;
+  /** The operators whose applications so far the root draws, by key, some only inside a label. */
+  histories?: Record<string, { operator: string; start?: number; end?: number }>;
   /** The view's nodes and renders, and its views, for what each presentation leaves out. */
   leftOut?: { model: LeftOutModel; components: string[] };
 };
@@ -305,10 +325,11 @@ function framings(
   algorithm: Block,
   blocks: Partial<Record<BlockKind, Block>>,
   input: TypedState,
-  domain: DomainRegistry
+  domain: DomainRegistry,
+  keep: Parameters<typeof traceAlgorithm>[4] = {}
 ): Record<string, ReturnType<typeof traceAlgorithm>> {
   const trace = (label?: string) =>
-    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label));
+    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label, keep));
   // The rule it starts with; any problem here is the algorithm's or its labels'.
   const first = trace();
   const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.options[0]]: first };
@@ -404,7 +425,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
   }
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
-    const { svelteSource, blocks, listings: listingBlocks } = extractBlocks(source);
+    const extracted = extractBlocks(source);
+    const { blocks, listings: listingBlocks } = extracted;
+    // Labels the markup reads become identifiers of the same length (see label-values.ts).
+    const { source: svelteSource, references } = markLabels(extracted.svelteSource);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -528,11 +552,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     if (wrongRender)
       throw new InvalidSvelteSourceError(
         wrongRender.argued
-          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}()}, with nothing between the brackets, draws the one a step's own code makes.`
+          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}()}, with nothing between the brackets, draws the one a step's own code makes; {@render ${wrongRender.name}(@inner)} the one made inside @inner; and in {#each applied(${wrongRender.name}) as a}, {@render ${wrongRender.name}(a)} each so far.`
           : `{@render ${wrongRender.name}()} draws the application of ${wrongRender.name} a step makes, which only the root knows: render it there, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
-    const appliedNames = [...new Set(appliedRenders.map(({ name }) => name))];
+    // Each render of an applied operator by its key: the operator's name, and the label it is
+    // narrowed to (see appliedKey); one in {#each applied(…)} draws a value, as a type is rendered.
+    const appliedNames = [
+      ...new Set(
+        appliedRenders.flatMap(({ name, filter, fromHistory }) =>
+          fromHistory ? [] : [filter ? `${name}_${filter}` : name]
+        )
+      )
+    ];
     const undrawn = rendered.find(({ name }) => !views[name]?.length);
     if (undrawn)
       throw new InvalidSvelteSourceError(
@@ -567,7 +599,66 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
     const algorithm = blocks.algorithm;
-    const runs = framings(source, algorithm, blocks, input, domain);
+    // The labels the markup reads, each resolved to one of the algorithm's; their problems wait for
+    // the labels' own, which the first trace reports.
+    const algorithmLabels = interpretBlock(source, algorithm, (body) =>
+      stepLabels(parseBlock(body, 'algorithm', domain))
+    );
+    const filters = new Set(appliedRenders.flatMap(({ filter }) => (filter ? [filter] : [])));
+    const snippets = snippetRangesOf(ast.html);
+    const labelled: Record<string, { label: string; sample?: LabelRun }> = {};
+    const histories: Record<string, { operator: string; start?: number; end?: number }> = {};
+    const narrowed = new Map<string, { start: number; end: number }>();
+    const labelProblems: InvalidSvelteSourceError[] = [];
+    if (!algorithmLabels.problems.length)
+      for (const reference of references) {
+        const at = { code: 'view_label', start: sourcePosition(source, reference.start) };
+        const problem = (message: string) =>
+          labelProblems.push(new InvalidSvelteSourceError(message, at));
+        if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end)) {
+          problem(
+            `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in the root, which passes what a view draws, as {@render Int(@swap.a)}.`
+          );
+          continue;
+        }
+        if (reference.kind === 'applied' && !operators.has(reference.operator)) {
+          problem(
+            `applied(${reference.operator}) takes an operator the domain declares, as applied(Equal).`
+          );
+          continue;
+        }
+        if (reference.path === undefined) {
+          histories[reference.key] = { operator: (reference as { operator: string }).operator };
+          continue;
+        }
+        const filter = reference.kind === 'value' && filters.has(reference.key);
+        const found = resolveLabel(
+          reference.path,
+          algorithmLabels.labels,
+          reference.kind !== 'applied' && !filter
+        );
+        if ('problem' in found) {
+          problem(found.problem);
+          continue;
+        }
+        if (reference.kind === 'applied')
+          histories[reference.key] = {
+            operator: reference.operator,
+            ...labelSpan(found.label)
+          };
+        else if (filter) narrowed.set(reference.key, labelSpan(found.label));
+        else labelled[reference.key] = { label: found.label.full };
+      }
+    if (labelProblems.length) throw InvalidSvelteSourceError.combine(labelProblems);
+    const appliedIn: Record<string, { operator: string; start: number; end: number }> = {};
+    for (const { name, filter } of appliedRenders) {
+      const span = filter ? narrowed.get(filter) : undefined;
+      if (span) appliedIn[`${name}_${filter}`] = { operator: name, ...span };
+    }
+    const runs = framings(source, algorithm, blocks, input, domain, {
+      labels: new Set(Object.values(labelled).map(({ label }) => label)),
+      history: new Set(Object.values(histories).map(({ operator }) => operator))
+    });
     const primary = Object.keys(runs)[0];
     const traced = runs[primary];
     const master = traced.steps;
@@ -581,12 +672,26 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const applied: Record<string, Application> = {};
     const widest = probeValues(viewing, everyStep);
     for (const name of appliedNames) {
+      const operator = appliedIn[name]?.operator ?? name;
       const made = Object.values(masters)
         .flat()
-        .find((step) => step.applied?.[name]?.length)?.applied?.[name][0];
+        .flatMap((step) => step.applied?.[operator] ?? [])
+        .find((application) => within(application, appliedIn[name]));
       const value = made ? undefined : (widest(name)?.widest[0] as TraceState | undefined);
-      applied[name] = made ?? { state: value ?? {}, types: typesOf(viewing, name, value) };
+      applied[name] = made ?? {
+        state: value ?? {},
+        types: typesOf(viewing, operator, value)
+      };
     }
+    // A value of each label the root reads, from any step, to stand in hidden where a step gave
+    // none or several.
+    for (const entry of Object.values(labelled))
+      entry.sample = Object.values(masters)
+        .flat()
+        .flatMap((step) => [
+          ...(step.labelled?.[entry.label] ?? []),
+          ...(step.led?.labelled?.[entry.label] ?? [])
+        ])[0];
     const written = listingsFrom(source, traced, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
@@ -612,9 +717,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       : undefined;
     // Variables out of scope at some step, of any frame rule: what the view draws from one is
     // hidden there.
-    const scoped = new Set(
-      stateNames.filter((name) => everyStep.some(({ state }) => !(name in state)))
-    );
+    const scoped = new Set([
+      ...stateNames.filter((name) => everyStep.some(({ state }) => !(name in state))),
+      ...Object.keys(labelled).filter(isLabelKey)
+    ]);
+    // What the root reads besides the state: labels' values, their values so far, and operators'
+    // applications so far, each a prop of its key.
+    const viewState = new Set([...stateNames, ...Object.keys(labelled), ...Object.keys(histories)]);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
     const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
     // A pointer is a view with a <Pointed>, or a type whose views are pointers.
@@ -659,7 +768,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const pointers = pointerCalls(
       ast.html,
       svelteSource,
-      new Set(stateNames),
+      viewState,
       new Map(
         [...pointerViews].map((name) => {
           const type = components[name] ?? components[chosen[name]?.[0] ?? ''];
@@ -719,7 +828,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         scopedReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${name} itself, but ${name} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${name})}, which draw nothing where it is out of scope.`,
+              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -731,7 +840,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ...slotInsertions(
         ast.html,
         svelteSource,
-        new Set(stateNames),
+        viewState,
         new Set([...viewNames].filter((name) => !pointerViews.has(name))),
         new Set(Object.keys(components)),
         scoped,
@@ -743,7 +852,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
-        [...stateNames, ...appliedNames.map(appliedKey), ...Object.keys(chosen)],
+        [
+          ...stateNames,
+          ...appliedNames.map(appliedKey),
+          ...Object.keys(labelled),
+          ...Object.keys(histories),
+          ...Object.keys(chosen)
+        ],
         chosen,
         pointerViews,
         pointers.calls,
@@ -803,6 +918,9 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       },
       ...(listings ? { listings } : {}),
       ...(appliedNames.length ? { applied } : {}),
+      ...(Object.keys(appliedIn).length ? { appliedIn } : {}),
+      ...(Object.keys(labelled).length ? { labelled } : {}),
+      ...(Object.keys(histories).length ? { histories } : {}),
       leftOut: { model: leftOut, components: Object.keys(components) }
     };
   } catch (cause) {
@@ -895,7 +1013,13 @@ export async function bundlePresentation(
     // A step's after holds the one application of each operator rendered its own code made; where
     // it made none or several, as at its before, one from another step stands in hidden.
     for (const [name, sample] of Object.entries(prepared.applied ?? {})) {
-      const made = index % 2 === 1 ? phase.applied?.[name] : undefined;
+      const narrowed = prepared.appliedIn?.[name];
+      const made =
+        index % 2 === 1
+          ? phase.applied?.[narrowed?.operator ?? name]?.filter((application) =>
+              within(application, narrowed)
+            )
+          : undefined;
       const own = made?.length === 1;
       const application = own ? made[0] : sample;
       const key = appliedKey(name);
@@ -903,20 +1027,79 @@ export async function bundlePresentation(
       for (const [path, type] of Object.entries(application.types))
         (own ? ownTypes : standIn.types)[`${key}.${path}`] = type;
     }
+    // Each label the root reads: the value its expression gave in the step's own code, at its
+    // after, where it gave one; else one from another step stands in hidden. Each label's values
+    // so far, and each operator's applications so far, are lists, there at every step.
+    const ownTargets: Record<string, string> = {};
+    const step = Math.floor(index / 2);
+    const sofar = master.slice(0, step + 1);
+    const at = (path: string, key: string) => key + path.slice('value'.length);
+    for (const [key, { label, sample }] of Object.entries(prepared.labelled ?? {})) {
+      if (isRunsKey(key)) {
+        const list = sofar.flatMap((past, which) => [
+          ...(past.led?.labelled?.[label] ?? []),
+          ...(which < step || index % 2 === 1 || index === 0 ? (past.labelled?.[label] ?? []) : [])
+        ]);
+        ownApplied[key] = list.map((run) => run.state.value);
+        list.forEach((run, k) => {
+          for (const [path, type] of Object.entries(run.types))
+            ownTypes[at(path, `${key}[${k}]`)] = type;
+          for (const [path, target] of Object.entries(run.targets))
+            ownTargets[at(path, `${key}[${k}]`)] = target;
+        });
+        continue;
+      }
+      const given = index % 2 === 1 ? phase.labelled?.[label] : undefined;
+      const run = given?.length === 1 ? given[0] : sample;
+      if (!run) continue;
+      const own = given?.length === 1;
+      (own ? ownApplied : standIn.state)[key] = run.state.value;
+      for (const [path, type] of Object.entries(run.types))
+        (own ? ownTypes : standIn.types)[at(path, key)] = type;
+      for (const [path, target] of Object.entries(run.targets))
+        (own ? ownTargets : standIn.targets)[at(path, key)] = target;
+    }
+    for (const [key, history] of Object.entries(prepared.histories ?? {})) {
+      const span =
+        history.start === undefined ? undefined : { start: history.start, end: history.end ?? 0 };
+      const list = sofar.flatMap((past, which) =>
+        [
+          ...(past.led?.applied?.[history.operator] ?? []),
+          ...(which < step || index % 2 === 1 || index === 0
+            ? (past.applied?.[history.operator] ?? [])
+            : [])
+        ].filter((application) => within(application, span))
+      );
+      ownApplied[key] = list.map((application) => application.state);
+      list.forEach((application, k) => {
+        for (const [path, type] of Object.entries(application.types))
+          ownTypes[`${key}[${k}].${path}`] = type;
+      });
+    }
     return {
       ...standIn.state,
       ...phase.state,
       ...ownApplied,
       ...views,
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
-      __targets: { ...standIn.targets, ...phase.targets },
+      __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
       __identities: phase.identities?.ids ?? {},
       __copies: phase.identities?.copies ?? {},
       __refs: phase.identities?.refs ?? {},
       __frame: frame,
       __design: values,
-      __leftOut: [...leftOut.nodes, ...leftOut.renders]
+      __leftOut: [...leftOut.nodes, ...leftOut.renders],
+      __hiddenSites: prepared.leftOut
+        ? hiddenAt(
+            prepared.leftOut.model,
+            values,
+            views,
+            new Set(prepared.leftOut.components),
+            new Set(Object.keys(standIn.state)),
+            leftOut.nodes
+          )
+        : []
     };
   });
   const language = values['listing.language'];
@@ -958,12 +1141,28 @@ export function leftOutOf(
   phases: readonly MasterStep[]
 ): { nodes: string[]; renders: string[] } {
   if (!prepared.leftOut) return { nodes: [], renders: [] };
+  // A label's value is drawn where a step's own code gave it once, an application narrowed to a
+  // label where one was made there, and the lists of what has happened at every step.
+  const once = <T>(made: (phase: MasterStep) => T[] | undefined) =>
+    phases.some((phase, index) => index % 2 === 1 && made(phase)?.length === 1);
+  const drawn = (name: string): boolean | undefined => {
+    const label = prepared.labelled?.[name];
+    if (label) return isRunsKey(name) || once((phase) => phase.labelled?.[label.label]);
+    if (prepared.histories?.[name]) return true;
+    const narrowed = prepared.appliedIn?.[name.slice('__applied_'.length)];
+    if (narrowed)
+      return once((phase) =>
+        phase.applied?.[narrowed.operator]?.filter((application) => within(application, narrowed))
+      );
+    return undefined;
+  };
   return leftOutSites(
     prepared.leftOut.model,
     values,
     views,
     new Set(prepared.leftOut.components),
-    phases
+    phases,
+    drawn
   );
 }
 
@@ -1774,9 +1973,34 @@ function renderedNames(markup: unknown): { name: string; start: number }[] {
   return names;
 }
 
-/** The prop holding an operator's application at a step, which no variable can be named. */
+/**
+ * The prop holding an operator's application at a step, which no variable can be named: by the
+ * operator's name, and the label it is narrowed to, as Greater_ℓinner.
+ */
 function appliedKey(operator: string): string {
   return `__applied_${operator}`;
+}
+
+/** Whether an application was made inside a label's code, where a render is narrowed to one. */
+function within(application: Application, span?: { start: number; end: number }): boolean {
+  return (
+    span === undefined ||
+    (application.at !== undefined && span.start <= application.at && application.at < span.end)
+  );
+}
+
+/** Where each snippet is in the markup, where labels are not read. */
+function snippetRangesOf(markup: unknown): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as { type?: string; start?: number; end?: number };
+    if (part.type === 'SnippetBlock') ranges.push({ start: part.start ?? 0, end: part.end ?? 0 });
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child);
+  };
+  walk(markup);
+  return ranges;
 }
 
 /**
@@ -1800,32 +2024,66 @@ function viewDomainOf(domain: DomainRegistry, viewed: ReadonlySet<string>): Doma
   return { ...domain, structures: { ...domain.structures, ...Object.fromEntries(records) } };
 }
 
-/** Each render of an operator by name: whether it is given a value, and whether it is in a view. */
+/**
+ * Each render of an operator by name: the label it is narrowed to (as {@render Greater(@inner)}),
+ * whether it draws an item of {#each applied(…)}, whether it is otherwise given a value, and
+ * whether it is in a view.
+ */
 function operatorRendersOf(
   markup: unknown,
   operators: ReadonlySet<string>
-): { name: string; start: number; argued: boolean; inView: boolean }[] {
-  const found: { name: string; start: number; argued: boolean; inView: boolean }[] = [];
-  const walk = (node: unknown, inView: boolean): void => {
+): {
+  name: string;
+  start: number;
+  filter?: string;
+  fromHistory?: boolean;
+  argued: boolean;
+  inView: boolean;
+}[] {
+  const found: ReturnType<typeof operatorRendersOf> = [];
+  const walk = (node: unknown, inView: boolean, items: ReadonlySet<string>): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView));
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView, items));
     const part = node as {
       type?: string;
       start?: number;
-      expression?: { callee?: { name?: string }; arguments?: unknown[] };
+      expression?: {
+        type?: string;
+        name?: string;
+        callee?: { name?: string };
+        arguments?: unknown[];
+      };
+      context?: { type?: string; name?: string };
     };
     const name = part.type === 'RenderTag' ? part.expression?.callee?.name : undefined;
-    if (name && operators.has(name))
+    if (name && operators.has(name)) {
+      const given = (part.expression?.arguments ?? []) as { type?: string; name?: string }[];
+      const [only] = given.length === 1 && given[0].type === 'Identifier' ? given : [];
+      const filter = only && isLabelKey(only.name ?? '') ? only.name : undefined;
+      const fromHistory = Boolean(only && items.has(only.name ?? ''));
       found.push({
         name,
         start: part.start ?? 0,
-        argued: (part.expression?.arguments ?? []).length > 0,
+        ...(filter ? { filter } : {}),
+        ...(fromHistory ? { fromHistory } : {}),
+        argued: given.length > 0 && !filter && !fromHistory,
         inView
       });
+    }
+    // An {#each applied(…) as a} makes a an application, which an operator's render draws.
+    const item =
+      part.type === 'EachBlock' &&
+      part.expression?.type === 'Identifier' &&
+      (part.expression.name ?? '').startsWith('ǂ') &&
+      part.context?.type === 'Identifier'
+        ? part.context.name
+        : undefined;
+    const inner = item ? new Set([...items, item]) : items;
     const within = inView || part.type === 'SnippetBlock';
-    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child, within);
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent') walk(child, within, inner);
   };
-  walk(markup, false);
+  walk(markup, false, new Set());
   return found;
 }
 

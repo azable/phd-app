@@ -102,7 +102,7 @@ it.skipIf(!enabled)(
     expect(first?.text).toMatch(/^is 5 > 1 ?\? yes$/u);
     expect(first?.hidden).toBeUndefined();
     expect((await captionAt('sweep.pair.*', 1))?.hidden).toBe('true');
-    // At *, a step is a whole sweep, with several comparisons.
-    expect((await captionAt('*', 1))?.hidden).toBe('true');
+    // At sweep, a step is a whole sweep, with several comparisons.
+    expect((await captionAt('sweep', 1))?.hidden).toBe('true');
   }
 );

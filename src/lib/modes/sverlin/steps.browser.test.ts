@@ -146,7 +146,7 @@ it.skipIf(!enabled)(
       return drawn;
     };
     // Stepping over each pass whole, key is out of scope at every step: no key node, no "key".
-    const whole = await kinds({ frames: '*' });
+    const whole = await kinds({ frames: 'pass' });
     expect(whole.kinds).not.toContain('root[key]');
     expect(whole.text).not.toContain('key');
     expect(whole.kinds).toContain('root[title]');

@@ -2,7 +2,8 @@
  * What a presentation leaves out: drawn nowhere and keeping no room, as a node whose kind has
  * `shown: false` is. A render is left out where its type's view is none, the view it draws is left
  * out, or it reads a value out of scope at every step of the presentation; a node, where its kind
- * is not shown or it holds renders and every one is left out, its text with them. Decided once a
+ * is not shown; or, holding no node, one of its renders is left out (its renders and text are one
+ * statement); or, holding nodes, every part is, each node and each render in it. Decided once a
  * presentation's variant and frames are known, by the site of each <Node> and render (its
  * line:column, as tags record their kinds).
  */
@@ -118,18 +119,22 @@ export function leftOutSites(
   design: Readonly<Record<string, unknown>>,
   views: Readonly<Record<string, unknown>>,
   components: ReadonlySet<string>,
-  phases: readonly MasterStep[]
+  phases: readonly MasterStep[],
+  /** Whether what a render reads besides the state is drawn at some step, as a label's value. */
+  drawn: (name: string) => boolean | undefined = () => undefined
 ): { nodes: string[]; renders: string[] } {
   const present = new Map<string, boolean>();
   const isPresent = (name: string): boolean => {
     let known = present.get(name);
     if (known === undefined) {
       const operator = name.startsWith('__applied_') ? name.slice('__applied_'.length) : undefined;
-      known = phases.some((phase, index) =>
-        operator === undefined
-          ? name in phase.state
-          : index % 2 === 1 && phase.applied?.[operator]?.length === 1
-      );
+      known =
+        drawn(name) ??
+        phases.some((phase, index) =>
+          operator === undefined
+            ? name in phase.state
+            : index % 2 === 1 && phase.applied?.[operator]?.length === 1
+        );
       present.set(name, known);
     }
     return known;
@@ -196,24 +201,46 @@ export function leftOutSites(
       const node = model.nodes[site];
       if (design[`${node.kind}.shown`] === false) return true;
       if (node.own) return false;
-      const items = [
-        ...rendersIn(site, node.view).map(
-          ([child]) =>
-            () =>
-              renderLeftOut(child)
-        ),
-        ...nodesIn(site, node.view)
-          .filter(([child]) => holdsRenders(child))
-          .map(
-            ([child]) =>
-              () =>
-                nodeLeftOut(child)
-          )
-      ];
-      return items.length > 0 && items.every((gone) => gone());
+      const direct = rendersIn(site, node.view);
+      const children = nodesIn(site, node.view);
+      // Holding no node, its renders and text are one statement: one missing takes the node.
+      if (!children.length) return direct.some(([child]) => renderLeftOut(child));
+      // Holding nodes, each node and each render in it is a part: it goes only with every one, and
+      // a node holding no render, as a label, never goes.
+      return (
+        children.every(([child]) => holdsRenders(child)) &&
+        direct.every(([child]) => renderLeftOut(child)) &&
+        children.every(([child]) => nodeLeftOut(child))
+      );
     });
   return {
     nodes: Object.keys(model.nodes).filter(nodeLeftOut),
     renders: Object.keys(model.renders).filter(renderLeftOut)
   };
+}
+
+/**
+ * The nodes hidden at one step, keeping their room: those whose renders are each hidden there, as
+ * one reading a value `absent` at that step (a variable out of scope, a label or an operator that
+ * gave none there), or left out. By the same rule as left out: a node holding no node hides with one
+ * render missing, a node holding nodes only with all its parts; it takes every child with it.
+ * Nodes the presentation leaves out are not among them.
+ */
+export function hiddenAt(
+  model: LeftOutModel,
+  design: Readonly<Record<string, unknown>>,
+  views: Readonly<Record<string, unknown>>,
+  components: ReadonlySet<string>,
+  absent: ReadonlySet<string>,
+  leftOut: readonly string[]
+): string[] {
+  const gone = new Set(leftOut);
+  return leftOutSites(
+    model,
+    design,
+    views,
+    components,
+    [],
+    (name) => !absent.has(name)
+  ).nodes.filter((site) => !gone.has(site));
 }

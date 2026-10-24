@@ -120,10 +120,10 @@ Each step inserts one key: it is copied into its box, the larger values slide ri
 
 - A step is a run of the code a label marks. Write the label around the code: `@name[…]` around a statement, statements in a row, or an expression, as `@place[values[j] = key;]` or `while (@test[Before(Position(0), j) && Greater(values[Prev(j)], key)])`, or `@name{` on a block the code already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`. A name is one word, without dots. The algorithm runs as if the marks were spaces. Each time the code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass, its test leading up to the pass.
 - A label inside another takes its name as a prefix: `@shift[…]` inside `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's body has labelled statements, every statement in it is inside one of them or contains one, so each step is one label's code and only loops' headers and tests run between steps; a statement left out is an error naming the labels beside it. Declarations leading a block, before its first labelled statement, need no label: as `let min = i;` at the top of `@select{`, they run leading up to its first step. A label on part of a statement, as `@test[…]`, asks nothing of the code around it. An algorithm with no labels has one step, its end, for a picture that does not move.
-- The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; or `insert.*`, each run of a label inside `insert`. A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes a value still in scope, declares one, or applies an operator, so the end of the algorithm is shown; variables only leaving scope, as a loop's at its exit, make no step.
+- The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes, offered only where there are several (with one, its own name is the first option); a label's name, as `insert.shift`, each run of its code; or `insert.*`, each run of a label inside `insert`. A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes a value still in scope, declares one, or applies an operator, so the end of the algorithm is shown; variables only leaving scope, as a loop's at its exit, make no step.
 - The page opens on the state before the first step's code, as a step of its own, where that code changes what was there already, so its change plays: reversing a word at `pass.*` opens on the word as given. A first step that only declares, as `@start[let lo = Spot(0);]`, opens on its after.
 - A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
-- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. One out of scope at every step of a presentation, as `key` declared inside `@insert{` stepping at `*`, is left out instead, as `shown` false leaves a node out. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
+- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, is missing there (see `shown` in Design). Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` written when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
 - Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[Prev(j)]` or `Merge(merged, Append(merged, left[i]))`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
@@ -317,11 +317,36 @@ An operator is a type a view can take: `{#snippet Ask(g: Greater)}` is a view of
 
 <Node layout="column">
   <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-  {@render Greater()}
+  <Node>{@render Greater()}</Node>
 </Node>
 ```
 
-At a comparison step the caption reads "is 5 > 1? yes"; at the swap after it, nothing. An operator is rendered only from the root, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, keeps its room hidden throughout. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is what a render of that name draws.
+At a comparison step the caption reads "is 5 > 1? yes"; at the swap after it, nothing. An operator is rendered only from the root, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, is left out. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is what a render of that name draws. `{@render Greater(@pair)}` draws only the application made inside the code labelled `@pair`, where an operator is applied in more than one place.
+
+A label is read in the root as a value: `@name` is the value the expression labelled `name` gave in the step's own code, drawn at the step's after where it gave one, and missing where it gave none or several. So a view shows what a step's code held, though no variable holds it at the step's edges: the values a swap exchanged, or the key a whole insertion inserts, out of scope once its block ends.
+
+```js
+for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
+  const key = @key[values[i]];
+  // the shifting and placing, as above
+}
+```
+
+```svelte
+<Node tags="key">inserting {@render Int(@insert.key)}</Node>
+```
+
+A name may be written as its shortest ending that names one label (`@key` for `@insert.key`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root, never in a view.
+
+What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`, every value the label has given up to this step, and `applied(Equal)`, every application of `Equal` so far (`applied(Equal, @check)`, those made inside `@check`). A pointer for each of a label's positions marks the cells a search has checked, and an operator's view draws each application:
+
+```svelte
+{#snippet Checked(p: Index)}<Pointed tags="checked" />{/snippet}
+{#each runs(@check.at) as p}{@render Checked(p)}{/each}
+<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>
+```
+
+A `for … of` variable refers to the element it is at, as a reference does: with `const At = ref(Digits);` and a pointer view of `At`, `{@render At(v)}` marks the cell `v` is at in `for (const v of digits)`, with no index.
 
 ## Design
 
@@ -335,7 +360,7 @@ Tags are names, written as one name (`tags="label"`), names separated by spaces,
 
 Every kind of node has these props, each with a fixed set of options:
 
-- `shown`: whether its nodes are drawn at all; one left out takes its children with it and keeps no room, and so does a node holding renders of values every one of which is left out, its text with them, as `<Node tags="key">key {@render Int(key)}</Node>` goes when `views.Int` is `none`. A node holding no render, as a title, stays. A `<Pointed>` kind has none: to drop a pointer, leave out a node around its `<Pointed>`, give its type's view `none`, or render it in `{#if}`; the elements it would point at are then drawn as without it.
+- `shown`: whether its nodes are drawn at all; one left out takes its children with it and keeps no room. A render is missing where its view is `none` or not shown, or it draws a value absent: for a whole presentation it is left out, keeping no room, and at one step hidden, keeping its room so nothing moves. A node holding only text and renders is one statement: one missing takes the node, so `<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>` hides whole at a step that swaps nothing. A node holding other nodes has parts, each node and each render in it: in `<Node layout="row"><Node>lo {@render Index(lo)}</Node><Node>mid {@render Index(mid)}</Node></Node>` only the `mid` part hides while `mid` is out of scope, a column holding the array and `{@render Greater()}` loses only the caption, and such a node goes only with all its parts. Split a sentence into parts to keep what is there. A node holding no render, as a title, stays. A `<Pointed>` kind has none: to drop a pointer, leave out a node around its `<Pointed>`, give its type's view `none`, or render it in `{#if}`; the elements it would point at are then drawn as without it.
 - `fill` and `stroke`: `none` or a colour.
 - `color`: the text's colour.
 - `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels.

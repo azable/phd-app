@@ -117,13 +117,27 @@ export type MasterStep = {
   counts?: EventCounts;
   /** The operators the step's own code applied, by name, each application in order. */
   applied?: Record<string, Application[]>;
+  /** The values each labelled expression gave in the step's own code, by the label's full name. */
+  labelled?: Record<string, LabelRun[]>;
+  /** The applications and labelled values of the code leading up to the step, likewise. */
+  led?: { applied?: Record<string, Application[]>; labelled?: Record<string, LabelRun[]> };
 };
 
 /**
  * An application of an operator, its operands named by the operator's parameters and its result as
  * `value`, each copied when it was made, with the types of their parts by path.
  */
-export type Application = { state: TraceState; types: TypeMap };
+export type Application = { state: TraceState; types: TypeMap; at?: number };
+
+/**
+ * A value a labelled expression gave, copied when it was given, with the types of its parts and the
+ * collection each position in it points into, by path from `value`.
+ */
+export type LabelRun = {
+  state: { value: TraceValue };
+  types: TypeMap;
+  targets: Record<string, string>;
+};
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
 export const algorithmLimits = {
@@ -188,7 +202,8 @@ export function spanKey({ start, end }: Span): string {
 export type FrameUnits = { nodes: ReadonlySet<AnyNode>; ranges: ReadonlyMap<AnyNode, AnyNode> };
 
 /**
- * What a source can step by (see labels.server.ts): `*`, at each run of a label at the top, then
+ * What a source can step by (see labels.server.ts): `*`, at each run of a label at the top, where
+ * there are several, then
  * each label in the order written, at each run of its code, followed by `x.*`, at each run of a
  * label inside it, where it has any. Also its labels, and the problems with them.
  */
@@ -203,8 +218,9 @@ export function stepLabels(
   const { root, markers, code } = parsed;
   const read = readLabels(root, markers, code);
   const { labels } = read;
+  // `*` steps at each label at the top, so it is offered only where there are several.
   const options = [
-    ...(labels.length ? ['*'] : []),
+    ...(labels.filter(({ parent }) => !parent).length > 1 ? ['*'] : []),
     ...labels.flatMap(({ full, children }) => (children.length ? [full, `${full}.*`] : [full]))
   ];
   const units = (frames: string): FrameUnits => {
@@ -234,7 +250,12 @@ export function traceAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain,
-  frames?: string
+  frames?: string,
+  /**
+   * What views draw beyond the state: the labels whose values are kept, by full name, and the
+   * operators whose applications leading up to a step are kept too, for what has happened.
+   */
+  keep: { labels?: ReadonlySet<string>; history?: ReadonlySet<string> } = {}
 ): {
   steps: MasterStep[];
   root: BlockStatement;
@@ -248,11 +269,18 @@ export function traceAlgorithm(
   const [problem] = labelled.problems;
   if (problem) throw new AlgorithmError(problem.message, problem.at);
   const rule = frames ?? labelled.options[0];
+  // The values each labelled expression gives are kept, for views drawing them (labels as values).
+  const captured = new Map<AnyNode, string[]>();
+  for (const { full, nodes, statement } of labelled.labels)
+    if (!statement && nodes.length === 1 && keep.labels?.has(full))
+      captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
   const interpreter = new Interpreter(root, offset, {
     kind: 'algorithm',
     initial: input,
     domain,
     code,
+    captured,
+    history: keep.history,
     frames: {
       label: rule ?? '',
       ...(rule === undefined ? { nodes: new Set(), ranges: new Map() } : labelled.units(rule))
@@ -272,12 +300,12 @@ export function traceAlgorithm(
 
 type ObjectValue = { [key: string]: Value };
 type Value = undefined | null | boolean | number | string | Atom | Value[] | ObjectValue;
-/** A variable: its value, and in the input and algorithm the type it was made with. */
 /**
  * A variable: its value, and in the input and algorithm the type it was made with; a position also
- * names the collection it points into.
+ * names the collection it points into; a `for … of` variable, the collection type it walks, whose
+ * element it refers to as a reference would.
  */
-type Binding = { value: Value; constant: boolean; type?: string; target?: string };
+type Binding = { value: Value; constant: boolean; type?: string; target?: string; of?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
@@ -342,6 +370,15 @@ class Interpreter {
   readonly #frames: { label: string } & FrameUnits;
   /** The applications the running step's own code has made, by operator. */
   #applied: Record<string, Application[]> = {};
+  /** The values the running step's own code gave each labelled expression, by full name. */
+  #labelled: Record<string, LabelRun[]> = {};
+  /** The applications and labelled values since the last step, leading up to the next. */
+  #ledApplied: Record<string, Application[]> = {};
+  #ledLabelled: Record<string, LabelRun[]> = {};
+  /** Each labelled expression's node, with the full names of the labels on it. */
+  readonly #captured: ReadonlyMap<AnyNode, readonly string[]>;
+  /** The operators whose applications leading up to a step are kept, for what has happened. */
+  readonly #history: ReadonlySet<string>;
   /** The step whose code is running: its node, the state before it, and the events leading up. */
   #open: { node: AnyNode; before: StepSnapshot; gap: number } | undefined;
   /** The place each collection and record was last reached by, as values or edges[2]. */
@@ -359,9 +396,13 @@ class Interpreter {
       domain?: DomainRegistry;
       frames?: { label: string } & FrameUnits;
       code?: string;
+      captured?: ReadonlyMap<AnyNode, readonly string[]>;
+      history?: ReadonlySet<string>;
     }
   ) {
     this.#root = root;
+    this.#captured = options.captured ?? new Map();
+    this.#history = options.history ?? new Set();
     this.#frames = options.frames ?? { label: '', nodes: new Set(), ranges: new Map() };
     this.#offset = offset;
     this.#kind = options.kind;
@@ -538,6 +579,17 @@ class Interpreter {
           return index >= 0 ? [`${collection}[${index}]`] : [];
         })[0];
         placed.push([name, binding.value as object, 'ref', element]);
+      } else if (binding.of && binding.value !== null && typeof binding.value === 'object') {
+        // A for … of variable refers to the element it is at, as a reference does, beside being
+        // a variable holding its value, so a pointer of a reference type can point at that cell.
+        const element = inScope.flatMap(([collection, { value }]) => {
+          const index =
+            Array.isArray(value) && this.#shapes.get(value)?.name === binding.of
+              ? value.indexOf(binding.value)
+              : -1;
+          return index >= 0 ? [`${collection}[${index}]`] : [];
+        })[0];
+        if (element) placed.push([name, binding.value as object, 'ref', element]);
       }
     }
     if (this.#frame !== this.#topLevel)
@@ -1047,7 +1099,8 @@ class Interpreter {
           loopScope.bindings.set(name, {
             value: items[index],
             constant: declaration.kind === 'const',
-            ...(element ? { type: element } : {})
+            ...(element ? { type: element } : {}),
+            ...(this.#shapes.get(items) ? { of: this.#shapes.get(items)!.name } : {})
           });
           this.#placed(items[index], place && `${place}[${index}]`);
           this.#access('write', node.left, name, items[index]);
@@ -1138,6 +1191,7 @@ class Interpreter {
       gap: this.#log.pending
     };
     this.#applied = {};
+    this.#labelled = {};
   }
 
   /** Close the step whose code has just run: the state after it, and the events since the last. */
@@ -1159,10 +1213,37 @@ class Interpreter {
       ...(open.node === this.#root ? {} : { unit: this.#offset(open.node) }),
       ...after,
       ...logged,
-      ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {})
+      ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {}),
+      ...(Object.keys(this.#labelled).length ? { labelled: this.#labelled } : {}),
+      ...(Object.keys(this.#ledApplied).length || Object.keys(this.#ledLabelled).length
+        ? {
+            led: {
+              ...(Object.keys(this.#ledApplied).length ? { applied: this.#ledApplied } : {}),
+              ...(Object.keys(this.#ledLabelled).length ? { labelled: this.#ledLabelled } : {})
+            }
+          }
+        : {})
     });
     this.#open = undefined;
     this.#applied = {};
+    this.#labelled = {};
+    this.#ledApplied = {};
+    this.#ledLabelled = {};
+  }
+
+  /** Keep the value a labelled expression gave, in the running step's own code or leading up. */
+  #capture(node: AnyNode, value: Value): void {
+    const names = this.#captured.get(node);
+    if (!names) return;
+    for (const name of names) {
+      const run: LabelRun = { state: { value: null }, types: {}, targets: {} };
+      run.state.value = this.#snapshot(value, node, 'value', {
+        types: run.types,
+        targets: run.targets,
+        placed: []
+      });
+      ((this.#open ? this.#labelled : this.#ledLabelled)[name] ??= []).push(run);
+    }
   }
 
   /**
@@ -1218,9 +1299,14 @@ class Interpreter {
 
   /** An expression, as a step of its own where the label steps are by marks it. */
   #expression(node: Expression | SpreadElement, scope: Scope): Value {
-    if (this.#open || !this.#frames.nodes.has(node)) return this.#evaluate(node, scope);
+    if (this.#open || !this.#frames.nodes.has(node)) {
+      const value = this.#evaluate(node, scope);
+      this.#capture(node, value);
+      return value;
+    }
     this.#begin(node, scope);
     const value = this.#evaluate(node, scope);
+    this.#capture(node, value);
     this.#end(node, scope);
     return value;
   }
@@ -1712,14 +1798,15 @@ class Interpreter {
       operands: values.map((value) => single(value) ?? null)
     });
     // An application in a step's own code is kept for the view, copied as a step's state is.
-    if (this.#open) {
-      const application: Application = { state: {}, types: {} };
+    // Leading up to a step, it is kept where a view draws what has happened so far.
+    if (this.#open || this.#history.has(name)) {
+      const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
       const into = { types: application.types, targets: {}, placed: [] };
       parameters.forEach((parameter, index) => {
         application.state[parameter] = this.#snapshot(values[index], node, parameter, into);
       });
       application.state.value = this.#snapshot(result, node, 'value', into);
-      (this.#applied[name] ??= []).push(application);
+      ((this.#open ? this.#applied : this.#ledApplied)[name] ??= []).push(application);
     }
     if (result !== null && typeof result === 'object' && !(result instanceof Atom))
       this.#computed.add(result);

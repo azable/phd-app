@@ -458,6 +458,18 @@ export function pointerCalls(
       }
       return;
     }
+    // A pointer at each position a label has given so far, as {#each runs(@check.at) as p}
+    // {@render Checked(p)}{/each}, written {#each ϟcheckˑat as p} by then (see label-values.ts).
+    const listed = part.type === 'EachBlock' && where === 'top' ? listPointer(part) : undefined;
+    if (listed) {
+      const pointer = pointers.get(listed.view);
+      calls.push(
+        `{ view: () => ${listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+      );
+      const start = part.start ?? 0;
+      removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
+      return;
+    }
     if (part.type === 'IfBlock' && where === 'top') {
       const test = `(${text(part.expression as Part)})`;
       visit(part.children, where, [...conditions, test]);
@@ -476,6 +488,31 @@ export function pointerCalls(
           : where;
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions);
+  };
+  /** An {#each} over a label's values so far whose only content is a pointer at each. */
+  const listPointer = (each: Part): { view: string; list: string } | undefined => {
+    const list = each.expression as Part | undefined;
+    const item = each.context as Part | undefined;
+    if (list?.type !== 'Identifier' || !list.name?.startsWith('ϟ') || item?.type !== 'Identifier')
+      return undefined;
+    const content =
+      ((each.body as Part | undefined)?.nodes as Part[] | undefined) ??
+      (each.children as Part[] | undefined) ??
+      [];
+    const parts = content.filter(
+      (child) => !(child.type === 'Text' && !String(child.data ?? '').trim())
+    );
+    const [only] = parts;
+    const call = only?.type === 'RenderTag' ? (only.expression as Part) : undefined;
+    const view = (call?.callee as Part | undefined)?.name;
+    const [argument] = (call?.arguments as Part[] | undefined) ?? [];
+    return parts.length === 1 &&
+      typeof view === 'string' &&
+      pointers.has(view) &&
+      argument?.type === 'Identifier' &&
+      argument.name === item.name
+      ? { view, list: list.name }
+      : undefined;
   };
   visit(markup, 'top');
   return { removals, calls, problems };
@@ -554,19 +591,35 @@ export function slotInsertions(
     if (part.type === 'RenderTag') {
       const call = part.expression as Part;
       const callee = call?.callee as Part | undefined;
+      const given = (call?.arguments as Part[] | undefined) ?? [];
+      // Narrowed to a label, as {@render Greater(@inner)}, written Greater(ℓinner) by then (see
+      // label-values.ts): the application made inside that label's code.
+      const narrowed =
+        given.length === 1 &&
+        given[0].type === 'Identifier' &&
+        typeof given[0].name === 'string' &&
+        given[0].name.startsWith('ℓ')
+          ? given[0]
+          : undefined;
       if (
         typeof callee?.name === 'string' &&
         operators.has(callee.name) &&
-        !((call.arguments as Part[] | undefined) ?? []).length
+        (!given.length || narrowed)
       ) {
-        const key = `__applied_${callee.name}`;
+        const key = `__applied_${callee.name}${narrowed ? `_${narrowed.name}` : ''}`;
         rendered.set(part.start ?? 0, [key]);
         insertions.push(
           {
             at: part.start ?? 0,
             text: `<SverlinSlot path="${key}" reads={["${key}"]} site="${siteOf(source, part.start ?? 0)}">`
           },
-          { at: (call.end ?? 1) - 1, text: key },
+          narrowed
+            ? {
+                at: narrowed.start ?? 0,
+                text: key,
+                remove: (narrowed.end ?? 0) - (narrowed.start ?? 0)
+              }
+            : { at: (call.end ?? 1) - 1, text: key },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );
         return;

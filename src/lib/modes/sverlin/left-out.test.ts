@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { leftOutOf, phasesOf, prepareSvelteComponent } from './compile.server';
-import { siteOf } from './left-out';
+import { hiddenAt, siteOf } from './left-out';
 
 const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -38,18 +38,17 @@ const left = (frames: string, values: Record<string, unknown> = {}) => {
 };
 
 describe('left out', () => {
-  it('leaves out a render of a value out of scope at every step, and a node holding only it', () => {
-    // Stepping over the whole pass, v is out of scope before it and after it.
-    expect(left('*')).toEqual({
-      nodes: [site('<Node tags="picked">')],
+  it('leaves out a render of a value out of scope at every step, and a node whose own render it is', () => {
+    // Stepping over the whole pass, v is out of scope before it and after it. A node's own renders
+    // and text are one statement, so "v and values[0]" goes too.
+    expect(left('pass')).toEqual({
+      nodes: [site('<Node tags="picked">'), site('<Node tags="both">')],
       renders: [site('{@render Int(v)}</Node>'), site('{@render Int(v)} and')]
     });
   });
 
-  it('keeps a node with any render still drawn, and a node holding no render', () => {
-    const { nodes } = left('*');
-    expect(nodes).not.toContain(site('<Node tags="both">'));
-    expect(nodes).not.toContain(site('<Node tags="title">'));
+  it('keeps a node holding no render', () => {
+    expect(left('pass').nodes).not.toContain(site('<Node tags="title">'));
   });
 
   it('hides, rather than leaves out, a value out of scope at only some steps', () => {
@@ -78,5 +77,69 @@ describe('left out', () => {
       expect.arrayContaining([...expected.nodes, site('<Node {value} />')])
     );
     expect(notShown.nodes).not.toContain(site('<Node tags="title">'));
+  });
+
+  it('hide at a step a node one of whose own renders is hidden, and a row only with all its parts', () => {
+    const nested = `${source.replace(
+      '<Node tags="picked">picked {@render Int(v)}</Node>',
+      '<Node tags="outer"><Node tags="picked">picked {@render Int(v)}</Node></Node>' +
+        '<Node tags="row"><Node tags="part">v {@render Int(v)}</Node><Node tags="first">first {@render Int(values[0])}</Node></Node>'
+    )}`;
+    const model = prepareSvelteComponent(nested).leftOut!.model;
+    const at = (text: string) => siteOf(nested, nested.indexOf(text));
+    const hidden = (absent: string[]) =>
+      hiddenAt(
+        model,
+        prepared.design.starter,
+        { Int: 'IntCell' },
+        new Set(['IntCell']),
+        new Set(absent),
+        []
+      );
+    // v out of scope here: its node hides, and the node around it, all of whose parts are gone; "v
+    // and values[0]" is one statement and hides whole; in the row only the part drawing v hides.
+    expect([...hidden(['v'])].sort()).toEqual(
+      [
+        at('<Node tags="outer">'),
+        at('<Node tags="picked">'),
+        at('<Node tags="part">'),
+        at('<Node tags="both">')
+      ].sort()
+    );
+    expect(hidden(['v'])).not.toContain(at('<Node tags="row">'));
+    expect(hidden(['v'])).not.toContain(at('<Node tags="first">'));
+    expect(hidden([])).toEqual([]);
+  });
+
+  it('take each render in a node holding nodes as a part, a column losing only its caption', () => {
+    const shaped = source.replace(
+      '<Node tags="picked">picked {@render Int(v)}</Node>',
+      '<Node tags="column"><Node tags="array">{#each values as x}{@render Int(x)}{/each}</Node>{@render Int(v)}</Node>' +
+        // Accepted: a sentence with a node in it is parts too, so only its loose render goes.
+        '<Node tags="mixed">picked {@render Int(v)} <Node tags="inner">first {@render Int(values[0])}</Node></Node>'
+    );
+    const shapedPrepared = prepareSvelteComponent(shaped);
+    const at = (text: string) => siteOf(shaped, shaped.indexOf(text));
+    const hidden = hiddenAt(
+      shapedPrepared.leftOut!.model,
+      shapedPrepared.design.starter,
+      { Int: 'IntCell' },
+      new Set(['IntCell']),
+      new Set(['v']),
+      []
+    );
+    expect(hidden).not.toContain(at('<Node tags="column">'));
+    expect(hidden).not.toContain(at('<Node tags="mixed">'));
+    // Per presentation, stepping over the whole pass, the same: neither is left out.
+    const design = shapedPrepared.design.starter;
+    const left = leftOutOf(
+      shapedPrepared,
+      design,
+      { Int: design['views.Int'] },
+      phasesOf(shapedPrepared.masters.pass)
+    );
+    expect(left.nodes).not.toContain(at('<Node tags="column">'));
+    expect(left.nodes).not.toContain(at('<Node tags="mixed">'));
+    expect(left.renders).toContain(at('{@render Int(v)}</Node>'));
   });
 });

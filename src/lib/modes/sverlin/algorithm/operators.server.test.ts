@@ -421,8 +421,8 @@ describe('applications kept for the view', () => {
     const [step] = run('@add[const total = Add(Add(Int(1), Int(2)), Int(3));]');
     expect(step.applied).toEqual({
       Add: [
-        { state: { a: 1, b: 2, value: 3 }, types: { a: 'Int', b: 'Int', value: 'Int' } },
-        { state: { a: 3, b: 3, value: 6 }, types: { a: 'Int', b: 'Int', value: 'Int' } }
+        { state: { a: 1, b: 2, value: 3 }, types: { a: 'Int', b: 'Int', value: 'Int' }, at: 23 },
+        { state: { a: 3, b: 3, value: 6 }, types: { a: 'Int', b: 'Int', value: 'Int' }, at: 19 }
       ]
     });
   });
@@ -435,7 +435,13 @@ describe('applications kept for the view', () => {
       }
     `);
     expect(steps[0].applied).toEqual({
-      Equal: [{ state: { a: 3, b: 5, value: false }, types: { a: 'Int', b: 'Int', value: 'Flag' } }]
+      Equal: [
+        {
+          state: { a: 3, b: 5, value: false },
+          types: { a: 'Int', b: 'Int', value: 'Flag' },
+          at: expect.any(Number)
+        }
+      ]
     });
   });
 

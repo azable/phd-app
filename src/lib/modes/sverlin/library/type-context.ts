@@ -56,6 +56,14 @@ export function leftOutContext(): ReadonlySet<string> | undefined {
   return getContext<ReadonlySet<string> | undefined>('sverlin:left-out');
 }
 
+/**
+ * The <Node> tags hidden at this step, keeping their room, as every render they hold is hidden here
+ * (see hiddenAt in left-out.ts), by their line:column.
+ */
+export function hiddenSitesContext(): ReadonlySet<string> | undefined {
+  return getContext<ReadonlySet<string> | undefined>('sverlin:hidden-sites');
+}
+
 /** The presentation's variant: every variable of its design space, by key (see node/design.ts). */
 export function designContext(): DesignValues {
   return getContext<DesignValues | undefined>('sverlin:design') ?? {};
@@ -225,6 +233,11 @@ export type PointerCall = {
    * <Pointed>'s, whose overflow says whether it is drawn past its collection's ends.
    */
   kinds?: () => { around: readonly string[]; pointed: string } | undefined;
+  /**
+   * A pointer at each position of a list, as {#each runs(@check.at) as p}{@render Checked(p)}{/each}:
+   * the list, named by `path`, each item's path its own.
+   */
+  list?: () => unknown;
 };
 
 /** A pointer into a collection: its view, where it points, and its place among the root's pointers. */
@@ -246,7 +259,19 @@ export type Pointer = {
 export function providePointers(calls: readonly PointerCall[]): void {
   const types = typeContext();
   const design = designContext();
-  const pointers = calls.flatMap((call, order): Pointer[] => {
+  const each = calls.flatMap((call): PointerCall[] => {
+    if (!call.list) return [call];
+    const items = call.list();
+    return Array.isArray(items)
+      ? items.map((item, k) => ({
+          ...call,
+          list: undefined,
+          path: `${call.path}[${k}]`,
+          value: () => item
+        }))
+      : [];
+  });
+  const pointers = each.flatMap((call, order): Pointer[] => {
     const kinds = call.kinds?.();
     if (kinds?.around.some((kind) => design[`${kind}.shown`] === false)) return [];
     const inside = kinds !== undefined && design[`${kinds.pointed}.overflow`] === 'hidden';
