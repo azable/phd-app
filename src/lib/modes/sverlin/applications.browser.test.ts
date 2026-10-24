@@ -97,12 +97,13 @@ it.skipIf(!enabled)(
   "draw a step's one application of an operator, and nothing where it made none or several",
   { timeout: 120_000 },
   async () => {
-    // At sweep.pair.*, the first step is the first comparison, the second its swap.
-    const first = await captionAt('sweep.pair.*', 0);
+    // At sweep.pair.*, step 0 is the input as given, step 1 the first comparison, step 2 its swap.
+    expect((await captionAt('sweep.pair.*', 0))?.hidden).toBe('true');
+    const first = await captionAt('sweep.pair.*', 1);
     expect(first?.text).toMatch(/^is 5 > 1 ?\? yes$/u);
     expect(first?.hidden).toBeUndefined();
-    expect((await captionAt('sweep.pair.*', 1))?.hidden).toBe('true');
+    expect((await captionAt('sweep.pair.*', 2))?.hidden).toBe('true');
     // At sweep, a step is a whole sweep, with several comparisons.
-    expect((await captionAt('sweep', 1))?.hidden).toBe('true');
+    expect((await captionAt('sweep', 2))?.hidden).toBe('true');
   }
 );

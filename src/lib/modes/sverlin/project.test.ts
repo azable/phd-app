@@ -41,7 +41,7 @@ describe('Svelte-backed project lifecycle', () => {
     );
     expect(presentations[0]).toMatchObject({
       mode: 'sverlin',
-      labels: ['Step 1', 'Step 2', 'Step 3']
+      labels: ['Step 1', 'Step 2', 'Step 3', 'Step 4']
     });
 
     const rebuilt = await buildProjectPresentations(
@@ -84,14 +84,14 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
     expect(left.masterSteps).toEqual(right.masterSteps);
-    expect(left.masterSteps).toHaveLength(6);
+    expect(left.masterSteps).toHaveLength(7);
     // The first is the starter; the second is randomised from it.
     expect(left.variant?.['views.Int']).toBe('IntCell');
     expect(left.origins?.['IntCell.fill']).toBe('starter');
     expect(right.variant).not.toEqual(left.variant);
     expect(right.views).toEqual({ Int: ['IntCell', 'IntTally'], Index: ['IndexText'] });
     const frames = alignPresentationFrames([left, right]);
-    expect(frames).toHaveLength(6);
+    expect(frames).toHaveLength(7);
     const document = await appendProjectPreference(
       result.document,
       {

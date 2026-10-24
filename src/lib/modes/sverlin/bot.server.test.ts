@@ -152,12 +152,14 @@ describe('recorded steps in the assistant context', () => {
     `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">@step[for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) {}] @done[const done = Flag(true);]</script><Node>x</Node>`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
-    // A step per pass, then the step after the loop, where n is out of scope.
+    // Numbered as the page numbers them: the input as given (here none), a step per pass, then the
+    // step after the loop, where n is out of scope.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
-        { step: 1, state: { n: 0 } },
-        { step: 2, state: { n: 1 } },
-        { step: 3, state: { done: true } }
+        { step: 1, state: {} },
+        { step: 2, state: { n: 0 } },
+        { step: 3, state: { n: 1 } },
+        { step: 4, state: { done: true } }
       ]
     });
   });
@@ -165,8 +167,9 @@ describe('recorded steps in the assistant context', () => {
   it('gives a repair the steps of the candidate that failed, and why there are none', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
       steps: [
-        { step: 1, state: { n: 0 } },
-        { step: 2, state: { done: true } }
+        { step: 1, state: {} },
+        { step: 2, state: { n: 0 } },
+        { step: 3, state: { done: true } }
       ]
     });
     expect(

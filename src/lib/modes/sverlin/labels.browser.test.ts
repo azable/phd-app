@@ -152,10 +152,11 @@ it.skipIf(!enabled)(
 {#snippet Checked(p: Index)}<Pointed tags="checked" />{/snippet}
 <Node>{#each values as v}{@render Int(v)}{/each}</Node>
 {#each runs(@check.at) as p}{@render Checked(p)}{/each}`;
-    const checked = (await stepsOf(search, 'check', 3)).map((nodes) =>
+    const checked = (await stepsOf(search, 'check', 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
-    expect(checked).toEqual([['3'], ['3', '8'], ['3', '8', '5']]);
+    // The input as given, nothing checked yet; then each check adds its cell.
+    expect(checked).toEqual([[], ['3'], ['3', '8'], ['3', '8', '5']]);
 
     const counting = `<script lang="sverlin" domain>
   const Digit = type('integer', { min: 0, max: 9 });
@@ -181,7 +182,7 @@ it.skipIf(!enabled)(
     const reading = (await stepsOf(counting, 'count', 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
     );
-    // The page opens before counting the 3, v already at it; then each digit counted.
-    expect(reading).toEqual(['3', '3', '1', '4']);
+    // The page opens on the input as given, v not yet declared; then each digit counted.
+    expect(reading).toEqual([undefined, '3', '1', '4']);
   }
 );

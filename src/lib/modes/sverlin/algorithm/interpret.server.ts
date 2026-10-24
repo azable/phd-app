@@ -258,6 +258,8 @@ export function traceAlgorithm(
   keep: { labels?: ReadonlySet<string>; history?: ReadonlySet<string> } = {}
 ): {
   steps: MasterStep[];
+  /** Step 0: the input as given, before any of the algorithm runs (see run). */
+  opening: MasterStep;
   root: BlockStatement;
   labels: Label[];
   options: string[];
@@ -286,8 +288,10 @@ export function traceAlgorithm(
       ...(rule === undefined ? { nodes: new Set(), ranges: new Map() } : labelled.units(rule))
     }
   });
+  const steps = interpreter.run();
   return {
-    steps: interpreter.run(),
+    steps,
+    opening: interpreter.opening!,
     root,
     labels: labelled.labels,
     options: labelled.options,
@@ -344,6 +348,8 @@ class Interpreter {
   /** The record or collection type of every array and object an input or algorithm made. */
   readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
   readonly #trace: MasterStep[] = [];
+  /** The state just after the input, before any of the algorithm runs, which a page opens on. */
+  opening: MasterStep | undefined;
   readonly #identities = new Identities();
   #operations = 0;
   #traceValues = 0;
@@ -458,6 +464,8 @@ class Interpreter {
 
   /** Run the algorithm block and return its master trace. */
   run(): MasterStep[] {
+    // Every presentation opens on the input as given, before any of the algorithm runs.
+    const opening = this.#state(this.#root, this.#topLevel);
     this.#execute();
     if (this.#trace.length === 0 && this.#frames.label)
       throw new AlgorithmError(
@@ -479,20 +487,9 @@ class Interpreter {
       )
     )
       this.#trace.pop();
-    // The page opens on the state before the first step where that step changes what was there
-    // already, so its change plays; a first step that only declares opens on its after.
-    const [first] = this.#trace;
-    const before = first?.before;
-    if (
-      before &&
-      Object.entries(before.state).some(
-        ([name, value]) => JSON.stringify(first.state[name]) !== JSON.stringify(value)
-      )
-    ) {
-      if ((first.moment ?? 0) <= 0)
-        for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
-      this.#trace.unshift({ moment: 0, ...before, before, gap: 0, events: [] });
-    }
+    if ((this.#trace[0]?.moment ?? 0) <= 0)
+      for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
+    this.opening = { moment: 0, ...opening, before: opening, gap: 0, events: [] };
     return this.#trace;
   }
 

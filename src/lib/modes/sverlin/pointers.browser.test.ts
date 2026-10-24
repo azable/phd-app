@@ -51,6 +51,9 @@ it.skipIf(!enabled)(
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
+    // Step 0 is the input as given, before i and j are declared; step 1 has both.
+    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
+    await page.waitForTimeout(1500);
     const kinds = await page.evaluate(() =>
       [
         ...document.querySelectorAll<HTMLElement>(

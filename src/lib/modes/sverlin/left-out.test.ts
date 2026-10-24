@@ -111,6 +111,30 @@ describe('left out', () => {
     expect(hidden([])).toEqual([]);
   });
 
+  it('hide a node reading a variable itself until it is declared, as at step 0', () => {
+    // The root reads found itself: allowed, as found is out of scope only before its declaration,
+    // and its node hides where found is absent, as at step 0, the input as given.
+    const reading = source
+      .replace('for (let i', '@start[let found = Flag(false);]\n  for (let i')
+      .replace(
+        '<Node tags="title">Pass</Node>',
+        '<Node tags="status">{#if found}found{:else}looking{/if}</Node>'
+      );
+    const readingPrepared = prepareSvelteComponent(reading);
+    const at = (text: string) => siteOf(reading, reading.indexOf(text));
+    const hidden = (absent: string[]) =>
+      hiddenAt(
+        readingPrepared.leftOut!.model,
+        readingPrepared.design.starter,
+        { Int: 'IntCell' },
+        new Set(['IntCell']),
+        new Set(absent),
+        []
+      );
+    expect(hidden(['found'])).toContain(at('<Node tags="status">'));
+    expect(hidden([])).not.toContain(at('<Node tags="status">'));
+  });
+
   it('take each render in a node holding nodes as a part, a column losing only its caption', () => {
     const shaped = source.replace(
       '<Node tags="picked">picked {@render Int(v)}</Node>',

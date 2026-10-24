@@ -328,8 +328,13 @@ function framings(
   domain: DomainRegistry,
   keep: Parameters<typeof traceAlgorithm>[4] = {}
 ): Record<string, ReturnType<typeof traceAlgorithm>> {
-  const trace = (label?: string) =>
-    interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain, label, keep));
+  // A presentation's steps open on step 0, the input as given, whichever rule they step by.
+  const trace = (label?: string) => {
+    const run = interpretBlock(source, algorithm, (body) =>
+      traceAlgorithm(body, input, domain, label, keep)
+    );
+    return { ...run, steps: [run.opening, ...run.steps] };
+  };
   // The rule it starts with; any problem here is the algorithm's or its labels'.
   const first = trace();
   const runs: Record<string, ReturnType<typeof traceAlgorithm>> = { [first.options[0]]: first };
@@ -344,8 +349,8 @@ function framings(
 
 /**
  * Each step as two, the state just before its code and just after it, as the page plays it: the
- * events up to the code, then the code itself. The first step is never played into, a page
- * opening on its after, so its before is its after, as the variables it declares are.
+ * events up to the code, then the code itself. The first, step 0, the input as given, has no code,
+ * so its before is its after.
  */
 export function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
   return steps.flatMap((step, index) => [
@@ -822,7 +827,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             )
         )
       );
-    const scopedReads = scopedReadsOf(ast.html, scoped);
+    // A presentation opens on the input as given, before the algorithm declares anything: the view
+    // reading a variable itself is hidden until it is declared (see leftOutModel), and refused only
+    // where it is out of scope after that.
+    const phased = Object.values(masters).map(phasesOf);
+    const scopedLater = new Set(
+      [...scoped].filter(
+        (name) =>
+          isLabelKey(name) ||
+          phased.some((phases) => {
+            const first = phases.findIndex(({ state }) => name in state);
+            return first >= 0 && phases.slice(first).some(({ state }) => !(name in state));
+          })
+      )
+    );
+    const scopedReads = scopedReadsOf(ast.html, scopedLater);
+    const openingReads = scopedReadsOf(
+      ast.html,
+      new Set([...scoped].filter((name) => !scopedLater.has(name)))
+    );
     if (scopedReads.length)
       throw InvalidSvelteSourceError.combine(
         scopedReads.map(
@@ -848,7 +871,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         slotted
       )
     ]);
-    const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted);
+    const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted, openingReads);
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,

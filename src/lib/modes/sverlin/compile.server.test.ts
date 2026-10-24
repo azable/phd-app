@@ -23,7 +23,8 @@ describe('single-component Svelte compilation', () => {
     const result = await compileSvelteComponent(
       '<script lang="sverlin">@a[;] @b[;]</script><Node>{step}</Node>'
     );
-    expect(result.labels).toEqual(['Step 1', 'Step 2']);
+    // The input as given, then a step per label.
+    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
   });
@@ -47,8 +48,16 @@ describe('single-component Svelte compilation', () => {
 
   it('derives master steps from labels and varies only the variant between seeds', async () => {
     const prepared = prepareSvelteComponent(linearSearchSource);
-    // The starter's linear search: its start, a step at each check, then its end.
-    expect(prepared.master.map(({ state }) => state.i)).toEqual([undefined, 0, 1, 2, 3, undefined]);
+    // The starter's linear search: the input as given, its start, a step at each check, then its end.
+    expect(prepared.master.map(({ state }) => state.i)).toEqual([
+      undefined,
+      undefined,
+      0,
+      1,
+      2,
+      3,
+      undefined
+    ]);
     const bundles = await Promise.all(
       Array.from({ length: 12 }, (_, seed) =>
         bundlePresentation(prepared, seed + 1, { randomise: true })
@@ -56,7 +65,15 @@ describe('single-component Svelte compilation', () => {
     );
     for (const bundle of bundles) {
       expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
-      expect(bundle.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5', 'Step 6']);
+      expect(bundle.labels).toEqual([
+        'Step 1',
+        'Step 2',
+        'Step 3',
+        'Step 4',
+        'Step 5',
+        'Step 6',
+        'Step 7'
+      ]);
       expect(bundle.masterSteps).toEqual(prepared.master.map(({ moment }) => moment));
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
@@ -183,7 +200,8 @@ describe('single-component Svelte compilation', () => {
     const withoutModuleScript = await compileSvelteComponent(
       '<script lang="sverlin"></script><Node>x</Node>'
     );
-    expect(withoutModuleScript.labels).toEqual(['Step 1']);
+    // The input as given (here none), then the algorithm's one step.
+    expect(withoutModuleScript.labels).toEqual(['Step 1', 'Step 2']);
     expect(withoutModuleScript.javascript).toContain('sv-node');
   });
 
@@ -192,8 +210,9 @@ describe('single-component Svelte compilation', () => {
       '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (const v of values) {\n  @add[total = Add(total, v);]\n}</script>\n<Node layout="column">{@const doubled = total * 2}<Node tags="sum">{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
-    // The start and a step per addition; the loop's end only drops v, so it is no step.
-    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3']);
+    // The input as given, the start, and a step per addition; the loop's end only drops v, so it
+    // is no step.
+    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4']);
     expect(result.variant['root[sum].fill']).toBeDefined();
   });
 
@@ -316,8 +335,10 @@ describe('single-component Svelte compilation', () => {
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
     expect(prepared.design.starter['listing.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n');
-    // A step per pass; the loop's end only drops i, so it is no step.
-    expect(prepared.listings?.code.lit.loop).toHaveLength(2);
+    // The input as given, lighting nothing, then a step per pass; the loop's end only drops i, so it
+    // is no step.
+    expect(prepared.listings?.code.lit.loop).toHaveLength(3);
+    expect(prepared.listings?.code.lit.loop[0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n');
     // Without a <Listing />, the design has no listing variables.
@@ -631,15 +652,15 @@ describe('typed view components', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
-    // i places the pointer; target and the cells go to views.
-    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
+    // i places the pointer, measured where it is first declared; target and the cells go to views.
+    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('measures a position with every place in its collection, and as far past it as the trace goes', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">@start[let i = Position(-1);] @move[i = Position(0);]</script><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
-    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {

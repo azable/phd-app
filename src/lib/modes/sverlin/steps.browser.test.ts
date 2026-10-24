@@ -47,8 +47,8 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 <Node>{#each values as v}{@render Int(v)}{/each}</Node>`;
     const prepared = prepareSvelteComponent(source);
-    // Step 0 is the state before the first write's code, which changes values.
-    expect(prepared.masters.write[0].state.values).toEqual([3, 1, 1]);
+    // Step 0 is the input as given, before any of the algorithm runs.
+    expect(prepared.masters.write[0].state.values).toEqual([1, 1, 1]);
     expect(prepared.masters.write[1].before?.state.values).toEqual([3, 1, 1]);
     expect(prepared.masters.write[1].state.values).toEqual([7, 1, 1]);
     const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'write' } });
@@ -67,7 +67,7 @@ it.skipIf(!enabled)(
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    expect(await shown()).toEqual(['3', '1', '1']);
+    expect(await shown()).toEqual(['1', '1', '1']);
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
     await page.waitForFunction(
       () =>

@@ -14,6 +14,7 @@ type Part = Record<string, unknown> & {
   type?: string;
   name?: string;
   start?: number;
+  end?: number;
   attributes?: { name?: string }[];
   expression?: Part & { callee?: Part; arguments?: unknown[] };
 };
@@ -54,9 +55,15 @@ export function leftOutModel(
   markup: unknown,
   source: string,
   kinds: ReadonlyMap<number, string>,
-  reads: ReadonlyMap<number, string[]>
+  reads: ReadonlyMap<number, string[]>,
+  /**
+   * Variables the root's markup reads itself, by where each read starts: each counts as a render of
+   * its node, so the node hides where the variable is absent, as at step 0.
+   */
+  direct: readonly { name: string; start: number }[] = []
 ): LeftOutModel {
   const model: LeftOutModel = { nodes: {}, renders: {}, ownTops: [] };
+  const spans: { site: string; view: string; start: number; end: number }[] = [];
   const own = (parent: string | undefined, view: string) => {
     if (parent) model.nodes[parent].own = true;
     else if (!model.ownTops.includes(view)) model.ownTops.push(view);
@@ -81,6 +88,7 @@ export function leftOutModel(
         kind: kinds.get(part.start) ?? '',
         own: attributes.some((attribute) => attribute.name === 'value')
       };
+      spans.push({ site, view, start: part.start, end: part.end ?? part.start });
       walk(part.children, view, site);
       return;
     }
@@ -106,6 +114,18 @@ export function leftOutModel(
         walk(child, view, parent);
   };
   walk(markup, 'root', undefined);
+  for (const { name, start } of direct) {
+    const around = spans
+      .filter((span) => span.start <= start && start < span.end)
+      .sort((a, b) => b.start - a.start)[0];
+    if (!around) continue;
+    model.renders[`read ${siteOf(source, start)}`] = {
+      parent: around.site,
+      view: around.view,
+      callee: '',
+      reads: [name]
+    };
+  }
   return model;
 }
 

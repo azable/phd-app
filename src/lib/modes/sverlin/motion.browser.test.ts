@@ -420,9 +420,13 @@ it.skipIf(!enabled)(
     await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
       timeout: 60_000
     });
-    expect(await drawn()).toEqual({ slots: 6, pointers: 1 });
+    // Step 0 is the input as given, the pointer not yet declared; step 1 sets it.
+    expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
     await step(1);
     // A step forward plays its before, then its after.
+    await page.waitForTimeout(1500);
+    expect(await drawn()).toEqual({ slots: 6, pointers: 1 });
+    await step(2);
     await page.waitForTimeout(1500);
     expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
     expect(errors).toEqual([]);
@@ -541,7 +545,8 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const steps = await cursorRows({ 'JCursor[next].overflow': 'hidden' });
-    const [first] = steps;
+    // Step 0 is the input as given; the first step sets j.
+    const [, first] = steps;
     expect(first.rows[0]).toEqual(first.rows[1]);
     expect(first.j).toBeDefined();
     expect(steps.at(-1)!.j).toBeUndefined();
