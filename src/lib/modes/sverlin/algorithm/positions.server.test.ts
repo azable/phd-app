@@ -18,13 +18,13 @@ const domain = interpretDomain(`
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
   const Edges = collection(Edge);
   const Flag = type('boolean');
-  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const Skip = unop(Position, (p) => Position(p + 2));
-  const Sum = binop(Position, Position, (a, b) => Position(a + b - 1));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Append = binop((c: Values, x: Int) => Values([...c, x]));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Skip = unop((p: Position) => Position(p + 2));
+  const Sum = binop((a: Position, b: Position) => Position(a + b - 1));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
 `);
 const run = (body: string, frames?: string) =>
   traceAlgorithm(body, undefined, domain, frames).steps;
@@ -112,7 +112,7 @@ describe('positions', () => {
       const Position = index(Values);
       const Positions = collection(Position);
       const Take = record({ from: Position });
-      const Next = unop(Position, (p) => Position(p + 1));
+      const Next = unop((p: Position) => Position(p + 1));
     `);
 
     it('in records, collections, and the variables made from them', () => {

@@ -9,11 +9,11 @@ const domain = interpretDomain(`
   const Table = collection(Values);
   const RowIndex = index(Table);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const FirstRow = unop(RowIndex, (r) => Flag(r < 1));
-  const NextRow = unop(RowIndex, (r) => RowIndex(r + 1));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const FirstRow = unop((r: RowIndex) => Flag(r < 1));
+  const NextRow = unop((r: RowIndex) => RowIndex(r + 1));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 

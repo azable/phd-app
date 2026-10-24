@@ -31,9 +31,9 @@ it.skipIf(!enabled)(
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Index(v.length));
-  const Before = binop(Index, Index, (a, b) => Flag(a < b));
-  const Next = unop(Index, (p) => Index(p + 1));
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([1, 1, 1]);

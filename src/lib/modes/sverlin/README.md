@@ -75,13 +75,13 @@ Insertion sort, with the key drawn beside the row:
   const Flag = type('boolean');
 
   // walking the collection
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const Prev = unop(Position, (p) => Position(p - 1));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
 
   // what the algorithm does
-  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -143,15 +143,15 @@ Binary search, written recursively:
   const Flag = type('boolean');
 
   // walking the collection
-  const After = binop(Index, Index, (a, b) => Flag(a > b));
-  const Middle = binop(Index, Index, (a, b) => Index(Math.floor((a + b) / 2)));
-  const Next = unop(Index, (p) => Index(p + 1));
-  const Prev = unop(Index, (p) => Index(p - 1));
-  const Last = unop(Values, (v) => Index(v.length - 1));
+  const After = binop((a: Index, b: Index) => Flag(a > b));
+  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+  const Last = unop((v: Values) => Index(v.length - 1));
 
   // what the algorithm does
-  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Equal = binop((a: Int, b: Int) => Flag(a === b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
 </script>
 
 <script lang="sverlin" input>
@@ -224,9 +224,9 @@ A union value is always one of its members: a literal becomes the member it fits
 
 ```js
 // domain
-const Reached = unop(Dist, (d) => Flag(d !== 'unreached'));
-const Through = binop(Dist, Weight, (d, w) => Distance(d + Distance(w)));
-const Shorter = binop(Distance, Dist, (a, b) => Flag(b === 'unreached' || a < b));
+const Reached = unop((d: Dist) => Flag(d !== 'unreached'));
+const Through = binop((d: Dist, w: Weight) => Distance(d + Distance(w)));
+const Shorter = binop((a: Distance, b: Dist) => Flag(b === 'unreached' || a < b));
 ```
 
 ```js
@@ -239,17 +239,17 @@ The view receives plain arrays and objects, drawn by the views of their types: a
 
 ## Operators
 
-The input and algorithm compute nothing themselves: everything they compute is an operator the domain declares, unary or binary, with its operands' types and a function of them. Writing stays plain: `=` puts a value, typically an operator's result, into a variable, an element, or a field.
+The input and algorithm compute nothing themselves: everything they compute is an operator the domain declares, unary or binary: a function of its operands, each parameter typed, as `(a: Int, b: Int) => Flag(a > b)`. Type annotations are written only there. Writing stays plain: `=` puts a value, typically an operator's result, into a variable, an element, or a field.
 
 ```js
 // walking the collection
-const Length = unop(Values, (v) => Index(v.length));
-const Before = binop(Index, Index, (a, b) => Flag(a < b));
-const Next = unop(Index, (p) => Index(p + 1));
+const Length = unop((v: Values) => Index(v.length));
+const Before = binop((a: Index, b: Index) => Flag(a < b));
+const Next = unop((p: Index) => Index(p + 1));
 
 // what the algorithm does
-const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-const Add = binop(Int, Int, (a, b) => Int(a + b));
+const Equal = binop((a: Int, b: Int) => Flag(a === b));
+const Add = binop((a: Int, b: Int) => Int(a + b));
 ```
 
 The algorithm applies an operator as a call, its operands in order, each taking its operand's type as a function's argument does, and gets the value its function gives: `if (Equal(values[i], target)) break;`, `total = Add(total, v);`, `for (let i = Index(0); Before(i, Length(values)); i = Next(i))`. Name operators for what they compute, as `Before`, `Middle`, or `Shorter`, and declare each the algorithm needs, those that walk the collection apart from what the algorithm does, as above.
@@ -257,8 +257,8 @@ The algorithm applies an operator as a call, its operands in order, each taking 
 A collection's methods compute too: an operator computes the new collection, and `=` writes it, in place, so the collection and each element it keeps stay the same values and move rather than reappear:
 
 ```js
-const Append = binop(Queue, Vertex, (q, v) => Queue([...q, v]));
-const Rest = unop(Queue, (q) => Queue(q.slice(1)));
+const Append = binop((q: Queue, v: Vertex) => Queue([...q, v]));
+const Rest = unop((q: Queue) => Queue(q.slice(1)));
 ```
 
 `queue = Append(queue, v);` adds `v` at the back, and `const u = queue[0]; queue = Rest(queue);` takes the front. A rearrangement is plain writes, labelled as one step, as a swap through a temporary: `@swap[const moved = values[i]; values[i] = values[Next(i)]; values[Next(i)] = moved;]` moves both values.
@@ -320,9 +320,9 @@ Example, with domain, input, algorithm, and a script-free view:
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Index(v.length));
-  const Before = binop(Index, Index, (a, b) => Flag(a < b));
-  const Next = unop(Index, (p) => Index(p + 1));
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
 </script>
 
 <script lang="sverlin" input>
@@ -388,13 +388,13 @@ Insertion sort, beside a textbook's pseudocode:
   const Flag = type('boolean');
 
   // walking the collection
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const Prev = unop(Position, (p) => Position(p - 1));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
 
   // what the algorithm does
-  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -511,16 +511,16 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   const Queue = collection(VertexRef);
 
   // walking the edges
-  const Count = unop(Edges, (es) => EdgeIndex(es.length));
-  const Before = binop(EdgeIndex, EdgeIndex, (a, b) => Flag(a < b));
-  const Next = unop(EdgeIndex, (e) => EdgeIndex(e + 1));
+  const Count = unop((es: Edges) => EdgeIndex(es.length));
+  const Before = binop((a: EdgeIndex, b: EdgeIndex) => Flag(a < b));
+  const Next = unop((e: EdgeIndex) => EdgeIndex(e + 1));
 
   // what the algorithm does
-  const Waiting = unop(Queue, (q) => Flag(q.length > 0));
-  const Same = binop(VertexRef, VertexRef, (a, b) => Flag(a === b));
-  const Not = unop(Flag, (f) => Flag(!f));
-  const Append = binop(Queue, VertexRef, (q, v) => Queue([...q, v]));
-  const Rest = unop(Queue, (q) => Queue(q.slice(1)));
+  const Waiting = unop((q: Queue) => Flag(q.length > 0));
+  const Same = binop((a: VertexRef, b: VertexRef) => Flag(a === b));
+  const Not = unop((f: Flag) => Flag(!f));
+  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
+  const Rest = unop((q: Queue) => Queue(q.slice(1)));
 </script>
 
 <script lang="sverlin" input>

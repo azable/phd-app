@@ -12,19 +12,19 @@ import {
 const atoms = interpretDomain(
   "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });" +
     // The algorithm computes nothing itself: these are its operators.
-    `const Less = binop(Int, Int, (a, b) => Flag(a < b));
-    const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-    const Add = binop(Int, Int, (a, b) => Int(a + b));
-    const Next = unop(Int, (n) => Int(n + 1));
-    const Count = unop(Ints, (v) => Int(v.length));
-    const Root = unop(Int, (n) => Real(Math.sqrt(n)));
-    const Width = unop(Reals, (v) => Int(v.join('-').length));
-    const Halve = unop(Int, (n) => Real(n / 2));
-    const Long = unop(Ints, (v) => Int(v.join('${'-'.repeat(60)}').length));
-    const Push = binop(Reals, Real, (c, x) => Reals([...c, x]));
-    const Find = binop(Reals, Real, (c, x) => Int(c.indexOf(x)));
-    const Grow = binop(Ints, Int, (c, x) => Ints([...c, x]));
-    const Flip = unop(Ints, (c) => Ints(c.slice().reverse()));`
+    `const Less = binop((a: Int, b: Int) => Flag(a < b));
+    const Equal = binop((a: Int, b: Int) => Flag(a === b));
+    const Add = binop((a: Int, b: Int) => Int(a + b));
+    const Next = unop((n: Int) => Int(n + 1));
+    const Count = unop((v: Ints) => Int(v.length));
+    const Root = unop((n: Int) => Real(Math.sqrt(n)));
+    const Width = unop((v: Reals) => Int(v.join('-').length));
+    const Halve = unop((n: Int) => Real(n / 2));
+    const Long = unop((v: Ints) => Int(v.join('${'-'.repeat(60)}').length));
+    const Push = binop((c: Reals, x: Real) => Reals([...c, x]));
+    const Find = binop((c: Reals, x: Real) => Int(c.indexOf(x)));
+    const Grow = binop((c: Ints, x: Int) => Ints([...c, x]));
+    const Flip = unop((c: Ints) => Ints(c.slice().reverse()));`
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);

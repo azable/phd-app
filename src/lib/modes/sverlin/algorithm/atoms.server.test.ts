@@ -120,10 +120,10 @@ describe('typed values', () => {
       const g = Negate(Weight(5));
     `,
       `
-      const Add = binop(Int, Int, (x, y) => Int(x + y));
-      const Half = unop(Int, (x) => Real(x / 2));
-      const Grow = binop(Height, Int, (h, n) => Height(h + n));
-      const Negate = unop(Weight, (w) => Weight(-w));
+      const Add = binop((x: Int, y: Int) => Int(x + y));
+      const Half = unop((x: Int) => Real(x / 2));
+      const Grow = binop((h: Height, n: Int) => Height(h + n));
+      const Negate = unop((w: Weight) => Weight(-w));
     `
     );
     expect(step.state).toMatchObject({ a: 9, b: 3.5, d: 155, g: -5 });
@@ -133,30 +133,30 @@ describe('typed values', () => {
   it.each([
     [
       'combining unrelated types',
-      'binop(Height, Weight, (a, b) => Int(a + b))',
+      'binop((a: Height, b: Weight) => Int(a + b))',
       'Height(1), Weight(1)',
       /cannot be combined/
     ],
     [
       'comparing unrelated types',
-      'binop(Height, Weight, (a, b) => Bool(a < b))',
+      'binop((a: Height, b: Weight) => Bool(a < b))',
       'Height(1), Weight(1)',
       /cannot be combined/
     ],
     [
       'equating unrelated types',
-      'binop(Height, Weight, (a, b) => Bool(a === b))',
+      'binop((a: Height, b: Weight) => Bool(a === b))',
       'Height(1), Weight(1)',
       /cannot be combined/
     ],
-    ['leaving an enumeration', 'unop(Grade, (g) => Grade(g + 1))', 'Grade(3)', /4 is not a Grade/],
+    ['leaving an enumeration', 'unop((g: Grade) => Grade(g + 1))', 'Grade(3)', /4 is not a Grade/],
     [
       'arithmetic on Bool',
-      'unop(Bool, (b) => Int(b + 1))',
+      'unop((b: Bool) => Int(b + 1))',
       'Bool(true)',
       /cannot be used in arithmetic/
     ],
-    ['leaving a range', 'unop(Height, (h) => Height(h - 20))', 'Height(10)', /at least 0/]
+    ['leaving a range', 'unop((h: Height) => Height(h - 20))', 'Height(10)', /at least 0/]
   ])('rejects %s in an operator, at its application', (_name, operator, operands, message) => {
     expect(() => last(`const a = Op(${operands});`, `const Op = ${operator};`)).toThrow(message);
   });
@@ -177,12 +177,12 @@ describe('typed values', () => {
       const length = Size(Text('abc'));
     `,
       `
-      const Same = binop(Int, Int, (a, b) => Bool(a === b));
-      const Add = binop(Int, Int, (a, b) => Int(a + b));
-      const Suffix = unop(Text, (t) => Text(t + 'c'));
-      const Size = unop(Text, (t) => Int(t.length));
-      const Find = binop(Ints, Int, (c, x) => Int(c.indexOf(x)));
-      const Has = binop(Ints, Int, (c, x) => Bool(c.includes(x)));
+      const Same = binop((a: Int, b: Int) => Bool(a === b));
+      const Add = binop((a: Int, b: Int) => Int(a + b));
+      const Suffix = unop((t: Text) => Text(t + 'c'));
+      const Size = unop((t: Text) => Int(t.length));
+      const Find = binop((c: Ints, x: Int) => Int(c.indexOf(x)));
+      const Has = binop((c: Ints, x: Int) => Bool(c.includes(x)));
     `
     );
     expect(step.state).toMatchObject({

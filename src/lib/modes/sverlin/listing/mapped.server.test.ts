@@ -8,11 +8,11 @@ const blocks = (algorithm: string, listing: string) => `<script lang="sverlin" d
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const Prev = unop(Position, (p) => Position(p - 1));
-  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([2, 1]);

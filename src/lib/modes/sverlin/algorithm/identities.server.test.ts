@@ -10,14 +10,14 @@ const domain = interpretDomain(`
   const Counts = collection(Count);
   const Table = collection(Counts);
   const Flag = type('boolean');
-  const Filled = unop(Values, (v) => Flag(v.length > 0));
-  const Before = binop(Count, Count, (a, b) => Flag(a < b));
-  const Size = unop(Values, (v) => Count(v.length));
-  const Up = unop(Count, (n) => Count(n + 1));
-  const Down = unop(Count, (n) => Count(n - 1));
-  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
-  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
-  const Rest = unop(Values, (c) => Values(c.slice(1)));
+  const Filled = unop((v: Values) => Flag(v.length > 0));
+  const Before = binop((a: Count, b: Count) => Flag(a < b));
+  const Size = unop((v: Values) => Count(v.length));
+  const Up = unop((n: Count) => Count(n + 1));
+  const Down = unop((n: Count) => Count(n - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+  const Append = binop((c: Values, x: Int) => Values([...c, x]));
+  const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 
 const idsOf = (identities: StepIdentities | undefined, paths: string[]) => ({

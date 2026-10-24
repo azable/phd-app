@@ -18,7 +18,8 @@ import type { DomainRegistry, OperatorType, StructureType } from './structures.s
  * `collection(Edge)`).
  */
 export function interpretDomain(body: string): DomainRegistry {
-  const { root, offset } = parseBlock(body, 'domain');
+  const source = body;
+  const { root, offset, parameterTypes } = parseBlock(source, 'domain');
   const fail = (node: AnyNode, message: string): never => {
     throw new AlgorithmError(message, offset(node));
   };
@@ -54,7 +55,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });, or an operator with binop(...) or unop(...), as in const Greater = binop(Int, Int, (a, b) => Flag(a > b));`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });, or an operator with binop(...) or unop(...), as in const Greater = binop((a: Int, b: Int) => Flag(a > b));`
         );
       const call = init as CallExpression;
       if (name in atoms || name in structures || name in operators)
@@ -167,9 +168,10 @@ export function interpretDomain(body: string): DomainRegistry {
   }
 
   /**
-   * An operator, as in binop(Int, Int, (a, b) => Flag(a > b)) or unop(Index, (p) => Index(p + 1)):
-   * its operands' types, then a function of them that is one expression, reading only its
-   * parameters and Math, and giving a typed value, the call of a type, which is its result's type.
+   * An operator, as in binop((a: Int, b: Int) => Flag(a > b)) or unop((p: Index) => Index(p + 1)):
+   * a function of its operands, each typed on its parameter, that is one expression, reading only
+   * its parameters and Math, and giving a typed value, the call of a type, which is its result's
+   * type.
    */
   function defineOperator(
     name: string,
@@ -179,16 +181,36 @@ export function interpretDomain(body: string): DomainRegistry {
     const arity = kind === 'binop' ? 2 : 1;
     const example =
       kind === 'binop'
-        ? 'binop(Int, Int, (a, b) => Flag(a > b))'
-        : 'unop(Index, (p) => Index(p + 1))';
+        ? 'binop((a: Int, b: Int) => Flag(a > b))'
+        : 'unop((p: Index) => Index(p + 1))';
     const args = call.arguments as Expression[];
     const lambda = args.at(-1);
-    if (args.length !== arity + 1 || lambda?.type !== 'ArrowFunctionExpression')
+    const textOf = (node: AnyNode) => {
+      const { start, end } = offset(node);
+      return source.slice(start, end);
+    };
+    // The earlier form gave the operands' types before the function.
+    if (
+      args.length === arity + 1 &&
+      lambda?.type === 'ArrowFunctionExpression' &&
+      lambda.params.length === arity &&
+      lambda.params.every((parameter) => parameter.type === 'Identifier') &&
+      args.slice(0, arity).every((argument) => argument.type === 'Identifier')
+    ) {
+      const typed = lambda.params.map(
+        (parameter, index) =>
+          `${(parameter as { name: string }).name}: ${(args[index] as { name: string }).name}`
+      );
       fail(
         call,
-        `${kind}() takes ${arity === 2 ? 'its two operands’ types' : 'its operand’s type'}, then a function of ${arity === 2 ? 'them' : 'it'}, as in ${example}.`
+        `An operator's operand types are written on its parameters: const ${name} = ${kind}((${typed.join(', ')}) => ${textOf(lambda.body)});`
       );
-    const operands = args.slice(0, arity).map((argument) => defined(argument, 'An operand'));
+    }
+    if (args.length !== 1 || lambda?.type !== 'ArrowFunctionExpression')
+      fail(
+        call,
+        `${kind}() takes a function of ${arity === 2 ? 'two operands' : 'one operand'}, each typed, as in ${example}.`
+      );
     const arrow = lambda as ArrowFunctionExpression;
     if (
       arrow.async ||
@@ -197,11 +219,28 @@ export function interpretDomain(body: string): DomainRegistry {
     )
       fail(
         arrow,
-        `${name}'s function takes ${arity} plain name${arity === 2 ? 's' : ''}, one per operand, as in ${example}.`
+        `${name}'s function takes ${arity} typed name${arity === 2 ? 's' : ''}, one per operand, as in ${example}.`
       );
     const parameters = arrow.params.map((parameter) => (parameter as { name: string }).name);
     if (new Set(parameters).size !== parameters.length)
       fail(arrow, `${name}'s operands need names of their own.`);
+    const operands = arrow.params.map((parameter) => {
+      const written = parameterTypes.get(offset(parameter).end);
+      if (!written)
+        return fail(
+          parameter,
+          `Give ${(parameter as { name: string }).name} its type, as in ${example}.`
+        );
+      const type = written.type;
+      if (!Object.hasOwn(atoms, type) && !Object.hasOwn(structures, type))
+        throw new AlgorithmError(
+          Object.hasOwn(operators, type)
+            ? `${type} is an operator, not a type.`
+            : `Unknown type ${type}; define it earlier in the domain block.`,
+          { start: written.at, end: written.at + type.length }
+        );
+      return type;
+    });
     if (arrow.body.type === 'BlockStatement')
       fail(arrow.body, `${name}'s function is one expression, without braces, as in ${example}.`);
     const body = arrow.body as Expression;

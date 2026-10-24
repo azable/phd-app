@@ -96,7 +96,7 @@ export function checkSubset(
           if (node.body.type === 'BlockStatement')
             reject(
               node.body,
-              'An operator’s function is one expression, without braces, as in binop(Int, Int, (a, b) => Flag(a > b)).'
+              'An operator’s function is one expression, without braces, as in binop((a: Int, b: Int) => Flag(a > b)).'
             );
           break;
         }

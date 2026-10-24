@@ -14,16 +14,16 @@ const domain = interpretDomain(`
   const Distances = collection(Dist);
   const Queue = collection(Vertex);
   const Either = union(Distance, Count);
-  const IsReached = unop(Dist, (d) => Count(d !== Unreached('unreached') ? 1 : 0));
-  const IsUnreached = unop(Dist, (d) => Count(d === Unreached('unreached') ? 1 : 0));
-  const Order = binop(Dist, Dist, (a, b) => Count(a < b ? 1 : 0));
-  const Bump = unop(Weight, (w) => Weight(w + 1));
-  const Double = unop(Weight, (w) => Weight(w + w));
-  const Twice = unop(Weight, (w) => Distance(Distance(w) + Distance(w)));
-  const Append = binop(Edges, Edge, (c, x) => Edges([...c, x]));
-  const Tail = unop(Edges, (c) => Edges(c.slice(1)));
-  const Enqueue = binop(Queue, Vertex, (c, x) => Queue([...c, x]));
-  const Prepend = binop(Queue, Vertex, (c, x) => Queue([x, ...c]));
+  const IsReached = unop((d: Dist) => Count(d !== Unreached('unreached') ? 1 : 0));
+  const IsUnreached = unop((d: Dist) => Count(d === Unreached('unreached') ? 1 : 0));
+  const Order = binop((a: Dist, b: Dist) => Count(a < b ? 1 : 0));
+  const Bump = unop((w: Weight) => Weight(w + 1));
+  const Double = unop((w: Weight) => Weight(w + w));
+  const Twice = unop((w: Weight) => Distance(Distance(w) + Distance(w)));
+  const Append = binop((c: Edges, x: Edge) => Edges([...c, x]));
+  const Tail = unop((c: Edges) => Edges(c.slice(1)));
+  const Enqueue = binop((c: Queue, x: Vertex) => Queue([...c, x]));
+  const Prepend = binop((c: Queue, x: Vertex) => Queue([x, ...c]));
 `);
 
 /** Run an algorithm with the test domain from an input block, and return its last step. */

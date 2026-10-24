@@ -9,12 +9,12 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Index(v.length));
-  const Before = binop(Index, Index, (a, b) => Flag(a < b));
-  const Next = unop(Index, (p) => Index(p + 1));
-  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
-  const Up = unop(Int, (n) => Int(n + 1));
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Equal = binop((a: Int, b: Int) => Flag(a === b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Up = unop((n: Int) => Int(n + 1));
 `);
 const input = interpretInput('const values = Values([3, 8, 5, 2]); const target = Int(5);', domain);
 const search = `

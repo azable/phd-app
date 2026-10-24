@@ -8,10 +8,10 @@ const domain = interpretDomain(`
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
-  const Up = unop(Int, (n) => Int(n + 1));
-  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
+  const Equal = binop((a: Int, b: Int) => Flag(a === b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Up = unop((n: Int) => Int(n + 1));
+  const Append = binop((c: Values, x: Int) => Values([...c, x]));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 /** Each event as its kind and what it names, with the source it is at. */

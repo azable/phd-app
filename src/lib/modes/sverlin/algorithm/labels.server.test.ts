@@ -7,8 +7,8 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Flag = type('boolean');
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
-  const Up = unop(Int, (n) => Int(n + 1));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Up = unop((n: Int) => Int(n + 1));
 `);
 const labelsOf = (body: string) =>
   traceAlgorithm(body, undefined, domain).labels.map(({ full, nodes }) => [

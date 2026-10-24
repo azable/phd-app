@@ -6,7 +6,7 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Front = ref(Values);
-  const Rest = unop(Values, (c) => Values(c.slice(1)));
+  const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 
@@ -88,7 +88,7 @@ describe('references to positions', () => {
       const Edges = collection(Edge);
       const Queue = collection(Vertex);
       const Front = ref(Queue);
-      const Append = binop(Queue, Vertex, (c, x) => Queue([...c, x]));
+      const Append = binop((c: Queue, x: Vertex) => Queue([...c, x]));
     `);
     const [step] = interpretAlgorithm(
       `const vertices = Names(['A', 'B', 'C']);

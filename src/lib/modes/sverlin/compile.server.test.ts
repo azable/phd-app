@@ -127,7 +127,7 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -189,7 +189,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop(Int, Int, (a, b) => Int(a + b));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (const v of values) {\n  @add[total = Add(total, v);]\n}</script>\n<Node layout="column">{@const doubled = total * 2}<Node tags="sum">{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (const v of values) {\n  @add[total = Add(total, v);]\n}</script>\n<Node layout="column">{@const doubled = total * 2}<Node tags="sum">{values.join("+")} = {total}; doubled {doubled}; step {step}, seed {seed}</Node></Node>',
       5
     );
     // The start, a step per addition, then the end.
@@ -306,7 +306,7 @@ describe('single-component Svelte compilation', () => {
 
   it('shows the source’s own listing where the view places a <Listing />, lit per step', async () => {
     const source = [
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean"); const Length = unop(Values, (v) => Index(v.length)); const Before = binop(Index, Index, (a, b) => Flag(a < b)); const Next = unop(Index, (p) => Index(p + 1));</script>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script>',
       '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
       '<script lang="sverlin">@loop[for (let i = Index(0); Before(i, Length(values)); i = Next(i)) {}]</script>',
       '<script lang="sverlin" listing="code">for @loop[i = 1 to n]</script>',
@@ -514,7 +514,7 @@ describe('single-component Svelte compilation', () => {
 
   it('identifies the master trace by its recorded states, whatever the view', async () => {
     const source = (values: string, view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>${view}`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>${view}`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).masterSignature;
     const first = await signature('[1, 2]', '<Node>{#each values as v}{v}{/each}</Node>');
@@ -629,7 +629,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
     expect(prepared.placements['*']).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);
@@ -727,7 +727,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean"); const Length = unop(Values, (v) => Position(v.length)); const Before = binop(Position, Position, (a, b) => Flag(a < b)); const Next = unop(Position, (p) => Position(p + 1));</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {\n  @key[const key = values[i];]\n}</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Position(v.length)); const Before = binop((a: Position, b: Position) => Flag(a < b)); const Next = unop((p: Position) => Position(p + 1));</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {\n  @key[const key = values[i];]\n}</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(source('{@render Int(key)}'));

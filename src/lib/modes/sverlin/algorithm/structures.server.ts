@@ -19,9 +19,10 @@ export type RefType = { kind: 'ref'; name: string; collection: string; element: 
 export type StructureType = UnionType | RecordType | CollectionType | RefType;
 
 /**
- * An operator on domain values, unary or binary, as in binop(Int, Int, (a, b) => Flag(a > b)): its
- * operands' types, its parameters' names, which name an application's parts, its body, one
- * expression of its parameters, and the type of the value it gives, the body's constructor.
+ * An operator on domain values, unary or binary, as in binop((a: Int, b: Int) => Flag(a > b)): its
+ * operands' types, written on its parameters; its parameters' names, which name an application's
+ * parts; its body, one expression of its parameters; and the type of the value it gives, the
+ * body's constructor.
  */
 export type OperatorType = {
   name: string;

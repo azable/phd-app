@@ -9,14 +9,14 @@ const types = `
   const Index = index(Values);
 `;
 const domain = interpretDomain(`${types}
-  const Length = unop(Values, (v) => Index(v.length));
-  const Before = binop(Index, Index, (a, b) => Flag(a < b));
-  const Next = unop(Index, (p) => Index(p + 1));
-  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
-  const Add = binop(Int, Int, (a, b) => Int(a + b));
-  const Floor = unop(Int, (x) => Int(Math.floor(x / 2)));
-  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
-  const Rest = unop(Values, (c) => Values(c.slice(1)));
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Equal = binop((a: Int, b: Int) => Flag(a === b));
+  const Add = binop((a: Int, b: Int) => Int(a + b));
+  const Floor = unop((x: Int) => Int(Math.floor(x / 2)));
+  const Append = binop((c: Values, x: Int) => Values([...c, x]));
+  const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(5);', domain);
 const run = (body: string) => traceAlgorithm(body, input, domain).steps;
@@ -67,38 +67,53 @@ describe('operators', () => {
   it.each([
     [
       'a function giving no typed value',
-      'const Bad = binop(Int, Int, (a, b) => a > b);',
+      'const Bad = binop((a: Int, b: Int) => a > b);',
       'Bad gives a typed value: wrap what it computes in a type defined above'
     ],
     [
       'a function with braces',
-      'const Bad = unop(Int, (a) => { return Int(a); });',
+      'const Bad = unop((a: Int) => { return Int(a); });',
       'An operator’s function is one expression, without braces'
     ],
     [
       'a function reading the state',
-      'const Bad = unop(Int, (a) => Int(a + values[0]));',
+      'const Bad = unop((a: Int) => Int(a + values[0]));',
       'Bad reads only its operands (a) and Math, not values.'
     ],
     [
       'a function using another operator',
-      'const Up = unop(Int, (a) => Int(a + 1)); const Bad = unop(Int, (a) => Up(a));',
+      'const Up = unop((a: Int) => Int(a + 1)); const Bad = unop((a: Int) => Up(a));',
       'Bad gives a typed value'
     ],
     [
       'a function using another operator inside',
-      'const Up = unop(Int, (a) => Int(a + 1)); const Bad = unop(Int, (a) => Int(Up(a)));',
+      'const Up = unop((a: Int) => Int(a + 1)); const Bad = unop((a: Int) => Int(Up(a)));',
       'Bad cannot use the operator Up: an operator computes from its operands alone.'
     ],
     [
       'the wrong number of operands',
-      'const Bad = binop(Int, (a, b) => Flag(a < b));',
-      'binop() takes its two operands’ types, then a function of them'
+      'const Bad = binop((a: Int) => Flag(a));',
+      "Bad's function takes 2 typed names, one per operand"
     ],
-    ['operands of unknown types', 'const Bad = unop(Nope, (a) => Flag(a));', 'Unknown type Nope'],
+    [
+      'an operand without its type',
+      'const Bad = binop((a: Int, b) => Flag(a < b));',
+      'Give b its type, as in binop((a: Int, b: Int) => Flag(a > b)).'
+    ],
+    [
+      'the earlier form, the operand types given first',
+      'const Bad = binop(Int, Int, (a, b) => Flag(a < b));',
+      "An operator's operand types are written on its parameters: const Bad = binop((a: Int, b: Int) => Flag(a < b));"
+    ],
+    [
+      'a type written anywhere but on an operator’s parameter',
+      'const Bad = unop((a: Int) => Int(a)); const c: Int = 1;',
+      "Type annotations are written only on an operator's parameters, as (q: Queue, x: Letter) => …"
+    ],
+    ['operands of unknown types', 'const Bad = unop((a: Nope) => Flag(a));', 'Unknown type Nope'],
     [
       'an operator as an operand type',
-      'const Up = unop(Int, (a) => Int(a + 1)); const Bad = unop(Up, (a) => Int(a));',
+      'const Up = unop((a: Int) => Int(a + 1)); const Bad = unop((a: Up) => Int(a));',
       'Up is an operator, not a type.'
     ]
   ])('reject %s', (_name, declaration, message) => {
@@ -110,19 +125,19 @@ describe('primitive operators', () => {
   it('refuse a body that is an algorithm: a callback, or a method outside the subset', () => {
     expect(() =>
       interpretDomain(
-        `${types}const Merge = binop(Values, Values, (a, b) => Values([...a, ...b].sort((x, y) => x - y)));`
+        `${types}const Merge = binop((a: Values, b: Values) => Values([...a, ...b].sort((x, y) => x - y)));`
       )
     ).toThrow(
       'An operator is one primitive step; sort is an algorithm, so write it out in the algorithm block.'
     );
     expect(() =>
-      interpretDomain(`${types}const Some = unop(Values, (a) => Flag(a.includes((x) => x)));`)
+      interpretDomain(`${types}const Some = unop((a: Values) => Flag(a.includes((x) => x)));`)
     ).toThrow(
       'An operator is one primitive step, and a function inside it, as for sort, map, or filter, makes it an algorithm: write that out in the algorithm block.'
     );
     // The subset's methods are primitive steps.
     expect(() =>
-      interpretDomain(`${types}const Rest = unop(Values, (a) => Values(a.slice(1)));`)
+      interpretDomain(`${types}const Rest = unop((a: Values) => Values(a.slice(1)));`)
     ).not.toThrow();
   });
 });
@@ -173,32 +188,32 @@ describe('no raw JavaScript but control flow', () => {
     [
       'a comparison',
       'const f = Flag(values[0] > values[1]);',
-      'values[0] > values[1]: > on Int values; declare it, as const Greater = binop(Int, Int, (a, b) => Flag(a > b));, and write Greater(values[0], values[1]).'
+      'values[0] > values[1]: > on Int values; declare it, as const Greater = binop((a: Int, b: Int) => Flag(a > b));, and write Greater(values[0], values[1]).'
     ],
     [
       'arithmetic',
       'const n = Int(target + 1);',
-      'target + 1: + on Int values; declare it, as const Add = binop(Int, Int, (a, b) => Int(a + b));, and write Add(target, 1).'
+      'target + 1: + on Int values; declare it, as const Add = binop((a: Int, b: Int) => Int(a + b));, and write Add(target, 1).'
     ],
     [
       'a compound assignment',
       'let n = Int(0); n += target;',
-      'n += target: += on Int values; declare it, as const Add = binop(Int, Int, (a, b) => Int(a + b));, and write n = Add(n, target).'
+      'n += target: += on Int values; declare it, as const Add = binop((a: Int, b: Int) => Int(a + b));, and write n = Add(n, target).'
     ],
     [
       'an increment',
       'let i = Index(0); i++;',
-      'i++: ++ on an Index; declare it, as const Next = unop(Index, (p) => Index(p + 1));, and write i = Next(i).'
+      'i++: ++ on an Index; declare it, as const Next = unop((p: Index) => Index(p + 1));, and write i = Next(i).'
     ],
     [
       'a negation',
       'let f = Flag(true); f = !f;',
-      '!f: ! on a Flag; declare it, as const Not = unop(Flag, (x) => Flag(!x));, and write Not(f).'
+      '!f: ! on a Flag; declare it, as const Not = unop((x: Flag) => Flag(!x));, and write Not(f).'
     ],
     [
       '.length',
       'const n = Index(values.length);',
-      'values.length: .length on a Values; declare it, as const Length = unop(Values, (v) => Index(v.length));, and write Length(values).'
+      'values.length: .length on a Values; declare it, as const Length = unop((v: Values) => Index(v.length));, and write Length(values).'
     ],
     [
       'Math',
@@ -213,7 +228,7 @@ describe('no raw JavaScript but control flow', () => {
     [
       'code that never runs',
       'if (false) { const n = Int(target - 1); }',
-      'target - 1: -; declare it, as const Subtract = binop(Int, Int, (a, b) => Int(a - b));, and write Subtract(target, 1).'
+      'target - 1: -; declare it, as const Subtract = binop((a: Int, b: Int) => Int(a - b));, and write Subtract(target, 1).'
     ]
   ])('reject %s, naming the operator to declare', (_name, body, message) => {
     expect(() => run(body)).toThrow(message);
@@ -223,27 +238,27 @@ describe('no raw JavaScript but control flow', () => {
     [
       'a push',
       'values.push(target);',
-      'values.push(target): computes a new Values from values; declare an operator, as const Append = binop(Values, Int, (c, x) => Values([...c, x]));, and write values = Append(values, target).'
+      'values.push(target): computes a new Values from values; declare an operator, as const Append = binop((c: Values, x: Int) => Values([...c, x]));, and write values = Append(values, target).'
     ],
     [
       'a shift',
       'const front = Int(values.shift());',
-      'values.shift(): computes a new Values from values; declare an operator, as const Rest = unop(Values, (c) => Values(c.slice(1)));, read what it takes first (values[0]), and write values = Rest(values).'
+      'values.shift(): computes a new Values from values; declare an operator, as const Rest = unop((c: Values) => Values(c.slice(1)));, read what it takes first (values[0]), and write values = Rest(values).'
     ],
     [
       'a reverse',
       'values.reverse();',
-      'const Reversed = unop(Values, (c) => Values(c.slice().reverse()));, and write values = Reversed(values).'
+      'const Reversed = unop((c: Values) => Values(c.slice().reverse()));, and write values = Reversed(values).'
     ],
     [
       'a search',
       'const at = Index(values.indexOf(target));',
-      'values.indexOf(target): computed from values; declare an operator, as const Find = binop(Values, Int, (c, x) => Index(c.indexOf(x)));, and write Find(values, target).'
+      'values.indexOf(target): computed from values; declare an operator, as const Find = binop((c: Values, x: Int) => Index(c.indexOf(x)));, and write Find(values, target).'
     ],
     [
       'a membership test',
       'const has = Flag(values.includes(target));',
-      'const Has = binop(Values, Int, (c, x) => Flag(c.includes(x)));'
+      'const Has = binop((c: Values, x: Int) => Flag(c.includes(x)));'
     ],
     [
       'a slice',
@@ -341,11 +356,11 @@ describe('writes', () => {
   });
 
   it('keep operators from changing anything, what they are given included', () => {
-    expect(() => interpretDomain(`${types}const Bad = unop(Int, (a) => Int(a = 1));`)).toThrow(
+    expect(() => interpretDomain(`${types}const Bad = unop((a: Int) => Int(a = 1));`)).toThrow(
       'Bad computes a value and changes nothing.'
     );
     const changing = interpretDomain(
-      `${types}const Grow = unop(Values, (c) => Values(c.push(1) ? c : c));`
+      `${types}const Grow = unop((c: Values) => Values(c.push(1) ? c : c));`
     );
     expect(() => traceAlgorithm('const v = Grow(values);', input, changing)).toThrow(
       'An operator computes a new value and changes nothing: write the new collection, as [...c, x] or c.slice(1), not c.push().'

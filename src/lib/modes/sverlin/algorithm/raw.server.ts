@@ -130,13 +130,13 @@ export function rawProblem(
   const a = (type: string) => `${/^[AEIOU]/u.test(type) ? 'an' : 'a'} ${type}`;
   const on = types ? (first === second ? ` on ${first} values` : ` on ${first} and ${second}`) : '';
   if (operation === 'template')
-    return `${text(node)}: a template string is computed inside an operator’s function; declare one, as const Label = unop(Int, (n) => Name(\`v\${n}\`));, and apply it, as Label(n).`;
+    return `${text(node)}: a template string is computed inside an operator’s function; declare one, as const Label = unop((n: Int) => Name(\`v\${n}\`));, and apply it, as Label(n).`;
   if (operation === 'Math')
-    return 'Math is used only inside an operator’s function; declare one, as const Floor = unop(Int, (x) => Int(Math.floor(x)));, and apply it, as Floor(x).';
+    return 'Math is used only inside an operator’s function; declare one, as const Floor = unop((x: Int) => Int(Math.floor(x)));, and apply it, as Floor(x).';
   if (operation === '.length' && node.type === 'MemberExpression') {
     const collection = types?.[0] ?? 'Values';
     const index = context.indexOf(collection);
-    const declare = `${index ? '' : `const Index = index(${collection}); `}const Length = unop(${collection}, (v) => ${index ?? 'Index'}(v.length));`;
+    const declare = `${index ? '' : `const Index = index(${collection}); `}const Length = unop((v: ${collection}) => ${index ?? 'Index'}(v.length));`;
     return `${text(node)}: .length on ${types ? a(collection) : 'a collection'}; declare it, as ${declare}, and write Length(${text(node.object as AnyNode)}).`;
   }
   if (node.type === 'CallExpression' && node.callee.type === 'MemberExpression') {
@@ -149,31 +149,31 @@ export function rawProblem(
       const [operator, made, read] = {
         push: [
           'Append',
-          `binop(${collection}, ${element}, (c, x) => ${collection}([...c, x]))`,
+          `binop((c: ${collection}, x: ${element}) => ${collection}([...c, x]))`,
           ''
         ],
         unshift: [
           'Prepend',
-          `binop(${collection}, ${element}, (c, x) => ${collection}([x, ...c]))`,
+          `binop((c: ${collection}, x: ${element}) => ${collection}([x, ...c]))`,
           ''
         ],
-        shift: ['Rest', `unop(${collection}, (c) => ${collection}(c.slice(1)))`, `${owner}[0]`],
+        shift: ['Rest', `unop((c: ${collection}) => ${collection}(c.slice(1)))`, `${owner}[0]`],
         pop: [
           'Front',
-          `unop(${collection}, (c) => ${collection}(c.slice(0, -1)))`,
+          `unop((c: ${collection}) => ${collection}(c.slice(0, -1)))`,
           'the last element'
         ],
-        reverse: ['Reversed', `unop(${collection}, (c) => ${collection}(c.slice().reverse()))`, '']
+        reverse: ['Reversed', `unop((c: ${collection}) => ${collection}(c.slice().reverse()))`, '']
       }[method as 'push']!;
       const write = `${owner} = ${operator}(${owner}${argument ? `, ${argument}` : ''})`;
       return `${text(node)}: computes a new ${collection} from ${owner}; declare an operator, as const ${operator} = ${made};,${read ? ` read what it takes first (${read}),` : ''} and write ${write}.`;
     }
     const index = context.indexOf(collection) ?? 'Index';
     const [operator, made] = {
-      indexOf: ['Find', `binop(${collection}, ${element}, (c, x) => ${index}(c.indexOf(x)))`],
-      includes: ['Has', `binop(${collection}, ${element}, (c, x) => ${flag}(c.includes(x)))`],
-      slice: ['Part', `unop(${collection}, (c) => ${collection}(c.slice(1)))`],
-      join: ['Joined', `unop(${collection}, (c) => Text(c.join(',')))`]
+      indexOf: ['Find', `binop((c: ${collection}, x: ${element}) => ${index}(c.indexOf(x)))`],
+      includes: ['Has', `binop((c: ${collection}, x: ${element}) => ${flag}(c.includes(x)))`],
+      slice: ['Part', `unop((c: ${collection}) => ${collection}(c.slice(1)))`],
+      join: ['Joined', `unop((c: ${collection}) => Text(c.join(',')))`]
     }[method as 'indexOf']!;
     const operands = method === 'slice' || method === 'join' ? owner : `${owner}, ${argument}`;
     return `${text(node)}: computed from ${owner}; declare an operator, as const ${operator} = ${made};, and write ${operator}(${operands}).`;
@@ -181,17 +181,17 @@ export function rawProblem(
   if (node.type === 'UpdateExpression') {
     const [name, sign] = operation === '++' ? ['Next', '+'] : ['Prev', '-'];
     const target = text(node.argument);
-    return `${text(node)}: ${operation}${types ? ` on ${a(first)}` : ''}; declare it, as const ${name} = unop(${first}, (p) => ${first}(p ${sign} 1));, and write ${target} = ${name}(${target}).`;
+    return `${text(node)}: ${operation}${types ? ` on ${a(first)}` : ''}; declare it, as const ${name} = unop((p: ${first}) => ${first}(p ${sign} 1));, and write ${target} = ${name}(${target}).`;
   }
   if (node.type === 'UnaryExpression') {
     const [name, made] =
       operation === '!' ? ['Not', `${first}(!x)`] : ['Negate', `${first}(${operation}x)`];
-    return `${text(node)}: ${operation}${types ? ` on ${a(first)}` : ''}; declare it, as const ${name} = unop(${first}, (x) => ${made});, and write ${name}(${text(node.argument)}).`;
+    return `${text(node)}: ${operation}${types ? ` on ${a(first)}` : ''}; declare it, as const ${name} = unop((x: ${first}) => ${made});, and write ${name}(${text(node.argument)}).`;
   }
   const symbol = node.type === 'AssignmentExpression' ? operation.slice(0, -1) : operation;
   const name = operatorNames[symbol] ?? 'Op';
   const result = comparisons.has(symbol) ? flag : first;
-  const declare = `${comparisons.has(symbol) ? flagFirst : ''}const ${name} = binop(${first}, ${second}, (a, b) => ${result}(a ${symbol} b));`;
+  const declare = `${comparisons.has(symbol) ? flagFirst : ''}const ${name} = binop((a: ${first}, b: ${second}) => ${result}(a ${symbol} b));`;
   if (node.type === 'AssignmentExpression') {
     const target = text(node.left as AnyNode);
     return `${text(node)}: ${operation}${on}; declare it, as ${declare}, and write ${target} = ${name}(${target}, ${text(node.right)}).`;

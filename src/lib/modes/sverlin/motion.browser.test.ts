@@ -17,15 +17,15 @@ const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 const merge = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
-  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
+  const Append = binop((c: Values, x: Int) => Values([...c, x]));
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Position(v.length));
-  const Before = binop(Position, Position, (a, b) => Flag(a < b));
-  const Same = binop(Position, Position, (a, b) => Flag(a === b));
-  const Next = unop(Position, (p) => Position(p + 1));
-  const Last = unop(Values, (v) => Position(v.length - 1));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Same = binop((a: Position, b: Position) => Flag(a === b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Last = unop((v: Values) => Position(v.length - 1));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
 </script>
 <script lang="sverlin" input>
   const left = Values([1, 4, 7]);
@@ -217,9 +217,9 @@ const walk = `<script lang="sverlin" domain>
   const Edges = collection(Edge);
   const EdgeIndex = index(Edges);
   const Flag = type('boolean');
-  const Count = unop(Edges, (es) => EdgeIndex(es.length));
-  const Before = binop(EdgeIndex, EdgeIndex, (a, b) => Flag(a < b));
-  const Next = unop(EdgeIndex, (e) => EdgeIndex(e + 1));
+  const Count = unop((es: Edges) => EdgeIndex(es.length));
+  const Before = binop((a: EdgeIndex, b: EdgeIndex) => Flag(a < b));
+  const Next = unop((e: EdgeIndex) => EdgeIndex(e + 1));
 </script>
 <script lang="sverlin" input>
   const vertices = Names(['A', 'B', 'C']);
@@ -289,10 +289,10 @@ const taken = `<script lang="sverlin" domain>
   const Index = index(Values);
   const Take = record({ from: Index });
   const Flag = type('boolean');
-  const Length = unop(Values, (v) => Index(v.length));
-  const Before = binop(Index, Index, (a, b) => Flag(a < b));
-  const Next = unop(Index, (p) => Index(p + 1));
-  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
 </script>
 <script lang="sverlin" input>
   const left = Values([1, 4, 6]);
