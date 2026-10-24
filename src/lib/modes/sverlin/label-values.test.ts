@@ -85,6 +85,14 @@ describe('labels read in the view', () => {
     expect(() => prepare('{@render Int(@v)}', twice)).toThrow(
       '@v could be @a.v or @b.v; write more of its name.'
     );
+    // A label named exactly as written wins over one whose name only ends so.
+    const nested = `
+<script lang="sverlin">
+  const x = @v[values[0]];
+  @b[const y = @v[values[1]];]
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
+    expect(() => prepare('{@render Int(@v)}{@render Int(@b.v)}', nested)).not.toThrow();
   });
 
   it('take a label on an expression, and are read only in the root', () => {

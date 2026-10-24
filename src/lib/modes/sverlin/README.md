@@ -336,7 +336,7 @@ for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
 <Node tags="key">inserting {@render Int(@insert.key)}</Node>
 ```
 
-A name may be written as its shortest ending that names one label (`@key` for `@insert.key`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root, never in a view.
+A name may be written as its shortest ending that names one label (`@key` for `@insert.key`), and a label named exactly as written wins over one whose name only ends so (`@check` is `check`, not `check.check`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root, never in a view.
 
 What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`, every value the label has given up to this step, and `applied(Equal)`, every application of `Equal` so far (`applied(Equal, @check)`, those made inside `@check`). A pointer for each of a label's positions marks the cells a search has checked, and an operator's view draws each application:
 

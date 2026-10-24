@@ -118,15 +118,19 @@ export function labelSpan({ nodes }: Label): { start: number; end: number } {
 }
 
 /**
- * The label a written path names: the one whose full name is it or ends with it. Problems name the
- * labels it could be, or the fix for a label on code that is no expression.
+ * The label a written path names: the one whose full name is it, else the one whose full name ends
+ * with it. Problems name the labels it could be, or the fix for a label on code that is no
+ * expression.
  */
 export function resolveLabel(
   written: string,
   labels: readonly Label[],
   asValue: boolean
 ): { label: Label } | { problem: string } {
-  const candidates = labels.filter(({ full }) => full === written || full.endsWith(`.${written}`));
+  const exact = labels.filter(({ full }) => full === written);
+  const candidates = exact.length
+    ? exact
+    : labels.filter(({ full }) => full.endsWith(`.${written}`));
   if (!candidates.length)
     return {
       problem: `@${written} names no label of the algorithm${labels.length ? `; its labels are ${labels.map(({ full }) => `@${full}`).join(', ')}` : ''}.`
