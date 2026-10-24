@@ -275,6 +275,9 @@ export function readLabels(
       );
       if (!beside.length) continue;
       if (beside.some((label) => label.nodes.some((marked) => within(marked, node)))) continue;
+      // Declarations leading their block, before any labelled code, are the lead-up to its first
+      // step, as a loop's header is.
+      if (node.type === 'VariableDeclaration' && leading(node, beside)) continue;
       if (reported.some((outer) => within(node, outer))) continue;
       reported.push(node);
       const text = code.slice(spanOf(node).start, spanOf(node).end).trim().split('\n')[0];
@@ -283,6 +286,20 @@ export function readLabels(
         at: spanOf(node).start
       });
     }
+  }
+
+  /** Whether every statement before a declaration in its block is a declaration, labelled none. */
+  function leading(node: AnyNode, beside: readonly Label[]): boolean {
+    const list = lists.find((statements) => statements.includes(node));
+    if (!list) return false;
+    const labelled = (statement: AnyNode) =>
+      beside.some(({ nodes: marked }) =>
+        marked.some((part) => within(part, statement) || within(statement, part))
+      );
+    return list
+      .slice(0, list.indexOf(node))
+      .filter((statement) => spanOf(statement).start >= 0)
+      .every((statement) => statement.type === 'VariableDeclaration' && !labelled(statement));
   }
 
   /** The nearest statement label around a label, in the same function. */

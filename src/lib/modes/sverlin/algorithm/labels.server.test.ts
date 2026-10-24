@@ -73,18 +73,23 @@ describe('labels', () => {
     ).toEqual(['start', 'loop', 'loop.test', 'loop.test.low', 'loop.test.small']);
   });
 
-  it('cover every statement beside a labelled one, leaving a loop’s header and an expression’s surroundings', () => {
-    expect(problemOf('let a = Int(1);\n@b[let c = Int(2);]')).toThrow(
-      'let a = Int(1); is in the algorithm but in none of the labels beside it (@b)'
+  it('cover every statement beside a labelled one, leaving a loop’s header, leading declarations, and an expression’s surroundings', () => {
+    expect(problemOf(`let a = Int(1);\na = Up(a);\n@b[let c = Int(2);]`)).toThrow(
+      'a = Up(a); is in the algorithm but in none of the labels beside it (@b)'
     );
+    // Declarations leading a block are the lead-up to its first step; one after labelled code is
+    // not.
+    expect(problemOf('let a = Int(1);\nconst d = Int(2);\n@b[let c = Int(3);]')).not.toThrow();
     expect(
       problemOf(`
         for (let i = Int(0); Less(i, 3); i = Up(i)) @pass{
           let a = Int(1);
           @b[let c = Int(2);]
+          let e = Int(3);
+          @f[e = Up(e);]
         }
       `)
-    ).toThrow('let a = Int(1); is in @pass but in none of the labels beside it (@b)');
+    ).toThrow('let e = Int(3); is in @pass but in none of the labels beside it (@b, @f)');
     // A loop's header is its control code; the code around a labelled test needs no label.
     expect(
       problemOf(`
