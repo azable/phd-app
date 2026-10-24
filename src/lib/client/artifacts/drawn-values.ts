@@ -6,7 +6,8 @@
  * type, as {@render Flag(seen)}, the view each shown variant draws it with; the first top-level
  * node's chip also holds the page frame, with which events are steps (frames), which shows above
  * the source where there is no such node.
- * Views of a type that no shown presentation's variant chose are greyed out. A presentation built
+ * Views of a type that no shown presentation's variant chose are greyed out, and so are nodes every
+ * shown presentation left out (see left-out.ts). A presentation built
  * while sources had design blocks also marks each draw call with the value each shown presentation
  * drew there.
  *
@@ -64,6 +65,8 @@ export type DrawnPresentation = {
   origins?: Readonly<Record<string, string>>;
   views?: Readonly<Record<string, readonly string[]>>;
   kinds?: Readonly<Record<string, readonly string[]>>;
+  /** The <Node> tags it left out, by their line:column; none recorded by older presentations. */
+  leftOut?: readonly string[];
   /** The draws of a presentation built while sources had design blocks; none for others. */
   draws: readonly DesignDraw[];
   layouts?: readonly DrawnLayout[];
@@ -123,6 +126,55 @@ export function unchosenViews(
     }
   }
   return [...unchosen.values()].sort((a, b) => a.from - b.from);
+}
+
+/**
+ * The <Node> tags every shown presentation left out, each from its opening tag to the end of its
+ * closing one. Where a presentation recorded none, as older ones, nothing is left out.
+ */
+export function leftOutNodes(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): UnchosenView[] {
+  if (!presentations.length || presentations.some(({ leftOut }) => !leftOut)) return [];
+  const [first, ...others] = presentations.map(({ leftOut }) => new Set(leftOut));
+  const doc = state.doc.toString();
+  const nodes: UnchosenView[] = [];
+  for (const site of first) {
+    if (others.some((set) => !set.has(site))) continue;
+    const [line, column] = site.split(':').map(Number);
+    if (!(line >= 1 && line <= state.doc.lines)) continue;
+    const from = state.doc.line(line).from + column - 1;
+    if (!doc.startsWith('<Node', from)) continue;
+    nodes.push({
+      from,
+      to: nodeEnd(doc, from),
+      title: 'Not drawn: left out of every shown presentation'
+    });
+  }
+  // A node inside another left out is greyed once, with it.
+  return nodes
+    .sort((a, b) => a.from - b.from)
+    .filter(
+      (node) =>
+        !nodes.some((outer) => outer !== node && outer.from <= node.from && node.to <= outer.to)
+    );
+}
+
+/** Where the <Node> starting at `from` ends: after its closing tag, or its own if it closes itself. */
+function nodeEnd(doc: string, from: number): number {
+  const opening = from + tagEnd(doc.slice(from));
+  if (doc[opening - 2] === '/') return opening;
+  let depth = 1;
+  const tags = /<Node(?![\w$])|<\/Node\s*>/gu;
+  tags.lastIndex = opening;
+  for (let match = tags.exec(doc); match; match = tags.exec(doc)) {
+    if (match[0].startsWith('</')) {
+      depth--;
+      if (!depth) return match.index + match[0].length;
+    } else if (doc[match.index + tagEnd(doc.slice(match.index)) - 2] !== '/') depth++;
+  }
+  return opening;
 }
 
 /** Each named {#snippet} block of a source, from its {#snippet to the end of its {/snippet}. */
@@ -669,7 +721,10 @@ const drawnField = StateField.define<DrawnState>({
             : frameProps(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
-          unchosen: unchosenViews(transaction.state, effect.value.presentations)
+          unchosen: [
+            ...unchosenViews(transaction.state, effect.value.presentations),
+            ...leftOutNodes(transaction.state, effect.value.presentations)
+          ].sort((a, b) => a.from - b.from)
         };
       }
       if (effect.is(toggleGhosts)) {

@@ -60,6 +60,7 @@ import {
   type DesignValue,
   type VariantRequest
 } from './design.server';
+import { leftOutModel, leftOutSites, type LeftOutModel } from './left-out';
 import { kindKey, type KindRole } from './library/node/design';
 import { forms } from './library/node/forms';
 import type { FrameSettings } from './library/node/props';
@@ -127,6 +128,8 @@ export type SvelteBundle = {
   variant: Record<string, DesignValue>;
   /** Where each value came from. */
   origins: Record<string, DesignOrigin>;
+  /** The <Node> tags it leaves out, by their line:column. */
+  leftOut: string[];
 };
 
 type Block = { body: string; offset: number };
@@ -168,6 +171,8 @@ export type PreparedComponent = {
    * some step, which stands in hidden where a step has none or several of them.
    */
   applied?: Record<string, Application>;
+  /** The view's nodes and renders, and its views, for what each presentation leaves out. */
+  leftOut?: { model: LeftOutModel; components: string[] };
 };
 
 /** A listing's text and what each step lights in it, by frame rule. */
@@ -321,7 +326,7 @@ function framings(
  * events up to the code, then the code itself. The first step is never played into, a page
  * opening on its after, so its before is its after, as the variables it declares are.
  */
-function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
+export function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
   return steps.flatMap((step, index) => [
     index === 0 ? step : { ...step, ...(step.before ?? {}) },
     step
@@ -432,7 +437,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, every type a choice of its views. Remove the block, and say what nodes are with tags, as <Node tags="current">.',
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
-    const { insertions, problems, kinds, tagKinds, listing, listingAt } = withNodeRefs(
+    const { insertions, problems, kinds, tagKinds, nodeKinds, listing, listingAt } = withNodeRefs(
       svelteSource,
       ast,
       source,
@@ -719,6 +724,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             )
         )
       );
+    const slotted = new Map<number, string[]>();
     const tagged = withInsertions(svelteSource, [
       ...insertions,
       ...pointers.removals,
@@ -729,9 +735,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         new Set([...viewNames].filter((name) => !pointerViews.has(name))),
         new Set(Object.keys(components)),
         scoped,
-        operators
+        operators,
+        slotted
       )
     ]);
+    const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted);
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
@@ -794,7 +802,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         starter: starterVariant(kinds, chosen, listing, rules, ownListings)
       },
       ...(listings ? { listings } : {}),
-      ...(appliedNames.length ? { applied } : {})
+      ...(appliedNames.length ? { applied } : {}),
+      leftOut: { model: leftOut, components: Object.keys(components) }
     };
   } catch (cause) {
     const error =
@@ -878,6 +887,7 @@ export async function bundlePresentation(
   // carries its atomic types, the page frame, and the variant for the view, under keys no variable
   // can use; a variable out of scope at one stands in hidden (__absent).
   const phases = phasesOf(master);
+  const leftOut = leftOutOf(prepared, values, views, phases);
   const states = phases.map((phase, index) => {
     const standIn = standInsFor(phases, index);
     const ownApplied: TraceState = {};
@@ -905,7 +915,8 @@ export async function bundlePresentation(
       __copies: phase.identities?.copies ?? {},
       __refs: phase.identities?.refs ?? {},
       __frame: frame,
-      __design: values
+      __design: values,
+      __leftOut: [...leftOut.nodes, ...leftOut.renders]
     };
   });
   const language = values['listing.language'];
@@ -931,8 +942,29 @@ export async function bundlePresentation(
     masterSignature: prepared.signature,
     masterSteps: moments,
     variant: values,
-    origins: variant.origins
+    origins: variant.origins,
+    leftOut: leftOut.nodes
   };
+}
+
+/**
+ * What a presentation leaves out (see left-out.ts), from its variant, the view each type rendered by
+ * name draws, and its states.
+ */
+export function leftOutOf(
+  prepared: PreparedComponent,
+  values: Readonly<Record<string, unknown>>,
+  views: Readonly<Record<string, unknown>>,
+  phases: readonly MasterStep[]
+): { nodes: string[]; renders: string[] } {
+  if (!prepared.leftOut) return { nodes: [], renders: [] };
+  return leftOutSites(
+    prepared.leftOut.model,
+    values,
+    views,
+    new Set(prepared.leftOut.components),
+    phases
+  );
 }
 
 const sverlinBlock =
@@ -1334,6 +1366,8 @@ function withNodeRefs(
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
   tagKinds: Record<string, string[]>;
+  /** Each <Node> tag's base kind, by where it starts, for what a presentation leaves out. */
+  nodeKinds: Map<number, string>;
   /** Whether the view places a <Listing />, and where the first starts. */
   listing: boolean;
   listingAt?: number;
@@ -1483,6 +1517,7 @@ function withNodeRefs(
   const tagKinds: Record<string, string[]> = {};
   // A tag with conditional tags: its base tags, and every kind it can be, by where it starts.
   const sites = new Map<number, { base: string[]; keys: string[] }>();
+  const nodeKinds = new Map<number, string>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
   const add = (key: string, role: KindRole, start: number) => {
     const known = kinds.get(key);
@@ -1511,6 +1546,7 @@ function withNodeRefs(
     // step draws it alone, as with cond ? 'a' : 'b'.
     add(base, role, entry.start);
     based.add(base);
+    if (entry.name === 'Node') nodeKinds.set(entry.start, base);
     for (const key of keys) add(key, role, entry.start);
     if (keys.some((key) => key !== base)) sites.set(entry.start, { base: read.fixed, keys });
     const { line, column } = sourcePosition(source, entry.start);
@@ -1545,7 +1581,8 @@ function withNodeRefs(
       role,
       ...(based.has(key) ? {} : { conditional: true })
     })),
-    tagKinds
+    tagKinds,
+    nodeKinds
   };
 }
 

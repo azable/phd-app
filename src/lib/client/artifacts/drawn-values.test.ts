@@ -8,6 +8,7 @@ import {
   frameProps,
   drawnValues,
   ghostSummary,
+  leftOutNodes,
   setDrawnValues,
   tagGhosts,
   unchosenViews,
@@ -218,6 +219,32 @@ describe('drawn value markers', () => {
       expect(
         greyed(direct, [{ seed: 1, draws: [], views: options, variant: showing('IntDots') }])
       ).toEqual([{ view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }]);
+    });
+
+    it('greys out a node every shown presentation left out, from its tag to its closing tag', () => {
+      const markup = '<Node tags="title">Sort</Node>\n<Node tags="key">key <Node>{x}</Node></Node>';
+      const doc = EditorState.create({ doc: markup });
+      const left = (presentations: Parameters<typeof leftOutNodes>[1]) =>
+        leftOutNodes(doc, presentations).map(({ from, to }) => markup.slice(from, to));
+      expect(
+        left([
+          { seed: 1, draws: [], leftOut: ['2:1', '2:22'] },
+          { seed: 2, draws: [], leftOut: ['2:1'] }
+        ])
+      ).toEqual(['<Node tags="key">key <Node>{x}</Node></Node>']);
+      // One presentation drawing it, or one that recorded nothing, greys nothing.
+      expect(
+        left([
+          { seed: 1, draws: [], leftOut: ['2:1'] },
+          { seed: 2, draws: [], leftOut: [] }
+        ])
+      ).toEqual([]);
+      expect(
+        left([
+          { seed: 1, draws: [], leftOut: ['2:1'] },
+          { seed: 2, draws: [] }
+        ])
+      ).toEqual([]);
     });
 
     it('leaves views be beside a presentation that recorded no variant', () => {

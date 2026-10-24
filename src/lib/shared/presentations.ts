@@ -135,6 +135,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kinds each tag can be, by its line:column, as the editor shows them. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
+  leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
   /** Design values and draws of a presentation built while sources had design blocks. */
   parameters: v.optional(v.record(v.string(), v.unknown())),
   draws: v.optional(v.array(designDrawSchema)),

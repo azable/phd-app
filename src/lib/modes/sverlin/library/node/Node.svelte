@@ -23,6 +23,7 @@
     provideItemEnds,
     hiddenContext,
     insideComponentBox,
+    leftOutContext,
     keyedRef,
     layoutMemoryContext,
     nodeIdsContext,
@@ -269,6 +270,8 @@
   const overhang = overhangContext();
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   const hidden = hiddenContext();
+  // Left out of the presentation, as its kind's shown false leaves it out (see left-out.ts).
+  const leftOut = untrack(() => __ref !== undefined && (leftOutContext()?.has(__ref) ?? false));
   // A node keeps a least size so that changing content never moves anything around it. A typed
   // component's root keeps the largest box the component reaches for any of its inputs (see
   // assembly/entry.ts), and the nodes inside it keep their natural sizes, since that box already
@@ -379,8 +382,8 @@
   <Node {...given} {__text} __ref={undefined} />
 {/snippet}
 
-{#if look('shown') === false}
-  <!-- Left out of this variant: drawn nowhere, keeping no room. -->
+{#if look('shown') === false || leftOut}
+  <!-- Left out of this presentation: drawn nowhere, keeping no room. -->
 {:else}
   {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
     <Overhang {overhang} side="before">

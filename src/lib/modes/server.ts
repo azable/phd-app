@@ -38,6 +38,8 @@ export type ModeBuildResult =
         listings?: string[];
         // The kinds each tag can be, by its line:column.
         kinds?: Record<string, string[]>;
+        // The <Node> tags the presentation leaves out, by their line:column.
+        leftOut?: string[];
       };
     }
   | {

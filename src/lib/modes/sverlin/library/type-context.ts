@@ -51,6 +51,11 @@ export function typeContext(): TypeContext | undefined {
   return getContext<TypeContext | undefined>('sverlin:types');
 }
 
+/** The <Node> tags and renders the presentation leaves out, by their line:column (see left-out.ts). */
+export function leftOutContext(): ReadonlySet<string> | undefined {
+  return getContext<ReadonlySet<string> | undefined>('sverlin:left-out');
+}
+
 /** The presentation's variant: every variable of its design space, by key (see node/design.ts). */
 export function designContext(): DesignValues {
   return getContext<DesignValues | undefined>('sverlin:design') ?? {};

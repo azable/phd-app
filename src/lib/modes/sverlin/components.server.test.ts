@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import { pointerCalls, slotInsertions, withInsertions } from './components.server';
 
+/** Slots without the site each is stamped with, which one test checks on its own. */
+const unsited = (view: string) => view.replaceAll(/ site="\d+:\d+"/gu, '');
+
 /** The view with every call to a view wrapped in the slot of the element it draws. */
 function slotted(view: string, state = ['values', 'target', 'edges', 'vertices']): string {
   const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
   const components = new Set(['IntText', 'ValuesRow', 'EdgeRow']);
-  return withInsertions(
-    view,
-    slotInsertions(ast.html, view, new Set(state), new Set([...components, 'Int']), components)
+  return unsited(
+    withInsertions(
+      view,
+      slotInsertions(ast.html, view, new Set(state), new Set([...components, 'Int']), components)
+    )
   );
 }
 
@@ -150,9 +155,11 @@ describe('scope', () => {
     const state = new Set(['values', 'i', 'row', 'target']);
     const scoped = new Set(['i', 'row']);
     expect(
-      withInsertions(
-        view,
-        slotInsertions(ast.html, view, state, new Set(['Int']), new Set(), scoped)
+      unsited(
+        withInsertions(
+          view,
+          slotInsertions(ast.html, view, state, new Set(['Int']), new Set(), scoped)
+        )
       )
     ).toBe(
       '<SverlinSlot of={values} at={i} reads={["i"]}>{@render Int(values[i])}</SverlinSlot>{#each row as v, __k1}<SverlinSlot of={row} at={__k1} reads={["row"]}>{@render Int(v)}</SverlinSlot>{/each}<SverlinSlot path="target">{@render Int(target)}</SverlinSlot>'
@@ -172,15 +179,41 @@ describe('scope', () => {
   });
 });
 
+describe('sites', () => {
+  it('stamps each slot with its render’s line:column and records what it reads', () => {
+    const view = '<Node>{@render Int(target)}</Node>\n  {@render Int(values[i])}';
+    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    const rendered = new Map<number, string[]>();
+    const slots = withInsertions(
+      view,
+      slotInsertions(
+        ast.html,
+        view,
+        new Set(['target', 'values', 'i']),
+        new Set(['Int']),
+        new Set(),
+        new Set(['i']),
+        new Set(),
+        rendered
+      )
+    );
+    expect(slots).toContain('<SverlinSlot path="target" site="1:7">');
+    expect(slots).toContain('reads={["i"]} site="2:3">');
+    expect([...rendered.values()]).toEqual([[], ['i']]);
+  });
+});
+
 describe('text', () => {
   it('sets views inline in a node that writes text around them', () => {
     const view =
       '<Node>Found {@render Int(target)} here</Node><Node>{@render Int(target)}</Node><Node layout="row">At {@render Int(target)}</Node>';
     const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
     expect(
-      withInsertions(
-        view,
-        slotInsertions(ast.html, view, new Set(['target']), new Set(['Int']), new Set())
+      unsited(
+        withInsertions(
+          view,
+          slotInsertions(ast.html, view, new Set(['target']), new Set(['Int']), new Set())
+        )
       )
     ).toBe(
       '<Node __text>Found <SverlinSlot path="target">{@render Int(target)}</SverlinSlot> here</Node><Node><SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node><Node layout="row">At <SverlinSlot path="target">{@render Int(target)}</SverlinSlot></Node>'

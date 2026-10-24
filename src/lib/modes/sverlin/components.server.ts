@@ -9,6 +9,7 @@
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
+import { siteOf } from './left-out';
 
 /** Each component's type, by name. */
 export type ComponentSignatures = Record<string, string>;
@@ -499,7 +500,9 @@ export function slotInsertions(
    * The operators: rendered by name with nothing between the brackets, one draws the application a
    * step made, given as the prop __applied_Name, hidden where that step made none or several.
    */
-  operators: ReadonlySet<string> = new Set()
+  operators: ReadonlySet<string> = new Set(),
+  /** Filled with each slotted render's variables, by where it starts, for what is left out. */
+  rendered: Map<number, string[]> = new Map()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -557,8 +560,12 @@ export function slotInsertions(
         !((call.arguments as Part[] | undefined) ?? []).length
       ) {
         const key = `__applied_${callee.name}`;
+        rendered.set(part.start ?? 0, [key]);
         insertions.push(
-          { at: part.start ?? 0, text: `<SverlinSlot path="${key}" reads={["${key}"]}>` },
+          {
+            at: part.start ?? 0,
+            text: `<SverlinSlot path="${key}" reads={["${key}"]} site="${siteOf(source, part.start ?? 0)}">`
+          },
           { at: (call.end ?? 1) - 1, text: key },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );
@@ -575,10 +582,11 @@ export function slotInsertions(
             ...(local?.kind === 'item' ? stateReadsOf(local.of, scoped, locals) : [])
           ])
         ];
+        rendered.set(part.start ?? 0, reads);
         insertions.push(
           {
             at: part.start ?? 0,
-            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''}>`
+            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''} site="${siteOf(source, part.start ?? 0)}">`
           },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );

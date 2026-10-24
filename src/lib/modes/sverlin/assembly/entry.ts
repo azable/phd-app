@@ -49,6 +49,8 @@ type StepState = Record<string, unknown> & {
   /** The presentation's variant: every variable of its design, by key. */
   __design: DesignValues;
   __frame: FrameSettings;
+  /** The <Node> tags and renders it leaves out, by their line:column (see left-out.ts). */
+  __leftOut?: string[];
 };
 
 const playback = window as typeof window & {
@@ -201,6 +203,7 @@ function mountStep(
     __absent: absent = [],
     __design: design,
     __frame: frame,
+    __leftOut: leftOut = [],
     ...state
   } = substituted ?? (states[step] as StepState);
   // Arrays and objects in the props, by path and the other way round, so a node can find the types
@@ -244,6 +247,7 @@ function mountStep(
       },
       context: new Map<string, unknown>([
         ['sverlin:design', design],
+        ['sverlin:left-out', new Set(leftOut)],
         ['sverlin:layout-memory', memory],
         [
           'sverlin:listing',

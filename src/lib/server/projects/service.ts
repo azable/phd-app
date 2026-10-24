@@ -864,6 +864,7 @@ export async function activateBuiltPresentations(
       ...(bundle.frames ? { frames: bundle.frames } : {}),
       ...(bundle.listings?.length ? { listings: bundle.listings } : {}),
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
+      ...(bundle.leftOut ? { leftOut: bundle.leftOut } : {}),
       seed: item.seed,
       source: item.source,
       html: recordText(bundle.html, 'text/html'),
