@@ -19,6 +19,8 @@ const domain = interpretDomain(`
   const Triple = unop(Int, (n) => Int(n * 3));
   const Even = unop(Int, (n) => Flag(n % 2 === 0));
   const Short = unop(Values, (v) => Flag(v.length < 3));
+  const Tail = unop(Values, (v) => Values(v.slice(1)));
+  const Append = binop(Values, Int, (v, x) => Values([...v, x]));
 `);
 const run = (body: string, frames?: string) =>
   traceAlgorithm(body, undefined, domain, frames).steps;
@@ -63,7 +65,7 @@ describe('functions', () => {
         @step[const v = values[0];]
       }
       const values = Values([4, 2]);
-      first(values.slice(1));
+      first(Tail(values));
     `);
     expect(inside.state).toMatchObject({ values: [2], v: 2 });
   });
@@ -159,10 +161,10 @@ describe('loops', () => {
 
   it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
     const trace = run(`
-      @start[const values = Values([1]);
+      @start[let values = Values([1]);
       let i = Index(0);]
       for (i = Index(0); Before(i, Length(values)); i = Next(i)) {
-        @grow[if (Short(values)) values.push(1);]
+        @grow[if (Short(values)) values = Append(values, 1);]
       }
       for (let k = Int(1); Below(k, 10); k = Triple(k)) {
         @bump[k = Up(k);]

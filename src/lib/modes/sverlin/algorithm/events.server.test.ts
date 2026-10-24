@@ -11,6 +11,7 @@ const domain = interpretDomain(`
   const Equal = binop(Int, Int, (a, b) => Flag(a === b));
   const Less = binop(Int, Int, (a, b) => Flag(a < b));
   const Up = unop(Int, (n) => Int(n + 1));
+  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 /** Each event as its kind and what it names, with the source it is at. */
@@ -82,8 +83,8 @@ describe('the event log', () => {
 
   it('keeps each step’s latest events, counting every one', () => {
     // Stepping at each mark, the loop leads up to the first.
-    const body = `@fill[const values = Values([]);
-      for (let i = Int(0); Less(i, 1000); i = Up(i)) values.push(i);]
+    const body = `@fill[let values = Values([]);
+      for (let i = Int(0); Less(i, 1000); i = Up(i)) values = Append(values, i);]
       @mark[const a = Int(1);]
       @mark[const b = Int(2);]`;
     const { steps: trace } = traceAlgorithm(body, undefined, domain, 'mark');

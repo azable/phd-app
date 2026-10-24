@@ -220,6 +220,8 @@ export function interpretDomain(body: string): DomainRegistry {
       if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
         return;
       const part = node as AnyNode;
+      if (part.type === 'AssignmentExpression' || part.type === 'UpdateExpression')
+        fail(part, `${name} computes a value and changes nothing.`);
       if (part.type === 'Identifier') {
         const property =
           parent?.type === 'MemberExpression' && parent.property === part && !parent.computed;

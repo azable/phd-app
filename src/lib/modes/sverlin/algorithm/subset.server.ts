@@ -4,6 +4,7 @@ import type { AnyNode, BlockStatement } from 'acorn';
 
 import {
   AlgorithmError,
+  arrayMethods,
   describe,
   domainFunctions,
   forbiddenProperties,
@@ -58,17 +59,31 @@ export function checkSubset(
       case 'ArrayExpression':
       case 'ObjectExpression':
         // Input and algorithm values all come from domain types, so a literal is only written
-        // where a type is known for it: given to a type, or stored into a collection or record.
+        // where a type is known for it: given to a type or an operator, or written into an element
+        // or field.
         if ((kind === 'input' || kind === 'algorithm') && !typedContext(node, ancestors))
           reject(
             node,
             node.type === 'ArrayExpression'
-              ? 'Arrays are made by a collection type: define one in the domain block, such as const Queue = collection(Vertex);, and write Queue([...]). A literal can also be stored into a typed collection or record, as in queue.push(...) or cell.items = [...].'
-              : 'Objects are made by a record type: define one in the domain block, such as const Edge = record({ from: Vertex, to: Vertex });, and write Edge({ ... }). A literal can also be stored into a typed collection or record, as in edges.push({ ... }).'
+              ? 'Arrays are made by a collection type: define one in the domain block, such as const Queue = collection(Vertex);, and write Queue([...]). A literal can also be given to an operator, whose types it takes, or written into an element or field, as in cell.items = [...].'
+              : 'Objects are made by a record type: define one in the domain block, such as const Edge = record({ from: Vertex, to: Vertex });, and write Edge({ ... }). A literal can also be given to an operator, whose types it takes, or written into an element or field, as in edges[0] = { ... }.'
           );
         break;
       case 'CallExpression':
         if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name, kind);
+        // An operator is one step a learner takes as a single action, never a library algorithm.
+        if (
+          inOperator &&
+          node.callee.type === 'MemberExpression' &&
+          !node.callee.computed &&
+          node.callee.property.type === 'Identifier' &&
+          !(node.callee.object.type === 'Identifier' && node.callee.object.name === 'Math') &&
+          !arrayMethods.has(node.callee.property.name)
+        )
+          reject(
+            node,
+            `An operator is one primitive step; ${node.callee.property.name} is an algorithm, so write it out in the algorithm block.`
+          );
         break;
       case 'ArrowFunctionExpression':
         if (
@@ -85,6 +100,11 @@ export function checkSubset(
             );
           break;
         }
+        if (inOperator)
+          reject(
+            node,
+            'An operator is one primitive step, and a function inside it, as for sort, map, or filter, makes it an algorithm: write that out in the algorithm block.'
+          );
         reject(
           node,
           'Arrow functions are only an operator’s function, in binop(...) or unop(...) in the domain block; declare function name(...) { … } at the top level of the algorithm block.'
@@ -209,12 +229,10 @@ export function checkSubset(
       if (ancestor.type === 'CallExpression') {
         if (!(ancestor.arguments as AnyNode[]).includes(child)) return false;
         const callee = ancestor.callee;
-        if (callee.type === 'Identifier') return constructors.has(callee.name);
+        // A type or an operator gives a literal its type.
         return (
-          callee.type === 'MemberExpression' &&
-          !callee.computed &&
-          callee.property.type === 'Identifier' &&
-          (callee.property.name === 'push' || callee.property.name === 'unshift')
+          callee.type === 'Identifier' &&
+          (constructors.has(callee.name) || operators.has(callee.name))
         );
       }
       return (

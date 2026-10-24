@@ -73,10 +73,14 @@ Insertion sort, with the key drawn beside the row:
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
+
+  // walking the collection
   const Length = unop(Values, (v) => Position(v.length));
   const Before = binop(Position, Position, (a, b) => Flag(a < b));
   const Next = unop(Position, (p) => Position(p + 1));
   const Prev = unop(Position, (p) => Position(p - 1));
+
+  // what the algorithm does
   const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 </script>
 
@@ -119,9 +123,9 @@ Each step inserts one key: it is copied into its box, the larger values slide ri
 - The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; or `insert.*`, each run of a label inside `insert`. A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes the state, so the end of the algorithm is shown.
 - A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
 - Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
-- A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
+- A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` written when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
-- Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
+- Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[Prev(j)]` or `Merge(merged, Append(merged, left[i]))`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
 
 ## Loops and functions
 
@@ -137,11 +141,15 @@ Binary search, written recursively:
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
+
+  // walking the collection
   const After = binop(Index, Index, (a, b) => Flag(a > b));
   const Middle = binop(Index, Index, (a, b) => Index(Math.floor((a + b) / 2)));
   const Next = unop(Index, (p) => Index(p + 1));
   const Prev = unop(Index, (p) => Index(p - 1));
   const Last = unop(Values, (v) => Index(v.length - 1));
+
+  // what the algorithm does
   const Equal = binop(Int, Int, (a, b) => Flag(a === b));
   const Less = binop(Int, Int, (a, b) => Flag(a < b));
 </script>
@@ -186,11 +194,11 @@ Give values meaning with atomic types. No types are predefined: define each one 
 
 Every type has a known, finite set of values, so the view can be drawn for each of them. Choose ranges that hold every value the algorithm reaches, such as a count up to the input's length. Positions (`index(...)`, below) need no range: their collection gives them one.
 
-Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. There is no `null`: every variable starts with a value, and "nothing yet" is a value of a type that says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')` (see Collections, records, and unions). Taking a value that is not there, such as `.pop()` of an empty collection, is an error. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
+Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. There is no `null`: every variable starts with a value, and "nothing yet" is a value of a type that says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')` (see Collections, records, and unions). Reading a value that is not there, such as `queue[0]` of an empty queue, is an error. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
 
 A variable keeps the type it was made with, and a value assigned to it takes that type, as an element or field does: after `let found = Found(false);`, `found = true` and `found = Equal(values[i], target)` store a `Found`, while `found = Count(1)` is an error. A variable made by a union, as in `let d = Dist(0);`, can hold any of its members. The input and algorithm compute nothing themselves: comparisons, arithmetic, `.length`, and `Math` are operators the domain declares (see Operators), each giving a typed value.
 
-Typed values keep their type as the algorithm moves them between variables and arrays, and read as their plain values in conditions, `.indexOf`, `.includes`, and indexing. Inside an operator's function, they behave like their plain values in comparisons and `===`, and arithmetic keeps types: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
+Typed values keep their type as the algorithm moves them between variables and arrays, and read as their plain values in conditions and indexing. Inside an operator's function, they behave like their plain values in comparisons and `===`, and arithmetic keeps types: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
 
 The view receives plain values; a value's type chooses the views that draw it (see Views of types).
 
@@ -204,13 +212,13 @@ Every array and object in the input and algorithm is made by a type, defined in 
 - a position in a collection, such as a loop index or a pointer: `const Index = index(Values);`
 - a reference to an element of a collection of single values, which stays with it as it moves: `const Front = ref(Queue);`
 
-Make one by calling its name, writing its contents as literals, which take their types from it: `Values([3, 8, 5])` holds three `Int`s, and `Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a `Vertex`, a `Vertex`, and a `Weight`. Values added to a collection or assigned to a record's field take its types in the same way: `queue.push(3)`, `dist[v] = 0`, `edge.weight = 5`. An array or object literal anywhere else is an error, so there are no plain arrays or objects. A record has exactly its fields: leaving one out, or reading or writing another, is an error. `.slice()` of a collection gives a collection of the same type.
+Make one by calling its name, writing its contents as literals, which take their types from it: `Values([3, 8, 5])` holds three `Int`s, and `Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a `Vertex`, a `Vertex`, and a `Weight`. Values written into an element or a field take its types in the same way: `dist[v] = 0`, `edge.weight = 5`; a literal given to an operator takes the operand's type, as `queue = Append(queue, 3)`. An array or object literal anywhere else is an error, so there are no plain arrays or objects. A record has exactly its fields: leaving one out, or reading or writing another, is an error. `.slice()` of a collection gives a collection of the same type.
 
-A position is any whole number, and 0 to length - 1 point at an element of its collection; others point nowhere, as -1 before a search starts or the length after it ends, or the length + 1 after `i += 2`. Reading or writing an element outside the collection is an error, except that writing at the length adds one. The view keeps room past an end for the positions its pointers draw, as far as they go and at most 4 places, so a pointer further out draws nothing; a position nothing draws keeps none. A variable is bound to its collection when it is declared: `let i = Index(-1);` points into the only `Values`, and with several, name the one, as in `let i = Index(left, 0);`. The binding stays with the variable, so `k = i + j` gives `k` a number and leaves it pointing into its own collection. A position stored in a record or collection keeps the collection it came from: `Take({ from: j })` points into `right` when `j` does, as does `i + 1` when `i` does, and `const at = take.from;` declares `at` pointing there too. A number stored there, as in `Edges([{ from: 0, to: 1 }])`, points into the only collection of its type, and with several, name the one, as in `Take({ from: Index(left, 0) })`.
+A position is any whole number, and 0 to length - 1 point at an element of its collection; others point nowhere, as -1 before a search starts or the length after it ends, or the length + 1 after `i = Skip(i)`. Reading or writing an element outside the collection is an error, except that writing at the length adds one. The view keeps room past an end for the positions its pointers draw, as far as they go and at most 4 places, so a pointer further out draws nothing; a position nothing draws keeps none. A variable is bound to its collection when it is declared: `let i = Index(-1);` points into the only `Values`, and with several, name the one, as in `let i = Index(left, 0);`. The binding stays with the variable, so `Move(k, Sum(i, j))` gives `k` a number and leaves it pointing into its own collection. A position stored in a record or collection keeps the collection it came from: `Take({ from: j })` points into `right` when `j` does, as does `Next(i)` when `i` does, and `const at = take.from;` declares `at` pointing there too. A number stored there, as in `Edges([{ from: 0, to: 1 }])`, points into the only collection of its type, and with several, name the one, as in `Take({ from: Index(left, 0) })`.
 
-A grid is a collection of collections, as `const Table = collection(Counts);`. To point at a cell, hold the row in a variable and point into it: `let row = paths[r];` is that row itself, not a copy, so `let c = ColIndex(row, 1);` points at a cell of `paths`, and its pointer views draw there. Assigning `row = paths[r];` again moves `c` to the new row.
+A grid is a collection of collections, as `const Table = collection(Counts);`. To point at a cell, hold the row in a variable and point into it: `let row = paths[r];` is that row itself, not a copy, so `let c = ColIndex(row, 1);` points at a cell of `paths`, and its pointer views draw there. Changing `row` to another row, as `NextRow(row, paths[r])`, moves `c` to the new row.
 
-A reference is made from an element, `const front = Front(queue[0]);`, and reads as it, as in `edge.from === front`. Where a position stays at its place as the collection changes, a reference stays with its element: after `queue.shift()` or a sort it is wherever the element went, and once the element has left the collection it refers to nothing, so its pointer views draw nothing and keep their room. A reference follows an element of a collection of its own type, even when the same value is also a field elsewhere, as an edge's end pushed onto the queue. Use a position to step to a neighbour: `front + 1` is the element's value plus one.
+A reference is made from an element, `const front = Front(queue[0]);`, and reads as it, as in `Same(edge.from, front)`. Where a position stays at its place as the collection changes, a reference stays with its element: after `queue = Rest(queue)` or a sort it is wherever the element went, and once the element has left the collection it refers to nothing, so its pointer views draw nothing and keep their room. A reference follows an element of a collection of its own type, even when the same value is also a field elsewhere, as an edge's end pushed onto the queue. Use a position to step to a neighbour.
 
 A union value is always one of its members: a literal becomes the member it fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`, and a literal that fits two members needs its type written, as in `Distance(4)`. Inside an operator's function, members compare with `===` and `!==`, where values of different members are unequal, but not with `<` or `>`; check which member a value is before ordering it:
 
@@ -231,20 +239,36 @@ The view receives plain arrays and objects, drawn by the views of their types: a
 
 ## Operators
 
-The input and algorithm hold no JavaScript but control flow and typed values: everything they compute is an operator the domain declares, unary or binary, with its operands' types and a function of them:
+The input and algorithm compute nothing themselves: everything they compute is an operator the domain declares, unary or binary, with its operands' types and a function of them. Writing stays plain: `=` puts a value, typically an operator's result, into a variable, an element, or a field.
 
 ```js
+// walking the collection
+const Length = unop(Values, (v) => Index(v.length));
+const Before = binop(Index, Index, (a, b) => Flag(a < b));
+const Next = unop(Index, (p) => Index(p + 1));
+
+// what the algorithm does
 const Equal = binop(Int, Int, (a, b) => Flag(a === b));
 const Add = binop(Int, Int, (a, b) => Int(a + b));
-const Length = unop(Values, (v) => Index(v.length));
-const Next = unop(Index, (p) => Index(p + 1));
 ```
 
-The algorithm applies one as a call, its operands in order, each taking its operand's type as a function's argument does: `if (Equal(values[i], target)) break;`, `total = Add(total, v);`, `for (let i = Index(0); Before(i, Length(values)); i = Next(i))`. An application gives the value its function gives. Name operators for what they compute, as `Before`, `Middle`, or `Shorter`, and declare each the algorithm needs, position ones included.
+The algorithm applies an operator as a call, its operands in order, each taking its operand's type as a function's argument does, and gets the value its function gives: `if (Equal(values[i], target)) break;`, `total = Add(total, v);`, `for (let i = Index(0); Before(i, Length(values)); i = Next(i))`. Name operators for what they compute, as `Before`, `Middle`, or `Shorter`, and declare each the algorithm needs, those that walk the collection apart from what the algorithm does, as above.
 
-- Raw: control flow (`if`, loops, `break`, `continue`, `return`, the algorithm's functions, `? :`, `&&`, `||`, `??`), declarations, assignment, reading and writing elements and fields, collection methods (`.push`, `.shift`, …), and typed values from literals, as `Index(0)`, `Index(-1)`, or `Flag(true)`.
-- Declared as operators: every operator on values, as `<`, `===`, `+`, `!`, and `-x`; `++`, `--`, and `+=`; `.length`; `Math`; and template strings. Each written raw is an error naming the declaration to add and the call to write.
-- An operator's function is one expression of its operands, reading only them and `Math`, without braces, other operators, or the state, where JavaScript's operators work on typed values as described under Atomic types. It gives a typed value: wrap what it computes in a type, as `Flag(a > b)`, which is the operator's result type.
+A collection's methods compute too: an operator computes the new collection, and `=` writes it, in place, so the collection and each element it keeps stay the same values and move rather than reappear:
+
+```js
+const Append = binop(Queue, Vertex, (q, v) => Queue([...q, v]));
+const Rest = unop(Queue, (q) => Queue(q.slice(1)));
+```
+
+`queue = Append(queue, v);` adds `v` at the back, and `const u = queue[0]; queue = Rest(queue);` takes the front. A rearrangement is plain writes, labelled as one step, as a swap through a temporary: `@swap[const moved = values[i]; values[i] = values[Next(i)]; values[Next(i)] = moved;]` moves both values.
+
+Use `for (const v of values)` where a loop only reads the values and the view points at none of them, as a sum, and an index loop where the position matters: a pointer, a write back, a neighbour, or a position as the result.
+
+- Raw: control flow (`if`, loops, `break`, `continue`, `return`, the algorithm's functions, `? :`, `&&`, `||`, `??`), declarations, writes with `=` (to a variable declared with `let`, an element, or a field), reading elements and fields, and typed values from literals, as `Index(0)`, `Index(-1)`, or `Flag(true)`.
+- Declared as operators: every operator on values, as `<`, `===`, `+`, `!`, and `-x`; `++`, `--`, and `+=`; `.length`; `Math`; template strings; and collection methods, as `.push`, `.shift`, `.indexOf`, or `.slice`. Each written raw is an error naming the declaration to add and what to write.
+- An operator changes nothing, so an application whose result is unused, as `Append(served, front);` or a `for` update `Next(i)`, is an error naming the write: `served = Append(served, front)`.
+- An operator is one primitive step, one a learner takes as a single action (compare, add, take the next position, append), never a loop or a library algorithm: a merge by `Values([...a, ...b].sort(…))` is refused, as `sort` is an algorithm, and merging is written out in the algorithm block. Its function is one expression of its operands, reading only them and `Math`, without braces, nested functions, other operators, methods outside the subset, or the state, and changing nothing, where JavaScript's operators and the collection methods work on typed values as described under Atomic types. It gives a typed value: wrap what it computes in a type, as `Flag(a > b)`, which is the operator's result type.
 
 ## Design
 
@@ -336,7 +360,7 @@ Example, with domain, input, algorithm, and a script-free view:
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); `&&`, `||`, `??`, and `? :`; collection methods `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`; and operators the domain declares (see Operators), whose functions may use JavaScript's operators, template strings, `.length`, and `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
+- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); `&&`, `||`, `??`, and `? :`; writes with `=`; and the operators the domain declares (see Operators), whose functions may use JavaScript's operators, template strings, `.length`, the collection methods (`[...c, x]`, `.slice`, `.indexOf`, `.includes`, `.join`), and `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
 - Not allowed: `null` and `undefined`, other functions, such as arrow functions outside an operator and functions inside blocks, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
@@ -362,10 +386,14 @@ Insertion sort, beside a textbook's pseudocode:
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
+
+  // walking the collection
   const Length = unop(Values, (v) => Position(v.length));
   const Before = binop(Position, Position, (a, b) => Flag(a < b));
   const Next = unop(Position, (p) => Position(p + 1));
   const Prev = unop(Position, (p) => Position(p - 1));
+
+  // what the algorithm does
   const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 </script>
 
@@ -481,12 +509,18 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   const Edges = collection(Edge);
   const EdgeIndex = index(Edges);
   const Queue = collection(VertexRef);
-  const Waiting = unop(Queue, (q) => Flag(q.length > 0));
+
+  // walking the edges
   const Count = unop(Edges, (es) => EdgeIndex(es.length));
   const Before = binop(EdgeIndex, EdgeIndex, (a, b) => Flag(a < b));
   const Next = unop(EdgeIndex, (e) => EdgeIndex(e + 1));
+
+  // what the algorithm does
+  const Waiting = unop(Queue, (q) => Flag(q.length > 0));
   const Same = binop(VertexRef, VertexRef, (a, b) => Flag(a === b));
   const Not = unop(Flag, (f) => Flag(!f));
+  const Append = binop(Queue, VertexRef, (q, v) => Queue([...q, v]));
+  const Rest = unop(Queue, (q) => Queue(q.slice(1)));
 </script>
 
 <script lang="sverlin" input>
@@ -510,12 +544,13 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   @start[let queue = Queue([0]);
   vertices[0].seen = true;]
   while (Waiting(queue)) @visit{
-    @take[const current = VertexRef(queue.shift());]
+    @take[const current = queue[0];
+    queue = Rest(queue);]
     for (let e = EdgeIndex(0); Before(e, Count(edges)); e = Next(e)) @edge{
       if (Same(edges[e].from, current)) {
         if (Not(vertices[edges[e].to].seen)) {
           vertices[edges[e].to].seen = true;
-          queue.push(edges[e].to);
+          queue = Append(queue, edges[e].to);
         }
       }
     }

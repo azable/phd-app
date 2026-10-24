@@ -21,6 +21,19 @@ export const domainFunctions: ReadonlySet<string> = new Set([
   'unop'
 ]);
 
+/** The array methods of the subset, used inside an operator's function. */
+export const arrayMethods: ReadonlySet<string> = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'slice',
+  'indexOf',
+  'includes',
+  'reverse',
+  'join'
+]);
+
 /** Property names no block may read, write, or declare. */
 export const forbiddenProperties: ReadonlySet<string> = new Set([
   '__proto__',

@@ -1,7 +1,8 @@
 /**
- * What the input and algorithm may not compute themselves: an operator on their values, `.length`,
- * or Math. Each is an operator the domain declares (binop, unop), whose function computes it; the
- * problem names the declaration to add and the call to write.
+ * What the input and algorithm may not do themselves: compute, as an operator on their values,
+ * `++` and `+=`, `.length`, Math, a template string, or a collection method. Computing is an
+ * operator the domain declares (binop, unop), its result written with `=`; the problem names the
+ * declaration to add and what to write.
  */
 
 import type { AnyNode, BlockStatement } from 'acorn';
@@ -22,29 +23,52 @@ const operatorNames: Record<string, string> = {
 };
 const comparisons = new Set(['<', '<=', '>', '>=', '===', '!==']);
 
+/** Collection methods that change the collection, and those that compute from it. */
+export const changingMethods: ReadonlySet<string> = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'reverse'
+]);
+const computingMethods: ReadonlySet<string> = new Set(['indexOf', 'includes', 'slice', 'join']);
+
 /**
- * The raw operation a node is, if any: its operator, `.length`, or `Math`. A negative number is a
- * literal, not an operation.
+ * The raw operation a node is, if any: its operator (a write with `=` is none), `.length`, `Math`,
+ * a template string, or a collection method, as `.push`. A negative number is a literal, not an
+ * operation.
  */
 export function rawOperation(node: AnyNode): string | undefined {
   switch (node.type) {
     case 'BinaryExpression':
     case 'UpdateExpression':
       return node.operator;
+    case 'AssignmentExpression':
+      return node.operator === '=' ? undefined : node.operator;
     case 'UnaryExpression':
       return node.operator === '-' &&
         node.argument.type === 'Literal' &&
         typeof node.argument.value === 'number'
         ? undefined
         : node.operator;
-    case 'AssignmentExpression':
-      return node.operator === '=' ? undefined : node.operator;
     case 'MemberExpression':
       return !node.computed &&
         node.property.type === 'Identifier' &&
         node.property.name === 'length'
         ? '.length'
         : undefined;
+    case 'CallExpression': {
+      const { callee } = node;
+      const name =
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.type === 'Identifier'
+          ? callee.property.name
+          : undefined;
+      return name && (changingMethods.has(name) || computingMethods.has(name))
+        ? `.${name}`
+        : undefined;
+    }
     case 'Identifier':
       return node.name === 'Math' ? 'Math' : undefined;
     case 'TemplateLiteral':
@@ -74,15 +98,19 @@ export function firstRawOperation(
   return found;
 }
 
-/** What the problem needs to know of the domain: its boolean type, and a collection's index type. */
+/**
+ * What the problem needs to know of the domain: its boolean type, a collection's index type, and a
+ * collection's element type.
+ */
 export type RawContext = {
   text: (node: AnyNode) => string;
   flag?: string;
   indexOf: (collection: string) => string | undefined;
+  elementOf: (collection: string) => string | undefined;
 };
 
 /**
- * The problem with a raw operation, naming the declaration to add and the call to write; the
+ * The problem with a raw operation, naming the declarations to add and the call to write; the
  * operands' types when the operation ran, else none.
  */
 export function rawProblem(
@@ -111,6 +139,45 @@ export function rawProblem(
     const declare = `${index ? '' : `const Index = index(${collection}); `}const Length = unop(${collection}, (v) => ${index ?? 'Index'}(v.length));`;
     return `${text(node)}: .length on ${types ? a(collection) : 'a collection'}; declare it, as ${declare}, and write Length(${text(node.object as AnyNode)}).`;
   }
+  if (node.type === 'CallExpression' && node.callee.type === 'MemberExpression') {
+    const method = operation.slice(1);
+    const owner = text(node.callee.object as AnyNode);
+    const collection = types?.[0] ?? 'Values';
+    const element = context.elementOf(collection) ?? 'Int';
+    const argument = node.arguments[0] ? text(node.arguments[0] as AnyNode) : '';
+    if (changingMethods.has(method)) {
+      const [operator, made, read] = {
+        push: [
+          'Append',
+          `binop(${collection}, ${element}, (c, x) => ${collection}([...c, x]))`,
+          ''
+        ],
+        unshift: [
+          'Prepend',
+          `binop(${collection}, ${element}, (c, x) => ${collection}([x, ...c]))`,
+          ''
+        ],
+        shift: ['Rest', `unop(${collection}, (c) => ${collection}(c.slice(1)))`, `${owner}[0]`],
+        pop: [
+          'Front',
+          `unop(${collection}, (c) => ${collection}(c.slice(0, -1)))`,
+          'the last element'
+        ],
+        reverse: ['Reversed', `unop(${collection}, (c) => ${collection}(c.slice().reverse()))`, '']
+      }[method as 'push']!;
+      const write = `${owner} = ${operator}(${owner}${argument ? `, ${argument}` : ''})`;
+      return `${text(node)}: computes a new ${collection} from ${owner}; declare an operator, as const ${operator} = ${made};,${read ? ` read what it takes first (${read}),` : ''} and write ${write}.`;
+    }
+    const index = context.indexOf(collection) ?? 'Index';
+    const [operator, made] = {
+      indexOf: ['Find', `binop(${collection}, ${element}, (c, x) => ${index}(c.indexOf(x)))`],
+      includes: ['Has', `binop(${collection}, ${element}, (c, x) => ${flag}(c.includes(x)))`],
+      slice: ['Part', `unop(${collection}, (c) => ${collection}(c.slice(1)))`],
+      join: ['Joined', `unop(${collection}, (c) => Text(c.join(',')))`]
+    }[method as 'indexOf']!;
+    const operands = method === 'slice' || method === 'join' ? owner : `${owner}, ${argument}`;
+    return `${text(node)}: computed from ${owner}; declare an operator, as const ${operator} = ${made};, and write ${operator}(${operands}).`;
+  }
   if (node.type === 'UpdateExpression') {
     const [name, sign] = operation === '++' ? ['Next', '+'] : ['Prev', '-'];
     const target = text(node.argument);
@@ -131,4 +198,59 @@ export function rawProblem(
   }
   const { left, right } = node as unknown as { left: AnyNode; right: AnyNode };
   return `${text(node)}: ${operation}${on}; declare it, as ${declare}, and write ${name}(${text(left)}, ${text(right)}).`;
+}
+
+/**
+ * The first application of a domain operator whose result is unused, with its problem: operators
+ * change nothing, so discarding one is a mistake. Unused is a statement's expression, the sides of
+ * `&&`, `||`, `??`, and `? :` whose value is itself unused, a sequence's parts, and a `for`
+ * update. The fix assigns to the first operand where it is a place of the result's type.
+ */
+export function firstDiscarded(
+  root: BlockStatement,
+  operators: Readonly<Record<string, { operands: readonly string[]; result: string }>>,
+  text: (node: AnyNode) => string
+): { node: AnyNode; message: string } | undefined {
+  let found: { node: AnyNode; message: string } | undefined;
+  const unused = (node: AnyNode | null | undefined): void => {
+    if (found || !node) return;
+    switch (node.type) {
+      case 'CallExpression': {
+        const operator =
+          node.callee.type === 'Identifier' ? operators[node.callee.name] : undefined;
+        if (!operator) return;
+        const [first] = node.arguments as AnyNode[];
+        const place =
+          first &&
+          (first.type === 'Identifier' || first.type === 'MemberExpression') &&
+          operator.operands[0] === operator.result;
+        const a = /^[AEIOU]/u.test(operator.result) ? 'an' : 'a';
+        found = {
+          node,
+          message: `${text(node)} computes ${a} ${operator.result} and discards it; operators change nothing. Write ${place ? `${text(first)} = ${text(node)}` : `const result = ${text(node)}`}.`
+        };
+        return;
+      }
+      case 'LogicalExpression':
+        return unused(node.right);
+      case 'ConditionalExpression':
+        unused(node.consequent);
+        return unused(node.alternate);
+      case 'SequenceExpression':
+        return node.expressions.forEach((part) => unused(part));
+      default:
+        return;
+    }
+  };
+  const visit = (node: unknown): void => {
+    if (found || node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    const part = node as AnyNode;
+    if (typeof part.type !== 'string') return;
+    if (part.type === 'ExpressionStatement') unused(part.expression);
+    if (part.type === 'ForStatement') unused(part.update);
+    for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child);
+  };
+  visit(root.body);
+  return found;
 }

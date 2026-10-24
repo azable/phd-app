@@ -17,6 +17,7 @@ const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 const merge = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
+  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
   const Position = index(Values);
   const Flag = type('boolean');
   const Length = unop(Values, (v) => Position(v.length));
@@ -36,10 +37,10 @@ const merge = `<script lang="sverlin" domain>
   let j = Position(right, 0);]
   while (Before(i, Length(left)) || Before(j, Length(right))) {
     @take[if (Same(j, Length(right)) || (Before(i, Length(left)) && Less(left[i], right[j]))) {
-      merged.push(left[i]);
+      merged = Append(merged, left[i]);
       i = Next(i);
     } else {
-      merged.push(right[j]);
+      merged = Append(merged, right[j]);
       j = Next(j);
     }]
     @step[const k = Last(merged);]

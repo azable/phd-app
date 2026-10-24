@@ -168,8 +168,8 @@ describe('typed values', () => {
       const target = Int(8);
       const equal = Same(values[1], target);
       const plainEqual = Same(values[1], 8);
-      const position = Int(values.indexOf(target));
-      const present = Bool(values.includes(Int(5)));
+      const position = Find(values, target);
+      const present = Has(values, Int(5));
       const falsy = Text(Bool(false) ? 'yes' : 'no');
       let count = Int(0);
       if (Bool(true)) count = Add(count, Int(1));
@@ -181,6 +181,8 @@ describe('typed values', () => {
       const Add = binop(Int, Int, (a, b) => Int(a + b));
       const Suffix = unop(Text, (t) => Text(t + 'c'));
       const Size = unop(Text, (t) => Int(t.length));
+      const Find = binop(Ints, Int, (c, x) => Int(c.indexOf(x)));
+      const Has = binop(Ints, Int, (c, x) => Bool(c.includes(x)));
     `
     );
     expect(step.state).toMatchObject({

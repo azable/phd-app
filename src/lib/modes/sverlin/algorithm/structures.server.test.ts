@@ -20,6 +20,10 @@ const domain = interpretDomain(`
   const Bump = unop(Weight, (w) => Weight(w + 1));
   const Double = unop(Weight, (w) => Weight(w + w));
   const Twice = unop(Weight, (w) => Distance(Distance(w) + Distance(w)));
+  const Append = binop(Edges, Edge, (c, x) => Edges([...c, x]));
+  const Tail = unop(Edges, (c) => Edges(c.slice(1)));
+  const Enqueue = binop(Queue, Vertex, (c, x) => Queue([...c, x]));
+  const Prepend = binop(Queue, Vertex, (c, x) => Queue([x, ...c]));
 `);
 
 /** Run an algorithm with the test domain from an input block, and return its last step. */
@@ -92,7 +96,7 @@ describe('values made by collection and record types', () => {
 
   it('carries collections and records from the input into the algorithm', () => {
     const step = last(
-      'const e = edges[0]; e.weight = 7; edges.push({ from: 1, to: 2, weight: 5 }); const part = edges.slice(1);',
+      'const e = edges[0]; e.weight = 7; edges = Append(edges, { from: 1, to: 2, weight: 5 }); const part = Tail(edges);',
       'const edges = Edges([{ from: 0, to: 1, weight: 4 }]);'
     );
     expect(step.state.edges).toEqual([
@@ -146,10 +150,10 @@ describe('values made by collection and record types', () => {
   });
 
   it('converts what is pushed or assigned into a collection to its element type', () => {
-    const step = last('const q = Queue([]); q.push(1); q.unshift(0); q[2] = 3;');
+    const step = last('let q = Queue([]); q = Enqueue(q, 1); q = Prepend(q, 0); q[2] = 3;');
     expect(step.state.q).toEqual([0, 1, 3]);
     expect(step.types).toMatchObject({ 'q[0]': 'Vertex', 'q[1]': 'Vertex', 'q[2]': 'Vertex' });
-    expect(() => last('const q = Queue([]); q.push(9);')).toThrow(/9 is not a Vertex/);
+    expect(() => last('let q = Queue([]); q = Enqueue(q, 9);')).toThrow(/9 is not a Vertex/);
   });
 });
 

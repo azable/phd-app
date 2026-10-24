@@ -20,7 +20,11 @@ const atoms = interpretDomain(
     const Root = unop(Int, (n) => Real(Math.sqrt(n)));
     const Width = unop(Reals, (v) => Int(v.join('-').length));
     const Halve = unop(Int, (n) => Real(n / 2));
-    const Long = unop(Ints, (v) => Int(v.join('${'-'.repeat(60)}').length));`
+    const Long = unop(Ints, (v) => Int(v.join('${'-'.repeat(60)}').length));
+    const Push = binop(Reals, Real, (c, x) => Reals([...c, x]));
+    const Find = binop(Reals, Real, (c, x) => Int(c.indexOf(x)));
+    const Grow = binop(Ints, Int, (c, x) => Ints([...c, x]));
+    const Flip = unop(Ints, (c) => Ints(c.slice().reverse()));`
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);
@@ -68,13 +72,13 @@ describe('algorithm interpretation', () => {
 
   it('supports loops, objects, array methods, operators, and early return', () => {
     const trace = interpretAlgorithm(`
-      const stack = Reals([]);
+      let stack = Reals([]);
       const point = Point({ x: 1, y: 2 });
       let total = Int(0);
-      for (const n of Ints([4, 9, 16])) { stack.push(Root(n)); total = Add(total, n); }
+      for (const n of Ints([4, 9, 16])) { stack = Push(stack, Root(n)); total = Add(total, n); }
       let k = Int(0);
       while (true) { k = Next(k); if (Less(2, k)) break; else continue; }
-      point.x = Add(point.x, Int(stack.indexOf(3)));
+      point.x = Add(point.x, Find(stack, 3));
       let i = Int(0);
       const a = Ints([0, 0]);
       a[i] = Add(a[i], 5);
@@ -128,7 +132,7 @@ describe('algorithm interpretation', () => {
     expect(() => interpretAlgorithm('while (true) {}')).toThrow(/operations/);
     expect(() =>
       interpretAlgorithm(
-        'let a = Ints([1]); while (Less(Count(a), 200)) a.push(1); const n = Long(a);'
+        'let a = Ints([1]); while (Less(Count(a), 200)) a = Grow(a, 1); const n = Long(a);'
       )
     ).toThrow(/characters/);
     expect(() =>
@@ -166,7 +170,7 @@ describe('input and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
     const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
-      '@reverse[values.reverse();] @flag[let swapped = Flag(true);]',
+      '@reverse[values = Flip(values);] @flag[let swapped = Flag(true);]',
       input
     );
     expect(trace[0].before?.state).toEqual({ values: [2, 1], label: 'pair' });
@@ -202,8 +206,8 @@ describe('domain types', () => {
 
   it('rejects plain values the algorithm stores, at the statement that stores them', () => {
     expect(() => interpretAlgorithm('let i = 0;')).toThrow(/i would be the plain number 0/);
-    expect(() => interpretAlgorithm('const s = Ints([]); s.push("x");')).toThrow(
-      /an item added by s\.push\(\): Int values must be whole numbers, not "x"/
+    expect(() => interpretAlgorithm('let s = Ints([]); s = Grow(s, "x");')).toThrow(
+      /Int values must be whole numbers, not "x"/
     );
     // A plain literal given to an operator takes its operand's type.
     expect(interpretAlgorithm('let i = Int(0); i = Add(i, 1); i = Next(i);')[0].types).toEqual({
@@ -232,12 +236,7 @@ describe('domain types', () => {
   it('has no null: every place holds a value of its type', () => {
     expect(() => interpretInput('const none = null;')).toThrow(/There is no null/);
     expect(() => interpretAlgorithm('let x;')).toThrow(/Give x a starting value/);
-    expect(() => interpretAlgorithm('const s = Ints([]); const x = s.pop();')).toThrow(
-      /x would have no value: it was taken from an empty collection/
-    );
-    expect(() => interpretAlgorithm('const s = Ints([]); let x = Int(0); x = s.pop();')).toThrow(
-      /x would have no value.*an Int is needed here|x would have no value/
-    );
+    expect(() => interpretAlgorithm('const s = Ints([]); const x = s[0];')).toThrow(/s\[0\]/);
     expect(() => interpretAlgorithm('const x = undefined;')).toThrow(/"undefined" is not defined/);
   });
 });

@@ -16,6 +16,8 @@ const domain = interpretDomain(`
   const Up = unop(Count, (n) => Count(n + 1));
   const Down = unop(Count, (n) => Count(n - 1));
   const Greater = binop(Int, Int, (a, b) => Flag(a > b));
+  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
+  const Rest = unop(Values, (c) => Values(c.slice(1)));
 `);
 
 const idsOf = (identities: StepIdentities | undefined, paths: string[]) => ({
@@ -116,7 +118,7 @@ describe('identities', () => {
     const [start, merged] = identities(
       `@start[const left = Values([1, 4]);
        let merged = Values([]);]
-       @push[merged.push(left[0]);]`,
+       @push[merged = Append(merged, left[0]);]`,
       ['left[0]', 'merged[0]']
     );
     const one = start.ids[0];
@@ -137,11 +139,42 @@ describe('identities', () => {
 
   it('keep the rest when the front leaves', () => {
     const [before, after] = identities(
-      `@start[const queue = Values([1, 2, 3]);]
-       @leave[queue.shift();]`,
+      `@start[let queue = Values([1, 2, 3]);]
+       @leave[queue = Rest(queue);]`,
       ['queue[0]', 'queue[1]', 'queue[2]']
     );
     expect(after.ids).toEqual([before.ids[1], before.ids[2], undefined]);
+  });
+
+  it('follow elements through a queue: one arriving at the back, the front leaving', () => {
+    const [start, joined, left] = identities(
+      `@start[let queue = Values([1, 2]);]
+       @join[queue = Append(queue, 3);]
+       @leave[const front = queue[0];
+       queue = Rest(queue);]`,
+      ['queue[0]', 'queue[1]', 'queue[2]']
+    );
+    const [one, two] = start.ids;
+    const three = joined.ids[2];
+    expect(joined.ids).toEqual([one, two, three]);
+    expect(three).not.toBe(one);
+    // The front leaves; the rest move up, and the front itself stays with front, a copy no more.
+    expect(left.ids).toEqual([two, three, undefined]);
+  });
+
+  it('follow values rearranged by writes in one step, as a re-insert', () => {
+    const [before, after] = identities(
+      `@start[const values = Values([1, 2, 3]);]
+       @rotate[const last = values[2];
+       values[2] = values[1];
+       values[1] = values[0];
+       values[0] = last;]`,
+      ['values[0]', 'values[1]', 'values[2]']
+    );
+    const [one, two, three] = before.ids;
+    expect(after.ids).toEqual([three, one, two]);
+    // The temporary, still in scope, is the copy; the rearranged values are the originals.
+    expect(Object.values(after.copies)).toEqual([three]);
   });
 
   it('are one for a collection wherever it is held', () => {

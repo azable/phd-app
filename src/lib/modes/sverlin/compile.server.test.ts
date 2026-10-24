@@ -127,7 +127,7 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  let i = 0;\n\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -514,7 +514,7 @@ describe('single-component Svelte compilation', () => {
 
   it('identifies the master trace by its recorded states, whatever the view', async () => {
     const source = (values: string, view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values.reverse();]</script>${view}`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>${view}`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).masterSignature;
     const first = await signature('[1, 2]', '<Node>{#each values as v}{v}{/each}</Node>');
@@ -629,7 +629,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{@render Int(target)}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>`
     );
     // i places the pointer; target and the cells go to views.
     expect(prepared.placements['*']).toEqual([{ path: 'i', step: 0, values: [-1, 0, 1, 2, 3] }]);

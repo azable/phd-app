@@ -18,6 +18,7 @@ const domain = interpretDomain(`
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
   const Edges = collection(Edge);
   const Flag = type('boolean');
+  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
   const Length = unop(Values, (v) => Position(v.length));
   const Before = binop(Position, Position, (a, b) => Flag(a < b));
   const Next = unop(Position, (p) => Position(p + 1));
@@ -53,7 +54,7 @@ describe('positions', () => {
       let j = Position(right, 0);
       let k = Position(merged, -1);]
       while (Before(i, Length(left)) && Before(j, Length(right))) {
-        @take[if (Less(left[i], right[j])) { merged.push(left[i]); i = Next(i); } else { merged.push(right[j]); j = Next(j); }]
+        @take[if (Less(left[i], right[j])) { merged = Append(merged, left[i]); i = Next(i); } else { merged = Append(merged, right[j]); j = Next(j); }]
         @count[k = Sum(i, j);]
       }
     `,

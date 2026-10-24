@@ -140,7 +140,7 @@ describe('variants', () => {
 });
 
 describe('kinds a tag the state decides draws', () => {
-  const source = `<script lang="sverlin" domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([3, 8]);</script><script lang="sverlin">@step[values.reverse();] @step[values.reverse();]</script>
+  const source = `<script lang="sverlin" domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop(Values, (c) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([3, 8]);</script><script lang="sverlin">@step[values = Reversed(values);] @step[values = Reversed(values);]</script>
 <Node layout="row">{#each values as value, k}<Node layout="column" tags={k < step && 'checked'}>{value}</Node>{/each}</Node>
 <Node tags={step ? 'late' : 'early'}>text</Node>`;
   const prepared = prepareSvelteComponent(source);

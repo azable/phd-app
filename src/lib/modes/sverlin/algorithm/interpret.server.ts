@@ -33,7 +33,14 @@ import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './e
 import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { readLabels, type Label, type LabelProblem } from './labels.server';
 import { parseBlock } from './parse.server';
-import { firstRawOperation, rawOperation, rawProblem, type RawContext } from './raw.server';
+import {
+  changingMethods,
+  firstDiscarded,
+  firstRawOperation,
+  rawOperation,
+  rawProblem,
+  type RawContext
+} from './raw.server';
 import {
   noDomain,
   type CollectionType,
@@ -308,6 +315,10 @@ class Interpreter {
   #returned: Value;
   /** How many operators' functions are running, which compute as JavaScript does and log nothing. */
   #inOperator = 0;
+  /** The collections and records operators computed, written into a place in place (see #store). */
+  readonly #computed = new WeakSet<object>();
+  /** The collections and records the running operators were given, which they may not change. */
+  readonly #given: Set<object>[] = [];
   /** What a raw operation's problem names: the block's code, and the domain's types. */
   readonly #raw: RawContext;
   /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
@@ -357,7 +368,11 @@ class Interpreter {
           .trim();
       },
       flag: atomTypes.find((type) => type.base === 'boolean')?.name,
-      indexOf: (collection) => atomTypes.find((type) => type.index === collection)?.name
+      indexOf: (collection) => atomTypes.find((type) => type.index === collection)?.name,
+      elementOf: (collection) => {
+        const structure = this.#domain.structures[collection];
+        return structure?.kind === 'collection' ? structure.element : undefined;
+      }
     };
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
@@ -417,6 +432,8 @@ class Interpreter {
   }
 
   #execute(): void {
+    const discarded = firstDiscarded(this.#root, this.#domain.operators ?? {}, this.#raw.text);
+    if (discarded) this.#fail(discarded.node, discarded.message);
     const completion = this.#block(this.#root.body, this.#topLevel);
     // A raw operation that ran was a problem as it ran, naming its operands' types.
     const raw = firstRawOperation(this.#root);
@@ -1276,7 +1293,7 @@ class Interpreter {
         // Resolve the target once so a[i++] += 1 evaluates i++ a single time, as in JavaScript.
         const target = this.#reference(node.left as Expression, scope);
         const right = this.#expression(node.right, scope);
-        if (node.operator !== '=') this.#rawCheck(node, [target.get(), right]);
+        if (node.operator !== '=') this.#rawCheck(node, [target.get(), right], target.type);
         if (node.operator !== '=') this.#access('read', node.left, target.place, target.get());
         const value = target.prepare(
           node.operator === '='
@@ -1284,9 +1301,10 @@ class Interpreter {
             : this.#binary(node.operator.slice(0, -1), target.get(), right, node)
         );
         this.#typed(value, node.right, targetName(node.left as Expression));
-        target.set(value);
-        this.#access('write', node, target.place, value);
-        return value;
+        this.#store(target, value, node);
+        const stored = target.get();
+        this.#access('write', node, target.place, stored);
+        return stored;
       }
       case 'UpdateExpression': {
         const target = this.#reference(node.argument, scope);
@@ -1324,13 +1342,16 @@ class Interpreter {
     prepare(value: Value): Value;
     set(value: Value): void;
     place?: string;
+    type?: string;
   } {
     if (target.type === 'Identifier') {
       const binding = scope.lookup(target.name);
       if (!binding || binding === this.#globals.bindings.get(target.name))
         this.#fail(target, `"${target.name}" must be declared with let before it is assigned.`);
-      if (binding.constant) this.#fail(target, `"${target.name}" is a constant.`);
+      if (binding.constant)
+        this.#fail(target, `"${target.name}" is a constant; declare it with let to change it.`);
       return {
+        type: binding.type,
         get: () => binding.value,
         // A variable keeps the type it was made with, as an element or field does.
         prepare: (value) =>
@@ -1355,6 +1376,7 @@ class Interpreter {
     const prepare = (value: Value) =>
       slot ? this.#convert(value, slot, target, targetName(target)) : value;
     if (Array.isArray(object)) {
+      const type = slot;
       if (typeof key !== 'number' || !Number.isInteger(key))
         this.#fail(target, 'Array elements are assigned by whole-number index.');
       // Writing at the length adds an element; any further would leave a gap with no value.
@@ -1364,6 +1386,7 @@ class Interpreter {
           `${targetName(target)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}, so write at 0 to ${object.length}, where ${object.length} adds one.`
         );
       return {
+        type,
         get: () => object[key],
         prepare,
         set: (value) => {
@@ -1384,6 +1407,7 @@ class Interpreter {
     const name = String(key);
     if (forbiddenProperties.has(name)) this.#fail(target, 'That property name is not allowed.');
     return {
+      type: slot,
       get: () => object[name],
       prepare,
       set: (value) => {
@@ -1480,6 +1504,12 @@ class Interpreter {
         this.#fail(argument, 'Spread arguments are not supported.');
       return this.#expression(argument, scope);
     });
+    this.#rawCheck(node, [object, ...args]);
+    if (changingMethods.has(name) && this.#given.at(-1)?.has(object as object) && this.#inOperator)
+      this.#fail(
+        node,
+        `An operator computes a new value and changes nothing: write the new collection, as [...c, x] or c.slice(1), not ${targetName(callee.object as Expression)}.${name}().`
+      );
     if (object === mathMarker) {
       const fn = mathFunctions[name];
       if (!fn) this.#fail(callee, `Math.${name} is not available.`);
@@ -1545,16 +1575,18 @@ class Interpreter {
    * An operation the input or algorithm computes itself, a problem outside an operator's function:
    * an operator on its values, `.length`, or Math, named with the operands' types.
    */
-  #rawCheck(node: AnyNode, operands: Value[]): void {
+  #rawCheck(node: AnyNode, operands: Value[], placeType?: string): void {
     if (this.#inOperator) return;
     const operation = rawOperation(node);
     if (!operation) return;
-    const types = operands.map((value) =>
-      value instanceof Atom
-        ? value.type.name
-        : value !== null && typeof value === 'object'
-          ? (this.#shapes.get(value)?.name ?? kind(value))
-          : typeof value
+    const types = operands.map((value, index) =>
+      index === 0 && placeType
+        ? placeType
+        : value instanceof Atom
+          ? value.type.name
+          : value !== null && typeof value === 'object'
+            ? (this.#shapes.get(value)?.name ?? kind(value))
+            : typeof value
     );
     this.#fail(node, rawProblem(node, operation, types, this.#raw));
   }
@@ -1588,6 +1620,15 @@ class Interpreter {
     parameters.forEach((parameter, index) =>
       body.bindings.set(parameter, { value: values[index], constant: true, type: operands[index] })
     );
+    const given = new Set<object>();
+    const gather = (value: Value): void => {
+      if (value === null || typeof value !== 'object' || value instanceof Atom || given.has(value))
+        return;
+      given.add(value);
+      (Array.isArray(value) ? value : Object.values(value)).forEach(gather);
+    };
+    values.forEach(gather);
+    this.#given.push(given);
     this.#inOperator += 1;
     const single = (value: Value) => {
       const plain = unwrap(value);
@@ -1601,6 +1642,7 @@ class Interpreter {
     } catch (cause) {
       if (!(cause instanceof AlgorithmError)) throw cause;
       this.#inOperator -= 1;
+      this.#given.pop();
       const shown = values.map((value) => {
         const plain = single(value);
         if (typeof plain === 'string') return JSON.stringify(plain);
@@ -1611,6 +1653,7 @@ class Interpreter {
       return this.#fail(node, `${name}(${shown.join(', ')}): ${cause.message}`);
     }
     this.#inOperator -= 1;
+    this.#given.pop();
     // A position an operator gives points where its operand of the same type points, as i + 1,
     // or into its operand that is a collection of its type, named by a variable, as Length(left).
     if (result instanceof Atom && result.type.index && !result.collection) {
@@ -1632,7 +1675,26 @@ class Interpreter {
       value: result,
       operands: values.map((value) => single(value) ?? null)
     });
+    if (result !== null && typeof result === 'object' && !(result instanceof Atom))
+      this.#computed.add(result);
     return result;
+  }
+
+  /**
+   * Write a value into a place. A collection or record an operator computed is written into the one
+   * the place holds, its elements or fields replaced in place, so it and the elements the new value
+   * carries over keep their identities; any other value, as another row of a grid, is the place's
+   * new value itself.
+   */
+  #store(target: { get(): Value; set(value: Value): void }, value: Value, node: AnyNode): void {
+    const old = target.get();
+    const fresh = value !== null && typeof value === 'object' && this.#computed.has(value);
+    if (fresh && Array.isArray(old) && Array.isArray(value)) {
+      this.#checkLength(value.length, node);
+      old.splice(0, old.length, ...value);
+    } else if (fresh && isPlainObject(old) && isPlainObject(value)) {
+      for (const field of Object.keys(old)) old[field] = value[field];
+    } else target.set(value);
   }
 
   /**

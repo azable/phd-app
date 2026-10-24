@@ -15,6 +15,8 @@ const domain = interpretDomain(`${types}
   const Equal = binop(Int, Int, (a, b) => Flag(a === b));
   const Add = binop(Int, Int, (a, b) => Int(a + b));
   const Floor = unop(Int, (x) => Int(Math.floor(x / 2)));
+  const Append = binop(Values, Int, (c, x) => Values([...c, x]));
+  const Rest = unop(Values, (c) => Values(c.slice(1)));
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(5);', domain);
 const run = (body: string) => traceAlgorithm(body, input, domain).steps;
@@ -104,6 +106,68 @@ describe('operators', () => {
   });
 });
 
+describe('primitive operators', () => {
+  it('refuse a body that is an algorithm: a callback, or a method outside the subset', () => {
+    expect(() =>
+      interpretDomain(
+        `${types}const Merge = binop(Values, Values, (a, b) => Values([...a, ...b].sort((x, y) => x - y)));`
+      )
+    ).toThrow(
+      'An operator is one primitive step; sort is an algorithm, so write it out in the algorithm block.'
+    );
+    expect(() =>
+      interpretDomain(`${types}const Some = unop(Values, (a) => Flag(a.includes((x) => x)));`)
+    ).toThrow(
+      'An operator is one primitive step, and a function inside it, as for sort, map, or filter, makes it an algorithm: write that out in the algorithm block.'
+    );
+    // The subset's methods are primitive steps.
+    expect(() =>
+      interpretDomain(`${types}const Rest = unop(Values, (a) => Values(a.slice(1)));`)
+    ).not.toThrow();
+  });
+});
+
+describe('discarded results', () => {
+  it.each([
+    [
+      'a statement',
+      'let queue = Values([]); Append(queue, target);',
+      'Append(queue, target) computes a Values and discards it; operators change nothing. Write queue = Append(queue, target).'
+    ],
+    [
+      'a for update',
+      'for (let i = Index(0); Before(i, Length(values)); Next(i)) {}',
+      'Next(i) computes an Index and discards it; operators change nothing. Write i = Next(i).'
+    ],
+    [
+      'a short-circuit side',
+      'let n = Int(0); Equal(n, target) || Add(n, target);',
+      'Add(n, target) computes an Int and discards it; operators change nothing. Write n = Add(n, target).'
+    ],
+    [
+      'a result of another type',
+      'Equal(values[0], target);',
+      'Equal(values[0], target) computes a Flag and discards it; operators change nothing. Write const result = Equal(values[0], target).'
+    ],
+    [
+      'code that never runs',
+      'let n = Int(0); if (false) Add(n, target);',
+      'Add(n, target) computes an Int and discards it'
+    ]
+  ])('reject %s, naming the write', (_name, body, message) => {
+    expect(() => run(body)).toThrow(message);
+  });
+
+  it('allow a used result, and the algorithm’s own functions as statements', () => {
+    expect(() =>
+      run('let n = Int(0); if (Equal(Add(n, 1), target)) n = Add(n, 1); const f = Equal(n, 1);')
+    ).not.toThrow();
+    expect(() =>
+      run('function grow(a) { return Length(a); } grow(values); const k = grow(values);')
+    ).not.toThrow();
+  });
+});
+
 describe('no raw JavaScript but control flow', () => {
   it.each([
     [
@@ -155,6 +219,46 @@ describe('no raw JavaScript but control flow', () => {
     expect(() => run(body)).toThrow(message);
   });
 
+  it.each([
+    [
+      'a push',
+      'values.push(target);',
+      'values.push(target): computes a new Values from values; declare an operator, as const Append = binop(Values, Int, (c, x) => Values([...c, x]));, and write values = Append(values, target).'
+    ],
+    [
+      'a shift',
+      'const front = Int(values.shift());',
+      'values.shift(): computes a new Values from values; declare an operator, as const Rest = unop(Values, (c) => Values(c.slice(1)));, read what it takes first (values[0]), and write values = Rest(values).'
+    ],
+    [
+      'a reverse',
+      'values.reverse();',
+      'const Reversed = unop(Values, (c) => Values(c.slice().reverse()));, and write values = Reversed(values).'
+    ],
+    [
+      'a search',
+      'const at = Index(values.indexOf(target));',
+      'values.indexOf(target): computed from values; declare an operator, as const Find = binop(Values, Int, (c, x) => Index(c.indexOf(x)));, and write Find(values, target).'
+    ],
+    [
+      'a membership test',
+      'const has = Flag(values.includes(target));',
+      'const Has = binop(Values, Int, (c, x) => Flag(c.includes(x)));'
+    ],
+    [
+      'a slice',
+      'const part = values.slice(1);',
+      'values.slice(1): computed from values; declare an operator'
+    ],
+    [
+      'a push that never runs',
+      'if (false) { values.push(target); }',
+      'values.push(target): computes a new Values from values; declare an operator'
+    ]
+  ])('reject %s, naming the operator to declare', (_name, body, message) => {
+    expect(() => run(body)).toThrow(message);
+  });
+
   it('keep negative literals, control flow, and typed literals raw', () => {
     const [step] = run(`
       let i = Index(-1);
@@ -170,6 +274,81 @@ describe('no raw JavaScript but control flow', () => {
     );
     expect(() => interpretInput('const n = Add(Int(1), Int(2));', domain)).toThrow(
       'Add(...) is an operator, which the algorithm applies.'
+    );
+  });
+});
+
+describe('writes', () => {
+  it('are plain =, of an operator’s result or any value, logged as writes', () => {
+    const [step] = run(`
+      let i = Index(0);
+      i = Next(i);
+      values[i] = target;
+      let found = Flag(false);
+      found = Equal(values[i], target);
+    `);
+    expect(step.state).toMatchObject({ i: 1, values: [3, 5, 5], found: true });
+    const written = step.events?.filter(({ kind }) => kind === 'write') ?? [];
+    expect(written.map(({ place, value }) => [place, value])).toEqual([
+      ['i', 0],
+      ['i', 1],
+      ['values[1]', 5],
+      ['found', false],
+      ['found', true]
+    ]);
+  });
+
+  it('write a collection an operator computed in place, its elements keeping their identities', () => {
+    const steps = traceAlgorithm(
+      `@join[values = Append(values, target);]
+       @leave[values = Rest(values);]`,
+      input,
+      domain
+    ).steps;
+    const [joined, left] = steps;
+    expect(joined.state.values).toEqual([3, 8, 5, 5]);
+    expect(left.state.values).toEqual([8, 5, 5]);
+    const ids = (step: (typeof steps)[number]) => step.identities!.ids;
+    // The collection is the same one; its elements move up as the front leaves.
+    expect(ids(left).values).toBe(ids(joined).values);
+    expect(ids(left)['values[0]']).toBe(ids(joined)['values[1]']);
+    expect(ids(left)['values[2]']).toBe(ids(joined)['values[3]']);
+  });
+
+  it('give a place a collection the state already holds itself, as another row of a grid', () => {
+    const grid = interpretDomain(`${types}const Table = collection(Values);`);
+    const [step] = traceAlgorithm(
+      'const table = Table([[1, 2], [3, 4]]); let row = table[1]; row = table[0];',
+      undefined,
+      grid
+    ).steps;
+    // The rows are unchanged; row is the first one now.
+    expect(step.state).toMatchObject({
+      table: [
+        [1, 2],
+        [3, 4]
+      ],
+      row: [1, 2]
+    });
+    expect(step.identities!.ids.row).toBe(step.identities!.ids['table[0]']);
+  });
+
+  it('reject a value of another type and a constant', () => {
+    expect(() => run('let i = Index(0); i = values[0];')).toThrow('i must be a Index, not a Int');
+    expect(() => run('const n = Int(1); n = Int(2);')).toThrow(
+      '"n" is a constant; declare it with let to change it.'
+    );
+  });
+
+  it('keep operators from changing anything, what they are given included', () => {
+    expect(() => interpretDomain(`${types}const Bad = unop(Int, (a) => Int(a = 1));`)).toThrow(
+      'Bad computes a value and changes nothing.'
+    );
+    const changing = interpretDomain(
+      `${types}const Grow = unop(Values, (c) => Values(c.push(1) ? c : c));`
+    );
+    expect(() => traceAlgorithm('const v = Grow(values);', input, changing)).toThrow(
+      'An operator computes a new value and changes nothing: write the new collection, as [...c, x] or c.slice(1), not c.push().'
     );
   });
 });
