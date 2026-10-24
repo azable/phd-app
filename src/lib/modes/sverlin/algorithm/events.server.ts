@@ -17,8 +17,7 @@ export type EventKind =
   | 'break'
   | 'continue'
   | 'read'
-  | 'write'
-  | 'yield';
+  | 'write';
 
 /** One event, at the source it comes from. A loop's events are at the loop, a test's at its condition. */
 export type TraceEvent = {

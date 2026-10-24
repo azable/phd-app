@@ -131,11 +131,11 @@ type Block = { body: string; offset: number };
 export type PreparedComponent = {
   source: string;
   component: string;
-  /** The steps of the frame rule the source starts with: yield where it yields. */
+  /** The steps of the frame rule the source starts with. */
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
   ownListings: string[];
-  /** The steps of every frame rule the source can step by, by its name (see FrameRule). */
+  /** The steps of every frame rule the source can step by, by its name (see stepLabels). */
   masters: Record<string, MasterStep[]>;
   /** The source's identity, shared by its presentations whichever events they step by. */
   signature: string;
@@ -235,7 +235,7 @@ export function recordedTrace(source: string): MasterStep[] {
   const input = blocks.input
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
-  // By the frame rule the source starts with: yield where it yields.
+  // By the frame rule the source starts with.
   const runs = framings(source, blocks.algorithm, blocks, input, domain);
   return Object.values(runs)[0].steps;
 }
@@ -442,7 +442,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ];
     if (!blocks.algorithm)
       throw new InvalidSvelteSourceError(
-        'Add a <script lang="sverlin"> algorithm block whose yield statements mark the steps, such as yield;',
+        'Add a <script lang="sverlin"> algorithm block, labelling the code its steps are about, as @check[…] (see Steps).',
         { code: 'missing_algorithm' }
       );
     const domain = blocks.domain

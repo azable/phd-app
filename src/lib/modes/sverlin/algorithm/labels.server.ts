@@ -9,7 +9,7 @@
 
 import type { AnyNode, BlockStatement } from 'acorn';
 
-import { spanOf, type BlockComment } from './parse.server';
+import { spanOf } from './parse.server';
 
 export type LabelProblem = { message: string; at: number };
 
@@ -131,27 +131,14 @@ export function readMarkers(body: string): {
 
 /**
  * The labels, in the order written, each with the code it marks and its place among the others,
- * and the problems with them: a marker on no code, a label comment of the old form, and a statement
- * no label covers.
+ * and the problems with them: a marker on no code, and a statement no label covers.
  */
 export function readLabels(
   root: BlockStatement,
   markers: readonly Marker[],
-  comments: readonly BlockComment[],
   code: string
 ): { labels: Label[]; problems: LabelProblem[] } {
   const problems: LabelProblem[] = [];
-  for (const comment of comments)
-    if (comment.text.trim().startsWith('@'))
-      problems.push({
-        message: `Labels are written around code, not in comments: @${
-          comment.text
-            .trim()
-            .slice(1)
-            .split(/[;:\s]/u)[0]
-        }[…] around a statement or part of one, or @name{ on a loop's, an if's, or a function's block.`,
-        at: comment.start
-      });
 
   // Every node, with its parent, and every list of statements.
   const parents = new Map<AnyNode, AnyNode | undefined>();

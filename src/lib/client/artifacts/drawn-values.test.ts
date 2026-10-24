@@ -75,7 +75,9 @@ describe('drawn value markers', () => {
       effects: setDrawnValues.of({ presentations: [{ seed: 1, draws: [accent('red'), size] }] })
     }).state;
     expect(() =>
-      marked.update({ changes: { from: 0, to: marked.doc.length, insert: 'yield;' } })
+      marked.update({
+        changes: { from: 0, to: marked.doc.length, insert: '@done[let n = Int(0);]' }
+      })
     ).not.toThrow();
   });
 
@@ -281,14 +283,14 @@ describe('variant markers', () => {
     expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
   });
 
-  it('gives a <Listing /> its language and fills, and the page which events are steps', () => {
+  it('gives a <Listing /> its language and fills, and the page which labels are steps', () => {
     const listed = `${source}\n<Node layout="row"><Listing /></Node>`;
     const withListing = presentations.map((presentation, index) => ({
       ...presentation,
       variant: {
         ...presentation.variant,
-        frames: index ? 'Matches' : 'yield',
-        'listing.language': index ? 'pseudocode' : 'python',
+        frames: index ? 'check' : '*',
+        'listing.language': index ? 'textbook' : 'code',
         'listing.current.fill': 'amber-200',
         'listing.earlier.fill': 'neutral-200'
       }

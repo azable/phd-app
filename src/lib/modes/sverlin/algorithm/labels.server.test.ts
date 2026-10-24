@@ -93,10 +93,7 @@ describe('labels', () => {
     ).not.toThrow();
   });
 
-  it('report a marker on no code, of the old form, or written wrong, each with the fix', () => {
-    expect(problemOf('let n = Int(1); // @step')).toThrow(
-      'Labels are written around code, not in comments: @step[…]'
-    );
+  it('report a marker on no code, or written wrong, each with the fix', () => {
     expect(problemOf('@a{\n  let n = Int(1);\n}')).toThrow(
       '@a{ is on a block of its own, whose declarations later code could not see; wrap the statements as @a[…] instead.'
     );

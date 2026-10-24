@@ -88,12 +88,6 @@ describe('listings of the source’s own', () => {
       "The listing's region @spare is labelled on no code"
     ],
     [
-      'a region of the old form',
-      '  @size[const n = Int(1);]',
-      '[size: n]',
-      'Regions are written @size[…] now, not [size: …].'
-    ],
-    [
       'a listing named none',
       '  @size[const n = Int(1);]',
       '@size[n]',

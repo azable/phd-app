@@ -2,7 +2,7 @@
 
 /**
  * Domain: type definitions. Input: fixed initial state. Design: seeded presentation choices.
- * Algorithm: the yielding steps.
+ * Algorithm: the labelled steps.
  */
 export type BlockKind = 'domain' | 'input' | 'algorithm';
 

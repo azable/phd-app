@@ -102,8 +102,6 @@ describe('algorithm interpretation', () => {
     ['loose equality', 'const f = Flag(1 == 1);', /Use ===/],
     ['reserved names', 'let step = Int(0);', /reserved/],
     ['undeclared assignment', 'x = Int(1);', /must be declared/],
-    ['yield', 'yield;', /Steps are marked by labels, not yield/],
-    ['nested yield', 'const a = Ints([yield]);', /Steps are marked by labels, not yield/],
     [
       'object arithmetic',
       'const o = Point({ x: 1, y: 2 }); const n = Int(o - 1);',
@@ -168,9 +166,6 @@ describe('input and step selection', () => {
     expect(input.state.values).toEqual([2, 1]);
     expect(() => interpretAlgorithm('let values = Ints([]);', input)).toThrow(
       /already declared here or in the input/
-    );
-    expect(() => interpretInput('const x = Int(1); yield;')).toThrow(
-      /Steps are marked by labels, not yield/
     );
   });
 

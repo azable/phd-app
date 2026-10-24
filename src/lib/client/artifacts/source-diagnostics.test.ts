@@ -49,7 +49,7 @@ describe('build diagnostics in the source editor', () => {
   });
 
   it('underlines from a diagnostic’s start to its end, or to the end of its line', () => {
-    const state = EditorState.create({ doc: 'yield "A";\n  v = queue.shift();\n' });
+    const state = EditorState.create({ doc: 'let a = 1;\n  v = queue.shift();\n' });
     expect(editorDiagnostics(state, [problem])).toEqual([
       { from: 13, to: 28, severity: 'error', message: problem.message }
     ]);

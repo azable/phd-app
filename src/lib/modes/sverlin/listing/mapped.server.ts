@@ -24,8 +24,6 @@ export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; 
 export type RegionMap = { label: string; text: string; sources: { text: string; line: number }[] };
 
 const regionOpen = /^@([A-Za-z_$][\w$]*)\[/u;
-// The old form, [name: text], where a [ follows no name, as A[i] would.
-const oldRegion = /^\[([A-Za-z_][\w.-]*): /u;
 /**
  * The text a listing shows, without its region marks and the indentation its lines share, and its
  * regions, each named with the names of those around it. A [ not opening a region, as in A[i], is
@@ -72,16 +70,6 @@ export function readRegions(body: string): {
       index += opening[0].length - 1;
       continue;
     }
-    const old =
-      source[index] === '[' && !/[\w\])]/u.test(source[index - 1] ?? '')
-        ? oldRegion.exec(source.slice(index))
-        : null;
-    if (old)
-      problems.push({
-        message: `Regions are written @${old[1]}[…] now, not [${old[1]}: …].`,
-        block: 'listing',
-        at: characters[index].at
-      });
     if (source[index] === '[') open.push('plain');
     if (source[index] === ']' && open.length) {
       const closing = open.pop();

@@ -150,7 +150,7 @@ export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegi
   return [...names];
 }
 
-/** Interpret the algorithm from the input state; the variables in scope are recorded at each yield. */
+/** Interpret the algorithm from the input state; the variables in scope are recorded at each step. */
 export function interpretAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
@@ -176,15 +176,15 @@ export type FrameUnits = { nodes: ReadonlySet<AnyNode>; ranges: ReadonlyMap<AnyN
  * label inside it, where it has any. Also its labels, and the problems with them.
  */
 export function stepLabels(
-  parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'comments' | 'code'>
+  parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'code'>
 ): {
   options: string[];
   units: (frames: string) => FrameUnits;
   labels: Label[];
   problems: LabelProblem[];
 } {
-  const { root, markers, comments, code } = parsed;
-  const read = readLabels(root, markers, comments, code);
+  const { root, markers, code } = parsed;
+  const read = readLabels(root, markers, code);
   const { labels } = read;
   const options = [
     ...(labels.length ? ['*'] : []),

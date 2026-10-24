@@ -15,16 +15,12 @@ import {
 const allowedBinary = new Set(['+', '-', '*', '/', '%', '**', '<', '<=', '>', '>=', '===', '!==']);
 const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
 
-/**
- * `constructors` names the types the block may call. `functions` holds where each function the parser read as a generator starts: one written with
- * `*` is not among them.
- */
+/** `constructors` names the types the block may call. */
 export function checkSubset(
   root: BlockStatement,
   offset: (node: AnyNode) => Span,
   kind: BlockKind,
-  constructors: ReadonlySet<string>,
-  functions: ReadonlySet<number> = new Set()
+  constructors: ReadonlySet<string>
 ): void {
   const functionNames = new Set(
     root.body.flatMap((statement) =>
@@ -78,8 +74,8 @@ export function checkSubset(
         const name = node.id?.name ?? '';
         if (kind !== 'algorithm' || parent !== root)
           reject(node, 'Functions are declared at the top level of the algorithm block.');
-        if (node.async || !functions.has(node.start))
-          reject(node, `Write function ${name}(...), without * or async: it may yield as it is.`);
+        if (node.async || node.generator)
+          reject(node, `Write function ${name}(...), without * or async.`);
         if (constructors.has(name) || reservedNames.has(name) || name === 'Math')
           reject(node, `"${name}" is taken; give the function another name.`);
         for (const param of node.params)
@@ -165,12 +161,6 @@ export function checkSubset(
       case 'UpdateExpression':
         if (node.argument.type !== 'Identifier' && node.argument.type !== 'MemberExpression')
           reject(node, 'Only variables, elements, and properties can be incremented.');
-        break;
-      case 'YieldExpression':
-        reject(
-          node,
-          'Steps are marked by labels, not yield: label the code each step is about, as // @step at the end of its line, and each time it runs is a step.'
-        );
         break;
       default:
         reject(node, `${describe(node.type)} is not supported in ${kind} blocks.`);
