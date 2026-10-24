@@ -18,7 +18,7 @@
     slotContext,
     typeContext
   } from '../type-context';
-  import { activeTags, colourCss, kindKey, strokeStyleCss } from './design';
+  import { colourCss, kindKey, strokeStyleCss } from './design';
   import { designContext } from '../type-context';
 
   let {
@@ -26,11 +26,9 @@
     to,
     directed = true,
     label,
-    tags,
     curve,
     bend,
     __view = 'root',
-    __base,
     __ref,
     __component,
     __fromPath,
@@ -48,8 +46,6 @@
     directed?: boolean;
     /** Text shown along the link, at its middle. */
     label?: string;
-    /** Names saying what the link is, which with its view make its kind and so its look. */
-    tags?: string | readonly (string | false | null | undefined)[];
     /** Whether this link runs straight or curves, whatever its arrangement prefers. */
     curve?: 'straight' | 'curved';
     /**
@@ -60,8 +56,6 @@
     bend?: number;
     /** Internal: the view this link is in, added by the compiler. */
     __view?: string;
-    /** Internal, where its tags depend on the state: its literal tags, giving its base kind. */
-    __base?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
@@ -86,10 +80,7 @@
   // pointer written last winning.
   const design = designContext();
   // Each step mounts afresh, so the props are read once.
-  const { kind, base } = untrack(() => ({
-    kind: kindKey(__view, activeTags(tags, 'link')),
-    base: kindKey(__view, activeTags(__base ?? tags, 'link'))
-  }));
+  const kind = untrack(() => kindKey(__view, 'Link'));
   const pointer = untrack(() => {
     const element = __component ? elementSlot(slotContext()) : undefined;
     if (!element) return undefined;
@@ -105,9 +96,7 @@
     ).__kind as string | undefined;
   });
   const look = (prop: string, over = true) =>
-    (over && pointer ? design[`${pointer}.${prop}`] : undefined) ??
-    design[`${kind}.${prop}`] ??
-    design[`${base}.${prop}`];
+    (over && pointer ? design[`${pointer}.${prop}`] : undefined) ?? design[`${kind}.${prop}`];
   const nodeIds = nodeIdsContext();
   const id = untrack(() =>
     __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined

@@ -756,13 +756,13 @@ describe('submitProjectFeedback', () => {
       variants: [
         {
           values: [
-            { variable: 'root.fill', value: 'amber-100' },
-            { variable: 'root.fill', value: 'not-a-colour' },
-            { variable: 'root.depth', value: 3 }
+            { variable: 'Shown.fill', value: 'amber-100' },
+            { variable: 'Shown.fill', value: 'not-a-colour' },
+            { variable: 'Shown.depth', value: 3 }
           ],
           randomise: []
         },
-        { values: [{ variable: 'root.fill', value: 'blue-100' }], randomise: ['root.font'] }
+        { values: [{ variable: 'Shown.fill', value: 'blue-100' }], randomise: ['Shown.font'] }
       ],
       prompt,
       generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
@@ -800,7 +800,7 @@ describe('submitProjectFeedback', () => {
     );
 
     const [{ context }] = choose.mock.calls[0];
-    expect(JSON.stringify(context.project.design)).toContain('"variable":"root.fill"');
+    expect(JSON.stringify(context.project.design)).toContain('"variable":"Shown.fill"');
     expect(
       result.appendedEvents.some(
         (event) => event.type === 'ai.generation-requested' && event.payload.purpose === 'choosing'
@@ -816,9 +816,9 @@ describe('submitProjectFeedback', () => {
         ? [event.payload.presentation]
         : []
     );
-    expect(shown.map(({ variant }) => variant?.['root.fill'])).toEqual(['amber-100', 'blue-100']);
-    expect(shown.map(({ origins }) => origins?.['root.fill'])).toEqual(['chosen', 'chosen']);
-    expect(shown[0].variant).not.toHaveProperty('root.depth');
+    expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual(['amber-100', 'blue-100']);
+    expect(shown.map(({ origins }) => origins?.['Shown.fill'])).toEqual(['chosen', 'chosen']);
+    expect(shown[0].variant).not.toHaveProperty('Shown.depth');
   });
 
   it('shows the first build when choosing fails', async () => {
@@ -1697,15 +1697,16 @@ describe('submitProjectFeedback', () => {
     const presentation = presentedEvent(created).payload.presentation;
     if (presentation.format !== 'browser-bundle-v1') throw new Error('Expected a Sverlin bundle.');
     const lines = presentation.source.text.split('\n');
-    const line = lines.findIndex((text) => text.startsWith('<Node tags="title"')) + 1;
+    const line = lines.findIndex((text) => text.startsWith('{#snippet Title()}')) + 1;
+    const column = '{#snippet Title()}'.length + 1;
     const reference: ElementReference = {
       type: 'element-ref',
       presentationId: presentation.presentationId,
       step: 1,
       element: {
-        id: `${line}:1`,
+        id: `${line}:${column}`,
         label: 'Linear search',
-        layouts: [{ node: `${line}:1`, seed: 7, form: 'snake' }]
+        layouts: [{ node: `${line}:${column}`, seed: 7, form: 'snake' }]
       }
     };
     const submit = (content: ElementReference[]) =>
@@ -1742,20 +1743,20 @@ describe('submitProjectFeedback', () => {
                 presentationId: presentation.presentationId,
                 step: 1,
                 stepLabel: presentation.labels[1],
-                elementId: `${line}:1`,
+                elementId: `${line}:${column}`,
                 label: 'Linear search',
                 source: expect.objectContaining({
                   line,
-                  column: 1,
+                  column,
                   occurrence: 1,
                   markup: expect.stringContaining('Linear search')
                 }),
                 layouts: [
                   {
-                    node: `${line}:1`,
+                    node: `${line}:${column}`,
                     seed: 7,
                     form: 'snake',
-                    source: expect.objectContaining({ line, column: 1 })
+                    source: expect.objectContaining({ line, column })
                   }
                 ]
               }
@@ -1781,7 +1782,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script lang="sverlin"></script><Node>${source}</Node>`,
+              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}{@render Shown()}`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -1949,7 +1950,7 @@ describe('building on the candidate shown', () => {
         projectId: created.projectId,
         expectedHead: projectHead(created).id,
         artifactId: 'main',
-        source: `${earlier.source.text}\n<Node>Edited</Node>`,
+        source: `${earlier.source.text}\n{#snippet Edited()}<Node>Edited</Node>{/snippet}{@render Edited()}`,
         presentationCount: 1,
         operationId: '22345678-1234-4123-8123-123456789abc'
       },
@@ -2032,7 +2033,7 @@ describe('version parents', () => {
           projectId: created.projectId,
           expectedHead: projectHead(document).id,
           artifactId: 'main',
-          source: `${source}\n<Node>${operationId.slice(0, 2)}</Node>`,
+          source: `${source}\n{#snippet Saved()}<Node>${operationId.slice(0, 2)}</Node>{/snippet}{@render Saved()}`,
           presentationCount: 1,
           operationId,
           ...extra
@@ -2094,11 +2095,17 @@ describe('assistant edits', () => {
 
   it('applies the edits to the source it revises, and records what they change', async () => {
     const { document, source } = await created('Edited');
-    mocks.generatePrepared
-      .mockReset()
-      .mockResolvedValue(
-        edit([{ find: source, replace: `${source}\n<Node>Caption</Node>` }], 'Adds a caption')
-      );
+    mocks.generatePrepared.mockReset().mockResolvedValue(
+      edit(
+        [
+          {
+            find: source,
+            replace: `${source}\n{#snippet Note()}<Node>Caption</Node>{/snippet}{@render Note()}`
+          }
+        ],
+        'Adds a caption'
+      )
+    );
 
     const result = await feedback(document);
 
@@ -2109,7 +2116,7 @@ describe('assistant edits', () => {
     });
     const [change] = revised?.payload.changes ?? [];
     expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(
-      `${source}\n<Node>Caption</Node>`
+      `${source}\n{#snippet Note()}<Node>Caption</Node>{/snippet}{@render Note()}`
     );
   });
 
@@ -2195,7 +2202,7 @@ describe('assistant edits', () => {
       decision: {
         action: 'vary' as const,
         values: [{ variable: 'views.Int', value: 'IntTally' }],
-        randomise: ['Current[current].fill'],
+        randomise: ['Current.Pointed.fill'],
         summary: 'Draws every value with a tally'
       }
     });
@@ -2216,9 +2223,9 @@ describe('assistant edits', () => {
       );
     expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
     expect(origins(second)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
-    expect(origins(first)['Current[current].fill'].origin).not.toBe('chosen');
+    expect(origins(first)['Current.Pointed.fill'].origin).not.toBe('chosen');
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'views.Int' && key !== 'Current[current].fill')
+      if (key !== 'views.Int' && key !== 'Current.Pointed.fill')
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
     expect(Object.values(origins(second)).some(({ origin }) => origin === 'random')).toBe(true);
   });

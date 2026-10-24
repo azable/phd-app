@@ -76,7 +76,7 @@ export const designValueSchema = v.union([
   v.boolean()
 ]);
 
-/** A variant: every variable of a source's design space, by key, as Arrow[current].fill. */
+/** A variant: every variable of a source's design space, by key, as Compared.Pointed.fill. */
 export const designValuesSchema = v.record(v.pipe(v.string(), v.maxLength(200)), designValueSchema);
 export type DesignValues = v.InferOutput<typeof designValuesSchema>;
 
@@ -133,7 +133,7 @@ export const browserBundlePresentationSchema = v.strictObject({
   frames: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The source's own listings, the first options of its listing.language variable. */
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
-  /** The kinds each tag can be, by its line:column, as the editor shows them. */
+  /** The kind of each tag, by its line:column, as the editor shows it. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),

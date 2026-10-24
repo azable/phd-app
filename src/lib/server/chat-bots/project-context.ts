@@ -65,7 +65,7 @@ export type AiWorkspace = {
 };
 
 /**
- * One variable of the base's design space: its key, as Arrow[current].fill or views.Int, its options
+ * One variable of the base's design space: its key, as Compared.Pointed.fill or views.Int, its options
  * (a list, or the name of an option set in design.options, as fill), and its value in the viewed
  * variant, with where that value came from.
  */

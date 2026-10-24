@@ -191,7 +191,7 @@ describe('drawn value markers', () => {
     const views = [
       '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
       '{#snippet IntTally(value: Int)}<Node layout="column"><Node {value} /></Node>{/snippet}',
-      '{#snippet IntDots(value: Int)}<Node tags="dots">{value}</Node>{/snippet}',
+      '{#snippet IntDots(value: Int)}<Node>{value}</Node>{/snippet}',
       '{@render Int(target)}'
     ].join('\n');
     const options = { Int: ['IntCell', 'IntTally', 'IntDots'] };
@@ -222,26 +222,27 @@ describe('drawn value markers', () => {
     });
 
     it('greys out a node every shown presentation left out, from its tag to its closing tag', () => {
-      const markup = '<Node tags="title">Sort</Node>\n<Node tags="key">key <Node>{x}</Node></Node>';
+      const markup =
+        '{#snippet T()}<Node>Sort</Node>{/snippet}\n{#snippet K()}<Node>key <Node>{x}</Node></Node>{/snippet}';
       const doc = EditorState.create({ doc: markup });
       const left = (presentations: Parameters<typeof leftOutNodes>[1]) =>
         leftOutNodes(doc, presentations).map(({ from, to }) => markup.slice(from, to));
       expect(
         left([
-          { seed: 1, draws: [], leftOut: ['2:1', '2:22'] },
-          { seed: 2, draws: [], leftOut: ['2:1'] }
+          { seed: 1, draws: [], leftOut: ['2:15', '2:25'] },
+          { seed: 2, draws: [], leftOut: ['2:15'] }
         ])
-      ).toEqual(['<Node tags="key">key <Node>{x}</Node></Node>']);
+      ).toEqual(['<Node>key <Node>{x}</Node></Node>']);
       // One presentation drawing it, or one that recorded nothing, greys nothing.
       expect(
         left([
-          { seed: 1, draws: [], leftOut: ['2:1'] },
+          { seed: 1, draws: [], leftOut: ['2:15'] },
           { seed: 2, draws: [], leftOut: [] }
         ])
       ).toEqual([]);
       expect(
         left([
-          { seed: 1, draws: [], leftOut: ['2:1'] },
+          { seed: 1, draws: [], leftOut: ['2:15'] },
           { seed: 2, draws: [] }
         ])
       ).toEqual([]);
@@ -260,14 +261,13 @@ describe('drawn value markers', () => {
 
 describe('variant markers', () => {
   const source =
-    "{#snippet Here(i: Index)}\n  <Pointed tags={['current', found && 'found']} />\n{/snippet}\n<Node tags=\"title\">Search</Node>";
+    '{#snippet Here(i: Index)}\n  <Pointed />\n{/snippet}\n{#snippet Title()}<Node>Search</Node>{/snippet}';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'frame.ratio': '16:9',
-    'Here[current].fill': fill,
-    'Here[current].size': 1,
-    'Here[current,found].fill': 'green-100',
-    'root[title].size': 1.5
+    'Here.Pointed.fill': fill,
+    'Here.Pointed.size': 1,
+    'Title.size': 1.5
   });
   const presentations = [
     {
@@ -275,43 +275,38 @@ describe('variant markers', () => {
       seed: 1,
       draws: [],
       variant: variant('amber-100'),
-      origins: { 'Here[current].fill': 'starter' },
-      kinds: { '2:3': ['Here[current]', 'Here[current,found]'], '4:1': ['root[title]'] }
+      origins: { 'Here.Pointed.fill': 'starter' },
+      kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
     },
     {
       label: 'bottom',
       seed: 2,
       draws: [],
       variant: variant('blue-100'),
-      origins: { 'Here[current].fill': 'random' },
-      kinds: { '2:3': ['Here[current]', 'Here[current,found]'], '4:1': ['root[title]'] }
+      origins: { 'Here.Pointed.fill': 'random' },
+      kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
     }
   ];
 
-  it('gives each tag its kinds’ values in every shown variant, and whether they differ', () => {
+  it('gives each tag its kind’s values in every shown variant, and whether they differ', () => {
     const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
-    expect(ghosts.map(({ kinds }) => kinds)).toEqual([
-      ['Here[current]', 'Here[current,found]'],
-      ['root[title]', 'page']
-    ]);
+    expect(ghosts.map(({ kinds }) => kinds)).toEqual([['Here.Pointed'], ['Title']]);
     const [pointer, title] = ghosts;
     expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
-      ['Here[current].fill', true],
-      ['Here[current].size', false],
-      ['Here[current,found].fill', false]
+      ['fill', true],
+      ['size', false]
     ]);
     expect(pointer.props[0].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
       [
-        ['amber-100', 'Here[current].fill = amber-100, from the starter', true],
-        ['blue-100', 'Here[current].fill = blue-100, randomised', true]
+        ['amber-100', 'Here.Pointed.fill = amber-100, from the starter', true],
+        ['blue-100', 'Here.Pointed.fill = blue-100, randomised', true]
       ]
     );
-    // A tag of one kind names its props alone, and the first top-level node holds the page.
-    expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
+    expect(title.props.map(({ name }) => name)).toEqual(['size']);
   });
 
   it('gives a <Listing /> its language and fills, and the page which labels are steps', () => {
-    const listed = `${source}\n<Node layout="row"><Listing /></Node>`;
+    const listed = `${source}\n<Listing />`;
     const withListing = presentations.map((presentation, index) => ({
       ...presentation,
       variant: {
@@ -336,10 +331,9 @@ describe('variant markers', () => {
     ]);
   });
 
-  it('gives the first top-level node the page frame', () => {
-    const [, title] = tagGhosts(EditorState.create({ doc: source }), presentations);
-    expect(title.kinds).toEqual(['root[title]', 'page']);
-    expect(title.props.map(({ name }) => name)).toEqual(['size', 'ratio']);
+  it('leaves the page frame to no tag', () => {
+    const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
+    expect(ghosts.flatMap(({ props }) => props.map(({ name }) => name))).not.toContain('ratio');
     expect(frameProps(presentations).map(({ name }) => name)).toEqual(['ratio']);
   });
 

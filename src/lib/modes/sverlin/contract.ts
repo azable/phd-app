@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script lang="sverlin">\n</script>\n<Node tags="title">Start your visualization</Node>\n<Node tags="caption">Step {step + 1} · seed {seed}</Node>\n'
+    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n{#snippet Caption()}<Node>Step {step + 1} · seed {seed}</Node>{/snippet}\n{@render Title()}\n{@render Caption()}\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
@@ -28,42 +28,50 @@ export const linearSearchSource = `<script lang="sverlin" domain>
   const target = Int(2);
 </script>
 <script lang="sverlin">
-  @start[let found = Flag(false);
-  let searching = Flag(true);]
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
-    found = Equal(values[i], target);
-    if (found) break;
+  function search(a, target) {
+    for (let i = Index(0); Before(i, Length(a)); i = Next(i)) @check{
+      if (Equal(a[i], target)) return i;
+    }
+    @missing[return Index(-1);]
   }
-  @finish[searching = false;]
+  const found = search(values, target);
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}
+  {#snippet Tally()}<Node>{'•'.repeat(value)}</Node>{/snippet}
   <Node layout="column">
     <Node {value} />
-    <Node tags="tally">{'•'.repeat(value)}</Node>
+    {@render Tally()}
   </Node>
 {/snippet}
 {#snippet IndexText(i: Index)}<Node value={i} />{/snippet}
 {#snippet Row(list: Values)}
   <Node layout="row">
     {#each list as value, k}
+      {#snippet Under()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
         {@render Int(value)}
-        <Node tags="index">{k}</Node>
+        {@render Under()}
       </Node>
     {/each}
   </Node>
 {/snippet}
 {#snippet Current(i: Index)}
+  {#snippet Name()}<Node>i</Node>{/snippet}
   <Node layout="column">
-    <Pointed tags={['current', found && 'found']} />
-    <Node tags="label">i</Node>
+    <Pointed />
+    {@render Name()}
   </Node>
 {/snippet}
-<Node tags="title">Linear search</Node>
-<Node tags="caption">Find {@render Int(target)} by checking each cell in order.</Node>
+{#snippet Found(p: Index)}<Pointed />{/snippet}
+{#snippet Title()}<Node>Linear search</Node>{/snippet}
+{#snippet Caption()}<Node>Find {@render Int(target)} by checking each cell in order.</Node>{/snippet}
+{#snippet Checking()}<Node>Checking index {@render Index(i)}.</Node>{/snippet}
+{#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
+{@render Title()}
+{@render Caption()}
 {@render Row(values)}
 {@render Current(i)}
-<Node tags="status">
-  {#if found}Found {@render Int(target)} at index {@render Index(i)}.{:else if !searching}{@render Int(target)} is not in the array.{:else if step === 0}Start at the first cell.{:else}Checking index {@render Index(i)}.{/if}
-</Node>`;
+{@render Found(found)}
+{@render Checking()}
+{@render Result()}`;

@@ -36,7 +36,7 @@ export type ModeBuildResult =
         frames?: string[];
         // The source's own listings, the first options of its listing.language variable.
         listings?: string[];
-        // The kinds each tag can be, by its line:column.
+        // The kind of each tag, by its line:column.
         kinds?: Record<string, string[]>;
         // The <Node> tags the presentation leaves out, by their line:column.
         leftOut?: string[];

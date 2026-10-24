@@ -49,9 +49,10 @@ const merge = `<script lang="sverlin" domain>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
 {#snippet IntCard(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node tags="label">↑</Node></Node>{/snippet}
-{#snippet Placed(p: Position)}<Pointed tags="placed" />{/snippet}
-<Node layout="column">{@render Row(left)}{@render Row(right)}{@render Row(merged)}</Node>
+{#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node>↑</Node></Node>{/snippet}
+{#snippet Placed(p: Position)}<Pointed />{/snippet}
+{#snippet Rows()}<Node layout="column">{@render Row(left)}{@render Row(right)}{@render Row(merged)}</Node>{/snippet}
+{@render Rows()}
 {@render Arrow(i)}
 {@render Arrow(j)}
 {@render Placed(k)}`;
@@ -230,11 +231,14 @@ const walk = `<script lang="sverlin" domain>
 </script>
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
-{#snippet Current(c: EdgeIndex)}<Pointed tags="current" />{/snippet}
-<Node layout="free">
-  {#each vertices as name}{@render Name(name)}{/each}
-  {#each edges as edge}{@render Arrow(edge)}{/each}
-</Node>
+{#snippet Current(c: EdgeIndex)}<Pointed />{/snippet}
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as name}{@render Name(name)}{/each}
+    {#each edges as edge}{@render Arrow(edge)}{/each}
+  </Node>
+{/snippet}
+{@render Graph()}
 {@render Current(e)}`;
 
 it.skipIf(!enabled)(
@@ -315,7 +319,7 @@ const taken = `<script lang="sverlin" domain>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Taken(at: Index)}
-  <Node layout="column"><Pointed tags="taken" /><Node tags="label">taken</Node></Node>
+  <Node layout="column"><Pointed /><Node>taken</Node></Node>
 {/snippet}
 {@render Row(left)}
 {@render Row(right)}
@@ -381,7 +385,7 @@ const far = `<script lang="sverlin" domain>
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Here(at: Index)}<Pointed tags="current" />{/snippet}
+{#snippet Here(at: Index)}<Pointed />{/snippet}
 {@render Row(values)}
 {@render Here(i)}`;
 
@@ -412,7 +416,7 @@ it.skipIf(!enabled)(
           slots: items?.children.length,
           // The element the pointer is at is drawn in its kind.
           pointers: [
-            ...(layer?.querySelectorAll<HTMLElement>('[data-sv-kind="Here[current]"]') ?? [])
+            ...(layer?.querySelectorAll<HTMLElement>('[data-sv-kind="Here.Pointed"]') ?? [])
           ].filter((node) => getComputedStyle(node).visibility !== 'hidden').length
         };
       });
@@ -436,8 +440,8 @@ it.skipIf(!enabled)(
 
 const cursors = taken.replace(
   '{@render Taken(take.from)}',
-  `{#snippet ICursor(at: Index)}<Node layout="column"><Node tags="cursor">i</Node><Pointed tags="next" /></Node>{/snippet}
-{#snippet JCursor(at: Index)}<Node layout="column"><Node tags="cursor">j</Node><Pointed tags="next" /></Node>{/snippet}
+  `{#snippet ICursor(at: Index)}{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node>{/snippet}
+{#snippet JCursor(at: Index)}{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node>{/snippet}
 {@render ICursor(i)}
 {@render JCursor(j)}
 {@render Taken(take.from)}`
@@ -512,7 +516,7 @@ async function cursorRows(chosen: Record<string, string>) {
           const { left, right } = node.getBoundingClientRect();
           return [Math.round(left), Math.round(right)];
         };
-        const j = [...layer.querySelectorAll<HTMLElement>('[data-sv-kind="JCursor[cursor]"]')].find(
+        const j = [...layer.querySelectorAll<HTMLElement>('[data-sv-kind="JCursor.JName"]')].find(
           (node) => getComputedStyle(node).visibility !== 'hidden'
         );
         return {
@@ -544,7 +548,7 @@ it.skipIf(!enabled)(
   'leaves a pointer whose overflow is hidden undrawn past the ends, keeping no room there',
   { timeout: 120_000 },
   async () => {
-    const steps = await cursorRows({ 'JCursor[next].overflow': 'hidden' });
+    const steps = await cursorRows({ 'JCursor.Pointed.overflow': 'hidden' });
     // Step 0 is the input as given; the first step sets j.
     const [, first] = steps;
     expect(first.rows[0]).toEqual(first.rows[1]);
@@ -558,14 +562,14 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin"></script><Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>`
+      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin"></script>{#snippet Pair()}<Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>{/snippet}{@render Pair()}`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
-        'root.stroke': 'neutral-500',
-        'root.strokeWidth': 1.5,
-        'root.strokeStyle': 'dashed',
-        'root[link].strokeStyle': 'dotted'
+        'Pair.stroke': 'neutral-500',
+        'Pair.strokeWidth': 1.5,
+        'Pair.strokeStyle': 'dashed',
+        'Pair.Link.strokeStyle': 'dotted'
       }
     });
     const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
@@ -588,7 +592,7 @@ it.skipIf(!enabled)(
       const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
       const path = layer.querySelector('path.link')!;
       return {
-        border: getComputedStyle(layer.querySelector('[data-sv-kind="root"]')!).borderTopStyle,
+        border: getComputedStyle(layer.querySelector('[data-sv-kind="Pair"]')!).borderTopStyle,
         dashes: path.getAttribute('stroke-dasharray'),
         cap: path.getAttribute('stroke-linecap')
       };

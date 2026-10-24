@@ -38,7 +38,7 @@ export type SceneNode = {
   key?: string;
   /** Its atomic type name, if typed. */
   type?: string;
-  /** Its kind of node, as Arrow[current]: what its look is the variant's values for. */
+  /** Its kind of node, as Compared.Pointed: what its look is the variant's values for. */
   kind?: string;
   /** How it arranges its items or children, if it does. */
   layout?: Layout;

@@ -1,11 +1,12 @@
 /**
  * What a presentation leaves out: drawn nowhere and keeping no room, as a node whose kind has
- * `shown: false` is. A render is left out where its type's view is none, the view it draws is left
- * out, or it reads a value out of scope at every step of the presentation; a node, where its kind
- * is not shown; or, holding no node, one of its renders is left out (its renders and text are one
- * statement); or, holding nodes, every part is, each node and each render in it. Decided once a
- * presentation's variant and frames are known, by the site of each <Node> and render (its
- * line:column, as tags record their kinds).
+ * `shown: false` is. A render is left out where its type's view is none, the view or part of the
+ * page it draws is left out, or it reads a value out of scope at every step of the presentation; a
+ * node, where its kind is not shown; or, holding no node or part, one of its renders is left out
+ * (its renders and text are one statement); or, holding nodes, every part is, each node and each
+ * render in it, a part's render counting as the nodes it draws. Decided once a presentation's
+ * variant and frames are known, by the site of each <Node> and render (its line:column, as tags
+ * record their kinds).
  */
 
 import type { MasterStep } from './algorithm/interpret.server';
@@ -19,7 +20,7 @@ type Part = Record<string, unknown> & {
   expression?: Part & { callee?: Part; arguments?: unknown[] };
 };
 
-/** A <Node> of the view: the node around it, the snippet it is in, and its base kind. */
+/** A <Node> of the view: the node around it, the snippet it is in, by its path, and its kind. */
 type ModelNode = {
   parent?: string;
   view: string;
@@ -28,8 +29,17 @@ type ModelNode = {
   own: boolean;
 };
 
-/** A render of a view or type: the node around it, the snippet it is in, what it renders. */
-type ModelRender = { parent?: string; view: string; callee: string; reads: string[] };
+/**
+ * A render of a view, type, or part: the node around it, the snippet it is in, what it renders,
+ * and whether it is a part's, whose nodes are the node's parts as its child nodes are.
+ */
+type ModelRender = {
+  parent?: string;
+  view: string;
+  callee: string;
+  reads: string[];
+  part?: boolean;
+};
 
 /** The view's nodes and renders, by site, with what each snippet holds at its top. */
 export type LeftOutModel = {
@@ -47,15 +57,17 @@ export function siteOf(source: string, offset: number): string {
 }
 
 /**
- * The model of the view's markup: every <Node> by its site with its base kind (`kinds`, by where
- * the tag starts), and every render the page draws in a slot (`reads`, by where the render starts,
- * the variables it is drawn from).
+ * The model of the view's markup: every <Node> by its site with its kind (`kinds`, by where the
+ * tag starts), every render the page draws in a slot (`reads`, by where the render starts, the
+ * variables it is drawn from), and every render of a snippet without parameters, a part, by its
+ * path (`paths`, by name), drawn as a view is.
  */
 export function leftOutModel(
   markup: unknown,
   source: string,
   kinds: ReadonlyMap<number, string>,
   reads: ReadonlyMap<number, string[]>,
+  paths: ReadonlyMap<string, string>,
   /**
    * Variables the root's markup reads itself, by where each read starts: each counts as a render of
    * its node, so the node hides where the variable is absent, as at step 0.
@@ -76,7 +88,8 @@ export function leftOutModel(
     }
     const part = node as Part;
     if (part.type === 'SnippetBlock') {
-      walk(part.children, part.expression?.name ?? view, undefined);
+      const name = part.expression?.name ?? '';
+      walk(part.children, paths.get(name) ?? name, undefined);
       return;
     }
     if (part.type === 'InlineComponent' && part.name === 'Node' && part.start !== undefined) {
@@ -99,13 +112,15 @@ export function leftOutModel(
     if (part.type === 'RenderTag' && part.start !== undefined) {
       const callee = part.expression?.callee?.name;
       const read = reads.get(part.start);
-      // Only renders the page draws in a slot; a pointer's is drawn at the element it points at.
-      if (typeof callee === 'string' && read)
+      const ofPart = typeof callee === 'string' && !part.expression?.arguments?.length;
+      // Only renders the page draws in a slot, and parts; a pointer's is drawn where it points.
+      if (typeof callee === 'string' && (read || (ofPart && paths.has(callee))))
         model.renders[siteOf(source, part.start)] = {
           ...(parent ? { parent } : {}),
           view,
-          callee,
-          reads: read
+          callee: read ? callee : (paths.get(callee) ?? callee),
+          reads: read ?? [],
+          ...(read ? {} : { part: true })
         };
       return;
     }
@@ -243,8 +258,10 @@ export function leftOutSites(
       if (node.own) return false;
       const direct = rendersIn(site, node.view);
       const children = nodesIn(site, node.view);
+      // A part of the page drawn inside draws nodes of its own, so it counts as they would.
+      const parts = direct.filter(([, render]) => render.part);
       // Holding no node, its renders and text are one statement: one missing takes the node.
-      if (!children.length) return direct.some(([child]) => renderLeftOut(child));
+      if (!children.length && !parts.length) return direct.some(([child]) => renderLeftOut(child));
       // Holding nodes, each node and each render in it is a part: it goes only with every one, and
       // a node holding no render, as a label, never goes.
       return (

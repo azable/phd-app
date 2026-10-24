@@ -88,17 +88,19 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>
-<Node tags="key">inserting {@render Int(@insert.key)}</Node>`;
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
+{@render Cells()}
+{@render Inserting()}`;
     const keys = (await stepsOf(source, 'insert', 4)).map((nodes) =>
-      nodes.find((node) => node.startsWith('root[key]'))
+      nodes.find((node) => node.startsWith('Inserting'))
     );
     // The page opens on the input, before any key, the node hidden whole; then one key per step.
     expect(keys).toEqual([
       undefined,
-      'root[key]:inserting 2',
-      'root[key]:inserting 8',
-      'root[key]:inserting 1'
+      'Inserting:inserting 2',
+      'Inserting:inserting 8',
+      'Inserting:inserting 1'
     ]);
   }
 );
@@ -123,14 +125,16 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>
-<Node tags="caption">swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>`;
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Swapped()}<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>{/snippet}
+{@render Cells()}
+{@render Swapped()}`;
     const [, first] = await stepsOf(source, 'sweep.pair.test.swap', 2);
-    expect(first).toContain('root[caption]:swap 5 and 1');
+    expect(first).toContain('Swapped:swap 5 and 1');
     // At a comparison that swaps nothing, the caption hides whole, its text with its values.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
     const [, , , compare] = await stepsOf(source, 'sweep.pair.test', 4);
-    expect(compare.some((node) => node.startsWith('root[caption]'))).toBe(false);
+    expect(compare.some((node) => node.startsWith('Swapped'))).toBe(false);
   }
 );
 
@@ -149,8 +153,9 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Checked(p: Index)}<Pointed tags="checked" />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>
+{#snippet Checked(p: Index)}<Pointed />{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{@render Cells()}
 {#each runs(@check.at) as p}{@render Checked(p)}{/each}`;
     const checked = (await stepsOf(search, 'check', 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
@@ -175,9 +180,11 @@ it.skipIf(!enabled)(
 </script>
 {#snippet DigitCell(value: Digit)}<Node {value} />{/snippet}
 {#snippet CountCell(value: Count)}<Node {value} />{/snippet}
-{#snippet Reading(r: At)}<Pointed tags="reading" />{/snippet}
-<Node>{#each digits as d}{@render Digit(d)}{/each}</Node>
-<Node>{#each counts as c}{@render Count(c)}{/each}</Node>
+{#snippet Reading(r: At)}<Pointed />{/snippet}
+{#snippet DigitRow()}<Node>{#each digits as d}{@render Digit(d)}{/each}</Node>{/snippet}
+{#snippet CountRow()}<Node>{#each counts as c}{@render Count(c)}{/each}</Node>{/snippet}
+{@render DigitRow()}
+{@render CountRow()}
 {@render At(v)}`;
     const reading = (await stepsOf(counting, 'count', 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]

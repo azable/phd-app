@@ -183,23 +183,6 @@ export function optionsOf(
   return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
 }
 
-/**
- * Props a kind only some steps draw a node as, by a tag the state decides, can vary: not those that
- * move its children or its room, which its base kind gives (see conditionalProps).
- */
-const layoutProps: ReadonlySet<DesignProp> = new Set([
-  'shown',
-  'gap',
-  'align',
-  'justify',
-  'overflow'
-]);
-
-/** The props of a kind drawn only under a conditional tag: paint, text, and inset, not layout. */
-export function conditionalProps(role: KindRole): readonly DesignProp[] {
-  return roleProps[role].filter((prop) => !layoutProps.has(prop));
-}
-
 /** Paint shows only where a pointer is; its other props hold in every slot, so slots keep one size. */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
@@ -210,33 +193,14 @@ export const paintProps: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The kinds a node is drawn with: the one it is at a step, its base kind (its view and literal
- * tags), whose layout every kind of its tag takes, and, where tags depend on the state, every kind
- * its tag can be.
+ * The kind a node is of: the snippet it is in, by its path (`Row.Under` for a snippet inside
+ * `Row`), and for a pointer view's <Pointed> or a <Link>, that part, as `Compared.Pointed`.
  */
-export type KindSite = { kind: string; base: string; site?: readonly string[] };
-
-/** The kind a node is of: its view (root outside one) and the tags it has, as Arrow[current]. */
-export function kindKey(view: string, tags: readonly string[]): string {
-  return tags.length ? `${view}[${tags.join(',')}]` : view;
+export function kindKey(view: string, part?: 'Pointed' | 'Link'): string {
+  return part ? `${view}.${part}` : view;
 }
 
-/**
- * The tags a node has, from its tags prop: a name, names separated by spaces, or a list. A
- * <Pointed> or <Link> with none is of the kind its own tag names, pointed or link, apart from the
- * untagged nodes of its view.
- */
-export function activeTags(tags: unknown, untagged?: 'pointed' | 'link'): string[] {
-  const active =
-    typeof tags === 'string'
-      ? tags.split(/\s+/u).filter(Boolean)
-      : Array.isArray(tags)
-        ? tags.filter((tag): tag is string => typeof tag === 'string' && tag !== '')
-        : [];
-  return active.length || !untagged ? active : [untagged];
-}
-
-/** A variant: each variable's value, by key, as Arrow[current].fill or views.Int. */
+/** A variant: each variable's value, by key, as Compared.Pointed.fill or views.Int. */
 export type DesignValues = Readonly<Record<string, string | number | boolean>>;
 
 /** The starter's value for each prop of a kind: plain containers and text, framed values and pointers. */

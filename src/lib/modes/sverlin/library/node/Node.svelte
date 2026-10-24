@@ -2,7 +2,7 @@
   One node of a visualization: a primitive `value`, or children content, which makes it a
   collection when it is one {#each} over a collection. A layout arranges its children, so
   annotations such as an index or a pointer are simply nodes beside a value. Its look is the
-  variant's values for its kind, its view and tags (see design.ts), not props of its own.
+  variant's values for its kind, the snippet it is in (see design.ts), not props of its own.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -47,21 +47,13 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import {
-    activeTags,
-    colourCss,
-    kindKey,
-    paintProps,
-    strokeStyleCss,
-    type KindSite
-  } from './design';
+  import { colourCss, paintProps, strokeStyleCss } from './design';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
   let {
     value,
     layout,
-    tags,
     children,
     key,
     constraints,
@@ -70,8 +62,6 @@
     curve,
     layoutSeed,
     __view = 'root',
-    __base,
-    __site,
     __over,
     __ref,
     __id,
@@ -88,11 +78,6 @@
     value?: Primitive;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /**
-     * Names saying what this node is, which with its view make its kind and so its look: a name,
-     * names separated by spaces, or a list, as ['current', found && 'found'].
-     */
-    tags?: string | readonly (string | false | null | undefined)[];
     children?: Snippet;
     /** A name its parent's links and relations refer to this node by. */
     key?: string;
@@ -115,19 +100,13 @@
      * layout used, so a layout the participant liked can be kept while everything else varies.
      */
     layoutSeed?: number;
-    /** Internal: the view this node is in, added by the compiler; root outside one. */
+    /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
     __view?: string;
     /**
-     * Internal, added by the compiler where tags depend on the state: the literal tags, which with
-     * the view make the base kind giving the layout, and every kind the tag can be.
-     */
-    __base?: string;
-    __site?: readonly string[];
-    /**
-     * Internal: the kinds of the pointer drawing this node again, and whether it is at it: its paint
+     * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
      * shows only where it is, and its other props hold in every slot, so slots keep one size.
      */
-    __over?: KindSite & { active: boolean };
+    __over?: { kind: string; active: boolean };
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
     /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
@@ -152,40 +131,9 @@
   const types = typeContext();
   // This node's look: the variant's values for its kind, or for a pointer drawing it again.
   const design = designContext();
-  const kind = $derived(kindKey(__view, activeTags(tags)));
-  const own = $derived<KindSite>({
-    kind,
-    base: __base === undefined ? kind : kindKey(__view, activeTags(__base)),
-    site: __site
-  });
-  // A pointer drawing this node again gives its paint where it is, and its base kind's other props.
-  const from = (prop: string): KindSite =>
-    __over && (__over.active || !paintProps.has(prop))
-      ? { ...__over, kind: __over.active ? __over.kind : __over.base }
-      : own;
-  // A kind drawn only at some steps leaves its layout to its base kind.
-  const valueIn = (kinds: KindSite, prop: string, kind = kinds.kind): unknown =>
-    design[`${kind}.${prop}`] ?? design[`${kinds.base}.${prop}`];
-  const look = (prop: string): unknown => valueIn(from(prop), prop);
-  // A node that can be several kinds keeps the largest inset (padding and border, in rem and
-  // pixels) and least size of them all, so its content stays put as its kind changes.
-  const reach = $derived.by(() => {
-    const kinds = from('padding');
-    if (!kinds.site?.length) return undefined;
-    const number = (kind: string, prop: string) => {
-      const value = valueIn(kinds, prop, kind);
-      return typeof value === 'number' ? value : undefined;
-    };
-    const scaled = (kind: string, prop: string) =>
-      (number(kind, prop) ?? 0) * (number(kind, 'size') ?? 1);
-    const border = (kind: string) =>
-      colourCss(valueIn(kinds, 'stroke', kind)) ? (number(kind, 'strokeWidth') ?? 0) : 0;
-    return {
-      padding: Math.max(...kinds.site.map((kind) => scaled(kind, 'padding'))),
-      border: Math.max(...kinds.site.map(border)),
-      minSize: Math.max(...kinds.site.map((kind) => scaled(kind, 'minSize')))
-    };
-  });
+  // A pointer drawing this node again gives its paint where it is, and its other props everywhere.
+  const look = (prop: string): unknown =>
+    design[`${__over && (__over.active || !paintProps.has(prop)) ? __over.kind : __view}.${prop}`];
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -304,7 +252,6 @@
   const given = $derived({
     value,
     layout,
-    tags,
     children,
     key,
     constraints,
@@ -313,8 +260,6 @@
     curve,
     layoutSeed,
     __view,
-    __base,
-    __site,
     __ref,
     __type,
     __links,
@@ -424,7 +369,7 @@
       class="sv-node {typeof font === 'string' ? font : ''}"
       data-sv-node={id}
       data-sv-key={key}
-      data-sv-kind={__over?.active ? __over.kind : kind}
+      data-sv-kind={__over?.active ? __over.kind : __view}
       data-sv-component={__component}
       data-sv-slot={slot}
       data-sv-identity={identity}
@@ -444,17 +389,9 @@
       style:border-style={strokeStyleCss(look('strokeStyle'))}
       style:border-width={`${borderWidth}px`}
       style:border-radius={measured('radius', 'px')}
-      style:padding={reach
-        ? `calc(${reach.padding}rem + ${reach.border - borderWidth}px)`
-        : measured('padding', 'em')}
-      style:min-width={least(
-        reach ? `${reach.minSize}rem` : measured('minSize', 'em'),
-        reserved?.width
-      )}
-      style:min-height={least(
-        reach ? `${reach.minSize}rem` : measured('minSize', 'em'),
-        reserved?.height
-      )}
+      style:padding={measured('padding', 'em')}
+      style:min-width={least(measured('minSize', 'em'), reserved?.width)}
+      style:min-height={least(measured('minSize', 'em'), reserved?.height)}
       style:opacity={look('opacity') as number | undefined}
     >
       {#if solved}

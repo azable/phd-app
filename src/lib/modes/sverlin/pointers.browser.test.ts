@@ -38,9 +38,10 @@ it.skipIf(!enabled)(
   const j = Index(0);
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet First(p: Index)}<Pointed tags="first" />{/snippet}
-{#snippet Second(p: Index)}<Pointed tags="second" />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>
+{#snippet First(p: Index)}<Pointed />{/snippet}
+{#snippet Second(p: Index)}<Pointed />{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{@render Cells()}
 {@render First(i)}
 {@render Second(j)}`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
@@ -66,8 +67,8 @@ it.skipIf(!enabled)(
     expect(errors).toEqual([]);
     expect(kinds).toEqual(
       expect.arrayContaining([
-        ['5', 'Second[second]'],
-        ['1', 'First[first]'],
+        ['5', 'Second.Pointed'],
+        ['1', 'First.Pointed'],
         ['4', 'IntCell']
       ])
     );

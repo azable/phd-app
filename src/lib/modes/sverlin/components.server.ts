@@ -3,7 +3,10 @@
  * {#snippet IntText(value: Int)}, optionally taking the props of the node they draw, as in
  * (value: Int, node). A component reads only its value and other components, so its size can be
  * found by rendering it for every value of its type (see assembly/entry.ts). A type renders by its
- * name, as in {@render Int(value)}, drawing the view of it its variant chooses (views.Int).
+ * name, as in {@render Int(value)}, drawing the view of it its variant chooses (views.Int). A
+ * snippet without parameters is a part: of the page at the top level, reading what the root reads,
+ * or of the view it is inside. Every snippet's name, with those of the snippets around it, is the
+ * kind of the nodes it draws.
  */
 
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
@@ -30,10 +33,37 @@ type TypeNode = { type?: string; typeName?: { type?: string; name?: string } };
 /** A problem with a component, at a position in the view. */
 export type ComponentProblem = { message: string; start: number };
 
+/** Whether markup is a snippet without parameters: a part of the page, or of the view it is in. */
+export function isPart(node: unknown): boolean {
+  const part = node as { type?: string; parameters?: unknown[] } | undefined;
+  return part?.type === 'SnippetBlock' && !part.parameters?.length;
+}
+
+/**
+ * Every snippet's kind, by its name: the names of the snippets it is inside and its own, as
+ * Row.Under for Under inside Row. Names are unique (see findComponents), so a render names one.
+ */
+export function snippetPaths(markup: unknown): Map<string, string> {
+  const paths = new Map<string, string>();
+  const walk = (node: unknown, around: string | undefined): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, around));
+    const part = node as { type?: string; expression?: { name?: string } };
+    const name = part.type === 'SnippetBlock' ? part.expression?.name : undefined;
+    const path = name ? (around ? `${around}.${name}` : name) : around;
+    if (name && path && !paths.has(name)) paths.set(name, path);
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'expression') walk(child, path);
+  };
+  walk(markup, undefined);
+  return paths;
+}
+
 /**
  * The view's components, the start of each one's root <Node> tags, the <Node> tags that show a
  * component's own value with its type, and problems: a snippet that types more than one parameter,
- * takes more than its value, or is typed but not at the top level.
+ * takes more than its value, takes a parameter without a type, is typed but not at the top level,
+ * or has the name of another snippet.
  */
 export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   components: { name: string; start: number; type: string; node: SvelteNode }[];
@@ -134,6 +164,28 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     for (const child of part.children ?? []) nested(child, depth + 1);
   };
   for (const node of html?.children ?? []) nested(node.children ?? [], 1);
+  // A snippet's name is its kind, so each names one snippet; one without a type takes nothing.
+  const named = new Set<string>();
+  const snippets = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(snippets);
+    const part = node as SvelteNode;
+    const name = part.type === 'SnippetBlock' ? part.expression?.name : undefined;
+    if (name && named.has(name))
+      problems.push({
+        message: `Two snippets are named ${name}: a snippet's name is the kind of the nodes it draws, so give each its own.`,
+        start: part.start ?? 0
+      });
+    else if (name) named.add(name);
+    if (name && part.parameters?.length && !typeOf(part))
+      problems.push({
+        message: `${name} takes a parameter without a type: a view takes one value, its type given, as in (value: Int), and a snippet without parameters is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`,
+        start: part.start ?? 0
+      });
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'expression') snippets(child);
+  };
+  snippets(html?.children);
   return { components, roots, valueTypes, pointers, pointed: pointedTags, problems };
 }
 
@@ -216,9 +268,10 @@ export function viewCallsOf(
 }
 
 /**
- * Where the root reads a variable out of scope at some step other than through a view or pointer:
- * there it would read the value standing in from another step. {@render} arguments and {#each}
- * collections are drawn through views, which draw nothing at such steps.
+ * Where the root, or a part of the page, reads a variable out of scope at some step other than
+ * through a view or pointer: there it would read the value standing in from another step.
+ * {@render} arguments and {#each} collections are drawn through views, which draw nothing at such
+ * steps.
  */
 export function scopedReadsOf(
   markup: unknown,
@@ -229,7 +282,7 @@ export function scopedReadsOf(
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) return value.forEach((item) => walk(item, parent, key));
     const node = value as Record<string, unknown> & { type?: string; name?: string };
-    if (node.type === 'RenderTag' || node.type === 'SnippetBlock') return;
+    if (node.type === 'RenderTag' || (node.type === 'SnippetBlock' && !isPart(node))) return;
     if (node.type === 'EachBlock') {
       walk(node.body ?? node.children, node, 'body');
       walk(node.fallback ?? node.else, node, 'fallback');
@@ -440,7 +493,7 @@ export function pointerCalls(
       const start = part.start ?? 0;
       if (where !== 'top')
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside components, as in {@render ${name}(i)}.`,
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as in {@render ${name}(i)}.`,
           start
         });
       else if (!position)
@@ -680,9 +733,12 @@ export function slotInsertions(
         const local = { kind: 'item', of: part.expression as Part, each: part } as const;
         inner.set(context.name, local);
         // A node holding all of an item, as its value and the labels under it, keeps the item's
-        // end slots in the sequence the items are arranged in (see Node.svelte).
+        // end slots in the sequence the items are arranged in (see Node.svelte); a snippet the
+        // item declares for its parts draws nothing there.
         const roots = ((part.children as Part[] | undefined) ?? []).filter(
-          (child) => !(child.type === 'Text' && String(child.data ?? '').trim() === '')
+          (child) =>
+            child.type !== 'SnippetBlock' &&
+            !(child.type === 'Text' && String(child.data ?? '').trim() === '')
         );
         const [root] = roots;
         if (roots.length === 1 && root.type === 'InlineComponent' && root.name === 'Node')

@@ -45,7 +45,8 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>`;
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{@render Cells()}`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.masters.write[0].state.values).toEqual([1, 1, 1]);
@@ -122,9 +123,12 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-<Node tags="title">Pass</Node>
-<Node tags="key">key {@render Int(key)}</Node>
-<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>`;
+{#snippet Title()}<Node>Pass</Node>{/snippet}
+{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
+{#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
+{@render Title()}
+{@render Key()}
+{@render Cells()}`;
     const prepared = prepareSvelteComponent(source);
     const kinds = async (chosen: Record<string, string | boolean>) => {
       const { javascript } = await bundlePresentation(prepared, 1, { chosen });
@@ -147,16 +151,16 @@ it.skipIf(!enabled)(
     };
     // Stepping over each pass whole, key is out of scope at every step: no key node, no "key".
     const whole = await kinds({ frames: 'pass' });
-    expect(whole.kinds).not.toContain('root[key]');
+    expect(whole.kinds).not.toContain('Key');
     expect(whole.text).not.toContain('key');
-    expect(whole.kinds).toContain('root[title]');
+    expect(whole.kinds).toContain('Title');
     // Stepping inside the pass, key shows.
     const inside = await kinds({ frames: 'pass.*' });
-    expect(inside.kinds).toContain('root[key]');
+    expect(inside.kinds).toContain('Key');
     // A kind not shown takes the nodes holding only its values with it: the row, and the key.
     const hidden = await kinds({ frames: 'pass.*', 'IntCell.shown': false });
-    expect(hidden.kinds).not.toContain('root');
-    expect(hidden.kinds).not.toContain('root[key]');
-    expect(hidden.kinds).toContain('root[title]');
+    expect(hidden.kinds).not.toContain('Cells');
+    expect(hidden.kinds).not.toContain('Key');
+    expect(hidden.kinds).toContain('Title');
   }
 );

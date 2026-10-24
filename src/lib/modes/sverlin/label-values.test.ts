@@ -34,7 +34,8 @@ const insertion = `
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-<Node>{#each values as v}{@render Int(v)}{/each}</Node>`;
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{@render Cells()}`;
 
 const prepare = (view: string, algorithm = insertion) =>
   prepareSvelteComponent(`${domain}${algorithm}\n${view}`);
@@ -55,8 +56,10 @@ describe('labels read in the view', () => {
     ]);
   });
 
-  it('give the value the labelled expression gave in a step’s own code', () => {
-    const prepared = prepare('<Node tags="key">inserting {@render Int(@insert.key)}</Node>');
+  it('give the value the labelled expression gave in a step’s own code, in a part of the page', () => {
+    const prepared = prepare(
+      '{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}{@render Inserting()}'
+    );
     expect(prepared.labelled).toEqual({
       ℓinsertˑkey: {
         label: 'insert.key',
@@ -95,7 +98,7 @@ describe('labels read in the view', () => {
     expect(() => prepare('{@render Int(@v)}{@render Int(@b.v)}', nested)).not.toThrow();
   });
 
-  it('take a label on an expression, and are read only in the root', () => {
+  it('take a label on an expression, and are read only in the root and its parts', () => {
     const statement = `
 <script lang="sverlin">
   for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
@@ -121,11 +124,12 @@ describe('labels read in the view', () => {
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Asking(e: Equal)}<Node>{@render Int(e.a)}</Node>{/snippet}
-{#snippet Checked(p: Index)}<Pointed tags="checked" />{/snippet}`;
+{#snippet Checked(p: Index)}<Pointed />{/snippet}
+{#snippet Asked()}<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
     const prepared = prepare(
       `{@render Equal(@check)}
 {#each runs(@check.at) as p}{@render Checked(p)}{/each}
-<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>`,
+{@render Asked()}`,
       search
     );
     expect(prepared.appliedIn?.['Equal_ℓcheck']?.operator).toBe('Equal');

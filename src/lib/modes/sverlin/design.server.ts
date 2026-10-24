@@ -8,7 +8,6 @@
 import { keyedRandom } from './algorithm/random.server';
 import {
   colourParts,
-  conditionalProps,
   frameOptions,
   listingOptions,
   optionsOf,
@@ -23,15 +22,10 @@ import {
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
 
-/**
- * A kind of node: its key (as Arrow[current]), what it is, which gives its props, and whether a
- * node is drawn as it only at some steps, by a tag the state decides, which leaves its layout to
- * its base kind.
- */
-export type DesignKind = { key: string; role: KindRole; conditional?: boolean };
+/** A kind of node: its key, the snippet it is in (as Compared.Pointed), and what it is, giving its props. */
+export type DesignKind = { key: string; role: KindRole };
 
-const propsOf = ({ role, conditional }: DesignKind) =>
-  conditional ? conditionalProps(role) : roleProps[role];
+const propsOf = ({ role }: DesignKind) => roleProps[role];
 
 /** Each variable's options, by key. */
 export type DesignSpace = Readonly<Record<string, readonly DesignValue[]>>;
@@ -200,7 +194,7 @@ export function buildVariant(
   return { values, origins };
 }
 
-/** The prop a variable sets, as fill for Arrow[current].fill, or views and frame for theirs. */
+/** The prop a variable sets, as fill for Compared.Pointed.fill, or views and frame for theirs. */
 function propOf(key: string): string {
   if (key.startsWith('views.')) return 'views';
   if (key.startsWith('frame.')) return key;

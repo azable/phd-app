@@ -54,16 +54,20 @@ const source = `<script lang="sverlin" domain>
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet FlagWord(value: Flag)}<Node tags="answer">{value ? 'yes' : 'no'}</Node>{/snippet}
+{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
 {#snippet Ask(g: Greater)}
-  <Node tags="caption">is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+  <Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+{/snippet}
+{#snippet Title()}<Node>Bubble sort</Node>{/snippet}
+{#snippet Board()}
+  <Node layout="column">
+    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    {@render Greater()}
+  </Node>
 {/snippet}
 
-<Node tags="title">Bubble sort</Node>
-<Node layout="column">
-  <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-  {@render Greater()}
-</Node>`;
+{@render Title()}
+{@render Board()}`;
 
 /** The caption Ask draws at a step, and whether it is hidden. */
 async function captionAt(frames: string, step: number) {

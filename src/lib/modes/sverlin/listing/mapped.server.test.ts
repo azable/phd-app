@@ -23,7 +23,9 @@ ${algorithm}
 <script lang="sverlin" listing="textbook">
 ${listing}
 </script>
-<Node layout="row"><Listing /><Node>{#each values as v}<Node value={v} />{/each}</Node></Node>`;
+{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}
+<Listing />
+{@render Cells()}`;
 
 const insertion = blocks(
   `  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {

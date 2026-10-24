@@ -59,7 +59,7 @@ export type DrawnPresentation = {
   seed: number;
   /**
    * Its variant, where each value came from, the views each type rendered by name could draw, and
-   * the kinds each tag can be, by its line:column.
+   * the kind of each tag, by its line:column.
    */
   variant?: DesignValues;
   origins?: Readonly<Record<string, string>>;
@@ -89,7 +89,7 @@ export type DrawnMarker = {
   differs: boolean;
 };
 
-/** The ghost props of one tag, at the offset of its closing > (or />), and the kinds it can be. */
+/** The ghost props of one tag, at the offset of its closing > (or />), and its kind. */
 export type TagGhosts = { at: number; props: GhostProp[]; kinds: string[] };
 
 /** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
@@ -265,7 +265,7 @@ function variable(
 
 /**
  * The ghost props of every <Node>, <Pointed>, and <Link> tag in the document: its kind's values in
- * each shown presentation's variant, a tag that can be several kinds showing each prop by its kind,
+ * each shown presentation's variant, a tag of several kinds, as across sources, naming each by its kind,
  * and the layout it arranged (its form, curve, and layoutSeed). A tag rendered more than once, as
  * in an {#each}, shows each layout value it drew once, and can be pinned only where it drew one.
  */
@@ -312,12 +312,6 @@ export function tagGhosts(
       const line = state.doc.lineAt(match.index);
       add(line.number, match.index - line.from + 1, listingProps, ['listing']);
     }
-  // The page frame belongs to no tag: it goes with the first top-level node, as page.
-  const [first] = [...tagged]
-    .filter(([, keys]) => [...keys].some((kind) => kind === 'root' || kind.startsWith('root[')))
-    .map(([position]) => position.split(':').map(Number))
-    .sort(([lineA, columnA], [lineB, columnB]) => lineA - lineB || columnA - columnB);
-  if (first) add(first[0], first[1], frameProps(presentations), ['page']);
   const arranged = new Map<string, { line: number; column: number }>();
   for (const { layouts = [] } of presentations)
     for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
@@ -715,10 +709,8 @@ const drawnField = StateField.define<DrawnState>({
             ...viewMarkers(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from),
           ghosts,
-          // The frame shows above the source only where no top-level node can hold it.
-          strip: ghosts.some(({ kinds }) => kinds.includes('page'))
-            ? []
-            : frameProps(effect.value.presentations),
+          // The frame belongs to no tag, so it shows above the source.
+          strip: frameProps(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: [
