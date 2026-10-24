@@ -17,6 +17,13 @@ const domain = interpretDomain(`
   const Weight = type('integer', { min: 0, max: 9 });
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
   const Edges = collection(Edge);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Position(v.length));
+  const Before = binop(Position, Position, (a, b) => Flag(a < b));
+  const Next = unop(Position, (p) => Position(p + 1));
+  const Skip = unop(Position, (p) => Position(p + 2));
+  const Sum = binop(Position, Position, (a, b) => Position(a + b - 1));
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
 `);
 const run = (body: string, frames?: string) =>
   traceAlgorithm(body, undefined, domain, frames).steps;
@@ -27,8 +34,8 @@ describe('positions', () => {
       @start[const values = Values([3, 8, 5]);
       let i = Position(-1);]
       @zero[i = Position(0);]
-      while (i < values.length) {
-        @up[i++;]
+      while (Before(i, Length(values))) {
+        @up[i = Next(i);]
       }
     `);
     // The loop's last test, after the last i++, changes nothing, so it is no step.
@@ -45,9 +52,9 @@ describe('positions', () => {
       let i = Position(left, 0);
       let j = Position(right, 0);
       let k = Position(merged, -1);]
-      while (i < left.length && j < right.length) {
-        @take[if (left[i] < right[j]) { merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }]
-        @count[k = i + j - 1;]
+      while (Before(i, Length(left)) && Before(j, Length(right))) {
+        @take[if (Less(left[i], right[j])) { merged.push(left[i]); i = Next(i); } else { merged.push(right[j]); j = Next(j); }]
+        @count[k = Sum(i, j);]
       }
     `,
       'count'
@@ -62,8 +69,8 @@ describe('positions', () => {
       @start[const values = Values([3, 8, 5]);
       let i = Position(-2);]
       @zero[i = Position(0);]
-      while (i < values.length) {
-        @up[i += 2;]
+      while (Before(i, Length(values))) {
+        @up[i = Skip(i);]
       }
       @far[i = 50;
       i = 0;]
@@ -104,6 +111,7 @@ describe('positions', () => {
       const Position = index(Values);
       const Positions = collection(Position);
       const Take = record({ from: Position });
+      const Next = unop(Position, (p) => Position(p + 1));
     `);
 
     it('in records, collections, and the variables made from them', () => {
@@ -114,7 +122,7 @@ describe('positions', () => {
         let i = Position(left, 1);
         let j = Position(right, 0);
         const take = Take({ from: j });
-        const seen = Positions([i, j + 1, Position(right, 0)]);
+        const seen = Positions([i, Next(j), Position(right, 0)]);
         let k = Position(left, 0);
         k = j;
         const moved = take.from;

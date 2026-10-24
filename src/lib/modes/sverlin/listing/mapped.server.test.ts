@@ -7,6 +7,12 @@ const blocks = (algorithm: string, listing: string) => `<script lang="sverlin" d
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Position(v.length));
+  const Before = binop(Position, Position, (a, b) => Flag(a < b));
+  const Next = unop(Position, (p) => Position(p + 1));
+  const Prev = unop(Position, (p) => Position(p - 1));
+  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([2, 1]);
@@ -20,12 +26,12 @@ ${listing}
 <Node layout="row"><Listing /><Node>{#each values as v}<Node value={v} />{/each}</Node></Node>`;
 
 const insertion = blocks(
-  `  for (let i = Position(1); i < values.length; i++) {
+  `  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {
     @key[const key = values[i];]
     @init[let j = i;]
-    while (@test[@bound[j > 0] && @cmp[values[j - 1] > key]]) {
-      @shift[values[j] = values[j - 1];]
-      @down[j--;]
+    while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) {
+      @shift[values[j] = values[Prev(j)];]
+      @down[j = Prev(j);]
     }
     @place[values[j] = key;]
   }`,
@@ -105,11 +111,11 @@ describe('listings of the source’s own', () => {
     expect(maps?.textbook.find(({ label }) => label === 'test.cmp')).toEqual({
       label: 'test.cmp',
       text: 'A[j] > key',
-      sources: [{ text: 'values[j - 1] > key', line: 13 }],
+      sources: [{ text: 'Greater(values[Prev(j)], key)', line: 19 }],
       lit: true
     });
     expect(maps?.textbook.find(({ label }) => label === 'place')?.sources).toEqual([
-      { text: 'values[j] = key;', line: 17 }
+      { text: 'values[j] = key;', line: 23 }
     ]);
   });
 });

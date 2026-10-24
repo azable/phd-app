@@ -9,14 +9,16 @@ export type BlockKind = 'domain' | 'input' | 'algorithm';
 /** Names the view receives from the application rather than from a block. */
 export const reservedNames: ReadonlySet<string> = new Set(['step', 'seed']);
 
-/** The domain block's functions, each defining one type. */
+/** The domain block's functions, each defining one type or operator. */
 export const domainFunctions: ReadonlySet<string> = new Set([
   'type',
   'union',
   'record',
   'collection',
   'index',
-  'ref'
+  'ref',
+  'binop',
+  'unop'
 ]);
 
 /** Property names no block may read, write, or declare. */

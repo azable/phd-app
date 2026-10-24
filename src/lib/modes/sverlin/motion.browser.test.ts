@@ -18,6 +18,13 @@ const merge = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Position(v.length));
+  const Before = binop(Position, Position, (a, b) => Flag(a < b));
+  const Same = binop(Position, Position, (a, b) => Flag(a === b));
+  const Next = unop(Position, (p) => Position(p + 1));
+  const Last = unop(Values, (v) => Position(v.length - 1));
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
 </script>
 <script lang="sverlin" input>
   const left = Values([1, 4, 7]);
@@ -27,15 +34,15 @@ const merge = `<script lang="sverlin" domain>
   @start[let merged = Values([]);
   let i = Position(left, 0);
   let j = Position(right, 0);]
-  while (i < left.length || j < right.length) {
-    @take[if (j === right.length || (i < left.length && left[i] < right[j])) {
+  while (Before(i, Length(left)) || Before(j, Length(right))) {
+    @take[if (Same(j, Length(right)) || (Before(i, Length(left)) && Less(left[i], right[j]))) {
       merged.push(left[i]);
-      i++;
+      i = Next(i);
     } else {
       merged.push(right[j]);
-      j++;
+      j = Next(j);
     }]
-    @step[const k = Position(merged, merged.length - 1);]
+    @step[const k = Last(merged);]
   }
 </script>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
@@ -208,13 +215,17 @@ const walk = `<script lang="sverlin" domain>
   const Edge = record({ from: Vertex, to: Vertex });
   const Edges = collection(Edge);
   const EdgeIndex = index(Edges);
+  const Flag = type('boolean');
+  const Count = unop(Edges, (es) => EdgeIndex(es.length));
+  const Before = binop(EdgeIndex, EdgeIndex, (a, b) => Flag(a < b));
+  const Next = unop(EdgeIndex, (e) => EdgeIndex(e + 1));
 </script>
 <script lang="sverlin" input>
   const vertices = Names(['A', 'B', 'C']);
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
 </script>
 <script lang="sverlin">
-  @step[for (let e = EdgeIndex(0); e < edges.length; e++) {}]
+  @step[for (let e = EdgeIndex(0); Before(e, Count(edges)); e = Next(e)) {}]
 </script>
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
@@ -276,6 +287,11 @@ const taken = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Index = index(Values);
   const Take = record({ from: Index });
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Index(v.length));
+  const Before = binop(Index, Index, (a, b) => Flag(a < b));
+  const Next = unop(Index, (p) => Index(p + 1));
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
 </script>
 <script lang="sverlin" input>
   const left = Values([1, 4, 6]);
@@ -285,13 +301,13 @@ const taken = `<script lang="sverlin" domain>
   @start[let i = Index(left, 0);
   let j = Index(right, 0);
   let take = Take({ from: j });]
-  @step[while (i < left.length && j < right.length) {
-    if (left[i] < right[j]) {
+  @step[while (Before(i, Length(left)) && Before(j, Length(right))) {
+    if (Less(left[i], right[j])) {
       take = Take({ from: i });
-      i++;
+      i = Next(i);
     } else {
       take = Take({ from: j });
-      j++;
+      j = Next(j);
     }
   }]
 </script>

@@ -6,6 +6,9 @@ import { readMarkers } from './labels.server';
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
+  const Flag = type('boolean');
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Up = unop(Int, (n) => Int(n + 1));
 `);
 const labelsOf = (body: string) =>
   traceAlgorithm(body, undefined, domain).labels.map(({ full, nodes }) => [
@@ -31,14 +34,14 @@ describe('labels', () => {
       labelsOf(`
         @start[let n = Int(0);
         let m = Int(1);]
-        while (@test[n < 3]) @up{
-          n = n + 1;
+        while (@test[Less(n, 3)]) @up{
+          n = Up(n);
         }
         @last[m = n];
       `)
     ).toEqual([
       ['start', 'VariableDeclaration VariableDeclaration'],
-      ['test', 'BinaryExpression'],
+      ['test', 'CallExpression'],
       ['up', 'BlockStatement'],
       // An expression that is its statement's whole expression labels the statement.
       ['last', 'ExpressionStatement']
@@ -48,8 +51,8 @@ describe('labels', () => {
   it('label a statement outside a block, as an if’s, by its text with its semicolon', () => {
     expect(
       labelsOf(`
-        for (let i = Int(0); i < 3; i++) @pass{
-          @stop[if (i > 0) @leave[break;]]
+        for (let i = Int(0); Less(i, 3); i = Up(i)) @pass{
+          @stop[if (Less(0, i)) @leave[break;]]
         }
       `)
     ).toEqual([
@@ -63,8 +66,8 @@ describe('labels', () => {
     expect(
       labelsOf(`
         @start[let n = Int(0);]
-        @loop[while (@test[@low[n < 3] && @small[n < 9]]) {
-          n = n + 1;
+        @loop[while (@test[@low[Less(n, 3)] && @small[Less(n, 9)]]) {
+          n = Up(n);
         }]
       `).map(([full]) => full)
     ).toEqual(['start', 'loop', 'loop.test', 'loop.test.low', 'loop.test.small']);
@@ -76,7 +79,7 @@ describe('labels', () => {
     );
     expect(
       problemOf(`
-        for (let i = Int(0); i < 3; i++) @pass{
+        for (let i = Int(0); Less(i, 3); i = Up(i)) @pass{
           let a = Int(1);
           @b[let c = Int(2);]
         }
@@ -86,8 +89,8 @@ describe('labels', () => {
     expect(
       problemOf(`
         @start[let n = Int(0);]
-        for (let i = Int(0); @test[i < 3]; i++) @pass{
-          n = n + 1;
+        for (let i = Int(0); @test[Less(i, 3)]; i = Up(i)) @pass{
+          n = Up(n);
         }
       `)
     ).not.toThrow();

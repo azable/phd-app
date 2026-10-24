@@ -14,6 +14,12 @@ const domain = interpretDomain(`
   const Distances = collection(Dist);
   const Queue = collection(Vertex);
   const Either = union(Distance, Count);
+  const IsReached = unop(Dist, (d) => Count(d !== Unreached('unreached') ? 1 : 0));
+  const IsUnreached = unop(Dist, (d) => Count(d === Unreached('unreached') ? 1 : 0));
+  const Order = binop(Dist, Dist, (a, b) => Count(a < b ? 1 : 0));
+  const Bump = unop(Weight, (w) => Weight(w + 1));
+  const Double = unop(Weight, (w) => Weight(w + w));
+  const Twice = unop(Weight, (w) => Distance(Distance(w) + Distance(w)));
 `);
 
 /** Run an algorithm with the test domain from an input block, and return its last step. */
@@ -179,22 +185,22 @@ describe('unions', () => {
   it('compares members with === and !==, but not by order', () => {
     const step = last(`
       const d = Distances([0, "unreached"]);
-      const reached = Count(d[0] !== Unreached("unreached") ? 1 : 0);
-      const unreached = Count(d[1] === Unreached("unreached") ? 1 : 0);
+      const reached = IsReached(d[0]);
+      const unreached = IsUnreached(d[1]);
     `);
     expect(step.state).toMatchObject({ reached: 1, unreached: 1 });
     expect(() =>
-      last('const d = Distances([0, "unreached"]); const x = Count(d[0] < d[1] ? 1 : 0);')
+      last('const d = Distances([0, "unreached"]); const x = Order(d[0], d[1]);')
     ).toThrow(/cannot be combined/);
   });
 });
 
 describe('enumerations in arithmetic', () => {
   it('keeps the type, and fails when the result is not one of its values', () => {
-    const step = last('const w = Weight(4) + 1;');
+    const step = last('const w = Bump(Weight(4));');
     expect(step.state.w).toBe(5);
     expect(step.types.w).toBe('Weight');
-    expect(() => last('const w = Weight(4) + Weight(4);')).toThrow(
+    expect(() => last('const w = Double(Weight(4));')).toThrow(
       '8 is not a Weight; allowed values are 4, 5, 7.'
     );
   });
@@ -202,7 +208,7 @@ describe('enumerations in arithmetic', () => {
   it('converts to a numeric type of the same kind', () => {
     const step = last(`
       const e = Edge({ from: 0, to: 1, weight: 7 });
-      const d = Distance(e.weight) + Distance(e.weight);
+      const d = Twice(e.weight);
     `);
     expect(step.state.d).toBe(14);
     expect(step.types.d).toBe('Distance');

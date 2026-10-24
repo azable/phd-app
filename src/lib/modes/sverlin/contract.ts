@@ -14,6 +14,10 @@ export const linearSearchSource = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
+  const Length = unop(Values, (v) => Index(v.length));
+  const Before = binop(Index, Index, (a, b) => Flag(a < b));
+  const Next = unop(Index, (p) => Index(p + 1));
+  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
 </script>
 <script lang="sverlin" input>
   const values = Values([3, 8, 5, 2, 7]);
@@ -22,8 +26,8 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 <script lang="sverlin">
   @start[let found = Flag(false);
   let searching = Flag(true);]
-  for (let i = Index(0); i < values.length; i++) @check{
-    found = values[i] === target;
+  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
+    found = Equal(values[i], target);
     if (found) break;
   }
   @finish[searching = false;]

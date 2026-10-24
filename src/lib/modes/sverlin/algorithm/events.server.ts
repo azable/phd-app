@@ -16,6 +16,7 @@ export type EventKind =
   | 'test'
   | 'break'
   | 'continue'
+  | 'apply'
   | 'read'
   | 'write';
 
@@ -27,8 +28,10 @@ export type TraceEvent = {
   place?: string;
   /** A read's or write's value, or a return's, when it is a single value. */
   value?: string | number | boolean;
-  /** The function called. */
+  /** The function called, or the operator applied. */
   name?: string;
+  /** For an application, its operands, each when it is a single value. */
+  operands?: (string | number | boolean | null)[];
   /** For an iteration, its number, from 0. */
   index?: number;
   /** For a test, whether it held. */
@@ -37,7 +40,7 @@ export type TraceEvent = {
   method?: string;
 };
 
-/** Totals since the algorithm started: events by kind, and calls by function. */
+/** Totals since the algorithm started: events by kind, and calls by function and operator. */
 export type EventCounts = {
   events: Partial<Record<EventKind, number>>;
   calls: Record<string, number>;
@@ -65,7 +68,7 @@ export class EventLog {
     node: AnyNode,
     place?: string,
     value?: unknown,
-    details?: Pick<TraceEvent, 'name' | 'index' | 'held' | 'method'>
+    details?: Pick<TraceEvent, 'name' | 'index' | 'held' | 'method' | 'operands'>
   ): void {
     let slot = this.#slots[this.#next];
     if (!slot) slot = this.#slots[this.#next] = { kind, node, value };
@@ -77,12 +80,14 @@ export class EventLog {
     slot.index = details?.index;
     slot.held = details?.held;
     slot.method = details?.method;
+    slot.operands = details?.operands;
     this.#next = (this.#next + 1) % maximumStepEvents;
     this.#total += 1;
     this.#seen += 1;
     const { events, calls } = this.#counts;
     events[kind] = (events[kind] ?? 0) + 1;
-    if (kind === 'call' && details?.name) calls[details.name] = (calls[details.name] ?? 0) + 1;
+    if ((kind === 'call' || kind === 'apply') && details?.name)
+      calls[details.name] = (calls[details.name] ?? 0) + 1;
   }
 
   /** How many events the algorithm has logged so far, which numbers the moment of a step. */
@@ -121,7 +126,8 @@ export class EventLog {
         ...(slot.name !== undefined ? { name: slot.name } : {}),
         ...(slot.index !== undefined ? { index: slot.index } : {}),
         ...(slot.held !== undefined ? { held: slot.held } : {}),
-        ...(slot.method !== undefined ? { method: slot.method } : {})
+        ...(slot.method !== undefined ? { method: slot.method } : {}),
+        ...(slot.operands !== undefined ? { operands: slot.operands } : {})
       });
     }
     const dropped = this.#total - kept;

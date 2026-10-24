@@ -10,11 +10,15 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
+  const Length = unop(Values, (v) => Index(v.length));
+  const Before = binop(Index, Index, (a, b) => Flag(a < b));
+  const Next = unop(Index, (p) => Index(p + 1));
+  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(8);', domain);
 const body = `
-  for (let i = Index(0); @loop[i < values.length]; i++) {
-    @check[const found = Flag(@matches[values[i] === target]);]
+  for (let i = Index(0); @loop[Before(i, Length(values))]; i = Next(i)) {
+    @check[const found = @matches[Equal(values[i], target)];]
     @test[if (found) {
       @stop[break;]
     }]

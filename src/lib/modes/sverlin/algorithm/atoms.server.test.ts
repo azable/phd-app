@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret.server';
 
-const domain = interpretDomain(`
+const types = `
   const Int = type('integer', { min: -100, max: 1000 });
   const Real = type('number', { min: -100, max: 1000 });
   const Bool = type('boolean');
@@ -13,11 +13,16 @@ const domain = interpretDomain(`
   const Grade = type([1, 2, 3]);
   const Ints = collection(Int);
   const Person = record({ height: Height });
-`);
+`;
+const domain = interpretDomain(types);
 
-/** Run an algorithm with the test domain and return its last step. */
-function last(body: string) {
-  const trace = interpretAlgorithm(body, { state: {}, types: {} }, domain);
+/** Run an algorithm with the test domain, and these operators, and return its last step. */
+function last(body: string, operators = '') {
+  const trace = interpretAlgorithm(
+    body,
+    { state: {}, types: {} },
+    operators ? interpretDomain(`${types}${operators}`) : domain
+  );
   return trace[trace.length - 1];
 }
 
@@ -34,7 +39,7 @@ describe('atomic type definitions', () => {
     });
     expect(domain.atoms.Suit).toEqual({ name: 'Suit', base: 'text', values: ['♠', '♥', '♦', '♣'] });
     expect(domain.atoms.Grade.base).toBe('integer');
-    expect(interpretDomain('')).toEqual({ atoms: {}, structures: {} });
+    expect(interpretDomain('')).toEqual({ atoms: {}, structures: {}, operators: {} });
   });
 
   it.each([
@@ -106,55 +111,78 @@ describe('typed values', () => {
     expect(() => last('const a = Height(Suit("♠"));')).toThrow(/cannot become/);
   });
 
-  it('carries types through arithmetic and adopts the more specific type', () => {
-    const step = last(`
-      const a = Int(7) + Int(2);
-      const b = Real(Int(7) / Int(2));
-      const c = Real(Int(7) + 0.5);
-      const d = Height(150) + Int(5);
-      const e = Height(150) * 2;
-      let f = Int(1);
-      f++;
-      const g = -Weight(5);
-    `);
-    expect(step.state).toMatchObject({ a: 9, b: 3.5, c: 7.5, d: 155, e: 300, f: 2, g: -5 });
-    // b and c are no longer whole, so they leave the integer type, and are kept as Real.
-    expect(step.types).toEqual({
-      a: 'Int',
-      b: 'Real',
-      c: 'Real',
-      d: 'Height',
-      e: 'Height',
-      f: 'Int',
-      g: 'Weight'
-    });
+  it('compute in operators, whose functions carry types through arithmetic', () => {
+    const step = last(
+      `
+      const a = Add(Int(7), Int(2));
+      const b = Half(Int(7));
+      const d = Grow(Height(150), Int(5));
+      const g = Negate(Weight(5));
+    `,
+      `
+      const Add = binop(Int, Int, (x, y) => Int(x + y));
+      const Half = unop(Int, (x) => Real(x / 2));
+      const Grow = binop(Height, Int, (h, n) => Height(h + n));
+      const Negate = unop(Weight, (w) => Weight(-w));
+    `
+    );
+    expect(step.state).toMatchObject({ a: 9, b: 3.5, d: 155, g: -5 });
+    expect(step.types).toEqual({ a: 'Int', b: 'Real', d: 'Height', g: 'Weight' });
   });
 
   it.each([
-    ['combining unrelated types', 'const a = Height(1) + Weight(1);', /cannot be combined/],
-    ['comparing unrelated types', 'const a = Height(1) < Weight(1);', /cannot be combined/],
-    ['equating unrelated types', 'const a = Height(1) === Weight(1);', /cannot be combined/],
-    ['leaving an enumeration', 'const a = Grade(3) + 1;', /4 is not a Grade/],
-    ['arithmetic on Bool', 'const a = Bool(true) + 1;', /cannot be used in arithmetic/],
-    ['leaving a range', 'const a = Height(10) - 20;', /at least 0/]
-  ])('rejects %s', (_name, statement, message) => {
-    expect(() => last(`${statement}`)).toThrow(message);
+    [
+      'combining unrelated types',
+      'binop(Height, Weight, (a, b) => Int(a + b))',
+      'Height(1), Weight(1)',
+      /cannot be combined/
+    ],
+    [
+      'comparing unrelated types',
+      'binop(Height, Weight, (a, b) => Bool(a < b))',
+      'Height(1), Weight(1)',
+      /cannot be combined/
+    ],
+    [
+      'equating unrelated types',
+      'binop(Height, Weight, (a, b) => Bool(a === b))',
+      'Height(1), Weight(1)',
+      /cannot be combined/
+    ],
+    ['leaving an enumeration', 'unop(Grade, (g) => Grade(g + 1))', 'Grade(3)', /4 is not a Grade/],
+    [
+      'arithmetic on Bool',
+      'unop(Bool, (b) => Int(b + 1))',
+      'Bool(true)',
+      /cannot be used in arithmetic/
+    ],
+    ['leaving a range', 'unop(Height, (h) => Height(h - 20))', 'Height(10)', /at least 0/]
+  ])('rejects %s in an operator, at its application', (_name, operator, operands, message) => {
+    expect(() => last(`const a = Op(${operands});`, `const Op = ${operator};`)).toThrow(message);
   });
 
   it('compares, tests, and searches typed values by value', () => {
-    const step = last(`
+    const step = last(
+      `
       const values = Ints([3, 8, 5]);
       const target = Int(8);
-      const equal = Bool(values[1] === target);
-      const plainEqual = Bool(values[1] === 8);
+      const equal = Same(values[1], target);
+      const plainEqual = Same(values[1], 8);
       const position = Int(values.indexOf(target));
       const present = Bool(values.includes(Int(5)));
       const falsy = Text(Bool(false) ? 'yes' : 'no');
       let count = Int(0);
-      if (Bool(true)) count += 1;
-      const name = Text('ab') + 'c';
-      const length = Int(Text('abc').length);
-    `);
+      if (Bool(true)) count = Add(count, Int(1));
+      const name = Suffix(Text('ab'));
+      const length = Size(Text('abc'));
+    `,
+      `
+      const Same = binop(Int, Int, (a, b) => Bool(a === b));
+      const Add = binop(Int, Int, (a, b) => Int(a + b));
+      const Suffix = unop(Text, (t) => Text(t + 'c'));
+      const Size = unop(Text, (t) => Int(t.length));
+    `
+    );
     expect(step.state).toMatchObject({
       equal: true,
       plainEqual: true,

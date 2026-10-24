@@ -1,14 +1,14 @@
 /**
  * The domain block: atomic types built from primitive kinds, refinements, and enumerations, the
- * unions, records, and collections built from them.
+ * unions, records, and collections built from them, and the operators on them.
  */
 
-import type { AnyNode, CallExpression, Expression, Pattern } from 'acorn';
+import type { AnyNode, ArrowFunctionExpression, CallExpression, Expression, Pattern } from 'acorn';
 
 import { atomBases, type AtomBase, type AtomType } from './atoms.server';
 import { AlgorithmError, domainFunctions } from './block.server';
 import { parseBlock } from './parse.server';
-import type { DomainRegistry, StructureType } from './structures.server';
+import type { DomainRegistry, OperatorType, StructureType } from './structures.server';
 
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
@@ -24,12 +24,18 @@ export function interpretDomain(body: string): DomainRegistry {
   };
   const atoms: Record<string, AtomType> = {};
   const structures: Record<string, StructureType> = {};
+  const operators: Record<string, OperatorType> = {};
   /** A type defined earlier in the block, named by an identifier. */
   const defined = (node: Expression | undefined, role: string): string => {
     if (node?.type !== 'Identifier')
       return fail(node ?? root, `${role} must name a type defined earlier in the domain block.`);
     if (!Object.hasOwn(atoms, node.name) && !Object.hasOwn(structures, node.name))
-      fail(node, `Unknown type ${node.name}; define it earlier in the domain block.`);
+      fail(
+        node,
+        Object.hasOwn(operators, node.name)
+          ? `${node.name} is an operator, not a type.`
+          : `Unknown type ${node.name}; define it earlier in the domain block.`
+      );
     return node.name;
   };
   for (const statement of root.body) {
@@ -48,11 +54,15 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });, or an operator with binop(...) or unop(...), as in const Greater = binop(Int, Int, (a, b) => Flag(a > b));`
         );
       const call = init as CallExpression;
-      if (name in atoms || name in structures)
-        fail(declarator as AnyNode, `"${name}" is already a type.`);
+      if (name in atoms || name in structures || name in operators)
+        fail(declarator as AnyNode, `"${name}" is already defined.`);
+      if (kind === 'binop' || kind === 'unop') {
+        operators[name] = defineOperator(name, kind, call);
+        continue;
+      }
       if (kind === 'index') {
         atoms[name] = defineIndex(name, call);
         continue;
@@ -121,7 +131,7 @@ export function interpretDomain(body: string): DomainRegistry {
       atoms[name] = type;
     }
   }
-  return { atoms, structures };
+  return { atoms, structures, operators };
 
   /**
    * A position in a collection type, as in index(Values): any whole number, of which 0 to its
@@ -154,6 +164,81 @@ export function interpretDomain(body: string): DomainRegistry {
         `ref() refers to elements that are single values, and ${collection} holds ${element}s; refer to one of its fields' collections, or use an index(${collection}).`
       );
     return { kind: 'ref', name, collection, element };
+  }
+
+  /**
+   * An operator, as in binop(Int, Int, (a, b) => Flag(a > b)) or unop(Index, (p) => Index(p + 1)):
+   * its operands' types, then a function of them that is one expression, reading only its
+   * parameters and Math, and giving a typed value, the call of a type, which is its result's type.
+   */
+  function defineOperator(
+    name: string,
+    kind: 'binop' | 'unop',
+    call: CallExpression
+  ): OperatorType {
+    const arity = kind === 'binop' ? 2 : 1;
+    const example =
+      kind === 'binop'
+        ? 'binop(Int, Int, (a, b) => Flag(a > b))'
+        : 'unop(Index, (p) => Index(p + 1))';
+    const args = call.arguments as Expression[];
+    const lambda = args.at(-1);
+    if (args.length !== arity + 1 || lambda?.type !== 'ArrowFunctionExpression')
+      fail(
+        call,
+        `${kind}() takes ${arity === 2 ? 'its two operands’ types' : 'its operand’s type'}, then a function of ${arity === 2 ? 'them' : 'it'}, as in ${example}.`
+      );
+    const operands = args.slice(0, arity).map((argument) => defined(argument, 'An operand'));
+    const arrow = lambda as ArrowFunctionExpression;
+    if (
+      arrow.async ||
+      arrow.params.length !== arity ||
+      arrow.params.some((p) => p.type !== 'Identifier')
+    )
+      fail(
+        arrow,
+        `${name}'s function takes ${arity} plain name${arity === 2 ? 's' : ''}, one per operand, as in ${example}.`
+      );
+    const parameters = arrow.params.map((parameter) => (parameter as { name: string }).name);
+    if (new Set(parameters).size !== parameters.length)
+      fail(arrow, `${name}'s operands need names of their own.`);
+    if (arrow.body.type === 'BlockStatement')
+      fail(arrow.body, `${name}'s function is one expression, without braces, as in ${example}.`);
+    const body = arrow.body as Expression;
+    const result =
+      body.type === 'CallExpression' && body.callee.type === 'Identifier'
+        ? body.callee.name
+        : undefined;
+    if (!result || (!Object.hasOwn(atoms, result) && !Object.hasOwn(structures, result)))
+      fail(
+        body,
+        `${name} gives a typed value: wrap what it computes in a type defined above, as in ${example}.`
+      );
+    // The function reads its operands and Math only, and makes values of the types above.
+    const visit = (node: unknown, parent?: AnyNode): void => {
+      if (Array.isArray(node)) return node.forEach((child) => visit(child, parent));
+      if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
+        return;
+      const part = node as AnyNode;
+      if (part.type === 'Identifier') {
+        const property =
+          parent?.type === 'MemberExpression' && parent.property === part && !parent.computed;
+        const typeCall =
+          parent?.type === 'CallExpression' &&
+          parent.callee === part &&
+          (Object.hasOwn(atoms, part.name) || Object.hasOwn(structures, part.name));
+        if (!property && !typeCall && part.name !== 'Math' && !parameters.includes(part.name))
+          fail(
+            part,
+            Object.hasOwn(operators, part.name)
+              ? `${name} cannot use the operator ${part.name}: an operator computes from its operands alone.`
+              : `${name} reads only its operands (${parameters.join(', ')}) and Math, not ${part.name}.`
+          );
+      }
+      for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child, part);
+    };
+    visit(body);
+    return { name, operands, parameters, result: result as string, body };
   }
 
   function defineStructure(

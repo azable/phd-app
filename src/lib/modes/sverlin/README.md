@@ -21,7 +21,7 @@ they show the algorithm.
 
 A component describes its visualization in `<script lang="sverlin">` blocks, written in a restricted subset of JavaScript (see The subset), followed by a script-free Svelte view. The algorithm block is required; the domain and input blocks are optional.
 
-1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them (see Atomic types, and Collections, records, and unions).
+1. `<script lang="sverlin" domain>`: the types: atomic types, and the collections, records, and unions built from them, and the operators the algorithm computes with (see Atomic types, Collections, records, and unions, and Operators).
 2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with `Values` defined in the domain block as a collection of `Int`; every value has a domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables, may update them and declare more, may declare functions (see Loops and functions), and labels the code its steps are about (see Steps). It runs once.
 
@@ -72,6 +72,12 @@ Insertion sort, with the key drawn beside the row:
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Position(v.length));
+  const Before = binop(Position, Position, (a, b) => Flag(a < b));
+  const Next = unop(Position, (p) => Position(p + 1));
+  const Prev = unop(Position, (p) => Position(p - 1));
+  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -79,12 +85,12 @@ Insertion sort, with the key drawn beside the row:
 </script>
 
 <script lang="sverlin">
-  for (let i = Position(1); i < values.length; i++) @insert{
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
     @pick[const key = values[i];
     let j = i;]
-    @shift[while (j > 0 && values[j - 1] > key) {
-      values[j] = values[j - 1];
-      j--;
+    @shift[while (Before(Position(0), j) && Greater(values[Prev(j)], key)) {
+      values[j] = values[Prev(j)];
+      j = Prev(j);
     }]
     @place[values[j] = key;]
   }
@@ -108,11 +114,11 @@ Each step inserts one key: it is copied into its box, the larger values slide ri
 
 ## Steps
 
-- A step is a run of the code a label marks. Write the label around the code: `@name[…]` around a statement, statements in a row, or an expression, as `@place[values[j] = key;]` or `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`. A name is one word, without dots. The algorithm runs as if the marks were spaces. Each time the code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass, its test leading up to the pass.
+- A step is a run of the code a label marks. Write the label around the code: `@name[…]` around a statement, statements in a row, or an expression, as `@place[values[j] = key;]` or `while (@test[Before(Position(0), j) && Greater(values[Prev(j)], key)])`, or `@name{` on a block the code already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`. A name is one word, without dots. The algorithm runs as if the marks were spaces. Each time the code runs is a step, shown as a change: the page shows the state just before the code, then moves to the state just after it. A labelled loop steps once per pass, its test leading up to the pass.
 - A label inside another takes its name as a prefix: `@shift[…]` inside `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's body has labelled statements, every statement in it is inside one of them or contains one, so each step is one label's code and only loops' headers and tests run between steps; a statement left out is an error naming the labels beside it. A label on part of a statement, as `@test[…]`, asks nothing of the code around it. An algorithm with no labels has one step, its end, for a picture that does not move.
 - The variable `frames` says what a presentation steps at: `*`, each label at the top, which the starter takes; a label's name, as `insert.shift`, each run of its code; or `insert.*`, each run of a label inside `insert`. A variant keeps it unless the participant asks for another, and presentations stepping by different rules step together, one holding its step while the other shows the code between. What runs after the last step is a step of its own when it changes the state, so the end of the algorithm is shown.
 - A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
-- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = i + 1; ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
+- Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, draws nothing there and keeps its room, so nothing moves as it comes and goes. Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
 - A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step, such as `let found = Found(false);` set when the search finds its target, so the view can show "Found" at that step.
 - `return;` stops the algorithm early.
 - Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[j - 1]` or `merged.push(left[i])`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
@@ -130,6 +136,14 @@ Binary search, written recursively:
   const Int = type('integer', { min: 0, max: 99 });
   const Values = collection(Int);
   const Index = index(Values);
+  const Flag = type('boolean');
+  const After = binop(Index, Index, (a, b) => Flag(a > b));
+  const Middle = binop(Index, Index, (a, b) => Index(Math.floor((a + b) / 2)));
+  const Next = unop(Index, (p) => Index(p + 1));
+  const Prev = unop(Index, (p) => Index(p - 1));
+  const Last = unop(Values, (v) => Index(v.length - 1));
+  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
 </script>
 
 <script lang="sverlin" input>
@@ -139,13 +153,13 @@ Binary search, written recursively:
 
 <script lang="sverlin">
   function search(a, target, lo, hi) @call{
-    if (lo > hi) return Index(-1);
-    const mid = Index(Math.floor((lo + hi) / 2));
-    if (a[mid] === target) return mid;
-    if (a[mid] < target) return search(a, target, mid + 1, hi);
-    return search(a, target, lo, mid - 1);
+    if (After(lo, hi)) return Index(-1);
+    const mid = Middle(lo, hi);
+    if (Equal(a[mid], target)) return mid;
+    if (Less(a[mid], target)) return search(a, target, Next(mid), hi);
+    return search(a, target, lo, Prev(mid));
   }
-  const found = search(values, target, Index(0), Index(values.length - 1));
+  const found = search(values, target, Index(0), Last(values));
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -174,9 +188,9 @@ Every type has a known, finite set of values, so the view can be drawn for each 
 
 Create typed values with a type's name in the input or algorithm block, such as `const target = Int(8);`. Input and algorithm values all have domain types: every number, boolean, and text that a variable, collection element, or record field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag `let found = Found(false);`, and a distance `Distance(0)`. There is no `null`: every variable starts with a value, and "nothing yet" is a value of a type that says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')` (see Collections, records, and unions). Taking a value that is not there, such as `.pop()` of an empty collection, is an error. Define a type for each meaning, such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
 
-A variable keeps the type it was made with, and a value assigned to it takes that type, as an element or field does: after `let found = Found(false);`, `found = values[i] === target` stores a `Found`, and after `let n = Count(0);`, `n = values.length` stores a `Count`, while `found = Count(1)` is an error. A variable made by a union, as in `let d = Dist(0);`, can hold any of its members. Plain literals can appear in expressions, as in `i + 1` or `x < 10`, but a new variable needs a type to hold a plain result: comparisons, `.length`, `.indexOf()`, and `Math` functions give plain values, so write `const n = Count(values.length);`.
+A variable keeps the type it was made with, and a value assigned to it takes that type, as an element or field does: after `let found = Found(false);`, `found = true` and `found = Equal(values[i], target)` store a `Found`, while `found = Count(1)` is an error. A variable made by a union, as in `let d = Dist(0);`, can hold any of its members. The input and algorithm compute nothing themselves: comparisons, arithmetic, `.length`, and `Math` are operators the domain declares (see Operators), each giving a typed value.
 
-Typed values behave like their plain values in comparisons, conditions, `===`, `.indexOf`, `.includes`, template strings, and indexing, and they keep their type as the algorithm moves them between variables and arrays. Arithmetic keeps types too: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
+Typed values keep their type as the algorithm moves them between variables and arrays, and read as their plain values in conditions, `.indexOf`, `.includes`, and indexing. Inside an operator's function, they behave like their plain values in comparisons and `===`, and arithmetic keeps types: `Int + Int` is an `Int`; a refined type combined with the type it refines or with a plain number keeps the refined type (`Height(150) + 5` is a `Height`); an integer type whose result is no longer whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration keeps its type in arithmetic, and the result must be one of its values: with `const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and `Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute beyond a type's values, convert to another number type: `Distance(e.weight)` makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types, and leaving a type's values, `min`, or `max` are errors. Type names cannot be used as variable names.
 
 The view receives plain values; a value's type chooses the views that draw it (see Views of types).
 
@@ -198,17 +212,39 @@ A grid is a collection of collections, as `const Table = collection(Counts);`. T
 
 A reference is made from an element, `const front = Front(queue[0]);`, and reads as it, as in `edge.from === front`. Where a position stays at its place as the collection changes, a reference stays with its element: after `queue.shift()` or a sort it is wherever the element went, and once the element has left the collection it refers to nothing, so its pointer views draw nothing and keep their room. A reference follows an element of a collection of its own type, even when the same value is also a field elsewhere, as an edge's end pushed onto the queue. Use a position to step to a neighbour: `front + 1` is the element's value plus one.
 
-A union value is always one of its members: a literal becomes the member it fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`, and a literal that fits two members needs its type written, as in `Distance(4)`. Members compare with `===` and `!==`, where values of different members are unequal, but not with `<` or `>`; check which member a value is before ordering it:
+A union value is always one of its members: a literal becomes the member it fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`, and a literal that fits two members needs its type written, as in `Distance(4)`. Inside an operator's function, members compare with `===` and `!==`, where values of different members are unequal, but not with `<` or `>`; check which member a value is before ordering it:
 
 ```js
-if (
-  dist[e.from] !== Unreached('unreached') &&
-  (dist[e.to] === Unreached('unreached') || dist[e.from] + Distance(e.weight) < dist[e.to])
-)
-  dist[e.to] = dist[e.from] + Distance(e.weight);
+// domain
+const Reached = unop(Dist, (d) => Flag(d !== 'unreached'));
+const Through = binop(Dist, Weight, (d, w) => Distance(d + Distance(w)));
+const Shorter = binop(Distance, Dist, (a, b) => Flag(b === 'unreached' || a < b));
+```
+
+```js
+// algorithm
+if (Reached(dist[e.from]) && Shorter(Through(dist[e.from], e.weight), dist[e.to]))
+  dist[e.to] = Through(dist[e.from], e.weight);
 ```
 
 The view receives plain arrays and objects, drawn by the views of their types: a record's view draws its fields through theirs (see Views of types).
+
+## Operators
+
+The input and algorithm hold no JavaScript but control flow and typed values: everything they compute is an operator the domain declares, unary or binary, with its operands' types and a function of them:
+
+```js
+const Equal = binop(Int, Int, (a, b) => Flag(a === b));
+const Add = binop(Int, Int, (a, b) => Int(a + b));
+const Length = unop(Values, (v) => Index(v.length));
+const Next = unop(Index, (p) => Index(p + 1));
+```
+
+The algorithm applies one as a call, its operands in order, each taking its operand's type as a function's argument does: `if (Equal(values[i], target)) break;`, `total = Add(total, v);`, `for (let i = Index(0); Before(i, Length(values)); i = Next(i))`. An application gives the value its function gives. Name operators for what they compute, as `Before`, `Middle`, or `Shorter`, and declare each the algorithm needs, position ones included.
+
+- Raw: control flow (`if`, loops, `break`, `continue`, `return`, the algorithm's functions, `? :`, `&&`, `||`, `??`), declarations, assignment, reading and writing elements and fields, collection methods (`.push`, `.shift`, …), and typed values from literals, as `Index(0)`, `Index(-1)`, or `Flag(true)`.
+- Declared as operators: every operator on values, as `<`, `===`, `+`, `!`, and `-x`; `++`, `--`, and `+=`; `.length`; `Math`; and template strings. Each written raw is an error naming the declaration to add and the call to write.
+- An operator's function is one expression of its operands, reading only them and `Math`, without braces, other operators, or the state, where JavaScript's operators work on typed values as described under Atomic types. It gives a typed value: wrap what it computes in a type, as `Flag(a > b)`, which is the operator's result type.
 
 ## Design
 
@@ -259,6 +295,10 @@ Example, with domain, input, algorithm, and a script-free view:
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Index(v.length));
+  const Before = binop(Index, Index, (a, b) => Flag(a < b));
+  const Next = unop(Index, (p) => Index(p + 1));
 </script>
 
 <script lang="sverlin" input>
@@ -266,7 +306,7 @@ Example, with domain, input, algorithm, and a script-free view:
 </script>
 
 <script lang="sverlin">
-  for (let i = Index(0); i < values.length; i++) @visit{}
+  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @visit{}
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -296,8 +336,8 @@ Example, with domain, input, algorithm, and a script-free view:
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); arithmetic, comparison with `===`/`!==`, `&&`, `||`, `??`, `? :`, template strings, `+=` and `++`; `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc`, `Math.PI`; array `.length`, `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`.
-- Not allowed: `null` and `undefined`, other functions, such as arrow functions and functions inside blocks, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
+- Allowed: numbers, strings, booleans, and the collections and records their types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`, `break`, `continue`, and functions at the top level of the algorithm block (see Loops and functions); `&&`, `||`, `??`, and `? :`; collection methods `.push`, `.pop`, `.shift`, `.unshift`, `.slice`, `.indexOf`, `.includes`, `.reverse`, `.join`; and operators the domain declares (see Operators), whose functions may use JavaScript's operators, template strings, `.length`, and `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
+- Not allowed: `null` and `undefined`, other functions, such as arrow functions outside an operator and functions inside blocks, `new`, classes, `this`, `==`, string methods, other globals, the names `step` and `seed`, and array or object literals except inside a type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object, and 10,000 characters per string.
 
 ## Library
@@ -321,6 +361,12 @@ Insertion sort, beside a textbook's pseudocode:
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Position(v.length));
+  const Before = binop(Position, Position, (a, b) => Flag(a < b));
+  const Next = unop(Position, (p) => Position(p + 1));
+  const Prev = unop(Position, (p) => Position(p - 1));
+  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -328,12 +374,12 @@ Insertion sort, beside a textbook's pseudocode:
 </script>
 
 <script lang="sverlin">
-  for (let i = Position(1); i < values.length; i++) @insert{
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
-    while (@test[@bound[j > 0] && @cmp[values[j - 1] > key]]) @shift{
-      @copy[values[j] = values[j - 1];]
-      @down[j--;]
+    while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) @shift{
+      @copy[values[j] = values[Prev(j)];]
+      @down[j = Prev(j);]
     }
     @place[values[j] = key;]
   }
@@ -435,6 +481,12 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   const Edges = collection(Edge);
   const EdgeIndex = index(Edges);
   const Queue = collection(VertexRef);
+  const Waiting = unop(Queue, (q) => Flag(q.length > 0));
+  const Count = unop(Edges, (es) => EdgeIndex(es.length));
+  const Before = binop(EdgeIndex, EdgeIndex, (a, b) => Flag(a < b));
+  const Next = unop(EdgeIndex, (e) => EdgeIndex(e + 1));
+  const Same = binop(VertexRef, VertexRef, (a, b) => Flag(a === b));
+  const Not = unop(Flag, (f) => Flag(!f));
 </script>
 
 <script lang="sverlin" input>
@@ -457,11 +509,11 @@ Breadth-first search, with the vertex being visited and the edge being examined 
 <script lang="sverlin">
   @start[let queue = Queue([0]);
   vertices[0].seen = true;]
-  while (queue.length > 0) @visit{
+  while (Waiting(queue)) @visit{
     @take[const current = VertexRef(queue.shift());]
-    for (let e = EdgeIndex(0); e < edges.length; e++) @edge{
-      if (edges[e].from === current) {
-        if (!vertices[edges[e].to].seen) {
+    for (let e = EdgeIndex(0); Before(e, Count(edges)); e = Next(e)) @edge{
+      if (Same(edges[e].from, current)) {
+        if (Not(vertices[edges[e].to].seen)) {
           vertices[edges[e].to].seen = true;
           queue.push(edges[e].to);
         }

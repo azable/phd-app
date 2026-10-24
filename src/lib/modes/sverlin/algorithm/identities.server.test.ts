@@ -9,6 +9,13 @@ const domain = interpretDomain(`
   const Count = type('integer', { min: 0, max: 99 });
   const Counts = collection(Count);
   const Table = collection(Counts);
+  const Flag = type('boolean');
+  const Filled = unop(Values, (v) => Flag(v.length > 0));
+  const Before = binop(Count, Count, (a, b) => Flag(a < b));
+  const Size = unop(Values, (v) => Count(v.length));
+  const Up = unop(Count, (n) => Count(n + 1));
+  const Down = unop(Count, (n) => Count(n - 1));
+  const Greater = binop(Int, Int, (a, b) => Flag(a > b));
 `);
 
 const idsOf = (identities: StepIdentities | undefined, paths: string[]) => ({
@@ -39,7 +46,7 @@ describe('identities', () => {
     const swap = 'const moved = values[0]; values[0] = values[1]; values[1] = moved;';
     // The whole swap is one step's code.
     const [before, after] = identities(
-      `@start[const values = Values([7, 3, 9]);] @swap[if (values.length > 0) { ${swap} }]`,
+      `@start[const values = Values([7, 3, 9]);] @swap[if (Filled(values)) { ${swap} }]`,
       ['values[0]', 'values[1]', 'values[2]']
     );
     const [seven, three, nine] = before.ids;
@@ -83,12 +90,12 @@ describe('identities', () => {
     // lead up to one.
     const snapshots = shown(
       `@start[const values = Values([5, 2, 4, 1]);]
-       for (let i = Count(1); i < values.length; i++) {
+       for (let i = Count(1); Before(i, Size(values)); i = Up(i)) {
          @pick[const key = values[i];
          let j = i;]
-         @shift[while (j > 0 && values[j - 1] > key) {
-           values[j] = values[j - 1];
-           j--;
+         @shift[while (Before(Count(0), j) && Greater(values[Down(j)], key)) {
+           values[j] = values[Down(j)];
+           j = Down(j);
          }]
          @place[values[j] = key;]
        }`,

@@ -8,13 +8,20 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
+  const Flag = type('boolean');
+  const Length = unop(Values, (v) => Index(v.length));
+  const Before = binop(Index, Index, (a, b) => Flag(a < b));
+  const Next = unop(Index, (p) => Index(p + 1));
+  const Equal = binop(Int, Int, (a, b) => Flag(a === b));
+  const Less = binop(Int, Int, (a, b) => Flag(a < b));
+  const Up = unop(Int, (n) => Int(n + 1));
 `);
 const input = interpretInput('const values = Values([3, 8, 5, 2]); const target = Int(5);', domain);
 const search = `
   @start[let checked = Int(0);]
-  for (let i = Index(0); i < values.length; i++) @pass{
-    @count[checked = checked + 1;]
-    @check[if (values[i] === target) break;]
+  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @pass{
+    @count[checked = Up(checked);]
+    @check[if (Equal(values[i], target)) break;]
   }
 `;
 const steps = (body: string, frames?: string) => traceAlgorithm(body, input, domain, frames).steps;
@@ -43,7 +50,11 @@ describe('frames', () => {
     ]);
     // The events leading up to the code, then its own.
     const [first] = trace;
-    expect(first.events?.slice(first.gap).map(({ kind }) => kind)).toEqual(['read', 'write']);
+    expect(first.events?.slice(first.gap).map(({ kind }) => kind)).toEqual([
+      'read',
+      'apply',
+      'write'
+    ]);
   });
 
   it('step at each run of a label at the top, and of each label inside one', () => {
@@ -57,9 +68,9 @@ describe('frames', () => {
   it('step once at each pass of a labelled loop, its test leading up to the pass', () => {
     const loop = `
       @start[let checked = Int(0);]
-      @loop[for (let i = Index(0); i < values.length; i++) {
-        checked = checked + 1;
-        if (values[i] === target) break;
+      @loop[for (let i = Index(0); Before(i, Length(values)); i = Next(i)) {
+        checked = Up(checked);
+        if (Equal(values[i], target)) break;
       }]
     `;
     expect(
@@ -85,7 +96,7 @@ describe('frames', () => {
     expect(trace).toHaveLength(4);
     expect(trace.at(-1)?.events?.map(({ kind }) => kind)).toEqual(['exit']);
     // A loop's last test changes nothing.
-    const counting = '@start[let n = Int(0);]\nwhile (n < 2) @up{\n  n = n + 1;\n}';
+    const counting = '@start[let n = Int(0);]\nwhile (Less(n, 2)) @up{\n  n = Up(n);\n}';
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
   });
 
@@ -119,7 +130,7 @@ describe('frames', () => {
 
   it('reject a label whose code never runs', () => {
     expect(() =>
-      steps('@start[const n = Int(1);]\nif (n > 5) @never{\n  const m = Int(2);\n}', 'never')
+      steps('@start[const n = Int(1);]\nif (Less(5, n)) @never{\n  const m = Int(2);\n}', 'never')
     ).toThrow('The code labelled never never runs, so there are no steps.');
   });
 

@@ -15,12 +15,16 @@ import {
 const allowedBinary = new Set(['+', '-', '*', '/', '%', '**', '<', '<=', '>', '>=', '===', '!==']);
 const allowedAssignment = new Set(['=', '+=', '-=', '*=', '/=', '%=']);
 
-/** `constructors` names the types the block may call. */
+/**
+ * `constructors` names the types the block may call, and `operators` the operators the algorithm
+ * may. An operator's function, in the domain block, is held to the algorithm's subset.
+ */
 export function checkSubset(
   root: BlockStatement,
   offset: (node: AnyNode) => Span,
-  kind: BlockKind,
-  constructors: ReadonlySet<string>
+  blockKind: BlockKind,
+  constructors: ReadonlySet<string>,
+  operators: ReadonlySet<string> = new Set()
 ): void {
   const functionNames = new Set(
     root.body.flatMap((statement) =>
@@ -33,6 +37,8 @@ export function checkSubset(
   const visit = (node: AnyNode, ancestors: readonly AnyNode[]): void => {
     const parent = ancestors.at(-1);
     const inFunction = ancestors.some((ancestor) => ancestor.type === 'FunctionDeclaration');
+    const inOperator = ancestors.some((ancestor) => ancestor.type === 'ArrowFunctionExpression');
+    const kind: BlockKind = inOperator ? 'algorithm' : blockKind;
     switch (node.type) {
       case 'BlockStatement':
       case 'ExpressionStatement':
@@ -65,14 +71,28 @@ export function checkSubset(
         if (node.callee.type === 'Identifier') checkBuiltin(node, node.callee.name, kind);
         break;
       case 'ArrowFunctionExpression':
+        if (
+          blockKind === 'domain' &&
+          parent?.type === 'CallExpression' &&
+          parent.callee.type === 'Identifier' &&
+          (parent.callee.name === 'binop' || parent.callee.name === 'unop') &&
+          parent.arguments.at(-1) === node
+        ) {
+          if (node.body.type === 'BlockStatement')
+            reject(
+              node.body,
+              'An operator’s function is one expression, without braces, as in binop(Int, Int, (a, b) => Flag(a > b)).'
+            );
+          break;
+        }
         reject(
           node,
-          'Arrow functions are not supported; declare function name(...) { … } at the top level of the algorithm block.'
+          'Arrow functions are only an operator’s function, in binop(...) or unop(...) in the domain block; declare function name(...) { … } at the top level of the algorithm block.'
         );
         break;
       case 'FunctionDeclaration': {
         const name = node.id?.name ?? '';
-        if (kind !== 'algorithm' || parent !== root)
+        if (blockKind !== 'algorithm' || parent !== root)
           reject(node, 'Functions are declared at the top level of the algorithm block.');
         if (node.async || node.generator)
           reject(node, `Write function ${name}(...), without * or async.`);
@@ -212,13 +232,16 @@ export function checkSubset(
     } else if (domainFunctions.has(name)) {
       if (kind !== 'domain')
         reject(node, `${name}() defines a type and belongs in the domain block.`);
+    } else if (operators.has(name)) {
+      if (kind !== 'algorithm')
+        reject(node, `${name}(...) is an operator, which the algorithm applies.`);
     } else if (constructors.has(name)) {
       if (kind !== 'input' && kind !== 'algorithm')
         reject(node, `${name}(...) creates a typed value in the input or algorithm block.`);
     } else {
       reject(
         node,
-        `${name}() is not available; only Math functions and array methods can be called.`
+        `${name}() is not available; only the algorithm’s functions, the domain’s types and operators, and collection methods can be called.`
       );
     }
   };

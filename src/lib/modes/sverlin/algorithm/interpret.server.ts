@@ -33,10 +33,12 @@ import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './e
 import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { readLabels, type Label, type LabelProblem } from './labels.server';
 import { parseBlock } from './parse.server';
+import { firstRawOperation, rawOperation, rawProblem, type RawContext } from './raw.server';
 import {
   noDomain,
   type CollectionType,
   type DomainRegistry,
+  type OperatorType,
   type RecordType,
   type RefType,
   type UnionType
@@ -121,7 +123,7 @@ export const algorithmLimits = {
 /** Interpret the input block into the fixed initial state shared by every presentation. */
 export function interpretInput(body: string, domain: DomainRegistry = noDomain): TypedState {
   const { root, offset } = parseBlock(body, 'input', domain);
-  return new Interpreter(root, offset, { kind: 'input', domain }).bindings();
+  return new Interpreter(root, offset, { kind: 'input', domain, code: body }).bindings();
 }
 
 /**
@@ -235,6 +237,7 @@ export function traceAlgorithm(
     kind: 'algorithm',
     initial: input,
     domain,
+    code,
     frames: {
       label: rule ?? '',
       ...(rule === undefined ? { nodes: new Set(), ranges: new Map() } : labelled.units(rule))
@@ -303,6 +306,10 @@ class Interpreter {
   #traceValues = 0;
   /** The value a running body's return statement gave. */
   #returned: Value;
+  /** How many operators' functions are running, which compute as JavaScript does and log nothing. */
+  #inOperator = 0;
+  /** What a raw operation's problem names: the block's code, and the domain's types. */
+  readonly #raw: RawContext;
   /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
   readonly #functions = new Map<string, FunctionDeclaration>();
   /** The functions holding code the frame rule steps at, whose calls end a step around them. */
@@ -330,6 +337,7 @@ class Interpreter {
       initial?: TypedState;
       domain?: DomainRegistry;
       frames?: { label: string } & FrameUnits;
+      code?: string;
     }
   ) {
     this.#root = root;
@@ -338,6 +346,19 @@ class Interpreter {
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
+    const atomTypes = Object.values(this.#atoms);
+    this.#raw = {
+      text: (node) => {
+        const { start, end } = offset(node);
+        return (options.code ?? '')
+          .slice(start, end)
+          .replace(/\s+/gu, ' ')
+          .replace(/([[(]) | ([\])])/gu, '$1$2')
+          .trim();
+      },
+      flag: atomTypes.find((type) => type.base === 'boolean')?.name,
+      indexOf: (collection) => atomTypes.find((type) => type.index === collection)?.name
+    };
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
     this.#globals.bindings.set('NaN', { value: NaN, constant: true });
@@ -397,6 +418,9 @@ class Interpreter {
 
   #execute(): void {
     const completion = this.#block(this.#root.body, this.#topLevel);
+    // A raw operation that ran was a problem as it ran, naming its operands' types.
+    const raw = firstRawOperation(this.#root);
+    if (raw) this.#fail(raw.node, rawProblem(raw.node, raw.operation, undefined, this.#raw));
     if (completion === 'break' || completion === 'continue')
       throw new AlgorithmError(
         `${completion} must be inside a loop.`,
@@ -494,17 +518,17 @@ class Interpreter {
   #emit(
     kind: EventKind,
     node: AnyNode,
-    details?: Pick<TraceEvent, 'place' | 'name' | 'index' | 'held' | 'method'> & {
+    details?: Pick<TraceEvent, 'place' | 'name' | 'index' | 'held' | 'method' | 'operands'> & {
       value?: Value;
     }
   ): void {
-    if (this.#kind === 'algorithm')
+    if (this.#kind === 'algorithm' && !this.#inOperator)
       this.#log.add(kind, node, details?.place, details?.value, details);
   }
 
   /** Log a read or write, the events the algorithm logs most. */
   #access(kind: 'read' | 'write', node: AnyNode, place: string | undefined, value: Value): void {
-    if (this.#kind === 'algorithm') this.#log.add(kind, node, place, value);
+    if (this.#kind === 'algorithm' && !this.#inOperator) this.#log.add(kind, node, place, value);
   }
 
   /** The place a collection or record holds, by the name a step records it under. */
@@ -838,7 +862,7 @@ class Interpreter {
     const computed =
       node.type === 'Literal' || node.type === 'ArrayExpression' || node.type === 'ObjectExpression'
         ? ''
-        : ' Comparisons, .length, .indexOf(), and Math functions give plain values; wrap the result, as in Flag(a < b) or Count(items.length).';
+        : ' .indexOf(), .includes(), and .join() give plain values; wrap the result, as in Count(items.indexOf(x)).';
     this.#fail(
       node,
       `${plain.path} would be the plain ${typeof plain.value} ${shown}, but input and algorithm values must have a domain type. ${fix}${computed}`
@@ -1156,6 +1180,7 @@ class Interpreter {
       case 'Identifier': {
         const binding = scope.lookup(node.name);
         if (!binding) this.#fail(node, `"${node.name}" is not defined.`);
+        if (binding.value === mathMarker) this.#rawCheck(node, []);
         if (binding === this.#globals.bindings.get(node.name)) return binding.value;
         // Inside a call, a collection is named as the top level holds it.
         const place =
@@ -1167,6 +1192,7 @@ class Interpreter {
         return binding.value;
       }
       case 'TemplateLiteral': {
+        this.#rawCheck(node, []);
         let text = node.quasis[0].value.cooked ?? '';
         node.expressions.forEach((expression, index) => {
           text += this.#text(this.#expression(expression, scope), expression);
@@ -1202,12 +1228,16 @@ class Interpreter {
         }
         return object;
       }
-      case 'MemberExpression':
-        return this.#read(this.#expression(node.object as Expression, scope), node, scope);
+      case 'MemberExpression': {
+        const object = this.#expression(node.object as Expression, scope);
+        if (rawOperation(node)) this.#rawCheck(node, [object]);
+        return this.#read(object, node, scope);
+      }
       case 'CallExpression':
         return this.#call(node, scope);
       case 'UnaryExpression': {
         const value = this.#expression(node.argument, scope);
+        if (rawOperation(node)) this.#rawCheck(node, [value]);
         if (node.operator === '!') return !this.#truthy(value);
         const number = this.#number(value, node);
         return node.operator === '-'
@@ -1219,13 +1249,12 @@ class Interpreter {
             )
           : value;
       }
-      case 'BinaryExpression':
-        return this.#binary(
-          node.operator,
-          this.#expression(node.left as Expression, scope),
-          this.#expression(node.right, scope),
-          node
-        );
+      case 'BinaryExpression': {
+        const left = this.#expression(node.left as Expression, scope);
+        const right = this.#expression(node.right, scope);
+        this.#rawCheck(node, [left, right]);
+        return this.#binary(node.operator, left, right, node);
+      }
       case 'LogicalExpression': {
         const left = this.#expression(node.left, scope);
         if (node.operator === '&&')
@@ -1247,6 +1276,7 @@ class Interpreter {
         // Resolve the target once so a[i++] += 1 evaluates i++ a single time, as in JavaScript.
         const target = this.#reference(node.left as Expression, scope);
         const right = this.#expression(node.right, scope);
+        if (node.operator !== '=') this.#rawCheck(node, [target.get(), right]);
         if (node.operator !== '=') this.#access('read', node.left, target.place, target.get());
         const value = target.prepare(
           node.operator === '='
@@ -1261,6 +1291,7 @@ class Interpreter {
       case 'UpdateExpression': {
         const target = this.#reference(node.argument, scope);
         const current = target.get();
+        this.#rawCheck(node, [current]);
         this.#access('read', node.argument, target.place, current);
         const before = this.#number(current, node);
         const after = target.prepare(
@@ -1428,6 +1459,9 @@ class Interpreter {
     const callee = node.callee;
     const declared = callee.type === 'Identifier' ? this.#functions.get(callee.name) : undefined;
     if (declared) return this.#invoke(node, declared, scope);
+    const operator =
+      callee.type === 'Identifier' ? this.#domain.operators?.[callee.name] : undefined;
+    if (operator) return this.#apply(node, operator, scope);
     if (
       callee.type === 'Identifier' &&
       (Object.hasOwn(this.#atoms, callee.name) ||
@@ -1435,7 +1469,10 @@ class Interpreter {
     )
       return this.#construct(node, callee.name, scope);
     if (callee.type !== 'MemberExpression' || callee.computed || node.optional)
-      this.#fail(node, 'Only Math functions and array methods can be called.');
+      this.#fail(
+        node,
+        'Only the algorithm’s functions, the domain’s types and operators, and collection methods can be called.'
+      );
     const object = this.#expression(callee.object as Expression, scope);
     const name = (callee.property as { name: string }).name;
     let args = node.arguments.map((argument) => {
@@ -1502,6 +1539,100 @@ class Interpreter {
       default:
         return this.#fail(callee, `Array method .${name}() is not available.`);
     }
+  }
+
+  /**
+   * An operation the input or algorithm computes itself, a problem outside an operator's function:
+   * an operator on its values, `.length`, or Math, named with the operands' types.
+   */
+  #rawCheck(node: AnyNode, operands: Value[]): void {
+    if (this.#inOperator) return;
+    const operation = rawOperation(node);
+    if (!operation) return;
+    const types = operands.map((value) =>
+      value instanceof Atom
+        ? value.type.name
+        : value !== null && typeof value === 'object'
+          ? (this.#shapes.get(value)?.name ?? kind(value))
+          : typeof value
+    );
+    this.#fail(node, rawProblem(node, operation, types, this.#raw));
+  }
+
+  /**
+   * An application of an operator: its operands, each converted to its type as a function's
+   * argument is, given by name to its function, which computes as JavaScript does and logs
+   * nothing. Its value is the function's, logged with the operands as an application.
+   */
+  #apply(node: CallExpression, operator: OperatorType, scope: Scope): Value {
+    const { name, operands, parameters } = operator;
+    if (
+      node.arguments.length !== operands.length ||
+      node.arguments.some((argument) => argument.type === 'SpreadElement')
+    )
+      this.#fail(
+        node,
+        `${name}(...) takes ${operands.length === 1 ? 'one operand' : 'two operands'}, ${operands.map((type) => `${/^[AEIOU]/u.test(type) ? 'an' : 'a'} ${type}`).join(' and ')}.`
+      );
+    const values = node.arguments.map((argument, index) => {
+      const value = this.#expression(argument as Expression, scope);
+      return this.#convert(
+        value,
+        operands[index],
+        argument,
+        `${name}'s ${parameters[index]}`,
+        collectionOf(value)
+      );
+    });
+    const body = new Scope(this.#globals);
+    parameters.forEach((parameter, index) =>
+      body.bindings.set(parameter, { value: values[index], constant: true, type: operands[index] })
+    );
+    this.#inOperator += 1;
+    const single = (value: Value) => {
+      const plain = unwrap(value);
+      return typeof plain === 'number' || typeof plain === 'string' || typeof plain === 'boolean'
+        ? plain
+        : undefined;
+    };
+    let result: Value;
+    try {
+      result = this.#expression(operator.body, body);
+    } catch (cause) {
+      if (!(cause instanceof AlgorithmError)) throw cause;
+      this.#inOperator -= 1;
+      const shown = values.map((value) => {
+        const plain = single(value);
+        if (typeof plain === 'string') return JSON.stringify(plain);
+        return plain !== undefined
+          ? String(plain)
+          : (this.#shapes.get(value as object)?.name ?? kind(value));
+      });
+      return this.#fail(node, `${name}(${shown.join(', ')}): ${cause.message}`);
+    }
+    this.#inOperator -= 1;
+    // A position an operator gives points where its operand of the same type points, as i + 1,
+    // or into its operand that is a collection of its type, named by a variable, as Length(left).
+    if (result instanceof Atom && result.type.index && !result.collection) {
+      const { index, name: type } = result.type;
+      const from = values.find(
+        (value) => value instanceof Atom && value.type.name === type && value.collection
+      );
+      const named = node.arguments.find(
+        (argument, at) =>
+          argument.type === 'Identifier' &&
+          Array.isArray(values[at]) &&
+          this.#shapes.get(values[at] as object)?.name === index
+      ) as { name: string } | undefined;
+      const collection = from ? collectionOf(from) : named?.name;
+      if (collection) result = new Atom(result.type, result.value, collection);
+    }
+    this.#emit('apply', node, {
+      name,
+      value: result,
+      operands: values.map((value) => single(value) ?? null)
+    });
+    return result;
   }
 
   /**
