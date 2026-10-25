@@ -5,7 +5,7 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import type { DesignValues } from './node/design';
+import { placedKind, type DesignValues, type Place } from './node/design';
 import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
 
@@ -233,6 +233,8 @@ export type PointerCall = {
    * <Pointed>'s, whose overflow says whether it is drawn past its collection's ends.
    */
   kinds?: () => { around: readonly string[]; pointed: string } | undefined;
+  /** The place it is rendered at, whose own variables its view's kinds take. */
+  place?: Place;
   /**
    * A pointer at each position of a list, as {#each runs(@check.at) as p}{@render Checked(p)}{/each}:
    * the list, named by `path`, each item's path its own.
@@ -253,6 +255,8 @@ export type Pointer = {
   path?: string;
   /** Whether it is left out past its collection's ends, keeping no end slots there. */
   inside?: boolean;
+  /** The place it is rendered at (see Place). */
+  place?: Place;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -273,7 +277,9 @@ export function providePointers(calls: readonly PointerCall[]): void {
   });
   const pointers = each.flatMap((call, order): Pointer[] => {
     const kinds = call.kinds?.();
-    if (kinds?.around.some((kind) => design[`${kind}.shown`] === false)) return [];
+    const shown = (kind: string) =>
+      design[`${placedKind(call.place, kind) ?? kind}.shown`] ?? design[`${kind}.shown`];
+    if (kinds?.around.some((kind) => shown(kind) === false)) return [];
     const inside = kinds !== undefined && design[`${kinds.pointed}.overflow`] === 'hidden';
     // A position read through one that points nowhere, as edges[e].to with e at -1, points at
     // nothing this step, but keeps its room in the only collection of its type; so does one read
@@ -320,12 +326,22 @@ export function providePointers(calls: readonly PointerCall[]): void {
             paint: call.paint,
             reaches: path === undefined ? undefined : types?.reachedFrom(path),
             path,
-            ...(inside ? { inside } : {})
+            ...(inside ? { inside } : {}),
+            ...(call.place ? { place: call.place } : {})
           }
         ]
       : [];
   });
   setContext('sverlin:pointers', pointers);
+}
+
+/** Inside a render at a place: the place, whose own variables the kinds of the view it draws take. */
+export function providePlace(place: Place | undefined): void {
+  setContext('sverlin:place', place);
+}
+
+export function placeContext(): Place | undefined {
+  return getContext<Place | undefined>('sverlin:place');
 }
 
 export function pointersContext(): readonly Pointer[] {

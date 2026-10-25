@@ -41,7 +41,7 @@ A node that writes text around nodes or views, with no `layout`, reads as a line
 
 A view is a snippet that draws one value of one domain type: its one parameter has that type, as in `{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`, and the node showing that value, as `<Node {value} />` does, shows the type's unit too. A view reads only its value and other views, never the input or algorithm variables, except a pointer (see Pointers): how two values relate is drawn where both are in scope, in the view that holds them or by a pointer. Define views at the top level of the markup.
 
-A type is drawn by its name: `{@render Int(value)}` draws whichever view of `Int` the variant chooses, the variable `views.Int`, whose options are every view of `Int`, and `none`, which draws nothing. Name views after how they draw, as `IntCell` or `IntTally`: a view named after its type, `{#snippet Int(value: Int)}`, is an error, as it would leave nothing to choose. A view rendered by its own name, as `{@render IntCell(value)}`, is always that view. Views differ in what they draw: two views that would differ only in their look, such as a cell and a round cell, are one view, the look the design's. A type that has pointers (see Pointers) and other views chooses among the others when rendered by name; render a pointer by its own name. Rendering a type no view draws is an error. In the view, a type's name is its view, never a constructor: draw values the state holds, made in the input and algorithm blocks, and show a loop's own index, as `k` in `{#each list as v, k}`, as text, `{k}`.
+A type is drawn by its name: `{@render Int(value)}` draws whichever view of `Int` the variant chooses, the variable `views.Int`, whose options are every view of `Int`, and `none`, which draws nothing. Name views after how they draw, as `IntCell` or `IntTally`: a view named after its type, `{#snippet Int(value: Int)}`, is an error, as it would leave nothing to choose. Which view draws a value is a look, the variant's, so a value is always rendered through its type: rendering a view by its own name, as `{@render IntCell(value)}`, is an error naming the fix, and one render is drawn apart through its place (see Places). Views differ in what they draw: two views that would differ only in their look, such as a cell and a round cell, are one view, the look the design's. Rendering a type no view draws is an error. In the view, a type's name is its view, never a constructor: draw values the state holds, made in the input and algorithm blocks, and show a loop's own index, as `k` in `{#each list as v, k}`, as text, `{k}`.
 
 A view of a collection or record draws its parts through their types' views:
 
@@ -63,7 +63,7 @@ A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a
 - a bracket: `<Node layout="row"><Node>[</Node><Pointed /></Node>`
 - a mark alone: `<Pointed />`
 
-`<Pointed>` takes no props: while the pointer is at it, the element is drawn in the pointer's kind, its view's name and `.Pointed`, so `Here.Pointed.fill` is the fill of the element `Here` points at. Write it in the pointer view itself, not in a snippet inside it. Its paint (fill, stroke, opacity, text colour) shows only where the pointer is, and the rest of its look holds in every slot, so every slot keeps one size. Render a pointer at the top level of the markup, outside snippets and blocks other than `{#if}`, with a position from the state: a variable (`{@render Arrow(i)}`), an element, or a field (`{@render To(edges[e].to)}`). Rendered by name, a position type draws as its place calls for: outside any node, as `{@render Index(i)}`, a mark, through its pointer views (`pointers.Index`), so every mark of it looks the same; inside a node, as `<Node>at {@render Index(i)}</Node>`, its number, through its other views (`views.Index`); each is a choice of its own. The page draws it around the element wherever the element is drawn. Every element keeps room for every pointer that can point into its collection, and a position a step shows past an end gets a slot there, so nothing moves as pointers move. Pointers at one element nest, the one rendered last outermost. A pointer whose position is out of scope, or points nowhere, draws nothing and keeps its room. Since it is drawn from the top level, a pointer view may read the input and algorithm variables, so its label can follow the state, as `<Node>{done ? 'last' : 'next'}</Node>`; to give the element another look as the state changes, render another pointer in `{#if}`, as `{#if done}{@render Last(i)}{:else}{@render Next(i)}{/if}`, and one whose branch is not taken draws nothing and keeps its room. A pointer at an element drawn as a link, such as the current edge, gives the link its kind's stroke and width.
+`<Pointed>` takes no props: while the pointer is at it, the element is drawn in the pointer's kind, its view's name and `.Pointed`, so `Here.Pointed.fill` is the fill of the element `Here` points at. Write it in the pointer view itself, not in a snippet inside it. Its paint (fill, stroke, opacity, text colour) shows only where the pointer is, and the rest of its look holds in every slot, so every slot keeps one size. Render a pointer at the top level of the markup, outside snippets and blocks other than `{#if}`, with a position from the state: a variable (`{@render Index(i)}`), an element, or a field (`{@render Index(edges[e].to)}`). A position type draws as where it is rendered calls for: outside any node, as `{@render Index(i)}`, a mark, through its pointer views (`pointers.Index`), so every mark of it looks the same; inside a node, as `<Node>at {@render Index(i)}</Node>`, its number, through its other views (`views.Index`); each is a choice of its own. The page draws it around the element wherever the element is drawn. Every element keeps room for every pointer that can point into its collection, and a position a step shows past an end gets a slot there, so nothing moves as pointers move. Pointers at one element nest, the one rendered last outermost. A pointer whose position is out of scope, or points nowhere, draws nothing and keeps its room. Since it is drawn from the top level, a pointer view may read the input and algorithm variables, so its label can follow the state, as `<Node>{done ? 'last' : 'next'}</Node>`; one rendered in `{#if}` whose branch is not taken draws nothing and keeps its room. A pointer at an element drawn as a link, such as the current edge, gives the link its kind's stroke and width.
 
 Insertion sort, with the key drawn beside the row:
 
@@ -102,25 +102,19 @@ Insertion sort, with the key drawn beside the row:
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Next(p: Position)}
-  {#snippet IName()}<Node>i</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render IName()}</Node>
-{/snippet}
-{#snippet Hole(p: Position)}
-  {#snippet JName()}<Node>j</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render JName()}</Node>
-{/snippet}
+{#snippet Mark(p: Position)}<Pointed />{/snippet}
+{#snippet Bracket(p: Position)}<Node layout="row"><Node>[</Node><Pointed /></Node>{/snippet}
 {#snippet Title()}<Node>Insertion sort</Node>{/snippet}
 {#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
-{#snippet Board()}<Node layout="row">{@render Key()}{@render Items(values)}</Node>{/snippet}
+{#snippet Board()}<Node layout="row">{@render Key()}{@render Values(values)}</Node>{/snippet}
 
 {@render Title()}
 {@render Board()}
-{@render Next(i)}
-{@render Hole(j)}
+{@render Position(i)}
+{@render Position(j)}
 ```
 
-Each step inserts one key: it is copied into its box, the larger values slide right, and the key drops into its place; with `frames` set to `insert.*`, each of these is a step of its own (see Steps). A reference follows its element as it moves: with `const Tracked = ref(Values);` and `const tracked = Tracked(values[3]);`, `{@render Follow(tracked)}` marks that value wherever the sort takes it.
+Both marks are drawn by the view `pointers.Position` chooses, `Mark` to start, so they look alike; a variant draws one apart through its place, as `Mark.Pointed@j.fill` colouring the hole, or `pointers.Position@j` drawing it with `Bracket` (see Places). Each step inserts one key: it is copied into its box, the larger values slide right, and the key drops into its place; with `frames` set to `insert.*`, each of these is a step of its own (see Steps). A reference follows its element as it moves: with `const Tracked = ref(Values);` and `const tracked = Tracked(values[3]);`, `{@render Tracked(tracked)}` marks that value wherever the sort takes it.
 
 ## Steps
 
@@ -130,7 +124,7 @@ Each step inserts one key: it is copied into its box, the larger values slide ri
 - Every presentation opens on the input as given, step 0, before any of the algorithm runs: what the algorithm declares, its labels' values, and its operators' applications appear from the first step on, and the view reads a variable itself only inside a <Node>, which is hidden until it is declared.
 - A step's code stops where it calls one of the algorithm's functions with steps of its own, whose steps follow, so `function search(a, target, lo, hi) @call{ … }` steps once per call, recursive calls included.
 - Each step records every variable in scope, before its code and after it: the input's, the top level's, and those of the loops and blocks around it, as `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A variable out of scope at a step, before its declaration or after its block ends, is not part of it: whatever the view draws from it, a value or a pointer, is missing there (see `shown` in Design). Declare a variable where it belongs rather than at the top level with a stand-in value such as -1. A variable a step's code declares is out of scope before it, so the view draws it through a view or a pointer; the first step is shown only after its code. A name is declared once among the blocks in scope: a loop inside another cannot declare `j` again, while loops one after another can each have their own `j`.
-- A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step in the algorithm's variables: an answer, as the position a search finds, is the value its function returns, drawn with a view of its own, as `{@render Found(found)}` in binary search below.
+- A step has no label or text: steps are numbered, and the view says what each one shows, from the recorded variables and `step` (0 for the first). Record what the view should say about a step in the algorithm's variables: an answer, as the position a search finds, is the value its function returns, drawn with a view of its own, as `{@render Index(found)}` in binary search below.
 - `return;` stops the algorithm early.
 - Between steps, the page moves each value from where the step before drew it, so a swap shows as two values trading places: a value moved from one element to another, as through a temporary variable, is the same value. A variable holding a value a collection also holds shows a copy of it, as insertion sort's `key` when it is picked up, and the copy keeps its place once the collection's is overwritten, so the key moves back into the row when it is put down. A value copied to a second place, as `values[j] = values[Prev(j)]` or `Merge(merged, Append(merged, left[i]))`, starts where its source was; a value written anew, as `values[i] = 0`, fades in; one no longer held fades out. Pointers slide from where they were. Links switch with the step.
 
@@ -178,29 +172,20 @@ Binary search, written recursively:
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Low(p: Index)}
-  {#snippet LoName()}<Node>lo</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render LoName()}</Node>
-{/snippet}
-{#snippet High(p: Index)}
-  {#snippet HiName()}<Node>hi</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render HiName()}</Node>
-{/snippet}
-{#snippet Middle(p: Index)}<Pointed />{/snippet}
-{#snippet Found(p: Index)}
-  {#snippet FoundName()}<Node>found</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render FoundName()}</Node>
-{/snippet}
+{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Binary search for {@render Int(target)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Bounds()}<Node>lo {@render Index(lo)}, hi {@render Index(hi)}</Node>{/snippet}
 
 {@render Title()}
 {@render Cells()}
-{@render Low(lo)}
-{@render High(hi)}
-{@render Middle(mid)}
-{@render Found(found)}
+{@render Bounds()}
+{@render Index(mid)}
+{@render Index(found)}
 ```
+
+In `Bounds`, inside a node, `lo` and `hi` are drawn as numbers by `IndexText`; at the top level, `mid` and the answer are marks drawn by `Highlight`, which a variant colours apart at `@found`.
 
 ## Atomic types
 
@@ -337,7 +322,7 @@ An operator is a type a view can take: `{#snippet Ask(g: Greater)}` is a view of
 {@render Board()}
 ```
 
-At a comparison step the caption reads "is 5 > 1? yes"; at the swap after it, nothing. An operator is rendered only from the root and its parts, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, is left out. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is what a render of that name draws. `{@render Greater(@pair)}` draws only the application made inside the code labelled `@pair`, where an operator is applied in more than one place.
+At a comparison step the caption reads "is 5 > 1? yes"; at the swap after it, nothing. An operator is rendered only from the root and its parts, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, is left out. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is drawn through its type, like any view. `{@render Greater(@pair)}` draws only the application made inside the code labelled `@pair`, where an operator is applied in more than one place.
 
 A label is read in the root and its parts as a value: `@name` is the value the expression labelled `name` gave in the step's own code, drawn at the step's after where it gave one, and missing where it gave none or several. So a view shows what a step's code held, though no variable holds it at the step's edges: the values a swap exchanged, or the key a whole insertion inserts, out of scope once its block ends.
 
@@ -373,7 +358,7 @@ What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`, eve
 ```svelte
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
 {#snippet Asked()}<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>{/snippet}
-{#each runs(@check.at) as p}{@render Checked(p)}{/each}
+{#each runs(@check.at) as p}{@render Index(p)}{/each}
 {@render Asked()}
 ```
 
@@ -387,8 +372,9 @@ The design space is every variable of a component's look, found in its markup:
 - `pointers.Index`, for each position type rendered by name as a pointer: its pointer views and `none` (see Pointers).
 - The page frame's: `frame.ratio`, `frame.justify`, `frame.align`, `frame.padding`, `frame.gap`, and `frame.layout` (see Page frame).
 - Each kind of node's props. A kind is the snippet a node is in: a view's or a part's name, as `Items` or `Title`, and for a snippet inside another, both, as `IntTally.Tally`; every node of a snippet is of its kind. A pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's `<Link>`, as `Graph.Link`. A variable is its kind and prop, as `Here.Pointed.fill` or `Items.Under.shown`.
+- Each place's own, for a render with an argument (see Places).
 
-A snippet's name is its kind, so it names what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a name of its own, a part is not named as a type, and a render names the snippet it draws, so every kind is known before the view runs.
+A snippet's name is its kind, so it names what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a name of its own, a part is not named as a type, and a render names a part, a type, or an operator, so every kind is known before the view runs.
 
 Every kind of node has these props, each with a fixed set of options:
 
@@ -406,6 +392,25 @@ Every kind of node has these props, each with a fixed set of options:
 - `minSize`: the least width and height, 0, 1, 1.5, 2, 2.5, 3, or 4 em.
 
 A kind that arranges its children, with a `layout`, a collection, or links, also has `gap` (as `padding`), `align` (start, center, or end, across the layout), and `justify` (start, center, end, between, around, or evenly, along it). Where a collection's node has more room than its items' tracks need, as when every render of a view keeps the widest box any of them reaches, `justify` start, center, or end puts the room after, around, or before them, and between, around, or evenly spreads the tracks over it. Positions past a collection's ends are drawn in end slots beside it, kept only as far as the drawn positions go: a collection's kind has `overflow`, included (its end slots are tracks of its box) or excluded (they hang outside its box, so centring it centres its elements); a `<Pointed>` kind has `overflow` too, shown (drawn past the ends) or hidden (drawing nothing there, keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label. The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, and rose) in 11 shades from 50, the lightest, to 950, the darkest, as `blue-600`.
+
+### Places
+
+A render with an argument is a place, named by what is written there after `@`: a label, a variable, or a field, as `{@render Index(@left)}` at `@left`, `{@render Index(found)}` at `@found`, and `{@render Int(g.a)}` in `Ask` at `Ask.` and `@g.a`. A render of another expression, or with nothing between the brackets, is none. Rendering a type keeps the page uniform, every render drawn by the view its type's variable chooses, in its kinds' looks; a place has variables of its own that fall back to those until a variant sets them, so one render is drawn apart with nothing declared:
+
+- its own choice of view, where its type has more than one view of the kind it draws, as `pointers.Index@found` or `views.Int@swap.held`;
+- its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it can draw, nested snippets included, as `Highlight.Pointed@left.fill` or `IntTally.Tally@swap.held.shown`, though not for another view that view renders.
+
+```json
+{
+  "pointers.Index": "Highlight",
+  "pointers.Index@found": "Arrow",
+  "Highlight.Pointed.fill": "amber-100",
+  "Highlight.Pointed@left.fill": "sky-100",
+  "IntCell@swap.held.fill": "neutral-100"
+}
+```
+
+In a key the last part is the prop, and the dots after `@` the place's. A label and a variable rendered by one type with one name would share a place, which is an error: rename the label.
 
 ### Variants
 
@@ -468,8 +473,8 @@ Example, with domain, input, algorithm, and a script-free view:
 {#snippet Status()}<Node>Visiting index {@render Index(i)}.</Node>{/snippet}
 
 {@render Title()}
-{@render Items(values)}
-{@render Here(i)}
+{@render Values(values)}
+{@render Index(i)}
 {@render Status()}
 ```
 
@@ -561,8 +566,8 @@ Insertion sort, beside a textbook's pseudocode:
 
 {@render Title()}
 {@render Board()}
-{@render Next(i)}
-{@render Hole(j)}
+{@render Position(i)}
+{@render Position(j)}
 ```
 
 ## Node
@@ -602,7 +607,7 @@ Leave `form` unset, set `flow` only when asked, such as for a list that must run
   {#snippet Head()}<Node key="head">head</Node>{/snippet}
   <Node layout="free" flow="x">
     {#each names as name}{@render Name(name)}{/each}
-    {#each next as pair}{@render Next(pair)}{/each}
+    {#each next as pair}{@render Pair(pair)}{/each}
     {@render Head()}
     <Link from="head" to={first} />
   </Node>
@@ -696,15 +701,15 @@ Breadth-first search, with the vertex being visited and the edge being examined 
   <Node layout="free">
     {#each vertices as v, k}
       {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{@render VertexCard(v)}{@render VertexNumber()}</Node>
+      <Node layout="column">{@render Vertex(v)}{@render VertexNumber()}</Node>
     {/each}
-    {#each edges as edge}{@render Arrow(edge)}{/each}
+    {#each edges as edge}{@render Edge(edge)}{/each}
   </Node>
 {/snippet}
-{#snippet QueueLine()}<Node>queue {@render QueueItems(queue)}</Node>{/snippet}
+{#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
 
 {@render Graph()}
 {@render QueueLine()}
-{@render Visiting(current)}
-{@render Examining(e)}
+{@render VertexRef(current)}
+{@render EdgeIndex(e)}
 ```

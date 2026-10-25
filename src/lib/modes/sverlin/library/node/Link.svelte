@@ -13,12 +13,13 @@
     keyedRef,
     linkEnd,
     nodeIdsContext,
+    placeContext,
     pointersContext,
     pointsInto,
     slotContext,
     typeContext
   } from '../type-context';
-  import { colourCss, kindKey, strokeStyleCss } from './design';
+  import { colourCss, kindKey, lookUp, placedKind, strokeStyleCss } from './design';
   import { designContext } from '../type-context';
 
   let {
@@ -81,6 +82,7 @@
   const design = designContext();
   // Each step mounts afresh, so the props are read once.
   const kind = untrack(() => kindKey(__view, 'Link'));
+  const placed = untrack(() => placedKind(placeContext(), kind));
   const pointer = untrack(() => {
     const element = __component ? elementSlot(slotContext()) : undefined;
     if (!element) return undefined;
@@ -92,11 +94,18 @@
             pointsInto(types, pointer, element.collection) && pointer.position === element.index
         )
         .toSorted((a, b) => a.order - b.order)
-        .map((pointer) => pointer.paint?.(pointer.position) ?? {})
-    ).__kind as string | undefined;
+        .map((pointer) => {
+          const own = pointer.paint?.(pointer.position) as { __kind?: string } | undefined;
+          return own?.__kind
+            ? { __kind: own.__kind, __placed: placedKind(pointer.place, own.__kind) }
+            : {};
+        })
+    ) as { __kind?: string; __placed?: string };
   });
   const look = (prop: string, over = true) =>
-    (over && pointer ? design[`${pointer}.${prop}`] : undefined) ?? design[`${kind}.${prop}`];
+    (over && pointer?.__kind
+      ? lookUp(design, pointer.__kind, pointer.__placed, prop)
+      : undefined) ?? lookUp(design, kind, placed, prop);
   const nodeIds = nodeIdsContext();
   const id = untrack(() =>
     __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined

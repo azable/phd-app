@@ -156,7 +156,7 @@ it.skipIf(!enabled)(
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {@render Cells()}
-{#each runs(@check.at) as p}{@render Checked(p)}{/each}`;
+{#each runs(@check.at) as p}{@render Index(p)}{/each}`;
     const checked = (await stepsOf(search, 'check', 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );

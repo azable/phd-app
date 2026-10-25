@@ -2202,7 +2202,7 @@ describe('assistant edits', () => {
       decision: {
         action: 'vary' as const,
         values: [{ variable: 'views.Int', value: 'IntTally' }],
-        randomise: ['Current.Pointed.fill'],
+        randomise: ['Highlight.Pointed.fill'],
         summary: 'Draws every value with a tally'
       }
     });
@@ -2223,9 +2223,12 @@ describe('assistant edits', () => {
       );
     expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
     expect(origins(second)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
-    expect(origins(first)['Current.Pointed.fill'].origin).not.toBe('chosen');
+    expect(origins(first)['Highlight.Pointed.fill'].origin).not.toBe('chosen');
+    // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
+    const follows = (key: string) =>
+      /^views\.(\w+\.)?Int@/u.test(key) || /^Highlight\.Pointed@\w+\.fill$/u.test(key);
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'views.Int' && key !== 'Current.Pointed.fill')
+      if (key !== 'views.Int' && key !== 'Highlight.Pointed.fill' && !follows(key))
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
     expect(Object.values(origins(second)).some(({ origin }) => origin === 'random')).toBe(true);
   });

@@ -128,7 +128,7 @@ describe('labels read in the view', () => {
 {#snippet Asked()}<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
     const prepared = prepare(
       `{@render Equal(@check)}
-{#each runs(@check.at) as p}{@render Checked(p)}{/each}
+{#each runs(@check.at) as p}{@render Index(p)}{/each}
 {@render Asked()}`,
       search
     );

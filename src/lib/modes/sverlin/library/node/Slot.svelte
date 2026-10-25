@@ -5,7 +5,8 @@
   call is in, for a component passing its own value on. With none of them, the value is no element.
   `reads` are the state variables the value comes from: at a step where one is out of scope, the
   value stands in from another step, drawn hidden as a copy, so it keeps its room. `site` is the
-  render's line:column: one the presentation leaves out draws nothing and keeps no room.
+  render's line:column: one the presentation leaves out draws nothing and keeps no room. `place` is
+  the render's place, whose own variables the kinds of the view it draws take (see placedKind).
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -15,11 +16,13 @@
     elementOf,
     leftOutContext,
     provideCopy,
+    providePlace,
     provideHidden,
     provideSlot,
     slotContext,
     typeContext
   } from '../type-context';
+  import type { Place } from './design';
 
   let {
     path,
@@ -28,6 +31,7 @@
     inherit = false,
     reads = [],
     site,
+    place,
     children
   }: {
     path?: string;
@@ -36,9 +40,11 @@
     inherit?: boolean;
     reads?: readonly string[];
     site?: string;
+    place?: Place;
     children: Snippet;
   } = $props();
   const leftOut = untrack(() => site !== undefined && (leftOutContext()?.has(site) ?? false));
+  untrack(() => providePlace(place));
 
   // Each step mounts afresh, so the props are read once. A hidden copy names no element.
   const types = typeContext();

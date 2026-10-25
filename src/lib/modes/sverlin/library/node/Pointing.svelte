@@ -11,6 +11,7 @@
   import Pointing from './Pointing.svelte';
   import {
     providePointed,
+    providePlace,
     provideHidden,
     providePointerIdentity,
     provideSlot,
@@ -52,6 +53,7 @@
   untrack(() => providePointerIdentity(active ? `pointer:${pointer.order}` : undefined));
   // The pointer view draws no element of its own; its <Pointed> draws the one it points at.
   provideSlot(undefined);
+  untrack(() => providePlace(pointer.place));
 </script>
 
 {#snippet next(props: Record<string, unknown>)}

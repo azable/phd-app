@@ -9,9 +9,10 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
-  import { kindKey } from './design';
+  import { kindKey, placedKind } from './design';
   import {
     leaveComponentBox,
+    placeContext,
     pointedContext,
     provideCopy,
     provideHidden,
@@ -33,7 +34,8 @@
   // the props are read once.
   const own = untrack(() => ({
     kind: kindKey(__view, 'Pointed'),
-    active: pointed?.active ?? false
+    active: pointed?.active ?? false,
+    placed: placedKind(placeContext(), kindKey(__view, 'Pointed'))
   }));
   const outer = pointed?.outer as { __over?: { active?: boolean } } | undefined;
   const merged = {

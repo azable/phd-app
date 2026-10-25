@@ -51,11 +51,11 @@ const merge = `<script lang="sverlin" domain>
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node>↑</Node></Node>{/snippet}
 {#snippet Placed(p: Position)}<Pointed />{/snippet}
-{#snippet Rows()}<Node layout="column">{@render Row(left)}{@render Row(right)}{@render Row(merged)}</Node>{/snippet}
+{#snippet Rows()}<Node layout="column">{@render Values(left)}{@render Values(right)}{@render Values(merged)}</Node>{/snippet}
 {@render Rows()}
-{@render Arrow(i)}
-{@render Arrow(j)}
-{@render Placed(k)}`;
+{@render Position(i)}
+{@render Position(j)}
+{@render Position(k)}`;
 
 let browser: Browser | undefined;
 beforeAll(async () => {
@@ -120,7 +120,7 @@ it.skipIf(!enabled)(
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
         const { javascript } = await bundlePresentation(prepared, seed, {
-          chosen: { frames: 'step' }
+          chosen: { frames: 'step', 'pointers.Position@k': 'Placed' }
         });
         return sandboxDocument('', javascript, 0, seed);
       })
@@ -235,11 +235,11 @@ const walk = `<script lang="sverlin" domain>
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as name}{@render Name(name)}{/each}
-    {#each edges as edge}{@render Arrow(edge)}{/each}
+    {#each edges as edge}{@render Edge(edge)}{/each}
   </Node>
 {/snippet}
 {@render Graph()}
-{@render Current(e)}`;
+{@render EdgeIndex(e)}`;
 
 it.skipIf(!enabled)(
   'draws each arrow with its own step’s arrowhead while two steps are in the page',
@@ -321,9 +321,9 @@ const taken = `<script lang="sverlin" domain>
 {#snippet Taken(at: Index)}
   <Node layout="column"><Pointed /><Node>taken</Node></Node>
 {/snippet}
-{@render Row(left)}
-{@render Row(right)}
-{@render Taken(take.from)}`;
+{@render Values(left)}
+{@render Values(right)}
+{@render Index(take.from)}`;
 
 it.skipIf(!enabled)(
   'keeps every element in place as a pointer moves between collections',
@@ -386,8 +386,8 @@ const far = `<script lang="sverlin" domain>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Here(at: Index)}<Pointed />{/snippet}
-{@render Row(values)}
-{@render Here(i)}`;
+{@render Values(values)}
+{@render Index(i)}`;
 
 it.skipIf(!enabled)(
   'keeps room at most 4 past an end, a pointer further out drawing nothing',
@@ -439,13 +439,15 @@ it.skipIf(!enabled)(
 );
 
 const cursors = taken.replace(
-  '{@render Taken(take.from)}',
+  '{@render Index(take.from)}',
   `{#snippet ICursor(at: Index)}{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node>{/snippet}
 {#snippet JCursor(at: Index)}{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node>{/snippet}
-{@render ICursor(i)}
-{@render JCursor(j)}
-{@render Taken(take.from)}`
+{@render Index(i)}
+{@render Index(j)}
+{@render Index(take.from)}`
 );
+/** The cursors' places, each drawn by its own pointer view (Taken draws every Index otherwise). */
+const cursorViews = { 'pointers.Index@i': 'ICursor', 'pointers.Index@j': 'JCursor' };
 
 it.skipIf(!enabled)(
   'leaves out a pointer whose view a variant hides, drawing the elements as without it',
@@ -453,7 +455,7 @@ it.skipIf(!enabled)(
   async () => {
     const prepared = prepareSvelteComponent(cursors);
     const { javascript } = await bundlePresentation(prepared, 1, {
-      chosen: { 'ICursor.shown': false, 'JCursor.shown': false }
+      chosen: { ...cursorViews, 'ICursor.shown': false, 'JCursor.shown': false }
     });
     const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
@@ -490,7 +492,9 @@ it.skipIf(!enabled)(
 /** The cursors merge drawn with a variant, stepped to each step: its rows' boxes and the j label. */
 async function cursorRows(chosen: Record<string, string>) {
   const prepared = prepareSvelteComponent(cursors);
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+  const { javascript } = await bundlePresentation(prepared, 1, {
+    chosen: { ...cursorViews, ...chosen }
+  });
   const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
   await page.setContent(
     `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`

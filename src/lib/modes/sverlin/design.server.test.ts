@@ -14,7 +14,14 @@ describe('design space', () => {
     expect(space['frame.ratio']).toContain('4:3');
     const kinds = new Set(
       Object.keys(space)
-        .filter((key) => !key.startsWith('views.') && !key.startsWith('frame.') && key !== 'frames')
+        .filter(
+          (key) =>
+            !key.startsWith('views.') &&
+            !key.startsWith('pointers.') &&
+            !key.startsWith('frame.') &&
+            !key.includes('@') &&
+            key !== 'frames'
+        )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     );
     expect([...kinds].sort()).toEqual(
@@ -29,22 +36,18 @@ describe('design space', () => {
         'IndexText',
         'Row',
         'Row.Under',
-        'Current',
-        'Current.Name',
-        'Current.Pointed',
-        'Found.Pointed'
+        'Highlight.Pointed'
       ].sort()
     );
     // A layout's props, and nothing to hide a <Pointed> by.
     expect(space['Row.gap']).toBeDefined();
     expect(space['IntCell.gap']).toBeUndefined();
-    expect(space['Current.Pointed.shown']).toBeUndefined();
-    expect(space['Current.Pointed.fill']).toContain('amber-100');
+    expect(space['Highlight.Pointed.shown']).toBeUndefined();
+    expect(space['Highlight.Pointed.fill']).toContain('amber-100');
     // Overflow: a pointer's, drawn past the ends or not; a collection's, its end slots in its box
     // or hanging outside it. Dashed borders are paint, for any node.
-    expect(space['Current.Pointed.overflow']).toEqual(['shown', 'hidden']);
-    expect(space['Found.Pointed.overflow']).toEqual(['shown', 'hidden']);
-    expect(space['Current.Name.overflow']).toBeUndefined();
+    expect(space['Highlight.Pointed.overflow']).toEqual(['shown', 'hidden']);
+    expect(space['IntTally.Tally.overflow']).toBeUndefined();
     expect(space['Row.overflow']).toEqual(['included', 'excluded']);
     expect(space['IntCell.overflow']).toBeUndefined();
     expect(space['IntCell.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
@@ -54,7 +57,7 @@ describe('design space', () => {
     const lines = linearSearchSource.split('\n');
     const line = lines.findIndex((text) => text.includes('<Pointed'));
     const position = `${line + 1}:${lines[line].indexOf('<Pointed') + 1}`;
-    expect(prepared.design.tags[position]).toEqual(['Current.Pointed']);
+    expect(prepared.design.tags[position]).toEqual(['Highlight.Pointed']);
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
@@ -96,6 +99,41 @@ describe('variants', () => {
     );
   });
 
+  it('keeps a place as its kinds are until a variant sets it apart', () => {
+    const { fallbacks } = prepared.design;
+    const [first, second] = space['Highlight.Pointed.fill'].filter(
+      (option) => option !== 'none' && option !== starter['Highlight.Pointed.fill']
+    );
+    // A place follows the kind it falls back to.
+    const followed = buildVariant(
+      space,
+      starter,
+      { chosen: { 'Highlight.Pointed.fill': first } },
+      1,
+      fallbacks
+    ).values;
+    expect(followed['Highlight.Pointed@found.fill']).toBe(first);
+    // Chosen, it is set apart, and stays so as the kind changes.
+    const apart = buildVariant(
+      space,
+      starter,
+      { chosen: { 'Highlight.Pointed@found.fill': second } },
+      1,
+      fallbacks
+    ).values;
+    expect(apart['Highlight.Pointed@found.fill']).toBe(second);
+    expect(apart['Highlight.Pointed@i.fill']).toBe(starter['Highlight.Pointed.fill']);
+    const kept = buildVariant(
+      space,
+      starter,
+      { base: apart, chosen: { 'Highlight.Pointed.fill': first } },
+      1,
+      fallbacks
+    ).values;
+    expect(kept['Highlight.Pointed@found.fill']).toBe(second);
+    expect(kept['Highlight.Pointed@i.fill']).toBe(first);
+  });
+
   it('randomises keeping equalities, shades, and what is shown or none', () => {
     const variants = Array.from(
       { length: 8 },
@@ -112,9 +150,9 @@ describe('variants', () => {
       expect(values['Row.fill']).toBe('none');
       expect(values['views.Int']).not.toBe('none');
     }
-    expect(new Set(variants.map((values) => values['Current.Pointed.fill'])).size).toBeGreaterThan(
-      1
-    );
+    expect(
+      new Set(variants.map((values) => values['Highlight.Pointed.fill'])).size
+    ).toBeGreaterThan(1);
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
 

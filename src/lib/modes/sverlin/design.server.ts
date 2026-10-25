@@ -11,6 +11,7 @@ import {
   frameOptions,
   listingOptions,
   optionsOf,
+  placeProps,
   roleProps,
   starterFrame,
   starterListing,
@@ -26,6 +27,18 @@ export type DesignValue = string | number | boolean;
 export type DesignKind = { key: string; role: KindRole };
 
 const propsOf = ({ role }: DesignKind) => roleProps[role];
+
+/**
+ * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
+ * place sets, and their own choices of view, as views.Int@swap.held.
+ */
+export type DesignPlaces = {
+  kinds: readonly DesignKind[];
+  choices: readonly { key: string; options: readonly string[] }[];
+};
+
+const placePropsOf = ({ role }: DesignKind) =>
+  roleProps[role].filter((prop) => placeProps.has(prop));
 
 /** Each variable's options, by key. */
 export type DesignSpace = Readonly<Record<string, readonly DesignValue[]>>;
@@ -57,7 +70,7 @@ export class DesignValueError extends Error {
  * rendered as a pointer, the frame's settings, a listing's if the view
  * places one (its languages the source's own listings first, then the library's), which events are
  * steps if it can step by more than one (frames, its options the source's frame rules, the first
- * where it starts), and each kind's props.
+ * where it starts), each kind's props, and each place's.
  */
 export function designSpace(
   kinds: readonly DesignKind[],
@@ -65,7 +78,8 @@ export function designSpace(
   listing = false,
   frames: readonly string[] = [],
   ownListings: readonly string[] = [],
-  pointers: Readonly<Record<string, readonly string[]>> = {}
+  pointers: Readonly<Record<string, readonly string[]>> = {},
+  places: DesignPlaces = { kinds: [], choices: [] }
 ): DesignSpace {
   return {
     ...(frames.length > 1 ? { frames: [...frames] } : {}),
@@ -86,6 +100,12 @@ export function designSpace(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
       )
+    ),
+    ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
+    ...Object.fromEntries(
+      places.kinds.flatMap((kind) =>
+        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
+      )
     )
   };
 }
@@ -97,7 +117,8 @@ export function starterVariant(
   listing = false,
   frames: readonly string[] = [],
   ownListings: readonly string[] = [],
-  pointers: Readonly<Record<string, readonly string[]>> = {}
+  pointers: Readonly<Record<string, readonly string[]>> = {},
+  places: DesignPlaces = { kinds: [], choices: [] }
 ): Record<string, DesignValue> {
   return {
     ...(frames.length > 1 ? { frames: frames[0] } : {}),
@@ -118,6 +139,13 @@ export function starterVariant(
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
+      )
+    ),
+    // A place starts as its type and kinds do.
+    ...Object.fromEntries(places.choices.map(({ key, options }) => [key, options[0]])),
+    ...Object.fromEntries(
+      places.kinds.flatMap((kind) =>
+        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
       )
     )
   };
@@ -162,13 +190,16 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
 /**
  * The complete variant a build takes, and where each value came from: the starter, then the base's
  * values that still fit, then any randomising, then the chosen values. A chosen value the space
- * has no place for is an error naming it.
+ * has no place for is an error naming it. A place's variable (`fallbacks`, by key, the variable it
+ * falls back to) then takes the value of its own unless it is chosen, drawn by name, or set apart
+ * in the base, so a place looks as its type and kinds do until a variant sets it.
  */
 export function buildVariant(
   space: DesignSpace,
   starter: Readonly<Record<string, DesignValue>>,
   request: VariantRequest,
-  seed: number
+  seed: number,
+  fallbacks: Readonly<Record<string, string>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
   const chosen = Object.entries(request.chosen ?? {});
   const problems = chosen
@@ -200,6 +231,15 @@ export function buildVariant(
   for (const [key, value] of chosen) {
     values[key] = value as DesignValue;
     origins[key] = 'chosen';
+  }
+  const base = request.base ?? {};
+  for (const [key, fallback] of Object.entries(fallbacks)) {
+    const apart =
+      Object.hasOwn(base, key) && base[key] !== base[fallback] && fits(space, key, base[key]);
+    if (apart || named.includes(key) || chosen.some(([name]) => name === key)) continue;
+    if (!Object.hasOwn(values, fallback) || !fits(space, key, values[fallback])) continue;
+    values[key] = values[fallback];
+    origins[key] = origins[fallback];
   }
   return { values, origins };
 }

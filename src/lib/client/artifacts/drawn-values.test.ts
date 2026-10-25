@@ -214,6 +214,19 @@ describe('drawn value markers', () => {
       ]);
     });
 
+    it('keeps a view a place chooses for itself', () => {
+      expect(
+        greyed(views, [
+          {
+            seed: 1,
+            draws: [],
+            views: options,
+            variant: { ...showing('IntDots'), 'views.Int@target': 'IntTally' }
+          }
+        ])
+      ).toEqual([{ view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }]);
+    });
+
     it('keeps views rendered directly', () => {
       const direct = `${views}\n{@render IntTally(target)}`;
       expect(

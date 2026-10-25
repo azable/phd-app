@@ -192,6 +192,38 @@ export const paintProps: ReadonlySet<string> = new Set([
   'color'
 ]);
 
+/** The props a place sets for the kinds of the view it draws, those that tell one render apart. */
+export const placeProps: ReadonlySet<string> = new Set(['shown', 'fill', 'stroke', 'color']);
+
+/**
+ * A render at a place: what is written there after `@` (`@left`, `@g.a`), the path of the view it
+ * is written in, as `Ask.` (empty outside views), and the view it draws, the variant's choice.
+ */
+export type Place = { within: string; at: string; view?: string };
+
+/**
+ * A kind's own variables at a place, as `IntCell@swap.held` or `Highlight.Pointed@left`: for the
+ * kinds of the view the place draws, its nested snippets' included; none for another kind.
+ */
+export function placedKind(place: Place | undefined, kind: string): string | undefined {
+  return place?.view && (kind === place.view || kind.startsWith(`${place.view}.`))
+    ? `${place.within}${kind}${place.at}`
+    : undefined;
+}
+
+/** A prop's value for a kind, its place's own where the place sets the prop, else the kind's. */
+export function lookUp(
+  design: Readonly<Record<string, unknown>>,
+  kind: string,
+  placed: string | undefined,
+  prop: string
+): unknown {
+  return (
+    (placed && placeProps.has(prop) ? design[`${placed}.${prop}`] : undefined) ??
+    design[`${kind}.${prop}`]
+  );
+}
+
 /**
  * The kind a node is of: the snippet it is in, by its path (`Row.Under` for a snippet inside
  * `Row`), and for a pointer view's <Pointed> or a <Link>, that part, as `Compared.Pointed`.

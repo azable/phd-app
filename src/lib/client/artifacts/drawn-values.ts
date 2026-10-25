@@ -131,9 +131,29 @@ export function unchosenViews(
     const chosen = presentations.map(({ variant }) => variant?.[key]);
     if (!chosen.every((name) => typeof name === 'string')) continue;
     const picked = [...new Set(chosen)].join(' and ');
+    // A place's own choice of the type, as views.Int@swap.held or views.Ask.Int@g.a, draws its view.
+    const [prefix, type] = [key.slice(0, key.indexOf('.')), key.slice(key.indexOf('.') + 1)];
+    const atPlaces = presentations.flatMap(({ variant = {} }) =>
+      Object.entries(variant).flatMap(([other, value]) =>
+        other.startsWith(`${prefix}.`) &&
+        other.includes('@') &&
+        other
+          .slice(prefix.length + 1, other.indexOf('@'))
+          .split('.')
+          .at(-1) === type
+          ? [value]
+          : []
+      )
+    );
     for (const name of names) {
       const view = blocks.get(name);
-      if (!view || chosen.includes(name) || renderedElsewhere(name, view)) continue;
+      if (
+        !view ||
+        chosen.includes(name) ||
+        atPlaces.includes(name) ||
+        renderedElsewhere(name, view)
+      )
+        continue;
       unchosen.set(name, { ...view, title: `Not drawn: ${key} is ${picked}` });
     }
   }

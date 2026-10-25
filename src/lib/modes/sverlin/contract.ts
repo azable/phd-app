@@ -56,22 +56,15 @@ export const linearSearchSource = `<script lang="sverlin" domain>
     {/each}
   </Node>
 {/snippet}
-{#snippet Current(i: Index)}
-  {#snippet Name()}<Node>i</Node>{/snippet}
-  <Node layout="column">
-    <Pointed />
-    {@render Name()}
-  </Node>
-{/snippet}
-{#snippet Found(p: Index)}<Pointed />{/snippet}
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
 {#snippet Caption()}<Node>Find {@render Int(target)} by checking each cell in order.</Node>{/snippet}
 {#snippet Checking()}<Node>Checking index {@render Index(i)}.</Node>{/snippet}
 {#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
 {@render Title()}
 {@render Caption()}
-{@render Row(values)}
-{@render Current(i)}
-{@render Found(found)}
+{@render Values(values)}
+{@render Index(i)}
+{@render Index(found)}
 {@render Checking()}
 {@render Result()}`;

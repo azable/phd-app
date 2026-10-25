@@ -33,6 +33,7 @@
     provideOverhang,
     elementSlot,
     pointerIdentityContext,
+    placeContext,
     pointersContext,
     pointsInto,
     reachesInto,
@@ -47,7 +48,7 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import { colourCss, paintProps, strokeStyleCss } from './design';
+  import { colourCss, lookUp, paintProps, placedKind, strokeStyleCss } from './design';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
@@ -106,7 +107,7 @@
      * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
      * shows only where it is, and its other props hold in every slot, so slots keep one size.
      */
-    __over?: { kind: string; active: boolean };
+    __over?: { kind: string; active: boolean; placed?: string };
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
     /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
@@ -131,9 +132,15 @@
   const types = typeContext();
   // This node's look: the variant's values for its kind, or for a pointer drawing it again.
   const design = designContext();
-  // A pointer drawing this node again gives its paint where it is, and its other props everywhere.
-  const look = (prop: string): unknown =>
-    design[`${__over && (__over.active || !paintProps.has(prop)) ? __over.kind : __view}.${prop}`];
+  // A pointer drawing this node again gives its paint where it is, and its other props everywhere;
+  // a render at a place gives its own where the variant sets them (see placedKind).
+  const placed = untrack(() => placedKind(placeContext(), __view));
+  const look = (prop: string): unknown => {
+    const over = __over && (__over.active || !paintProps.has(prop)) ? __over : undefined;
+    return over
+      ? lookUp(design, over.kind, over.placed, prop)
+      : lookUp(design, __view, placed, prop);
+  };
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();

@@ -432,7 +432,7 @@ export function withInsertions(source: string, insertions: readonly Insertion[])
 }
 
 /**
- * The root's pointers, as in {@render Arrow(i)}: drawn around the element the position points at,
+ * The root's pointers, as in {@render Index(i)}: drawn around the element the position points at,
  * not where they are written, so each call is removed from the markup and registered in the root's
  * script (see providePointers in library/type-context.ts). A pointer is rendered at the top of the
  * root, outside blocks other than {#if}, with a position from the state: a variable, an element, or
@@ -462,7 +462,13 @@ export function pointerCalls(
     }
   >,
   /** The state variables out of scope at some step, which a pointer reading one names. */
-  scoped: ReadonlySet<string> = new Set()
+  scoped: ReadonlySet<string> = new Set(),
+  /**
+   * The renders at a place, by where each starts: the code of its place (see Place), and, where it
+   * has a choice of its own, of the pointer view it draws and of the choice, which its paint and
+   * kinds then follow in place of its type's.
+   */
+  places: ReadonlyMap<number, { view?: string; choice?: string; place: string }> = new Map()
 ): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -518,10 +524,16 @@ export function pointerCalls(
           start
         });
       else {
-        const pointer = pointers.get(name);
+        const found = pointers.get(name);
+        const place = places.get(start);
+        const own = (code: string | undefined) =>
+          code && place?.choice
+            ? code.replaceAll(`[__pointer_${name}]`, `[${place.choice}]`)
+            : code;
+        const pointer = found && { ...found, paint: own(found.paint)!, kinds: own(found.kinds) };
         const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
         calls.push(
-          `{ view: () => ${pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+          `{ view: () => ${place?.view ?? pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}${place ? `place: ${place.place}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -611,7 +623,9 @@ export function slotInsertions(
   /** Filled with each slotted render's variables, by where it starts, for what is left out. */
   rendered: Map<number, string[]> = new Map(),
   /** Spans of the source drawn as pointers instead, and removed (see pointerCalls). */
-  removed: readonly Insertion[] = []
+  removed: readonly Insertion[] = [],
+  /** The code of the place of each render at one, by where it starts (see Place). */
+  places: ReadonlyMap<number, string> = new Map()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -653,6 +667,10 @@ export function slotInsertions(
     }
     return '';
   };
+  const placeOf = (render: Part): string => {
+    const place = places.get(render.start ?? 0);
+    return place ? ` place={${place}}` : '';
+  };
   const walk = (node: unknown, locals: ReadonlyMap<string, Local>): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -685,7 +703,7 @@ export function slotInsertions(
         insertions.push(
           {
             at: part.start ?? 0,
-            text: `<SverlinSlot path="${key}" reads={["${key}"]} site="${siteOf(source, part.start ?? 0)}">`
+            text: `<SverlinSlot path="${key}" reads={["${key}"]} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
           },
           narrowed
             ? {
@@ -713,7 +731,7 @@ export function slotInsertions(
         insertions.push(
           {
             at: part.start ?? 0,
-            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''} site="${siteOf(source, part.start ?? 0)}">`
+            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
           },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );

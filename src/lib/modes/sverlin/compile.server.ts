@@ -73,8 +73,15 @@ import {
   type DesignValue,
   type VariantRequest
 } from './design.server';
-import { hiddenAt, leftOutModel, leftOutSites, outsideNodes, type LeftOutModel } from './left-out';
-import { kindKey, type KindRole } from './library/node/design';
+import {
+  hiddenAt,
+  leftOutModel,
+  leftOutSites,
+  outsideNodes,
+  siteOf,
+  type LeftOutModel
+} from './left-out';
+import { kindKey, placeProps, roleProps, type KindRole } from './library/node/design';
 import { forms } from './library/node/forms';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
@@ -178,6 +185,13 @@ export type PreparedComponent = {
     tags: Record<string, string[]>;
     /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
     renders: Record<string, string>;
+    /**
+     * The places with a view choice of their own, by the alias they are drawn through: its variable,
+     * as views.Int@swap.held, the type's it falls back to, its options, and whether it is a pointer.
+     */
+    places: Record<string, { key: string; base: string; options: string[]; pointer: boolean }>;
+    /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
+    fallbacks: Record<string, string>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
@@ -646,6 +660,77 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(value: ${endless.name})}<Node {value} />{/snippet}.`,
         { code: 'view_component', start: sourcePosition(source, endless.start) }
       );
+    // Which view draws a value is a look, the variant's: a value is rendered through its type, and
+    // a view by its own name is no render.
+    const sites = renderSites(ast.html, svelteSource, new Set(Object.keys(components)), paths);
+    const named = sites.filter(({ name }) => Object.hasOwn(components, name));
+    if (named.length)
+      throw InvalidSvelteSourceError.combine(
+        named.map(({ name, start }) => {
+          const type = components[name];
+          const variable = `${found.pointers.has(name) ? 'pointers' : 'views'}.${type}`;
+          return new InvalidSvelteSourceError(
+            `{@render ${name}(…)} names the view ${name}, but which view draws a value is the variant's: render its type, as {@render ${type}(…)}, which ${variable} chooses the view of, and a place's own choice draws one render apart.`,
+            { code: 'view_component', start: sourcePosition(source, start) }
+          );
+        })
+      );
+    // Each render with an argument is a place, named by what is written there (see Place): its own
+    // choice of view, where its type has more than one of the kind it draws, and its own paint for
+    // the kinds of the views it can draw, each falling back to the type's and the kinds' until a
+    // variant sets them. A place drawing another view than its type's is drawn through an alias.
+    const placeChoices: Record<
+      string,
+      { key: string; base: string; options: string[]; pointer: boolean }
+    > = {};
+    const placeKinds = new Map<string, { base: string; role: KindRole }>();
+    const placeSlots = new Map<number, string>();
+    const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
+    const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
+    const aliasOf = new Map<string, string>();
+    const placeReaders = new Map<string, Set<boolean>>();
+    for (const site of sites) {
+      const { name, start, inNode, at, label } = site;
+      if (!at || !(chosen[name] || pointerChosen[name])) continue;
+      const { plain, marks } = optionsOf(name);
+      const asMark = marks.length > 0 && (!inNode || !plain.length);
+      const options = asMark ? marks : plain;
+      const prefix = asMark ? 'pointers' : 'views';
+      const within = site.within ? `${site.within}.` : '';
+      const readers = placeReaders.get(`${within}${name}${at}`) ?? new Set<boolean>();
+      placeReaders.set(`${within}${name}${at}`, readers.add(label));
+      let alias: string | undefined;
+      if (options.length > 1) {
+        const key = `${prefix}.${within}${name}${at}`;
+        alias = aliasOf.get(key) ?? `__place${aliasOf.size + 1}`;
+        aliasOf.set(key, alias);
+        placeChoices[alias] = { key, base: `${prefix}.${name}`, options, pointer: asMark };
+        const { line, column } = sourcePosition(source, start);
+        renderVariables[`${line}:${column + 1}`] = key;
+      }
+      const chooser = asMark ? `__pointer_${alias ?? name}` : `__choice_${alias ?? name}`;
+      const place = `{ within: ${JSON.stringify(within)}, at: ${JSON.stringify(at)}, view: ${chooser} }`;
+      if (asMark)
+        pointerPlaces.set(start, {
+          ...(alias ? { view: `__pointerOf_${alias}`, choice: `__pointer_${alias}` } : {}),
+          place
+        });
+      else {
+        placeSlots.set(start, place);
+        if (alias) aliases.set(start, { alias, callee: site.callee });
+      }
+      for (const view of options)
+        for (const kind of kinds)
+          if (kind.key === view || kind.key.startsWith(`${view}.`))
+            placeKinds.set(`${within}${kind.key}${at}`, { base: kind.key, role: kind.role });
+    }
+    // One @ names a label or a variable, so a place a label and a variable would share is refused.
+    const shared = [...placeReaders].find(([, readers]) => readers.size > 1);
+    if (shared)
+      throw new InvalidSvelteSourceError(
+        `${shared[0]} is rendered at a label and at a variable both named ${shared[0].slice(shared[0].indexOf('@'))}, but a place's name says which: rename the label.`,
+        { code: 'view_label' }
+      );
     const input = blocks.input
       ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
       : { state: {}, types: {} };
@@ -842,7 +927,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ];
         })
       ),
-      scoped
+      scoped,
+      pointerPlaces
     );
     if (pointers.problems.length)
       throw InvalidSvelteSourceError.combine(
@@ -921,10 +1007,31 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         scoped,
         operators,
         slotted,
-        pointers.removals
-      )
+        pointers.removals,
+        placeSlots
+      ),
+      ...[...aliases.values()].map(({ alias, callee }) => ({
+        at: callee.start,
+        text: alias,
+        remove: callee.end - callee.start
+      }))
     ]);
     const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted, paths, openingReads);
+    // A place drawing its own choice of view is decided by that choice.
+    for (const [start, { alias }] of aliases) {
+      const render = leftOut.renders[siteOf(source, start)];
+      if (render) render.callee = alias;
+    }
+    const viewAliases = Object.fromEntries(
+      Object.entries(placeChoices).flatMap(([alias, { pointer, options }]) =>
+        pointer ? [] : [[alias, options]]
+      )
+    );
+    const pointerAliases = Object.fromEntries(
+      Object.entries(placeChoices).flatMap(([alias, { pointer, options }]) =>
+        pointer ? [[alias, options]] : []
+      )
+    );
     const component = compile(
       withGeneratedScripts(
         `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
@@ -933,10 +1040,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ...appliedNames.map(appliedKey),
           ...Object.keys(labelled),
           ...Object.keys(histories),
-          ...Object.keys(chosen)
+          ...Object.keys(chosen),
+          ...Object.keys(viewAliases)
         ],
-        chosen,
-        pointerChosen,
+        { ...chosen, ...viewAliases },
+        { ...pointerChosen, ...pointerAliases },
         pointers.calls,
         paints
       ),
@@ -991,8 +1099,23 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         pointers: pointerChosen,
         tags: tagKinds,
         renders: renderVariables,
-        space: designSpace(kinds, chosen, listing, rules, ownListings, pointerChosen),
-        starter: starterVariant(kinds, chosen, listing, rules, ownListings, pointerChosen)
+        places: placeChoices,
+        fallbacks: Object.fromEntries([
+          ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
+          ...[...placeKinds].flatMap(([key, { base, role }]) =>
+            roleProps[role]
+              .filter((prop) => placeProps.has(prop))
+              .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
+          )
+        ]),
+        space: designSpace(kinds, chosen, listing, rules, ownListings, pointerChosen, {
+          kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+          choices: Object.values(placeChoices)
+        }),
+        starter: starterVariant(kinds, chosen, listing, rules, ownListings, pointerChosen, {
+          kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+          choices: Object.values(placeChoices)
+        })
       },
       ...(listings ? { listings } : {}),
       ...(appliedNames.length ? { applied } : {}),
@@ -1059,7 +1182,7 @@ export async function bundlePresentation(
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
   try {
-    variant = buildVariant(design.space, design.starter, request, seed);
+    variant = buildVariant(design.space, design.starter, request, seed, design.fallbacks);
   } catch (cause) {
     if (!(cause instanceof DesignValueError)) throw cause;
     throw new InvalidSvelteSourceError(cause.message, { code: 'design_value' });
@@ -1074,16 +1197,23 @@ export async function bundlePresentation(
     layout: values['frame.layout'] as FrameSettings['layout']
   };
   // Each type rendered by name draws the view the variant chose for it.
-  const views = Object.fromEntries(
-    Object.keys(design.views).map((type) => [type, values[`views.${type}`]])
-  );
+  const views = Object.fromEntries([
+    ...Object.keys(design.views).map((type) => [type, values[`views.${type}`]]),
+    // A place with a choice of its own draws through its alias (see places).
+    ...Object.entries(design.places ?? {}).flatMap(([alias, { key, base, pointer }]) =>
+      pointer ? [] : [[alias, values[key] ?? values[base]]]
+    )
+  ]);
   // Each position type rendered as a pointer, the pointer view the variant chose for it.
-  const pointerViews = Object.fromEntries(
-    Object.keys(design.pointers ?? {}).map((type) => [
+  const pointerViews = Object.fromEntries([
+    ...Object.keys(design.pointers ?? {}).map((type) => [
       `__pointer_${type}`,
       values[`pointers.${type}`]
-    ])
-  );
+    ]),
+    ...Object.entries(design.places ?? {}).flatMap(([alias, { key, base, pointer }]) =>
+      pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
+    )
+  ]);
   // The steps of the label the variant chose, each placed by its moment.
   const rule = typeof values.frames === 'string' ? values.frames : Object.keys(prepared.masters)[0];
   const master = prepared.masters[rule] ?? prepared.master;
@@ -1983,6 +2113,79 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
   for (const [key, child] of Object.entries(node)) {
     if (key !== 'parent' && key !== 'metadata') visit(child, check);
   }
+}
+
+/**
+ * Every {@render} tag: the name it calls, where it starts, whether it is inside a <Node>, and its
+ * place (see Place): what its argument is written as after `@`, a label (`@swap.held`), a variable
+ * (`@i`), or a field (`@g.a`), none for another expression or none at all; whether it is a label;
+ * and, inside a view, that view's path.
+ */
+function renderSites(
+  markup: unknown,
+  source: string,
+  views: ReadonlySet<string>,
+  paths: ReadonlyMap<string, string>
+): {
+  name: string;
+  start: number;
+  callee: { start: number; end: number };
+  inNode: boolean;
+  at?: string;
+  label: boolean;
+  within: string;
+}[] {
+  type Part = Record<string, unknown> & {
+    type?: string;
+    name?: string;
+    start?: number;
+    end?: number;
+    computed?: boolean;
+  };
+  const sites: ReturnType<typeof renderSites> = [];
+  const chain = (node: Part | undefined): boolean =>
+    node?.type === 'Identifier' ||
+    (node?.type === 'MemberExpression' && !node.computed && chain(node.object as Part));
+  const walk = (node: unknown, inNode: boolean, within: string, inView: boolean): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inNode, within, inView));
+    const part = node as Part;
+    if (part.type === 'SnippetBlock') {
+      const name = (part.expression as Part | undefined)?.name ?? '';
+      const view = inView || views.has(name);
+      walk(part.children, false, view ? (paths.get(name) ?? name) : '', view);
+      return;
+    }
+    if (part.type === 'RenderTag') {
+      const call = part.expression as Part | undefined;
+      const callee = call?.callee as Part | undefined;
+      const name = callee?.name;
+      const [argument] = (call?.arguments as Part[] | undefined) ?? [];
+      if (typeof name === 'string') {
+        const label = argument?.type === 'Identifier' && isLabelKey(argument.name ?? '');
+        const written = label
+          ? asWritten(argument.name ?? '')
+          : chain(argument)
+            ? `@${source.slice(argument.start, argument.end)}`
+            : undefined;
+        sites.push({
+          name,
+          start: part.start ?? 0,
+          callee: { start: callee?.start ?? 0, end: callee?.end ?? 0 },
+          inNode,
+          ...(written ? { at: written } : {}),
+          label,
+          within
+        });
+      }
+      return;
+    }
+    const inside = inNode || (part.type === 'InlineComponent' && part.name === 'Node');
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent') walk(child, inside, within, inView);
+  };
+  walk(markup, false, '', false);
+  return sites;
 }
 
 /**

@@ -661,8 +661,10 @@ export function designVariables(
   const options: Record<string, readonly DesignValue[]> = {};
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
-    const view = key.startsWith('views.') ? key.slice('views.'.length) : undefined;
-    const pointer = key.startsWith('pointers.') ? key.slice('pointers.'.length) : undefined;
+    // A place's own choice, as views.Int@swap.held or views.Ask.Int@g.a, has its type's options.
+    const typeIn = (rest: string) => rest.split('@')[0].split('.').at(-1) ?? rest;
+    const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
+    const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
     const prop =
       key.startsWith('frame.') || key === 'listing.language'
         ? key
