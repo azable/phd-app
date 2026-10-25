@@ -13,11 +13,14 @@
  * A recorded value's place: a collection or record (`shared`, one id wherever held), a typed value
  * a collection or record holds (`held`), or a typed value a variable holds (`variable`). A
  * reference (`ref`) is no place: it names the element it refers to, as queue[0], if it is there.
+ * An operand an operator was given (`copy`) is a copy made at that step of the place it was read
+ * from, the element named, as key, where that place still holds it, else of the place holding
+ * it, or new where none does, as a computed value; it takes part in no other matching.
  */
 export type Placed = readonly [
   path: string,
   value: object,
-  kind: 'shared' | 'held' | 'variable' | 'ref',
+  kind: 'shared' | 'held' | 'variable' | 'ref' | 'copy',
   element?: string
 ];
 
@@ -84,6 +87,15 @@ export class Identities {
     for (const [path, value] of values)
       if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
     this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
+
+    const valueAt = new Map(values.map(([path, value]) => [path, value]));
+    for (const [path, value, kind, element] of placed) {
+      if (kind !== 'copy') continue;
+      const source =
+        element !== undefined && valueAt.get(element) === value ? ids[element] : holder.get(value);
+      ids[path] = this.#next++;
+      if (source !== undefined) copies[ids[path]] = source;
+    }
     return { ids, copies, refs };
   }
 

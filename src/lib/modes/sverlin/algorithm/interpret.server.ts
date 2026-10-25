@@ -130,7 +130,13 @@ export type MasterStep = {
  * An application of an operator, its operands named by the operator's parameters and its result as
  * `value`, each copied when it was made, with the types of their parts by path.
  */
-export type Application = { state: TraceState; types: TypeMap; at?: number };
+export type Application = {
+  state: TraceState;
+  types: TypeMap;
+  at?: number;
+  /** In the step's own code, the id of each typed operand and the result, by path, as copies. */
+  identities?: Record<string, number>;
+};
 
 /**
  * A value a labelled expression gave, copied when it was given, with the types of its parts and the
@@ -394,6 +400,11 @@ class Interpreter {
   readonly #frames: { label: string } & FrameUnits;
   /** The applications the running step's own code has made, by operator. */
   #applied: Record<string, Application[]> = {};
+  /**
+   * The typed operands and result of each application in the running step's own code, and the
+   * variable each operand was read through, if any, so its copy starts there (see identities).
+   */
+  readonly #operands = new WeakMap<Application, { path: string; value: Atom; from?: string }[]>();
   /** The values the running step's own code gave each labelled expression, by full name. */
   #labelled: Record<string, LabelRun[]> = {};
   /** The applications and labelled values since the last step, leading up to the next. */
@@ -594,7 +605,8 @@ class Interpreter {
   #state(
     node: AnyNode,
     scope: Scope = this.#topLevel,
-    recorded: [string, Binding][] = []
+    recorded: [string, Binding][] = [],
+    operands: readonly Placed[] = []
   ): TypedState {
     const state: TraceState = {};
     const types: TypeMap = {};
@@ -662,6 +674,7 @@ class Interpreter {
     }
     if (this.#frame !== this.#topLevel)
       for (const [path, name] of Object.entries(targets)) targets[path] = this.#shown(name, scope);
+    placed.push(...operands);
     return {
       state,
       types,
@@ -1315,7 +1328,8 @@ class Interpreter {
   #end(node: AnyNode, scope: Scope): void {
     const open = this.#open;
     if (!open) return;
-    const after = this.#state(node, scope);
+    const after = this.#state(node, scope, [], this.#operandPlaces(scope));
+    this.#nameOperands(after.identities?.ids);
     const logged = this.#log.step(this.#offset, (value) => {
       const single = unwrap(value as Value);
       return typeof single === 'number' || typeof single === 'string' || typeof single === 'boolean'
@@ -1346,6 +1360,47 @@ class Interpreter {
     this.#labelled = {};
     this.#ledApplied = {};
     this.#ledLabelled = {};
+  }
+
+  /**
+   * The step's applications' operands and results as copies (see Placed), each by a path no
+   * variable can have, named back on its application once the step's ids are made. An operand read
+   * through a variable is a copy of that variable's value, or of the cell a for … of variable is at.
+   */
+  #operandPlaces(scope: Scope): Placed[] {
+    const inScope = this.#inScope(scope);
+    const bindings = new Map(inScope);
+    const cellOf = (binding: Binding) =>
+      inScope.flatMap(([collection, { value }]) => {
+        const index =
+          Array.isArray(value) && this.#shapes.get(value)?.name === binding.of
+            ? value.indexOf(binding.value)
+            : -1;
+        return index >= 0 ? [`${collection}[${index}]`] : [];
+      })[0];
+    return Object.entries(this.#applied).flatMap(([name, applications]) =>
+      applications.flatMap((application, at) =>
+        (this.#operands.get(application) ?? []).map(({ path, value, from }): Placed => {
+          const binding = from === undefined ? undefined : bindings.get(from);
+          const element = binding?.of ? cellOf(binding) : binding ? from : undefined;
+          return [operandPath(name, at, path), value, 'copy', element];
+        })
+      )
+    );
+  }
+
+  /** Name each application's operand copies by their paths, out of the step's own ids. */
+  #nameOperands(ids: Record<string, number> | undefined): void {
+    if (!ids) return;
+    for (const [name, applications] of Object.entries(this.#applied))
+      applications.forEach((application, at) => {
+        for (const { path } of this.#operands.get(application) ?? []) {
+          const key = operandPath(name, at, path);
+          if (ids[key] === undefined) continue;
+          (application.identities ??= {})[path] = ids[key];
+          delete ids[key];
+        }
+      });
   }
 
   /** Keep the value a labelled expression gave, in the running step's own code or leading up. */
@@ -1945,6 +2000,23 @@ class Interpreter {
       });
       application.state.value = this.#snapshot(result, node, 'value', into);
       ((this.#open ? this.#applied : this.#ledApplied)[name] ??= []).push(application);
+      if (this.#open)
+        this.#operands.set(application, [
+          ...parameters.flatMap((parameter, index) => {
+            const value = values[index];
+            const argument = node.arguments[index];
+            return value instanceof Atom
+              ? [
+                  {
+                    path: parameter,
+                    value,
+                    ...(argument?.type === 'Identifier' ? { from: argument.name } : {})
+                  }
+                ]
+              : [];
+          }),
+          ...(result instanceof Atom ? [{ path: 'value', value: result }] : [])
+        ]);
     }
     if (result !== null && typeof result === 'object' && !(result instanceof Atom))
       this.#computed.add(result);
@@ -2317,4 +2389,9 @@ function isLoop(node: AnyNode): boolean {
   return ['ForStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement'].includes(
     node.type
   );
+}
+
+/** The path an application's operand copy has among a step's places, which no variable can have. */
+function operandPath(operator: string, at: number, path: string): string {
+  return `ȧ${operator}#${at}.${path}`;
 }

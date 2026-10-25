@@ -123,7 +123,8 @@ describe('identities', () => {
     );
     const one = start.ids[0];
     const copy = merged.ids[1];
-    expect(merged).toEqual({ ids: [one, copy], copies: { [copy!]: one } });
+    expect(merged.ids).toEqual([one, copy]);
+    expect(merged.copies[copy!]).toBe(one);
   });
 
   it('give a value written anew a new identity', () => {

@@ -421,8 +421,18 @@ describe('applications kept for the view', () => {
     const [step] = run('@add[const total = Add(Add(Int(1), Int(2)), Int(3));]');
     expect(step.applied).toEqual({
       Add: [
-        { state: { a: 1, b: 2, value: 3 }, types: { a: 'Int', b: 'Int', value: 'Int' }, at: 23 },
-        { state: { a: 3, b: 3, value: 6 }, types: { a: 'Int', b: 'Int', value: 'Int' }, at: 19 }
+        {
+          state: { a: 1, b: 2, value: 3 },
+          types: { a: 'Int', b: 'Int', value: 'Int' },
+          at: 23,
+          identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
+        },
+        {
+          state: { a: 3, b: 3, value: 6 },
+          types: { a: 'Int', b: 'Int', value: 'Int' },
+          at: 19,
+          identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
+        }
       ]
     });
   });
@@ -439,10 +449,33 @@ describe('applications kept for the view', () => {
         {
           state: { a: 3, b: 5, value: false },
           types: { a: 'Int', b: 'Int', value: 'Flag' },
-          at: expect.any(Number)
+          at: expect.any(Number),
+          identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
         }
       ]
     });
+  });
+
+  it('make each operand a copy of where it was read, so the view draws it from there', () => {
+    const [first] = run(`
+      for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
+        if (Equal(values[i], target)) break;
+      }
+    `);
+    const { ids, copies } = first.identities!;
+    const operands = first.applied!.Equal[0].identities!;
+    // a was read from values[0], b through the variable target; the result is new.
+    expect(copies[operands.a]).toBe(ids['values[0]']);
+    expect(copies[operands.b]).toBe(ids.target);
+    expect(copies[operands.value]).toBeUndefined();
+    // The copies are the application's alone, not places of the step.
+    expect(Object.keys(ids).some((path) => path.startsWith('ȧ'))).toBe(false);
+  });
+
+  it('copy an operand read through a for … of variable from the cell it is at', () => {
+    const [first] = run('for (const v of values) @check{ if (Equal(v, target)) break; }');
+    const { ids, copies } = first.identities!;
+    expect(copies[first.applied!.Equal[0].identities!.a]).toBe(ids['values[0]']);
   });
 
   it('copy a collection given or given back, so later writes leave it as it was', () => {

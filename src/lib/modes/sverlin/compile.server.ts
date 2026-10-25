@@ -1251,6 +1251,8 @@ export async function bundlePresentation(
     const standIn = standInsFor(phases, index);
     const ownApplied: TraceState = {};
     const ownTypes: Record<string, string> = {};
+    // An application's operands and result are copies made at the step, of where they were read.
+    const ownIdentities: Record<string, number> = {};
     // A step's after holds the one application of each operator rendered its own code made; where
     // it made none or several, as at its before, one from another step stands in hidden.
     for (const [name, sample] of Object.entries(prepared.applied ?? {})) {
@@ -1267,6 +1269,9 @@ export async function bundlePresentation(
       (own ? ownApplied : standIn.state)[key] = application.state;
       for (const [path, type] of Object.entries(application.types))
         (own ? ownTypes : standIn.types)[`${key}.${path}`] = type;
+      if (own)
+        for (const [path, id] of Object.entries(application.identities ?? {}))
+          ownIdentities[`${key}.${path}`] = id;
     }
     // Each label the root reads: the value its expression gave in the step's own code, at its
     // after, where it gave one; else one from another step stands in hidden. Each label's values
@@ -1326,7 +1331,7 @@ export async function bundlePresentation(
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
-      __identities: phase.identities?.ids ?? {},
+      __identities: { ...phase.identities?.ids, ...ownIdentities },
       __copies: phase.identities?.copies ?? {},
       __refs: phase.identities?.refs ?? {},
       __frame: frame,

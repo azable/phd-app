@@ -608,3 +608,91 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+const compared = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+<script lang="sverlin" input>
+  const values = Values([5, 1, 4]);
+</script>
+<script lang="sverlin">
+  for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @compare{
+    if (Greater(values[Prev(i)], values[i])) @swap{
+      const moved = values[Prev(i)];
+      values[Prev(i)] = values[i];
+      values[i] = moved;
+    }
+  }
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Ask(g: Greater)}<Node>{@render Int(g.a)} vs {@render Int(g.b)}</Node>{/snippet}
+{#snippet Board()}
+  <Node layout="column"><Node>{#each values as v}{@render Int(v)}{/each}</Node>{@render Greater()}</Node>
+{/snippet}
+{@render Board()}`;
+
+it.skipIf(!enabled)(
+  'starts an operator’s operands, drawn by its view, at the cells they were read from',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(compared);
+    const [, first] = prepared.masters.compare;
+    const operands = first.applied!.Greater[0].identities!;
+    const copies = first.identities!.copies;
+    const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'compare' } });
+    const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(
+      `<iframe sandbox="allow-scripts" style="width:900px;height:500px;border:0" srcdoc="${sandboxDocument(
+        '',
+        javascript,
+        0,
+        1
+      )
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')}"></iframe>`
+    );
+    const [frame] = page.frames().slice(1);
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    const from = await placed(frame);
+    await frame.evaluate(() =>
+      document.querySelector('.sv-layer:not(.pending)')?.setAttribute('data-checked', '')
+    );
+    await page.evaluate(() =>
+      document
+        .querySelector('iframe')
+        ?.contentWindow?.postMessage({ type: 'sverlin:step', step: 1, selection: [] }, '*')
+    );
+    // Step 1's after, where its comparison is drawn: 5 and 1 lift out of their cells.
+    await frame.waitForFunction(
+      () =>
+        document.querySelector(
+          '.sv-layer[data-sv-phase="after"]:not(.pending):not(.sv-leaving):not([data-checked])'
+        ),
+      null,
+      { timeout: 20_000 }
+    );
+    const moving = Object.fromEntries(
+      (await starts(frame)).map(({ identity, at }) => [identity, at])
+    );
+    for (const operand of [operands.a, operands.b]) {
+      expect(copies[operand], `operand ${operand} is a copy`).toBeDefined();
+      expect(moving[String(operand)], `operand ${operand} starts at its cell`).toEqual(
+        from[String(copies[operand])]
+      );
+    }
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);

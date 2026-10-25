@@ -978,7 +978,8 @@ describe('views of what a step computed', () => {
     expect(prepared.applied?.Greater).toEqual({
       state: { a: 5, b: 1, value: true },
       types: { a: 'Int', b: 'Int', value: 'Flag' },
-      at: expect.any(Number)
+      at: expect.any(Number),
+      identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
     });
   });
 
