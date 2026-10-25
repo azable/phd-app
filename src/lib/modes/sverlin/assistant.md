@@ -22,7 +22,7 @@ Where the source has a listing of its own, the context’s listingMaps gives eac
 
 The context’s recordedSteps gives the steps the algorithm records, each with the variables in scope (for a repair, those of the failed candidate), or the problem that stops it, with omittedSteps when not all fit. Check it against what the algorithm should do before revising the view, and use it to say what a step shows; steps are numbered from 1, as the participant sees them.
 
-Leave the algorithm as the participant’s algorithm: never add or change its variables or steps to drive the view, such as a variable that only marks what to highlight or a position set to -1 to hide a pointer. Derive what the view shows from the algorithm’s own variables, in the view, as the guide describes.
+Leave the algorithm as the participant’s algorithm: never add or change its variables or steps to drive the view, such as a variable that only marks what to highlight or a position set to -1 to hide a pointer. Derive what the view shows from the algorithm’s own variables and from labels on its code, which change no value, as the guide describes.
 
 An interaction of kind runtime-failure was reported by the participant’s browser, not written by the participant: revise the view so that every step draws, change nothing else, and reply in one sentence with what failed and what you fixed.
 

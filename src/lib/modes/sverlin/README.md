@@ -354,6 +354,20 @@ for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
 
 A name may be written as its shortest ending that names one label (`@key` for `@insert.key`), and a label named exactly as written wins over one whose name only ends so (`@check` is `check`, not `check.check`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root and its parts, never in a view.
 
+To mark what a step used, label it and render a pointer at the label. A pointer view marks one position, named for how it marks, so render it once per label: `Highlight` at each of the two cells a comparison reads.
+
+```js
+if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
+```
+
+```svelte
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{@render Highlight(@left)}
+{@render Highlight(@right)}
+```
+
+A label gives a value only where its code ran, `&&` skipping it included, so the marks come and go with the comparison; and it marks the position however the value is then used, read from its cell, copied into a variable, or compared in a loop's test. The labels say what a mark means, so render one view at each label rather than a view per mark, and mark with a label rather than a loop variable (`@right`, not `i`) where the mark is what the step used, not where the loop is. A label added for a mark leaves `frames` as it is: it marks within a step, and makes no step of its own.
+
 What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`, every value the label has given up to this step, and `applied(Equal)`, every application of `Equal` so far (`applied(Equal, @check)`, those made inside `@check`). A pointer for each of a label's positions marks the cells a search has checked, and an operator's view draws each application:
 
 ```svelte
