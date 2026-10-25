@@ -8,7 +8,7 @@
   import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
-  import { drawnValues, setDrawnValues, type DrawnPresentation } from './drawn-values';
+  import { drawnValues, ghostRowAt, setDrawnValues, type DrawnPresentation } from './drawn-values';
   import { editorDiagnostics } from './source-diagnostics';
   import { revealedRegions, showRevealed } from './source-reveal';
   import type { SourceReveal } from '$lib/client/projects/source-links.svelte';
@@ -137,7 +137,8 @@
       view.dispatch(setDiagnostics(view.state, editorDiagnostics(view.state, items)));
   });
 
-  // Each reveal once, in the text its regions are in; clearing it clears them.
+  // Each reveal once, in the text its regions are in; clearing it clears them. Variables' rows open
+  // their ghost props and are scrolled to.
   let revealedId = 0;
   $effect(() => {
     void value;
@@ -148,7 +149,8 @@
       revealedId = 0;
     } else if (next.id !== revealedId && view.state.doc.toString() === next.source) {
       revealedId = next.id;
-      view.dispatch(showRevealed(view.state, next.ranges));
+      const keys = next.keys ?? [];
+      view.dispatch(showRevealed(view.state, next.ranges, keys, ghostRowAt(view.state, keys)));
     }
   });
 

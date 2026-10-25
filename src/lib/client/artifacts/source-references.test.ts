@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { codeIn, codeMarkdown, diagnosticRanges, referenceRanges } from './source-references';
+import {
+  codeIn,
+  codeMarkdown,
+  diagnosticRanges,
+  ghostKey,
+  referenceRanges
+} from './source-references';
 
 const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -187,5 +193,38 @@ describe('problems of a build', () => {
       'Highlight',
       'Index(@left)}'
     ]);
+  });
+});
+
+describe('design variables with a row of their own', () => {
+  const design = {
+    variant: {
+      'views.Index': 'IndexText',
+      'pointers.Index@found': 'Arrow',
+      'Highlight.Pointed.fill': 'amber-100',
+      'Highlight.Pointed@left.fill': 'sky-100',
+      'IntCell.fill': 'white',
+      'frame.gap': 0.5,
+      'listing.language': 'code'
+    }
+  };
+
+  it("are a kind's or a place's prop, a place's view choice, or a frame or listing setting", () => {
+    for (const key of [
+      'Highlight.Pointed@left.fill',
+      'Highlight.Pointed.fill',
+      'IntCell.fill',
+      'pointers.Index@found',
+      'frame.gap',
+      'listing.language'
+    ])
+      expect(ghostKey(` ${key} `, design)).toBe(key);
+  });
+
+  it("are not a type's own view choice, a key the variant has not, or anything without a build", () => {
+    expect(ghostKey('views.Index', design)).toBeUndefined();
+    expect(ghostKey('Highlight.Pointed@right.fill', design)).toBeUndefined();
+    expect(ghostKey('@left', design)).toBeUndefined();
+    expect(ghostKey('IntCell.fill')).toBeUndefined();
   });
 });

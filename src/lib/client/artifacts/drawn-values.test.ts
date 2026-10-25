@@ -8,15 +8,17 @@ import {
   drawnMarkers,
   frameProps,
   drawnValues,
+  ghostRowAt,
   ghostSummary,
   leftOutNodes,
+  placeGhosts,
   setDrawnValues,
   tagGhosts,
   unchosenViews,
   valueText,
   viewMarkers
 } from './drawn-values';
-import { setRevealed } from './source-reveal';
+import { setRevealed, setRevealedKeys } from './source-reveal';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -405,5 +407,101 @@ describe('variant markers', () => {
       ['{@render Index(lo)}', 'IndexText'],
       ['{@render Index(@mid)}', 'Highlight']
     ]);
+  });
+});
+
+describe('place values', () => {
+  const doc = [
+    '{#snippet Highlight(p: Index)}<Pointed />{/snippet}',
+    '{#snippet Arrow(p: Index)}<Node layout="column"><Pointed /></Node>{/snippet}',
+    '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
+    '{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}',
+    '{#snippet Ask(g: Greater)}<Node>{@render Int(g.a)}</Node>{/snippet}',
+    '{#snippet Top()}<Node>looking at {@render Index(i)}</Node>{/snippet}',
+    '{@render Index(@left)}',
+    '{@render Index(@right)}',
+    '{@render Int(v)}'
+  ].join('\n');
+  const variant = {
+    'views.Int': 'IntCell',
+    'views.Index': 'IndexText',
+    'pointers.Index': 'Highlight',
+    'pointers.Index@left': 'Highlight',
+    'Highlight.Pointed.fill': 'amber-100',
+    'Highlight.Pointed@left.fill': 'sky-100',
+    'Highlight.Pointed@left.shown': true,
+    'Arrow.Pointed@left.fill': 'amber-100',
+    'IndexText@i.fill': 'sky-100',
+    'IntCell@v.fill': 'white',
+    'Ask.IntCell@g.a.fill': 'green-100',
+    'Ask.fill': 'none'
+  };
+  const sites = (text: string) => {
+    const at = doc.indexOf(text);
+    const before = doc.slice(0, at);
+    return `${before.split('\n').length}:${at - before.lastIndexOf('\n')}`;
+  };
+  const presentation = {
+    seed: 1,
+    draws: [],
+    variant,
+    views: { Int: ['IntCell'], Index: ['IndexText'] },
+    pointers: { Index: ['Highlight', 'Arrow'] },
+    kinds: { [sites('<Node>{@render Int(g.a)}')]: ['Ask'] },
+    renders: {
+      [sites('{@render Index(@left)}')]: 'pointers.Index@left',
+      [sites('{@render Index(@right)}')]: 'pointers.Index',
+      [sites('{@render Index(i)}')]: 'views.Index',
+      [sites('{@render Int(g.a)}')]: 'views.Int',
+      [sites('{@render Int(v)}')]: 'views.Int'
+    }
+  };
+  const rows = (render: string) =>
+    placeGhosts(EditorState.create({ doc }), [presentation])
+      .find(({ at }) => at === doc.indexOf(render) + render.length)
+      ?.props.map(({ name, key, values }) => [name, key, values[0].text]);
+
+  it("shows a place's own view choice and the paint of the view it draws, after its render", () => {
+    expect(rows('{@render Index(@left)}')).toEqual([
+      ['view', 'pointers.Index@left', 'Highlight'],
+      ['Highlight.Pointed.shown', 'Highlight.Pointed@left.shown', 'true'],
+      ['Highlight.Pointed.fill', 'Highlight.Pointed@left.fill', 'sky-100']
+    ]);
+    // A render whose argument has no variables of its own is no place shown.
+    expect(rows('{@render Index(@right)}')).toBeUndefined();
+  });
+
+  it('names a place in a part by its argument, and one in a typed view after the view', () => {
+    expect(rows('{@render Index(i)}')).toEqual([['IndexText.fill', 'IndexText@i.fill', 'sky-100']]);
+    expect(rows('{@render Int(g.a)}')).toEqual([
+      ['IntCell.fill', 'Ask.IntCell@g.a.fill', 'green-100']
+    ]);
+    expect(rows('{@render Int(v)}')).toEqual([['IntCell.fill', 'IntCell@v.fill', 'white']]);
+  });
+
+  it("keeps a place's variables out of its kind's tag", () => {
+    const tags = tagGhosts(EditorState.create({ doc }), [presentation]);
+    expect(tags.flatMap(({ props }) => props.map(({ key }) => key))).toEqual(['Ask.fill']);
+  });
+
+  it('opens the ghost props holding a revealed variable and flashes its row', () => {
+    const state = EditorState.create({ doc, extensions: [drawnValues] }).update({
+      effects: [
+        setDrawnValues.of({ presentations: [presentation] }),
+        setRevealedKeys.of(['Highlight.Pointed@left.fill'])
+      ]
+    }).state;
+    const tables: string[][] = [];
+    for (const set of state.facet(EditorView.decorations))
+      if (typeof set !== 'function')
+        set.between(0, state.doc.length, (_from, _to, decoration) => {
+          const widget = decoration.spec.widget as { revealed?: readonly string[] } | undefined;
+          if (widget && Array.isArray(widget.revealed)) tables.push([...widget.revealed]);
+        });
+    expect(tables).toEqual([['Highlight.Pointed@left.fill']]);
+    expect(ghostRowAt(state, ['Highlight.Pointed@left.fill'])).toBe(
+      state.doc.lineAt(doc.indexOf('{@render Index(@left)}')).to
+    );
+    expect(ghostRowAt(state, ['Nothing.fill'])).toBeUndefined();
   });
 });

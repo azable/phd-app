@@ -3,7 +3,8 @@
  * chip naming its kind, which opens under the tag its kind's values in each shown presentation's
  * variant (and inside a <Listing />, its language and fills), and the layout it arranged from the seed as ghost props, written as the view would write
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
- * type, as {@render Flag(seen)}, the view each shown variant draws it with; the first top-level
+ * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
+ * a place, as {@render Index(@left)}, a chip opening that place's own values; the first top-level
  * node's chip also holds the page frame, with which events are steps (frames), which shows above
  * the source where there is no such node.
  * Views of a type that no shown presentation's variant chose are greyed out, and so are nodes every
@@ -33,6 +34,8 @@ export type GhostProp = {
   name: string;
   values: { label?: string; text: string; color?: string; title: string; pin?: string }[];
   differs: boolean;
+  /** The design variable its row shows, as `Highlight.Pointed@left.fill`, which links reveal. */
+  key?: string;
 };
 
 /** A prop as a view writes it: a text value quoted, anything else in braces. */
@@ -40,7 +43,13 @@ export function propText(name: string, value: unknown): string {
   return typeof value === 'string' ? `${name}="${value}"` : `${name}={${JSON.stringify(value)}}`;
 }
 import { tagEnd } from './selection-highlights';
-import { revealedField, revealedRanges, revealedRegions } from './source-reveal';
+import {
+  revealedField,
+  revealedKeys,
+  revealedRanges,
+  revealedRegions,
+  setRevealedKeys
+} from './source-reveal';
 
 /**
  * A constraint layout the step on screen drew: the line and column (both from 1) of the tag that
@@ -94,8 +103,11 @@ export type DrawnMarker = {
   differs: boolean;
 };
 
-/** The ghost props of one tag, at the offset of its closing > (or />), and its kind. */
-export type TagGhosts = { at: number; props: GhostProp[]; kinds: string[] };
+/**
+ * The ghost props of one tag, at the offset of its closing > (or />), and its kind; or of a place, at
+ * the end of the render drawn there, named by it (`@left`).
+ */
+export type TagGhosts = { at: number; props: GhostProp[]; kinds: string[]; place?: string };
 
 /** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
 export type UnchosenView = { from: number; to: number; title: string };
@@ -293,7 +305,7 @@ function variable(
       ...(colour ? { color: colour } : {})
     };
   });
-  return { name, values, differs: new Set(values.map(({ text }) => text)).size > 1 };
+  return { name, values, differs: new Set(values.map(({ text }) => text)).size > 1, key };
 }
 
 /**
@@ -326,7 +338,8 @@ export function tagGhosts(
       [
         ...new Set(
           presentations.flatMap(({ variant = {} }) =>
-            Object.keys(variant).filter((key) => key.startsWith(`${kind}.`))
+            // A place's variables are its render's (see placeGhosts), not its kind's tag's.
+            Object.keys(variant).filter((key) => key.startsWith(`${kind}.`) && !key.includes('@'))
           )
         )
       ]
@@ -381,6 +394,149 @@ export function tagGhosts(
     .map(([at, { props, kinds }]) => ({ at, props, kinds }))
     .sort((a, b) => a.at - b.at);
 }
+
+/** A render's argument that makes it a place: a label, a variable, or a field, as written. */
+const placeArgument = /^@?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
+
+/** Each {#snippet} of a source, from its {#snippet to its {/snippet}, and whether it takes a value. */
+function snippetRanges(doc: string): { name: string; from: number; to: number; typed: boolean }[] {
+  const ranges: { name: string; from: number; to: number; typed: boolean }[] = [];
+  const open: { name: string; from: number; typed: boolean }[] = [];
+  for (const match of doc.matchAll(
+    /\{#snippet\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)|\{\/snippet\}/gu
+  )) {
+    if (match[1]) open.push({ name: match[1], from: match.index, typed: match[2].trim() !== '' });
+    else {
+      const block = open.pop();
+      if (block) ranges.push({ ...block, to: match.index + match[0].length });
+    }
+  }
+  return ranges;
+}
+
+/** Where a tag that opens with { at `from` closes, after its }, or undefined. */
+function braceEnd(doc: string, from: number): number | undefined {
+  let depth = 0;
+  for (let at = from; at < doc.length; at++) {
+    if (doc[at] === '{') depth++;
+    if (doc[at] === '}' && --depth === 0) return at + 1;
+  }
+  return undefined;
+}
+
+/**
+ * A place's own values, as each shown presentation's variant has them, after the render drawn there,
+ * as {@render Index(@left)}: its own view choice, where it has one, and the paint of the kinds of
+ * the view it draws with, as `Highlight.Pointed@left.fill`. A place is named by the argument as
+ * written, inside a typed view after that view's path (`Ask.IntCell@g.a`), as the build names it.
+ */
+export function placeGhosts(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): TagGhosts[] {
+  const keys = [
+    ...new Set(
+      presentations.flatMap(({ variant = {} }) =>
+        Object.keys(variant).filter((key) => key.includes('@'))
+      )
+    )
+  ];
+  if (!keys.length) return [];
+  const doc = state.doc.toString();
+  const snippets = snippetRanges(doc);
+  const ghosts: TagGhosts[] = [];
+  for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
+    const type = match[1];
+    const opened = match.index + match[0].length;
+    let close = opened;
+    for (let depth = 1; close < doc.length && depth; close++)
+      if (doc[close] === '(') depth++;
+      else if (doc[close] === ')') depth--;
+    const place = placeArgument.exec(doc.slice(opened, close - 1).trim())?.[1];
+    const end = braceEnd(doc, match.index);
+    if (!place || end === undefined) continue;
+    // In a typed view, a place's variables carry the view's path; at the top level or in a part,
+    // none.
+    const around = snippets
+      .filter(({ from, to }) => from < match.index && match.index < to)
+      .sort((a, b) => a.from - b.from);
+    const typed = around.findLastIndex((snippet) => snippet.typed);
+    const prefixes =
+      typed < 0
+        ? ['']
+        : [
+            ...new Set([
+              `${around
+                .slice(0, typed + 1)
+                .map(({ name }) => name)
+                .join('.')}.`,
+              `${around[typed].name}.`
+            ])
+          ];
+    const views = new Set(
+      presentations.flatMap(({ views = {}, pointers = {} }) => [
+        ...(views[type] ?? []),
+        ...(pointers[type] ?? [])
+      ])
+    );
+    const choices = keys.filter((key) => {
+      const at = key.indexOf('@');
+      const head = key.slice(0, at);
+      return (
+        /^(?:views|pointers)\./u.test(head) &&
+        key.slice(at + 1) === place &&
+        prefixes.some((prefix) => head.slice(head.indexOf('.') + 1) === `${prefix}${type}`)
+      );
+    });
+    // The view this render draws with in each presentation: the place's own choice, else what the
+    // build records it reads.
+    const line = state.doc.lineAt(match.index);
+    const site = `${line.number}:${match.index - line.from + 1}`;
+    const drawnWith = new Set(
+      presentations.flatMap(({ variant = {}, renders = {} }) => {
+        const choice = choices
+          .map((key) => variant[key])
+          .find((value) => typeof value === 'string');
+        const read = renders[site];
+        const value = choice ?? (read ? variant[read] : undefined);
+        return typeof value === 'string' ? [value] : [];
+      })
+    );
+    const kindOf = (key: string) => {
+      const at = key.indexOf('@');
+      const rest = key.slice(at + 1);
+      const dot = rest.lastIndexOf('.');
+      if (dot < 0 || rest.slice(0, dot) !== place || !paintProps.has(rest.slice(dot + 1)))
+        return undefined;
+      const head = key.slice(0, at);
+      for (const prefix of prefixes) {
+        if (!head.startsWith(prefix)) continue;
+        const kind = head.slice(prefix.length);
+        const view = [...views].find((name) => kind === name || kind.startsWith(`${name}.`));
+        if (view && (!drawnWith.size || drawnWith.has(view))) return kind;
+      }
+      return undefined;
+    };
+    const paint = keys
+      .flatMap((key) => {
+        const kind = kindOf(key);
+        return kind ? [{ key, kind, prop: key.slice(key.lastIndexOf('.') + 1) }] : [];
+      })
+      .sort(
+        (a, b) =>
+          a.kind.localeCompare(b.kind) || propOrder.indexOf(a.prop) - propOrder.indexOf(b.prop)
+      );
+    const props = [
+      ...choices.map((key) => variable(presentations, key, choices.length > 1 ? key : 'view')),
+      ...paint.map(({ key, kind, prop }) => variable(presentations, key, `${kind}.${prop}`))
+    ];
+    if (props.length) ghosts.push({ at: end, props, kinds: [`@${place}`], place: `@${place}` });
+  }
+  return ghosts;
+}
+
+/** The props a place sets of its own: what tells one render apart. */
+const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
 
 /**
  * The page frame's settings in each shown presentation's variant, each named by its setting, and
@@ -541,12 +697,13 @@ export function ghostSummary(props: readonly GhostProp[], kinds: readonly string
   return `${what}${differing.length ? ` · ${named} differ${differing.length > 1 ? '' : 's'}` : ''}`;
 }
 
-/** Inside a tag, before its >: a chip naming its kind, opening its ghost props. */
+/** Inside a tag, before its >: a chip naming its kind, opening its ghost props; after a place's render, its place. */
 class GhostChipWidget extends WidgetType {
   constructor(
     private readonly props: readonly GhostProp[],
     private readonly open: boolean,
-    private readonly kinds: readonly string[]
+    private readonly kinds: readonly string[],
+    private readonly place?: string
   ) {
     super();
   }
@@ -554,6 +711,7 @@ class GhostChipWidget extends WidgetType {
   eq(other: GhostChipWidget): boolean {
     return (
       other.open === this.open &&
+      other.place === this.place &&
       JSON.stringify([other.props, other.kinds]) === JSON.stringify([this.props, this.kinds])
     );
   }
@@ -564,7 +722,9 @@ class GhostChipWidget extends WidgetType {
       ? 'cm-ghost-chip cm-drawn-differs'
       : 'cm-ghost-chip';
     chip.textContent = `${this.open ? '▾' : '▸'} ${ghostSummary(this.props, this.kinds)}`;
-    chip.title = `${this.open ? 'Hide' : 'Show'} this tag's look in each shown variant, and the layout it drew`;
+    chip.title = this.place
+      ? `${this.open ? 'Hide' : 'Show'} this render's own look at ${this.place} in each shown variant`
+      : `${this.open ? 'Hide' : 'Show'} this tag's look in each shown variant, and the layout it drew`;
     chip.addEventListener('mousedown', (event) => {
       event.preventDefault();
       view.dispatch({ effects: toggleGhosts.of(view.posAtDOM(chip)) });
@@ -585,13 +745,18 @@ class GhostChipWidget extends WidgetType {
 class GhostTableWidget extends WidgetType {
   constructor(
     private readonly props: readonly GhostProp[],
-    private readonly at: number
+    private readonly at: number,
+    /** The design variables revealed, whose rows flash. */
+    private readonly revealed: readonly string[] = []
   ) {
     super();
   }
 
   eq(other: GhostTableWidget): boolean {
-    return other.at === this.at && JSON.stringify(other.props) === JSON.stringify(this.props);
+    return (
+      other.at === this.at &&
+      JSON.stringify([other.props, other.revealed]) === JSON.stringify([this.props, this.revealed])
+    );
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -611,11 +776,16 @@ class GhostTableWidget extends WidgetType {
       cell('cm-ghost-name');
       for (const label of labels) cell('cm-drawn-label', label ?? '');
     }
-    for (const { name, values, differs } of this.props) {
-      cell(differs ? 'cm-ghost-name cm-drawn-differs' : 'cm-ghost-name', `${name}=`);
+    for (const { name, values, differs, key } of this.props) {
+      const shown = key !== undefined && this.revealed.includes(key) ? ' cm-revealed-row' : '';
+      const named = cell(
+        `${differs ? 'cm-ghost-name cm-drawn-differs' : 'cm-ghost-name'}${shown}`,
+        `${name}=`
+      );
+      if (key) named.dataset.key = key;
       for (const { label, text, color, title, pin } of values) {
         const value = cell(
-          differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value',
+          `${differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value'}${shown}`,
           color ? '' : text
         );
         value.title = `${label ? `${label}: ` : ''}${title}${pin ? `\nWhile editing, click to write ${pin}` : ''}`;
@@ -650,20 +820,32 @@ class GhostTableWidget extends WidgetType {
  * every shown presentation's value where they differ.
  */
 class StripWidget extends WidgetType {
-  constructor(private readonly props: readonly GhostProp[]) {
+  constructor(
+    private readonly props: readonly GhostProp[],
+    private readonly revealed: readonly string[] = []
+  ) {
     super();
   }
 
   eq(other: StripWidget): boolean {
-    return JSON.stringify(other.props) === JSON.stringify(this.props);
+    return (
+      JSON.stringify([other.props, other.revealed]) === JSON.stringify([this.props, this.revealed])
+    );
   }
 
   toDOM(): HTMLElement {
     const strip = document.createElement('div');
     strip.className = 'cm-design-strip';
-    for (const { name, values, differs } of this.props) {
+    for (const { name, values, differs, key } of this.props) {
       const pill = document.createElement('span');
-      pill.className = differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value';
+      pill.className = [
+        'cm-ghost-value',
+        differs && 'cm-drawn-differs',
+        key !== undefined && this.revealed.includes(key) && 'cm-revealed-row'
+      ]
+        .filter(Boolean)
+        .join(' ');
+      if (key) pill.dataset.key = key;
       pill.title = values
         .map(({ label, title }) => `${label ? `${label}: ` : ''}${title}`)
         .join('\n');
@@ -700,9 +882,10 @@ function decorations(
   { markers, ghosts, strip, open, unchosen }: DrawnState
 ): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  const keys = revealedKeys(state);
   if (strip.length)
     marks.push(
-      Decoration.widget({ widget: new StripWidget(strip), block: true, side: -1 }).range(0)
+      Decoration.widget({ widget: new StripWidget(strip, keys), block: true, side: -1 }).range(0)
     );
   for (const { from, to, title } of unchosen)
     if (from < to)
@@ -717,17 +900,27 @@ function decorations(
       )
     );
   }
-  for (const { at, props, kinds } of ghosts) {
+  for (const { at, props, kinds, place } of ghosts) {
     if (!props.length || at > state.doc.length) continue;
     const shown = open.includes(at);
+    // A place's chip follows the view marker after its render.
     marks.push(
-      Decoration.widget({ widget: new GhostChipWidget(props, shown, kinds), side: 1 }).range(at)
+      Decoration.widget({
+        widget: new GhostChipWidget(props, shown, kinds, place),
+        side: place ? 2 : 1
+      }).range(at)
     );
     if (shown)
       marks.push(
-        Decoration.widget({ widget: new GhostTableWidget(props, at), block: true, side: 1 }).range(
-          state.doc.lineAt(at).to
-        )
+        Decoration.widget({
+          widget: new GhostTableWidget(
+            props,
+            at,
+            keys.filter((key) => props.some((prop) => prop.key === key))
+          ),
+          block: true,
+          side: 1
+        }).range(state.doc.lineAt(at).to)
       );
   }
   return Decoration.set(marks, true);
@@ -760,7 +953,10 @@ const drawnField = StateField.define<DrawnState>({
       : value;
     for (const effect of transaction.effects) {
       if (effect.is(setDrawnValues)) {
-        const ghosts = tagGhosts(transaction.state, effect.value.presentations);
+        const ghosts = [
+          ...tagGhosts(transaction.state, effect.value.presentations),
+          ...placeGhosts(transaction.state, effect.value.presentations)
+        ].sort((a, b) => a.at - b.at);
         next = {
           markers: [
             ...drawnMarkers(transaction.state, effect.value.presentations),
@@ -776,6 +972,13 @@ const drawnField = StateField.define<DrawnState>({
             ...leftOutNodes(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from)
         };
+      }
+      // A revealed variable opens the ghost props holding its row.
+      if (effect.is(setRevealedKeys)) {
+        const holding = next.ghosts
+          .filter(({ props }) => props.some(({ key }) => key && effect.value.includes(key)))
+          .map(({ at }) => at);
+        next = { ...next, open: [...new Set([...next.open, ...holding])] };
       }
       if (effect.is(toggleGhosts)) {
         const at = changes.mapPos(effect.value, 1);
@@ -805,6 +1008,20 @@ const drawnField = StateField.define<DrawnState>({
       decorations(state, state.field(field))
     )
 });
+
+/**
+ * Where the first row of these design variables is: the line its ghost props open under, or the top
+ * of the source for a page-frame pill; undefined where none has a row.
+ */
+export function ghostRowAt(state: EditorState, keys: readonly string[]): number | undefined {
+  const drawn = state.field(drawnField, false);
+  if (!drawn || !keys.length) return undefined;
+  const ghost = drawn.ghosts.find(({ props }) =>
+    props.some(({ key }) => key && keys.includes(key))
+  );
+  if (ghost && ghost.at <= state.doc.length) return state.doc.lineAt(ghost.at).to;
+  return drawn.strip.some(({ key }) => key && keys.includes(key)) ? 0 : undefined;
+}
 
 const drawnTheme = EditorView.baseTheme({
   '.cm-unchosen': { opacity: '0.4' },

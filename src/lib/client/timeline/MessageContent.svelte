@@ -2,7 +2,11 @@
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import { renderSafeMarkdown } from './markdown';
-  import { referenceRanges, type ReferenceDesign } from '$lib/client/artifacts/source-references';
+  import {
+    ghostKey,
+    referenceRanges,
+    type ReferenceDesign
+  } from '$lib/client/artifacts/source-references';
   import { sourceLinksContext } from '$lib/client/projects/source-links.svelte';
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import { knownCandidate } from '$lib/client/visualization/presentation-history';
@@ -45,15 +49,23 @@
     const built = design ?? (source === undefined ? links?.shownDesign : undefined);
     const named = (code: Element) =>
       shown ? referenceRanges(shown, code.textContent ?? '', built) : [];
+    // A design variable with a row of its own reveals that row, its value beside the code.
+    const rows = (code: Element) => {
+      const key = shown ? ghostKey(code.textContent ?? '', built) : undefined;
+      return key ? [key] : [];
+    };
     for (const code of node.querySelectorAll('code')) {
-      const linked = !code.closest('pre') && named(code).length > 0;
+      const linked = !code.closest('pre') && (named(code).length > 0 || rows(code).length > 0);
       code.classList.toggle('source-ref', linked);
       if (linked) {
         code.setAttribute('role', 'button');
         code.setAttribute('tabindex', '0');
         code.setAttribute('title', 'Show in the source');
         // Pressed while its regions are the ones revealed in the source panel.
-        code.setAttribute('aria-pressed', String(links?.isRevealed(shown, named(code)) ?? false));
+        code.setAttribute(
+          'aria-pressed',
+          String(links?.isRevealed(shown, named(code), rows(code)) ?? false)
+        );
       } else
         for (const attribute of ['role', 'tabindex', 'title', 'aria-pressed'])
           code.removeAttribute(attribute);
@@ -69,7 +81,7 @@
       event.preventDefault();
       event.stopPropagation();
       if (source !== undefined && source !== links.shown) onRevealSource();
-      links.reveal(shown, named(code));
+      links.reveal(shown, named(code), rows(code));
     };
     node.addEventListener('click', activate);
     node.addEventListener('keydown', activate);

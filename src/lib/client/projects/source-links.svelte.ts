@@ -9,8 +9,16 @@ import { getContext, setContext } from 'svelte';
 
 import type { ReferenceDesign, SourceRange } from '$lib/client/artifacts/source-references';
 
-/** Regions to reveal in a source, numbered so the same regions can be revealed again. */
-export type SourceReveal = { source: string; ranges: readonly SourceRange[]; id: number };
+/**
+ * Regions to reveal in a source, and design variables whose rows to reveal (see ghostKey), numbered
+ * so the same can be revealed again.
+ */
+export type SourceReveal = {
+  source: string;
+  ranges: readonly SourceRange[];
+  keys: readonly string[];
+  id: number;
+};
 
 /** The source shown and what to reveal in it, shared by the timeline and the source panel. */
 export class SourceLinks {
@@ -22,8 +30,12 @@ export class SourceLinks {
   revealed = $state.raw<SourceReveal | undefined>(undefined);
   #next = 0;
 
-  /** Whether these regions of a source are the ones revealed. */
-  isRevealed(source: string, ranges: readonly SourceRange[]): boolean {
+  /** Whether these regions of a source, and these variables' rows, are the ones revealed. */
+  isRevealed(
+    source: string,
+    ranges: readonly SourceRange[],
+    keys: readonly string[] = []
+  ): boolean {
     const current = this.revealed;
     return (
       current !== undefined &&
@@ -31,19 +43,22 @@ export class SourceLinks {
       current.ranges.length === ranges.length &&
       current.ranges.every(
         ({ from, to }, index) => from === ranges[index].from && to === ranges[index].to
-      )
+      ) &&
+      current.keys.length === keys.length &&
+      current.keys.every((key, index) => key === keys[index])
     );
   }
 
-  /** Reveal regions of a source; revealing the ones already shown clears them. */
-  reveal(source: string, ranges: readonly SourceRange[]): void {
-    if (this.isRevealed(source, ranges)) this.revealed = undefined;
-    else this.show(source, ranges);
+  /** Reveal regions of a source and rows of variables; revealing the ones already shown clears them. */
+  reveal(source: string, ranges: readonly SourceRange[], keys: readonly string[] = []): void {
+    if (this.isRevealed(source, ranges, keys)) this.revealed = undefined;
+    else this.show(source, ranges, keys);
   }
 
-  /** Reveal regions of a source, whatever is shown. */
-  show(source: string, ranges: readonly SourceRange[]): void {
-    this.revealed = ranges.length ? { source, ranges, id: ++this.#next } : undefined;
+  /** Reveal regions of a source and rows of variables, whatever is shown. */
+  show(source: string, ranges: readonly SourceRange[], keys: readonly string[] = []): void {
+    this.revealed =
+      ranges.length || keys.length ? { source, ranges, keys, id: ++this.#next } : undefined;
   }
 }
 

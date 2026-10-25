@@ -91,6 +91,19 @@ export function referenceRanges(
 }
 
 /**
+ * The design variable a reference names whose value the editor shows in a row of its own, which a
+ * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Highlight.Pointed@left.fill`), a
+ * place's view choice (`pointers.Index@found`), or a page-frame or listing setting, as the variant
+ * of a build of the source (`design`) has it. A type's own view choice (`views.Index`) has no row:
+ * the view markers after its renders show it.
+ */
+export function ghostKey(text: string, design?: ReferenceDesign): string | undefined {
+  const written = text.trim();
+  if (!design?.variant || !Object.hasOwn(design.variant, written)) return undefined;
+  return /^(?:views|pointers)\.[^@]+$/u.test(written) ? undefined : written;
+}
+
+/**
  * Text split into its code and the rest, as an error message names code without marking it: a
  * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index@found`,
  * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
