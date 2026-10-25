@@ -39,7 +39,7 @@ export const sourceDecisions = {
           v.string(),
           v.minLength(1),
           v.description(
-            'A variable from project.design, by its key, as Compared.Pointed.fill or views.Int.'
+            'A variable from project.design, by its key, as Compared.Pointed.fill, views.Int, or pointers.Index.'
           )
         ),
         value: v.pipe(

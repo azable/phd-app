@@ -129,12 +129,16 @@ export const browserBundlePresentationSchema = v.strictObject({
   origins: v.optional(v.record(v.string(), designOriginSchema)),
   /** The views each type rendered by name could draw, the options of its views variable. */
   views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** The pointer views each position type rendered as a pointer could draw, its pointers variable's. */
+  pointers: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
   /** The events the source can step by, the options of its frames variable. */
   frames: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The source's own listings, the first options of its listing.language variable. */
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+  renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
   /** Design values and draws of a presentation built while sources had design blocks. */

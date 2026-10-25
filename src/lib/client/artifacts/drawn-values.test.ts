@@ -351,4 +351,18 @@ describe('variant markers', () => {
       ])
     ).toEqual([['{@render Int(values[i + 1])}', true, ['IntCell', 'IntTally']]]);
   });
+
+  it('marks a render with the variable the build says it reads, a mark or a number', () => {
+    const doc =
+      '{#snippet At()}<Node>at {@render Index(lo)}</Node>{/snippet}\n{@render Index(@mid)}';
+    const variant = { 'views.Index': 'IndexText', 'pointers.Index': 'Highlight' };
+    const renders = { '1:25': 'views.Index', '2:1': 'pointers.Index' };
+    const markers = viewMarkers(EditorState.create({ doc }), [
+      { ...presentations[0], variant, renders }
+    ]);
+    expect(markers.map(({ from, to, values }) => [doc.slice(from, to), values[0].text])).toEqual([
+      ['{@render Index(lo)}', 'IndexText'],
+      ['{@render Index(@mid)}', 'Highlight']
+    ]);
+  });
 });

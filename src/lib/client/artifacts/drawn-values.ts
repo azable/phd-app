@@ -58,13 +58,17 @@ export type DrawnPresentation = {
   label?: string;
   seed: number;
   /**
-   * Its variant, where each value came from, the views each type rendered by name could draw, and
-   * the kind of each tag, by its line:column.
+   * Its variant, where each value came from, the views each type rendered by name could draw, the
+   * pointer views each position type rendered as a pointer could, and the kind of each tag, by its
+   * line:column.
    */
   variant?: DesignValues;
   origins?: Readonly<Record<string, string>>;
   views?: Readonly<Record<string, readonly string[]>>;
+  pointers?: Readonly<Record<string, readonly string[]>>;
   kinds?: Readonly<Record<string, readonly string[]>>;
+  /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+  renders?: Readonly<Record<string, string>>;
   /** The <Node> tags it left out, by their line:column; none recorded by older presentations. */
   leftOut?: readonly string[];
   /** The draws of a presentation built while sources had design blocks; none for others. */
@@ -106,23 +110,31 @@ export function unchosenViews(
 ): UnchosenView[] {
   const doc = state.doc.toString();
   const blocks = snippetBlocks(doc);
+  // By variable, as views.Int or pointers.Index, every view it could choose.
   const options = new Map<string, Set<string>>();
-  for (const { views = {} } of presentations)
-    for (const [type, names] of Object.entries(views))
-      options.set(type, new Set([...(options.get(type) ?? []), ...names]));
+  for (const { views = {}, pointers = {} } of presentations)
+    for (const [prefix, choices] of [
+      ['views', views],
+      ['pointers', pointers]
+    ] as const)
+      for (const [type, names] of Object.entries(choices))
+        options.set(
+          `${prefix}.${type}`,
+          new Set([...(options.get(`${prefix}.${type}`) ?? []), ...names])
+        );
   const renderedElsewhere = (name: string, view: { from: number }) =>
     [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
       ({ index }) => doc.slice(view.from, index).trim() !== '{#snippet'
     );
   const unchosen = new Map<string, UnchosenView>();
-  for (const [type, names] of options) {
-    const chosen = presentations.map(({ variant }) => variant?.[`views.${type}`]);
+  for (const [key, names] of options) {
+    const chosen = presentations.map(({ variant }) => variant?.[key]);
     if (!chosen.every((name) => typeof name === 'string')) continue;
     const picked = [...new Set(chosen)].join(' and ');
     for (const name of names) {
       const view = blocks.get(name);
       if (!view || chosen.includes(name) || renderedElsewhere(name, view)) continue;
-      unchosen.set(name, { ...view, title: `Not drawn: views.${type} is ${picked}` });
+      unchosen.set(name, { ...view, title: `Not drawn: ${key} is ${picked}` });
     }
   }
   return [...unchosen.values()].sort((a, b) => a.from - b.from);
@@ -387,14 +399,24 @@ export function viewMarkers(
   presentations: readonly DrawnPresentation[]
 ): DrawnMarker[] {
   const doc = state.doc.toString();
-  const types = new Set(
+  const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).flatMap((key) => (key.startsWith('views.') ? [key.slice(6)] : []))
+      Object.keys(variant).filter((key) => key.startsWith('views.') || key.startsWith('pointers.'))
     )
   );
   const markers: DrawnMarker[] = [];
   for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
-    if (!types.has(match[1])) continue;
+    // The variable the build says this render reads: a position type's number or its mark.
+    const line = state.doc.lineAt(match.index);
+    const site = `${line.number}:${match.index - line.from + 1}`;
+    const read = presentations.map(({ renders }) => renders?.[site]).find(Boolean);
+    const chosen =
+      read && keys.has(read)
+        ? read
+        : keys.has(`views.${match[1]}`)
+          ? `views.${match[1]}`
+          : undefined;
+    if (!chosen) continue;
     // The tag ends at the brace that closes its own.
     let depth = 0;
     let to = match.index;
@@ -403,7 +425,7 @@ export function viewMarkers(
       if (doc[to] === '}' && --depth === 0) break;
     }
     if (to >= doc.length) continue;
-    const { values, differs } = variable(presentations, `views.${match[1]}`, match[1]);
+    const { values, differs } = variable(presentations, chosen, match[1]);
     markers.push({ from: match.index, to: to + 1, values, differs });
   }
   return markers;

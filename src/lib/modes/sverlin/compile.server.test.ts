@@ -604,6 +604,41 @@ describe('pointers', () => {
     expect(prepared.design.space['Arrow.Pointed.fill']).toBeDefined();
   });
 
+  it('draws a position type rendered by name as a mark outside a node, its number inside one', () => {
+    const pointer = '{#snippet Highlight(p: Position)}<Pointed />{/snippet}';
+    const caption = '{#snippet At()}<Node>at {@render Position(i)}</Node>{/snippet}{@render At()}';
+    const both = prepareSvelteComponent(
+      view(
+        `{#snippet PositionText(p: Position)}<Node value={p} />{/snippet}${pointer}${caption}{@render Position(i)}`
+      )
+    );
+    expect(both.design.space['views.Position']).toEqual(['PositionText', 'none']);
+    expect(both.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
+    expect(both.design.starter['pointers.Position']).toBe('Highlight');
+    // Each render's variable, by its line:column, for the editor.
+    const source = view(
+      `{#snippet PositionText(p: Position)}<Node value={p} />{/snippet}${pointer}${caption}{@render Position(i)}`
+    );
+    const siteOf = (needle: string, from = 0) => {
+      const at = source.indexOf(needle, from);
+      const before = source.slice(0, at);
+      return `${before.split('\n').length}:${at - before.lastIndexOf('\n')}`;
+    };
+    const inCaption = source.indexOf('{@render Position(i)}');
+    expect(both.design.renders).toMatchObject({
+      [siteOf('{@render Position(i)}')]: 'views.Position',
+      [siteOf('{@render Position(i)}', inCaption + 1)]: 'pointers.Position'
+    });
+    expect(both.component).toContain('__sverlinPointers');
+    // With only pointer views, the type's choice is its pointers variable all the same.
+    const marks = prepareSvelteComponent(view(`${pointer}{@render Position(i)}`));
+    expect(marks.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
+    expect(marks.design.space['views.Position']).toBeUndefined();
+    expect(() => prepareSvelteComponent(view(`${pointer}${caption}`))).toThrow(
+      'or, to show the position as a number here, add a view that draws it, as {#snippet PositionText(p: Position)}<Node value={p} />{/snippet}'
+    );
+  });
+
   it.each([
     [
       '<Pointed> outside a view of an index type',

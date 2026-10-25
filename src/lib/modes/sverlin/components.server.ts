@@ -445,11 +445,21 @@ export function pointerCalls(
   /**
    * Each pointer view, with the collection type its index type points into, the code of a
    * function giving its <Pointed>'s props for a position, which links it points at take, the code of
-   * a function giving its base kinds (see providePointers), and the scoped variables its view reads.
+   * a function giving its base kinds (see providePointers), and the scoped variables its view reads;
+   * for a position type rendered by name, the code naming the pointer view its variant chose, and
+   * whether a render of it inside a <Node> draws its number instead.
    */
   pointers: ReadonlyMap<
     string,
-    { into: string; ref?: boolean; paint: string; kinds?: string; reads?: readonly string[] }
+    {
+      into: string;
+      ref?: boolean;
+      paint: string;
+      kinds?: string;
+      reads?: readonly string[];
+      view?: string;
+      plainInNode?: boolean;
+    }
   >,
   /** The state variables out of scope at some step, which a pointer reading one names. */
   scoped: ReadonlySet<string> = new Set()
@@ -467,11 +477,12 @@ export function pointerCalls(
   const visit = (
     node: unknown,
     where: 'top' | 'block' | 'component',
-    conditions: readonly string[] = []
+    conditions: readonly string[] = [],
+    inNode = false
   ): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
-      for (const item of node) visit(item, where, conditions);
+      for (const item of node) visit(item, where, conditions, inNode);
       return;
     }
     const part = node as Part;
@@ -479,6 +490,7 @@ export function pointerCalls(
       const call = part.expression as Part;
       const name = (call?.callee as Part | undefined)?.name;
       if (typeof name !== 'string' || !pointers.has(name)) return;
+      if (inNode && pointers.get(name)?.plainInNode) return;
       const [argument] = (call.arguments as Part[] | undefined) ?? [];
       const position =
         argument?.type === 'Identifier' && stateNames.has(argument.name ?? '')
@@ -491,9 +503,13 @@ export function pointerCalls(
               }`
             : undefined;
       const start = part.start ?? 0;
-      if (where !== 'top')
+      if (where !== 'top' || inNode)
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as in {@render ${name}(i)}.`,
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as in {@render ${name}(i)}${
+            inNode && pointers.get(name)?.view
+              ? `; or, to show the position as a number here, add a view that draws it, as {#snippet ${name}Text(p: ${name})}<Node value={p} />{/snippet}`
+              : ''
+          }.`,
           start
         });
       else if (!position)
@@ -505,7 +521,7 @@ export function pointerCalls(
         const pointer = pointers.get(name);
         const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
         calls.push(
-          `{ view: () => ${name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+          `{ view: () => ${pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -517,7 +533,7 @@ export function pointerCalls(
     if (listed) {
       const pointer = pointers.get(listed.view);
       calls.push(
-        `{ view: () => ${listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+        `{ view: () => ${pointer?.view ?? listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
       );
       const start = part.start ?? 0;
       removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
@@ -525,8 +541,8 @@ export function pointerCalls(
     }
     if (part.type === 'IfBlock' && where === 'top') {
       const test = `(${text(part.expression as Part)})`;
-      visit(part.children, where, [...conditions, test]);
-      visit(part.else, where, [...conditions, `!${test}`]);
+      visit(part.children, where, [...conditions, test], inNode);
+      visit(part.else, where, [...conditions, `!${test}`], inNode);
       return;
     }
     const inner =
@@ -539,8 +555,9 @@ export function pointerCalls(
             part.type !== 'Fragment'
           ? 'block'
           : where;
+    const inside = inNode || (part.type === 'InlineComponent' && part.name === 'Node');
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions);
+      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions, inside);
   };
   /** An {#each} over a label's values so far whose only content is a pointer at each. */
   const listPointer = (each: Part): { view: string; list: string } | undefined => {
@@ -592,7 +609,9 @@ export function slotInsertions(
    */
   operators: ReadonlySet<string> = new Set(),
   /** Filled with each slotted render's variables, by where it starts, for what is left out. */
-  rendered: Map<number, string[]> = new Map()
+  rendered: Map<number, string[]> = new Map(),
+  /** Spans of the source drawn as pointers instead, and removed (see pointerCalls). */
+  removed: readonly Insertion[] = []
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -642,6 +661,8 @@ export function slotInsertions(
     }
     const part = node as Part;
     if (part.type === 'RenderTag') {
+      const start = part.start ?? 0;
+      if (removed.some(({ at, remove = 0 }) => at <= start && start < at + remove)) return;
       const call = part.expression as Part;
       const callee = call?.callee as Part | undefined;
       const given = (call?.arguments as Part[] | undefined) ?? [];

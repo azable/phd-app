@@ -63,7 +63,7 @@ A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a
 - a bracket: `<Node layout="row"><Node>[</Node><Pointed /></Node>`
 - a mark alone: `<Pointed />`
 
-`<Pointed>` takes no props: while the pointer is at it, the element is drawn in the pointer's kind, its view's name and `.Pointed`, so `Here.Pointed.fill` is the fill of the element `Here` points at. Write it in the pointer view itself, not in a snippet inside it. Its paint (fill, stroke, opacity, text colour) shows only where the pointer is, and the rest of its look holds in every slot, so every slot keeps one size. Render a pointer at the top level of the markup, outside snippets and blocks other than `{#if}`, with a position from the state: a variable (`{@render Arrow(i)}`), an element, or a field (`{@render To(edges[e].to)}`). The page draws it around the element wherever the element is drawn. Every element keeps room for every pointer that can point into its collection, and a position a step shows past an end gets a slot there, so nothing moves as pointers move. Pointers at one element nest, the one rendered last outermost. A pointer whose position is out of scope, or points nowhere, draws nothing and keeps its room. Since it is drawn from the top level, a pointer view may read the input and algorithm variables, so its label can follow the state, as `<Node>{done ? 'last' : 'next'}</Node>`; to give the element another look as the state changes, render another pointer in `{#if}`, as `{#if done}{@render Last(i)}{:else}{@render Next(i)}{/if}`, and one whose branch is not taken draws nothing and keeps its room. A pointer at an element drawn as a link, such as the current edge, gives the link its kind's stroke and width.
+`<Pointed>` takes no props: while the pointer is at it, the element is drawn in the pointer's kind, its view's name and `.Pointed`, so `Here.Pointed.fill` is the fill of the element `Here` points at. Write it in the pointer view itself, not in a snippet inside it. Its paint (fill, stroke, opacity, text colour) shows only where the pointer is, and the rest of its look holds in every slot, so every slot keeps one size. Render a pointer at the top level of the markup, outside snippets and blocks other than `{#if}`, with a position from the state: a variable (`{@render Arrow(i)}`), an element, or a field (`{@render To(edges[e].to)}`). Rendered by name, a position type draws as its place calls for: outside any node, as `{@render Index(i)}`, a mark, through its pointer views (`pointers.Index`), so every mark of it looks the same; inside a node, as `<Node>at {@render Index(i)}</Node>`, its number, through its other views (`views.Index`); each is a choice of its own. The page draws it around the element wherever the element is drawn. Every element keeps room for every pointer that can point into its collection, and a position a step shows past an end gets a slot there, so nothing moves as pointers move. Pointers at one element nest, the one rendered last outermost. A pointer whose position is out of scope, or points nowhere, draws nothing and keeps its room. Since it is drawn from the top level, a pointer view may read the input and algorithm variables, so its label can follow the state, as `<Node>{done ? 'last' : 'next'}</Node>`; to give the element another look as the state changes, render another pointer in `{#if}`, as `{#if done}{@render Last(i)}{:else}{@render Next(i)}{/if}`, and one whose branch is not taken draws nothing and keeps its room. A pointer at an element drawn as a link, such as the current edge, gives the link its kind's stroke and width.
 
 Insertion sort, with the key drawn beside the row:
 
@@ -354,7 +354,7 @@ for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
 
 A name may be written as its shortest ending that names one label (`@key` for `@insert.key`), and a label named exactly as written wins over one whose name only ends so (`@check` is `check`, not `check.check`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root and its parts, never in a view.
 
-To mark what a step used, label it and render a pointer at the label. A pointer view marks one position, named for how it marks, so render it once per label: `Highlight` at each of the two cells a comparison reads.
+To mark what a step used, label it and render the position's type at each label, so every mark looks the same, here drawn by `Highlight`, a pointer view named for how it marks.
 
 ```js
 if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
@@ -362,11 +362,11 @@ if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
 
 ```svelte
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{@render Highlight(@left)}
-{@render Highlight(@right)}
+{@render Index(@left)}
+{@render Index(@right)}
 ```
 
-A label gives a value only where its code ran, `&&` skipping it included, so the marks come and go with the comparison; and it marks the position however the value is then used, read from its cell, copied into a variable, or compared in a loop's test. The labels say what a mark means, so render one view at each label rather than a view per mark, and mark with a label rather than a loop variable (`@right`, not `i`) where the mark is what the step used, not where the loop is. A label added for a mark leaves `frames` as it is: it marks within a step, and makes no step of its own.
+A label gives a value only where its code ran, `&&` skipping it included, so the marks come and go with the comparison; and it marks the position however the value is then used, read from its cell, copied into a variable, or compared in a loop's test. The labels say what a mark means, so render the type at each label rather than a view per mark, and mark with a label rather than a loop variable (`@right`, not `i`) where the mark is what the step used, not where the loop is. A label added for a mark leaves `frames` as it is: it marks within a step, and makes no step of its own.
 
 What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`, every value the label has given up to this step, and `applied(Equal)`, every application of `Equal` so far (`applied(Equal, @check)`, those made inside `@check`). A pointer for each of a label's positions marks the cells a search has checked, and an operator's view draws each application:
 
@@ -384,6 +384,7 @@ A `for … of` variable refers to the element it is at, as a reference does: wit
 The design space is every variable of a component's look, found in its markup:
 
 - `views.Int`, for each type rendered by name: its views and `none` (see Views of types).
+- `pointers.Index`, for each position type rendered by name as a pointer: its pointer views and `none` (see Pointers).
 - The page frame's: `frame.ratio`, `frame.justify`, `frame.align`, `frame.padding`, `frame.gap`, and `frame.layout` (see Page frame).
 - Each kind of node's props. A kind is the snippet a node is in: a view's or a part's name, as `Items` or `Title`, and for a snippet inside another, both, as `IntTally.Tally`; every node of a snippet is of its kind. A pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's `<Link>`, as `Graph.Link`. A variable is its kind and prop, as `Here.Pointed.fill` or `Items.Under.shown`.
 

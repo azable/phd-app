@@ -32,12 +32,16 @@ export type ModeBuildResult =
         variant?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
         views?: Record<string, string[]>;
+        // Each position type's pointer views, the options of its pointers variable.
+        pointers?: Record<string, string[]>;
         // The events a presentation can step by, the options of its frames variable.
         frames?: string[];
         // The source's own listings, the first options of its listing.language variable.
         listings?: string[];
         // The kind of each tag, by its line:column.
         kinds?: Record<string, string[]>;
+        // The variable each render of a type by name reads, by its line:column.
+        renders?: Record<string, string>;
         // The <Node> tags the presentation leaves out, by their line:column.
         leftOut?: string[];
       };

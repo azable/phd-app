@@ -65,7 +65,8 @@ export type AiWorkspace = {
 };
 
 /**
- * One variable of the base's design space: its key, as Compared.Pointed.fill or views.Int, its options
+ * One variable of the base's design space: its key, as Compared.Pointed.fill, views.Int, or
+ * pointers.Index, its options
  * (a list, or the name of an option set in design.options, as fill), and its value in the viewed
  * variant, with where that value came from.
  */
@@ -651,13 +652,17 @@ export function viewedPresentation(
 /** A presentation's design space and variant, each prop's options named once. */
 export function designVariables(
   presentation:
-    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'frames' | 'listings'>
+    | Pick<
+        BrowserBundlePresentation,
+        'variant' | 'origins' | 'views' | 'pointers' | 'frames' | 'listings'
+      >
     | undefined
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
     const view = key.startsWith('views.') ? key.slice('views.'.length) : undefined;
+    const pointer = key.startsWith('pointers.') ? key.slice('pointers.'.length) : undefined;
     const prop =
       key.startsWith('frame.') || key === 'listing.language'
         ? key
@@ -676,16 +681,18 @@ export function designVariables(
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection
     };
-    if (!view && Object.hasOwn(known, set)) options[set] = known[set];
+    if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
     return {
       variable: key,
       options: view
         ? [...(presentation?.views?.[view] ?? []), 'none']
-        : key === 'frames'
-          ? (presentation?.frames ?? [])
-          : key === 'listing.language' && presentation?.listings?.length
-            ? [...presentation.listings, ...listingOptions['listing.language']]
-            : set,
+        : pointer
+          ? [...(presentation?.pointers?.[pointer] ?? []), 'none']
+          : key === 'frames'
+            ? (presentation?.frames ?? [])
+            : key === 'listing.language' && presentation?.listings?.length
+              ? [...presentation.listings, ...listingOptions['listing.language']]
+              : set,
       value,
       ...(origin ? { origin } : {})
     };

@@ -53,7 +53,8 @@ export class DesignValueError extends Error {
 }
 
 /**
- * Every variable of a source: each type's views, the frame's settings, a listing's if the view
+ * Every variable of a source: each type's views, each position type's pointer views where it is
+ * rendered as a pointer, the frame's settings, a listing's if the view
  * places one (its languages the source's own listings first, then the library's), which events are
  * steps if it can step by more than one (frames, its options the source's frame rules, the first
  * where it starts), and each kind's props.
@@ -63,12 +64,16 @@ export function designSpace(
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
   frames: readonly string[] = [],
-  ownListings: readonly string[] = []
+  ownListings: readonly string[] = [],
+  pointers: Readonly<Record<string, readonly string[]>> = {}
 ): DesignSpace {
   return {
     ...(frames.length > 1 ? { frames: [...frames] } : {}),
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, [...options, 'none']])
+    ),
+    ...Object.fromEntries(
+      Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, [...options, 'none']])
     ),
     ...frameOptions,
     ...(listing
@@ -91,12 +96,16 @@ export function starterVariant(
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
   frames: readonly string[] = [],
-  ownListings: readonly string[] = []
+  ownListings: readonly string[] = [],
+  pointers: Readonly<Record<string, readonly string[]>> = {}
 ): Record<string, DesignValue> {
   return {
     ...(frames.length > 1 ? { frames: frames[0] } : {}),
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
+    ),
+    ...Object.fromEntries(
+      Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, options[0]])
     ),
     ...starterFrame,
     // The source's first listing is the one it starts with.
@@ -130,6 +139,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
               .filter(
                 (other) =>
                   !other.startsWith('views.') &&
+                  !other.startsWith('pointers.') &&
                   !other.startsWith('frame.') &&
                   !other.startsWith('listing.') &&
                   other !== 'frames'
@@ -194,9 +204,12 @@ export function buildVariant(
   return { values, origins };
 }
 
-/** The prop a variable sets, as fill for Compared.Pointed.fill, or views and frame for theirs. */
+/**
+ * The prop a variable sets, as fill for Compared.Pointed.fill, views for a choice of views
+ * (views.Int, pointers.Index), and frame for the frame's.
+ */
 function propOf(key: string): string {
-  if (key.startsWith('views.')) return 'views';
+  if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
   if (key.startsWith('frame.')) return key;
   return key.slice(key.lastIndexOf('.') + 1);
 }

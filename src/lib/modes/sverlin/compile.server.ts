@@ -168,12 +168,16 @@ export type PreparedComponent = {
    */
   placements: Record<string, Placement[]>;
   /**
-   * The design space, the views each type rendered by name chooses among, the kind of each tag (by
-   * its line:column), and the first variant.
+   * The design space, the views each type rendered by name chooses among (its pointer views apart),
+   * the kind of each tag (by its line:column), and the first variant.
    */
   design: {
     views: Record<string, string[]>;
+    /** The pointer views each position type rendered by name as a pointer chooses among. */
+    pointers: Record<string, string[]>;
     tags: Record<string, string[]>;
+    /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+    renders: Record<string, string>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
@@ -613,15 +617,30 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       [...(reads.get(view) ?? [])].some(
         (read) => read === type || (reads.has(read) && drawsItself(read, type, seen.add(view)))
       );
+    // A position type draws a mark outside a <Node>, through its pointer views (pointers.Index), and
+    // its number inside one, through its other views (views.Index): each a choice of its own. A
+    // render inside a node of a type with only pointer views is a pointer, refused there.
     const optionsOf = (type: string) => {
       const drawable = views[type].filter((view) => !drawsItself(view, type));
-      const plain = drawable.filter((view) => !found.pointers.has(view));
-      return plain.length ? plain : drawable;
+      return {
+        plain: drawable.filter((view) => !found.pointers.has(view)),
+        marks: drawable.filter((view) => found.pointers.has(view))
+      };
     };
-    const chosen: Record<string, string[]> = Object.fromEntries(
-      [...new Set(rendered.map(({ name }) => name))].map((name) => [name, optionsOf(name)])
+    const chosen: Record<string, string[]> = {};
+    const pointerChosen: Record<string, string[]> = {};
+    const renderVariables: Record<string, string> = {};
+    for (const { name, start, inNode } of rendered) {
+      const { plain, marks } = optionsOf(name);
+      const asMark = marks.length > 0 && (!inNode || !plain.length);
+      if (asMark) pointerChosen[name] = marks;
+      else chosen[name] = plain;
+      const { line, column } = sourcePosition(source, start);
+      renderVariables[`${line}:${column + 1}`] = `${asMark ? 'pointers' : 'views'}.${name}`;
+    }
+    const endless = rendered.find(
+      ({ name }) => !(chosen[name]?.length || pointerChosen[name]?.length)
     );
-    const endless = rendered.find(({ name }) => !chosen[name].length);
     if (endless)
       throw new InvalidSvelteSourceError(
         `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(value: ${endless.name})}<Node {value} />{/snippet}.`,
@@ -757,11 +776,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // applications so far, each a prop of its key.
     const viewState = new Set([...stateNames, ...Object.keys(labelled), ...Object.keys(histories)]);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
-    // A pointer is a view with a <Pointed>, or a type whose views are pointers.
-    const pointerViews = new Set(found.pointers);
-    for (const [name, options] of Object.entries(chosen))
-      if (options.some((option) => found.pointers.has(option))) pointerViews.add(name);
+    const viewNames = new Set([
+      ...Object.keys(components),
+      ...Object.keys(chosen),
+      ...Object.keys(pointerChosen)
+    ]);
+    // A pointer is a view with a <Pointed>, or a position type rendered by name as one, choosing
+    // among its pointer views (see withGeneratedScripts).
+    const pointerViews = new Set([...found.pointers, ...Object.keys(pointerChosen)]);
+    const choiceOf = (name: string) => ({
+      options: pointerChosen[name] ?? [],
+      value: `__pointer_${name}`,
+      view: `__pointerOf_${name}`
+    });
     // A pointer's kind, for a position, as code: a link it points at takes its look.
     const paints = [...found.pointed].map(
       ([name, { parameter }]) =>
@@ -784,12 +811,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       viewState,
       new Map(
         [...pointerViews].map((name) => {
-          const type = components[name] ?? components[chosen[name]?.[0] ?? ''];
+          const choice = choiceOf(name);
+          const type = components[name] ?? components[choice.options[0] ?? ''];
           const paint = found.pointers.has(name)
             ? `__paint_${name}`
-            : `(position: number) => (({ ${chosen[name].map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[__choice_${name}]?.(position) ?? {}`;
+            : `(position: number) => (({ ${choice.options.map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[${choice.value}]?.(position) ?? {}`;
           // The scoped variables its view reads, or any view its type chooses among reads.
-          const reads = (found.pointers.has(name) ? [name] : chosen[name]).flatMap((option) =>
+          const reads = (found.pointers.has(name) ? [name] : choice.options).flatMap((option) =>
             [...readsOf(found.components.find((view) => view.name === option)!.node)].filter(
               (read) => scoped.has(read)
             )
@@ -804,9 +832,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
                   }
                 : { into: domain.atoms[type]?.index ?? '' }),
               paint,
+              ...(found.pointers.has(name) ? {} : { view: choice.view }),
+              ...(chosen[name] ? { plainInNode: true } : {}),
               kinds: found.pointers.has(name)
                 ? `() => (${JSON.stringify(pointerKinds(name))})`
-                : `() => (${JSON.stringify(Object.fromEntries(chosen[name].map((option) => [option, pointerKinds(option)])))} as Record<string, { around: string[]; pointed: string }>)[__choice_${name}]`,
+                : `() => (${JSON.stringify(Object.fromEntries(choice.options.map((option) => [option, pointerKinds(option)])))} as Record<string, { around: string[]; pointed: string }>)[${choice.value}]`,
               ...(reads.length ? { reads: [...new Set(reads)] } : {})
             }
           ];
@@ -883,11 +913,15 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         ast.html,
         svelteSource,
         viewState,
-        new Set([...viewNames].filter((name) => !pointerViews.has(name))),
+        new Set([
+          ...Object.keys(components).filter((name) => !found.pointers.has(name)),
+          ...Object.keys(chosen)
+        ]),
         new Set(Object.keys(components)),
         scoped,
         operators,
-        slotted
+        slotted,
+        pointers.removals
       )
     ]);
     const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted, paths, openingReads);
@@ -902,7 +936,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ...Object.keys(chosen)
         ],
         chosen,
-        pointerViews,
+        pointerChosen,
         pointers.calls,
         paints
       ),
@@ -954,9 +988,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       placements,
       design: {
         views: chosen,
+        pointers: pointerChosen,
         tags: tagKinds,
-        space: designSpace(kinds, chosen, listing, rules, ownListings),
-        starter: starterVariant(kinds, chosen, listing, rules, ownListings)
+        renders: renderVariables,
+        space: designSpace(kinds, chosen, listing, rules, ownListings, pointerChosen),
+        starter: starterVariant(kinds, chosen, listing, rules, ownListings, pointerChosen)
       },
       ...(listings ? { listings } : {}),
       ...(appliedNames.length ? { applied } : {}),
@@ -1040,6 +1076,13 @@ export async function bundlePresentation(
   // Each type rendered by name draws the view the variant chose for it.
   const views = Object.fromEntries(
     Object.keys(design.views).map((type) => [type, values[`views.${type}`]])
+  );
+  // Each position type rendered as a pointer, the pointer view the variant chose for it.
+  const pointerViews = Object.fromEntries(
+    Object.keys(design.pointers ?? {}).map((type) => [
+      `__pointer_${type}`,
+      values[`pointers.${type}`]
+    ])
   );
   // The steps of the label the variant chose, each placed by its moment.
   const rule = typeof values.frames === 'string' ? values.frames : Object.keys(prepared.masters)[0];
@@ -1126,6 +1169,7 @@ export async function bundlePresentation(
       ...phase.state,
       ...ownApplied,
       ...views,
+      ...pointerViews,
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
@@ -1295,24 +1339,31 @@ function withGeneratedScripts(
   source: string,
   props: readonly string[],
   choices: Record<string, string[]>,
-  pointerTypes: ReadonlySet<string>,
+  pointerChoices: Record<string, string[]>,
   pointers: readonly string[],
   paints: readonly string[]
 ): string {
   // A type rendered by name arrives as the name of the view the variant chose, and the view uses
-  // that view under the type's name; none draws nothing, and a pointer drawn as none is no pointer.
+  // that view under the type's name; none draws nothing. A position type rendered as a pointer
+  // arrives as __pointer_Index, its pointer view under __pointerOf_Index; one drawn as none is no
+  // pointer.
   const names = [
     ...props.map((name) => (choices[name] ? `${name}: __choice_${name}` : name)),
+    ...Object.keys(pointerChoices).map((name) => `__pointer_${name}`),
     'step',
     'seed',
     '__probe'
   ].join(', ');
-  const chosen = Object.entries(choices)
-    .map(
+  const chosen = [
+    ...Object.entries(choices).map(
       ([name, options]) =>
-        `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}]${pointerTypes.has(name) ? '' : ' ?? __sverlinNone'});`
+        `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}] ?? __sverlinNone);`
+    ),
+    ...Object.entries(pointerChoices).map(
+      ([name, options]) =>
+        `const __pointerOf_${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__pointer_${name}]);`
     )
-    .join(' ');
+  ].join(' ');
   // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
   const pointing = pointers.length
     ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
@@ -1934,22 +1985,27 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
   }
 }
 
-/** The names {@render} tags call, as in {@render Int(value)}, and where each tag starts. */
-function renderedNames(markup: unknown): { name: string; start: number }[] {
-  const names: { name: string; start: number }[] = [];
-  const walk = (node: unknown): void => {
+/**
+ * The names {@render} tags call, as in {@render Int(value)}, where each tag starts, and whether it
+ * is inside a <Node>, where a position is drawn as its number rather than as a mark.
+ */
+function renderedNames(markup: unknown): { name: string; start: number; inNode: boolean }[] {
+  const names: { name: string; start: number; inNode: boolean }[] = [];
+  const walk = (node: unknown, inNode: boolean): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach(walk);
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inNode));
     const part = node as {
       type?: string;
+      name?: string;
       start?: number;
       expression?: { callee?: { name?: string } };
     };
     const name = part.type === 'RenderTag' ? part.expression?.callee?.name : undefined;
-    if (name) names.push({ name, start: part.start ?? 0 });
-    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child);
+    if (name) names.push({ name, start: part.start ?? 0, inNode });
+    const inside = inNode || (part.type === 'InlineComponent' && part.name === 'Node');
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child, inside);
   };
-  walk(markup);
+  walk(markup, false);
   return names;
 }
 
