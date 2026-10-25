@@ -3,12 +3,15 @@
 
   import BotIcon from '@lucide/svelte/icons/bot';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
+  import StickyNoteIcon from '@lucide/svelte/icons/sticky-note';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
 
+  import { codeIn, codeMarkdown } from '$lib/client/artifacts/source-references';
   import * as Avatar from '$lib/client/components/ui/avatar';
   import { Button } from '$lib/client/components/ui/button';
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
+  import { sourceLinksContext } from '$lib/client/projects/source-links.svelte';
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import {
     candidateId,
@@ -105,6 +108,11 @@
     activatePresentation(variant, event);
   }
 
+  // An error message as Markdown: its code, where the source holds it, as source links.
+  const links = sourceLinksContext();
+  const errorMarkdown = (text: string, source: string) =>
+    codeMarkdown(source ? codeIn(source, text) : [{ text, code: false }]);
+
   // The source card a parent link last showed, outlined for a moment so the eye finds it.
   let shown = $state<string | undefined>();
   function showVersion(sourceHash: string) {
@@ -160,6 +168,26 @@
           content={item.content}
           inverted={item.actor === 'user'}
           onReferenceActivate={activateReference}
+        />
+      </article>
+    {:else if item.kind === 'note'}
+      {@const of = item.of}
+      <article class="max-w-[88%] rounded-2xl border border-dashed bg-card px-4 py-3 shadow-md">
+        <div class="mb-2 flex flex-wrap items-center gap-2.5">
+          <Avatar.Root size="lg" class="shadow-sm" aria-hidden="true">
+            <Avatar.Fallback class="[&>svg]:size-5"><StickyNoteIcon /></Avatar.Fallback>
+          </Avatar.Root>
+          <p class="text-base font-medium">Note</p>
+        </div>
+        <MessageContent
+          content={[{ type: 'markdown', text: item.text }]}
+          source={of?.source}
+          onRevealSource={() =>
+            of &&
+            onChooseSource({
+              sourceHash: of.sourceHash,
+              ...(of.parentHash ? { parentHash: of.parentHash } : {})
+            })}
         />
       </article>
     {:else if item.kind === 'presentation'}
@@ -246,7 +274,7 @@
         <button
           type="button"
           class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          aria-label={`Source ${sourceId(item.sourceHash).source}: ${item.summary}`}
+          aria-label={`Source ${sourceId(item.sourceHash).source}: ${item.summary.replaceAll('`', '')}`}
           aria-pressed={chosen}
           onclick={() => chooseSource(item)}
         ></button>
@@ -266,9 +294,18 @@
               </button>
             {/if}
           </div>
-          <p class={['mt-2 text-base', !item.described && 'text-muted-foreground']}>
-            {item.summary}
-          </p>
+          {#if item.described}
+            <!-- Code it names links to its source; choosing a link shows the card, not the card's click. -->
+            <div class="mt-2 [&_code.source-ref]:pointer-events-auto">
+              <MessageContent
+                content={[{ type: 'markdown', text: item.summary }]}
+                source={item.source}
+                onRevealSource={() => chooseSource(item)}
+              />
+            </div>
+          {:else}
+            <p class="mt-2 text-base text-muted-foreground">{item.summary}</p>
+          {/if}
           <div class="mt-2 flex flex-wrap justify-end gap-1">
             {#each item.variants as variant (variant.presentation.presentationId)}
               {@const id = variant.presentation.presentationId}
@@ -308,26 +345,45 @@
     {:else if item.failed}
       {@const failed = item.failed}
       {@const chosen = chosenFailure === item.eventId}
-      <!-- Choosing it shows the source that did not build, its problems underlined. -->
-      <button
-        type="button"
+      <!-- Choosing it shows the source that did not build, its problems underlined; code its
+        message names links there, choosing it rather than the box. -->
+      <article
         class={[
-          'w-full rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-left shadow-md transition-colors hover:border-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          'relative w-full rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 shadow-md transition-colors hover:border-destructive',
           chosen && 'border-destructive ring-2 ring-destructive/40'
         ]}
-        aria-pressed={chosen}
-        title={chosen ? 'Hide the source that did not build' : 'Show the source that did not build'}
-        onclick={() => onChooseFailure(chosen ? undefined : { eventId: item.eventId, ...failed })}
       >
-        <p class="text-sm font-medium text-destructive">The request could not be completed</p>
-        <p class="mt-1 text-base">{item.text}</p>
-      </button>
+        <button
+          type="button"
+          class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          aria-label={`The request could not be completed: ${item.text}`}
+          aria-pressed={chosen}
+          title={chosen
+            ? 'Hide the source that did not build'
+            : 'Show the source that did not build'}
+          onclick={() => onChooseFailure(chosen ? undefined : { eventId: item.eventId, ...failed })}
+        ></button>
+        <div class="pointer-events-none relative">
+          <p class="text-sm font-medium text-destructive">The request could not be completed</p>
+          <div class="mt-1 [&_code.source-ref]:pointer-events-auto">
+            <MessageContent
+              content={[{ type: 'markdown', text: errorMarkdown(item.text, failed.source) }]}
+              source={failed.source}
+              onRevealSource={() => onChooseFailure({ eventId: item.eventId, ...failed })}
+            />
+          </div>
+        </div>
+      </article>
     {:else}
       <article
         class="w-full rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 shadow-md"
       >
         <p class="text-sm font-medium text-destructive">The request could not be completed</p>
-        <p class="mt-1 text-base">{item.text}</p>
+        <div class="mt-1">
+          <MessageContent
+            content={[{ type: 'markdown', text: errorMarkdown(item.text, links?.shown ?? '') }]}
+          />
+        </div>
       </article>
     {/if}
   </li>

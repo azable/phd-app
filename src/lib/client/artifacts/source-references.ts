@@ -63,9 +63,85 @@ export function referenceRanges(source: string, text: string): SourceRange[] {
     if (regions.length && kind.place) regions.push(...placeRenders(source, kind.place));
     if (regions.length) return sorted(regions);
   }
+  // Code written with … for what is left out, as `{@render Highlight(…)}`: wherever it fits.
+  if (written.includes('…')) return elided(source, written);
   // Code written as it is in the source, specific enough not to be a word or a name.
   if (written.length >= 3 && /[^\w\s]/u.test(written)) return occurrences(source, written);
   return [];
+}
+
+/**
+ * Text split into its code and the rest, as an error message names code without marking it: a
+ * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index@found`,
+ * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
+ */
+export function codeIn(source: string, text: string): { text: string; code: boolean }[] {
+  const spans: { text: string; code: boolean }[] = [];
+  const add = (written: string, code: boolean) => {
+    const last = spans.at(-1);
+    if (last && !last.code && !code) last.text += written;
+    else spans.push({ text: written, code });
+  };
+  for (let at = 0; at < text.length; ) {
+    const candidates = codeAt(text, at);
+    const piece = candidates.find((candidate) => referenceRanges(source, candidate).length);
+    // Code naming nothing in the source, as a fix a message suggests, is text, inside it too.
+    const written = piece ?? candidates[0] ?? text[at];
+    add(written, piece !== undefined);
+    at += written.length;
+  }
+  return spans;
+}
+
+/** Text as Markdown that shows it as written, its code as inline code, from `codeIn`. */
+export function codeMarkdown(spans: readonly { text: string; code: boolean }[]): string {
+  return spans
+    .map(({ text, code }) => {
+      if (!code) return text.replace(/[!-/:-@[-`{-~]/gu, '\\$&');
+      const fence = '`'.repeat(
+        Math.max(0, ...[...text.matchAll(/`+/gu)].map(([run]) => run.length)) + 1
+      );
+      return `${fence}${text.startsWith('`') || text.endsWith('`') ? ` ${text} ` : text}${fence}`;
+    })
+    .join('');
+}
+
+/** The code-shaped pieces of text starting at an offset, longest first; see `codeIn`. */
+function codeAt(text: string, at: number): string[] {
+  if (at > 0 && /[\w$@.{]/u.test(text[at - 1])) return [];
+  if (text[at] === '{') return [balanced(text, at, '{', '}') ?? ''].filter(Boolean);
+  const rest = text.slice(at);
+  const label = new RegExp(String.raw`^@${name}(?:\.${name})*`, 'u').exec(rest)?.[0];
+  if (label) {
+    // A label opening a region, as `@check.found[`, is code only with its region, where closed.
+    return rest[label.length] === '['
+      ? [label + (balanced(rest, label.length, '[', ']') ?? '[')]
+      : [label];
+  }
+  const path = new RegExp(String.raw`^${name}(?:\.${name})*(?:@${name}(?:\.${name})*)?`, 'u').exec(
+    rest
+  )?.[0];
+  if (!path) return [];
+  const call = rest[path.length] === '(' ? balanced(rest, path.length, '(', ')') : undefined;
+  // A word alone is no code: only a call, or a path with a dot or a place.
+  return [...(call ? [path + call] : []), ...(/[.@]/u.test(path) ? [path] : [])];
+}
+
+/** From an opener to the closer that matches it, or nothing where it is never closed. */
+function balanced(text: string, at: number, open: string, close: string): string | undefined {
+  let depth = 0;
+  for (let index = at; index < text.length; index++) {
+    if (text[index] === open) depth++;
+    else if (text[index] === close && --depth === 0) return text.slice(at, index + 1);
+  }
+  return undefined;
+}
+
+/** Where code written with … fits, each … standing for anything on one line. */
+function elided(source: string, written: string): SourceRange[] {
+  const parts = written.split('…');
+  if (parts.join('').trim().length < 3) return [];
+  return matches(source, new RegExp(parts.map(escape).join('[^\\n]*?'), 'gu')).slice(0, 20);
 }
 
 /** The regions build problems are about, as the editor underlines them. */
@@ -154,7 +230,7 @@ function labelRanges(source: string, label: string): SourceRange[] {
   const last = label.split('.').at(-1) ?? label;
   return sorted([
     ...matches(source, new RegExp(String.raw`@${escape(last)}(?=[[{])`, 'gu')),
-    ...matches(source, new RegExp(String.raw`@${escape(label)}(?![\w$.[{])`, 'gu'))
+    ...matches(source, new RegExp(String.raw`(?<!\{)@${escape(label)}(?![\w$.[{])`, 'gu'))
   ]);
 }
 

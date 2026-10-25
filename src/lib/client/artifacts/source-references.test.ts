@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticRanges, referenceRanges } from './source-references';
+import { codeIn, codeMarkdown, diagnosticRanges, referenceRanges } from './source-references';
 
 const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -68,6 +68,46 @@ describe('references in messages', () => {
   it('name nothing for words, props, numbers, or names the source does not declare', () => {
     for (const text of ['fill', 'swap', 'the', '3', 'Arrow', '@missing', 'views.Missing', 'a > b?'])
       expect(named(text)).toEqual([]);
+  });
+});
+
+describe('code in an error message', () => {
+  const dotted = `<script lang="sverlin" listing="code">
+  for i = 0 to n - 1
+      @check[if A[i] == target:] @check.found[return i]
+      @next[@found[return i]]
+</script>
+<script lang="sverlin">let i = Index(1);</script>
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{@render Highlight(@left)}`;
+  const code = (text: string, inSource = dotted) =>
+    codeIn(inSource, text).flatMap((span) => (span.code ? [span.text] : []));
+
+  it('finds the region a dotted-name problem names, not the fix it suggests', () => {
+    expect(
+      code(
+        'The region @check.found[ has a dotted name: a region takes one name and nests inside the one around it, as @check[… @found[…]].'
+      )
+    ).toEqual(['@check.found[']);
+  });
+
+  it('finds a render written with …, and leaves one the source has not as text', () => {
+    expect(
+      code(
+        "{@render Highlight(…)} names the view Highlight, but which view draws a value is the variant's: render its type, as {@render Index(…)}, which pointers.Index chooses the view of."
+      )
+    ).toEqual(['{@render Highlight(…)}']);
+    expect(named('Highlight(…)')).toEqual(['Highlight(p: Index)']);
+  });
+
+  it('finds nothing in a message without code, or code the source does not hold', () => {
+    expect(code('The recorded steps are too large; use smaller state or fewer steps.')).toEqual([]);
+    expect(code('Two snippets are named Under, as in Row.Under or views.Gone.')).toEqual([]);
+  });
+
+  it('writes the rest as text, so nothing in a message is markup', () => {
+    const markdown = codeMarkdown(codeIn(dotted, '<Node> *at* the region @check.found[ [x](y)'));
+    expect(markdown).toBe('\\<Node\\> \\*at\\* the region `@check.found[` \\[x\\]\\(y\\)');
   });
 });
 

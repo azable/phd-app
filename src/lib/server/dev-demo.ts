@@ -3,8 +3,9 @@
  * agent drops into .demo/inbox, each saved as a version of its own, until a .demo/flush marker
  * replaces it with a fresh project. An example may begin with `<!-- summary: … -->`, saying what it
  * shows or changes, `<!-- parent: name -->`, naming the earlier example it changes (without a
- * parent it starts a tree of its own), and `<!-- variant: {"Here.shown": false} -->`, values to build
- * it with. Only the dev server serves it.
+ * parent it starts a tree of its own), `<!-- variant: {"Here.shown": false} -->`, values to build
+ * it with, and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
+ * Only the dev server serves it.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -18,7 +19,8 @@ import { database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { projectRepository } from '$lib/server/projects/repository';
-import { createProjectSkeleton } from '$lib/server/projects/service';
+import { createProjectSkeleton, draftEvent } from '$lib/server/projects/service';
+import { withoutHeader } from '$lib/server/dev-demo-header';
 import type { DesignValues } from '$lib/shared/presentations';
 import { projectCommandSchema, type ProjectDocument } from '$lib/shared/projects/model';
 
@@ -28,6 +30,8 @@ const flushMarker = path.join(folder, 'flush');
 const stateFile = path.join(folder, 'state.json');
 // The source of each example saved to the demo project, by name, so a later one can name its parent.
 const sourcesFile = path.join(folder, 'sources.json');
+// A note posted after an example: markdown on one line, longer than a summary may be.
+const noteSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(2000));
 
 let syncing: Promise<string> | undefined;
 let saving: Promise<void> | undefined;
@@ -71,7 +75,7 @@ async function saveWaiting(projectId: string): Promise<void> {
   const examples = (await readdir(inbox)).filter((name) => name.endsWith('.svelte')).sort();
   for (const name of examples) {
     const file = path.join(inbox, name);
-    const { source, summary, parent, variant } = withoutHeader(await readFile(file, 'utf8'));
+    const { source, summary, parent, variant, note } = withoutHeader(await readFile(file, 'utf8'));
     await rm(file);
     const document = await projectRepository.load(projectId);
     const operationId = randomUUID();
@@ -104,28 +108,26 @@ async function saveWaiting(projectId: string): Promise<void> {
       command: command.output
     });
     await finished(projectId, operationId, document.events.length);
+    if (note !== undefined) await postNote(projectId, name, note);
   }
 }
 
-/** An example's source without its header lines, and what they say. */
-function withoutHeader(text: string): {
-  source: string;
-  summary?: string;
-  parent?: string;
-  variant?: string;
-} {
-  const header: Record<string, string> = {};
-  const source = text.replace(
-    /^(?:\s*<!--\s*(summary|parent|variant):\s*(.*?)\s*-->\s*\n)+/u,
-    (lines) => {
-      for (const [, key, value] of lines.matchAll(
-        /<!--\s*(summary|parent|variant):\s*(.*?)\s*-->/gu
-      ))
-        header[key] = value;
-      return '';
-    }
-  );
-  return { source, ...header };
+/** Post a developer's note to the demo project's chat, as a notice of its own. */
+async function postNote(projectId: string, name: string, text: string): Promise<void> {
+  const note = v.safeParse(noteSchema, text);
+  if (!note.success) {
+    console.error(`The note of demo example ${name} was not posted: ${v.summarize(note.issues)}`);
+    return;
+  }
+  const { events } = await projectRepository.load(projectId);
+  await projectRepository.append(projectId, events.length, [
+    draftEvent({
+      type: 'system.notified',
+      operationId: randomUUID(),
+      actor: { kind: 'system' },
+      payload: { severity: 'info', message: note.output }
+    })
+  ]);
 }
 
 async function savedSources(): Promise<Record<string, string>> {

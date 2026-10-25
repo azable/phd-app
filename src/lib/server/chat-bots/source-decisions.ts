@@ -15,7 +15,7 @@ const summary = v.pipe(
   v.minLength(1),
   v.maxLength(300),
   v.description(
-    'One short sentence in the participant’s terms: what a first visualization shows, or what this change does.'
+    'One short sentence in the participant’s terms: what a first visualization shows, or what this change does, with any code it names, as a snippet, label or variable, in backticks, as `@left`.'
   )
 );
 

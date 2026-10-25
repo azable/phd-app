@@ -31,10 +31,21 @@ export type ParticipantTimelineItem =
       /** What it shows or changes, or how it was made where nobody said. */
       summary: string;
       described: boolean;
+      /** Its source, which code its summary names is found in. */
+      source: string;
       /** The source it was made from, where that has a card of its own. */
       parentHash?: string;
       /** Its presentations, each a variant of its random values, oldest first. */
       variants: TimelinePresentation[];
+    }
+  /** A note from the developer, as the demo project's examples carry, about the card before it. */
+  | {
+      id: string;
+      kind: 'note';
+      text: string;
+      eventId: number;
+      /** The card it follows, whose source code it names is found in. */
+      of?: { sourceHash: string; source: string; parentHash?: string };
     }
   | {
       id: string;
@@ -66,7 +77,10 @@ export function participantTimeline(
   // A source has one card, where it was first presented; later variants join it there.
   const placed = new Set<string>();
   const groups = Map.groupBy(events, ({ operationId }) => operationId);
-  return [...groups.values()]
+  // The source presented last, by hash, which a note that follows is about.
+  let presented: string | undefined;
+  const about = new Map<string, string>();
+  const items = [...groups.values()]
     .toSorted((left, right) => left[0].id - right[0].id)
     .flatMap((related) => {
       const items: ParticipantTimelineItem[] = [];
@@ -108,6 +122,12 @@ export function participantTimeline(
         }
       }
       for (const event of related) {
+        if (event.type !== 'system.notified' || event.payload.severity !== 'info') continue;
+        const id = `note-${event.id}`;
+        items.push({ id, kind: 'note', text: event.payload.message, eventId: event.id });
+        if (presented) about.set(id, presented);
+      }
+      for (const event of related) {
         if (event.type !== 'visualization.presented') continue;
         const value = presentations.get(event.id);
         if (!value) continue;
@@ -116,6 +136,7 @@ export function participantTimeline(
           continue;
         }
         const sourceHash = value.presentation.source.sha256;
+        presented = sourceHash;
         if (placed.has(sourceHash)) continue;
         placed.add(sourceHash);
         const version = versions.first.get(sourceHash);
@@ -128,6 +149,7 @@ export function participantTimeline(
           sourceHash,
           summary: version?.payload.summary ?? madeBy[version?.payload.origin.kind ?? 'none'],
           described: version?.payload.summary !== undefined,
+          source: value.presentation.source.text,
           ...(parentHash && parentHash !== sourceHash && variants.has(parentHash)
             ? { parentHash }
             : {}),
@@ -147,6 +169,20 @@ export function participantTimeline(
       }
       return items;
     });
+  // A note is about the source presented before it, on that source's card.
+  const cards = new Map(
+    items.flatMap((item) => (item.kind === 'version' ? [[item.sourceHash, item] as const] : []))
+  );
+  for (const item of items) {
+    const card = item.kind === 'note' ? cards.get(about.get(item.id) ?? '') : undefined;
+    if (item.kind === 'note' && card)
+      item.of = {
+        sourceHash: card.sourceHash,
+        source: card.source,
+        ...(card.parentHash ? { parentHash: card.parentHash } : {})
+      };
+  }
+  return items;
 }
 
 /** The source of an operation's last build that failed on its code, and who wrote it. */

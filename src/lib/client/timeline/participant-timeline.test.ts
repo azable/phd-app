@@ -14,7 +14,12 @@ describe('participant Timeline projection', () => {
     const items = participantTimeline(events());
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'message', 'version', 'message']);
     // Both presentations were built from one source, so they are two variants of its card.
-    expect(items[2]).toMatchObject({ kind: 'version', sourceHash: 'a'.repeat(64) });
+    // The card carries its source, which code its summary names is found in.
+    expect(items[2]).toMatchObject({
+      kind: 'version',
+      sourceHash: 'a'.repeat(64),
+      source: 'source'
+    });
     expect(
       items[2].kind === 'version' &&
         items[2].variants.map(({ presentation }) => presentation.presentationId)
@@ -110,6 +115,40 @@ describe('participant Timeline projection', () => {
     expect(items.at(-1)).toMatchObject({
       kind: 'error',
       failed: { source: 'saved by hand', by: 'save' }
+    });
+  });
+
+  it('shows an info notice as a note, and no other notice', () => {
+    const notice = (id: number, severity: 'info' | 'warning' | 'error'): ProjectEvent => ({
+      id,
+      type: 'system.notified',
+      actor: { kind: 'system' },
+      operationId: `62345678-1234-4234-8234-12345678900${id}`,
+      createdAt: `2026-08-30T00:02:0${id}.000Z`,
+      payload: { severity, message: `Click \`@left\` (${severity}).` }
+    });
+    const items = participantTimeline([
+      notice(1, 'info'),
+      notice(2, 'warning'),
+      notice(3, 'error')
+    ]);
+    expect(items).toEqual([
+      { id: 'note-1', kind: 'note', text: 'Click `@left` (info).', eventId: 1 }
+    ]);
+  });
+
+  it('makes a note about the card before it', () => {
+    const note: ProjectEvent = {
+      id: 99,
+      type: 'system.notified',
+      actor: { kind: 'system' },
+      operationId: '62345678-1234-4234-8234-123456789999',
+      createdAt: '2026-08-30T00:09:00.000Z',
+      payload: { severity: 'info', message: 'Click `source`.' }
+    };
+    expect(participantTimeline([...events(), note]).at(-1)).toMatchObject({
+      kind: 'note',
+      of: { sourceHash: 'a'.repeat(64), source: 'source' }
     });
   });
 

@@ -20,19 +20,25 @@
     interactive?: boolean;
     inverted?: boolean;
     onReferenceActivate?: (reference: ReferenceSegment, extend: boolean) => void;
+    /** The source code it names is found in, where not the one the panel shows, as a card's own. */
+    source?: string;
+    /** Before revealing in a source of its own: show that source, as by choosing its card. */
+    onRevealSource?: () => void;
   };
 
   let {
     content,
     interactive = true,
     inverted = false,
-    onReferenceActivate = () => {}
+    onReferenceActivate = () => {},
+    source,
+    onRevealSource = () => {}
   }: Props = $props();
 
   // Inline code naming something in the source shown links to it: choosing it reveals it there.
   const links = sourceLinksContext();
   function linkReferences(node: HTMLElement) {
-    const shown = links?.shown ?? '';
+    const shown = source ?? links?.shown ?? '';
     const named = (code: Element) => (shown ? referenceRanges(shown, code.textContent ?? '') : []);
     for (const code of node.querySelectorAll('code')) {
       const linked = !code.closest('pre') && named(code).length > 0;
@@ -57,6 +63,7 @@
         return;
       event.preventDefault();
       event.stopPropagation();
+      if (source !== undefined && source !== links.shown) onRevealSource();
       links.reveal(shown, named(code));
     };
     node.addEventListener('click', activate);
@@ -163,11 +170,12 @@
     font-family: var(--font-mono, ui-monospace, monospace);
   }
 
-  /* A pill naming something in the source is a link: amber, as the source panel's reveal is. */
+  /* A pill naming something in the source is a link: a stronger border, an arrow, a stronger tint
+     on hover; all from the text colour, so it stays neutral on either bubble and in either theme. */
   .message-content :global(code.source-ref) {
     cursor: pointer;
-    border-color: color-mix(in oklab, #d97706 65%, transparent);
-    background-color: color-mix(in oklab, #f59e0b 18%, transparent);
+    border-color: color-mix(in oklab, currentColor 38%, transparent);
+    background-color: color-mix(in oklab, currentColor 10%, transparent);
     transition: background-color 120ms;
   }
 
@@ -179,7 +187,7 @@
   }
 
   .message-content :global(code.source-ref:hover) {
-    background-color: color-mix(in oklab, #f59e0b 32%, transparent);
+    background-color: color-mix(in oklab, currentColor 18%, transparent);
   }
 
   .message-content :global(code.source-ref:focus-visible) {
@@ -188,7 +196,7 @@
   }
 
   .message-content :global(code.source-ref[aria-pressed='true']) {
-    border-color: #d97706;
-    background-color: color-mix(in oklab, #f59e0b 42%, transparent);
+    border-color: color-mix(in oklab, currentColor 70%, transparent);
+    background-color: color-mix(in oklab, currentColor 22%, transparent);
   }
 </style>
