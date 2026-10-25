@@ -71,6 +71,63 @@ describe('references in messages', () => {
   });
 });
 
+describe('view choices, by what a build records each render reads', () => {
+  const both = `{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+{#snippet At()}<Node>at {@render Index(lo)}</Node>{/snippet}
+{@render At()}
+{@render Index(mid)}
+{@render Index(found)}`;
+  /** A render's line:column (both from 1), as a build records it. */
+  const siteOf = (written: string) => {
+    const at = both.indexOf(written);
+    const before = both.slice(0, at);
+    return `${before.split('\n').length}:${at - before.lastIndexOf('\n')}`;
+  };
+  const design = {
+    renders: {
+      [siteOf('{@render Index(lo)}')]: 'views.Index',
+      [siteOf('{@render Index(mid)}')]: 'pointers.Index',
+      [siteOf('{@render Index(found)}')]: 'pointers.Index@found'
+    },
+    variant: {
+      'views.Index': 'IndexText',
+      'pointers.Index': 'Highlight',
+      'pointers.Index@found': 'Arrow'
+    }
+  };
+  const covered = (text: string, built?: typeof design) =>
+    referenceRanges(both, text, built).map(({ from, to }) => both.slice(from, to));
+
+  it('name the renders reading them, a number apart from a mark, and the view chosen', () => {
+    expect(covered('views.Index', design)).toEqual(['IndexText', '{@render Index(lo)}']);
+    expect(covered('pointers.Index', design)).toEqual(['Highlight', '{@render Index(mid)}']);
+  });
+
+  it("name a place's own render, and leave it out of the type's once set apart", () => {
+    expect(covered('pointers.Index@found', design)).toEqual(['Arrow', '{@render Index(found)}']);
+    const alike = {
+      ...design,
+      variant: { ...design.variant, 'pointers.Index@found': 'Highlight' }
+    };
+    expect(covered('pointers.Index', alike)).toEqual([
+      'Highlight',
+      '{@render Index(mid)}',
+      '{@render Index(found)}'
+    ]);
+  });
+
+  it('name nothing a build records no render reading, and every render without a record', () => {
+    expect(covered('views.Int', design)).toEqual([]);
+    expect(covered('views.Index')).toEqual([
+      '{@render Index(lo)}',
+      '{@render Index(mid)}',
+      '{@render Index(found)}'
+    ]);
+  });
+});
+
 describe('code in an error message', () => {
   const dotted = `<script lang="sverlin" listing="code">
   for i = 0 to n - 1

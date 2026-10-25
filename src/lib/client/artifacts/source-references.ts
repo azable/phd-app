@@ -12,6 +12,16 @@ import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 /** A region of a source, by offsets into its text. */
 export type SourceRange = { from: number; to: number };
 
+/**
+ * What a build of the source records that references need: the variable each render of a type by
+ * name reads (`views.Index`, `pointers.Index`), by the line:column of its tag, and a variant's
+ * values, which say the view each choice draws with.
+ */
+export type ReferenceDesign = {
+  renders?: Readonly<Record<string, string>>;
+  variant?: Readonly<Record<string, unknown>>;
+};
+
 /** The props a kind's variable can set, the last part of a key such as `Highlight.Pointed.fill`. */
 const props = new Set([
   'shown',
@@ -36,8 +46,16 @@ const props = new Set([
 const name = String.raw`[A-Za-z_$][\w$]*`;
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 
-/** The regions a reference names in a source, in order; none when it names nothing there. */
-export function referenceRanges(source: string, text: string): SourceRange[] {
+/**
+ * The regions a reference names in a source, in order; none when it names nothing there. A view
+ * choice names the renders a build of the source (`design`) records as reading it, and the view it
+ * draws them with now, or without a record, every render of its type.
+ */
+export function referenceRanges(
+  source: string,
+  text: string,
+  design?: ReferenceDesign
+): SourceRange[] {
   const written = text.trim();
   if (!written) return [];
   const line = /^(?:lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?|(\d+):(\d+))$/u.exec(written);
@@ -53,6 +71,8 @@ export function referenceRanges(source: string, text: string): SourceRange[] {
   ).exec(written);
   if (variable) {
     const [, , path, place] = variable;
+    if (design?.renders && Object.keys(design.renders).length)
+      return choiceRanges(source, written, design);
     return renders(source, path.split('.').at(-1) ?? path, place);
   }
   const label = new RegExp(String.raw`^@(${name}(?:\.${name})*)$`, 'u').exec(written);
@@ -75,7 +95,11 @@ export function referenceRanges(source: string, text: string): SourceRange[] {
  * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index@found`,
  * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
  */
-export function codeIn(source: string, text: string): { text: string; code: boolean }[] {
+export function codeIn(
+  source: string,
+  text: string,
+  design?: ReferenceDesign
+): { text: string; code: boolean }[] {
   const spans: { text: string; code: boolean }[] = [];
   const add = (written: string, code: boolean) => {
     const last = spans.at(-1);
@@ -84,7 +108,7 @@ export function codeIn(source: string, text: string): { text: string; code: bool
   };
   for (let at = 0; at < text.length; ) {
     const candidates = codeAt(text, at);
-    const piece = candidates.find((candidate) => referenceRanges(source, candidate).length);
+    const piece = candidates.find((candidate) => referenceRanges(source, candidate, design).length);
     // Code naming nothing in the source, as a fix a message suggests, is text, inside it too.
     const written = piece ?? candidates[0] ?? text[at];
     add(written, piece !== undefined);
@@ -263,6 +287,48 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
       to: to + declared[0].to
     }))
   ];
+}
+
+/** A view choice's parts: `views` or `pointers`, the type it draws, and its place, if any. */
+function choice(key: string): { kind: string; type: string; place?: string } | undefined {
+  const parsed = new RegExp(
+    String.raw`^(views|pointers)\.(?:${name}\.)*(${name})(?:@(.+))?$`,
+    'u'
+  ).exec(key);
+  return parsed ? { kind: parsed[1], type: parsed[2], place: parsed[3] } : undefined;
+}
+
+/**
+ * The renders a build records as reading a view choice, each tag whole, and the declaration of the
+ * view the variant chooses. A type's choice (`views.Index`) also names the renders of the type at
+ * places of their own that draw with its view, as they do until a variant sets theirs apart; a
+ * place's choice (`pointers.Index@found`) names only its own.
+ */
+function choiceRanges(source: string, key: string, design: ReferenceDesign): SourceRange[] {
+  const wanted = choice(key);
+  if (!wanted) return [];
+  const view = design.variant?.[key] ?? design.variant?.[`${wanted.kind}.${wanted.type}`];
+  const starts = lineStarts(source);
+  const found: SourceRange[] = [];
+  for (const match of source.matchAll(/\{@render\s/gu)) {
+    const at = match.index ?? 0;
+    const line = starts.findLastIndex((start) => start <= at);
+    const read = design.renders?.[`${line + 1}:${at - starts[line] + 1}`];
+    const reading = read ? choice(read) : undefined;
+    if (
+      !read ||
+      !reading ||
+      reading.kind !== wanted.kind ||
+      reading.type !== wanted.type ||
+      (wanted.place !== undefined && read !== key) ||
+      (read !== key && design.variant?.[read] !== undefined && design.variant[read] !== view)
+    )
+      continue;
+    const tag = balanced(source, at, '{', '}');
+    if (tag) found.push({ from: at, to: at + tag.length });
+  }
+  const chosen = typeof view === 'string' && view !== 'none' ? kindRanges(source, [view]) : [];
+  return found.length ? sorted([...found, ...chosen]) : [];
 }
 
 /** The renders of a type by name, or only those at a place. */

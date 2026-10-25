@@ -2,7 +2,7 @@
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import { renderSafeMarkdown } from './markdown';
-  import { referenceRanges } from '$lib/client/artifacts/source-references';
+  import { referenceRanges, type ReferenceDesign } from '$lib/client/artifacts/source-references';
   import { sourceLinksContext } from '$lib/client/projects/source-links.svelte';
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import { knownCandidate } from '$lib/client/visualization/presentation-history';
@@ -24,6 +24,8 @@
     source?: string;
     /** Before revealing in a source of its own: show that source, as by choosing its card. */
     onRevealSource?: () => void;
+    /** What a build of that source records, which view choices it names are matched by. */
+    design?: ReferenceDesign;
   };
 
   let {
@@ -32,14 +34,17 @@
     inverted = false,
     onReferenceActivate = () => {},
     source,
-    onRevealSource = () => {}
+    onRevealSource = () => {},
+    design
   }: Props = $props();
 
   // Inline code naming something in the source shown links to it: choosing it reveals it there.
   const links = sourceLinksContext();
   function linkReferences(node: HTMLElement) {
     const shown = source ?? links?.shown ?? '';
-    const named = (code: Element) => (shown ? referenceRanges(shown, code.textContent ?? '') : []);
+    const built = design ?? (source === undefined ? links?.shownDesign : undefined);
+    const named = (code: Element) =>
+      shown ? referenceRanges(shown, code.textContent ?? '', built) : [];
     for (const code of node.querySelectorAll('code')) {
       const linked = !code.closest('pre') && named(code).length > 0;
       code.classList.toggle('source-ref', linked);

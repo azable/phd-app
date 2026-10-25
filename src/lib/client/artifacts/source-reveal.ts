@@ -1,7 +1,7 @@
 /**
  * CodeMirror marks for regions shown from elsewhere, as code a message names or the problems of a
  * failed build: a tint that flashes in, over each region, until another is shown or the text is
- * edited.
+ * edited. A view marker after a render a region covers flashes with it (see drawn-values.ts).
  *
  * @packageDocumentation
  */
@@ -16,38 +16,59 @@ export const setRevealed = StateEffect.define<readonly SourceRange[]>();
 
 const revealedMark = Decoration.mark({ class: 'cm-revealed' });
 
-function decorations(state: EditorState, ranges: readonly SourceRange[]): DecorationSet {
+type Revealed = { ranges: readonly SourceRange[]; marks: DecorationSet };
+
+const none: Revealed = { ranges: [], marks: Decoration.none };
+
+function revealed(state: EditorState, ranges: readonly SourceRange[]): Revealed {
   const length = state.doc.length;
-  return Decoration.set(
-    ranges
-      .map(({ from, to }) => ({ from: Math.min(from, length), to: Math.min(to, length) }))
-      .filter(({ from, to }) => to > from)
-      .map(({ from, to }) => revealedMark.range(from, to)),
-    true
-  );
+  const kept = ranges
+    .map(({ from, to }) => ({ from: Math.min(from, length), to: Math.min(to, length) }))
+    .filter(({ from, to }) => to > from);
+  return {
+    ranges: kept,
+    marks: Decoration.set(
+      kept.map(({ from, to }) => revealedMark.range(from, to)),
+      true
+    )
+  };
 }
 
-const revealedField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
+/** The regions revealed, and their marks. */
+export const revealedField = StateField.define<Revealed>({
+  create: () => none,
   update(value, transaction) {
     // Editing the text ends what was shown.
-    let next = transaction.docChanged ? Decoration.none : value;
+    let next = transaction.docChanged ? none : value;
     for (const effect of transaction.effects)
-      if (effect.is(setRevealed)) next = decorations(transaction.state, effect.value);
+      if (effect.is(setRevealed)) next = revealed(transaction.state, effect.value);
     return next;
   },
-  provide: (field) => EditorView.decorations.from(field)
+  provide: (field) => EditorView.decorations.from(field, (value) => value.marks)
 });
 
+/** The regions an editor shows revealed, none where it cannot reveal any. */
+export function revealedRanges(state: EditorState): readonly SourceRange[] {
+  return state.field(revealedField, false)?.ranges ?? [];
+}
+
+const flash = {
+  from: { backgroundColor: 'color-mix(in oklab, #d97706 55%, transparent)' },
+  to: { backgroundColor: 'color-mix(in oklab, #d97706 22%, transparent)' }
+};
+
 const revealedTheme = EditorView.baseTheme({
-  '@keyframes cm-revealed-flash': {
-    from: { backgroundColor: 'color-mix(in oklab, #d97706 55%, transparent)' },
-    to: { backgroundColor: 'color-mix(in oklab, #d97706 22%, transparent)' }
-  },
+  '@keyframes cm-revealed-flash': flash,
   '.cm-revealed': {
     backgroundColor: 'color-mix(in oklab, #d97706 22%, transparent)',
     boxShadow: '0 0 0 1px color-mix(in oklab, #d97706 55%, transparent)',
     borderRadius: '2px',
+    animation: 'cm-revealed-flash 900ms ease-out'
+  },
+  // A view marker after a revealed render: the view it is drawn with flashes too.
+  '.cm-drawn-values.cm-revealed-marker .cm-drawn-value': {
+    backgroundColor: 'color-mix(in oklab, #d97706 22%, transparent)',
+    boxShadow: '0 0 0 1px color-mix(in oklab, #d97706 55%, transparent)',
     animation: 'cm-revealed-flash 900ms ease-out'
   }
 });

@@ -95,7 +95,10 @@
   // What the timeline links to: the source shown, and regions to reveal in it, which open it.
   const links = sourceLinksContext();
   $effect(() => {
-    if (links) links.shown = displayedSource;
+    if (!links) return;
+    links.shown = displayedSource;
+    const built = drawnSources.find(({ source }) => source === displayedSource);
+    links.shownDesign = built && { renders: built.renders, variant: built.variant };
   });
   $effect(() => {
     if (links?.revealed) {

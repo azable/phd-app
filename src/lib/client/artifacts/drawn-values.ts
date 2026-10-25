@@ -40,6 +40,7 @@ export function propText(name: string, value: unknown): string {
   return typeof value === 'string' ? `${name}="${value}"` : `${name}={${JSON.stringify(value)}}`;
 }
 import { tagEnd } from './selection-highlights';
+import { revealedField, revealedRanges, revealedRegions } from './source-reveal';
 
 /**
  * A constraint layout the step on screen drew: the line and column (both from 1) of the tag that
@@ -477,19 +478,30 @@ export function valueText(value: unknown): string {
 }
 
 class DrawnValuesWidget extends WidgetType {
-  constructor(private readonly marker: DrawnMarker) {
+  constructor(
+    private readonly marker: DrawnMarker,
+    /** Whether a revealed region covers the call it follows, which it then flashes with. */
+    private readonly revealed = false
+  ) {
     super();
   }
 
   eq(other: DrawnValuesWidget): boolean {
-    return JSON.stringify(other.marker) === JSON.stringify(this.marker);
+    return (
+      other.revealed === this.revealed &&
+      JSON.stringify(other.marker) === JSON.stringify(this.marker)
+    );
   }
 
   toDOM(): HTMLElement {
     const wrapper = document.createElement('span');
-    wrapper.className = this.marker.differs
-      ? 'cm-drawn-values cm-drawn-differs'
-      : 'cm-drawn-values';
+    wrapper.className = [
+      'cm-drawn-values',
+      this.marker.differs && 'cm-drawn-differs',
+      this.revealed && 'cm-revealed-marker'
+    ]
+      .filter(Boolean)
+      .join(' ');
     for (const { label, text, title } of this.marker.values) {
       const value = document.createElement('span');
       value.className = 'cm-drawn-value';
@@ -695,10 +707,14 @@ function decorations(
   for (const { from, to, title } of unchosen)
     if (from < to)
       marks.push(Decoration.mark({ class: 'cm-unchosen', attributes: { title } }).range(from, to));
+  const revealed = revealedRanges(state);
   for (const marker of markers) {
     marks.push((marker.differs ? differingCall : drawnCall).range(marker.from, marker.to));
+    const covered = revealed.some(({ from, to }) => from <= marker.from && marker.to <= to);
     marks.push(
-      Decoration.widget({ widget: new DrawnValuesWidget(marker), side: 1 }).range(marker.to)
+      Decoration.widget({ widget: new DrawnValuesWidget(marker, covered), side: 1 }).range(
+        marker.to
+      )
     );
   }
   for (const { at, props, kinds } of ghosts) {
@@ -785,7 +801,9 @@ const drawnField = StateField.define<DrawnState>({
     return next;
   },
   provide: (field) =>
-    EditorView.decorations.compute([field], (state) => decorations(state, state.field(field)))
+    EditorView.decorations.compute([field, revealedField], (state) =>
+      decorations(state, state.field(field))
+    )
 });
 
 const drawnTheme = EditorView.baseTheme({
@@ -886,4 +904,4 @@ const drawnTheme = EditorView.baseTheme({
 });
 
 /** The extensions that let an editor show drawn values. */
-export const drawnValues = [drawnField, drawnTheme];
+export const drawnValues = [drawnField, drawnTheme, revealedRegions];

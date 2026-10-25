@@ -7,7 +7,7 @@
 
 import { getContext, setContext } from 'svelte';
 
-import type { SourceRange } from '$lib/client/artifacts/source-references';
+import type { ReferenceDesign, SourceRange } from '$lib/client/artifacts/source-references';
 
 /** Regions to reveal in a source, numbered so the same regions can be revealed again. */
 export type SourceReveal = { source: string; ranges: readonly SourceRange[]; id: number };
@@ -16,6 +16,8 @@ export type SourceReveal = { source: string; ranges: readonly SourceRange[]; id:
 export class SourceLinks {
   /** The source the panel shows. */
   shown = $state('');
+  /** What a build of the shown source records, where one did: which choice each render reads. */
+  shownDesign = $state.raw<ReferenceDesign | undefined>(undefined);
   /** The regions to reveal, until others are or they are cleared. */
   revealed = $state.raw<SourceReveal | undefined>(undefined);
   #next = 0;

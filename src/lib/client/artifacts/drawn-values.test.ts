@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 
 import type { DesignDraw } from '$lib/shared/presentations';
 
@@ -15,6 +16,7 @@ import {
   valueText,
   viewMarkers
 } from './drawn-values';
+import { setRevealed } from './source-reveal';
 
 const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
 const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
@@ -348,6 +350,32 @@ describe('variant markers', () => {
     const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
     expect(ghosts.flatMap(({ props }) => props.map(({ name }) => name))).not.toContain('ratio');
     expect(frameProps(presentations).map(({ name }) => name)).toEqual(['ratio']);
+  });
+
+  it('flashes the view marker after a render a revealed region covers', () => {
+    const view = '<Node>{@render Int(a)} and {@render Int(b)}</Node>';
+    const second = view.indexOf('{@render Int(b)}');
+    const state = EditorState.create({ doc: view, extensions: [drawnValues] }).update({
+      effects: [
+        setDrawnValues.of({
+          presentations: [{ ...presentations[0], variant: { 'views.Int': 'IntCell' } }]
+        }),
+        setRevealed.of([{ from: second, to: second + '{@render Int(b)}'.length }])
+      ]
+    }).state;
+    // Each view marker widget, by where it sits, and whether it shows revealed.
+    const revealed: [number, boolean][] = [];
+    for (const set of state.facet(EditorView.decorations))
+      if (typeof set !== 'function')
+        set.between(0, state.doc.length, (from, to, decoration) => {
+          const widget = decoration.spec.widget as { revealed?: boolean } | undefined;
+          if (from === to && widget && 'revealed' in widget)
+            revealed.push([from, widget.revealed!]);
+        });
+    expect(revealed).toEqual([
+      [view.indexOf(' and'), false],
+      [view.indexOf('</Node>'), true]
+    ]);
   });
 
   it('marks each render of a type with the view each shown variant draws it with', () => {

@@ -6,7 +6,11 @@
   import StickyNoteIcon from '@lucide/svelte/icons/sticky-note';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
 
-  import { codeIn, codeMarkdown } from '$lib/client/artifacts/source-references';
+  import {
+    codeIn,
+    codeMarkdown,
+    type ReferenceDesign
+  } from '$lib/client/artifacts/source-references';
   import * as Avatar from '$lib/client/components/ui/avatar';
   import { Button } from '$lib/client/components/ui/button';
   import { Spinner } from '$lib/client/components/ui/spinner';
@@ -110,8 +114,16 @@
 
   // An error message as Markdown: its code, where the source holds it, as source links.
   const links = sourceLinksContext();
-  const errorMarkdown = (text: string, source: string) =>
-    codeMarkdown(source ? codeIn(source, text) : [{ text, code: false }]);
+  const errorMarkdown = (text: string, source: string, design?: ReferenceDesign) =>
+    codeMarkdown(source ? codeIn(source, text, design) : [{ text, code: false }]);
+  // What a card's first presentation's build records, which view choices its links are matched by.
+  const designOf = (sourceHash: string | undefined): ReferenceDesign | undefined => {
+    const card = items.find((item) => item.kind === 'version' && item.sourceHash === sourceHash);
+    const presentation = card?.kind === 'version' ? card.variants[0]?.presentation : undefined;
+    return presentation?.format === 'browser-bundle-v1'
+      ? { renders: presentation.renders, variant: presentation.variant }
+      : undefined;
+  };
 
   // The source card a parent link last showed, outlined for a moment so the eye finds it.
   let shown = $state<string | undefined>();
@@ -182,6 +194,7 @@
         <MessageContent
           content={[{ type: 'markdown', text: item.text }]}
           source={of?.source}
+          design={designOf(of?.sourceHash)}
           onRevealSource={() =>
             of &&
             onChooseSource({
@@ -300,6 +313,7 @@
               <MessageContent
                 content={[{ type: 'markdown', text: item.summary }]}
                 source={item.source}
+                design={designOf(item.sourceHash)}
                 onRevealSource={() => chooseSource(item)}
               />
             </div>
@@ -381,7 +395,12 @@
         <p class="text-sm font-medium text-destructive">The request could not be completed</p>
         <div class="mt-1">
           <MessageContent
-            content={[{ type: 'markdown', text: errorMarkdown(item.text, links?.shown ?? '') }]}
+            content={[
+              {
+                type: 'markdown',
+                text: errorMarkdown(item.text, links?.shown ?? '', links?.shownDesign)
+              }
+            ]}
           />
         </div>
       </article>
