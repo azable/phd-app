@@ -321,10 +321,6 @@
       >
         <p class="text-sm font-medium text-destructive">The request could not be completed</p>
         <p class="mt-1 text-base">{item.text}</p>
-        <p class="mt-1 text-xs text-muted-foreground">
-          {chosen ? 'Showing' : 'Show'}
-          {failed.by === 'assistant' ? 'the assistant’s attempt' : 'the saved source'} that didn’t build
-        </p>
       </button>
     {:else}
       <article
