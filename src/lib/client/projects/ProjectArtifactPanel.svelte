@@ -11,6 +11,7 @@
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
+  import { diagnosticRanges } from '$lib/client/artifacts/source-references';
   import * as AlertDialog from '$lib/client/components/ui/alert-dialog';
   import { Badge } from '$lib/client/components/ui/badge';
   import { Button } from '$lib/client/components/ui/button';
@@ -22,6 +23,7 @@
   import { locateElement } from '$lib/modes/sverlin/element-ref';
 
   import type { ProjectSession } from './project-session.svelte';
+  import { sourceLinksContext } from './source-links.svelte';
 
   /** Editing modes exposed to the parent project workspace. */
   export type ProjectArtifactEditMode = 'readonly' | 'editing';
@@ -89,6 +91,17 @@
   // Choosing a source, or a source that did not build, opens the panel to show it.
   $effect(() => {
     if (chosen || failed) expanded = true;
+  });
+  // What the timeline links to: the source shown, and regions to reveal in it, which open it.
+  const links = sourceLinksContext();
+  $effect(() => {
+    if (links) links.shown = displayedSource;
+  });
+  $effect(() => {
+    if (links?.revealed) {
+      expanded = true;
+      tab = 'source';
+    }
   });
   const showingChanges = $derived(chosen?.parent !== undefined && editMode === 'readonly');
 
@@ -287,11 +300,19 @@
           >
         {/if}
         {#if diagnosed.items.length}
-          <Badge variant="destructive"
-            >{diagnosed.items.length} build {diagnosed.items.length === 1
-              ? 'problem'
-              : 'problems'}</Badge
+          <button
+            type="button"
+            class="rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            title="Show where in the source"
+            onclick={() =>
+              links?.reveal(diagnosed.source, diagnosticRanges(diagnosed.source, diagnosed.items))}
           >
+            <Badge variant="destructive"
+              >{diagnosed.items.length} build {diagnosed.items.length === 1
+                ? 'problem'
+                : 'problems'}</Badge
+            >
+          </button>
         {/if}
         {#if failed}
           <Badge variant="destructive">Didn’t build</Badge>
@@ -453,6 +474,7 @@
             drawnSource={markedSource}
             original={showingChanges ? chosen?.parent?.source : undefined}
             diagnostics={diagnosed}
+            revealed={links?.revealed}
             onChange={updateDraft}
           />
         </div>

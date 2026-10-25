@@ -56,6 +56,9 @@
     type ProjectArtifactEditMode
   } from './ProjectArtifactPanel.svelte';
   import { ProjectSession } from './project-session.svelte';
+  import { provideSourceLinks, SourceLinks } from './source-links.svelte';
+  import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
+  import { diagnosticRanges } from '$lib/client/artifacts/source-references';
   import { shouldShowPhaseExpiredDialog } from './study-controls';
 
   type StudyTask =
@@ -209,6 +212,9 @@
   let chosenFailure = $state<
     { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
   >();
+
+  // Links from messages and problems to the source panel.
+  const sourceLinks = provideSourceLinks(new SourceLinks());
 
   // A source chosen on its own, by its card: no visualization shows, and the source panel fills the
   // stage with its source and what it changes from its parent, until a variant is chosen.
@@ -618,6 +624,9 @@
                   if (failure) {
                     chosenOf = undefined;
                     chosenRequestId = undefined;
+                    // Its problems, revealed where they are.
+                    const problems = buildDiagnosticsFor(session.events, failure.source);
+                    sourceLinks.show(failure.source, diagnosticRanges(failure.source, problems));
                   }
                 }}
               />

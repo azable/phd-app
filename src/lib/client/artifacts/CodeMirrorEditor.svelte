@@ -10,6 +10,8 @@
   import { artifactEditorExtensions, type ArtifactLanguage } from './artifact-editor';
   import { drawnValues, setDrawnValues, type DrawnPresentation } from './drawn-values';
   import { editorDiagnostics } from './source-diagnostics';
+  import { revealedRegions, showRevealed } from './source-reveal';
+  import type { SourceReveal } from '$lib/client/projects/source-links.svelte';
   import {
     showSourceHighlights,
     sourceHighlights,
@@ -32,6 +34,8 @@
     diagnostics?: { source: string; items: readonly BuildDiagnostic[] };
     /** A source to show the changes from, such as the version this one was made from. */
     original?: string;
+    /** Regions to reveal, with the source they are in: shown once each, while that is the text. */
+    revealed?: SourceReveal;
     onChange?: (value: string) => void;
   };
 
@@ -45,6 +49,7 @@
     drawnSource = '',
     diagnostics = { source: '', items: [] },
     original,
+    revealed,
     onChange
   }: Props = $props();
 
@@ -69,6 +74,7 @@
         extensions: [
           ...artifactEditorExtensions({ language }),
           sourceHighlights,
+          revealedRegions,
           drawnValues,
           lintGutter(),
           editableCompartment.of(editableExtensions(editable)),
@@ -129,6 +135,21 @@
     const { source, items } = diagnostics;
     if (view && view.state.doc.toString() === source)
       view.dispatch(setDiagnostics(view.state, editorDiagnostics(view.state, items)));
+  });
+
+  // Each reveal once, in the text its regions are in; clearing it clears them.
+  let revealedId = 0;
+  $effect(() => {
+    void value;
+    const next = revealed;
+    if (!view) return;
+    if (!next) {
+      if (revealedId) view.dispatch(showRevealed(view.state, []));
+      revealedId = 0;
+    } else if (next.id !== revealedId && view.state.doc.toString() === next.source) {
+      revealedId = next.id;
+      view.dispatch(showRevealed(view.state, next.ranges));
+    }
   });
 
   $effect(() => {
