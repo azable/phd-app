@@ -740,6 +740,14 @@ describe('typed view components', () => {
       /Int is a type, and nothing draws it: add a view of it/
     ],
     [
+      'rendering a snippet that is not defined',
+      () =>
+        component(
+          '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet I()}<Node>{@render Int(i)}</Node>{/snippet}{@render I()}{@render Compared(i)}'
+        ),
+      /\{@render Compared\(…\)\} draws Compared, which no snippet, type, or operator is named/
+    ],
+    [
       'a view named after its type',
       () => component('{#snippet Int(value: Int)}<Node {value} />{/snippet}{@render Int(i)}'),
       /Int is a view named after its type/

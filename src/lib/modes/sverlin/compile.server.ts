@@ -595,6 +595,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `${undrawn.name} is a type, and nothing draws it: add a view of it, as {#snippet ${undrawn.name}Cell(value: ${undrawn.name})}<Node {value} />{/snippet}.`,
         { code: 'view_component', start: sourcePosition(source, undrawn.start) }
       );
+    const unknown = renderedNames(ast.html).find(
+      ({ name }) => !paths.has(name) && !definesType(viewing, name) && !operators.has(name)
+    );
+    if (unknown)
+      throw new InvalidSvelteSourceError(
+        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or operator is named: define it, as {#snippet ${unknown.name}(p: Index)}<Pointed />{/snippet} for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
+        { code: 'view_component', start: sourcePosition(source, unknown.start) }
+      );
     // Each type rendered by name chooses among its views: its plain views, where it also has
     // pointers, which are rendered by their own names.
     // A view that draws its own type by name, itself or through views it renders, would draw
