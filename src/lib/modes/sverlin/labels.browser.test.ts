@@ -35,11 +35,9 @@ const domain = `<script lang="sverlin" domain>
 </script>`;
 
 /** Each step's visible nodes, as kind:text, from the first step on. */
-async function stepsOf(source: string, frames: string, count: number): Promise<string[][]> {
+async function stepsOf(source: string, count: number): Promise<string[][]> {
   const prepared = prepareSvelteComponent(source);
-  // A source with one way to step has no frames variable.
-  const chosen = 'frames' in prepared.design.space ? { frames } : {};
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+  const { javascript } = await bundlePresentation(prepared, 1);
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -92,7 +90,7 @@ it.skipIf(!enabled)(
 {#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
 {@render Cells()}
 {@render Inserting()}`;
-    const keys = (await stepsOf(source, 'insert', 4)).map((nodes) =>
+    const keys = (await stepsOf(source, 4)).map((nodes) =>
       nodes.find((node) => node.startsWith('Inserting'))
     );
     // The page opens on the input, before any key, the node hidden whole; then one key per step.
@@ -127,14 +125,18 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Swapped()}<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}?</Node>{/snippet}
 {@render Cells()}
+{@render Greater()}
 {@render Swapped()}`;
-    const [, first] = await stepsOf(source, 'sweep.pair.test.swap', 2);
-    expect(first).toContain('Swapped:swap 5 and 1');
-    // At a comparison that swaps nothing, the caption hides whole, its text with its values.
+    // Each comparison is a step, and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
-    const [, , , compare] = await stepsOf(source, 'sweep.pair.test', 4);
+    const [, compare, swap, , , last] = await stepsOf(source, 6);
+    expect(swap).toContain('Swapped:swap 5 and 1');
+    // At a comparison, the caption hides whole, its text with its values.
     expect(compare.some((node) => node.startsWith('Swapped'))).toBe(false);
+    expect(last.some((node) => node.startsWith('Swapped'))).toBe(false);
+    expect(last.some((node) => node.startsWith('Ask:is 1 > 4'))).toBe(true);
   }
 );
 
@@ -157,7 +159,7 @@ it.skipIf(!enabled)(
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {@render Cells()}
 {#each runs(@check.at) as p}{@render Index(p)}{/each}`;
-    const checked = (await stepsOf(search, 'check', 4)).map((nodes) =>
+    const checked = (await stepsOf(search, 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
     // The input as given, nothing checked yet; then each check adds its cell.
@@ -186,7 +188,7 @@ it.skipIf(!enabled)(
 {@render DigitRow()}
 {@render CountRow()}
 {@render At(v)}`;
-    const reading = (await stepsOf(counting, 'count', 4)).map(
+    const reading = (await stepsOf(counting, 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
     );
     // The page opens on the input as given, v not yet declared; then each digit counted.

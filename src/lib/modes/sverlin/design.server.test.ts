@@ -19,8 +19,7 @@ describe('design space', () => {
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
             !key.startsWith('frame.') &&
-            !key.includes('@') &&
-            key !== 'frames'
+            !key.includes('@')
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     );
@@ -28,6 +27,7 @@ describe('design space', () => {
       [
         'Title',
         'Caption',
+        'Ask',
         'Checking',
         'Result',
         'IntCell',

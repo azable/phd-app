@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { interpretDomain, interpretInput, traceAlgorithm } from './interpret.server';
+import { interpretDomain, interpretInput, traceAlgorithm, type Pacing } from './interpret.server';
 
 const types = `
   const Int = type('integer', { min: 0, max: 9 });
@@ -19,7 +19,11 @@ const domain = interpretDomain(`${types}
   const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(5);', domain);
-const run = (body: string) => traceAlgorithm(body, input, domain).steps;
+const run = (body: string, pacing?: Pacing) => traceAlgorithm(body, input, domain, pacing).steps;
+// A view showing the operators named.
+const showing = (...operators: string[]): Pacing => ({
+  shown: new Map(operators.map((operator) => [operator, undefined]))
+});
 
 describe('operators', () => {
   it('are declared with their operands’ types and a function of them, naming their parts', () => {
@@ -417,33 +421,44 @@ describe('structural operators', () => {
 });
 
 describe('applications kept for the view', () => {
-  it('keep a step’s own applications by operator, in order, named by the operator’s parameters', () => {
-    const [step] = run('@add[const total = Add(Add(Int(1), Int(2)), Int(3));]');
-    expect(step.applied).toEqual({
+  it('make each application of an operator shown a step, named by the operator’s parameters', () => {
+    const [inner, outer, add] = run(
+      '@add[const total = Add(Add(Int(1), Int(2)), Int(3));]',
+      showing('Add')
+    );
+    expect(inner.applied).toEqual({
       Add: [
         {
           state: { a: 1, b: 2, value: 3 },
           types: { a: 'Int', b: 'Int', value: 'Int' },
           at: 23,
           identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
-        },
-        {
-          state: { a: 3, b: 3, value: 6 },
-          types: { a: 'Int', b: 'Int', value: 'Int' },
-          at: 19,
-          identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
         }
       ]
     });
+    expect(outer.applied?.Add).toEqual([
+      {
+        state: { a: 3, b: 3, value: 6 },
+        types: { a: 'Int', b: 'Int', value: 'Int' },
+        at: 19,
+        identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
+      }
+    ]);
+    // Then the label's run, which declares total, with no application of its own.
+    expect(add.applied).toBeUndefined();
+    expect(add.state.total).toBe(6);
   });
 
   it('leave out the applications leading up to a step', () => {
-    // The loop's test leads up to each pass; only the pass's own Equal is the step's.
-    const steps = run(`
+    // The loop's test leads up to each comparison, which alone is the step's own.
+    const steps = run(
+      `
       for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
         if (Equal(values[i], target)) break;
       }
-    `);
+    `,
+      showing('Equal')
+    );
     expect(steps[0].applied).toEqual({
       Equal: [
         {
@@ -457,11 +472,14 @@ describe('applications kept for the view', () => {
   });
 
   it('make each operand a copy of where it was read, so the view draws it from there', () => {
-    const [first] = run(`
+    const [first] = run(
+      `
       for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
         if (Equal(values[i], target)) break;
       }
-    `);
+    `,
+      showing('Equal')
+    );
     const { ids, copies } = first.identities!;
     const operands = first.applied!.Equal[0].identities!;
     // a was read from values[0], b through the variable target; the result is new.
@@ -473,15 +491,21 @@ describe('applications kept for the view', () => {
   });
 
   it('copy an operand read through a for … of variable from the cell it is at', () => {
-    const [first] = run('for (const v of values) @check{ if (Equal(v, target)) break; }');
+    const [first] = run(
+      'for (const v of values) @check{ if (Equal(v, target)) break; }',
+      showing('Equal')
+    );
     const { ids, copies } = first.identities!;
     expect(copies[first.applied!.Equal[0].identities!.a]).toBe(ids['values[0]']);
   });
 
   it('copy a collection given or given back, so later writes leave it as it was', () => {
-    const [step] = run('@join[let more = Append(values, target); more[0] = Int(0);]');
+    const [step, join] = run(
+      '@join[let more = Append(values, target); more[0] = Int(0);]',
+      showing('Append')
+    );
     expect(step.applied?.Append?.[0].state).toEqual({ c: [3, 8, 5], x: 5, value: [3, 8, 5, 5] });
-    expect(step.state.more).toEqual([0, 8, 5, 5]);
+    expect(join.state.more).toEqual([0, 8, 5, 5]);
     expect(step.applied?.Append?.[0].types).toMatchObject({ c: 'Values', 'c[0]': 'Int', x: 'Int' });
   });
 

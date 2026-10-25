@@ -652,10 +652,7 @@ export function viewedPresentation(
 /** A presentation's design space and variant, each prop's options named once. */
 export function designVariables(
   presentation:
-    | Pick<
-        BrowserBundlePresentation,
-        'variant' | 'origins' | 'views' | 'pointers' | 'frames' | 'listings'
-      >
+    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'pointers' | 'listings'>
     | undefined
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
@@ -690,11 +687,9 @@ export function designVariables(
         ? [...(presentation?.views?.[view] ?? []), 'none']
         : pointer
           ? [...(presentation?.pointers?.[pointer] ?? []), 'none']
-          : key === 'frames'
-            ? (presentation?.frames ?? [])
-            : key === 'listing.language' && presentation?.listings?.length
-              ? [...presentation.listings, ...listingOptions['listing.language']]
-              : set,
+          : key === 'listing.language' && presentation?.listings?.length
+            ? [...presentation.listings, ...listingOptions['listing.language']]
+            : set,
       value,
       ...(origin ? { origin } : {})
     };

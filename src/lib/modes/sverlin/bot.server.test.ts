@@ -149,17 +149,17 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">@step[for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) {}] @done[const done = Flag(true);]</script><Node>x</Node>`;
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">let last = Count(9); for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(value: Count)}<Node {value} />{/snippet}{@render Count(last)}`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
-    // Numbered as the page numbers them: the input as given (here none), a step per pass, then the
-    // step after the loop, where n is out of scope.
+    // Numbered as the page numbers them: the input as given (here none), a step per pass changing
+    // what the view draws, then the step after the loop, where n is out of scope.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
         { step: 1, state: {} },
-        { step: 2, state: { n: 0 } },
-        { step: 3, state: { n: 1 } },
-        { step: 4, state: { done: true } }
+        { step: 2, state: { last: 0, n: 0 } },
+        { step: 3, state: { last: 1, n: 1 } },
+        { step: 4, state: { last: 1, done: true } }
       ]
     });
   });
@@ -168,8 +168,8 @@ describe('recorded steps in the assistant context', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
       steps: [
         { step: 1, state: {} },
-        { step: 2, state: { n: 0 } },
-        { step: 3, state: { done: true } }
+        { step: 2, state: { last: 0, n: 0 } },
+        { step: 3, state: { last: 0, done: true } }
       ]
     });
     expect(

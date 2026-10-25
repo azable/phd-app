@@ -66,25 +66,27 @@ describe('listings of the source’s own', () => {
     expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
     const { text, lit } = prepared.listings!.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
-    // Stepping by place, each step leads up to placing the key and then places it.
-    const shown = lit.place.map(({ current, earlier }) => ({
+    // The view draws the row, so the steps are the shift and the placing, each leading up from the
+    // step before.
+    const shown = lit[''].map(({ current, earlier }) => ({
       current: current.map(([start, end]) => text.slice(start, end)),
       earlier: earlier.map(([start, end]) => text.slice(start, end))
     }));
-    // [2, 1]: the 1 shifts once, then j reaches 0 and the comparison never runs.
-    // Step 0, the state before the first placing, lights nothing.
+    // [2, 1]: the 2 shifts once, then j reaches 0 and the comparison never runs.
+    // Step 0, the input as given, lights nothing.
     expect(shown[0]).toEqual({ current: [], earlier: [] });
-    expect(shown[1].current).toEqual(['A[j + 1] = key']);
+    expect(shown[1].current).toEqual(['A[j + 1] = A[j]']);
     expect(shown[1].earlier).toEqual(
-      expect.arrayContaining(['j > 0 and A[j] > key', 'A[j + 1] = A[j]', 'j = j - 1'])
+      expect.arrayContaining(['key = A[i]', 'j = i - 1', 'j > 0 and A[j] > key'])
     );
+    expect(shown[2].current).toEqual(['A[j + 1] = key']);
   });
 
   it('light the bound alone where the comparison never runs', () => {
-    // Stepping by down, the last step leads up from it: the test that fails at j = 0, its
-    // comparison never run, then placing the key.
+    // The last step, placing the key, leads up from the shift: j moves to 0, and the test fails on
+    // its bound, its comparison never run.
     const { text, lit } = prepareSvelteComponent(insertion).listings!.textbook;
-    const leaving = lit.down.at(-1)!;
+    const leaving = lit[''].at(-1)!;
     const earlier = leaving.earlier.map(([start, end]) => text.slice(start, end));
     expect(earlier).toContain('j > 0 and');
     expect(earlier).not.toContain('A[j] > key');

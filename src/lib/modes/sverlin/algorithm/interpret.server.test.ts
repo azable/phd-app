@@ -41,7 +41,7 @@ const plain = <T extends { types: unknown }>(step: T) => ({
 
 describe('algorithm interpretation', () => {
   it('records every top-level binding at each step', () => {
-    // Each label at the top is a step, the loop's too, its body being no label of its own.
+    // Each run of a label changing a variable is a step: the check finding nothing changes none.
     const trace = interpretAlgorithm(`
       @start[const values = Ints([3, 8, 5]);
       let i = Int(-1);
@@ -55,9 +55,9 @@ describe('algorithm interpretation', () => {
         @next[i = Next(i);]
       }
     `);
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 0, 1, 1]);
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 1]);
     expect(trace[0].state).toEqual({ values: [3, 8, 5], i: -1, found: false });
-    expect(trace[4].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
+    expect(trace[3].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
   });
 
   it('snapshots state so later mutations do not change earlier steps', () => {
@@ -140,12 +140,12 @@ describe('algorithm interpretation', () => {
     ).toThrow(/entries/);
     expect(() =>
       interpretAlgorithm(
-        '@grow[let a = Ints([1]); for (let i = Int(0); Less(i, 13); i = Next(i)) a = Ints([...a, ...a]);] @loop[for (let j = Int(0); Less(j, 30); j = Next(j)) {}]'
+        '@grow[let a = Ints([1]); for (let i = Int(0); Less(i, 13); i = Next(i)) a = Ints([...a, ...a]);\nlet b = Int(0);] @loop[for (let j = Int(0); Less(j, 30); j = Next(j)) { b = Next(j); }]'
       )
     ).toThrow(/too large/);
     expect(() =>
       interpretAlgorithm(
-        `@loop[for (let i = Int(0); Less(i, ${algorithmLimits.maximumSteps + 1}); i = Next(i)) {}]`
+        `let n = Int(0); @loop[for (let i = Int(0); Less(i, ${algorithmLimits.maximumSteps + 1}); i = Next(i)) { n = Next(i); }]`
       )
     ).toThrow(/more than/);
   });

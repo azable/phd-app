@@ -80,12 +80,16 @@ function placed(frame: Frame): Promise<Record<string, [number, number]>> {
   });
 }
 
-/** Where each moving node starts, held at the start of its move, with the value it was copied from. */
+/**
+ * Where each moving node starts, held at the start of its move, with the value it was copied from,
+ * on the layer shown, or the first matching the selector given.
+ */
 function starts(
-  frame: Frame
+  frame: Frame,
+  selector = '.sv-layer:not(.pending):not(.sv-leaving)'
 ): Promise<{ identity: string; at: [number, number]; copiedFrom?: string }[]> {
-  return frame.evaluate(() => {
-    const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)');
+  return frame.evaluate((selector) => {
+    const layer = document.querySelector(selector);
     const moves = (layer?.getAnimations({ subtree: true }) ?? []).filter(
       (animation) => (animation.effect as KeyframeEffect).getKeyframes()[0].translate !== undefined
     );
@@ -101,7 +105,7 @@ function starts(
         at: [Math.round(box.left), Math.round(box.top)] as [number, number]
       };
     });
-  });
+  }, selector);
 }
 
 it.skipIf(!enabled)(
@@ -109,8 +113,7 @@ it.skipIf(!enabled)(
   { timeout: 180_000 },
   async () => {
     const prepared = prepareSvelteComponent(merge);
-    // Stepping by step, each value taken leads up to marking where it was placed.
-    const master = prepared.masters.step;
+    const master = prepared.master;
     // Copies start where the value they were copied from was (identities.server.ts): into a
     // step's before from the step before, then into its after from its before.
     const copies = master.map(({ before, identities }) => [
@@ -120,7 +123,7 @@ it.skipIf(!enabled)(
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
         const { javascript } = await bundlePresentation(prepared, seed, {
-          chosen: { frames: 'step', 'pointers.Position@k': 'Placed' }
+          chosen: { 'pointers.Position@k': 'Placed' }
         });
         return sandboxDocument('', javascript, 0, seed);
       })
@@ -180,16 +183,19 @@ it.skipIf(!enabled)(
               null,
               { timeout: 20_000 }
             );
-            // Claimed as it is read, so a layer the page replaces at once is not marked unseen.
+            // Claimed as it is read, so a layer the page replaces at once is not marked unseen, and its
+            // moves read from it, though the page has gone on to the next.
             const name = await frame.evaluate(() => {
               const layer = document.querySelector(
                 '.sv-layer:not(.pending):not(.sv-leaving):not([data-checked])'
               ) as HTMLElement;
               layer.setAttribute('data-checked', '');
+              document.querySelector('[data-claimed]')?.removeAttribute('data-claimed');
+              layer.setAttribute('data-claimed', '');
               return layer.dataset.svPhase as 'before' | 'after';
             });
             const part = name === 'before' ? 0 : 1;
-            for (const { identity, at } of await starts(frame)) {
+            for (const { identity, at } of await starts(frame, '.sv-layer[data-claimed]')) {
               const was = from[pane][identity] ?? from[pane][copies[index][part][Number(identity)]];
               expect(
                 at,
@@ -644,10 +650,10 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(compared);
-    const [, first] = prepared.masters.compare;
+    const [, first] = prepared.master;
     const operands = first.applied!.Greater[0].identities!;
     const copies = first.identities!.copies;
-    const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'compare' } });
+    const { javascript } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

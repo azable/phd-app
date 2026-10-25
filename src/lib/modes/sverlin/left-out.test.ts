@@ -38,12 +38,20 @@ const nodeIn = (text: string) => (part: string) =>
   siteOf(text, text.indexOf(`{#snippet ${part}()}`) + `{#snippet ${part}()}`.length);
 const site = siteIn(source);
 const node = nodeIn(source);
-const left = (frames: string, values: Record<string, unknown> = {}) => {
-  const design = { ...prepared.design.starter, ...values };
-  const views = Object.fromEntries(
-    Object.keys(prepared.design.views).map((type) => [type, design[`views.${type}`]])
+// The pass as one label, which reads v and writes the row, as the same lines: its steps are its
+// passes that change the row, v out of scope before each and after it.
+const wholePass = (text: string) =>
+  text.replace(
+    '@pick[const v = values[i];]\n    @put[values[i] = v;]',
+    'const v = values[i];\n    values[i] = values[0];'
   );
-  return leftOutOf(prepared, design, views, phasesOf(prepared.masters[frames]));
+const whole = prepareSvelteComponent(wholePass(source));
+const left = (built: typeof prepared, values: Record<string, unknown> = {}) => {
+  const design = { ...built.design.starter, ...values };
+  const views = Object.fromEntries(
+    Object.keys(built.design.views).map((type) => [type, design[`views.${type}`]])
+  );
+  return leftOutOf(built, design, views, phasesOf(built.master));
 };
 const hiddenIn = (built: ReturnType<typeof prepareSvelteComponent>, absent: string[]) =>
   hiddenAt(
@@ -57,9 +65,9 @@ const hiddenIn = (built: ReturnType<typeof prepareSvelteComponent>, absent: stri
 
 describe('left out', () => {
   it('leaves out a render of a value out of scope at every step, and a node whose own render it is', () => {
-    // Stepping over the whole pass, v is out of scope before it and after it. A node's own renders
+    // Stepping over whole passes, v is out of scope before each and after it. A node's own renders
     // and text are one statement, so "v and values[0]" goes too, and the parts drawing nothing else.
-    expect(left('pass')).toEqual({
+    expect(left(whole)).toEqual({
       nodes: [node('Picked'), node('Both')],
       renders: [
         site('{@render Int(v)}</Node>'),
@@ -71,11 +79,11 @@ describe('left out', () => {
   });
 
   it('keeps a node holding no render', () => {
-    expect(left('pass').nodes).not.toContain(node('Title'));
+    expect(left(whole).nodes).not.toContain(node('Title'));
   });
 
   it('hides, rather than leaves out, a value out of scope at only some steps', () => {
-    expect(left('pass.*')).toEqual({ nodes: [], renders: [] });
+    expect(left(prepared)).toEqual({ nodes: [], renders: [] });
   });
 
   it('leaves out what a view of none or a kind not shown takes with it, up to its nodes', () => {
@@ -91,8 +99,8 @@ describe('left out', () => {
         site('{@render Cells()}')
       ]
     };
-    expect(left('pass.*', { 'views.Int': 'none' })).toEqual(expected);
-    const notShown = left('pass.*', { 'IntCell.shown': false });
+    expect(left(prepared, { 'views.Int': 'none' })).toEqual(expected);
+    const notShown = left(prepared, { 'IntCell.shown': false });
     expect(notShown.renders).toEqual(expected.renders);
     // The view's own node is left out by its kind, and the title, holding no render, stays.
     expect(notShown.nodes).toEqual(
@@ -102,7 +110,7 @@ describe('left out', () => {
   });
 
   it('leaves out a part of the page whose kind is not shown, and keeps the others', () => {
-    const { nodes } = left('pass.*', { 'Title.shown': false });
+    const { nodes } = left(prepared, { 'Title.shown': false });
     expect(nodes).toEqual([node('Title')]);
   });
 
@@ -155,16 +163,12 @@ describe('left out', () => {
     const built = prepareSvelteComponent(shaped);
     const first = nodeIn(shaped);
     const hidden = hiddenIn(built, ['v']);
+    const passes = prepareSvelteComponent(wholePass(shaped));
     expect(hidden).not.toContain(first('Column'));
     expect(hidden).not.toContain(first('Mixed'));
-    // Per presentation, stepping over the whole pass, the same: neither is left out.
-    const design = built.design.starter;
-    const left = leftOutOf(
-      built,
-      design,
-      { Int: design['views.Int'] },
-      phasesOf(built.masters.pass)
-    );
+    // Per presentation, stepping over whole passes, the same: neither is left out.
+    const design = passes.design.starter;
+    const left = leftOutOf(passes, design, { Int: design['views.Int'] }, phasesOf(passes.master));
     expect(left.nodes).not.toContain(first('Column'));
     expect(left.nodes).not.toContain(first('Mixed'));
     expect(left.renders).toContain(siteIn(shaped)('{@render Int(v)}</Node>'));

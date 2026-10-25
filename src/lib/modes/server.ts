@@ -34,8 +34,6 @@ export type ModeBuildResult =
         views?: Record<string, string[]>;
         // Each position type's pointer views, the options of its pointers variable.
         pointers?: Record<string, string[]>;
-        // The events a presentation can step by, the options of its frames variable.
-        frames?: string[];
         // The source's own listings, the first options of its listing.language variable.
         listings?: string[];
         // The kind of each tag, by its line:column.

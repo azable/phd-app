@@ -5,7 +5,7 @@
  * node, where its kind is not shown; or, holding no node or part, one of its renders is left out
  * (its renders and text are one statement); or, holding nodes, every part is, each node and each
  * render in it, a part's render counting as the nodes it draws. Decided once a presentation's
- * variant and frames are known, by the site of each <Node> and render (its line:column, as tags
+ * variant and steps are known, by the site of each <Node> and render (its line:column, as tags
  * record their kinds).
  */
 

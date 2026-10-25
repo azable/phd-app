@@ -864,7 +864,6 @@ export async function activateBuiltPresentations(
       ...(bundle.pointers && Object.keys(bundle.pointers).length
         ? { pointers: bundle.pointers }
         : {}),
-      ...(bundle.frames ? { frames: bundle.frames } : {}),
       ...(bundle.listings?.length ? { listings: bundle.listings } : {}),
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
       ...(bundle.renders ? { renders: bundle.renders } : {}),

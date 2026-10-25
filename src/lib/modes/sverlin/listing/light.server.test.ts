@@ -27,8 +27,9 @@ const body = `
 const text = `for @loop[i = 0 to n - 1]
     @check[found = @matches[A[i] == x]]
     if @test[found then @stop[stop]]`;
-// Stepping by check: each step leads up to the check, then makes it.
-const traced = traceAlgorithm(body, input, domain, 'check');
+// Drawing found: each step leads up to the check, then makes it.
+const drawingFound = { drawn: new Set(['found']) };
+const traced = traceAlgorithm(body, input, domain, drawingFound);
 const { listing, problems } = mappedListing({ body: text }, traced);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
@@ -59,7 +60,7 @@ describe('lighting', () => {
       `${body}\n  @done[const done = Flag(true);]`,
       input,
       domain,
-      'check'
+      drawingFound
     );
     const lit = lightSteps(mappedListing({ body: text }, ending).listing, ending.steps);
     expect(lit).toHaveLength(3);

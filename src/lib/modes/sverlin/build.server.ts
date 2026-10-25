@@ -43,7 +43,6 @@ export async function buildBatch(
           origins: bundle.origins,
           views: prepared.design.views,
           pointers: prepared.design.pointers,
-          frames: Object.keys(prepared.masters),
           listings: prepared.ownListings,
           kinds: prepared.design.tags,
           renders: prepared.design.renders,

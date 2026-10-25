@@ -5,8 +5,7 @@
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
  * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
  * a place, as {@render Index(@left)}, a chip opening that place's own values; the first top-level
- * node's chip also holds the page frame, with which events are steps (frames), which shows above
- * the source where there is no such node.
+ * node's chip also holds the page frame, which shows above the source where there is no such node.
  * Views of a type that no shown presentation's variant chose are greyed out, and so are nodes every
  * shown presentation left out (see left-out.ts). A presentation built
  * while sources had design blocks also marks each draw call with the value each shown presentation
@@ -538,21 +537,16 @@ export function placeGhosts(
 /** The props a place sets of its own: what tells one render apart. */
 const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
 
-/**
- * The page frame's settings in each shown presentation's variant, each named by its setting, and
- * which events are steps, where the source can step more than one way.
- */
+/** The page frame's settings in each shown presentation's variant, each named by its setting. */
 export function frameProps(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('frame.') || key === 'frames')
+      Object.keys(variant).filter((key) => key.startsWith('frame.'))
     )
   );
   return [...keys]
     .sort(byOrder(frameOrder, (key) => key))
-    .map((key) =>
-      variable(presentations, key, key === 'frames' ? key : key.slice('frame.'.length))
-    );
+    .map((key) => variable(presentations, key, key.slice('frame.'.length)));
 }
 
 /** A listing's settings in each shown presentation's variant: its language, then its fills. */

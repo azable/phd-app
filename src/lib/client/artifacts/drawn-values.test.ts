@@ -322,13 +322,12 @@ describe('variant markers', () => {
     expect(title.props.map(({ name }) => name)).toEqual(['size']);
   });
 
-  it('gives a <Listing /> its language and fills, and the page which labels are steps', () => {
+  it('gives a <Listing /> its language and fills', () => {
     const listed = `${source}\n<Listing />`;
     const withListing = presentations.map((presentation, index) => ({
       ...presentation,
       variant: {
         ...presentation.variant,
-        frames: index ? 'check' : '*',
         'listing.language': index ? 'textbook' : 'code',
         'listing.current.fill': 'amber-200',
         'listing.earlier.fill': 'neutral-200'
@@ -342,10 +341,6 @@ describe('variant markers', () => {
       ['earlier.fill', false]
     ]);
     expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
-    expect(frameProps(withListing).map(({ name, differs }) => [name, differs])).toEqual([
-      ['frames', true],
-      ['ratio', false]
-    ]);
   });
 
   it('leaves the page frame to no tag', () => {

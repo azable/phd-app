@@ -4,7 +4,8 @@ import {
   interpretAlgorithm,
   interpretDomain,
   interpretInput,
-  traceAlgorithm
+  traceAlgorithm,
+  type Pacing
 } from './interpret.server';
 
 const domain = interpretDomain(`
@@ -26,8 +27,8 @@ const domain = interpretDomain(`
   const Sum = binop((a: Position, b: Position) => Position(a + b - 1));
   const Less = binop((a: Int, b: Int) => Flag(a < b));
 `);
-const run = (body: string, frames?: string) =>
-  traceAlgorithm(body, undefined, domain, frames).steps;
+const run = (body: string, pacing?: Pacing) =>
+  traceAlgorithm(body, undefined, domain, pacing).steps;
 
 describe('positions', () => {
   it('point into the only collection of their type', () => {
@@ -58,10 +59,11 @@ describe('positions', () => {
         @count[k = Sum(i, j);]
       }
     `,
-      'count'
+      { drawn: new Set(['k']) }
     );
-    // The loop's last test changes nothing, so the last count is the last step.
-    expect(trace.map(({ state }) => state.merged)).toEqual([[1], [1, 2], [1, 2, 3]]);
+    // Drawing k alone, the start and each count are steps; the loop's last test changes nothing,
+    // so the last count is the last step.
+    expect(trace.map(({ state }) => state.merged)).toEqual([[], [1], [1, 2], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 

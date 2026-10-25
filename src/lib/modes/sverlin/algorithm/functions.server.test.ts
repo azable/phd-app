@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { declaredNames, interpretDomain, traceAlgorithm } from './interpret.server';
+import { declaredNames, interpretDomain, traceAlgorithm, type Pacing } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 99 });
@@ -22,8 +22,9 @@ const domain = interpretDomain(`
   const Tail = unop((v: Values) => Values(v.slice(1)));
   const Append = binop((v: Values, x: Int) => Values([...v, x]));
 `);
-const run = (body: string, frames?: string) =>
-  traceAlgorithm(body, undefined, domain, frames).steps;
+const run = (body: string, pacing?: Pacing) =>
+  traceAlgorithm(body, undefined, domain, pacing).steps;
+const showing = (operator: string): Pacing => ({ shown: new Map([[operator, undefined]]) });
 
 describe('functions', () => {
   it('are called with their arguments, giving back a position into the caller’s collection', () => {
@@ -40,8 +41,9 @@ describe('functions', () => {
   });
 
   it('record their own variables and the top level’s at a step, under the top level’s names', () => {
-    // Each check is a step, and the end another.
-    const trace = run(`
+    // Each comparison shown is a step, and the end another.
+    const trace = run(
+      `
       function search(a, target) {
         for (let i = Index(0); Before(i, Length(a)); i = Next(i)) {
           @check[if (Equal(a[i], target)) return i;]
@@ -50,7 +52,9 @@ describe('functions', () => {
       }
       const values = Values([3, 8, 5]);
       const found = search(values, Int(8));
-    `);
+    `,
+      showing('Equal')
+    );
     expect(trace.map(({ state }) => Object.keys(state))).toEqual([
       ['values', 'a', 'target', 'i'],
       ['values', 'a', 'target', 'i'],
@@ -80,7 +84,7 @@ describe('functions', () => {
       const values = Values([3, 8, 5]);
       const total = count(values, Index(0));
     `,
-      'test'
+      showing('Same')
     );
     // Each call's test is a step, the innermost's too, where it returns; then the end.
     expect(trace.map(({ state }) => state.lo)).toEqual([0, 1, 2, 3, undefined]);
@@ -147,17 +151,21 @@ describe('functions', () => {
 describe('loops', () => {
   it('count up, down, and by a constant step, and skip on with continue', () => {
     const loops = `
-      @start[const values = Values([1, 2, 3, 4, 5]);]
-      @down[for (let i = Index(4); Before(Index(-1), i); i = Back2(i)) {}]
+      @start[const values = Values([1, 2, 3, 4, 5]);
+      let last = Index(0);]
+      @down[for (let i = Index(4); Before(Index(-1), i); i = Back2(i)) {
+        last = i;
+      }]
       for (let j = Index(0); Before(j, Length(values)); j = Next(j)) {
         @skip[if (Even(values[j])) continue;]
         @take[const odd = values[j];]
       }
     `;
-    // A labelled loop steps once per pass; the end only drops the loop's variable, so it is no
-    // step.
-    expect(run(loops, 'down').map(({ state }) => state.i)).toEqual([4, 2, 0]);
-    expect(run(loops, 'take').map(({ state }) => state.j)).toEqual([0, 2, 4]);
+    // A labelled loop steps once per pass; a skip changes nothing, so it is no step, nor is the
+    // end, which only drops the loop's variables.
+    const trace = run(loops);
+    expect(trace.slice(1, 4).map(({ state }) => state.last)).toEqual([4, 2, 0]);
+    expect(trace.slice(4).map(({ state }) => state.j)).toEqual([0, 2, 4]);
   });
 
   it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
@@ -171,9 +179,10 @@ describe('loops', () => {
         @bump[k = Up(k);]
       }
     `);
-    // The last test only drops k, so the end is no step: the last is the bump to 7.
-    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3]);
-    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7]);
+    // The grow finding values long enough changes nothing, so it is no step. The last test only
+    // drops k, so the end is no step: the last is the bump to 7.
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 3, 3]);
+    expect(trace.slice(3).map(({ state }) => state.k)).toEqual([2, 7]);
   });
 
   it('run a do...while body once before its test', () => {

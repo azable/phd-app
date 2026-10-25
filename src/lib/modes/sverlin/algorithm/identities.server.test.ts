@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { StepIdentities } from './identities.server';
-import { interpretDomain, traceAlgorithm } from './interpret.server';
+import { interpretDomain, traceAlgorithm, type Pacing } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
@@ -33,11 +33,11 @@ function identities(body: string, paths: string[]) {
 }
 
 /**
- * The ids of the given paths as they are shown, stepping by a frame rule: each step's before its
- * code, then its after.
+ * The ids of the given paths as they are shown, paced as given: each step's before its code, then
+ * its after.
  */
-function shown(body: string, paths: string[], frames?: string) {
-  return traceAlgorithm(body, undefined, domain, frames).steps.flatMap(({ before, identities }) => [
+function shown(body: string, paths: string[], pacing?: Pacing) {
+  return traceAlgorithm(body, undefined, domain, pacing).steps.flatMap(({ before, identities }) => [
     ...(before ? [idsOf(before.identities, paths)] : []),
     idsOf(identities, paths)
   ]);
@@ -88,8 +88,7 @@ describe('identities', () => {
 
   it('never bring back a value once it is no longer shown', () => {
     const paths = ['values[0]', 'values[1]', 'values[2]', 'values[3]', 'key'];
-    // Stepping only at each pass of the shifting loop, the key picked up and the value put back
-    // lead up to one.
+    // Drawing only the row, the key picked up leads up to the shifts and the placing.
     const snapshots = shown(
       `@start[const values = Values([5, 2, 4, 1]);]
        for (let i = Count(1); Before(i, Size(values)); i = Up(i)) {
@@ -102,7 +101,7 @@ describe('identities', () => {
          @place[values[j] = key;]
        }`,
       paths,
-      'shift'
+      { drawn: new Set(['values']) }
     );
     const gone = new Set<number>();
     let previous = new Set<number>();

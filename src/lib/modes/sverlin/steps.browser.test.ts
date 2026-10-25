@@ -25,7 +25,7 @@ it.skipIf(!enabled)(
   'plays a step forward as the state before its code, then the state after it',
   { timeout: 120_000 },
   async () => {
-    // Stepping by write, each step is the write of 7; the write of 3 before it leads up to it.
+    // Each step is a write of 7; the loop moving i, which the view draws, leads up to it.
     const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
@@ -40,26 +40,28 @@ it.skipIf(!enabled)(
 </script>
 <script lang="sverlin">
   for (let i = Index(0); Before(i, Length(values)); i = Next(i)) {
-    @lead[values[i] = 3;]
     @write[values[i] = 7;]
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet At()}<Node>at {@render Index(i)}</Node>{/snippet}
 {#snippet Count()}<Node>step {step}</Node>{/snippet}
 {@render Cells()}
+{@render At()}
 {@render Count()}`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
-    expect(prepared.masters.write[0].state.values).toEqual([1, 1, 1]);
-    expect(prepared.masters.write[1].before?.state.values).toEqual([3, 1, 1]);
-    expect(prepared.masters.write[1].state.values).toEqual([7, 1, 1]);
-    const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames: 'write' } });
+    expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
+    expect(prepared.master[2].before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
+    expect(prepared.master[2].state.values).toEqual([7, 7, 1]);
+    const { javascript } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
-    const shown = () =>
+    const cells = () =>
       page.evaluate(() =>
         [
           ...document.querySelectorAll<HTMLElement>(
@@ -67,10 +69,20 @@ it.skipIf(!enabled)(
           )
         ].map((node) => node.innerText.trim())
       );
+    // Where i is, then the cells.
+    const shown = () =>
+      page.evaluate(() => {
+        const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+        const at = document.querySelector<HTMLElement>(`${layer} [data-sv-kind="IndexText"]`);
+        const values = [
+          ...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-kind="IntCell"]`)
+        ].map((node) => node.innerText.trim());
+        return [at?.innerText.trim() ?? '', ...values];
+      });
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    expect(await shown()).toEqual(['1', '1', '1']);
+    expect(await cells()).toEqual(['1', '1', '1']);
     // The view's step counts steps, whatever state of one is drawn.
     const count = () =>
       page.evaluate(() =>
@@ -107,9 +119,9 @@ it.skipIf(!enabled)(
       await page.waitForTimeout(50);
     }
     expect(errors).toEqual([]);
-    // From the step before, the 3 written leading up to the step shows first, then the 7 its code
+    // From the step before, i moving leading up to the step shows first, then the 7 its code
     // writes.
-    expect(seen.map((values) => values.join(' '))).toEqual(['7 1 1', '7 3 1', '7 7 1']);
+    expect(seen.map((values) => values.join(' '))).toEqual(['0 7 1 1', '1 7 1 1', '1 7 7 1']);
   }
 );
 
@@ -142,8 +154,14 @@ it.skipIf(!enabled)(
 {@render Title()}
 {@render Key()}
 {@render Cells()}`;
-    const prepared = prepareSvelteComponent(source);
-    const kinds = async (chosen: Record<string, string | boolean>) => {
+    // The pass as one label, which reads key and writes the row: its steps are its passes that
+    // change the row, key out of scope before each and after it.
+    const whole = source.replace(
+      '@pick[const key = values[i];]\n    @put[values[i] = key;]',
+      'const key = values[i];\n    values[i] = values[0];'
+    );
+    const kinds = async (text: string, chosen: Record<string, string | boolean> = {}) => {
+      const prepared = prepareSvelteComponent(text);
       const { javascript } = await bundlePresentation(prepared, 1, { chosen });
       const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
       await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -163,15 +181,15 @@ it.skipIf(!enabled)(
       return drawn;
     };
     // Stepping over each pass whole, key is out of scope at every step: no key node, no "key".
-    const whole = await kinds({ frames: 'pass' });
-    expect(whole.kinds).not.toContain('Key');
-    expect(whole.text).not.toContain('key');
-    expect(whole.kinds).toContain('Title');
-    // Stepping inside the pass, key shows.
-    const inside = await kinds({ frames: 'pass.*' });
+    const passes = await kinds(whole);
+    expect(passes.kinds).not.toContain('Key');
+    expect(passes.text).not.toContain('key');
+    expect(passes.kinds).toContain('Title');
+    // Stepping at the pick inside the pass, which declares key, key shows.
+    const inside = await kinds(source);
     expect(inside.kinds).toContain('Key');
     // A kind not shown takes the nodes holding only its values with it: the row, and the key.
-    const hidden = await kinds({ frames: 'pass.*', 'IntCell.shown': false });
+    const hidden = await kinds(source, { 'IntCell.shown': false });
     expect(hidden.kinds).not.toContain('Cells');
     expect(hidden.kinds).not.toContain('Key');
     expect(hidden.kinds).toContain('Title');

@@ -18,8 +18,7 @@ const kindsOf = (space: Record<string, unknown>) =>
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
             !key.startsWith('frame.') &&
-            !key.includes('@') &&
-            key !== 'frames'
+            !key.includes('@')
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     )
@@ -28,9 +27,9 @@ const kindsOf = (space: Record<string, unknown>) =>
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin">@a[;] @b[;]</script>{#snippet S()}<Node>{step}</Node>{/snippet}{@render S()}'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">let n = Int(0); @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>{step}</Node>{/snippet}{@render S()}{@render Int(n)}'
     );
-    // The input as given, then a step per label.
+    // The input as given, then a step per label changing what the view draws.
     expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
@@ -363,18 +362,18 @@ describe('single-component Svelte compilation', () => {
     const source = [
       '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script>',
       '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
-      '<script lang="sverlin">@loop[for (let i = Index(0); Before(i, Length(values)); i = Next(i)) {}]</script>',
+      '<script lang="sverlin">let last = Index(1); @loop[for (let i = Index(0); Before(i, Length(values)); i = Next(i)) { last = i; }]</script>',
       '<script lang="sverlin" listing="code">for @loop[i = 1 to n]</script>',
-      '{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Listing />{@render Cells()}'
+      '{#snippet IndexCell(p: Index)}<Node value={p} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Listing />{@render Cells()}{@render Index(last)}'
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
     expect(prepared.design.starter['listing.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n');
-    // The input as given, lighting nothing, then a step per pass; the loop's end only drops i, so it
-    // is no step.
-    expect(prepared.listings?.code.lit.loop).toHaveLength(3);
-    expect(prepared.listings?.code.lit.loop[0]).toEqual({ current: [], earlier: [] });
+    // The input as given, lighting nothing, then a step per pass, each changing last; the loop's
+    // end only drops i, so it is no step. With no operator rendered, the one pacing has no key.
+    expect(prepared.listings?.code.lit['']).toHaveLength(3);
+    expect(prepared.listings?.code.lit[''][0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n');
     // Without a <Listing />, the design has no listing variables.
@@ -748,14 +747,14 @@ describe('typed view components', () => {
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Int(target)}{@render Cells()}`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
-    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.placements['']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('measures a position with every place in its collection, and as far past it as the trace goes', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">@start[let i = Position(-1);] @move[i = Position(0);]</script>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Cells()}`
     );
-    expect(prepared.placements['*']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.placements['']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
@@ -985,10 +984,34 @@ describe('views of what a step computed', () => {
 
   it('give a step’s after its one application, and stand one in hidden elsewhere', async () => {
     const prepared = prepareSvelteComponent(bubble);
-    const { javascript } = await bundlePresentation(prepared, 1, {
-      chosen: { frames: 'sweep.pair.*' }
-    });
+    const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('__applied_Greater');
+  });
+
+  it('step at each comparison the view shows, and apart from it at each swap', async () => {
+    const prepared = prepareSvelteComponent(bubble);
+    const steps = (master: typeof prepared.master) =>
+      master.map(({ state, applied }) => [
+        String(state.values),
+        applied?.Greater?.map(({ state }) => `${state.a} > ${state.b}`) ?? []
+      ]);
+    // The comparison lifts its operands, then the swap moves them, each a step of its own.
+    expect(steps(prepared.master).slice(1, 5)).toEqual([
+      ['5,1,4,2,3', ['5 > 1']],
+      ['1,5,4,2,3', []],
+      ['1,5,4,2,3', ['5 > 4']],
+      ['1,4,5,2,3', []]
+    ]);
+    // Ten comparisons and six swaps, after the input as given.
+    expect(prepared.master).toHaveLength(17);
+    // With Greater's view hidden, comparisons are no steps: the sort plays through its swaps.
+    expect(steps(prepared.masters['']).slice(1, 3)).toEqual([
+      ['1,5,4,2,3', []],
+      ['1,4,5,2,3', []]
+    ]);
+    const paced = await bundlePresentation(prepared, 1, { chosen: { 'views.Greater': 'none' } });
+    expect(paced.labels).toHaveLength(7);
+    expect(paced.masterSignature).toBe((await bundlePresentation(prepared, 1)).masterSignature);
   });
 
   it('reject an operator rendered with a value, or inside a view', () => {
@@ -1098,7 +1121,7 @@ describe('nodes and references', () => {
     expect(prepared.design.space['pointers.NodeRef']).toEqual(['Here', 'none']);
     // The end a link to no node gives is drawn with its type's view, a choice of its own.
     expect(prepared.design.space['views.End']).toEqual(['EndMark', 'none']);
-    expect(prepared.masters.rewire.at(-1)!.state['ȟListNode']).toEqual([
+    expect(prepared.master.at(-1)!.state['ȟListNode']).toEqual([
       { name: 'B', next: 1 },
       { name: 'A', next: 'end' }
     ]);

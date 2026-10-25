@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { interpretAlgorithm, interpretDomain, interpretInput } from './interpret.server';
+import { interpretDomain, interpretInput, traceAlgorithm } from './interpret.server';
 
 const domain = interpretDomain(`
   const Name = type(['A', 'B', 'C', 'D']);
@@ -16,8 +16,11 @@ const domain = interpretDomain(`
 const list = `const head = NodeRef(Node({ name: 'A', next:
   NodeRef(Node({ name: 'B', next: NodeRef(Node({ name: 'C', next: End('end') })) })) }));`;
 
+// Showing each test for a node, as a view of IsNode would.
 const run = (algorithm: string, input = list) =>
-  interpretAlgorithm(algorithm, interpretInput(input, domain), domain);
+  traceAlgorithm(algorithm, interpretInput(input, domain), domain, {
+    shown: new Map([['IsNode', undefined]])
+  }).steps;
 
 describe('nodes and references', () => {
   it('records a node in its heap, in the order made, and a reference as its place there', () => {
@@ -78,7 +81,8 @@ describe('nodes and references', () => {
   });
 
   it('keeps a node live inside a call while only its caller holds it', () => {
-    // Inside visit, lone is out of scope, held only by build, which called it.
+    // Inside visit, lone is out of scope, held only by build, which called it; each test there is a
+    // step.
     const steps = run(
       `
       function visit(n) @visit{

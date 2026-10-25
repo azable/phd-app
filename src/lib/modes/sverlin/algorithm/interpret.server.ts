@@ -98,18 +98,18 @@ export type StepSnapshot = {
 };
 
 /**
- * One step of a source's trace: each run of the code a label marks (see labels.server.ts), as the
- * state just before it and just after it; a labelled loop's steps are its passes. Its events are
- * those since the step before, the first `gap` of them leading up to its code and the rest its
- * code's own. Its moment is how many events the algorithm had logged by its end, the same whichever
- * label the steps are by, so presentations stepping by different labels line up by it. What runs
- * after the last labelled code is a step of its own, with no code of its own.
+ * One step of a source's trace: where the view shows something happen (see Pacing), as the state
+ * just before its code and just after it. Its events are those since the step before, the first
+ * `gap` of them leading up to its code and the rest its code's own. Its moment is how many events
+ * the algorithm had logged by its end, the same however the steps are paced, so presentations
+ * pacing them differently line up by it. What runs after the last step is a step of its own, with
+ * no code of its own.
  */
 export type MasterStep = {
   moment?: number;
   before?: StepSnapshot;
   gap?: number;
-  /** The code the step is a run of, where it is a label's or a call's, not the end. */
+  /** The code the step is a run of, a label's or an application's, where it is not the end. */
   unit?: Span;
   state: TraceState;
   types: TypeMap;
@@ -206,61 +206,49 @@ export function spanKey({ start, end }: Span): string {
 }
 
 /**
- * The code a frame rule steps at: single nodes (a statement, a block, an expression, a call; a
- * loop at each pass), and statements in a row, by their first and last.
+ * The code labels mark, each run of which can be a step: single nodes (a statement, a block, an
+ * expression, a call; a loop at each pass), and statements in a row, by their first and last.
  */
 export type FrameUnits = { nodes: ReadonlySet<AnyNode>; ranges: ReadonlyMap<AnyNode, AnyNode> };
 
 /**
- * What a source can step by (see labels.server.ts): `*`, at each run of a label at the top, where
- * there are several, then
- * each label in the order written, at each run of its code, followed by `x.*`, at each run of a
- * label inside it, where it has any. Also its labels, and the problems with them.
+ * Where the view shows something happen, which makes the steps: each application of an operator it
+ * shows, anywhere or only inside the spans given; the end of each run of a label whose code changes
+ * a variable it draws (with none given, any variable); and where it draws a label's value, each run
+ * of the statement labelled around that label (else of the label) that gives one with no step after
+ * it. A label run that changes nothing drawn is no step, and code outside every label joins the
+ * next step.
  */
+export type Pacing = {
+  shown?: ReadonlyMap<string, readonly Span[] | undefined>;
+  drawn?: ReadonlySet<string>;
+  values?: ReadonlySet<string>;
+};
+
+/** The source's labels (see labels.server.ts), the code they mark, and the problems with them. */
 export function stepLabels(
   parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'code'>
-): {
-  options: string[];
-  units: (frames: string) => FrameUnits;
-  labels: Label[];
-  problems: LabelProblem[];
-} {
+): { units: FrameUnits; labels: Label[]; problems: LabelProblem[] } {
   const { root, markers, code } = parsed;
   const read = readLabels(root, markers, code);
-  const { labels } = read;
-  // `*` steps at each label at the top, so it is offered only where there are several.
-  const options = [
-    ...(labels.filter(({ parent }) => !parent).length > 1 ? ['*'] : []),
-    ...labels.flatMap(({ full, children }) => (children.length ? [full, `${full}.*`] : [full]))
-  ];
-  const units = (frames: string): FrameUnits => {
-    const chosen = labels.filter(({ full, parent }) =>
-      frames === '*'
-        ? !parent
-        : frames.endsWith('.*')
-          ? parent?.full === frames.slice(0, -2)
-          : full === frames
-    );
-    const nodes = new Set<AnyNode>();
-    const ranges = new Map<AnyNode, AnyNode>();
-    for (const { nodes: marked } of chosen)
-      if (marked.length === 1) nodes.add(marked[0]);
-      else ranges.set(marked[0], marked[marked.length - 1]);
-    return { nodes, ranges };
-  };
-  return { options: [...new Set(options)], units, labels, problems: read.problems };
+  const nodes = new Set<AnyNode>();
+  const ranges = new Map<AnyNode, AnyNode>();
+  for (const { nodes: marked } of read.labels)
+    if (marked.length === 1) nodes.add(marked[0]);
+    else ranges.set(marked[0], marked[marked.length - 1]);
+  return { units: { nodes, ranges }, labels: read.labels, problems: read.problems };
 }
 
 /**
- * Interpret the algorithm, stepping by a frame rule (see stepLabels): the one given, or the first
- * the source has; with none, its one step is its end. Keeps its tree, labels, and code as parsed,
+ * Interpret the algorithm, paced by what the view shows (see Pacing): once to find which label runs
+ * change what it draws, then again recording the steps. Keeps its tree, labels, and code as parsed,
  * which its listings are mapped by.
  */
 export function traceAlgorithm(
   body: string,
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain,
-  frames?: string,
+  pacing: Pacing = {},
   /**
    * What views draw beyond the state: the labels whose values are kept, by full name, and the
    * operators whose applications leading up to a step are kept too, for what has happened.
@@ -272,7 +260,6 @@ export function traceAlgorithm(
   opening: MasterStep;
   root: BlockStatement;
   labels: Label[];
-  options: string[];
   code: string;
 } {
   const parsed = parseBlock(body, 'algorithm', domain);
@@ -280,33 +267,38 @@ export function traceAlgorithm(
   const labelled = stepLabels(parsed);
   const [problem] = labelled.problems;
   if (problem) throw new AlgorithmError(problem.message, problem.at);
-  const rule = frames ?? labelled.options[0];
   // The values each labelled expression gives are kept, for views drawing them (labels as values).
   const captured = new Map<AnyNode, string[]>();
   for (const { full, nodes, statement } of labelled.labels)
     if (!statement && nodes.length === 1 && keep.labels?.has(full))
       captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
-  const interpreter = new Interpreter(root, offset, {
-    kind: 'algorithm',
-    initial: input,
-    domain,
-    code,
-    captured,
-    history: keep.history,
-    frames: {
-      label: rule ?? '',
-      ...(rule === undefined ? { nodes: new Set(), ranges: new Map() } : labelled.units(rule))
-    }
-  });
+  const named = new Map<AnyNode, string[]>();
+  const giving = new Map<string, AnyNode>();
+  for (const { full, nodes, statement, parent } of labelled.labels) {
+    named.set(nodes[0], [...(named.get(nodes[0]) ?? []), full]);
+    let around = statement ? undefined : parent;
+    while (around && !around.statement) around = around.parent;
+    if (around) giving.set(full, around.nodes[0]);
+  }
+  const interpret = (plan?: ReadonlySet<number>) =>
+    new Interpreter(root, offset, {
+      kind: 'algorithm',
+      initial: input,
+      domain,
+      code,
+      captured,
+      history: keep.history,
+      units: labelled.units,
+      named,
+      giving,
+      pacing,
+      plan
+    });
+  const planning = interpret();
+  planning.run();
+  const interpreter = interpret(planning.plan);
   const steps = interpreter.run();
-  return {
-    steps,
-    opening: interpreter.opening!,
-    root,
-    labels: labelled.labels,
-    options: labelled.options,
-    code
-  };
+  return { steps, opening: interpreter.opening!, root, labels: labelled.labels, code };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -321,6 +313,24 @@ type Value = undefined | null | boolean | number | string | Atom | Value[] | Obj
  */
 type Binding = { value: Value; constant: boolean; type?: string; target?: string; of?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
+/**
+ * Where a step's code starts: the state then, how many events led up to it, and how many of the
+ * applications since the last step came before it.
+ */
+type Since = { before: StepSnapshot; gap: number; applied: number };
+/**
+ * A run of labelled code going on, numbered in the order runs start, and the scope it runs in: in
+ * the first run, what the view drew there as it started or at the last step inside it, and whether
+ * code inside it has given a value the view draws since; in the second, where it is a step, since.
+ */
+type Run = {
+  node: AnyNode;
+  number: number;
+  scope: Scope;
+  drawn?: Map<string, string>;
+  gave?: boolean;
+  since?: Since;
+};
 
 const mathFunctions: Record<string, (...values: number[]) => number> = {
   abs: Math.abs,
@@ -387,8 +397,6 @@ class Interpreter {
   readonly #raw: RawContext;
   /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
   readonly #functions = new Map<string, FunctionDeclaration>();
-  /** The functions holding code the frame rule steps at, whose calls end a step around them. */
-  readonly #stepping = new Set<FunctionDeclaration>();
   readonly #parameterTypes = new Map<string, (string | undefined)[]>();
   /** The scope of the running call's parameters, or the top level outside every call. */
   #frame: Scope = this.#topLevel;
@@ -396,26 +404,38 @@ class Interpreter {
   /** The scope each running call was made from, outermost first: its variables keep nodes live. */
   readonly #callers: Scope[] = [];
   readonly #log = new EventLog();
-  /** The label steps are by, and the code it marks. */
-  readonly #frames: { label: string } & FrameUnits;
-  /** The applications the running step's own code has made, by operator. */
+  /** The code labels mark, and the full names of the labels on each, by its first node. */
+  readonly #units: FrameUnits;
+  readonly #named: ReadonlyMap<AnyNode, readonly string[]>;
+  /** The first node of the statement labelled around each labelled expression, by its full name. */
+  readonly #giving: ReadonlyMap<string, AnyNode>;
+  /** What the view shows, which paces the steps. */
+  readonly #pacing: Pacing;
+  /**
+   * The label runs that are steps, numbered in the order they start: found by a first run, which
+   * records no steps, and given to the second, which records them.
+   */
+  readonly #plan: Set<number>;
+  readonly #recording: boolean;
+  #runCount = 0;
+  /** The label runs going on, outermost first. */
+  readonly #runs: Run[] = [];
+  /** The applications the step being recorded made, by operator. */
   #applied: Record<string, Application[]> = {};
   /**
-   * The typed operands and result of each application in the running step's own code, and the
-   * variable each operand was read through, if any, so its copy starts there (see identities).
+   * The typed operands and result of each application, and the variable each operand was read
+   * through, if any, so its copy starts there (see identities).
    */
   readonly #operands = new WeakMap<Application, { path: string; value: Atom; from?: string }[]>();
-  /** The values the running step's own code gave each labelled expression, by full name. */
+  /** The values the step being recorded gave each labelled expression, by full name. */
   #labelled: Record<string, LabelRun[]> = {};
-  /** The applications and labelled values since the last step, leading up to the next. */
-  #ledApplied: Record<string, Application[]> = {};
-  #ledLabelled: Record<string, LabelRun[]> = {};
+  /** The applications and labelled values since the last step, in order. */
+  #pendingApplied: [string, Application][] = [];
+  #pendingLabelled: [string, LabelRun][] = [];
   /** Each labelled expression's node, with the full names of the labels on it. */
   readonly #captured: ReadonlyMap<AnyNode, readonly string[]>;
   /** The operators whose applications leading up to a step are kept, for what has happened. */
   readonly #history: ReadonlySet<string>;
-  /** The step whose code is running: its node, the state before it, and the events leading up. */
-  #open: { node: AnyNode; before: StepSnapshot; gap: number } | undefined;
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
   /** What the last element or field read read from, and by which key. */
@@ -429,7 +449,11 @@ class Interpreter {
       kind: BlockKind;
       initial?: TypedState;
       domain?: DomainRegistry;
-      frames?: { label: string } & FrameUnits;
+      units?: FrameUnits;
+      named?: ReadonlyMap<AnyNode, readonly string[]>;
+      giving?: ReadonlyMap<string, AnyNode>;
+      pacing?: Pacing;
+      plan?: ReadonlySet<number>;
       code?: string;
       captured?: ReadonlyMap<AnyNode, readonly string[]>;
       history?: ReadonlySet<string>;
@@ -438,7 +462,12 @@ class Interpreter {
     this.#root = root;
     this.#captured = options.captured ?? new Map();
     this.#history = options.history ?? new Set();
-    this.#frames = options.frames ?? { label: '', nodes: new Set(), ranges: new Map() };
+    this.#units = options.units ?? { nodes: new Set(), ranges: new Map() };
+    this.#named = options.named ?? new Map();
+    this.#giving = options.giving ?? new Map();
+    this.#pacing = options.pacing ?? {};
+    this.#plan = new Set(options.plan);
+    this.#recording = options.plan !== undefined || options.kind !== 'algorithm';
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -506,10 +535,6 @@ class Interpreter {
     for (const statement of root.body)
       if (statement.type === 'FunctionDeclaration')
         this.#functions.set(statement.id.name, statement);
-    const units = [...this.#frames.nodes, ...this.#frames.ranges.keys()];
-    for (const declared of this.#functions.values())
-      if (units.some(({ start, end }) => declared.start <= start && end <= declared.end))
-        this.#stepping.add(declared);
     this.#topLevelNames = [
       ...initial.map(([name]) => name),
       ...root.body.flatMap((statement) =>
@@ -520,21 +545,28 @@ class Interpreter {
     ];
   }
 
-  /** Run the algorithm block and return its master trace. */
+  /** The label runs found to be steps, by the first run (see Pacing). */
+  get plan(): ReadonlySet<number> {
+    return this.#plan;
+  }
+
+  /** Run the algorithm block and return its master trace; none from the first run. */
   run(): MasterStep[] {
+    if (!this.#recording) {
+      this.#execute();
+      return [];
+    }
     // Every presentation opens on the input as given, before any of the algorithm runs.
     const opening = this.#state(this.#root, this.#topLevel);
     this.#execute();
-    if (this.#trace.length === 0 && this.#frames.label)
-      throw new AlgorithmError(
-        `The code labelled ${this.#frames.label} never runs, so there are no steps.`
-      );
     // What runs after the last step is a step of its own where it changes a value still in scope,
-    // declares one, or applies an operator; variables only leaving scope are no step. Without
-    // labels, it is the only one.
+    // or declares one; variables only leaving scope are no step. Without steps, it is the only one.
     const last = this.#trace.at(-1);
-    this.#begin(this.#root, this.#topLevel);
-    this.#end(this.#root, this.#topLevel);
+    this.#record(this.#root, this.#root, this.#topLevel, {
+      before: this.#snapshotOf(this.#root, this.#topLevel),
+      gap: this.#log.pending,
+      applied: this.#pendingApplied.length
+    });
     const end = this.#trace.at(-1)!;
     if (
       last &&
@@ -1117,13 +1149,13 @@ class Interpreter {
   #block(statements: readonly Statement[], scope: Scope): Completion {
     for (let index = 0; index < statements.length; index++) {
       const statement = statements[index];
-      const last = this.#open ? undefined : this.#frames.ranges.get(statement);
+      const last = this.#units.ranges.get(statement);
       if (!last) {
         const completion = this.#statement(statement, scope);
         if (completion !== 'normal') return completion;
         continue;
       }
-      // Statements in a row marked together are one step.
+      // Statements in a row marked together are one run.
       const end = statements.indexOf(last as Statement);
       this.#begin(statement, scope);
       let completion: Completion = 'normal';
@@ -1136,9 +1168,9 @@ class Interpreter {
     return 'normal';
   }
 
-  /** A statement, as a step of its own where the label steps are by marks it (not a loop's). */
+  /** A statement, as a label run where a label marks it (a loop's runs are its passes). */
   #statement(node: Statement, scope: Scope): Completion {
-    if (this.#open || !this.#frames.nodes.has(node) || isLoop(node)) return this.#run(node, scope);
+    if (!this.#units.nodes.has(node) || isLoop(node)) return this.#run(node, scope);
     this.#begin(node, scope);
     const completion = this.#run(node, scope);
     this.#end(node, scope);
@@ -1278,8 +1310,8 @@ class Interpreter {
   /** One iteration of a loop's body: 'normal' to go on, also after continue. */
   #pass(node: Statement & { body: Statement }, index: number, scope: Scope): Completion {
     this.#emit('iteration', node, { index });
-    // A labelled loop's steps are its passes.
-    const stepping = !this.#open && this.#frames.nodes.has(node);
+    // A labelled loop's runs are its passes.
+    const stepping = this.#units.nodes.has(node);
     if (stepping) this.#begin(node, scope);
     const completion = this.#statement(node.body, scope);
     if (stepping) this.#end(node, scope);
@@ -1302,32 +1334,133 @@ class Interpreter {
         );
   }
 
-  /** Open a step as its code starts: the state before it, and how many events led up to it. */
-  #begin(node: AnyNode, scope: Scope): void {
-    if (this.#trace.length >= algorithmLimits.maximumSteps)
-      this.#fail(
-        node,
-        `The code labelled ${this.#frames.label} runs more than ${algorithmLimits.maximumSteps} times, each a step; label code that runs less often.`
-      );
+  /** The state at a moment, as a step records it before its code. */
+  #snapshotOf(node: AnyNode, scope: Scope): StepSnapshot {
     const { state, types, targets, identities } = this.#state(node, scope);
-    this.#open = {
-      node,
-      before: {
-        state,
-        types,
-        ...(targets ? { targets } : {}),
-        ...(identities ? { identities } : {})
-      },
-      gap: this.#log.pending
-    };
-    this.#applied = {};
-    this.#labelled = {};
+    return { state, types, ...(targets ? { targets } : {}), ...(identities ? { identities } : {}) };
   }
 
-  /** Close the step whose code has just run: the state after it, and the events since the last. */
+  /**
+   * What the view draws at a moment: each variable in scope it draws, as text, which the end of a
+   * label run is compared with. Within one variable, a value seen again is named by when it was
+   * first seen, so nodes linked in a cycle end.
+   */
+  #drawn(scope: Scope): Map<string, string> {
+    const { drawn } = this.#pacing;
+    // Drawing a heap draws every node a variable reaches.
+    const every = !drawn || [...this.#heaps.keys()].some((record) => drawn.has(heapKey(record)));
+    const shown = new Map<string, string>();
+    for (const [name, { value }] of this.#inScope(scope)) {
+      if (!every && !drawn?.has(name)) continue;
+      const seen = new Map<object, number>();
+      const text = (value: Value): string => {
+        if (value instanceof Atom) return `${value.type.name}(${JSON.stringify(value.value)})`;
+        if (value === null || typeof value !== 'object') return String(JSON.stringify(value));
+        const at = seen.get(value);
+        if (at !== undefined) return `#${at}`;
+        seen.set(value, seen.size);
+        return Array.isArray(value)
+          ? `[${value.map(text).join(',')}]`
+          : `{${Object.entries(value)
+              .map(([key, item]) => `${key}:${text(item)}`)
+              .join(',')}}`;
+      };
+      shown.set(name, text(value));
+    }
+    return shown;
+  }
+
+  /** Start a run of labelled code; where the first run found it a step, the state before it. */
+  #begin(node: AnyNode, scope: Scope): void {
+    const number = this.#runCount++;
+    const step = this.#recording && this.#plan.has(number);
+    this.#runs.push({
+      node,
+      number,
+      scope,
+      ...(this.#recording ? {} : { drawn: this.#drawn(scope) }),
+      ...(step
+        ? {
+            since: {
+              before: this.#snapshotOf(node, scope),
+              gap: this.#log.pending,
+              applied: this.#pendingApplied.length
+            }
+          }
+        : {})
+    });
+  }
+
+  /**
+   * End a run of labelled code: a step where it changed what the view draws since it started, or
+   * since the last step inside it, or where the view draws its label's value. Variables only
+   * leaving scope change nothing. The first run finds which runs are steps; the second records them.
+   */
   #end(node: AnyNode, scope: Scope): void {
-    const open = this.#open;
-    if (!open) return;
+    const run = this.#runs.pop();
+    if (!run) return;
+    if (this.#recording) {
+      if (run.since) this.#record(run.node, node, scope, run.since);
+      return;
+    }
+    const drawn = this.#drawn(scope);
+    const changed = [...drawn].some(([name, text]) => run.drawn?.get(name) !== text);
+    // A value the view draws makes a step of the run of the statement labelled around it, or of its
+    // own where none is, unless a step inside that run came after it.
+    let valued = run.gave ?? false;
+    for (const label of this.#named.get(run.node) ?? [])
+      if (this.#pacing.values?.has(label)) {
+        const around = this.#giving.get(label);
+        const giver = around && this.#runs.findLast((each) => each.node === around);
+        if (giver) giver.gave = true;
+        else valued = true;
+      }
+    if (changed || valued) {
+      this.#plan.add(run.number);
+      this.#planned();
+    }
+  }
+
+  /** In the first run, after a step: the runs going on compare what is drawn with it, each in its scope. */
+  #planned(): void {
+    const drawn = new Map<Scope, Map<string, string>>();
+    for (const run of this.#runs) {
+      if (!drawn.has(run.scope)) drawn.set(run.scope, this.#drawn(run.scope));
+      run.drawn = drawn.get(run.scope);
+      run.gave = false;
+    }
+  }
+
+  /** Whether the view shows this application of an operator: anywhere, or inside a span it names. */
+  #shows(name: string, node: AnyNode): boolean {
+    if (!this.#pacing.shown?.has(name)) return false;
+    const spans = this.#pacing.shown.get(name);
+    const at = this.#offset(node).start;
+    return !spans || spans.some(({ start, end }) => start <= at && at < end);
+  }
+
+  /**
+   * Record a step whose code has just run: the state after it, and the events since the last. Its
+   * own applications are those since its code started, those before it leading up to it, and its
+   * labelled values all those given since the step before. The runs going on start their code again
+   * after it.
+   */
+  #record(unit: AnyNode, node: AnyNode, scope: Scope, since: Since): void {
+    if (this.#trace.length >= algorithmLimits.maximumSteps)
+      this.#fail(
+        unit,
+        `The algorithm takes more than ${algorithmLimits.maximumSteps} steps, each an application of an operator the view shows or a run of a label changing what it draws; hide a view, give a smaller input, or label less of the code.`
+      );
+    const byName = <T>(entries: readonly [string, T][]) => {
+      const grouped: Record<string, T[]> = {};
+      for (const [name, item] of entries) (grouped[name] ??= []).push(item);
+      return grouped;
+    };
+    this.#applied = byName(this.#pendingApplied.slice(since.applied));
+    this.#labelled = byName(this.#pendingLabelled);
+    const ledApplied = byName(
+      this.#pendingApplied.slice(0, since.applied).filter(([name]) => this.#history.has(name))
+    );
     const after = this.#state(node, scope, [], this.#operandPlaces(scope));
     this.#nameOperands(after.identities?.ids);
     const logged = this.#log.step(this.#offset, (value) => {
@@ -1339,27 +1472,31 @@ class Interpreter {
     this.#trace.push({
       // Strictly later than the step before, though no event came between them.
       moment: Math.max(this.#log.seen, (this.#trace.at(-1)?.moment ?? -1) + 1),
-      before: open.before,
-      gap: Math.max(open.gap - (logged.dropped ?? 0), 0),
-      ...(open.node === this.#root ? {} : { unit: this.#offset(open.node) }),
+      before: since.before,
+      gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
+      ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       ...after,
       ...logged,
       ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {}),
       ...(Object.keys(this.#labelled).length ? { labelled: this.#labelled } : {}),
-      ...(Object.keys(this.#ledApplied).length || Object.keys(this.#ledLabelled).length
-        ? {
-            led: {
-              ...(Object.keys(this.#ledApplied).length ? { applied: this.#ledApplied } : {}),
-              ...(Object.keys(this.#ledLabelled).length ? { labelled: this.#ledLabelled } : {})
-            }
-          }
-        : {})
+      ...(Object.keys(ledApplied).length ? { led: { applied: ledApplied } } : {})
     });
-    this.#open = undefined;
     this.#applied = {};
     this.#labelled = {};
-    this.#ledApplied = {};
-    this.#ledLabelled = {};
+    this.#pendingApplied = [];
+    this.#pendingLabelled = [];
+    const { state, types, targets, identities } = after;
+    const again: Since = {
+      before: {
+        state,
+        types,
+        ...(targets ? { targets } : {}),
+        ...(identities ? { identities } : {})
+      },
+      gap: this.#log.pending,
+      applied: 0
+    };
+    for (const run of this.#runs) if (run.since) run.since = again;
   }
 
   /**
@@ -1403,10 +1540,10 @@ class Interpreter {
       });
   }
 
-  /** Keep the value a labelled expression gave, in the running step's own code or leading up. */
+  /** Keep the value a labelled expression gave, for the next step, its own or leading up to it. */
   #capture(node: AnyNode, value: Value): void {
     const names = this.#captured.get(node);
-    if (!names) return;
+    if (!names || !this.#recording) return;
     for (const name of names) {
       const run: LabelRun = { state: { value: null }, types: {}, targets: {} };
       run.state.value = this.#snapshot(value, node, 'value', {
@@ -1414,7 +1551,7 @@ class Interpreter {
         targets: run.targets,
         placed: []
       });
-      ((this.#open ? this.#labelled : this.#ledLabelled)[name] ??= []).push(run);
+      this.#pendingLabelled.push([name, run]);
     }
   }
 
@@ -1480,7 +1617,7 @@ class Interpreter {
 
   /** An expression, as a step of its own where the label steps are by marks it. */
   #expression(node: Expression | SpreadElement, scope: Scope): Value {
-    if (this.#open || !this.#frames.nodes.has(node)) {
+    if (!this.#units.nodes.has(node)) {
       const value = this.#evaluate(node, scope);
       this.#capture(node, value);
       return value;
@@ -1985,39 +2122,50 @@ class Interpreter {
       const collection = from ? collectionOf(from) : named?.name;
       if (collection) result = new Atom(result.type, result.value, collection);
     }
+    // An application of an operator the view shows is a step of its own, its code the application.
+    const shows = !this.#inOperator && this.#shows(name, node);
+    const since: Since | undefined =
+      shows && this.#recording
+        ? {
+            before: this.#snapshotOf(node, scope),
+            gap: this.#log.pending,
+            applied: this.#pendingApplied.length
+          }
+        : undefined;
     this.#emit('apply', node, {
       name,
       value: result,
       operands: values.map((value) => single(value) ?? null)
     });
-    // An application in a step's own code is kept for the view, copied as a step's state is.
-    // Leading up to a step, it is kept where a view draws what has happened so far.
-    if (this.#open || this.#history.has(name)) {
+    // An application of an operator the view shows is kept for it, copied as a step's state is;
+    // so is any application of one whose applications so far a view draws.
+    if (this.#recording && (shows || this.#history.has(name))) {
       const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
       const into = { types: application.types, targets: {}, placed: [] };
       parameters.forEach((parameter, index) => {
         application.state[parameter] = this.#snapshot(values[index], node, parameter, into);
       });
       application.state.value = this.#snapshot(result, node, 'value', into);
-      ((this.#open ? this.#applied : this.#ledApplied)[name] ??= []).push(application);
-      if (this.#open)
-        this.#operands.set(application, [
-          ...parameters.flatMap((parameter, index) => {
-            const value = values[index];
-            const argument = node.arguments[index];
-            return value instanceof Atom
-              ? [
-                  {
-                    path: parameter,
-                    value,
-                    ...(argument?.type === 'Identifier' ? { from: argument.name } : {})
-                  }
-                ]
-              : [];
-          }),
-          ...(result instanceof Atom ? [{ path: 'value', value: result }] : [])
-        ]);
+      this.#pendingApplied.push([name, application]);
+      this.#operands.set(application, [
+        ...parameters.flatMap((parameter, index) => {
+          const value = values[index];
+          const argument = node.arguments[index];
+          return value instanceof Atom
+            ? [
+                {
+                  path: parameter,
+                  value,
+                  ...(argument?.type === 'Identifier' ? { from: argument.name } : {})
+                }
+              ]
+            : [];
+        }),
+        ...(result instanceof Atom ? [{ path: 'value', value: result }] : [])
+      ]);
     }
+    if (since) this.#record(node, node, scope, since);
+    else if (shows) this.#planned();
     if (result !== null && typeof result === 'object' && !(result instanceof Atom))
       this.#computed.add(result);
     return result;
@@ -2103,8 +2251,6 @@ class Interpreter {
       );
       this.#access('write', param, parameters[index], value);
     });
-    // A step's code stops where it calls a function with steps of its own, which follow.
-    if (this.#open && this.#stepping.has(declared)) this.#end(this.#open.node, scope);
     const outer = this.#frame;
     const returned = this.#returned;
     this.#frame = frame;
@@ -2112,11 +2258,10 @@ class Interpreter {
     this.#callers.push(scope);
     this.#returned = undefined;
     try {
-      const stepping = !this.#open && this.#frames.nodes.has(declared.body);
+      const stepping = this.#units.nodes.has(declared.body);
       if (stepping) this.#begin(declared.body, frame);
       const completion = this.#block(declared.body.body, frame);
-      // Unless a call inside it ended it first.
-      if (stepping && this.#open?.node === declared.body) this.#end(declared.body, frame);
+      if (stepping) this.#end(declared.body, frame);
       const end = declared.body.end;
       if (completion !== 'return') this.#emit('return', { ...declared.body, start: end - 1, end });
       const result = this.#returned as Value;

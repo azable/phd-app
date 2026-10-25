@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet Shown()}<Node>{step}</Node>{/snippet}{@render Shown()}';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>{step}</Node>{/snippet}{@render Shown()}{@render Int(n)}';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -90,6 +90,7 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.origins?.['IntCell.fill']).toBe('starter');
     expect(right.variant).not.toEqual(left.variant);
     expect(right.views).toEqual({
+      Equal: ['Ask'],
       Int: ['IntCell', 'IntTally'],
       Index: ['IndexText'],
       Values: ['Row']

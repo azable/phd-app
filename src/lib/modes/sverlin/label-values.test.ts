@@ -66,11 +66,10 @@ describe('labels read in the view', () => {
         sample: { state: { value: 2 }, types: { value: 'Int' }, targets: {} }
       }
     });
-    // A step per key: each step's own code gave the key once.
+    // The view draws the key, so each run of the insertion giving it is a step, whose own code gave
+    // it once.
     expect(
-      prepared.masters.insert.map((step) =>
-        step.labelled?.['insert.key']?.map((run) => run.state.value)
-      )
+      prepared.master.map((step) => step.labelled?.['insert.key']?.map((run) => run.state.value))
     ).toEqual([undefined, [2], [8], [1]]);
   });
 
@@ -149,9 +148,10 @@ describe('a for … of variable', () => {
     `);
     const input = interpretInput('const digits = Digits([3, 1, 4]);', counting);
     const steps = traceAlgorithm(
-      'for (const v of digits) @read{ const seen = v; }',
+      'for (const v of digits) @read{ const seen = @seen[v]; }',
       input,
-      counting
+      counting,
+      { values: new Set(['read.seen']) }
     ).steps;
     const { identities } = steps[1];
     expect(identities?.refs.v).toBe(identities?.ids['digits[1]']);

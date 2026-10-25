@@ -70,9 +70,9 @@ const source = `<script lang="sverlin" domain>
 {@render Board()}`;
 
 /** The caption Ask draws at a step, and whether it is hidden. */
-async function captionAt(frames: string, step: number) {
+async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
   const prepared = prepareSvelteComponent(source);
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen: { frames } });
+  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -101,13 +101,13 @@ it.skipIf(!enabled)(
   "draw a step's one application of an operator, and nothing where it made none or several",
   { timeout: 120_000 },
   async () => {
-    // At sweep.pair.*, step 0 is the input as given, step 1 the first comparison, step 2 its swap.
-    expect((await captionAt('sweep.pair.*', 0))?.hidden).toBe('true');
-    const first = await captionAt('sweep.pair.*', 1);
+    // Step 0 is the input as given, step 1 the first comparison, step 2 its swap.
+    expect((await captionAt(0))?.hidden).toBe('true');
+    const first = await captionAt(1);
     expect(first?.text).toMatch(/^is 5 > 1 ?\? yes$/u);
     expect(first?.hidden).toBeUndefined();
-    expect((await captionAt('sweep.pair.*', 2))?.hidden).toBe('true');
-    // At sweep, a step is a whole sweep, with several comparisons.
-    expect((await captionAt('sweep', 2))?.hidden).toBe('true');
+    expect((await captionAt(2))?.hidden).toBe('true');
+    // With Greater's view hidden, the comparisons are no steps and nothing draws them.
+    expect(await captionAt(1, { 'views.Greater': 'none' })).toBeNull();
   }
 );

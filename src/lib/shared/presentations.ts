@@ -131,8 +131,6 @@ export const browserBundlePresentationSchema = v.strictObject({
   views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
   /** The pointer views each position type rendered as a pointer could draw, its pointers variable's. */
   pointers: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
-  /** The events the source can step by, the options of its frames variable. */
-  frames: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The source's own listings, the first options of its listing.language variable. */
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
