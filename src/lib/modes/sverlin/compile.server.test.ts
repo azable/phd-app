@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { MasterStep } from './algorithm/interpret.server';
 import {
   bundlePresentation,
   compileSvelteComponent,
@@ -371,9 +372,10 @@ describe('single-component Svelte compilation', () => {
     expect(prepared.design.starter['listing.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n');
     // The input as given, lighting nothing, then a step per pass, each changing last; the loop's
-    // end only drops i, so it is no step. With no operator rendered, the one pacing has no key.
-    expect(prepared.listings?.code.lit['']).toHaveLength(3);
-    expect(prepared.listings?.code.lit[''][0]).toEqual({ current: [], earlier: [] });
+    // end only drops i, so it is no step.
+    const { lit } = prepared.paced(new Set(prepared.pauses.defaults));
+    expect(lit.code).toHaveLength(3);
+    expect(lit.code[0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n');
     // Without a <Listing />, the design has no listing variables.
@@ -747,14 +749,18 @@ describe('typed view components', () => {
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Int(target)}{@render Cells()}`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
-    expect(prepared.placements['']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.paced(new Set(prepared.pauses.defaults)).placements).toEqual([
+      { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
+    ]);
   });
 
   it('measures a position with every place in its collection, and as far past it as the trace goes', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">@start[let i = Position(-1);] @move[i = Position(0);]</script>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Cells()}`
     );
-    expect(prepared.placements['']).toEqual([{ path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }]);
+    expect(prepared.paced(new Set(prepared.pauses.defaults)).placements).toEqual([
+      { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
+    ]);
   });
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
@@ -874,6 +880,15 @@ describe('scope', () => {
     ).toThrow('The view reads key itself, but key is out of scope at some steps');
   });
 
+  it('rejects choosing by a label value, pointing at labelling the guarded code', () => {
+    const chosen = source(
+      '{#snippet Held()}<Node>held</Node>{/snippet}{#if @at}{@render Held()}{/if}'
+    ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
+    expect(() => prepareSvelteComponent(chosen)).toThrow(
+      "A view cannot choose what to draw by a label's value, as {#if @at}"
+    );
+  });
+
   it('takes a variable declared later read itself only inside a node, which hides at step 0', () => {
     expect(() =>
       prepareSvelteComponent(
@@ -988,7 +1003,7 @@ describe('views of what a step computed', () => {
     expect(javascript).toContain('__applied_Greater');
   });
 
-  it('step at each comparison the view shows, and apart from it at each swap', async () => {
+  it('pause at each comparison its label runs, and apart from it at each swap', async () => {
     const prepared = prepareSvelteComponent(bubble);
     const steps = (master: typeof prepared.master) =>
       master.map(({ state, applied }) => [
@@ -1004,12 +1019,17 @@ describe('views of what a step computed', () => {
     ]);
     // Ten comparisons and six swaps, after the input as given.
     expect(prepared.master).toHaveLength(17);
-    // With Greater's view hidden, comparisons are no steps: the sort plays through its swaps.
-    expect(steps(prepared.masters['']).slice(1, 3)).toEqual([
-      ['1,5,4,2,3', []],
-      ['1,4,5,2,3', []]
+    expect(prepared.pauses.defaults).toEqual(['sweep.pair.test', 'sweep.pair.swap']);
+    // Not pausing at the comparisons, the sort plays through its swaps, each comparison leading up
+    // to its swap and drawn there.
+    const swaps = prepared.paced(new Set(['sweep.pair.swap'])).steps;
+    expect(steps(swaps).slice(1, 3)).toEqual([
+      ['1,5,4,2,3', ['5 > 1']],
+      ['1,4,5,2,3', ['5 > 4']]
     ]);
-    const paced = await bundlePresentation(prepared, 1, { chosen: { 'views.Greater': 'none' } });
+    const paced = await bundlePresentation(prepared, 1, {
+      chosen: { 'pause@sweep.pair.test': false }
+    });
     expect(paced.labels).toHaveLength(7);
     expect(paced.masterSignature).toBe((await bundlePresentation(prepared, 1)).masterSignature);
   });
@@ -1043,6 +1063,162 @@ describe('views of what a step computed', () => {
     );
     expect(Object.keys(prepared.applied?.Less?.state ?? {})).toEqual(['a', 'b', 'value']);
     expect(prepared.applied?.Less?.types).toEqual({ a: 'Int', b: 'Int', value: 'Flag' });
+  });
+});
+
+describe('pauses at labels', () => {
+  const insertion = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+
+<script lang="sverlin">
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+    let j = i;
+    while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
+      const moved = values[@from[Prev(j)]];
+      values[Prev(j)] = values[@to[j]];
+      values[j] = moved;
+      j = Prev(j);
+    }
+  }
+</script>
+
+<script lang="sverlin" listing="code">
+  for i = 1 to length(A) - 1
+    @insert[j = i
+    while j > 0 and @compare[A[@left[j - 1]] > A[@right[j]]]
+      @swap[moved = A[@from[j - 1]]
+      A[j - 1] = A[@to[j]]
+      A[j] = moved
+      j = j - 1]]
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}
+{#snippet Highlight(p: Position)}<Pointed />{/snippet}
+{#snippet Board()}
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+      {@render Greater()}
+    </Node>
+  </Node>
+{/snippet}
+
+{@render Board()}
+{@render Position(@left)}
+{@render Position(@right)}
+{@render Position(@from)}
+{@render Position(@to)}`;
+  const fine = new Set([
+    'insert.compare',
+    'insert.compare.left',
+    'insert.compare.right',
+    'insert.swap',
+    'insert.swap.to'
+  ]);
+
+  // Each step: the row after it, its comparison, the marks its code gave, and those held on.
+  const played = (master: MasterStep[]) =>
+    master.slice(1).map((step) => {
+      const comparison = step.applied?.Greater?.[0]?.state;
+      const short = (labels?: Record<string, unknown>) =>
+        Object.keys(labels ?? {})
+          .map((label) => label.slice(label.lastIndexOf('.') + 1))
+          .sort()
+          .join(' ');
+      return [
+        String(step.state.values),
+        comparison ? `${comparison.a} > ${comparison.b}: ${comparison.value}` : '',
+        short(step.labelled),
+        short(step.held)
+      ].join(' | ');
+    });
+
+  it('offers a pause at every label, by its full name, on where the view gives a reason', () => {
+    const prepared = prepareSvelteComponent(insertion);
+    const pauses = Object.entries(prepared.design.starter).filter(([key]) =>
+      key.startsWith('pause@')
+    );
+    expect(Object.fromEntries(pauses)).toEqual({
+      'pause@insert': false,
+      'pause@insert.compare': true,
+      'pause@insert.compare.left': false,
+      'pause@insert.compare.right': false,
+      'pause@insert.swap': true,
+      'pause@insert.swap.from': false,
+      'pause@insert.swap.to': false
+    });
+    expect(prepared.design.space['pause@insert.swap.to']).toEqual([true, false]);
+    expect(played(prepared.master).slice(0, 5)).toEqual([
+      '5,2,4,1 | 5 > 2: true | left right | ',
+      '2,5,4,1 |  | from to | ',
+      '2,5,4,1 | 5 > 4: true | left right | ',
+      '2,4,5,1 |  | from to | ',
+      '2,4,5,1 | 2 > 4: false | left right | '
+    ]);
+  });
+
+  it('pauses at each label switched on, holding a mark until the run around it finishes', () => {
+    const prepared = prepareSvelteComponent(insertion);
+    // Left, right, the comparison, the swap's marks with nothing moved, then the swap; the pair in
+    // order makes no marks step, as no swap runs.
+    expect(played(prepared.paced(fine).steps).slice(0, 11)).toEqual([
+      '5,2,4,1 |  | left | ',
+      '5,2,4,1 |  | right | left',
+      '5,2,4,1 | 5 > 2: true |  | left right',
+      '5,2,4,1 |  | from to | ',
+      '2,5,4,1 |  |  | from to',
+      '2,5,4,1 |  | left | ',
+      '2,5,4,1 |  | right | left',
+      '2,5,4,1 | 5 > 4: true |  | left right',
+      '2,5,4,1 |  | from to | ',
+      '2,4,5,1 |  |  | from to',
+      '2,4,5,1 |  | left | '
+    ]);
+  });
+
+  it('lights each pause’s region and lines the presentations up by moment', async () => {
+    const prepared = prepareSvelteComponent(insertion);
+    const { text } = prepared.listings!.code;
+    const lit = prepared
+      .paced(fine)
+      .lit.code.slice(1, 4)
+      .map(({ current }) => current.map(([start, end]) => text.slice(start, end)));
+    expect(lit).toEqual([['j - 1'], ['j'], ['A[j - 1] > A[j]']]);
+    const coarse = await bundlePresentation(prepared, 1);
+    const apart = await bundlePresentation(prepared, 1, {
+      chosen: {
+        'pause@insert.compare.left': true,
+        'pause@insert.compare.right': true,
+        'pause@insert.swap.to': true
+      }
+    });
+    expect(apart.masterSignature).toBe(coarse.masterSignature);
+    expect(apart.labels.length).toBeGreaterThan(coarse.labels.length);
+    // Every step of the coarse presentation falls on one of the fine one's.
+    expect(coarse.masterSteps.every((moment) => apart.masterSteps.includes(moment))).toBe(true);
+  });
+
+  it('names a pause by the label’s full name, refusing its short ending', async () => {
+    const prepared = prepareSvelteComponent(insertion);
+    await expect(
+      bundlePresentation(prepared, 1, { chosen: { 'pause@left': true } })
+    ).rejects.toThrow('a pause names a label by its full name');
   });
 });
 

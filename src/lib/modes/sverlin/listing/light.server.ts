@@ -21,11 +21,13 @@ export function lightSteps(
   const marks = new Map<string, Mark[]>();
   for (const mark of listing.marks) marks.set(mark.key, [...(marks.get(mark.key) ?? []), mark]);
   const lit: Lit[] = [];
-  for (const { events = [], gap = 0, unit } of steps) {
+  const marksOf = (events: readonly TraceEvent[]) =>
+    events.flatMap((event) => marks.get(spanKey(event.at)) ?? []);
+  for (const [index, { events = [], gap = 0, unit }] of steps.entries()) {
     const leading: Mark[] = [];
     const latest: Mark[] = [];
-    events.forEach((event, index) =>
-      (index < gap ? leading : latest).push(...(marks.get(spanKey(event.at)) ?? []))
+    events.forEach((event, at) =>
+      (at < gap ? leading : latest).push(...(marks.get(spanKey(event.at)) ?? []))
     );
     // A label on a block or on statements in a row has no events of its own.
     if (unit) latest.push(...(marks.get(spanKey(unit)) ?? []));
@@ -35,8 +37,20 @@ export function lightSteps(
     }
     const lighted = [leading, latest];
     // A region inside a lit one that ran nothing this step, nor anything inside it, is left out of
-    // it, as the comparison in while @test[@bound[j > 0] and @cmp[A[j] > key]] once j > 0 fails.
-    const ran = lighted.flat();
+    // it, as the comparison in while @test[@bound[j > 0] and @cmp[A[j] > key]] once j > 0 fails;
+    // what ran at the steps just before it inside its code counts, as operands paused at.
+    const inside: Mark[] = [];
+    for (let back = index - 1; unit && back > 0; back--) {
+      const earlier = steps[back].unit;
+      const within =
+        earlier &&
+        unit.start <= earlier.start &&
+        earlier.end <= unit.end &&
+        (earlier.start !== unit.start || earlier.end !== unit.end);
+      if (!within) break;
+      inside.push(...marksOf(steps[back].events ?? []));
+    }
+    const ran = [...lighted.flat(), ...inside];
     const quiet = (listing.regions ?? []).filter(
       (region) => !ran.some((mark) => region.start <= mark.start && mark.end <= region.end)
     );

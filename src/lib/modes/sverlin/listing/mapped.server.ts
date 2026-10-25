@@ -3,7 +3,8 @@
  * <script lang="sverlin" listing="name"> block, whose regions, marked @name[…], light when the
  * algorithm runs the code with that label (see algorithm/labels.server.ts). A region inside
  * another takes its name as a prefix, as a label does, so names line up with the algorithm's.
- * Every region needs a label, while a label may only mark steps. A node without a label of its
+ * Every region needs a label, and every label a region, as each label is a place the page can
+ * pause. A node without a label of its
  * own takes that of the nearest labelled node around it.
  */
 
@@ -157,6 +158,15 @@ export function mappedListing(
         message: `The listing's region @${region.label} is labelled on no code; label the code it shows the same way, with @${region.label.split('.').at(-1)}[…] around it${region.label.includes('.') ? ` inside @${region.label.split('.').slice(0, -1).join('.')}` : ''}.`,
         block: 'listing',
         at: region.at
+      });
+  // Every label is a place the page can pause, so each has a region, lit where it pauses.
+  const shown = new Set(regions.map(({ label }) => label));
+  for (const { full, name, at } of labels)
+    if (!shown.has(full))
+      problems.push({
+        message: `The label @${full} has no region in the listing, where the page lights it when it pauses there; mark the text its code shows as @${name}[…]${full.includes('.') ? ` inside @${full.split('.').slice(0, -1).join('.')}` : ''}, as A[@left[j - 1]] marks the j - 1 of A[j - 1].`,
+        block: 'algorithm',
+        at
       });
   const maps = regions.map(({ label, start, end }) => ({
     label,

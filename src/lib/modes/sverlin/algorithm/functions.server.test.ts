@@ -179,10 +179,10 @@ describe('loops', () => {
         @bump[k = Up(k);]
       }
     `);
-    // The grow finding values long enough changes nothing, so it is no step. The last test only
-    // drops k, so the end is no step: the last is the bump to 7.
-    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 3, 3]);
-    expect(trace.slice(3).map(({ state }) => state.k)).toEqual([2, 7]);
+    // @grow pauses at each run, the one finding values long enough too. The last test only drops
+    // k, so the end is no step: the last is the bump to 7.
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3]);
+    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7]);
   });
 
   it('run a do...while body once before its test', () => {

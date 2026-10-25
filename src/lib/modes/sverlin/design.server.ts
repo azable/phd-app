@@ -66,6 +66,22 @@ export class DesignValueError extends Error {
 }
 
 /**
+ * Where the steps pause: each label of the algorithm, by its full name, as pause@insert.swap.to,
+ * on or off (see Pacing in algorithm/interpret.server.ts).
+ */
+export function pauseSpace(labels: readonly string[]): DesignSpace {
+  return Object.fromEntries(labels.map((label) => [`pause@${label}`, [true, false]]));
+}
+
+/** The pauses a source starts with: the labels the view gives a reason to pause at. */
+export function starterPauses(
+  labels: readonly string[],
+  defaults: ReadonlySet<string>
+): Record<string, boolean> {
+  return Object.fromEntries(labels.map((label) => [`pause@${label}`, defaults.has(label)]));
+}
+
+/**
  * Every variable of a source: each type's views, each position type's pointer views where it is
  * rendered as a pointer, the frame's settings, a listing's if the view places one (its languages
  * the source's own listings first, then the library's), each kind's props, and each place's.
@@ -151,6 +167,10 @@ const fits = (space: DesignSpace, key: string, value: unknown) =>
 /** Explain a chosen value the space cannot take. */
 function unfit(space: DesignSpace, key: string, value: unknown): string {
   if (!Object.hasOwn(space, key)) {
+    if (key.startsWith('pause@')) {
+      const pauses = Object.keys(space).filter((other) => other.startsWith('pause@'));
+      return `The design has no variable ${key}; a pause names a label by its full name, and its pauses are ${pauses.join(', ') || 'none'}.`;
+    }
     // A view choice, a type's or a place's, is one variable, not a kind and a prop.
     if (key.startsWith('views.') || key.startsWith('pointers.')) {
       const choices = Object.keys(space).filter(
@@ -170,6 +190,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
                   !other.startsWith('views.') &&
                   !other.startsWith('pointers.') &&
                   !other.startsWith('frame.') &&
+                  !other.startsWith('pause@') &&
                   !other.startsWith('listing.')
               )
               .map((other) => other.slice(0, other.lastIndexOf('.')))
@@ -246,17 +267,17 @@ export function buildVariant(
 
 /**
  * The prop a variable sets, as fill for Compared.Pointed.fill, views for a choice of views
- * (views.Int, pointers.Index), and frame for the frame's.
+ * (views.Int, pointers.Index), and the variable itself for the frame's and the pauses.
  */
 function propOf(key: string): string {
   if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
-  if (key.startsWith('frame.')) return key;
+  if (key.startsWith('frame.') || key.startsWith('pause@')) return key;
   return key.slice(key.lastIndexOf('.') + 1);
 }
 
 /**
- * Props a random variant leaves as they were: what is shown, how things line up, the frame, and a
- * listing's language.
+ * Props a random variant leaves as they were: what is shown, how things line up, the frame, where
+ * the steps pause, and a listing's language.
  */
 const kept = new Set<string>([
   'language',
@@ -310,7 +331,7 @@ function drawOne(
       ? candidates[Math.floor(keyedRandom(seed, stream) * candidates.length)]
       : value;
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
-  if (prop.startsWith('frame.') || kept.has(prop)) return value;
+  if (prop.startsWith('frame.') || prop.startsWith('pause@') || kept.has(prop)) return value;
   if (colourProps.has(prop)) {
     const parts = typeof value === 'string' ? colourParts(value) : undefined;
     if (!parts) return value;

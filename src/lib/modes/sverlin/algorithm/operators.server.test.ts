@@ -421,9 +421,9 @@ describe('structural operators', () => {
 });
 
 describe('applications kept for the view', () => {
-  it('make each application of an operator shown a step, named by the operator’s parameters', () => {
+  it('keep each application of an operator shown in the label run around it, named by the operator’s parameters', () => {
     const [inner, outer, add] = run(
-      '@add[const total = Add(Add(Int(1), Int(2)), Int(3));]',
+      '@add[const total = @outer[Add(@inner[Add(Int(1), Int(2))], Int(3))];]',
       showing('Add')
     );
     expect(inner.applied).toEqual({
@@ -431,7 +431,7 @@ describe('applications kept for the view', () => {
         {
           state: { a: 1, b: 2, value: 3 },
           types: { a: 'Int', b: 'Int', value: 'Int' },
-          at: 23,
+          at: 37,
           identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
         }
       ]
@@ -440,7 +440,7 @@ describe('applications kept for the view', () => {
       {
         state: { a: 3, b: 3, value: 6 },
         types: { a: 'Int', b: 'Int', value: 'Int' },
-        at: 19,
+        at: 26,
         identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
       }
     ]);
@@ -501,7 +501,7 @@ describe('applications kept for the view', () => {
 
   it('copy a collection given or given back, so later writes leave it as it was', () => {
     const [step, join] = run(
-      '@join[let more = Append(values, target); more[0] = Int(0);]',
+      '@join[let more = @append[Append(values, target)]; more[0] = Int(0);]',
       showing('Append')
     );
     expect(step.applied?.Append?.[0].state).toEqual({ c: [3, 8, 5], x: 5, value: [3, 8, 5, 5] });

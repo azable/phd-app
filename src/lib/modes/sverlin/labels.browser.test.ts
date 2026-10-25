@@ -114,11 +114,11 @@ it.skipIf(!enabled)(
 <script lang="sverlin">
   for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
     for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
-      @test[if (Greater(values[Prev(i)], values[i])) @swap{
+      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
         const moved = @a[values[Prev(i)]];
         values[Prev(i)] = @b[values[i]];
         values[i] = moved;
-      }]
+      }
     }
   }
 </script>
@@ -129,7 +129,7 @@ it.skipIf(!enabled)(
 {@render Cells()}
 {@render Greater()}
 {@render Swapped()}`;
-    // Each comparison is a step, and each swap, which gives both values the caption draws.
+    // Each comparison, labelled, is a step, and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
     const [, compare, swap, , , last] = await stepsOf(source, 6);
     expect(swap).toContain('Swapped:swap 5 and 1');

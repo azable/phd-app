@@ -64,11 +64,12 @@ describe('listings of the source’s own', () => {
     const prepared = prepareSvelteComponent(insertion);
     expect(prepared.design.starter['listing.language']).toBe('textbook');
     expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
-    const { text, lit } = prepared.listings!.textbook;
+    const { text } = prepared.listings!.textbook;
+    const lit = prepared.paced(new Set(prepared.pauses.defaults)).lit.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
-    // The view draws the row, so the steps are the shift and the placing, each leading up from the
-    // step before.
-    const shown = lit[''].map(({ current, earlier }) => ({
+    // The view draws the row, so the pauses are the shift and the placing, each step leading up from
+    // the one before.
+    const shown = lit.map(({ current, earlier }) => ({
       current: current.map(([start, end]) => text.slice(start, end)),
       earlier: earlier.map(([start, end]) => text.slice(start, end))
     }));
@@ -85,8 +86,9 @@ describe('listings of the source’s own', () => {
   it('light the bound alone where the comparison never runs', () => {
     // The last step, placing the key, leads up from the shift: j moves to 0, and the test fails on
     // its bound, its comparison never run.
-    const { text, lit } = prepareSvelteComponent(insertion).listings!.textbook;
-    const leaving = lit[''].at(-1)!;
+    const prepared = prepareSvelteComponent(insertion);
+    const { text } = prepared.listings!.textbook;
+    const leaving = prepared.paced(new Set(prepared.pauses.defaults)).lit.textbook.at(-1)!;
     const earlier = leaving.earlier.map(([start, end]) => text.slice(start, end));
     expect(earlier).toContain('j > 0 and');
     expect(earlier).not.toContain('A[j] > key');
@@ -102,8 +104,14 @@ describe('listings of the source’s own', () => {
     [
       'a region with a dotted name',
       '  @size[const n = Int(1);]',
-      '@size.inner[n]',
+      '@size[n] @size.inner[m]',
       'The region @size.inner[ has a dotted name: a region takes one name and nests inside the one around it, as @size[… @inner[…]].'
+    ],
+    [
+      'a label with no region, where a pause there would light nothing',
+      '  @size[const n = Int(@more[1]);]',
+      '@size[n]',
+      'The label @size.more has no region in the listing, where the page lights it when it pauses there; mark the text its code shows as @more[…] inside @size, as A[@left[j - 1]] marks the j - 1 of A[j - 1].'
     ],
     [
       'a listing named none',

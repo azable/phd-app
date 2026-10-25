@@ -32,7 +32,7 @@ const comparing: Pacing = {
   drawn: new Set(['values', 'checked'])
 };
 
-describe('steps from what the view shows', () => {
+describe('pauses at labels', () => {
   it('step where a label’s code changes what is drawn, from the state before it to the state after', () => {
     // [3, 8, 5, 2], looking for 5: the start and three counts. The checks change nothing, nor
     // does a pass once its count is a step; the loop's exit only drops i, so it is no step.
@@ -59,9 +59,9 @@ describe('steps from what the view shows', () => {
     expect(steps(search, { drawn: new Set(['values']) })).toHaveLength(1);
   });
 
-  it('step at each application of an operator the view shows, its own code the application', () => {
+  it('pause by default at a label whose run applies an operator the view shows', () => {
     const trace = steps(search, comparing);
-    // The start, then each count and each comparison; the comparison finding 5 ends the search.
+    // The start, then each count and each check; the check finding 5 ends the search.
     expect(
       trace.map(({ state, applied }) => [
         state.checked,
@@ -76,32 +76,44 @@ describe('steps from what the view shows', () => {
       [3, []],
       [3, ['5 = 5']]
     ]);
-    // Its operands are read leading up to it; its own event is the application.
-    const [, , compare] = trace;
-    expect(compare.events?.slice(compare.gap).map(({ kind }) => kind)).toEqual(['apply']);
-    expect(compare.unit).toBeDefined();
+    const [, , check] = trace;
+    expect(check.events?.slice(check.gap).map(({ kind }) => kind)).toContain('apply');
+    expect(check.unit).toBeDefined();
   });
-  it('step at an operator’s applications only inside the label a view of it is narrowed to', () => {
+
+  it('pause only at the labels given, the code of those not given joining the next step', () => {
+    const run = traceAlgorithm(search, input, domain, comparing);
+    expect([...run.defaults].sort()).toEqual(['pass.check', 'pass.count', 'start']);
+    // Pausing at the checks alone: each count leads up to its check.
+    const checks = steps(search, { ...comparing, pauses: new Set(['pass.check']) });
+    expect(checks.map(({ before, state }) => [before?.state.checked, state.checked])).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3]
+    ]);
+    expect(checks.every(({ applied }) => applied?.Equal?.length === 1)).toBe(true);
+    // Pausing at the pass as well, which ends after each check, adds a step that changes nothing.
+    expect(steps(search, { ...comparing, pauses: new Set(['pass', 'pass.check']) })).toHaveLength(
+      6
+    );
+    // Pausing nowhere leaves the end alone.
+    expect(steps(search, { ...comparing, pauses: new Set() })).toHaveLength(1);
+  });
+
+  it('pause by default at an operator’s applications only inside the label a view is narrowed to', () => {
     const body = search.replace(
       '@count[checked = Up(checked);]',
-      '@count[checked = Up(checked);\n    const same = Equal(target, target);]'
+      '@count[checked = Up(checked);]\n    @keep[const same = @same[Equal(target, target)];]'
     );
-    // A step whose own code is one application.
-    const applications = (pacing: Pacing) =>
-      steps(body, pacing).filter(
-        ({ events, gap }) =>
-          events
-            ?.slice(gap)
-            .map(({ kind }) => kind)
-            .join() === 'apply'
-      ).length;
     const start = body.indexOf('@check[');
     const narrowed: Pacing = {
       ...comparing,
       shown: new Map([['Equal', [{ start, end: body.indexOf('break;]', start) + 7 }]]])
     };
-    expect(applications(comparing)).toBe(6);
-    expect(applications(narrowed)).toBe(3);
+    const defaults = (pacing: Pacing) => traceAlgorithm(body, input, domain, pacing).defaults;
+    expect(defaults(comparing).has('pass.keep.same')).toBe(true);
+    expect(defaults(narrowed).has('pass.keep.same')).toBe(false);
+    expect(defaults(narrowed).has('pass.check')).toBe(true);
   });
 
   it('step at each run of a label whose value the view draws, though it changes nothing', () => {

@@ -70,6 +70,8 @@ import {
   buildVariant,
   DesignValueError,
   designSpace,
+  pauseSpace,
+  starterPauses,
   starterVariant,
   type DesignKind,
   type DesignOrigin,
@@ -162,22 +164,23 @@ type Block = { body: string; offset: number };
 export type PreparedComponent = {
   source: string;
   component: string;
-  /** The steps with every operator the root renders shown. */
+  /** The steps pausing at the labels the view gives a reason to (see Pacing). */
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
   ownListings: string[];
-  /** The steps of each pacing the view can take, by its key (see pacings). */
-  masters: Record<string, MasterStep[]>;
+  /** Every label of the algorithm, by full name, and those the view pauses at by default. */
+  pauses: { labels: string[]; defaults: string[] };
+  /**
+   * The steps pausing at the labels given, and what follows from them: the values the root reads
+   * for placement, measured with every value of their types, as each names a step of its own, and
+   * what each step lights in each listing. Made once per set of pauses.
+   */
+  paced: (pauses: ReadonlySet<string>) => PacedSteps;
   /** The source's identity, shared by its presentations however their steps are paced. */
   signature: string;
   atoms: AtomRegistry;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
-  /**
-   * Values the root reads for placement, measured with every value of their types, by pacing,
-   * as each names a step of its own.
-   */
-  placements: Record<string, Placement[]>;
   /**
    * The design space, the views each type rendered by name chooses among (its pointer views apart),
    * the kind of each tag (by its line:column), and the first variant.
@@ -199,8 +202,8 @@ export type PreparedComponent = {
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
-  /** Where the view places a <Listing />, the algorithm in each language, and what each step lights. */
-  listings?: Record<string, LitListing>;
+  /** Where the view places a <Listing />, the algorithm's text in each language. */
+  listings?: Record<string, { text: string }>;
   /**
    * The operators the root renders by name, as {@render Greater()}, each with an application from
    * some step, which stands in hidden where a step has none or several of them.
@@ -215,14 +218,17 @@ export type PreparedComponent = {
   labelled?: Record<string, { label: string; sample?: LabelRun }>;
   /** The operators whose applications so far the root draws, by key, some only inside a label. */
   histories?: Record<string, { operator: string; start?: number; end?: number }>;
-  /** The renders of operators' applications that pace the steps, in the order pacings keys them. */
-  paced?: { key: string; operator: string }[];
   /** The view's nodes and renders, and its views, for what each presentation leaves out. */
   leftOut?: { model: LeftOutModel; components: string[] };
 };
 
-/** A listing's text and what each step lights in it, by pacing. */
-export type LitListing = { text: string; lit: Record<string, Lit[]> };
+/** The steps as a set of pauses paces them (see PreparedComponent.paced). */
+export type PacedSteps = {
+  steps: MasterStep[];
+  placements: Placement[];
+  /** What each step lights in each listing the view places, by its language. */
+  lit: Record<string, Lit[]>;
+};
 
 export class InvalidSvelteSourceError extends Error {
   readonly code?: string;
@@ -367,67 +373,26 @@ function paced(
   return { ...run, steps: [run.opening, ...run.steps] };
 }
 
-/**
- * What a view shows, which paces its steps (see Pacing): its renders of operators' applications,
- * one at a time or so far, each by its key and with the label span it is narrowed to; the variables
- * it draws; and the labels whose values it draws.
- */
-type ViewPacing = {
-  renders: readonly { key: string; operator: string; span?: { start: number; end: number } }[];
-  drawn: ReadonlySet<string>;
-  values: ReadonlySet<string>;
-};
+/** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
+export const pauseKey = (label: string): string => `pause@${label}`;
 
-/**
- * How many renders of applications are paced every way, each shown or hidden: up to 16 runs of
- * the algorithm. Beyond, only all shown or none, rare enough that more runs would only slow builds.
- */
-const pacedRenders = 4;
-
-/** A pacing's key: the keys of the renders of applications it shows, as written. */
-export function pacingKey(shown: readonly string[]): string {
-  return shown.join(',');
+/** The labels a variant pauses at: each whose pause@ variable is true, else the view's defaults. */
+export function pausesOf(
+  labels: readonly string[],
+  defaults: ReadonlySet<string>,
+  values: Readonly<Record<string, unknown>>
+): Set<string> {
+  return new Set(
+    labels.filter((label) =>
+      typeof values[pauseKey(label)] === 'boolean'
+        ? values[pauseKey(label)] === true
+        : defaults.has(label)
+    )
+  );
 }
 
-/**
- * The algorithm's steps for each pacing the view can take, by its key: which of its renders of
- * applications are shown, all of them first. One whose steps outrun the limit is left out.
- */
-function pacings(
-  source: string,
-  algorithm: Block,
-  input: TypedState,
-  domain: DomainRegistry,
-  view: ViewPacing,
-  keep: Parameters<typeof traceAlgorithm>[4] = {}
-): Record<string, ReturnType<typeof traceAlgorithm>> {
-  const { renders } = view;
-  const ways =
-    renders.length <= pacedRenders
-      ? Array.from({ length: 2 ** renders.length }, (_, hidden) =>
-          renders.filter((_, at) => !(hidden & (1 << at)))
-        )
-      : [renders, []];
-  const runs: Record<string, ReturnType<typeof traceAlgorithm>> = {};
-  ways.forEach((shown, index) => {
-    const operators = new Map<string, { start: number; end: number }[] | undefined>();
-    for (const { operator, span } of shown) {
-      const spans = operators.has(operator) ? operators.get(operator) : [];
-      operators.set(operator, span && spans ? [...spans, span] : undefined);
-    }
-    const pacing = { shown: operators, drawn: view.drawn, values: view.values };
-    const key = pacingKey(shown.map(({ key }) => key));
-    // Any problem with all shown is the algorithm's or its labels'.
-    if (index === 0) runs[key] = paced(source, algorithm, input, domain, pacing, keep);
-    else
-      try {
-        runs[key] = paced(source, algorithm, input, domain, pacing, keep);
-      } catch {
-        // A pacing with too many steps is no option.
-      }
-  });
-  return runs;
-}
+/** A set of pauses as a key, for the steps paced by them (see PreparedComponent.paced). */
+const pausesKey = (pauses: ReadonlySet<string>) => [...pauses].sort().join(',');
 
 /**
  * Each step as two, the state just before its code and just after it, as the page plays it: the
@@ -873,57 +838,62 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       const span = filter ? narrowed.get(filter) : undefined;
       if (span) appliedIn[`${name}_${filter}`] = { operator: name, ...span };
     }
-    // The page steps where the view shows something happen (see Pacing): at each application of an
-    // operator it draws, one at a time or so far; at each label run changing a variable the markup
-    // reads; and at each run of the code giving a label's value it reads, the statement labelled
-    // around a labelled expression, where no step came after the value. Hiding an operator's view paces the steps without it.
-    const shownRenders = [
+    // The page pauses where labels finish (see Pacing): at the labels a variant pauses at, else at
+    // those the view gives a reason to, a run changing a variable the markup reads or applying an
+    // operator it renders, one at a time or so far, and the code giving a label's value it reads.
+    const shown = new Map<string, { start: number; end: number }[] | undefined>();
+    for (const { operator, span } of [
       ...appliedNames.map((key) => ({
-        key,
         operator: appliedIn[key]?.operator ?? key,
-        ...(appliedIn[key] ? { span: appliedIn[key] } : {})
+        span: appliedIn[key]
       })),
-      ...Object.entries(histories).map(([key, { operator, start, end }]) => ({
-        key,
+      ...Object.values(histories).map(({ operator, start, end }) => ({
         operator,
-        ...(start === undefined ? {} : { span: { start, end: end ?? start } })
+        span: start === undefined ? undefined : { start, end: end ?? start }
       }))
-    ];
+    ]) {
+      const spans = shown.has(operator) ? shown.get(operator) : [];
+      shown.set(operator, span && spans ? [...spans, span] : undefined);
+    }
     const drawn = new Set(
       [...readsOf({ children: ast.html } as Parameters<typeof readsOf>[0])].filter((name) =>
         stateNames.includes(name)
       )
     );
-    const runs = pacings(
-      source,
-      algorithm,
-      input,
-      domain,
-      {
-        renders: shownRenders,
-        drawn,
-        values: new Set(Object.values(labelled).map(({ label }) => label))
-      },
-      {
-        labels: new Set(Object.values(labelled).map(({ label }) => label)),
-        history: new Set(Object.values(histories).map(({ operator }) => operator))
-      }
-    );
-    const traced = Object.values(runs)[0];
+    const labelValues = new Set(Object.values(labelled).map(({ label }) => label));
+    const pacing: Pacing = { shown, drawn, values: labelValues };
+    const keep = {
+      labels: labelValues,
+      history: new Set(Object.values(histories).map(({ operator }) => operator))
+    };
+    const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
-    const masters = Object.fromEntries(
-      Object.entries(runs).map(([pacing, run]) => [pacing, run.steps])
-    );
-    // Every state a presentation shows: each step's before and after, of every pacing.
-    const everyStep = Object.values(masters).flatMap(phasesOf);
+    const labelNames = traced.labels.map(({ full }) => full);
+    // Pausing at every label, the finest the steps go, whose states those of any other pauses are
+    // among; where that outruns the limit, the defaults' alone.
+    let finest: MasterStep[] = [];
+    try {
+      finest = paced(
+        source,
+        algorithm,
+        input,
+        domain,
+        { ...pacing, pauses: new Set(labelNames) },
+        keep
+      ).steps;
+    } catch {
+      finest = [];
+    }
+    const seen = [...master, ...finest];
+    // Every state a presentation can show: each step's before and after.
+    const everyStep = [...phasesOf(master), ...phasesOf(finest)];
     // An application of each operator the root renders, from any step, to stand in hidden; for one
     // no step applies, as a branch this input never takes, its widest value, drawn hidden throughout.
     const applied: Record<string, Application> = {};
     const widest = probeValues(viewing, everyStep);
     for (const name of appliedNames) {
       const operator = appliedIn[name]?.operator ?? name;
-      const made = Object.values(masters)
-        .flat()
+      const made = seen
         .flatMap((step) => step.applied?.[operator] ?? [])
         .find((application) => within(application, appliedIn[name]));
       const value = made ? undefined : (widest(name)?.widest[0] as TraceState | undefined);
@@ -935,12 +905,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // A value of each label the root reads, from any step, to stand in hidden where a step gave
     // none or several.
     for (const entry of Object.values(labelled))
-      entry.sample = Object.values(masters)
-        .flat()
-        .flatMap((step) => [
-          ...(step.labelled?.[entry.label] ?? []),
-          ...(step.led?.labelled?.[entry.label] ?? [])
-        ])[0];
+      entry.sample = seen.flatMap((step) => [
+        ...(step.labelled?.[entry.label] ?? []),
+        ...(step.led?.labelled?.[entry.label] ?? [])
+      ])[0];
     const written = listingsFrom(source, traced, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
@@ -953,22 +921,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const ownListings = listingBlocks.map(({ name }) => name);
     const listings = listing
       ? Object.fromEntries(
-          Object.entries(written.listings).map(([name, written]) => [
-            name,
-            {
-              text: written.text,
-              lit: Object.fromEntries(
-                Object.entries(masters).map(([pacing, steps]) => [
-                  pacing,
-                  lightSteps(written, steps)
-                ])
-              )
-            }
-          ])
+          Object.entries(written.listings).map(([name, { text }]) => [name, { text }])
         )
       : undefined;
-    // Variables out of scope at some step, of any pacing: what the view draws from one is
-    // hidden there.
+    // Variables out of scope at some step, however paced: what the view draws from one is hidden
+    // there.
     const scoped = new Set([
       ...stateNames.filter((name) => everyStep.some(({ state }) => !(name in state))),
       ...Object.keys(labelled).filter(isLabelKey)
@@ -1071,7 +1028,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // A presentation opens on the input as given, before the algorithm declares anything: the view
     // reading a variable itself is hidden until it is declared (see leftOutModel), and refused only
     // where it is out of scope after that.
-    const phased = Object.values(masters).map(phasesOf);
+    const phased = [master, finest].map(phasesOf);
     const scopedLater = new Set(
       [...scoped].filter(
         (name) =>
@@ -1092,7 +1049,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         scopedReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.`,
+              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1179,13 +1136,33 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       (node: { type?: string; expression?: { name?: string } }) =>
         !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
     );
-    // By the page's states, each step's before and after (see phasesOf).
-    const placements = Object.fromEntries(
-      Object.entries(masters).map(([pacing, steps]) => [
-        pacing,
-        rootPlacements(rootMarkup, stateNames, viewNames, viewing, phasesOf(steps))
-      ])
-    );
+    // The steps each set of pauses makes, with what follows from them, made once each; the defaults'
+    // are the master's.
+    const pacedBy = new Map<string, PacedSteps>();
+    const pacedSteps = (pauses: ReadonlySet<string>): PacedSteps => {
+      const key = pausesKey(pauses);
+      const made = pacedBy.get(key);
+      if (made) return made;
+      const steps =
+        key === pausesKey(traced.defaults)
+          ? master
+          : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
+      const result: PacedSteps = {
+        steps,
+        // By the page's states, each step's before and after (see phasesOf).
+        placements: rootPlacements(rootMarkup, stateNames, viewNames, viewing, phasesOf(steps)),
+        lit: listing
+          ? Object.fromEntries(
+              Object.entries(written.listings).map(([name, listed]) => [
+                name,
+                lightSteps(listed, steps)
+              ])
+            )
+          : {}
+      };
+      pacedBy.set(key, result);
+      return result;
+    };
     if (probeProblems.length)
       throw InvalidSvelteSourceError.combine(
         probeProblems.map(
@@ -1200,8 +1177,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       source,
       component,
       master,
-      masters,
       ownListings,
+      pauses: {
+        labels: labelNames,
+        defaults: labelNames.filter((label) => traced.defaults.has(label))
+      },
+      paced: pacedSteps,
       // Steps line up by their moments, so the identity tells presentations aligned that way from
       // those that number steps by their place.
       signature: stepSignature([
@@ -1210,8 +1191,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ]),
       atoms,
       components: probes,
-      placements,
-      paced: shownRenders.map(({ key, operator }) => ({ key, operator })),
       design: {
         views: chosen,
         pointers: pointerChosen,
@@ -1226,14 +1205,20 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
           )
         ]),
-        space: designSpace(kinds, chosen, listing, ownListings, pointerChosen, {
-          kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-          choices: Object.values(placeChoices)
-        }),
-        starter: starterVariant(kinds, chosen, listing, ownListings, pointerChosen, {
-          kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-          choices: Object.values(placeChoices)
-        })
+        space: {
+          ...designSpace(kinds, chosen, listing, ownListings, pointerChosen, {
+            kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+            choices: Object.values(placeChoices)
+          }),
+          ...pauseSpace(labelNames)
+        },
+        starter: {
+          ...starterVariant(kinds, chosen, listing, ownListings, pointerChosen, {
+            kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+            choices: Object.values(placeChoices)
+          }),
+          ...starterPauses(labelNames, traced.defaults)
+        }
       },
       ...(listings ? { listings } : {}),
       ...(appliedNames.length ? { applied } : {}),
@@ -1332,13 +1317,11 @@ export async function bundlePresentation(
       pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
     )
   ]);
-  // The steps paced by the operators whose views the variant shows, each placed by its moment.
-  const pacing = pacingKey(
-    (prepared.paced ?? []).flatMap(({ key, operator }) =>
-      values[`views.${operator}`] === 'none' ? [] : [key]
-    )
+  // The steps paced by the labels the variant pauses at, each placed by its moment.
+  const paced = prepared.paced(
+    pausesOf(prepared.pauses.labels, new Set(prepared.pauses.defaults), values)
   );
-  const master = prepared.masters[pacing] ?? prepared.master;
+  const master = paced.steps;
   const masterSteps = master.map((_, index) => index);
   const moments = master.map(({ moment }, index) => moment ?? index);
   // The page shows each step as two states, before its code and after it (see phasesOf). Each
@@ -1394,7 +1377,9 @@ export async function bundlePresentation(
         });
         continue;
       }
-      const given = index % 2 === 1 ? phase.labelled?.[label] : undefined;
+      // A value given at an earlier step inside a run of the label around it still going on is held,
+      // drawn from the step's before on.
+      const given = (index % 2 === 1 ? phase.labelled?.[label] : undefined) ?? phase.held?.[label];
       const run = given?.length === 1 ? given[0] : sample;
       if (!run) continue;
       const own = given?.length === 1;
@@ -1450,14 +1435,14 @@ export async function bundlePresentation(
   });
   const language = values['listing.language'];
   const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
-  const listing = listed ? { text: listed.text, lit: listed.lit[pacing] } : null;
+  const listing = listed ? { text: listed.text, lit: paced.lit[language as string] ?? [] } : null;
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),
     JSON.stringify(prepared.atoms),
     JSON.stringify({
       components: prepared.components,
-      placements: prepared.placements[pacing] ?? [],
+      placements: paced.placements,
       listing
     })
   );
