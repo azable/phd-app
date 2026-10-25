@@ -157,6 +157,13 @@ const fits = (space: DesignSpace, key: string, value: unknown) =>
 /** Explain a chosen value the space cannot take. */
 function unfit(space: DesignSpace, key: string, value: unknown): string {
   if (!Object.hasOwn(space, key)) {
+    // A view choice, a type's or a place's, is one variable, not a kind and a prop.
+    if (key.startsWith('views.') || key.startsWith('pointers.')) {
+      const choices = Object.keys(space).filter(
+        (other) => other.startsWith('views.') || other.startsWith('pointers.')
+      );
+      return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.`;
+    }
     const kind = key.slice(0, key.lastIndexOf('.'));
     const near = Object.keys(space).filter((other) => other.startsWith(`${kind}.`));
     return near.length

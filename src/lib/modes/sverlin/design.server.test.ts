@@ -97,6 +97,10 @@ describe('variants', () => {
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.depth': 1 } }, 1)).toThrow(
       'IntCell has no prop depth'
     );
+    // A view choice for a place the source has not is no variable, not a prop of "pointers".
+    expect(() =>
+      buildVariant(space, starter, { chosen: { 'pointers.Index@found': 'Arrow' } }, 1)
+    ).toThrow('The design has no variable pointers.Index@found; its view choices are views.Int');
   });
 
   it('keeps a place as its kinds are until a variant sets it apart', () => {
