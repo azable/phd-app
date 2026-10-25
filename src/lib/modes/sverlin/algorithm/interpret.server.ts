@@ -42,6 +42,9 @@ import {
   type RawContext
 } from './raw.server';
 import {
+  heapKey,
+  heapRecords,
+  isHeapKey,
   noDomain,
   type CollectionType,
   type DomainRegistry,
@@ -146,7 +149,8 @@ export const algorithmLimits = {
   maximumCallDepth: 100,
   maximumCollectionLength: 10_000,
   maximumStringLength: 10_000,
-  maximumTraceValues: 200_000
+  maximumTraceValues: 200_000,
+  maximumLiveNodes: 64
 } as const;
 
 /** Interpret the input block into the fixed initial state shared by every presentation. */
@@ -347,6 +351,18 @@ class Interpreter {
   readonly #atoms: AtomRegistry;
   /** The record or collection type of every array and object an input or algorithm made. */
   readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
+  /** The records a reference refers to as nodes, each with the reference type that names it. */
+  readonly #heaps: ReadonlyMap<string, string>;
+  /** Every node of each such record, in the order made, live or not. */
+  readonly #made = new Map<string, object[]>();
+  /** Each record's heap, one array kept across steps so it keeps its identity. */
+  readonly #heapArrays = new Map<string, object[]>();
+  /** Each live node's place in its heap at the last step recorded. */
+  #heapIndex = new Map<object, number>();
+  /** The node whose fields a step is recording, as its heap's element, not as a reference. */
+  #expanding: object | undefined;
+  /** While an input's nodes are rebuilt, each heap's nodes by their place in it. */
+  #restoring: Map<string, ObjectValue[]> | undefined;
   readonly #trace: MasterStep[] = [];
   /** The state just after the input, before any of the algorithm runs, which a page opens on. */
   opening: MasterStep | undefined;
@@ -371,6 +387,8 @@ class Interpreter {
   /** The scope of the running call's parameters, or the top level outside every call. */
   #frame: Scope = this.#topLevel;
   #depth = 0;
+  /** The scope each running call was made from, outermost first: its variables keep nodes live. */
+  readonly #callers: Scope[] = [];
   readonly #log = new EventLog();
   /** The label steps are by, and the code it marks. */
   readonly #frames: { label: string } & FrameUnits;
@@ -414,6 +432,7 @@ class Interpreter {
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
+    this.#heaps = heapRecords(this.#domain);
     const atomTypes = Object.values(this.#atoms);
     this.#raw = {
       text: (node) => {
@@ -435,9 +454,36 @@ class Interpreter {
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
     this.#globals.bindings.set('NaN', { value: NaN, constant: true });
     // Input values become ordinary top-level variables the algorithm may update, keeping types.
-    const initial = Object.entries(options.initial?.state ?? {});
     const initialTypes = options.initial?.types ?? {};
     const initialTargets = options.initial?.targets ?? {};
+    // An input's nodes come as each record's heap, the references to them as places in it.
+    this.#restoring = new Map();
+    for (const record of this.#heaps.keys()) {
+      const key = heapKey(record);
+      const recorded = options.initial?.state?.[key];
+      const nodes = (Array.isArray(recorded) ? recorded : []).map(() => {
+        const node = Object.create(null) as ObjectValue;
+        this.#shapes.set(node, this.#domain.structures[record] as RecordType);
+        return node;
+      });
+      this.#restoring.set(record, nodes);
+      this.#made.set(record, [...nodes]);
+    }
+    for (const [record, nodes] of this.#restoring) {
+      const recorded = options.initial?.state?.[heapKey(record)] as Record<string, TraceValue>[];
+      nodes.forEach((node, index) => {
+        for (const [field, item] of Object.entries(recorded[index] ?? {}))
+          node[field] = this.#fromTrace(
+            item,
+            `${heapKey(record)}[${index}].${field}`,
+            initialTypes,
+            initialTargets
+          );
+      });
+    }
+    const initial = Object.entries(options.initial?.state ?? {}).filter(
+      ([name]) => !isHeapKey(name)
+    );
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
         value: this.#fromTrace(value, name, initialTypes, initialTargets),
@@ -445,6 +491,7 @@ class Interpreter {
         type: options.initial?.declared?.[name] ?? initialTypes[name],
         ...(initialTargets[name] ? { target: initialTargets[name] } : {})
       });
+    this.#restoring = undefined;
     for (const statement of root.body)
       if (statement.type === 'FunctionDeclaration')
         this.#functions.set(statement.id.name, statement);
@@ -554,6 +601,7 @@ class Interpreter {
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
     const inScope = this.#inScope(scope);
+    const live = this.#liveNodes([...inScope, ...recorded], node);
     for (const [name, binding] of [...inScope, ...recorded]) {
       state[name] = this.#snapshot(binding.value, node, name, {
         types,
@@ -589,6 +637,29 @@ class Interpreter {
         if (element) placed.push([name, binding.value as object, 'ref', element]);
       }
     }
+    // Each record's heap, its live nodes in the order they were made, each drawn whole; a node a
+    // field or variable refers to is recorded as its place in it.
+    for (const [record, nodes] of live) {
+      const key = heapKey(record);
+      const array = this.#heapArrays.get(record) ?? [];
+      this.#heapArrays.set(record, array);
+      array.length = 0;
+      array.push(...nodes);
+      types[key] = key;
+      placed.push([key, array, 'shared']);
+      state[key] = nodes.map((each, index) => {
+        this.#expanding = each;
+        try {
+          return this.#snapshot(each as Value, node, `${key}[${index}]`, {
+            types,
+            targets,
+            placed
+          });
+        } finally {
+          this.#expanding = undefined;
+        }
+      });
+    }
     if (this.#frame !== this.#topLevel)
       for (const [path, name] of Object.entries(targets)) targets[path] = this.#shown(name, scope);
     return {
@@ -597,6 +668,39 @@ class Interpreter {
       ...(Object.keys(targets).length ? { targets } : {}),
       ...(this.#kind === 'algorithm' ? { identities: this.#identities.step(placed) } : {})
     };
+  }
+
+  /**
+   * Each record's live nodes, in the order they were made: those a variable in scope, a collection,
+   * or a live node refers to. Its heap's places are kept for the step's references to them.
+   */
+  #liveNodes(bindings: readonly [string, Binding][], node: AnyNode): Map<string, object[]> {
+    const reached = new Set<object>();
+    const visit = (value: Value): void => {
+      if (value === null || typeof value !== 'object' || value instanceof Atom) return;
+      if (value === mathMarker || reached.has(value)) return;
+      reached.add(value);
+      if (Array.isArray(value)) value.forEach(visit);
+      else Object.values(value).forEach(visit);
+    };
+    for (const [, binding] of bindings) visit(binding.value);
+    // A node a caller holds is live inside the call too, though out of the call's scope.
+    for (const caller of this.#callers)
+      for (let block: Scope | undefined = caller; block; block = block.parent)
+        for (const binding of block.bindings.values()) visit(binding.value);
+    const live = new Map<string, object[]>();
+    this.#heapIndex = new Map();
+    for (const record of this.#heaps.keys()) {
+      const nodes = (this.#made.get(record) ?? []).filter((each) => reached.has(each));
+      if (nodes.length > algorithmLimits.maximumLiveNodes)
+        this.#fail(
+          node,
+          `There are more than ${algorithmLimits.maximumLiveNodes} live ${record}s; check for a loop that keeps making them.`
+        );
+      nodes.forEach((each, index) => this.#heapIndex.set(each, index));
+      live.set(record, nodes);
+    }
+    return live;
   }
 
   /**
@@ -757,6 +861,10 @@ class Interpreter {
    * which element it is (identities.server.ts), so it stays with it as it moves.
    */
   #asRef(value: Value, ref: RefType, node: AnyNode): Value {
+    if (ref.heap) {
+      const record = this.#domain.structures[ref.element] as RecordType;
+      return this.#asRecord(value, record, node, `A ${ref.name}`);
+    }
     const held = [...this.#topLevel.bindings.values()].some(
       ({ value: collection }) =>
         Array.isArray(collection) &&
@@ -791,11 +899,15 @@ class Interpreter {
     const members = union.members.join(' or ');
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
     if (value instanceof Atom || shape) {
-      const fits = union.members.some((member) =>
-        value instanceof Atom
-          ? !!this.#atoms[member] && refines(value.type, this.#atoms[member], this.#atoms)
-          : shape?.name === member
-      );
+      const fits = union.members.some((member) => {
+        if (value instanceof Atom)
+          return !!this.#atoms[member] && refines(value.type, this.#atoms[member], this.#atoms);
+        const ref = this.#domain.structures[member];
+        return (
+          shape?.name === member ||
+          (ref?.kind === 'ref' && !!ref.heap && shape?.name === ref.element)
+        );
+      });
       if (fits) return value;
       return this.#fail(node, `${path} must be a ${members}, not ${kind(value)}.`);
     }
@@ -813,8 +925,10 @@ class Interpreter {
   #accepts(typeName: string, value: Value): boolean {
     const atom = this.#atoms[typeName];
     if (atom) return (value === null || typeof value !== 'object') && !atomProblem(atom, value);
-    const structure = this.#domain.structures[typeName];
+    let structure = this.#domain.structures[typeName];
     if (structure.kind === 'collection') return Array.isArray(value);
+    if (structure.kind === 'ref' && structure.heap)
+      structure = this.#domain.structures[structure.element];
     if (structure.kind !== 'record' || !isPlainObject(value)) return false;
     const fields = Object.keys(structure.fields);
     const keys = Object.keys(value);
@@ -841,6 +955,12 @@ class Interpreter {
       made[field] = this.#convert(value[field], record.fields[field], node, `${path}.${field}`);
     }
     this.#shapes.set(made, record);
+    // A node is live once made, while something refers to it.
+    if (this.#heaps.has(record.name)) {
+      const nodes = this.#made.get(record.name) ?? [];
+      this.#made.set(record.name, nodes);
+      nodes.push(made);
+    }
     return made;
   }
 
@@ -1276,6 +1396,15 @@ class Interpreter {
       return value.value;
     }
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
+    // A node is drawn in its record's heap; anywhere else, as a reference, it is its place there.
+    const ref = shape?.kind === 'record' ? this.#heaps.get(shape.name) : undefined;
+    if (ref && value !== this.#expanding) {
+      types[path] = ref;
+      targets[path] = heapKey((shape as RecordType).name);
+      return this.#heapIndex.get(value as object) ?? null;
+    }
+    // Only the heap's element itself is drawn whole; a field referring back to it is a reference.
+    if (value === this.#expanding) this.#expanding = undefined;
     if (shape) {
       types[path] = shape.name;
       placed.push([path, value as object, 'shared']);
@@ -1516,6 +1645,8 @@ class Interpreter {
         place
       };
     }
+    if (object instanceof Atom && typeof key === 'string')
+      this.#fail(target, this.#noField(object, target, key));
     if (
       object === null ||
       typeof object !== 'object' ||
@@ -1560,6 +1691,9 @@ class Interpreter {
   /** The value an element or field read gives, noting what it was read from and by which key. */
   #readValue(target: Value, node: MemberExpression, scope: Scope): Value {
     const key = this.#key(node, scope) as string | number;
+    // A field read through a value that is no record, as the end of a list, is a mistake.
+    if (target instanceof Atom && typeof key === 'string' && key !== 'length')
+      this.#fail(node, this.#noField(target, node, key));
     // Typed text reads like text; other atoms have no properties.
     const object = target instanceof Atom && target.type.base === 'text' ? target.value : target;
     if (object instanceof Atom)
@@ -1590,6 +1724,13 @@ class Interpreter {
       return this.#readAt(object[name], object, name);
     }
     return this.#fail(node, `Cannot read "${String(key)}" of ${String(object)}.`);
+  }
+
+  /** Why a field cannot be read or written through a value that is no record, as the end. */
+  #noField(value: Atom, node: MemberExpression, key: string): string {
+    const holder = this.#raw.text(node.object);
+    const article = /^[AEIOU]/u.test(value.type.name) ? 'an' : 'a';
+    return `${holder} is ${article} ${value.type.name} (${JSON.stringify(value.value)}), so it has no ${key}.`;
   }
 
   #readAt(value: Value, object: Value, key: string | number): Value {
@@ -1822,9 +1963,15 @@ class Interpreter {
     if (fresh && Array.isArray(old) && Array.isArray(value)) {
       this.#checkLength(value.length, node);
       old.splice(0, old.length, ...value);
-    } else if (fresh && isPlainObject(old) && isPlainObject(value)) {
+    } else if (fresh && isPlainObject(old) && isPlainObject(value) && !this.#isNode(old)) {
       for (const field of Object.keys(old)) old[field] = value[field];
     } else target.set(value);
+  }
+
+  /** Whether a value is a node, which a reference refers to and so is never written over. */
+  #isNode(value: Value): boolean {
+    const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
+    return shape?.kind === 'record' && this.#heaps.has(shape.name);
   }
 
   /**
@@ -1890,6 +2037,7 @@ class Interpreter {
     const returned = this.#returned;
     this.#frame = frame;
     this.#depth += 1;
+    this.#callers.push(scope);
     this.#returned = undefined;
     try {
       const stepping = !this.#open && this.#frames.nodes.has(declared.body);
@@ -1907,6 +2055,7 @@ class Interpreter {
     } finally {
       this.#frame = outer;
       this.#depth -= 1;
+      this.#callers.pop();
       this.#returned = returned;
     }
   }
@@ -2060,6 +2209,9 @@ class Interpreter {
     targets: Record<string, string>
   ): Value {
     const typeName = types[path];
+    const ref = typeName ? this.#domain.structures[typeName] : undefined;
+    if (ref?.kind === 'ref' && ref.heap && typeof value === 'number')
+      return this.#restoring?.get(ref.element)?.[value] ?? null;
     if (typeName && this.#atoms[typeName] && (value === null || typeof value !== 'object'))
       return value === null ? null : new Atom(this.#atoms[typeName], value, targets[path]);
     let made: Value[] | ObjectValue | undefined;

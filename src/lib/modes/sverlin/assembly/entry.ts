@@ -281,6 +281,7 @@ function mountStep(
               ),
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
+            typeAt: (path: string) => types[path],
             heldBy: (name: string) => held.get(name),
             reachedFrom: (path: string) => reached.get(anyIndex(path)),
             pastEnds: (collection: string, path?: string) =>

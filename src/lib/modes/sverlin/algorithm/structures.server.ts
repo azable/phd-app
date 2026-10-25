@@ -13,9 +13,17 @@ export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record
 export type CollectionType = { kind: 'collection'; name: string; element: string };
 /**
  * A reference to an element of a collection type, as in ref(Queue): it reads as the element, and
- * stays with it wherever it moves, pointing at nothing once it is gone.
+ * stays with it wherever it moves, pointing at nothing once it is gone. A reference to a record
+ * type, as in ref(Node), refers to a node wherever it is (`heap`): its collection is the record's
+ * heap, every live node of it (see heapKey).
  */
-export type RefType = { kind: 'ref'; name: string; collection: string; element: string };
+export type RefType = {
+  kind: 'ref';
+  name: string;
+  collection: string;
+  element: string;
+  heap?: boolean;
+};
 export type StructureType = UnionType | RecordType | CollectionType | RefType;
 
 /**
@@ -42,6 +50,22 @@ export type DomainRegistry = {
   operators?: Readonly<Record<string, OperatorType>>;
 };
 
+/**
+ * The name of a record's heap, every live node of it in the order they were made, as a step records
+ * it and the view reads it, written `all(Node)`; it is also the heap's collection type.
+ */
+export const heapKey = (record: string): string => `ȟ${record}`;
+export const isHeapKey = (name: string): boolean => name.startsWith('ȟ');
+
+/** The records a reference refers to as nodes, each with the first such reference type. */
+export function heapRecords(domain: DomainRegistry): Map<string, string> {
+  const records = new Map<string, string>();
+  for (const structure of Object.values(domain.structures))
+    if (structure.kind === 'ref' && structure.heap && !records.has(structure.element))
+      records.set(structure.element, structure.name);
+  return records;
+}
+
 /** A component without a domain block defines no types. */
 export const noDomain: DomainRegistry = { atoms: noAtoms, structures: {} };
 
@@ -52,7 +76,9 @@ export function operatorNames(domain: DomainRegistry): string[] {
 
 /** Every type name a domain defines. */
 export function typeNames(domain: DomainRegistry): string[] {
-  return [...Object.keys(domain.atoms), ...Object.keys(domain.structures)];
+  return [...Object.keys(domain.atoms), ...Object.keys(domain.structures)].filter(
+    (name) => !isHeapKey(name)
+  );
 }
 
 /** Whether a domain defines a type by this name. */

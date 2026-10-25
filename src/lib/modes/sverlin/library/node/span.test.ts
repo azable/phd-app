@@ -98,4 +98,30 @@ describe('structure over a whole animation', () => {
     expect(span.problems.join(' ')).toMatch(/make a path/u);
     expect(span.edges.map(({ id }) => id)).toEqual(['1:1', '2:1', '3:1', '4:1']);
   });
+
+  it('keeps a link that joins a child as it appears, as a tree grows', () => {
+    // Each step adds a child and its link: the links are absent only where their ends are.
+    const tree = [
+      { from: 'a', to: 'b', id: '5:1' },
+      { from: 'a', to: 'c', id: '6:1' },
+      { from: 'b', to: 'd', id: '7:1' }
+    ];
+    const grown = (count: number) => ({
+      seed: 3,
+      boxes: boxes.slice(0, count),
+      anchors: {},
+      parts: [],
+      options: {
+        template: 'free' as const,
+        links: tree.slice(0, count - 1).map((link) => ({ ...link, directed: true })),
+        gap: 8,
+        aspect: 2,
+        form: 'tree-down' as const
+      }
+    });
+    const span = solveSpan([grown(1), grown(2), grown(3), grown(4)]);
+    // Every link is structure, so the tree form the view asks for takes it.
+    expect(span.problems).toEqual([]);
+    expect(span.choices.form).toBe('tree-down');
+  });
 });

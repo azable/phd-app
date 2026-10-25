@@ -3,13 +3,19 @@
   its keys name. It takes no space itself: the arranging node reads it, lays its children out with
   it, and draws it over them. Each link has an id from its place in the source and its ends, so a
   participant can select it and refer to it in feedback, and a link whose ends change between steps
-  is a different link rather than the same one drawn to its old ends.
+  is a different link rather than the same one drawn to its old ends. One with no `from`, in a view
+  of an element, starts at the node drawing that element, as a node's `next` does, and is laid out
+  by the free layout around the elements.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
 
   import {
+    drawnContext,
+    provideSlot,
+    elementOf,
     elementSlot,
+    endsContext,
     keyedRef,
     linkEnd,
     nodeIdsContext,
@@ -39,8 +45,8 @@
     __toOf,
     __toAt
   }: {
-    /** The key of the node the link starts from, or a position, as edge.from. */
-    from: string | number;
+    /** The key of the node the link starts from, or a position, as edge.from; none, the element its view draws. */
+    from?: string | number;
     /** The key of the node the link goes to, or a position, as edge.to. */
     to: string | number;
     /** An arrow (true, the default) or a plain line. */
@@ -71,9 +77,18 @@
   } = $props();
 
   const types = typeContext();
+  // A link to an end, as a list's last next, draws the end where it is, with the end's view.
+  const end = untrack(() => {
+    const path = __toPath ?? (__toAt === undefined ? undefined : elementOf(types, __toOf, __toAt));
+    const type = path === undefined ? undefined : types?.typeAt(path);
+    return type === undefined ? undefined : endsContext()?.[type]?.();
+  });
   // An end given a position names the node drawing the element it points at.
   const ends = untrack(() => ({
-    from: linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt }),
+    from:
+      from === undefined
+        ? (drawnContext() ?? '')
+        : linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt }),
     to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt })
   }));
   // The link's look is the variant's values for its kind; one a component draws for an element, as
@@ -107,30 +122,40 @@
       ? lookUp(design, pointer.__kind, pointer.__placed, prop)
       : undefined) ?? lookUp(design, kind, placed, prop);
   const nodeIds = nodeIdsContext();
+  // A link from a node's field is known by the nodes it joins, not their places in the heap, which
+  // shift as nodes come and go: so another node's link never takes over its route.
+  const named = (end: string) => (from === undefined ? types?.identityOf(end) : undefined) ?? end;
   const id = untrack(() =>
-    __ref ? nodeIds?.claim(keyedRef(__ref, `${ends.from}->${ends.to}`)) : undefined
+    __ref ? nodeIds?.claim(keyedRef(__ref, `${named(ends.from)}->${named(ends.to)}`)) : undefined
   );
+  // The end it draws is no element of the state, so it draws none.
+  provideSlot(undefined);
 </script>
 
-<span
-  class="sv-link"
-  hidden
-  data-sv-link={id ?? ''}
-  data-from={ends.from}
-  data-to={ends.to}
-  data-directed={directed ? 'true' : 'false'}
-  data-stroke-style={strokeStyleCss(look('strokeStyle', false))}
-  data-label={label}
-  data-label-colour={colourCss(look('color', false))}
-  data-stroke={colourCss(look('stroke'))}
-  data-stroke-width={look('strokeWidth')}
-  data-shown={look('shown', false) === false ? 'false' : undefined}
-  data-opacity={look('opacity', false)}
-  data-curve={curve}
-  data-bend={typeof bend === 'number' && Number.isFinite(bend)
-    ? Math.min(Math.max(bend, -1), 1)
-    : undefined}
-></span>
+{#if end}
+  {@render end(to)}
+{:else}
+  <span
+    class="sv-link"
+    hidden
+    data-sv-link={id ?? ''}
+    data-sv-hoist={from === undefined ? 'true' : undefined}
+    data-from={ends.from}
+    data-to={ends.to}
+    data-directed={directed ? 'true' : 'false'}
+    data-stroke-style={strokeStyleCss(look('strokeStyle', false))}
+    data-label={label}
+    data-label-colour={colourCss(look('color', false))}
+    data-stroke={colourCss(look('stroke'))}
+    data-stroke-width={look('strokeWidth')}
+    data-shown={look('shown', false) === false ? 'false' : undefined}
+    data-opacity={look('opacity', false)}
+    data-curve={curve}
+    data-bend={typeof bend === 'number' && Number.isFinite(bend)
+      ? Math.min(Math.max(bend, -1), 1)
+      : undefined}
+  ></span>
+{/if}
 
 <style>
   .sv-link {

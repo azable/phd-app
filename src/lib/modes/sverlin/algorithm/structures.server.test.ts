@@ -50,11 +50,6 @@ describe('union, record, and collection definitions', () => {
   it.each([
     ['unknown members', 'const A = union(B, C);', /Unknown type B/],
     [
-      'types defined later',
-      'const A = collection(B); const B = type("integer", { min: -100, max: 1000 });',
-      /Unknown type B/
-    ],
-    [
       'one-member unions',
       'const B = type("integer", { min: -100, max: 1000 }); const A = union(B);',
       /two or more/
@@ -72,12 +67,49 @@ describe('union, record, and collection definitions', () => {
       /one element type/
     ],
     [
+      'a record holding itself',
+      'const N = type(["a"]); const Node = record({ name: N, next: Node });',
+      /Node holds itself \(Node → Node\)/
+    ],
+    [
+      'a record holding itself through a union and a collection',
+      'const N = type(["a"]); const End = type(["end"]); const Kids = collection(Node); const Next = union(Kids, End); const Node = record({ name: N, kids: Next });',
+      /Kids holds itself|Node holds itself/
+    ],
+    [
       'refining a record',
       'const B = type("integer", { min: -100, max: 1000 }); const R = record({ b: B }); const A = type(R);',
       /refines an atomic type/
     ]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);
+  });
+
+  it('takes types in any order, a record referring to its own kind through a reference', () => {
+    const later = interpretDomain(
+      'const A = collection(B); const B = type("integer", { min: -100, max: 1000 });'
+    );
+    expect(later.structures.A).toEqual({ kind: 'collection', name: 'A', element: 'B' });
+    const nodes = interpretDomain(`
+      const Node = record({ name: Name, next: Next });
+      const NodeRef = ref(Node);
+      const Next = union(NodeRef, End);
+      const Name = type(['A', 'B']);
+      const End = type(['end']);
+    `);
+    expect(nodes.structures.NodeRef).toEqual({
+      kind: 'ref',
+      name: 'NodeRef',
+      collection: 'ȟNode',
+      element: 'Node',
+      heap: true
+    });
+    // The heap of a record a reference refers to is a collection of its nodes.
+    expect(nodes.structures['ȟNode']).toEqual({
+      kind: 'collection',
+      name: 'ȟNode',
+      element: 'Node'
+    });
   });
 });
 

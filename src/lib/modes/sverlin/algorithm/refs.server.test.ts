@@ -66,7 +66,7 @@ describe('references', () => {
     [
       'a type that is not a collection',
       'const Int = type([1]); const R = ref(Int);',
-      /Int is not one/
+      /Int is neither/
     ],
     [
       'a collection of records',

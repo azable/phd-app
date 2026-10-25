@@ -1061,3 +1061,60 @@ describe('places', () => {
     ).toThrow('rename the label');
   });
 });
+
+describe('nodes and references', () => {
+  const domain = `<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C']);
+  const Flag = type('boolean');
+  const End = type(['end']);
+  const ListNode = record({ name: Name, next: Next });
+  const NodeRef = ref(ListNode);
+  const Next = union(NodeRef, End);
+  const IsNode = unop((p: Next) => Flag(p !== 'end'));
+</script>
+<script lang="sverlin" input>
+  const head = NodeRef(ListNode({ name: 'A', next: NodeRef(ListNode({ name: 'B', next: End('end') })) }));
+</script>
+<script lang="sverlin">
+  let prev = Next(End('end'));
+  let cur = Next(head);
+  while (IsNode(cur)) @rewire{
+    const after = cur.next;
+    cur.next = prev;
+    prev = cur;
+    cur = after;
+  }
+</script>
+{#snippet NameCell(value: Name)}<Node {value} />{/snippet}
+{#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
+{#snippet Here(p: NodeRef)}<Pointed />{/snippet}`;
+  const heap = `{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>{/snippet}{@render Heap()}{@render NodeRef(cur)}`;
+  const box = `{#snippet NodeBox(n: ListNode)}<Node layout="row">{@render Name(n.name)}<Link to={n.next} /></Node>{/snippet}`;
+
+  it('draws every live node with all(…), a reference as a pointer, and the end through its view', () => {
+    const prepared = prepareSvelteComponent(`${domain}${box}${heap}`);
+    expect(prepared.design.space['views.ListNode']).toEqual(['NodeBox', 'none']);
+    expect(prepared.design.space['pointers.NodeRef']).toEqual(['Here', 'none']);
+    // The end a link to no node gives is drawn with its type's view, a choice of its own.
+    expect(prepared.design.space['views.End']).toEqual(['EndMark', 'none']);
+    expect(prepared.masters.rewire.at(-1)!.state['ȟListNode']).toEqual([
+      { name: 'B', next: 1 },
+      { name: 'A', next: 'end' }
+    ]);
+  });
+
+  it.each([
+    [
+      'all(…) of a record no reference refers to',
+      `${box}{#snippet Heap()}<Node layout="free">{#each all(Name) as n}{@render ListNode(n)}{/each}</Node>{/snippet}{@render Heap()}`,
+      /all\(Name\) draws every live node of a record a reference refers to, and Name is not one/
+    ],
+    [
+      'a link with no from outside a view',
+      `{#snippet Heap()}<Node layout="free"><Link to={cur} /></Node>{/snippet}{@render Heap()}`,
+      /A <Link> with no from starts at the element its view draws/
+    ]
+  ])('refuses %s', (_name, markup, message) => {
+    expect(() => prepareSvelteComponent(`${domain}${markup}`)).toThrow(message);
+  });
+});

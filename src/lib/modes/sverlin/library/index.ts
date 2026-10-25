@@ -13,7 +13,7 @@ export { themeCss } from './theme';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
 export { kindKey, type DesignValues } from './node/design';
 export type { LayoutMemory } from './type-context';
-export { providePointers } from './type-context';
+export { provideEnds, providePointers } from './type-context';
 export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { arrangementLayout, describeFrame, describeStep, stepLayouts } from './scene';

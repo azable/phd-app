@@ -153,25 +153,37 @@
   $effect(() => {
     void revision;
     if (!host) return;
-    // Link components sit among the children as hidden markers: they are links, not boxes.
-    const markers = [...host.children].filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.hasAttribute('data-sv-link')
-    );
+    // Link components sit among the children as hidden markers: they are links, not boxes. One a
+    // view of an element draws from that element, with no from, is laid out here, from inside it.
+    const markers = [
+      ...[...host.children].filter(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement && child.hasAttribute('data-sv-link')
+      ),
+      ...[...host.querySelectorAll<HTMLElement>('[data-sv-link][data-sv-hoist]')].filter(
+        (marker) => marker.parentElement !== host && marker.closest('.placed') === host
+      )
+    ];
     const elements = [...host.children].filter(
       (child): child is HTMLElement =>
         child instanceof HTMLElement && !child.hasAttribute('data-sv-link')
     );
-    const specs: LinkSpec[] = markers.map(({ dataset }) => ({
-      from: dataset.from ?? '',
-      to: dataset.to ?? '',
-      directed: dataset.directed !== 'false',
-      ...(dataset.svLink ? { id: dataset.svLink } : {}),
-      ...(dataset.curve === 'straight' || dataset.curve === 'curved'
-        ? { curve: dataset.curve }
+    // A link with no from starts at the node it sits in, as a node's next field, not its whole box.
+    const origin = (marker: HTMLElement) =>
+      marker.hasAttribute('data-sv-hoist') && marker.dataset.svLink
+        ? `${marker.dataset.from ?? ''}↦${marker.dataset.svLink}`
+        : undefined;
+    const specs: LinkSpec[] = markers.map((marker) => ({
+      from: marker.dataset.from ?? '',
+      to: marker.dataset.to ?? '',
+      ...(origin(marker) ? { start: origin(marker) } : {}),
+      directed: marker.dataset.directed !== 'false',
+      ...(marker.dataset.svLink ? { id: marker.dataset.svLink } : {}),
+      ...(marker.dataset.curve === 'straight' || marker.dataset.curve === 'curved'
+        ? { curve: marker.dataset.curve }
         : {}),
-      ...(dataset.bend !== undefined && Number.isFinite(Number(dataset.bend))
-        ? { bend: Number(dataset.bend) }
+      ...(marker.dataset.bend !== undefined && Number.isFinite(Number(marker.dataset.bend))
+        ? { bend: Number(marker.dataset.bend) }
         : {})
     }));
     const styles: Record<string, LinkStyle> = Object.fromEntries(
@@ -200,8 +212,13 @@
     const fontSize = parseFloat(getComputedStyle(host).fontSize) || 16;
     const space = gap * fontSize;
     const boxes = elements.map((element, index) => ({
-      // A child without a key is known by its node id, which is the same at every step.
-      key: element.dataset.svKey ?? element.dataset.svNode ?? `#${index}`,
+      // A child without a key is known by the value it draws, as a node of a heap, which keeps its
+      // place as others come and go, or else by its node id, the same at every step.
+      key:
+        element.dataset.svKey ??
+        element.dataset.svIdentity ??
+        element.dataset.svNode ??
+        `#${index}`,
       // Layout sizes, unaffected by the frame's scale; offsetWidth rounds, so a pixel more keeps
       // a fractional width from wrapping once placed.
       width: element.offsetWidth + 1,
@@ -237,9 +254,20 @@
       );
       if (element.dataset.svKey && cells.length === 1)
         anchors[element.dataset.svKey] = anchor(cells[0]);
+      // So does a child drawing a node whose fields link onward, as [ A | next ]: arrows to it meet
+      // its value, never the field an arrow leaves.
+      const fields = element.querySelector('[data-sv-link][data-sv-hoist]');
+      if (element.dataset.svSlot && fields && cells.length === 1)
+        anchors[element.dataset.svSlot] = anchor(cells[0]);
       // The content inside a child, which arrows bend round: its innermost nodes.
       for (const inner of element.querySelectorAll('[data-sv-node]'))
         if (!inner.querySelector('[data-sv-node]')) parts.push(anchor(inner));
+      // A link from inside the child starts at the node holding it.
+      for (const marker of markers) {
+        const key = origin(marker);
+        const field = marker.parentElement?.closest<HTMLElement>('[data-sv-node]');
+        if (key && field && element.contains(field)) anchors[key] = anchor(field);
+      }
     });
     const options = {
       template,

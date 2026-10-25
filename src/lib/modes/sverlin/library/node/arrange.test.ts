@@ -365,3 +365,34 @@ describe('forms along a flow', () => {
     }
   });
 });
+
+describe('a tree drawn from its fields', () => {
+  // Each node is [ left | value | right ]; a link starts at the field it leaves.
+  const nodes = ['r', 'a', 'b'].map((key) => ({ key, width: 90, height: 30 }));
+  const field = (box: number, side: 'left' | 'right') => ({
+    box,
+    x: side === 'left' ? 0 : 60,
+    y: 0,
+    width: 30,
+    height: 30
+  });
+
+  it('places the child its left field leads to left of its right field’s, whatever the link order', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const result = arrange(nodes, {
+        template: 'free',
+        // Written right first, so only where each starts says which child is left.
+        links: [
+          { from: 'r.right', to: 'b', directed: true },
+          { from: 'r.left', to: 'a', directed: true }
+        ],
+        anchors: { 'r.left': field(0, 'left'), 'r.right': field(0, 'right') },
+        form: 'tree-down',
+        flow: 'y',
+        gap: 8,
+        random: keyedRandom(seed, 'layout')
+      });
+      expect(result.placements[1].x).toBeLessThan(result.placements[2].x);
+    }
+  });
+});

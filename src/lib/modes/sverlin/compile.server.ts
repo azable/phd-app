@@ -36,11 +36,14 @@ import { mappedListing, type RegionMap } from './listing/mapped.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
+  heapKey,
+  heapRecords,
   noDomain,
   operatorNames,
   typeNames,
   type DomainRegistry,
-  type RecordType
+  type RecordType,
+  type RefType
 } from './algorithm/structures.server';
 import {
   componentProbes,
@@ -453,7 +456,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const extracted = extractBlocks(source);
     const { blocks, listings: listingBlocks } = extracted;
     // Labels the markup reads become identifiers of the same length (see label-values.ts).
-    const { source: svelteSource, references } = markLabels(extracted.svelteSource);
+    const { source: svelteSource, references, heaps } = markLabels(extracted.svelteSource);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -556,6 +559,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         `"${library}" names a library component; choose another variable name.`,
         at(library, blocks.input, blocks.algorithm)
       );
+    // Each record a reference refers to has a heap, its live nodes, which the view reads as all(Node).
+    const nodeRecords = heapRecords(domain);
+    const unknownHeap = heaps.find(({ record }) => !nodeRecords.has(record));
+    if (unknownHeap)
+      throw new InvalidSvelteSourceError(
+        nodeRecords.size
+          ? `all(${unknownHeap.record}) draws every live node of a record a reference refers to, and ${unknownHeap.record} is not one; the domain's are ${[...nodeRecords.keys()].map((record) => `all(${record})`).join(', ')}.`
+          : `all(${unknownHeap.record}) draws every live node of a record a reference refers to, as all(Node) for const NodeRef = ref(Node);, and the domain has none.`,
+        { code: 'view_component', start: sourcePosition(source, unknownHeap.start) }
+      );
+    stateNames.push(...[...nodeRecords.keys()].map(heapKey));
     const components = checkComponents(
       found.components,
       found.pointers,
@@ -589,6 +603,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         }
       );
     const rendered = renderedNames(ast.html).filter(({ name }) => definesType(viewing, name));
+    // A link to no node, as a list's last next, draws the end it gives with the end's view, as if
+    // the type were rendered there: the members of a union with a reference to a node that have a
+    // view of their own.
+    const endTypes = endTypesOf(viewing).filter((name) => views[name]?.length);
+    const linked = fromlessLinks(ast.html);
+    if (linked.length)
+      for (const name of endTypes) rendered.push({ name, start: linked[0], inNode: true });
     const appliedRenders = operatorRendersOf(ast.html, operators);
     const wrongRender = appliedRenders.find(({ argued, inView }) => argued || inView);
     if (wrongRender)
@@ -910,12 +931,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           return [
             name,
             {
-              ...(domain.structures[type]?.kind === 'ref'
+              ...(domain.structures[type]?.kind === 'ref' &&
+              !(domain.structures[type] as { heap?: boolean }).heap
                 ? {
                     into: (domain.structures[type] as { collection: string }).collection,
                     ref: true
                   }
-                : { into: domain.atoms[type]?.index ?? '' }),
+                : { into: viewing.atoms[type]?.index ?? '' }),
               paint,
               ...(found.pointers.has(name) ? {} : { view: choice.view }),
               ...(chosen[name] ? { plainInNode: true } : {}),
@@ -1046,7 +1068,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         { ...chosen, ...viewAliases },
         { ...pointerChosen, ...pointerAliases },
         pointers.calls,
-        paints
+        paints,
+        linked.length ? endTypes : []
       ),
       { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
     ).js.code;
@@ -1471,7 +1494,8 @@ function withGeneratedScripts(
   choices: Record<string, string[]>,
   pointerChoices: Record<string, string[]>,
   pointers: readonly string[],
-  paints: readonly string[]
+  paints: readonly string[],
+  ends: readonly string[] = []
 ): string {
   // A type rendered by name arrives as the name of the view the variant chose, and the view uses
   // that view under the type's name; none draws nothing. A position type rendered as a pointer
@@ -1498,8 +1522,12 @@ function withGeneratedScripts(
   const pointing = pointers.length
     ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
     : '';
+  // A link to an end draws it with the view its type chose (see Link.svelte).
+  const ending = ends.length
+    ? `import { provideEnds as __sverlinEnds } from 'sverlin'; __sverlinEnds({ ${ends.map((name) => `${name}: () => ${name}`).join(', ')} });`
+    : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${pointing}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${pointing} ${ending}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -1850,7 +1878,20 @@ function withNodeRefs(
         );
       const entry = { start: tag.start, name: tag.name as string, links: false, view, tag };
       tags.push(entry);
-      if (tag.name === 'Link') {
+      // A link with no from starts at the element its view draws, laid out by the free layout
+      // around the elements rather than by the node it sits in.
+      const fromless =
+        tag.name === 'Link' &&
+        !(tag.attributes ?? []).some(
+          (attribute) => (attribute as { name?: string }).name === 'from'
+        );
+      if (fromless && page)
+        reject(
+          'A <Link> with no from starts at the element its view draws, so it belongs in a view of an element, as <Link to={n.next} /> in {#snippet NodeBox(n: ListNode)}; elsewhere, give it from={…}.',
+          'link_placement',
+          tag.start
+        );
+      if (tag.name === 'Link' && !fromless) {
         if (around) around.links = true;
         // In a view, as of an edge, it joins the children of the node the view is rendered in.
         else if (!inNode)
@@ -1884,7 +1925,24 @@ function withNodeRefs(
     );
   walk(ast.html, undefined, false, 'root', true);
   // What a node is says which props its kind has: one that arranges its children has a layout's.
-  const roleOf = ({ name, links, tag }: Entry): KindRole => {
+  // A field holds only links that start at it, as a node's next: a box, its content centred.
+  const isField = ({ name, tag }: Entry) => {
+    const children = (tag.children ?? []).filter(
+      (child) => !(child.type === 'Text' && !child.data?.trim())
+    );
+    return (
+      name === 'Node' &&
+      children.length > 0 &&
+      children.every(
+        (child) =>
+          child.type === 'InlineComponent' &&
+          child.name === 'Link' &&
+          !(child.attributes ?? []).some((attribute) => attribute.name === 'from')
+      )
+    );
+  };
+  const roleOf = (entry: Entry): KindRole => {
+    const { name, links, tag } = entry;
     if (name === 'Pointed') return 'pointed';
     if (name === 'Link') return 'link';
     const attributes = tag.attributes ?? [];
@@ -1894,7 +1952,7 @@ function withNodeRefs(
     );
     if (has('layout') || links || (children.length === 1 && children[0].type === 'EachBlock'))
       return 'container';
-    if (has('value') || !children.length) return 'value';
+    if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
@@ -1921,14 +1979,15 @@ function withNodeRefs(
     const { line, column } = sourcePosition(source, entry.start);
     tagKinds[`${line}:${column + 1}`] = [key];
   }
-  const insertions = tags.map(({ start, name, links, view }): Insertion => {
+  const insertions = tags.map((entry): Insertion => {
+    const { start, name, links, view } = entry;
     const { line, column } = sourcePosition(source, start);
     const root = roots.get(start);
     const type = valueTypes.get(start);
     const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
     return {
       at: start + name.length + 1,
-      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   for (const start of listings) {
@@ -2188,6 +2247,50 @@ function renderSites(
   return sites;
 }
 
+/** Where each <Link> with no from starts: a link a view of an element draws from that element. */
+function fromlessLinks(markup: unknown): number[] {
+  const starts: number[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as {
+      type?: string;
+      name?: string;
+      start?: number;
+      attributes?: { name?: string }[];
+    };
+    if (
+      part.type === 'InlineComponent' &&
+      part.name === 'Link' &&
+      !(part.attributes ?? []).some((attribute) => attribute.name === 'from')
+    )
+      starts.push(part.start ?? 0);
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') walk(child);
+  };
+  walk(markup);
+  return starts;
+}
+
+/** The atomic members of each union that also holds a reference to a node: its ends. */
+function endTypesOf(domain: DomainRegistry): string[] {
+  const ends = new Set<string>();
+  for (const structure of Object.values(domain.structures)) {
+    if (structure.kind !== 'union') continue;
+    const toNode = structure.members.some((member) => {
+      const index = domain.atoms[member]?.index;
+      return (
+        index !== undefined &&
+        domain.structures[index]?.kind === 'collection' &&
+        index.startsWith('ȟ')
+      );
+    });
+    if (toNode)
+      for (const member of structure.members)
+        if (domain.atoms[member] && !domain.atoms[member].index) ends.add(member);
+  }
+  return [...ends];
+}
+
 /**
  * The names {@render} tags call, as in {@render Int(value)}, where each tag starts, and whether it
  * is inside a <Node>, where a position is drawn as its number rather than as a mark.
@@ -2248,6 +2351,23 @@ function snippetRangesOf(markup: unknown): { start: number; end: number }[] {
  * its result as value, so a view of an application is a view of a record.
  */
 function viewDomainOf(domain: DomainRegistry, viewed: ReadonlySet<string>): DomainRegistry {
+  // A reference to a node is drawn as a position in its record's heap, as a step records it.
+  const refs = Object.values(domain.structures).filter(
+    (structure): structure is RefType => structure.kind === 'ref' && !!structure.heap
+  );
+  if (refs.length)
+    domain = {
+      ...domain,
+      atoms: {
+        ...domain.atoms,
+        ...Object.fromEntries(
+          refs.map(({ name, collection }) => [name, { name, base: 'integer', index: collection }])
+        )
+      },
+      structures: Object.fromEntries(
+        Object.entries(domain.structures).filter(([name]) => !refs.some((ref) => ref.name === name))
+      )
+    };
   const operators = Object.values(domain.operators ?? {}).filter(({ name }) => viewed.has(name));
   if (!operators.length) return domain;
   const records = operators.map(({ name, operands, parameters, result }): [string, RecordType] => [

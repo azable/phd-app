@@ -10,6 +10,7 @@ import {
   arrange,
   keyedRandom,
   linkKey,
+  linkSpecOf,
   type Anchor,
   type ArrangeBox,
   type ArrangeOptions,
@@ -67,11 +68,32 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
     ...new Set(lists.flatMap((list) => list ?? []).map((text) => text.trim()))
   ];
   const [first] = inputs;
-  // Links at every step decide the structure; ones that come and go are drawn on top of it.
+  // Links at every step where both their ends are decide the structure, so a tree that grows keeps
+  // each link from when its child joins; ones that come and go are drawn on top of it.
   const idsAt = inputs.map(
     ({ options }) => new Set((options.links ?? []).flatMap((link) => linkKey(link) ?? []))
   );
-  const permanent = new Set([...idsAt[0]].filter((id) => idsAt.every((ids) => ids.has(id))));
+  const boxesAt = inputs.map(({ boxes: at }) => new Set(at.map(({ key }) => key)));
+  // The children a link joins, by key, from a step that has it.
+  const ends = new Map<string, [string, string]>();
+  inputs.forEach((input, step) => {
+    const boxOf = (key: string) =>
+      input.anchors[key]?.box ?? (boxesAt[step].has(key) ? key : undefined);
+    for (const link of input.options.links ?? []) {
+      const id = linkKey(link);
+      const spec = linkSpecOf(link);
+      if (!id || !spec || ends.has(id)) continue;
+      const [from, to] = [boxOf(spec.from), boxOf(spec.to)];
+      if (from !== undefined && to !== undefined) ends.set(id, [from, to]);
+    }
+  });
+  const permanent = new Set(
+    [...ends].flatMap(([id, [from, to]]) =>
+      idsAt.every((ids, step) => ids.has(id) || !boxesAt[step].has(from) || !boxesAt[step].has(to))
+        ? [id]
+        : []
+    )
+  );
   const solved = arrange(boxes, {
     ...first.options,
     links: unionLinks(inputs.map(({ options }) => options.links)),

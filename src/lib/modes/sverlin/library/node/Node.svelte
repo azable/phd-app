@@ -44,6 +44,7 @@
     collectionLayoutContext,
     sequenceContext,
     slotContext,
+    provideDrawn,
     typeContext,
     wrappedContext,
     type Pointer
@@ -68,6 +69,7 @@
     __id,
     __type,
     __links,
+    __field = false,
     __component,
     __slot,
     __text = false,
@@ -116,6 +118,8 @@
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
     __links?: boolean;
+    /** Internal: set by the compiler on a field, a node holding only links that start at it: its content is centred, as a cell's is. */
+    __field?: boolean;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
     __component?: string;
     /** Internal: the element of the state this node draws, such as values[2], given by the node a pointer draws again. */
@@ -158,6 +162,9 @@
   // is then drawn inside them (see Pointing.svelte), once, however many nodes
   // inside also draw the element.
   const element = untrack(() => elementSlot(slot));
+  untrack(() => {
+    if (element && slot) provideDrawn(slot);
+  });
   const pointers = untrack(() =>
     element && wrappedContext() !== slot
       ? pointersContext()
@@ -386,7 +393,7 @@
       data-sv-fill={look('fill')}
       data-sv-stroke={look('stroke')}
       data-sv-color={look('color')}
-      class:cell={!arrangement && !children && !__text}
+      class:cell={(!arrangement && !children && !__text) || __field}
       class:text={__text}
       style:font-size={measured('size', 'rem')}
       style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}

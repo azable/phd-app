@@ -41,6 +41,8 @@ export type TypeContext = {
   pastEnds(collection: string, path?: string): { before: number; after: number };
   /** The variables holding a value of a type, such as the Values collections. */
   variablesOf(typeName: string): string[];
+  /** The type of the value at a path this step, such as End for a node's next at the end. */
+  typeAt(path: string): string | undefined;
   /** The type a type refines, if any. */
   parent(typeName: string): string | undefined;
   /** A type's unit, or that of the nearest type it refines. */
@@ -49,6 +51,20 @@ export type TypeContext = {
 
 export function typeContext(): TypeContext | undefined {
   return getContext<TypeContext | undefined>('sverlin:types');
+}
+
+/**
+ * The view each end type draws with, as the variant chooses it (views.End): an end is a value a
+ * link to no node gives, as a list's last next, and its link draws it where it is.
+ */
+type Ends = Readonly<Record<string, () => Snippet<[unknown]> | undefined>>;
+
+export function provideEnds(ends: Ends): void {
+  setContext('sverlin:ends', ends);
+}
+
+export function endsContext(): Ends | undefined {
+  return getContext<Ends | undefined>('sverlin:ends');
 }
 
 /** The <Node> tags and renders the presentation leaves out, by their line:column (see left-out.ts). */
@@ -97,12 +113,24 @@ const maximumKeyLength = 24;
 
 /**
  * The reference a keyed node claims its id by: its tag's position, @, and its key, encoded so it
- * cannot be read as the #render or /item parts. A key too long to fit leaves the position alone.
+ * cannot be read as the #render or /item parts. A key too long to fit is shortened to a hash of
+ * it, so a link whose ends change between steps is still a different link.
  */
 export function keyedRef(ref: string, key: string | undefined): string {
   if (key === undefined) return ref;
   const encoded = encodeURIComponent(key);
-  return encoded && encoded.length <= maximumKeyLength ? `${ref}@${encoded}` : ref;
+  if (!encoded) return ref;
+  return encoded.length <= maximumKeyLength ? `${ref}@${encoded}` : `${ref}@~${hashOf(key)}`;
+}
+
+/** A short hash of a text (FNV-1a), the same for the same text at every step. */
+function hashOf(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 export function nodeIdsContext(): NodeIds | undefined {
@@ -198,6 +226,18 @@ export function insideComponentBox(): boolean {
  * The element of the state a component call draws, such as values[2], for the roots of the
  * component it renders; undefined for a value that is not one, such as i + 1 (see node/Slot.svelte).
  */
+/**
+ * The element of the state the nearest node around draws, as ȟListNode[2] for a node's view: a
+ * link with no from starts there, inside pointers drawn around it too.
+ */
+export function provideDrawn(element: string): void {
+  setContext('sverlin:drawn', element);
+}
+
+export function drawnContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:drawn');
+}
+
 export function provideSlot(slot: string | undefined): void {
   setContext('sverlin:slot', slot);
 }

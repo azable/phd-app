@@ -8,14 +8,21 @@ import type { AnyNode, ArrowFunctionExpression, CallExpression, Expression, Patt
 import { atomBases, type AtomBase, type AtomType } from './atoms.server';
 import { AlgorithmError, domainFunctions } from './block.server';
 import { parseBlock } from './parse.server';
-import type { DomainRegistry, OperatorType, StructureType } from './structures.server';
+import {
+  heapKey,
+  type DomainRegistry,
+  type OperatorType,
+  type StructureType
+} from './structures.server';
 
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
- * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from types defined
- * before it (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`,
- * `collection(Edge)`).
+ * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from other types
+ * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge)`).
+ * Declarations may come in any order: the block is read for its names first, then each definition,
+ * so a record can refer to its own kind through a reference declared after it; a type holding
+ * itself other than through a reference or an index would be infinite, and is refused.
  */
 export function interpretDomain(body: string): DomainRegistry {
   const source = body;
@@ -26,18 +33,29 @@ export function interpretDomain(body: string): DomainRegistry {
   const atoms: Record<string, AtomType> = {};
   const structures: Record<string, StructureType> = {};
   const operators: Record<string, OperatorType> = {};
-  /** A type defined earlier in the block, named by an identifier. */
+  /** Each declaration, by name, read first so a definition can name one declared after it. */
+  const declared = new Map<string, { kind: string; call: CallExpression; node: AnyNode }>();
+  const isType = (name: string) => {
+    const kind = declared.get(name)?.kind;
+    return kind !== undefined && kind !== 'binop' && kind !== 'unop';
+  };
+  /** A type declared in the block, named by an identifier. */
   const defined = (node: Expression | undefined, role: string): string => {
     if (node?.type !== 'Identifier')
-      return fail(node ?? root, `${role} must name a type defined earlier in the domain block.`);
-    if (!Object.hasOwn(atoms, node.name) && !Object.hasOwn(structures, node.name))
+      return fail(node ?? root, `${role} must name a type defined in the domain block.`);
+    if (!isType(node.name))
       fail(
         node,
-        Object.hasOwn(operators, node.name)
+        declared.has(node.name)
           ? `${node.name} is an operator, not a type.`
-          : `Unknown type ${node.name}; define it earlier in the domain block.`
+          : `Unknown type ${node.name}; define it in the domain block.`
       );
     return node.name;
+  };
+  /** What a declared type is: atomic (from type() or index()), or the structure it builds. */
+  const kindOf = (name: string): string => {
+    const kind = declared.get(name)?.kind ?? '';
+    return kind === 'type' || kind === 'index' ? 'atom' : kind;
   };
   for (const statement of root.body) {
     // The parsing wrapper's 'use strict' directive is not part of the authored block.
@@ -57,82 +75,134 @@ export function interpretDomain(body: string): DomainRegistry {
           declarator as AnyNode,
           `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });, or an operator with binop(...) or unop(...), as in const Greater = binop((a: Int, b: Int) => Flag(a > b));`
         );
-      const call = init as CallExpression;
-      if (name in atoms || name in structures || name in operators)
-        fail(declarator as AnyNode, `"${name}" is already defined.`);
-      if (kind === 'binop' || kind === 'unop') {
-        operators[name] = defineOperator(name, kind, call);
-        continue;
-      }
-      if (kind === 'index') {
-        atoms[name] = defineIndex(name, call);
-        continue;
-      }
-      if (kind === 'ref') {
-        structures[name] = defineRef(name, call);
-        continue;
-      }
-      if (kind !== 'type') {
-        structures[name] = defineStructure(name, kind as StructureType['kind'], call);
-        continue;
-      }
-      const [definition, options, extra] = call.arguments as Expression[];
-      if (!definition || extra)
-        fail(
-          call,
-          'type() takes a kind, a type, or a list of allowed values, then optional options.'
-        );
-      let type: AtomType;
-      if (definition.type === 'Literal' && typeof definition.value === 'string') {
-        if (!atomBases.includes(definition.value as AtomBase))
-          fail(
-            definition,
-            `Unknown kind "${definition.value}"; use one of ${atomBases.join(', ')}.`
-          );
-        type = { name, base: definition.value as AtomBase };
-      } else if (definition.type === 'Identifier') {
-        const parent = atoms[definition.name];
-        if (!parent && Object.hasOwn(structures, definition.name))
-          fail(
-            definition,
-            `type() refines an atomic type, and ${definition.name} is a ${structures[definition.name].kind}.`
-          );
-        if (!parent)
-          fail(
-            definition,
-            `Unknown type ${definition.name}; define it first, as in const ${definition.name} = type('integer', { min: 0, max: 9 });`
-          );
-        type = { ...parent, name, parent: parent.name };
-      } else if (definition.type === 'ArrayExpression') {
-        const values = definition.elements.map((element) => {
-          const value = element ? literalValue(element as Expression) : undefined;
-          if (typeof value !== 'string' && typeof value !== 'number')
-            fail(element ?? definition, 'Enumeration values must be text or number literals.');
-          return value as string | number;
-        });
-        if (values.length === 0 || new Set(values).size !== values.length)
-          fail(definition, 'An enumeration needs at least one value, each listed once.');
-        const base: AtomBase = values.every((value) => typeof value === 'string')
-          ? 'text'
-          : values.every((value) => typeof value === 'number')
-            ? values.every(Number.isInteger)
-              ? 'integer'
-              : 'number'
-            : fail(definition, 'Enumeration values must be all text or all numbers.');
-        type = { name, base, values };
-      } else {
-        type = fail(
-          definition,
-          `type() takes a kind such as 'integer', a defined type, or a list of allowed values.`
-        );
-      }
-      if (options) applyAtomOptions(type, options, fail);
-      const unbounded = unboundedProblem(type);
-      if (unbounded) fail(call, unbounded);
-      atoms[name] = type;
+      if (declared.has(name)) fail(declarator as AnyNode, `"${name}" is already defined.`);
+      declared.set(name, {
+        kind: kind as string,
+        call: init as CallExpression,
+        node: declarator as AnyNode
+      });
     }
   }
+  // Types first, each once, an atom after the type it refines; then the operators on them.
+  const defining = new Set<string>();
+  const defineType = (name: string): void => {
+    if (name in atoms || name in structures) return;
+    const { kind, call } = declared.get(name)!;
+    if (defining.has(name))
+      fail(call, `${name} refines itself; a type() refines a type defined apart from it.`);
+    defining.add(name);
+    if (kind === 'index') atoms[name] = defineIndex(name, call);
+    else if (kind === 'ref') structures[name] = defineRef(name, call);
+    else if (kind !== 'type')
+      structures[name] = defineStructure(name, kind as StructureType['kind'], call);
+    else atoms[name] = defineAtom(name, call);
+    defining.delete(name);
+  };
+  for (const name of declared.keys()) if (isType(name)) defineType(name);
+  // A record's heap, every live node of it, is a collection the steps record and the view reads.
+  for (const structure of Object.values(structures))
+    if (structure.kind === 'ref' && structure.heap && !(structure.collection in structures))
+      structures[structure.collection] = {
+        kind: 'collection',
+        name: structure.collection,
+        element: structure.element
+      };
+  for (const name of declared.keys()) if (isType(name)) checkFinite(name);
+  for (const [name, { kind, call }] of declared)
+    if (kind === 'binop' || kind === 'unop') operators[name] = defineOperator(name, kind, call);
   return { atoms, structures, operators };
+
+  /** An atomic type: a primitive kind with options, a refinement of a defined type, or an enumeration. */
+  function defineAtom(name: string, call: CallExpression): AtomType {
+    const [definition, options, extra] = call.arguments as Expression[];
+    if (!definition || extra)
+      fail(
+        call,
+        'type() takes a kind, a type, or a list of allowed values, then optional options.'
+      );
+    let type: AtomType;
+    if (definition.type === 'Literal' && typeof definition.value === 'string') {
+      if (!atomBases.includes(definition.value as AtomBase))
+        fail(definition, `Unknown kind "${definition.value}"; use one of ${atomBases.join(', ')}.`);
+      type = { name, base: definition.value as AtomBase };
+    } else if (definition.type === 'Identifier') {
+      if (kindOf(definition.name) === 'atom' && declared.get(definition.name)?.kind === 'type')
+        defineType(definition.name);
+      const parent = atoms[definition.name];
+      if (!parent && isType(definition.name))
+        fail(
+          definition,
+          `type() refines an atomic type, and ${definition.name} is a ${kindOf(definition.name)}.`
+        );
+      if (!parent)
+        fail(
+          definition,
+          `Unknown type ${definition.name}; define it first, as in const ${definition.name} = type('integer', { min: 0, max: 9 });`
+        );
+      type = { ...parent, name, parent: parent.name };
+    } else if (definition.type === 'ArrayExpression') {
+      const values = definition.elements.map((element) => {
+        const value = element ? literalValue(element as Expression) : undefined;
+        if (typeof value !== 'string' && typeof value !== 'number')
+          fail(element ?? definition, 'Enumeration values must be text or number literals.');
+        return value as string | number;
+      });
+      if (values.length === 0 || new Set(values).size !== values.length)
+        fail(definition, 'An enumeration needs at least one value, each listed once.');
+      const base: AtomBase = values.every((value) => typeof value === 'string')
+        ? 'text'
+        : values.every((value) => typeof value === 'number')
+          ? values.every(Number.isInteger)
+            ? 'integer'
+            : 'number'
+          : fail(definition, 'Enumeration values must be all text or all numbers.');
+      type = { name, base, values };
+    } else {
+      type = fail(
+        definition,
+        `type() takes a kind such as 'integer', a defined type, or a list of allowed values.`
+      );
+    }
+    if (options) applyAtomOptions(type, options, fail);
+    const unbounded = unboundedProblem(type);
+    if (unbounded) fail(call, unbounded);
+    return type;
+  }
+
+  /**
+   * A collection or record holding itself other than through a reference or an index would be
+   * infinite: a node of a list or tree refers to its own kind through a reference.
+   */
+  function checkFinite(name: string): void {
+    const structure = structures[name];
+    if (structure?.kind !== 'record' && structure?.kind !== 'collection') return;
+    const parts = (type: string): string[] => {
+      const part = structures[type];
+      if (!part) return [];
+      if (part.kind === 'record') return Object.values(part.fields);
+      if (part.kind === 'collection') return [part.element];
+      if (part.kind === 'union') return [...part.members];
+      return [];
+    };
+    const seen = new Set<string>();
+    const through: string[] = [];
+    const reaches = (type: string): boolean => {
+      for (const part of parts(type)) {
+        if (part === name) return through.push(part) > 0;
+        if (seen.has(part)) continue;
+        seen.add(part);
+        through.push(part);
+        if (reaches(part)) return true;
+        through.pop();
+      }
+      return false;
+    };
+    if (reaches(name))
+      fail(
+        declared.get(name)!.call,
+        `${name} holds itself (${[name, ...through].join(' → ')}), which would never end: refer to its own kind through a reference, as const ${name}Ref = ref(${name}); and a field of type ${name}Ref.`
+      );
+  }
 
   /**
    * A position in a collection type, as in index(Values): any whole number, of which 0 to its
@@ -142,29 +212,36 @@ export function interpretDomain(body: string): DomainRegistry {
     const args = call.arguments as Expression[];
     if (args.length !== 1) fail(call, 'index() takes one collection type, as in index(Values).');
     const collection = defined(args[0], 'An index’s collection type');
-    if (structures[collection]?.kind !== 'collection')
+    if (kindOf(collection) !== 'collection')
       fail(args[0], `index() points into a collection type, and ${collection} is not one.`);
     return { name, base: 'integer', index: collection };
   }
 
   /**
-   * A reference to an element of a collection type, as in ref(Queue). Its elements are single
-   * values: a record's fields are values of their own, which a reference would also have to follow.
+   * A reference to an element of a collection type, as in ref(Queue), whose elements are single
+   * values, as a record's fields are values of their own, which such a reference would also have
+   * to follow; or to a record type, as in ref(Node): a node wherever it is, as a learner's pointer.
    */
   function defineRef(name: string, call: CallExpression): StructureType {
     const args = call.arguments as Expression[];
-    if (args.length !== 1) fail(call, 'ref() takes one collection type, as in ref(Queue).');
-    const collection = defined(args[0], 'A reference’s collection type');
-    const structure = structures[collection];
-    if (structure?.kind !== 'collection')
-      fail(args[0], `ref() refers to elements of a collection type, and ${collection} is not one.`);
-    const { element } = structure as { element: string };
-    if (!Object.hasOwn(atoms, element))
+    if (args.length !== 1)
+      fail(call, 'ref() takes one collection or record type, as in ref(Queue) or ref(Node).');
+    const target = defined(args[0], 'A reference’s type');
+    if (kindOf(target) === 'record')
+      return { kind: 'ref', name, collection: heapKey(target), element: target, heap: true };
+    if (kindOf(target) !== 'collection')
       fail(
         args[0],
-        `ref() refers to elements that are single values, and ${collection} holds ${element}s; refer to one of its fields' collections, or use an index(${collection}).`
+        `ref() refers to a node of a record type, or to an element of a collection type, and ${target} is neither.`
       );
-    return { kind: 'ref', name, collection, element };
+    const element = (declared.get(target)!.call.arguments as Expression[])[0];
+    const elementName = element?.type === 'Identifier' ? element.name : '';
+    if (kindOf(elementName) !== 'atom')
+      fail(
+        args[0],
+        `ref() refers to elements that are single values, and ${target} holds ${elementName}s; refer to one of its fields' collections, use an index(${target}), or refer to a node with ref(${elementName}).`
+      );
+    return { kind: 'ref', name, collection: target, element: elementName };
   }
 
   /**
@@ -399,7 +476,7 @@ export function interpretDomain(body: string): DomainRegistry {
       const members = args.map((argument) => defined(argument, 'Each union member'));
       if (new Set(members).size !== members.length)
         fail(call, 'A union lists each member type once.');
-      if (members.some((member) => structures[member]?.kind === 'union'))
+      if (members.some((member) => kindOf(member) === 'union'))
         fail(call, 'A union lists types directly, not other unions.');
       return { kind, name, members };
     }

@@ -207,13 +207,13 @@ The view receives plain values; a value's type chooses the views that draw it (s
 
 ## Collections, records, and unions
 
-Every array and object in the input and algorithm is made by a type, defined in the domain block from types defined before it, each as a top-level `const`:
+Every array and object in the input and algorithm is made by a type, defined in the domain block from other types, in any order, each as a top-level `const`:
 
 - a collection of elements of one type: `const Values = collection(Int);`, and a collection of collections for a table of rows: `const Grid = collection(Values);`
 - a record with named fields: `const Edge = record({ from: Vertex, to: Vertex, weight: Weight });`
 - a union, a value of one of several types, for a place that holds different kinds of value: `const Dist = union(Distance, Unreached);`
 - a position in a collection, such as a loop index or a pointer: `const Index = index(Values);`
-- a reference to an element of a collection of single values, which stays with it as it moves: `const Front = ref(Queue);`
+- a reference to an element of a collection of single values, which stays with it as it moves: `const Front = ref(Queue);`, or to a node of a record type, wherever it is: `const NodeRef = ref(ListNode);` (see Nodes and references)
 
 Make one by calling its name, writing its contents as literals, which take their types from it: `Values([3, 8, 5])` holds three `Int`s, and `Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a `Vertex`, a `Vertex`, and a `Weight`. Values written into an element or a field take its types in the same way: `dist[v] = 0`, `edge.weight = 5`; a literal given to an operator takes the operand's type, as `queue = Append(queue, 3)`. An array or object literal anywhere else is an error, so there are no plain arrays or objects. A record has exactly its fields: leaving one out, or reading or writing another, is an error. `.slice()` of a collection gives a collection of the same type.
 
@@ -239,6 +239,60 @@ if (Reached(dist[e.from]) && Shorter(Through(dist[e.from], e.weight), dist[e.to]
 ```
 
 The view receives plain arrays and objects, drawn by the views of their types: a record's view draws its fields through theirs (see Views of types).
+
+## Nodes and references
+
+A node of a linked list, a tree, or a graph is a record referring to others of its kind, as `struct Node { char name; struct Node *next; }` in C. A reference to a record type, `ref(ListNode)`, is that pointer: it refers to a node wherever it is, and always to one. "No node" is a value of a type of its own, joined to the reference with a union, so a field that may end says so, and the end is drawn and varied as any value is. A record holding itself other than through a reference or an index would never end, and is refused. A list given in the input and reversed:
+
+```svelte
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C']);
+  const Flag = type('boolean');
+  const End = type(['end']);
+  const ListNode = record({ name: Name, next: Next });  // Next is defined below
+  const NodeRef = ref(ListNode);                         // always a node
+  const Next = union(NodeRef, End);                      // a node, or the end
+
+  const IsNode = unop((p: Next) => Flag(p !== 'end'));
+</script>
+
+<script lang="sverlin" input>
+  const head = NodeRef(ListNode({ name: 'A', next:
+    NodeRef(ListNode({ name: 'B', next:
+      NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
+</script>
+
+<script lang="sverlin">
+  let prev = Next(End('end'));
+  let cur = Next(head);
+  while (IsNode(cur)) @rewire{
+    const after = cur.next;
+    cur.next = prev;
+    prev = cur;
+    cur = after;
+  }
+</script>
+
+{#snippet NameCell(value: Name)}<Node {value} />{/snippet}
+{#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
+{#snippet NodeBox(n: ListNode)}
+  {#snippet NextField()}<Node><Link to={n.next} /></Node>{/snippet}
+  <Node layout="row">{@render Name(n.name)}{@render NextField()}</Node>
+{/snippet}
+{#snippet Here(p: NodeRef)}<Pointed />{/snippet}
+{#snippet Heap()}
+  <Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>
+{/snippet}
+
+{@render Heap()}
+{@render NodeRef(cur)}
+```
+
+- `NodeRef(ListNode({ … }))` refers to a new node, as the input writes a list, nested or a variable for each node; the algorithm makes one through a structural operator, as `const NewNode = binop((v: Name, n: Next) => ListNode({ name: v, next: n }));` and `head = NodeRef(NewNode(v, head))` to push one in front. A cycle is the algorithm's to make.
+- A field is read and written through a reference, `cur.next`, `cur.next = prev`; a value of another type written into a field is refused, and reading or writing one through the end is a mistake at that step ("cur is an End ("end"), so it has no next"). A variable that holds a node or the end is made with the union, `let cur = Next(head);`, as a variable keeps the type it was made with.
+- A node lives while something refers to it: a variable in scope, a collection, or a live node. `all(ListNode)` is every live node, in the order they were made, drawn as a collection is, each through the record's view; a node no longer referred to leaves it and fades out, and a node keeps its identity as its links change, so it stays put. A step records a reference as its node's place there, so a circular list stays finite. At most 64 nodes of a type are live at once.
+- `<Link to={n.next} />` with no `from`, in a view of a node, leaves the node it sits in, and the free layout around the nodes lays it out. Draw a node as fields, as a textbook does, `[ A | next ]`, or a tree's `[ left | key | right ]`: a node holding only such links is a field, a box as a value is, its own snippet so it has its own look (`NodeBox.NextField`); the arrow leaves the field, arcing over its node where it points back, and meets the value of the node it points at. A tree's children are placed in the order their links leave it, so the left field's child is on the left. Where `n.next` is the end, the link draws the end in its field with its type's view (`views.End`, as `EndMark`'s ∅), which a variant can switch or leave out. A pointer view of the reference, as `Here`, marks the node a variable refers to, and draws nothing at the end.
+- An array-based structure keeps an index instead, `index(Nodes)`, where the position is the point.
 
 ## Operators
 
@@ -619,7 +673,7 @@ Leave `form` unset, set `flow` only when asked, such as for a list that must run
 
 `<Link from={edge.from} to={edge.to} />` draws a line, by default an arrow, between two nodes: a position from the state names the node drawing the element it points at, and a key names a child keyed so, such as a label. Put links among the children of the node whose children they join, beside the nodes they connect, or in a view of an edge rendered there; they take no space, and the node lays its children out with them (a node with links and no `layout` is laid out freely). Each link is a component of its own, so a participant can select it and refer to it in feedback, just as they can a node. Its look, its line's colour, width, opacity, and dashes and its label's colour, is its kind's (see Design); a link in `Arrow` is of kind `Arrow.Link`. A pointer at an element drawn as a link, such as the edge being examined, gives the link its kind's stroke and width (see Pointers).
 
-- `from` and `to`: positions from the state, as `edge.from`, or the keys of two nodes, or of nodes inside them (see `key` above).
+- `from` and `to`: positions from the state, as `edge.from`, or the keys of two nodes, or of nodes inside them (see `key` above). In a view of an element, a link with no `from` starts at the node drawing that element, as a node's `next` (see Nodes and references).
 - `directed`: `false` for a plain line instead of an arrow.
 - `label`: a short text shown at the middle of the link, such as `next` or `head`.
 - `curve`: `'straight'` or `'curved'` for this link alone; unset, it draws its own, whatever its siblings do.

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   elementSlot,
+  keyedRef,
   pointsInto,
   reachesInto,
   type Pointer,
@@ -35,5 +36,16 @@ describe('pointers', () => {
     expect(reachesInto(types, pointer('row'), 'paths[0]')).toBe(true);
     expect(reachesInto(types, pointer('row'), 'other')).toBe(false);
     expect(reachesInto(types, pointer('left'), 'right')).toBe(false);
+  });
+});
+
+describe('keyed references', () => {
+  it('keep a short key as written, and a long one as a hash, so different ends stay apart', () => {
+    expect(keyedRef('3:5', 'a->b')).toBe('3:5@a-%3Eb');
+    const one = keyedRef('3:5', 'ȟListNode[1]->ȟListNode[0]');
+    const other = keyedRef('3:5', 'ȟListNode[1]->ȟListNode[2]');
+    expect(one).toMatch(/^3:5@~[0-9a-z]+$/u);
+    expect(one).not.toBe(other);
+    expect(keyedRef('3:5', 'ȟListNode[1]->ȟListNode[0]')).toBe(one);
   });
 });

@@ -3,13 +3,16 @@
  * labelled `swap.a` gave in a step's own code; `runs(@check.at)` every value it has given so far;
  * `applied(Equal)` every application of `Equal` so far, `applied(Equal, @inner)` those made inside
  * `@inner`; and `{@render Greater(@inner)}` the application a step's own code made inside `@inner`.
+ * Beside them, `all(Node)` is every live node of a record a reference refers to, its heap.
  *
  * Before Svelte parses the markup, each is rewritten as an identifier of the same length, so every
  * offset holds: `@swap.a` as `ℓswapˑa`, `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal,
- * @inner)` as `ǂEqualˑˑinner` and spaces. The page is given each as a prop of that name.
+ * @inner)` as `ǂEqualˑˑinner` and spaces, `all(Node)` as `ȟNode` and spaces. The page is given
+ * each as a prop of that name.
  */
 
 import { spanOf } from './algorithm/parse.server';
+import { heapKey, isHeapKey } from './algorithm/structures.server';
 import type { Label } from './algorithm/labels.server';
 
 const label = 'ℓ';
@@ -35,11 +38,13 @@ export function written(name: string): string {
     const [operator, path] = name.slice(1).split(dot + dot);
     return `applied(${operator}${path ? `, @${path.replaceAll(dot, '.')}` : ''})`;
   }
+  if (isHeapKey(name)) return `all(${name.slice(1)})`;
   return name;
 }
 
 const path = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/u;
 const runsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
+const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
 
@@ -47,8 +52,13 @@ const appliedCall =
  * The markup with each label reference rewritten as an identifier of the same length, and the
  * references. Only inside `{…}` and outside strings; `{@render …}` and the other tags are no labels.
  */
-export function markLabels(source: string): { source: string; references: LabelReference[] } {
+export function markLabels(source: string): {
+  source: string;
+  references: LabelReference[];
+  heaps: { record: string; start: number }[];
+} {
   const references: LabelReference[] = [];
+  const heaps: { record: string; start: number }[] = [];
   let out = '';
   let depth = 0;
   let quote: string | undefined;
@@ -84,6 +94,13 @@ export function markLabels(source: string): { source: string; references: LabelR
         index += ran[0].length - 1;
         continue;
       }
+      const every = !word ? allCall.exec(rest) : null;
+      if (every) {
+        heaps.push({ record: every[1], start: index });
+        out += pad(heapKey(every[1]), every[0].length);
+        index += every[0].length - 1;
+        continue;
+      }
       const made = !word ? appliedCall.exec(rest) : null;
       if (made) {
         const key = `${history}${made[1]}${made[2] ? dot + dot + made[2].replaceAll('.', dot) : ''}`;
@@ -109,7 +126,7 @@ export function markLabels(source: string): { source: string; references: LabelR
     }
     out += char;
   }
-  return { source: out, references };
+  return { source: out, references, heaps };
 }
 
 /** Where a label's code is in the algorithm block's body, for applications made inside it. */

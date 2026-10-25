@@ -102,6 +102,11 @@ export type LinkSpec = {
   curve?: 'straight' | 'curved';
   /** An exact bend for this link, as a fraction of its length to one side (0 is straight). */
   bend?: number;
+  /**
+   * The anchor it starts at inside its from child, as a node's next field: it leaves that field
+   * itself, arcing over its node, rather than the child's edge.
+   */
+  start?: string;
 };
 
 /** A link as a spec, whether written as text such as "a -> b" or given as one; undefined if unreadable. */
@@ -216,7 +221,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       return [];
     }
     const text = linkText(spec);
-    const from = anchorOf(spec.from, text);
+    const from = anchorOf(spec.start ?? spec.from, text);
     const to = anchorOf(spec.to, text);
     return !from || !to || from.box === to.box
       ? []
@@ -231,7 +236,8 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
             id: spec.id,
             key: spec.id ?? text,
             curve: spec.curve,
-            bend: spec.bend
+            bend: spec.bend,
+            field: spec.start !== undefined
           }
         ];
   });
@@ -289,14 +295,28 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   // or a layered graph, from links present at every step only, so a link that comes and goes is
   // drawn but does not change it. The structure takes a form: the view's, or one the seed draws from
   // those whose proportions suit the space, so presentations vary in look.
+  // A node's links are read in the order they leave it, by where they start inside it, so a tree's
+  // left field leads to the child placed left of its right field's.
+  const leaving = (link: (typeof laidLinks)[number]) =>
+    offsetOf(link.from, 'x') * 1e6 + offsetOf(link.from, 'y');
+  const firstFrom = new Map<number, number>();
+  laidLinks.forEach(({ source }, position) => {
+    if (!firstFrom.has(source)) firstFrom.set(source, position);
+  });
   const structure =
     options.template === 'free'
       ? findStructure(
           boxes.length,
-          laidLinks.filter(
-            ({ directed, placed, key }) =>
-              directed && !placed && (!options.permanent || options.permanent.has(key))
-          )
+          laidLinks
+            .filter(
+              ({ directed, placed, key }) =>
+                directed && !placed && (!options.permanent || options.permanent.has(key))
+            )
+            .sort(
+              (a, b) =>
+                (firstFrom.get(a.source) ?? 0) - (firstFrom.get(b.source) ?? 0) ||
+                leaving(a) - leaving(b)
+            )
         )
       : undefined;
   const aspect = options.aspect ?? 16 / 9;
@@ -405,9 +425,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     const points = [...formed.values()];
     const meanX = points.reduce((sum, { x }) => sum + x, 0) / points.length;
     const meanY = points.reduce((sum, { y }) => sum + y, 0) / points.length;
+    // A node is placed by where links meet it, its box or value cell, rather than a field one leaves.
     const anchorOfBox = (box: number) =>
-      laidLinks.find(({ source }) => source === box)?.from ??
-      laidLinks.find(({ target }) => target === box)?.to;
+      laidLinks.find(({ target }) => target === box)?.to ??
+      laidLinks.find(({ source }) => source === box)?.from;
     for (const [node, point] of formed) {
       const anchor = anchorOfBox(node);
       nodes[node].x = startArea.width / 2 + point.x - meanX - (anchor ? offsetOf(anchor, 'x') : 0);
@@ -485,7 +506,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const overlaps = (a: Box, b: Box) =>
     Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
     Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-  const edges = links.map(({ from: tail, to: head, directed, text, id, curve, bend }) => {
+  const edges = links.map(({ from: tail, to: head, directed, text, id, curve, bend, field }) => {
     const [from, to] = [boxAt(tail), boxAt(head)];
     const obstacles = [
       ...boxes.flatMap((_, box) =>
@@ -520,7 +541,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     const bends = [0.15, 0.3, 0.5].flatMap((amount) => [amount * side, -amount * side]);
     const order = bend !== undefined ? [bend] : curvy ? [...bends, 0] : [0, ...bends];
     const routed = routeCurve(from, to, obstacles, order, {
-      from: surround(tail, from),
+      from: field ? undefined : surround(tail, from),
       to: surround(head, to)
     });
     return {
