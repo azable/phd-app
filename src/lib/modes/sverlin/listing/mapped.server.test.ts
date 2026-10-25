@@ -98,6 +98,12 @@ describe('listings of the source’s own', () => {
       "The listing's region @spare is labelled on no code"
     ],
     [
+      'a region with a dotted name',
+      '  @size[const n = Int(1);]',
+      '@size.inner[n]',
+      'The region @size.inner[ has a dotted name: a region takes one name and nests inside the one around it, as @size[… @inner[…]].'
+    ],
+    [
       'a listing named none',
       '  @size[const n = Int(1);]',
       '@size[n]',

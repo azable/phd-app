@@ -24,6 +24,7 @@ export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; 
 export type RegionMap = { label: string; text: string; sources: { text: string; line: number }[] };
 
 const regionOpen = /^@([A-Za-z_$][\w$]*)\[/u;
+const dottedOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\[/u;
 /**
  * The text a listing shows, without its region marks and the indentation its lines share, and its
  * regions, each named with the names of those around it. A [ not opening a region, as in A[i], is
@@ -60,6 +61,15 @@ export function readRegions(body: string): {
   const prefix = () => open.flatMap((region) => (region === 'plain' ? [] : [region.label])).at(-1);
   for (let index = 0; index < source.length; index++) {
     const opening = source[index] === '@' ? regionOpen.exec(source.slice(index)) : null;
+    const dotted = source[index] === '@' ? dottedOpen.exec(source.slice(index)) : null;
+    if (dotted) {
+      const names = dotted[1].split('.');
+      problems.push({
+        message: `The region @${dotted[1]}[ has a dotted name: a region takes one name and nests inside the one around it, as @${names.slice(0, -1).join('[… @')}[… @${names.at(-1)}[…]${']'.repeat(names.length - 1)}.`,
+        block: 'listing',
+        at: characters[index].at
+      });
+    }
     if (opening) {
       const outer = prefix();
       open.push({
