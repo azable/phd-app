@@ -36,6 +36,11 @@
     /** The model request chosen for audit, if any, by its event id. */
     chosenRequest?: number;
     onChooseRequest?: (eventId: number | undefined) => void;
+    /** The failure whose source is shown, if any, by its event id. */
+    chosenFailure?: number;
+    onChooseFailure?: (
+      failure: { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
+    ) => void;
   };
 
   let {
@@ -50,7 +55,9 @@
     chosenSource,
     onChooseSource = () => {},
     chosenRequest,
-    onChooseRequest = () => {}
+    onChooseRequest = () => {},
+    chosenFailure,
+    onChooseFailure = () => {}
   }: Props = $props();
   let viewport = $state<HTMLElement | null>(null);
   let timelineEnd = $state<HTMLElement | null>(null);
@@ -110,6 +117,8 @@
         audit={inspect}
         {chosenRequest}
         {onChooseRequest}
+        {chosenFailure}
+        {onChooseFailure}
       />
       <li class="h-px" aria-hidden="true"><span bind:this={timelineEnd}></span></li>
     </ol>

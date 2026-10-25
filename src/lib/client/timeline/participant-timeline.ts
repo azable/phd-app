@@ -36,7 +36,14 @@ export type ParticipantTimelineItem =
       /** Its presentations, each a variant of its random values, oldest first. */
       variants: TimelinePresentation[];
     }
-  | { id: string; kind: 'error'; text: string; eventId: number }
+  | {
+      id: string;
+      kind: 'error';
+      text: string;
+      eventId: number;
+      /** The source whose build failed on its code, where one did: the assistant's or a save's. */
+      failed?: { source: string; by: 'assistant' | 'save' };
+    }
   /** A request to a model, shown for audit in developer view. */
   | { id: string; kind: 'request'; value: AgentRequest };
 
@@ -129,15 +136,41 @@ export function participantTimeline(
       }
       const failure = related.findLast(({ type }) => type === 'operation.failed');
       if (failure?.type === 'operation.failed' && failure.payload.kind !== 'presentation-refill') {
+        const failed = failedSource(related);
         items.push({
           id: `error-${failure.id}`,
           kind: 'error',
           text: failure.payload.message,
-          eventId: failure.id
+          eventId: failure.id,
+          ...(failed ? { failed } : {})
         });
       }
       return items;
     });
+}
+
+/** The source of an operation's last build that failed on its code, and who wrote it. */
+function failedSource(
+  related: readonly ProjectEvent[]
+): { source: string; by: 'assistant' | 'save' } | undefined {
+  const failed = related.findLast(
+    (event): event is ProjectEventOf<'build.failed'> =>
+      event.type === 'build.failed' && event.payload.failureKind === 'source'
+  );
+  if (!failed) return undefined;
+  // The request it answers: the one with its build id, or else the latest before it.
+  const request = related.findLast(
+    (event): event is ProjectEventOf<'build.requested'> =>
+      event.type === 'build.requested' &&
+      event.id < failed.id &&
+      (failed.payload.buildId === undefined || event.payload.buildId === failed.payload.buildId)
+  );
+  return request
+    ? {
+        source: request.payload.source.text,
+        by: request.payload.input === 'assistant-candidate' ? 'assistant' : 'save'
+      }
+    : undefined;
 }
 
 // What a card says of a source whose version has no summary: how it was made.

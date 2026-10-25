@@ -87,7 +87,89 @@ describe('participant Timeline projection', () => {
       ]
     });
   });
+
+  it('gives a failure the source of its last build that failed on its code', () => {
+    const items = participantTimeline(
+      failedOperation('assistant-turn', [
+        { input: 'assistant-candidate', source: 'first attempt', failureKind: 'source' },
+        { input: 'assistant-candidate', source: 'repaired attempt', failureKind: 'source' }
+      ])
+    );
+    expect(items.at(-1)).toMatchObject({
+      kind: 'error',
+      failed: { source: 'repaired attempt', by: 'assistant' }
+    });
+  });
+
+  it('gives a failed save its saved source', () => {
+    const items = participantTimeline(
+      failedOperation('save', [
+        { input: 'committed-artifact', source: 'saved by hand', failureKind: 'source' }
+      ])
+    );
+    expect(items.at(-1)).toMatchObject({
+      kind: 'error',
+      failed: { source: 'saved by hand', by: 'save' }
+    });
+  });
+
+  it('gives no source to a failure whose builds did not fail on their code', () => {
+    const items = participantTimeline(
+      failedOperation('assistant-turn', [
+        { input: 'assistant-candidate', source: 'never compiled', failureKind: 'infrastructure' }
+      ])
+    );
+    expect(items.at(-1)).toMatchObject({ kind: 'error' });
+    expect(items.at(-1)).not.toHaveProperty('failed');
+  });
 });
+
+/** An operation whose builds each fail as given, in order, then the operation itself. */
+function failedOperation(
+  kind: 'assistant-turn' | 'save',
+  builds: {
+    input: 'assistant-candidate' | 'committed-artifact';
+    source: string;
+    failureKind: 'source' | 'infrastructure';
+  }[]
+): ProjectEvent[] {
+  const operationId = '42345678-1234-4234-8234-123456789abc';
+  const envelope = (id: number) => ({
+    id,
+    actor: { kind: 'system' as const },
+    operationId,
+    createdAt: `2026-08-30T00:01:${String(id).padStart(2, '0')}.000Z`
+  });
+  return [
+    ...builds.flatMap(({ input, source, failureKind }, index): ProjectEvent[] => {
+      const buildId = `52345678-1234-4234-8234-12345678900${index}`;
+      return [
+        {
+          ...envelope(2 * index + 1),
+          type: 'build.requested',
+          payload: {
+            purpose: input === 'assistant-candidate' ? 'assistant-edit' : 'manual-edit',
+            input,
+            source: { text: source, sha256: 'd'.repeat(64), mediaType: 'text/x-svelte' },
+            sourceLabel: 'Main.svelte',
+            seed: 1,
+            buildId
+          }
+        },
+        {
+          ...envelope(2 * index + 2),
+          type: 'build.failed',
+          payload: { durationMs: 1, buildId, failureKind, diagnostics: [], repairEligible: true }
+        }
+      ];
+    }),
+    {
+      ...envelope(2 * builds.length + 1),
+      type: 'operation.failed',
+      payload: { kind, failureKind: 'domain', message: 'The source did not build.' }
+    }
+  ];
+}
 
 function events(): ProjectEvent[] {
   const operationId = '12345678-1234-4123-8123-123456789abc';

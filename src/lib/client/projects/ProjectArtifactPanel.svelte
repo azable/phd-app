@@ -64,6 +64,12 @@
     onChooseVariant?: (presentationId: string, extend: boolean) => void;
     /** Leave the chosen source, back to its variants. */
     onLeaveSource?: () => void;
+    /**
+     * A source that did not build, chosen by its failure: the panel fills the stage to show it,
+     * read-only, its problems underlined, until it is left.
+     */
+    failed?: { source: string; by: 'assistant' | 'save' };
+    onLeaveFailed?: () => void;
   };
 
   let {
@@ -75,12 +81,14 @@
     onSaved = () => {},
     chosen,
     onLeaveSource = () => {},
-    onChooseVariant = () => {}
+    onChooseVariant = () => {},
+    failed,
+    onLeaveFailed = () => {}
   }: Props = $props();
 
-  // Choosing a source opens the panel to show it.
+  // Choosing a source, or a source that did not build, opens the panel to show it.
   $effect(() => {
-    if (chosen) expanded = true;
+    if (chosen || failed) expanded = true;
   });
   const showingChanges = $derived(chosen?.parent !== undefined && editMode === 'readonly');
 
@@ -110,6 +118,7 @@
   // The source the visible presentations were built from, when it is not the newest one: the panel
   // shows it, so their draws can be marked, and editing it builds a new candidate from it.
   const candidateSource = $derived.by(() => {
+    if (failed) return failed.source;
     if (!session.atHead) return undefined;
     if (chosen) return chosen.source === artifact?.content.text ? undefined : chosen.source;
     const sources = [...new Set(drawnSources.map(({ source }) => source))];
@@ -142,7 +151,7 @@
   // Why a visible presentation's draws are not marked: it was built from another version of the
   // source, or before draws were kept.
   const unmarkedNotice = $derived.by(() => {
-    if (chosen) return undefined;
+    if (chosen || failed) return undefined;
     const otherSource = drawnSources.filter((presentation) => !drawn.includes(presentation));
     const unrecorded = drawn.filter((presentation) => presentation.unrecorded);
     const [unmarked, reason, remedy] = otherSource.length
@@ -177,7 +186,7 @@
     );
   });
   $effect(() => {
-    if (editMode === 'editing' || !variantJson) tab = 'source';
+    if (editMode === 'editing' || !variantJson || failed) tab = 'source';
   });
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
@@ -186,7 +195,7 @@
   });
 
   function startEditing() {
-    if (!artifact || !session.atHead || session.pending || session.readOnly) return;
+    if (!artifact || failed || !session.atHead || session.pending || session.readOnly) return;
     draft = baseSource;
     draftBase = baseSource;
     draftFrom =
@@ -234,7 +243,7 @@
 </script>
 
 <section
-  class={['flex min-h-0 flex-col border-t p-2', chosen ? 'flex-1' : 'max-h-[38vh]']}
+  class={['flex min-h-0 flex-col border-t p-2', chosen || failed ? 'flex-1' : 'max-h-[38vh]']}
   aria-label="Project artifact"
 >
   {#if artifact}
@@ -242,7 +251,7 @@
       <header class="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         <EditIcon class="size-4 shrink-0 text-muted-foreground" />
         <div class="mr-auto min-w-0">
-          {#if variantJson && editMode === 'readonly'}
+          {#if variantJson && editMode === 'readonly' && !failed}
             <div class="flex gap-1" role="tablist" aria-label="Shown file">
               {#each [['source', artifact.path], ['variant', 'variant.json']] as [id, name] (id)}
                 <button
@@ -284,7 +293,9 @@
               : 'problems'}</Badge
           >
         {/if}
-        {#if chosen}
+        {#if failed}
+          <Badge variant="destructive">Didn’t build</Badge>
+        {:else if chosen}
           <CandidateIdPill {...sourceId(chosen.sourceHash)} />
         {:else}
           {#each drawnSources as { candidate, label } (label ?? 'shown')}
@@ -307,7 +318,7 @@
             size="sm"
             variant="outline"
             onclick={startEditing}
-            disabled={!session.atHead || !!session.pending || session.readOnly}
+            disabled={!!failed || !session.atHead || !!session.pending || session.readOnly}
           >
             <EditIcon data-icon="inline-start" />Edit
           </Button>
@@ -330,7 +341,24 @@
         {/if}
       </header>
 
-      {#if expanded && chosen && editMode === 'readonly'}
+      {#if expanded && failed}
+        <div
+          class="flex items-center gap-2 border-b bg-destructive/10 px-4 py-2 text-sm text-muted-foreground"
+        >
+          <span class="mr-auto"
+            >{failed.by === 'assistant'
+              ? 'The assistant’s attempt that didn’t build'
+              : 'The saved source that didn’t build'}, read-only; the working version is unchanged.</span
+          >
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Back to the working version"
+            title="Back to the working version"
+            onclick={onLeaveFailed}><XIcon /></Button
+          >
+        </div>
+      {:else if expanded && chosen && editMode === 'readonly'}
         <div
           class="flex flex-wrap items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
         >
@@ -380,7 +408,7 @@
         </div>
       {/if}
 
-      {#if expanded && unmatched}
+      {#if expanded && unmatched && !failed}
         <p class="border-b bg-muted px-4 py-2 text-sm text-muted-foreground">
           {editMode === 'editing'
             ? 'Selected nodes are not highlighted while the source has unsaved changes.'

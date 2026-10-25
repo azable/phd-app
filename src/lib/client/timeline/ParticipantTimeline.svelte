@@ -47,6 +47,12 @@
     /** The request chosen for audit, if any, by its event id. */
     chosenRequest?: number;
     onChooseRequest?: (eventId: number | undefined) => void;
+    /** The failure whose source is shown, if any, by its event id. */
+    chosenFailure?: number;
+    /** Show the source a failure did not build, or none. */
+    onChooseFailure?: (
+      failure: { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
+    ) => void;
   };
 
   let {
@@ -60,7 +66,9 @@
     onChooseSource = () => {},
     audit = false,
     chosenRequest,
-    onChooseRequest = () => {}
+    onChooseRequest = () => {},
+    chosenFailure,
+    onChooseFailure = () => {}
   }: Props = $props();
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
@@ -297,6 +305,27 @@
           </div>
         </div>
       </article>
+    {:else if item.failed}
+      {@const failed = item.failed}
+      {@const chosen = chosenFailure === item.eventId}
+      <!-- Choosing it shows the source that did not build, its problems underlined. -->
+      <button
+        type="button"
+        class={[
+          'w-full rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-left shadow-md transition-colors hover:border-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          chosen && 'border-destructive ring-2 ring-destructive/40'
+        ]}
+        aria-pressed={chosen}
+        title={chosen ? 'Hide the source that did not build' : 'Show the source that did not build'}
+        onclick={() => onChooseFailure(chosen ? undefined : { eventId: item.eventId, ...failed })}
+      >
+        <p class="text-sm font-medium text-destructive">The request could not be completed</p>
+        <p class="mt-1 text-base">{item.text}</p>
+        <p class="mt-1 text-xs text-muted-foreground">
+          {chosen ? 'Showing' : 'Show'}
+          {failed.by === 'assistant' ? 'the assistant’s attempt' : 'the saved source'} that didn’t build
+        </p>
+      </button>
     {:else}
       <article
         class="w-full rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 shadow-md"

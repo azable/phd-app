@@ -204,6 +204,12 @@
       : undefined
   );
 
+  // A failure chosen by its message: the source it did not build fills the stage, read-only, its
+  // problems underlined.
+  let chosenFailure = $state<
+    { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
+  >();
+
   // A source chosen on its own, by its card: no visualization shows, and the source panel fills the
   // stage with its source and what it changes from its parent, until a variant is chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
@@ -596,11 +602,23 @@
                 onChooseSource={(source) => {
                   chosenOf = source;
                   chosenRequestId = undefined;
+                  chosenFailure = undefined;
                 }}
                 chosenRequest={auditedRequest ? chosenRequestId : undefined}
                 onChooseRequest={(eventId) => {
                   chosenRequestId = eventId;
-                  if (eventId !== undefined) chosenOf = undefined;
+                  if (eventId !== undefined) {
+                    chosenOf = undefined;
+                    chosenFailure = undefined;
+                  }
+                }}
+                chosenFailure={chosenFailure?.eventId}
+                onChooseFailure={(failure) => {
+                  chosenFailure = failure;
+                  if (failure) {
+                    chosenOf = undefined;
+                    chosenRequestId = undefined;
+                  }
                 }}
               />
               {#if !expired && !session.readOnly}
@@ -614,6 +632,7 @@
                   visualSelections={visualSelections.current}
                   onSubmitted={() => {
                     chosenOf = undefined;
+                    chosenFailure = undefined;
                     presentationSelection.returnToLatest();
                   }}
                   onDraftChange={recordDraft}
@@ -660,7 +679,9 @@
             </div>
           {/if}
           <PresentationStage
-            hidden={chosen !== undefined || auditedRequest !== undefined}
+            hidden={chosen !== undefined ||
+              auditedRequest !== undefined ||
+              chosenFailure !== undefined}
             {session}
             selection={presentationSelection}
             playback={presentationPlayback}
@@ -691,9 +712,12 @@
               {drawnSources}
               onSaved={() => {
                 chosenOf = undefined;
+                chosenFailure = undefined;
                 presentationSelection.returnToLatest();
               }}
               {chosen}
+              failed={chosenFailure}
+              onLeaveFailed={() => (chosenFailure = undefined)}
               onLeaveSource={() => (chosenOf = undefined)}
               onChooseVariant={chooseVariant}
               bind:editMode
