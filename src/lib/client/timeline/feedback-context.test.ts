@@ -21,7 +21,7 @@ describe('automatic feedback context', () => {
     ]);
   });
 
-  it('references each visible presentation at the step it shows', () => {
+  it('references each visible presentation at the step it shows, by its number and name', () => {
     expect(
       automaticFeedbackContext(
         [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
@@ -31,7 +31,12 @@ describe('automatic feedback context', () => {
       )
     ).toEqual([
       { type: 'markdown', text: 'Comparing ' },
-      { type: 'presentation-ref', presentationId: presentationIds[0], step: 2 },
+      {
+        type: 'presentation-ref',
+        presentationId: presentationIds[0],
+        step: 2,
+        stepName: '@check#2'
+      },
       { type: 'markdown', text: ' with ' },
       { type: 'presentation-ref', presentationId: presentationIds[1] },
       { type: 'markdown', text: '.' }
@@ -99,7 +104,11 @@ function presentation(eventId: number, presentationId: string): TimelinePresenta
         sha256: 'a'.repeat(64)
       },
       rendered: {
-        text: '{}',
+        text: JSON.stringify({
+          format: 'sverlin-html-frames',
+          version: 1,
+          frames: ['start', '@check#1', '@check#2'].map((label) => ({ label, html: '<p>step</p>' }))
+        }),
         mediaType: 'application/json',
         sha256: 'b'.repeat(64)
       }

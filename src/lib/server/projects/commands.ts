@@ -24,6 +24,7 @@ import {
   isSverlinPresentation,
   presentationMode,
   presentationStepLabels,
+  presentationStepName,
   presentationVariant
 } from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -1798,7 +1799,28 @@ async function validateMessageContent(
     else if (segment.step !== undefined)
       validateReferencedStep(document, segment.presentationId, segment.step);
   }
-  return content;
+  return content.map((segment) =>
+    segment.type === 'markdown' ? segment : named(document, segment)
+  );
+}
+
+/** A reference at a step, named as its presentation names the step, where it does. */
+function named<Reference extends Exclude<MessageContent[number], { type: 'markdown' }>>(
+  document: ProjectDocument,
+  reference: Reference
+): Reference {
+  const presentation = document.events.find(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === reference.presentationId
+  );
+  const name =
+    presentation?.type === 'visualization.presented' && reference.step !== undefined
+      ? presentationStepName(presentation.payload.presentation, reference.step)
+      : undefined;
+  const renamed = { ...reference, stepName: name };
+  if (!name) delete renamed.stepName;
+  return renamed;
 }
 
 /** A presentation referenced at a step must have that step. */

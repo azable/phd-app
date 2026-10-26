@@ -28,6 +28,37 @@ describe('plain message text', () => {
       ])
     ).toBe(`Viewing [Presentation ${presentationId} at step 3]`);
   });
+
+  it('names the step by its label’s run where it has a name, with its number', () => {
+    expect(
+      plainMessageText([
+        { type: 'markdown', text: 'Viewing' },
+        { type: 'presentation-ref', presentationId, step: 2, stepName: '@insert.swap#1' },
+        {
+          type: 'element-ref',
+          presentationId,
+          step: 2,
+          stepName: '@insert.swap#1',
+          element: { id: '62:7', label: 'Int 8' }
+        }
+      ])
+    ).toBe(
+      `Viewing [Presentation ${presentationId} at @insert.swap#1 (step 3)] [Element "Int 8" (62:7) at @insert.swap#1 (step 3) of presentation ${presentationId}]`
+    );
+  });
+
+  it('accepts only step names of a label’s run, start, or end', () => {
+    const named = (stepName: string) =>
+      v.is(messageContentSegmentSchema, {
+        type: 'presentation-ref',
+        presentationId,
+        step: 0,
+        stepName
+      });
+    for (const name of ['start', 'end', '@insert.compare.left#3']) expect(named(name)).toBe(true);
+    for (const name of ['Step 1', '@insert.swap #1', 'insert.swap#1', '@insert.swap'])
+      expect(named(name)).toBe(false);
+  });
 });
 
 describe('element references', () => {

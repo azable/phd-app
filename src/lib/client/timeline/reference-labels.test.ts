@@ -44,4 +44,16 @@ describe('presentation reference labels', () => {
     expect(referenceChipLabel(reference)).toBe(`${presentation} · S3`);
     expect(referenceChipTitle(reference)).toBe(`${presentation} · step 3`);
   });
+
+  it('keeps a named step’s chip short, its name on hover', () => {
+    const reference = {
+      type: 'presentation-ref' as const,
+      presentationId: '12345678-1234-4123-8123-123456789ac1',
+      step: 2,
+      stepName: '@insert.swap#1'
+    };
+    const presentation = presentationDisplayId(reference.presentationId);
+    expect(referenceChipLabel(reference)).toBe(`${presentation} · S3`);
+    expect(referenceChipTitle(reference)).toBe(`${presentation} · step 3, @insert.swap#1`);
+  });
 });

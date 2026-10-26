@@ -14,7 +14,7 @@ describe('starter catalog', () => {
     expect(listProjectTemplates().map(({ id }) => id)).toEqual(['blank', 'linear-search']);
     const blank = resolveProjectTemplate({ templateId: 'blank' });
     // The input as given (here none), then the blank source's one step.
-    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['Step 1', 'Step 2']);
+    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['start', 'end']);
     expect(
       (await compileSvelteComponent(getProjectTemplate('linear-search').source)).labels
     ).toHaveLength(6);

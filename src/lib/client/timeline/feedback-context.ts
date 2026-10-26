@@ -1,6 +1,7 @@
 import type { TimelinePresentation } from '$lib/client/visualization/presentation-history';
 import type { VisualSelection } from '$lib/client/visualization/visual-selection.svelte';
 import type { MessageContent } from '$lib/shared/projects/events/message-content';
+import { presentationStepName, type RenderablePresentation } from '$lib/shared/presentations';
 
 import type { ReferenceSegment } from './reference-labels';
 
@@ -24,7 +25,7 @@ export function automaticFeedbackContext(
     );
     return selection
       ? selectionReferences(selection)
-      : [presentationReference(presentation.presentationId, steps)];
+      : [presentationReference(presentation, steps)];
   });
   if (references.length === 1) {
     return [
@@ -42,17 +43,16 @@ export function automaticFeedbackContext(
   ];
 }
 
-/** A reference to a presentation, at the step it shows if it is visible. */
+/** A reference to a presentation, at the step it shows, by its number and name, if it is visible. */
 export function presentationReference(
-  presentationId: string,
+  presentation: RenderablePresentation,
   steps: Readonly<Record<string, number>> = {}
 ): ReferenceSegment {
+  const { presentationId } = presentation;
   const step = steps[presentationId];
-  return {
-    type: 'presentation-ref',
-    presentationId,
-    ...(step !== undefined && step >= 0 ? { step } : {})
-  };
+  if (step === undefined || step < 0) return { type: 'presentation-ref', presentationId };
+  const stepName = presentationStepName(presentation, step);
+  return { type: 'presentation-ref', presentationId, step, ...(stepName ? { stepName } : {}) };
 }
 
 /** Prepend automatic context unless the participant deliberately inserted an inline reference. */

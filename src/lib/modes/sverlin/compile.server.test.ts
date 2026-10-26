@@ -32,8 +32,8 @@ describe('single-component Svelte compilation', () => {
     const result = await compileSvelteComponent(
       '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">let n = Int(0); @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>{step}</Node>{/snippet}{@render S()}{@render Int(n)}'
     );
-    // The input as given, then a step per label changing what the view draws.
-    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3']);
+    // The input as given, then a step at each label, each named by its label and run.
+    expect(result.labels).toEqual(['start', '@a#1', '@b#1']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
   });
@@ -67,7 +67,14 @@ describe('single-component Svelte compilation', () => {
     );
     for (const bundle of bundles) {
       expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
-      expect(bundle.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5', 'Step 6']);
+      expect(bundle.labels).toEqual([
+        'start',
+        '@check#1',
+        '@check#2',
+        '@check#3',
+        '@check#4',
+        'end'
+      ]);
       expect(bundle.masterSteps).toEqual(prepared.master.map(({ moment }) => moment));
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
@@ -205,8 +212,8 @@ describe('single-component Svelte compilation', () => {
     const withoutModuleScript = await compileSvelteComponent(
       '<script lang="sverlin"></script>{#snippet X()}<Node>x</Node>{/snippet}{@render X()}'
     );
-    // The input as given (here none), then the algorithm's one step.
-    expect(withoutModuleScript.labels).toEqual(['Step 1', 'Step 2']);
+    // The input as given (here none), then the algorithm's one step, its end.
+    expect(withoutModuleScript.labels).toEqual(['start', 'end']);
     expect(withoutModuleScript.javascript).toContain('sv-node');
   });
 
@@ -217,7 +224,7 @@ describe('single-component Svelte compilation', () => {
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
     // is no step.
-    expect(result.labels).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4']);
+    expect(result.labels).toEqual(['start', '@start#1', '@add#1', '@add#2']);
     expect(result.variant['Sum.fill']).toBeDefined();
   });
 
@@ -1456,6 +1463,31 @@ describe('pauses accumulate', () => {
     expect(right.held).toEqual([]);
     expect(right.earlier.join(' ')).toContain('j = i');
     expect(right.earlier.join(' ')).not.toContain('j - 1');
+  });
+
+  it('name each step by its label’s run, the same however the steps pause', () => {
+    const coarse = insertion.paced(
+      new Map([
+        ['insert.compare', 'accumulate'],
+        ['insert.swap', 'accumulate']
+      ])
+    ).steps;
+    const fine = insertion.paced(pausesOf(insertion.pauses, {})).steps;
+    expect(coarse.map(({ name }) => name).slice(0, 4)).toEqual([
+      'start',
+      '@insert.compare#1',
+      '@insert.swap#1',
+      '@insert.compare#2'
+    ]);
+    expect(fine.map(({ name }) => name).slice(0, 4)).toEqual([
+      'start',
+      '@insert.compare.left#1',
+      '@insert.compare.right#1',
+      '@insert.compare#1'
+    ]);
+    // Each coarse step is the fine step of its name, holding the same state.
+    const byName = new Map(fine.map((step) => [step.name, step.state]));
+    for (const { name, state } of coarse) expect(byName.get(name)).toEqual(state);
   });
 
   it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {

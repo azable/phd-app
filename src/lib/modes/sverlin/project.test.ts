@@ -41,7 +41,7 @@ describe('Svelte-backed project lifecycle', () => {
     );
     expect(presentations[0]).toMatchObject({
       mode: 'sverlin',
-      labels: ['Step 1', 'Step 2', 'Step 3', 'Step 4']
+      labels: ['start', '@start#1', '@set#1', '@set#2']
     });
 
     const rebuilt = await buildProjectPresentations(

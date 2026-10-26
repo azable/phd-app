@@ -411,7 +411,7 @@ export function projectAiContext(
       'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',
       'The participant can select compatible retained Sverlin presentations to compare a pair.',
       'A visible pair has preference controls; participants can reference retained presentations inline in messages.',
-      'A message viewing a presentation names the step the participant was on, as [Presentation id at step n], numbered from 1 as recordedSteps are.',
+      'A message viewing a presentation names the step the participant was on, as [Presentation id at @insert.swap#1 (step 3)]: its name, as recordedSteps name it, and the number the participant saw in that presentation.',
       'Participants can select elements of a Sverlin presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
       'Sverlin projects may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
     ],

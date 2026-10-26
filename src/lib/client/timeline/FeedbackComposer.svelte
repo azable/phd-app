@@ -67,7 +67,7 @@
   );
 
   export function referencePresentation(presentation: TimelinePresentation): void {
-    insertReference(presentationReference(presentation.presentation.presentationId, steps));
+    insertReference(presentationReference(presentation.presentation, steps));
   }
 
   export function referenceSelection(selection: VisualSelection): void {

@@ -30,11 +30,11 @@ export function referenceChipDetail(reference: ReferenceSegment): string | undef
 /** Return the full description of one reference chip, shown on hover. */
 export function referenceChipTitle(reference: ReferenceSegment): string {
   const presentation = presentationDisplayId(reference.presentationId);
-  if (reference.type === 'presentation-ref')
-    return reference.step === undefined
-      ? presentation
-      : `${presentation} · step ${reference.step + 1}`;
-  return `${presentation} · step ${reference.step + 1} · ${reference.element.label}`;
+  if (reference.step === undefined) return presentation;
+  const step = `step ${reference.step + 1}${reference.stepName ? `, ${reference.stepName}` : ''}`;
+  return reference.type === 'presentation-ref'
+    ? `${presentation} · ${step}`
+    : `${presentation} · ${step} · ${reference.element.label}`;
 }
 
 /** A label cut at a word boundary near the chip length, with an ellipsis if cut. */

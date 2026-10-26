@@ -155,7 +155,7 @@ function loadLibraryModule(path: string): { contents: string; loader: 'js' | 'ts
 /** One seeded presentation of a prepared component. */
 export type SvelteBundle = {
   javascript: string;
-  /** Labels of the steps this presentation keeps: their numbers in the master trace. */
+  /** The name of each step this presentation keeps (see MasterStep), the same in every pacing. */
   labels: string[];
   /** Identity of the master trace, from its recorded states, shared by all presentations of the source. */
   masterSignature: string;
@@ -1380,7 +1380,6 @@ export async function bundlePresentation(
   // The steps paced as the variant pauses, each placed by its moment.
   const paced = prepared.paced(pausesOf(prepared.pauses, values));
   const master = paced.steps;
-  const masterSteps = master.map((_, index) => index);
   const moments = master.map(({ moment }, index) => moment ?? index);
   // The page shows each step as two states, before its code and after it (see phasesOf). Each
   // carries its atomic types, the page frame, and the variant for the view, under keys no variable
@@ -1520,7 +1519,7 @@ export async function bundlePresentation(
   }
   return {
     javascript: output.text,
-    labels: masterSteps.map((index) => `Step ${index + 1}`),
+    labels: master.map(({ name }, index) => name ?? `Step ${index + 1}`),
     masterSignature: prepared.signature,
     masterSteps: moments,
     variant: values,

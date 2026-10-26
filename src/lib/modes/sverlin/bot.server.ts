@@ -33,8 +33,8 @@ const maximumTraceCharacters = 20_000;
 
 /**
  * The steps a source's algorithm records, for the assistant to check what its algorithm does and
- * to name what a step shows: each step's variables in scope, as many steps as fit, or why there
- * are none.
+ * to name what a step shows: each step by its name with its variables in scope, as many steps as
+ * fit, or why there are none.
  */
 export function recordedSteps(source: string): Record<string, unknown> {
   let trace;
@@ -43,10 +43,10 @@ export function recordedSteps(source: string): Record<string, unknown> {
   } catch (cause) {
     return { problem: cause instanceof Error ? cause.message : String(cause) };
   }
-  const steps: { step: number; state: unknown }[] = [];
+  const steps: { name: string; state: unknown }[] = [];
   let length = 0;
-  for (const [index, { state }] of trace.entries()) {
-    const entry = { step: index + 1, state };
+  for (const [index, { name, state }] of trace.entries()) {
+    const entry = { name: name ?? `step ${index + 1}`, state };
     length += JSON.stringify(entry).length;
     if (length > maximumTraceCharacters) break;
     steps.push(entry);

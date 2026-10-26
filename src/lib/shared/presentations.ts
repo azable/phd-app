@@ -173,6 +173,29 @@ export function presentationStepLabels(presentation: RenderablePresentation): st
   return parsed.frames.map(({ label }) => label);
 }
 
+/**
+ * A Sverlin step's name, the same however its steps pause: a label's full name and which run of it
+ * the step ends, as @insert.swap#1, or start or end. Older presentations label steps "Step n".
+ */
+export const stepNameSchema = v.pipe(
+  v.string(),
+  v.maxLength(200),
+  v.regex(/^(?:start|end|@[\w.]+#\d+)$/u)
+);
+
+/** Whether a step's label is its name. */
+export const isStepName = (label: string | undefined): label is string =>
+  v.is(stepNameSchema, label);
+
+/** The name of a presentation's step, where its label is one. */
+export function presentationStepName(
+  presentation: RenderablePresentation,
+  step: number
+): string | undefined {
+  const label = presentationStepLabels(presentation)[step];
+  return isStepName(label) ? label : undefined;
+}
+
 /** One shared playback position across simultaneously displayed presentations. */
 export type AlignedFrame = {
   label: string;

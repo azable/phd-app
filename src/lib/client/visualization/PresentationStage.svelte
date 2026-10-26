@@ -12,7 +12,8 @@
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
-  import type { PresentationLayout } from '$lib/shared/presentations';
+  import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
+  import { elidedName } from '$lib/client/artifacts/source-references';
 
   import { baseCandidate, type PresentationSelection } from './presentation-selection.svelte';
   import {
@@ -107,6 +108,17 @@
   });
   const step = $derived(playback.stepFor(playbackContext));
   const stepCount = $derived(playbackContext.stepCount);
+  // The step's name, its label elided at the start as chat pills are (@…compare.left#3).
+  const stepName = $derived.by(() => {
+    const label = playbackContext.frames[step]?.label;
+    return isStepName(label) ? label : undefined;
+  });
+  const shownStepName = $derived.by(() => {
+    if (!stepName) return undefined;
+    const [label, run] = stepName.split('#');
+    const parts = elidedName(label);
+    return parts ? `${parts.head}…${parts.tail}#${run}` : stepName;
+  });
   const selectedIds = $derived(visible.map(({ presentation }) => presentation.presentationId));
   // A selection belongs to its step and its presentation; stepping or switching drops it.
   $effect(() => {
@@ -212,8 +224,14 @@
       <ChevronLeftIcon data-icon="inline-start" />
       Previous
     </Button>
-    <span class="min-w-32 text-center text-sm text-muted-foreground">
-      {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}
+    <!-- A fixed width, so the buttons stay put as the step's name changes. -->
+    <span
+      class="w-72 shrink-0 truncate text-center text-sm whitespace-nowrap text-muted-foreground"
+      title={stepName}
+    >
+      {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
+          class="mx-1">·</span
+        ><code class="font-mono text-xs">{shownStepName}</code>{/if}
     </span>
     <Button
       size="lg"

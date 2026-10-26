@@ -20,7 +20,7 @@ Write each design as the guide’s Declare what varies describes. Change the sou
 
 Where the source has a listing of its own, the context’s listingMaps gives each of its regions, the source each label resolved to (by its text and line), and whether the algorithm runs its code: check them against the listing before replying, and relabel a region mapped to the wrong code or never run.
 
-The context’s recordedSteps gives the steps the algorithm records, each with the variables in scope (for a repair, those of the failed candidate), or the problem that stops it, with omittedSteps when not all fit. They pause at every label, as the starter does (see Steps); a variant pausing elsewhere steps otherwise. Check it against what the algorithm should do before revising the view, and use it to say what a step shows; steps are numbered from 1, as the participant sees them.
+The context’s recordedSteps gives the steps the algorithm records, each by its name with the variables in scope (for a repair, those of the failed candidate), or the problem that stops it, with omittedSteps when not all fit. They pause at every label, as the starter does (see Steps), so they hold every step a variant shows, by the same name. Check it against what the algorithm should do before revising the view, and use it to say what a step shows; name a step by its name, as @insert.swap#1, as a number is only where it falls in one presentation.
 
 Leave the algorithm as the participant’s algorithm: never add or change its variables or steps to drive the view, such as a variable that only marks what to highlight or a position set to -1 to hide a pointer. Derive what the view shows from the algorithm’s own variables and from labels on its code, which change no value, as the guide describes.
 

@@ -1700,7 +1700,10 @@ describe('submitProjectFeedback', () => {
         {
           projectId: created.projectId,
           expectedHead: projectHead(created).id,
-          content: [{ type: 'presentation-ref', presentationId, step }, ...markdownMessage('Here')],
+          content: [
+            { type: 'presentation-ref', presentationId, step, stepName: '@guess#1' },
+            ...markdownMessage('Here')
+          ],
           focus: [],
           presentationCount: 1,
           operationId: '12345678-1234-4123-8123-123456789abc'
@@ -1711,10 +1714,12 @@ describe('submitProjectFeedback', () => {
     await expect(submit(99)).rejects.toThrow('has no step 100');
     const result = await submit(1);
     const feedback = result.document.events.find((event) => event.type === 'feedback.submitted');
+    // Named as the presentation names the step, whatever name the message gave.
     expect(feedback?.type === 'feedback.submitted' && feedback.payload.content[0]).toEqual({
       type: 'presentation-ref',
       presentationId,
-      step: 1
+      step: 1,
+      stepName: '@check#1'
     });
   });
 

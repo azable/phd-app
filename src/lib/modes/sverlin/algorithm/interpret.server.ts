@@ -114,6 +114,12 @@ export type MasterStep = {
   gap?: number;
   /** The code the step is a run of, a label's, where it is not the end. */
   unit?: Span;
+  /**
+   * The step's name, the same however the steps pause: the label whose run it ends, by its full
+   * name, and which run of it that is over the whole algorithm, as @insert.swap#1; `start` for the
+   * input as given and `end` for the algorithm's end.
+   */
+  name?: string;
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -446,8 +452,10 @@ class Interpreter {
   readonly #pauses: Pauses;
   /** The values labelled expressions gave inside runs of the labels around them going on. */
   #labelGiven: Given[] = [];
-  /** How many events had been logged at the last step. */
+  /** How many runs have started, numbering each. */
   #runCount = 0;
+  /** How many runs of each label have ended, by full name, which names the steps. */
+  readonly #ended = new Map<string, number>();
   /** The label runs going on, outermost first. */
   readonly #runs: Run[] = [];
   /** The applications the step being recorded made, by operator. */
@@ -598,7 +606,7 @@ class Interpreter {
       this.#trace.pop();
     if ((this.#trace[0]?.moment ?? 0) <= 0)
       for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
-    this.opening = { moment: 0, ...opening, before: opening, gap: 0, events: [] };
+    this.opening = { moment: 0, name: 'start', ...opening, before: opening, gap: 0, events: [] };
     return this.#trace;
   }
 
@@ -1384,9 +1392,24 @@ class Interpreter {
   #end(node: AnyNode, scope: Scope): void {
     const run = this.#runs.pop();
     if (!run) return;
+    for (const label of this.#named.get(run.node) ?? [])
+      this.#ended.set(label, (this.#ended.get(label) ?? 0) + 1);
     if (run.since) this.#record(run.node, node, scope, run.since, run);
     // A value no longer inside a run of the label around it is never kept again.
     this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
+  }
+
+  /** A step's name, ending a run: its innermost paused label and which run of it this is. */
+  #nameOf(run: Run): string {
+    const labels = this.#named.get(run.node) ?? [];
+    const paused = labels.filter((label) => this.#pauses.has(label));
+    const pool = paused.length ? paused : labels;
+    const depth = (label: string) => label.split('.').length;
+    const label = pool.reduce(
+      (inner, each) => (depth(each) > depth(inner) ? each : inner),
+      pool[0]
+    );
+    return `@${label}#${this.#ended.get(label) ?? 0}`;
   }
 
   /** How the page pauses at a run's labels: accumulating if any of them does (see PauseMode). */
@@ -1487,6 +1510,7 @@ class Interpreter {
       before: since.before,
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
+      name: ending ? this.#nameOf(ending) : 'end',
       ...after,
       ...logged,
       ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {}),

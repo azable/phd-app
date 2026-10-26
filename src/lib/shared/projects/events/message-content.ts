@@ -2,7 +2,7 @@
 
 import * as v from 'valibot';
 
-import { presentationIdSchema } from '$lib/shared/presentations';
+import { presentationIdSchema, stepNameSchema } from '$lib/shared/presentations';
 import { naturalSchema, textSchema } from './values';
 
 export const markdownMessageSegmentSchema = v.strictObject({
@@ -10,11 +10,15 @@ export const markdownMessageSegmentSchema = v.strictObject({
   text: textSchema
 });
 
-/** A presentation, with the step the participant was on where they were viewing it, from 0. */
+/**
+ * A presentation, with the step the participant was on where they were viewing it, from 0, and its
+ * name where it has one (see stepNameSchema).
+ */
 export const presentationReferenceSegmentSchema = v.strictObject({
   type: v.literal('presentation-ref'),
   presentationId: presentationIdSchema,
-  step: v.optional(v.pipe(naturalSchema, v.maxValue(100_000)))
+  step: v.optional(v.pipe(naturalSchema, v.maxValue(100_000))),
+  stepName: v.optional(stepNameSchema)
 });
 
 /**
@@ -87,6 +91,7 @@ export const elementReferenceSegmentSchema = v.strictObject({
   type: v.literal('element-ref'),
   presentationId: presentationIdSchema,
   step: v.pipe(naturalSchema, v.maxValue(100_000)),
+  stepName: v.optional(stepNameSchema),
   element: selectedElementSchema
 });
 
@@ -156,17 +161,21 @@ export function plainMessageText(content: MessageContent): string {
       if (segment.type === 'markdown') return [segment.text];
       if (segment.type === 'element-ref')
         return [
-          `[Element "${segment.element.label}" (${segment.element.id}) at step ${segment.step + 1} of presentation ${segment.presentationId}]`
+          `[Element "${segment.element.label}" (${segment.element.id}) at ${stepText(segment.step, segment.stepName)} of presentation ${segment.presentationId}]`
         ];
       return [
         segment.step === undefined
           ? `[Presentation ${segment.presentationId}]`
-          : `[Presentation ${segment.presentationId} at step ${segment.step + 1}]`
+          : `[Presentation ${segment.presentationId} at ${stepText(segment.step, segment.stepName)}]`
       ];
     })
     .join(' ')
     .trim();
 }
+
+/** A step as a message names it: by its name, with the number the participant saw. */
+const stepText = (step: number, name: string | undefined) =>
+  name ? `${name} (step ${step + 1})` : `step ${step + 1}`;
 
 const presentationReferencePattern =
   /`?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`?/giu;
