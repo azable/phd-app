@@ -139,12 +139,13 @@ export function nodeIdsContext(): NodeIds | undefined {
 
 /**
  * The algorithm as a listing in the language the variant chose, and what the shown step lights in
- * it: the text of its latest event, and of its earlier ones, as [start, end] offsets.
+ * it: the code it finished and the code it keeps as run, alike, as [start, end] offsets.
  */
 export type ShownListing = {
   text: string;
-  current: readonly (readonly [number, number])[];
-  earlier: readonly (readonly [number, number])[];
+  /** Its regions, by their labels' full names, outer before inner, each painted as its place says. */
+  regions: readonly { label: string; start: number; end: number }[];
+  lit: readonly (readonly [number, number])[];
 };
 
 export function listingContext(): ShownListing | undefined {

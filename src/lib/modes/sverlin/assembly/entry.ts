@@ -255,7 +255,9 @@ function mountStep(
         ['sverlin:layout-memory', memory],
         [
           'sverlin:listing',
-          listing ? { text: listing.text, ...listing.lit[stepOf(step)] } : undefined
+          listing
+            ? { text: listing.text, regions: listing.regions, lit: listing.lit[stepOf(step)] ?? [] }
+            : undefined
         ],
         [
           'sverlin:types',

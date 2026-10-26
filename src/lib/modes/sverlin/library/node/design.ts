@@ -121,20 +121,56 @@ export const frameOptions = {
 } satisfies Record<string, readonly (string | number)[]>;
 
 /**
- * A listing's settings, variables of the whole presentation when the view places a <Listing />:
- * which of the source's listings it shows (they come first; see design.server.ts), and the fill
- * of the text the step's latest event ran and of its earlier events.
+ * The props of a listing's lit text, as a kind's: its fill, a stroke drawn inside it, its corners,
+ * and its text; `color` none keeps the listing's ink. Code a step finished, code it keeps as run,
+ * and code leading up to it all light alike. A region of the listing sets its own paint
+ * (`listingRegionProps`), the rest holding for every region.
  */
-export const listingOptions = {
-  'listing.language': ['none'],
-  'listing.current.fill': ['none', ...colours],
-  'listing.earlier.fill': ['none', ...colours]
-} satisfies Record<string, readonly string[]>;
+const listingLitOptions = {
+  fill: propOptions.fill,
+  stroke: propOptions.stroke,
+  strokeWidth: propOptions.strokeWidth,
+  strokeStyle: propOptions.strokeStyle,
+  radius: propOptions.radius,
+  color: ['none', ...colours],
+  weight: propOptions.weight,
+  padding: propOptions.padding
+} satisfies Record<string, readonly (string | number)[]>;
 
-export const starterListing: Record<keyof typeof listingOptions, string> = {
+/** The props a region of a listing sets for itself, as `listing.lit@insert.compare.left.fill`. */
+export const listingRegionProps = ['fill', 'stroke', 'color'] as const;
+
+/** The lit text's options for a prop, for its own variable or a region's. */
+export function listingPropOptions(prop: string): readonly (string | number)[] | undefined {
+  return Object.hasOwn(listingLitOptions, prop)
+    ? listingLitOptions[prop as keyof typeof listingLitOptions]
+    : undefined;
+}
+
+/**
+ * A listing's settings, variables of the whole presentation when the view places a <Listing />:
+ * which of the source's listings it shows (they come first; see design.server.ts), and how its lit
+ * text looks.
+ */
+export const listingOptions: Record<string, readonly (string | number)[]> & {
+  'listing.language': readonly string[];
+} = {
+  'listing.language': ['none'],
+  ...Object.fromEntries(
+    Object.entries(listingLitOptions).map(([prop, options]) => [`listing.lit.${prop}`, options])
+  )
+};
+
+export const starterListing: Record<string, string | number> & { 'listing.language': string } = {
   'listing.language': 'none',
-  'listing.current.fill': 'amber-200',
-  'listing.earlier.fill': 'neutral-200'
+  'listing.lit.fill': 'amber-200',
+  'listing.lit.stroke': 'none',
+  'listing.lit.strokeWidth': 0,
+  'listing.lit.strokeStyle': 'solid',
+  'listing.lit.radius': 2,
+  'listing.lit.color': 'none',
+  'listing.lit.weight': 'normal',
+  'listing.lit.padding': 0
 };
 
 /** What a kind of node is, which says the props it has. */

@@ -1224,6 +1224,84 @@ describe('pauses at labels', () => {
       bundlePresentation(prepared, 1, { chosen: { 'pause@left': 'on' } })
     ).rejects.toThrow('a pause names a label by its full name');
   });
+
+  describe('listing regions as places', () => {
+    it('gives each region its paint, falling back to its label’s mark', () => {
+      const { design } = prepareSvelteComponent(insertion);
+      expect(design.space['listing.lit.radius']).toContain(999);
+      expect(design.space['listing.lit.color']).toContain('none');
+      expect(design.space['listing.lit@insert.compare.left.fill']).toContain('sky-100');
+      expect(design.space['listing.lit@insert.compare.left.radius']).toBeUndefined();
+      expect(Object.keys(design.space).some((key) => key.startsWith('listing.earlier'))).toBe(
+        false
+      );
+      expect(design.starter['listing.lit.fill']).toBe('amber-200');
+      // A region follows the mark where the root draws its label; an unmarked one the lit look.
+      expect(design.fallbacks['listing.lit@insert.compare.left.fill']).toBe(
+        'Highlight.Pointed@insert.compare.left.fill'
+      );
+      expect(design.fallbacks['listing.lit@insert.swap.fill']).toBe('listing.lit.fill');
+    });
+
+    it('follows the mark through its place to its kind, until set apart', () => {
+      const { design } = prepareSvelteComponent(insertion);
+      const build = (request: Parameters<typeof buildVariant>[2]) =>
+        buildVariant(design.space, design.starter, request, 1, design.fallbacks).values;
+      const marked = build({
+        chosen: {
+          'Highlight.Pointed.fill': 'violet-100',
+          'Highlight.Pointed@insert.compare.left.fill': 'sky-100',
+          'listing.lit.fill': 'amber-200'
+        }
+      });
+      expect(marked['listing.lit@insert.compare.left.fill']).toBe('sky-100');
+      expect(marked['listing.lit@insert.compare.right.fill']).toBe('violet-100');
+      expect(marked['listing.lit@insert.compare.fill']).toBe('amber-200');
+      // A region given a paint of its own in the variant built on keeps it as the mark changes.
+      const apart = build({
+        base: { ...marked, 'listing.lit@insert.swap.to.fill': 'red-200' },
+        chosen: { 'Highlight.Pointed@insert.swap.to.fill': 'rose-100' }
+      });
+      expect(apart['listing.lit@insert.swap.to.fill']).toBe('red-200');
+    });
+
+    it('reads a variant saved with two levels as the current level’s look', () => {
+      const { design } = prepareSvelteComponent(insertion);
+      const { values } = buildVariant(
+        design.space,
+        design.starter,
+        {
+          base: {
+            'listing.current.fill': 'sky-200',
+            'listing.current.radius': 999,
+            'listing.earlier.fill': 'neutral-100',
+            'listing.current@insert.swap.to.fill': 'red-200'
+          }
+        },
+        1,
+        design.fallbacks
+      );
+      expect(values['listing.lit.fill']).toBe('sky-200');
+      expect(values['listing.lit.radius']).toBe(999);
+      expect(values['listing.lit@insert.swap.to.fill']).toBe('red-200');
+      expect(values).not.toHaveProperty('listing.earlier.fill');
+    });
+
+    it('hands the page each region by its label’s full name', async () => {
+      const prepared = prepareSvelteComponent(insertion);
+      expect(prepared.listings?.code.regions.map(({ label }) => label)).toEqual([
+        'insert',
+        'insert.compare',
+        'insert.compare.left',
+        'insert.compare.right',
+        'insert.swap',
+        'insert.swap.from',
+        'insert.swap.to'
+      ]);
+      const { javascript } = await bundlePresentation(prepared, 1);
+      expect(javascript).toMatch(/"?label"?:"insert\.compare\.left"/);
+    });
+  });
 });
 
 describe('pauses accumulate', () => {

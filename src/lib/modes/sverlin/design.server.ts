@@ -10,6 +10,8 @@ import {
   colourParts,
   frameOptions,
   listingOptions,
+  listingPropOptions,
+  listingRegionProps,
   optionsOf,
   placeProps,
   roleProps,
@@ -78,6 +80,81 @@ export function pauseSpace(labels: readonly string[], leaves: ReadonlySet<string
       leaves.has(label) ? ['on', 'off'] : ['accumulate', 'on', 'off']
     ])
   );
+}
+
+/**
+ * The variable a place falls back to until a variant sets it apart: one variable, or, where it
+ * hangs on a choice of view, the one for the view chosen (`by`, its value naming a key in `of`),
+ * else `otherwise`.
+ */
+export type Fallback =
+  | string
+  | { by: string; of: Readonly<Record<string, string>>; otherwise: string };
+
+/** The variable a fallback names, under the values given. */
+function fallbackOf(fallback: Fallback, values: Readonly<Record<string, unknown>>): string {
+  return typeof fallback === 'string'
+    ? fallback
+    : (fallback.of[String(values[fallback.by])] ?? fallback.otherwise);
+}
+
+/**
+ * A listing's regions as places, by their labels' full names: each region's own paint, as
+ * listing.lit@insert.compare.left.fill, with the listing's options.
+ */
+export function listingRegionSpace(labels: readonly string[]): DesignSpace {
+  return Object.fromEntries(
+    labels.flatMap((label) =>
+      listingRegionProps.map((prop) => [
+        `listing.lit@${label}.${prop}`,
+        listingPropOptions(prop) ?? []
+      ])
+    )
+  );
+}
+
+/**
+ * The variable each region's paint falls back to: its label's mark where the root draws the label
+ * as a pointer (`marks`, by label, the kind the place draws, or its views by the choice naming one),
+ * so its code looks as its cell does; else the listing's own lit look.
+ */
+export function listingRegionFallbacks(
+  labels: readonly string[],
+  marks: ReadonlyMap<string, { kinds: Readonly<Record<string, string>>; by?: string }>
+): Record<string, Fallback> {
+  return Object.fromEntries(
+    labels.flatMap((label) =>
+      listingRegionProps.map((prop): [string, Fallback] => {
+        const own = `listing.lit.${prop}`;
+        const mark = marks.get(label);
+        const kinds = Object.entries(mark?.kinds ?? {});
+        const fallback: Fallback = !mark
+          ? own
+          : mark.by
+            ? {
+                by: mark.by,
+                of: Object.fromEntries(kinds.map(([view, kind]) => [view, `${kind}.${prop}`])),
+                otherwise: own
+              }
+            : kinds.length
+              ? `${kinds[0][1]}.${prop}`
+              : own;
+        return [`listing.lit@${label}.${prop}`, fallback];
+      })
+    )
+  );
+}
+
+/**
+ * A saved key of a listing written when its lit text had two levels: the current level's as the lit
+ * look's, as listing.current.fill as listing.lit.fill; the earlier level's as none, dropped; any
+ * other key as it is.
+ */
+function litListingKey(key: string): string | undefined {
+  if (key.startsWith('listing.earlier.') || key.startsWith('listing.earlier@')) return undefined;
+  if (key.startsWith('listing.current.') || key.startsWith('listing.current@'))
+    return `listing.lit${key.slice('listing.current'.length)}`;
+  return key;
 }
 
 /** The pauses a source starts with: the labels the view gives a reason to pause at, switched on. */
@@ -243,7 +320,7 @@ export function buildVariant(
   starter: Readonly<Record<string, DesignValue>>,
   request: VariantRequest,
   seed: number,
-  fallbacks: Readonly<Record<string, string>> = {}
+  fallbacks: Readonly<Record<string, Fallback>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
   const chosen = Object.entries(request.chosen ?? {}).map(
     ([key, value]) => [key, asPause(space, key, value)] as const
@@ -261,7 +338,10 @@ export function buildVariant(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
   const base = Object.fromEntries(
-    Object.entries(request.base ?? {}).map(([key, saved]) => [fullPlaceKey(space, key), saved])
+    Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
+      const lit = litListingKey(key);
+      return lit === undefined ? [] : [[fullPlaceKey(space, lit), saved]];
+    })
   );
   for (const [key, saved] of Object.entries(base)) {
     const value = asPause(space, key, saved);
@@ -283,10 +363,14 @@ export function buildVariant(
     values[key] = value as DesignValue;
     origins[key] = 'chosen';
   }
-  for (const [key, fallback] of Object.entries(fallbacks)) {
+  // In order, so a place falling back to another place, as a listing's region to its label's mark,
+  // takes the value that one has come to.
+  for (const [key, given] of Object.entries(fallbacks)) {
+    const was = fallbackOf(given, { ...values, ...base });
     const apart =
-      Object.hasOwn(base, key) && base[key] !== base[fallback] && fits(space, key, base[key]);
+      Object.hasOwn(base, key) && base[key] !== base[was] && fits(space, key, base[key]);
     if (apart || named.includes(key) || chosen.some(([name]) => name === key)) continue;
+    const fallback = fallbackOf(given, values);
     if (!Object.hasOwn(values, fallback) || !fits(space, key, values[fallback])) continue;
     values[key] = values[fallback];
     origins[key] = origins[fallback];

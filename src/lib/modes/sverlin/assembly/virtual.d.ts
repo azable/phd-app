@@ -44,6 +44,9 @@ declare module 'virtual:components' {
   /** The listing in the variant's language, and what each step lights, if the view places one. */
   export const listing: {
     text: string;
-    lit: { current: [number, number][]; earlier: [number, number][] }[];
+    /** Its regions, by their labels' full names, each painted as its place says. */
+    regions: { label: string; start: number; end: number }[];
+    /** What each step lights: the code it finished and the code it keeps as run, alike. */
+    lit: [number, number][][];
   } | null;
 }

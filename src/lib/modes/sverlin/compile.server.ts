@@ -72,6 +72,8 @@ import {
   buildVariant,
   DesignValueError,
   designSpace,
+  listingRegionFallbacks,
+  listingRegionSpace,
   pauseSpace,
   starterPauses,
   starterVariant,
@@ -79,6 +81,7 @@ import {
   type DesignOrigin,
   type DesignSpace,
   type DesignValue,
+  type Fallback,
   type VariantRequest
 } from './design.server';
 import {
@@ -89,7 +92,13 @@ import {
   siteOf,
   type LeftOutModel
 } from './left-out';
-import { kindKey, placeProps, roleProps, type KindRole } from './library/node/design';
+import {
+  kindKey,
+  placeProps,
+  roleProps,
+  starterListing,
+  type KindRole
+} from './library/node/design';
 import { forms } from './library/node/forms';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
@@ -204,12 +213,15 @@ export type PreparedComponent = {
      */
     places: Record<string, { key: string; base: string; options: string[]; pointer: boolean }>;
     /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
-    fallbacks: Record<string, string>;
+    fallbacks: Record<string, Fallback>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
   };
   /** Where the view places a <Listing />, the algorithm's text in each language. */
-  listings?: Record<string, { text: string }>;
+  listings?: Record<
+    string,
+    { text: string; regions: { label: string; start: number; end: number }[] }
+  >;
   /**
    * The operators the root renders by name, as {@render Greater()}, each with an application from
    * some step, which stands in hidden where a step has none or several of them.
@@ -762,6 +774,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
     const aliasOf = new Map<string, string>();
     const placeReaders = new Map<string, Set<boolean>>();
+    const labelMarks = new Map<string, { kinds: Record<string, string>; by?: string }>();
     for (const site of sites) {
       const { name, start, inNode, at, label } = site;
       if (!at || !(chosen[name] || pointerChosen[name])) continue;
@@ -796,6 +809,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         for (const kind of kinds)
           if (kind.key === view || kind.key.startsWith(`${view}.`))
             placeKinds.set(`${within}${kind.key}${at}`, { base: kind.key, role: kind.role });
+      // A label the root marks: its listing region's paint falls back to the mark's.
+      if (asMark && label && !within)
+        labelMarks.set(at.slice(1), {
+          kinds: Object.fromEntries(
+            options
+              .filter((view) => kinds.some(({ key }) => key === kindKey(view, 'Pointed')))
+              .map((view) => [view, `${kindKey(view, 'Pointed')}${at}`])
+          ),
+          ...(options.length > 1 ? { by: `pointers.${name}${at}` } : {})
+        });
     }
     // One @ names a label or a variable, so a place a label and a variable would share is refused.
     const shared = [...placeReaders].find(([, readers]) => readers.size > 1);
@@ -949,9 +972,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const ownListings = listingBlocks.map(({ name }) => name);
     const listings = listing
       ? Object.fromEntries(
-          Object.entries(written.listings).map(([name, { text }]) => [name, { text }])
+          Object.entries(written.listings).map(([name, { text, regions = [] }]) => [
+            name,
+            { text, regions: regions.map(({ label, start, end }) => ({ label, start, end })) }
+          ])
         )
       : undefined;
+    // Each region a listing marks is a place, by its label's full name, its paint at each level
+    // starting as the level's own.
+    const regionLabels = [
+      ...new Set(
+        Object.values(listings ?? {}).flatMap(({ regions }) => regions.map(({ label }) => label))
+      )
+    ];
+    const regionStarter = Object.fromEntries(
+      Object.keys(listingRegionSpace(regionLabels)).map((key) => {
+        const prop = key.slice(key.lastIndexOf('.') + 1);
+        return [key, starterListing[`listing.lit.${prop}`]];
+      })
+    );
     // Variables out of scope at some step, however paced: what the view draws from one is hidden
     // there.
     const scoped = new Set([
@@ -1233,13 +1272,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             roleProps[role]
               .filter((prop) => placeProps.has(prop))
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
-          )
+          ),
+          // After the marks' places, which the regions' fall back to.
+          ...Object.entries(listingRegionFallbacks(regionLabels, labelMarks))
         ]),
         space: {
           ...designSpace(kinds, chosen, listing, ownListings, pointerChosen, {
             kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
             choices: Object.values(placeChoices)
           }),
+          ...listingRegionSpace(regionLabels),
           ...pauseSpace(labelNames, leaves)
         },
         starter: {
@@ -1247,6 +1289,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
             choices: Object.values(placeChoices)
           }),
+          ...regionStarter,
           ...starterPauses(labelNames, traced.defaults, leaves)
         }
       },
@@ -1463,7 +1506,17 @@ export async function bundlePresentation(
   });
   const language = values['listing.language'];
   const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
-  const listing = listed ? { text: listed.text, lit: paced.lit[language as string] ?? [] } : null;
+  const listing = listed
+    ? {
+        text: listed.text,
+        regions: listed.regions,
+        // The code a step finished and the code it keeps as run light alike.
+        lit: (paced.lit[language as string] ?? []).map(({ current, earlier }) => [
+          ...current,
+          ...earlier
+        ])
+      }
+    : null;
   const result = await bundle(
     prepared.component,
     JSON.stringify(states),

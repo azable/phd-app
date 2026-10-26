@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { linearSearchSource } from './contract';
-import { buildVariant, DesignValueError } from './design.server';
+import {
+  buildVariant,
+  DesignValueError,
+  listingRegionFallbacks,
+  listingRegionSpace
+} from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
 const { space, starter } = prepared.design;
@@ -180,5 +185,58 @@ describe('variants', () => {
     expect(bundle.variant['views.Int']).toBe('IntTally');
     expect(bundle.origins['Row.Under.shown']).toBe('chosen');
     expect(bundle.javascript).toContain('"views.Int":"IntTally"');
+  });
+});
+
+describe('listing regions', () => {
+  it('fall back to the mark of the view the place chose, or the level, by order', () => {
+    const marks = new Map([
+      [
+        'pass.left',
+        {
+          kinds: { Arrow: 'Arrow.Pointed@pass.left', Mark: 'Mark.Pointed@pass.left' },
+          by: 'pointers.Position@pass.left'
+        }
+      ]
+    ]);
+    const fallbacks = {
+      'pointers.Position@pass.left': 'pointers.Position',
+      'Arrow.Pointed@pass.left.fill': 'Arrow.Pointed.fill',
+      'Mark.Pointed@pass.left.fill': 'Mark.Pointed.fill',
+      ...listingRegionFallbacks(['pass', 'pass.left'], marks)
+    };
+    const regionSpace = listingRegionSpace(['pass', 'pass.left']);
+    const designed = {
+      'pointers.Position': ['Arrow', 'Mark', 'none'],
+      'pointers.Position@pass.left': ['Arrow', 'Mark', 'none'],
+      'Arrow.Pointed.fill': ['none', 'sky-100'],
+      'Mark.Pointed.fill': ['none', 'rose-100'],
+      'Arrow.Pointed@pass.left.fill': ['none', 'sky-100'],
+      'Mark.Pointed@pass.left.fill': ['none', 'rose-100'],
+      'listing.lit.fill': ['none', 'amber-200'],
+      'listing.lit.stroke': ['none'],
+      'listing.lit.color': ['none'],
+      ...regionSpace
+    };
+    const start = Object.fromEntries(
+      Object.entries(designed).map(([key, [first]]) => [key, first])
+    );
+    const values = (chosen: Record<string, string>) =>
+      buildVariant(designed, start, { chosen }, 1, fallbacks).values;
+    const shared = {
+      'Arrow.Pointed.fill': 'sky-100',
+      'Mark.Pointed.fill': 'rose-100',
+      'listing.lit.fill': 'amber-200'
+    };
+    expect(values({ ...shared, 'pointers.Position': 'Mark' })['listing.lit@pass.left.fill']).toBe(
+      'rose-100'
+    );
+    expect(values({ ...shared, 'pointers.Position': 'Arrow' })['listing.lit@pass.left.fill']).toBe(
+      'sky-100'
+    );
+    // A place drawing no mark, and a region with no mark, take the level's own.
+    const none = values({ ...shared, 'pointers.Position@pass.left': 'none' });
+    expect(none['listing.lit@pass.left.fill']).toBe('amber-200');
+    expect(none['listing.lit@pass.fill']).toBe('amber-200');
   });
 });

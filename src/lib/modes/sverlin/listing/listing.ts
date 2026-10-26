@@ -14,11 +14,12 @@ export type Mark = {
 };
 
 /**
- * A listing's text and its marks, and its regions, so a lit region can leave out the regions inside
- * it that did not run (see light.server.ts).
+ * A listing's text and its marks, and its regions, by their labels' full names, so a lit region can
+ * leave out the regions inside it that did not run (see light.server.ts) and the page can paint each
+ * region as its place says.
  */
 export type Listing = {
   text: string;
   marks: readonly Mark[];
-  regions?: readonly { start: number; end: number }[];
+  regions?: readonly { label: string; start: number; end: number }[];
 };

@@ -322,23 +322,25 @@ describe('variant markers', () => {
     expect(title.props.map(({ name }) => name)).toEqual(['size']);
   });
 
-  it('gives a <Listing /> its language and fills', () => {
+  it("gives a <Listing /> its language, its lit look, then its regions' paint", () => {
     const listed = `${source}\n<Listing />`;
     const withListing = presentations.map((presentation, index) => ({
       ...presentation,
       variant: {
         ...presentation.variant,
         'listing.language': index ? 'textbook' : 'code',
-        'listing.current.fill': 'amber-200',
-        'listing.earlier.fill': 'neutral-200'
+        'listing.lit@insert.compare.left.fill': 'sky-100',
+        'listing.lit.fill': 'amber-200',
+        'listing.lit.radius': 2
       }
     }));
     const ghosts = tagGhosts(EditorState.create({ doc: listed }), withListing);
     const listing = ghosts.find(({ kinds }) => kinds.includes('listing'));
     expect(listing?.props.map(({ name, differs }) => [name, differs])).toEqual([
       ['language', true],
-      ['current.fill', false],
-      ['earlier.fill', false]
+      ['lit.fill', false],
+      ['lit.radius', false],
+      ['lit@insert.compare.left.fill', false]
     ]);
     expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
   });

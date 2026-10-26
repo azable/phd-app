@@ -563,16 +563,21 @@ export function frameProps(presentations: readonly DrawnPresentation[]): GhostPr
   ];
 }
 
-/** A listing's settings in each shown presentation's variant: its language, then its fills. */
+/**
+ * A listing's settings in each shown presentation's variant: its language, then its lit look, then
+ * each region's paint, by its label's full name, as lit@insert.compare.left.fill.
+ */
 function listingSettings(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
       Object.keys(variant).filter((key) => key.startsWith('listing.'))
     )
   );
-  return [...keys]
-    .sort(byOrder(listingOrder, (key) => key))
-    .map((key) => variable(presentations, key, key.slice('listing.'.length)));
+  const own = [...keys].filter((key) => !key.includes('@'));
+  const regions = [...keys].filter((key) => key.includes('@')).sort();
+  return [...own.sort(byOrder(listingOrder, (key) => key)), ...regions].map((key) =>
+    variable(presentations, key, key.slice('listing.'.length))
+  );
 }
 
 /**

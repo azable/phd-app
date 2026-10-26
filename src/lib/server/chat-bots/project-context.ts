@@ -31,6 +31,7 @@ import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
   listingOptions,
+  listingPropOptions,
   overflowOptions,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
@@ -666,17 +667,21 @@ export function designVariables(
       key.startsWith('frame.') || key === 'listing.language'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
-    // A pointer's overflow and a collection's have options of their own.
+    // A pointer's overflow and a collection's have options of their own, as does a listing's
+    // text colour, which can keep the listing's ink.
     const set =
       prop === 'overflow'
         ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
           ? 'overflow.pointer'
           : 'overflow.collection'
-        : prop;
+        : prop === 'color' && key.startsWith('listing.')
+          ? 'listing.color'
+          : prop;
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
       'listing.language': listingOptions['listing.language'],
+      'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection
     };

@@ -265,7 +265,11 @@ export function mappedListing(
     sources: mapped.get(label) ?? []
   }));
   return {
-    listing: { text, marks, regions: regions.map(({ start, end }) => ({ start, end })) },
+    listing: {
+      text,
+      marks,
+      regions: regions.map(({ label, start, end }) => ({ label, start, end }))
+    },
     problems,
     maps
   };
