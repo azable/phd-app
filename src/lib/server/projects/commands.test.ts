@@ -708,6 +708,35 @@ describe('submitProjectFeedback', () => {
     ).toHaveLength(2);
   });
 
+  it('builds a first attempt that gave a recovery explanation, not showing it', async () => {
+    mocks.generatePrepared
+      .mockReset()
+      .mockResolvedValue(
+        generation('valid source', 'Ready', { struggledWith: 'nothing', simplified: 'nothing' })
+      );
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject({ title: 'Recovery' }, serviceDependencies);
+
+    const result = await submitProjectFeedback(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        content: markdownMessage('Show it'),
+        focus: [],
+        presentationCount: 1,
+        operationId: '12345678-1234-4123-8123-123456789abc'
+      },
+      commandDependencies
+    );
+
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+    expect(
+      result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
+    ).toHaveLength(1);
+    expect(JSON.stringify(result.appendedEvents)).not.toContain('struggledWith');
+  });
+
   it('builds a synchronized comparison from two distinct fresh seeds', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
     const { createProject } = await import('./service');

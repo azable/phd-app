@@ -1043,6 +1043,8 @@ async function runSverlinGeneration(
         options.chatbot.generatePrepared(prompt, { signal: currentProjectOperationSignal() }),
       validateResult: (result) => {
         validateRecoveryExplanation(prompt, result.recovery, result.providerResponse);
+        // Only the fallback explains a simplification; one any other attempt gives is not shown.
+        if (prompt.attempt.purpose !== 'fallback') result.recovery = undefined;
         if (
           options.contextSelection.interactionEventIds?.some(
             (id) => options.document.events[id - 1]?.type === 'visualization.preference-recorded'
@@ -1107,6 +1109,8 @@ async function runCandidateGeneration(
       validateResult: (result) => {
         validateGeneratedReply(result.reply, result.candidates.length, result.providerResponse);
         validateRecoveryExplanation(prompt, result.recovery, result.providerResponse);
+        // Only the fallback explains a simplification; one any other attempt gives is not shown.
+        if (prompt.attempt.purpose !== 'fallback') result.recovery = undefined;
       },
       fallbackResponse: (result) => ({
         reply: result.reply,
@@ -1587,12 +1591,6 @@ function validateRecoveryExplanation(
   if (prompt.attempt.purpose === 'fallback' && !recovery) {
     throw new InvalidChatbotResponseError(
       'The fallback response did not explain what was simplified.',
-      providerResponse
-    );
-  }
-  if (prompt.attempt.purpose !== 'fallback' && recovery) {
-    throw new InvalidChatbotResponseError(
-      'A non-fallback response unexpectedly included a recovery explanation.',
       providerResponse
     );
   }
