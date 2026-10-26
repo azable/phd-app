@@ -1296,7 +1296,8 @@ async function chosenBuild(
       source: options.candidate,
       ...(options.summary ? { summary: options.summary } : {}),
       count: options.seeds.length,
-      design
+      design,
+      ...(bundle.runs ? { runs: bundle.runs } : {})
     },
     attempt: 1
   });

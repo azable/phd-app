@@ -46,7 +46,8 @@ export async function buildBatch(
           listings: prepared.ownListings,
           kinds: prepared.design.tags,
           renders: prepared.design.renders,
-          leftOut: bundle.leftOut
+          leftOut: bundle.leftOut,
+          runs: prepared.pauses.runs
         }
       });
     } catch (cause) {

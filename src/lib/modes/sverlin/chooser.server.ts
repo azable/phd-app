@@ -12,12 +12,16 @@ import type { ChatBotConfig } from '$lib/server/chat-bots/types';
 import chooser from './chooser.md?raw';
 import guide from './README.md?raw';
 
-/** What the chooser is given: the new source, what it changes, how many variants, and its design. */
+/**
+ * What the chooser is given: the new source, what it changes, how many variants, its design, and
+ * each label's runs, with how many change what the view draws.
+ */
 export type ChooserProject = {
   source: string;
   summary?: string;
   count: number;
   design: AiDesign;
+  runs?: Record<string, { runs: number; drawn: number }>;
 };
 
 const designValue = v.union([v.string(), v.number(), v.boolean()]);
@@ -50,7 +54,7 @@ export default {
   attemptProfiles: [
     {
       purpose: 'choosing',
-      parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low', maxOutputTokens: 4000 }
+      parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'medium', maxOutputTokens: 4000 }
     }
   ],
   responseFormat: {

@@ -184,9 +184,10 @@ export type PreparedComponent = {
   ownListings: string[];
   /**
    * Every label of the algorithm, by full name, and those with no labels inside them, which pause
-   * only 'on'.
+   * only 'on'; and for each label, how many runs it has and how many of them change what the view
+   * draws, for the chooser to pace by (see chooser.md).
    */
-  pauses: { labels: string[]; leaves: string[] };
+  pauses: { labels: string[]; leaves: string[]; runs: Record<string, LabelRuns> };
   /**
    * The steps pausing at the labels given, each as given or, given as a set, as it pauses where its
    * variable is on (see pausing), and what follows from them: the values the root reads for
@@ -991,6 +992,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
     // A chain's branches take turns in one place: none may show at a step another shows at. The
+    const runs = labelRuns(master, {
+      state: new Set(
+        [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
+          stateNames.includes(name)
+        )
+      ),
+      labels: new Set(Object.values(labelled).map(({ label }) => label)),
+      operators: new Set(shown.keys()),
+      during: new Set(Object.values(during))
+    });
     // master pauses at every label, so every step any pacing has is among its steps.
     const overlaps = whens.chains.flatMap(({ start, keys }) => {
       const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
@@ -1341,7 +1352,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       component,
       master,
       ownListings,
-      pauses: { labels: labelNames, leaves: [...leaves] },
+      pauses: { labels: labelNames, leaves: [...leaves], runs },
       paced: pacedSteps,
       // Steps line up by their moments, so the identity tells presentations aligned that way from
       // those that number steps by their place.
@@ -2937,4 +2948,40 @@ function typesOf(
       Object.assign(types, typesOf(domain, structure.element, item, at('[' + index + ']')))
     );
   return types;
+}
+
+/** A label's runs, and how many of them change what the view draws. */
+export type LabelRuns = { runs: number; drawn: number };
+
+/**
+ * For each label, its runs in the steps given (paced at every label), and how many change what the
+ * view draws: a variable it reads, a label's value it renders, an application of an operator it
+ * renders at a label, or a label it draws for in an {#if when(…)}.
+ */
+function labelRuns(
+  steps: readonly MasterStep[],
+  drawn: {
+    state: ReadonlySet<string>;
+    labels: ReadonlySet<string>;
+    operators: ReadonlySet<string>;
+    during: ReadonlySet<string>;
+  }
+): Record<string, LabelRuns> {
+  const runs: Record<string, LabelRuns> = {};
+  for (const step of steps) {
+    const label = /^@(.+)#\d+$/u.exec(step.name ?? '')?.[1];
+    if (!label) continue;
+    const count = (runs[label] ??= { runs: 0, drawn: 0 });
+    count.runs++;
+    const before = step.before?.state ?? {};
+    const changes =
+      [...drawn.state].some(
+        (name) => JSON.stringify(before[name]) !== JSON.stringify(step.state[name])
+      ) ||
+      Object.keys(step.labelled ?? {}).some((name) => drawn.labels.has(name)) ||
+      Object.keys(step.applied ?? {}).some((name) => drawn.operators.has(name)) ||
+      (step.inside ?? []).some((name) => drawn.during.has(name));
+    if (changes) count.drawn++;
+  }
+  return runs;
 }

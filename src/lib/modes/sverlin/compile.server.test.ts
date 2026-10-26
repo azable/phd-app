@@ -1516,6 +1516,15 @@ describe('pauses accumulate', () => {
 
   it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
     expect(
+  it('count each label’s runs and those changing what the view draws, for the chooser', () => {
+    const { runs } = insertion.pauses;
+    // Each comparison and swap changes what the board draws; an insertion's own end adds nothing
+    // beyond them, so pausing there would repeat the step before.
+    expect(runs['insert.compare']).toEqual({ runs: 6, drawn: 6 });
+    expect(runs['insert.swap']).toEqual({ runs: 5, drawn: 5 });
+    expect(runs['insert']).toEqual({ runs: 3, drawn: 0 });
+  });
+
       pausesOf(insertion.pauses, {
         'pause@insert': 'off',
         'pause@insert.compare.left': 'accumulate',

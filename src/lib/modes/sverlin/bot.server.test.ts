@@ -11,7 +11,7 @@ describe('single-component Svelte assistant', () => {
         parameters.reasoningEffort
       ])
     ).toEqual([
-      ['initial', 'gpt-5.6-luna', 'medium'],
+      ['initial', 'gpt-5.6-sol', 'medium'],
       ['repair', 'gpt-5.6-sol', 'medium'],
       ['repair', 'gpt-5.6-sol', 'high'],
       ['repair', 'gpt-5.6-sol', 'xhigh'],

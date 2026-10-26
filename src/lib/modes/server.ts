@@ -42,6 +42,8 @@ export type ModeBuildResult =
         renders?: Record<string, string>;
         // The <Node> tags the presentation leaves out, by their line:column.
         leftOut?: string[];
+        // Each label's runs, and how many change what the view draws, for the chooser.
+        runs?: Record<string, { runs: number; drawn: number }>;
       };
     }
   | {
