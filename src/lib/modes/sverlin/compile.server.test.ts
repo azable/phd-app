@@ -884,10 +884,10 @@ describe('scope', () => {
 
   it('rejects choosing by a label value, pointing at labelling the guarded code', () => {
     const chosen = source(
-      '{#snippet Held()}<Node>held</Node>{/snippet}{#if @at}{@render Held()}{/if}'
+      '{#snippet Held()}<Node>held</Node>{/snippet}{#if @key.at}{@render Held()}{/if}'
     ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
     expect(() => prepareSvelteComponent(chosen)).toThrow(
-      "A view cannot choose what to draw by a label's value, as {#if @at}"
+      "A view cannot choose what to draw by a label's value, as {#if @key.at}"
     );
   });
 
@@ -1122,10 +1122,10 @@ describe('pauses at labels', () => {
 {/snippet}
 
 {@render Board()}
-{@render Position(@left)}
-{@render Position(@right)}
-{@render Position(@from)}
-{@render Position(@to)}`;
+{@render Position(@insert.compare.left)}
+{@render Position(@insert.compare.right)}
+{@render Position(@insert.swap.from)}
+{@render Position(@insert.swap.to)}`;
   const fine = new Set([
     'insert.compare',
     'insert.compare.left',
@@ -1277,10 +1277,10 @@ describe('pauses accumulate', () => {
   </Node>
 {/snippet}
 {@render Board()}
-{@render Position(@left)}
-{@render Position(@right)}
-{@render Position(@from)}
-{@render Position(@to)}`
+{@render Position(@insert.compare.left)}
+{@render Position(@insert.compare.right)}
+{@render Position(@insert.swap.from)}
+{@render Position(@insert.swap.to)}`
   );
   const { text } = insertion.listings!.code;
   const operands = { 'insert.compare.left': 'on', 'insert.compare.right': 'on' } as const;
@@ -1391,6 +1391,26 @@ describe('pauses accumulate', () => {
     expect(values['pause@insert.swap']).toBe('off');
     expect(origins['pause@insert']).toBe('kept');
   });
+
+  it('keys a label’s place by its full name, taking a saved short key for it', () => {
+    const { space, starter, fallbacks } = insertion.design;
+    expect(space['Highlight.Pointed@insert.compare.left.fill']).toBeDefined();
+    expect(space['Highlight.Pointed@left.fill']).toBeUndefined();
+    const base = {
+      'Highlight.Pointed@left.fill': 'sky-100',
+      'Highlight.Pointed@to.fill': 'red-100'
+    };
+    const { values, origins } = buildVariant(space, starter, { base }, 1, fallbacks);
+    expect(values['Highlight.Pointed@insert.compare.left.fill']).toBe('sky-100');
+    expect(origins['Highlight.Pointed@insert.compare.left.fill']).toBe('kept');
+    expect(values['Highlight.Pointed@insert.swap.to.fill']).toBe('red-100');
+    expect(values['Highlight.Pointed@insert.compare.right.fill']).toBe(
+      values['Highlight.Pointed.fill']
+    );
+    // A chosen value names the place by its full name only.
+    const chosen = { 'Highlight.Pointed@left.fill': 'sky-100' };
+    expect(() => buildVariant(space, starter, { chosen }, 1)).toThrow();
+  });
 });
 
 describe('places', () => {
@@ -1426,7 +1446,7 @@ describe('places', () => {
       prepareSvelteComponent(
         source(
           '{#snippet Shown()}<Node>{@render Int(key)} {@render Int(@key)}</Node>{/snippet}{@render Shown()}',
-          '@start[let key = Int(2);] @pick[const picked = @key[values[0]];]'
+          'let key = Int(2); const picked = @key[values[0]];'
         )
       )
     ).toThrow('rename the label');

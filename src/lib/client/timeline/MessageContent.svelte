@@ -3,6 +3,7 @@
 
   import { renderSafeMarkdown } from './markdown';
   import {
+    elidedName,
     ghostKey,
     referenceRanges,
     type ReferenceDesign
@@ -42,6 +43,29 @@
     design
   }: Props = $props();
 
+  // A linked pill naming a long label shows it elided at the start (@…compare.left); the parts it
+  // leaves out stay in the text, out of sight, so copying it and linking it keep the full name.
+  function showElided(code: HTMLElement, linked: boolean) {
+    const full = code.textContent ?? '';
+    const parts = linked ? elidedName(full) : undefined;
+    if (!parts) {
+      if (code.dataset.elided !== undefined) {
+        code.textContent = full;
+        delete code.dataset.elided;
+      }
+      return;
+    }
+    if (code.dataset.elided !== undefined) return;
+    code.dataset.elided = '';
+    const ellipsis = document.createElement('span');
+    ellipsis.className = 'ref-ellipsis';
+    ellipsis.setAttribute('aria-hidden', 'true');
+    const hidden = document.createElement('span');
+    hidden.className = 'ref-elided';
+    hidden.textContent = parts.hidden;
+    code.replaceChildren(parts.head, ellipsis, hidden, parts.tail);
+  }
+
   // Inline code naming something in the source shown links to it: choosing it reveals it there.
   const links = sourceLinksContext();
   function linkReferences(node: HTMLElement) {
@@ -57,10 +81,11 @@
     for (const code of node.querySelectorAll('code')) {
       const linked = !code.closest('pre') && (named(code).length > 0 || rows(code).length > 0);
       code.classList.toggle('source-ref', linked);
+      showElided(code, linked);
       if (linked) {
         code.setAttribute('role', 'button');
         code.setAttribute('tabindex', '0');
-        code.setAttribute('title', 'Show in the source');
+        code.setAttribute('title', `Show ${code.textContent ?? ''} in the source`);
         // Pressed while its regions are the ones revealed in the source panel.
         code.setAttribute(
           'aria-pressed',
@@ -201,6 +226,20 @@
     margin-left: 0.2em;
     font-size: 0.85em;
     opacity: 0.6;
+  }
+
+  /* A long label's elided parts: in the text, so copied, but drawn as an ellipsis. */
+  .message-content :global(code.source-ref .ref-elided) {
+    display: inline-block;
+    width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .message-content :global(code.source-ref .ref-ellipsis)::before {
+    content: '…';
+    user-select: none;
   }
 
   .message-content :global(code.source-ref:hover) {

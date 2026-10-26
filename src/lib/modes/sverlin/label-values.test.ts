@@ -73,8 +73,11 @@ describe('labels read in the view', () => {
     ).toEqual([undefined, [2], [8], [1]]);
   });
 
-  it('resolve a name by its shortest unique ending, and report one naming no label or several', () => {
-    expect(() => prepare('{@render Int(@key)}')).not.toThrow();
+  it('name a label by its full name only, refusing a shorter ending even where unique', () => {
+    expect(() => prepare('{@render Int(@insert.key)}')).not.toThrow();
+    expect(() => prepare('{@render Int(@key)}')).toThrow(
+      '@key is not a full name; write its full name, @insert.key.'
+    );
     expect(() => prepare('{@render Int(@nothing)}')).toThrow(
       '@nothing names no label of the algorithm; its labels are @insert, @insert.key.'
     );
@@ -85,16 +88,9 @@ describe('labels read in the view', () => {
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
     expect(() => prepare('{@render Int(@v)}', twice)).toThrow(
-      '@v could be @a.v or @b.v; write more of its name.'
+      '@v is not a full name; write its full name, @a.v or @b.v.'
     );
-    // A label named exactly as written wins over one whose name only ends so.
-    const nested = `
-<script lang="sverlin">
-  const x = @v[values[0]];
-  @b[const y = @v[values[1]];]
-</script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
-    expect(() => prepare('{@render Int(@v)}{@render Int(@b.v)}', nested)).not.toThrow();
+    expect(() => prepare('{@render Int(@a.v)}{@render Int(@b.v)}', twice)).not.toThrow();
   });
 
   it('take a label on an expression, and are read only in the root and its parts', () => {
@@ -110,8 +106,8 @@ describe('labels read in the view', () => {
       '@insert.key labels a statement, which gives no value; label its expression, as const key = @key[values[i]].'
     );
     expect(() =>
-      prepare('{#snippet Shown(v: Values)}<Node>{@render Int(@key)}</Node>{/snippet}')
-    ).toThrow('@key is read in a view, which sees only its value');
+      prepare('{#snippet Shown(v: Values)}<Node>{@render Int(@insert.key)}</Node>{/snippet}')
+    ).toThrow('@insert.key is read in a view, which sees only its value');
   });
 
   it('narrow an operator’s render to a label, and give the lists of what has happened', () => {

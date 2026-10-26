@@ -539,8 +539,8 @@ const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
 
 /**
  * The page frame's settings in each shown presentation's variant, each named by its setting, then
- * where the steps pause, each label named by its shortest ending naming it alone, as pause@to for
- * pause@insert.swap.to, though its variable is the full name.
+ * where the steps pause, each named by its variable, the label's full name, as
+ * pause@insert.swap.to.
  */
 export function frameProps(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
@@ -555,21 +555,11 @@ export function frameProps(presentations: readonly DrawnPresentation[]): GhostPr
       )
     )
   ].sort();
-  const labels = pauses.map((key) => key.slice('pause@'.length));
-  const short = (label: string) => {
-    const parts = label.split('.');
-    for (let from = parts.length - 1; from > 0; from--) {
-      const ending = parts.slice(from).join('.');
-      const naming = labels.filter((other) => other === ending || other.endsWith(`.${ending}`));
-      if (naming.length === 1) return ending;
-    }
-    return label;
-  };
   return [
     ...[...keys]
       .sort(byOrder(frameOrder, (key) => key))
       .map((key) => variable(presentations, key, key.slice('frame.'.length))),
-    ...pauses.map((key, at) => variable(presentations, key, `pause@${short(labels[at])}`))
+    ...pauses.map((key) => variable(presentations, key, key))
   ];
 }
 

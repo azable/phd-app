@@ -135,28 +135,24 @@ export function labelSpan({ nodes }: Label): { start: number; end: number } {
 }
 
 /**
- * The label a written path names: the one whose full name is it, else the one whose full name ends
- * with it. Problems name the labels it could be, or the fix for a label on code that is no
- * expression.
+ * The label a written path names: the one whose full name it is, the names of the labels around it
+ * first, so adding a label never changes what a path names. Problems give the full names a shorter
+ * path could stand for, or the fix for a label on code that is no expression.
  */
 export function resolveLabel(
   written: string,
   labels: readonly Label[],
   asValue: boolean
 ): { label: Label } | { problem: string } {
-  const exact = labels.filter(({ full }) => full === written);
-  const candidates = exact.length
-    ? exact
-    : labels.filter(({ full }) => full.endsWith(`.${written}`));
-  if (!candidates.length)
+  const found = labels.find(({ full }) => full === written);
+  if (!found) {
+    const ending = labels.filter(({ full }) => full.endsWith(`.${written}`));
     return {
-      problem: `@${written} names no label of the algorithm${labels.length ? `; its labels are ${labels.map(({ full }) => `@${full}`).join(', ')}` : ''}.`
+      problem: ending.length
+        ? `@${written} is not a full name; write its full name, ${ending.map(({ full }) => `@${full}`).join(' or ')}.`
+        : `@${written} names no label of the algorithm${labels.length ? `; its labels are ${labels.map(({ full }) => `@${full}`).join(', ')}` : ''}.`
     };
-  if (candidates.length > 1)
-    return {
-      problem: `@${written} could be ${candidates.map(({ full }) => `@${full}`).join(' or ')}; write more of its name.`
-    };
-  const [found] = candidates;
+  }
   if (asValue && (found.statement || found.nodes.length !== 1))
     return {
       problem: `@${found.full} labels a statement, which gives no value; label its expression, as const key = @${found.name}[values[i]].`

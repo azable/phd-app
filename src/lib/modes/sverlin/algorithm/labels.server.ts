@@ -282,7 +282,7 @@ export function readLabels(
       reported.push(node);
       const text = code.slice(spanOf(node).start, spanOf(node).end).trim().split('\n')[0];
       problems.push({
-        message: `${text} is ${owner ? `in @${owner.full}` : 'in the algorithm'} but in none of the labels beside it (${beside.map((label) => `@${label.name}`).join(', ')}); wrap it, as @name[${text}], or put it inside one of them, so each step is one label's code.`,
+        message: `${text} is ${owner ? `in @${owner.full}` : 'in the algorithm'} but in none of the labels beside it (${beside.map((label) => `@${label.full}`).join(', ')}); wrap it, as @name[${text}], or put it inside one of them, so each step is one label's code.`,
         at: spanOf(node).start
       });
     }

@@ -104,6 +104,31 @@ export function ghostKey(text: string, design?: ReferenceDesign): string | undef
 }
 
 /**
+ * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
+ * `@insert.compare.left` as `@…compare.left`, `pause@insert.compare.left` as
+ * `pause@…compare.left`, `Highlight.Pointed@insert.compare.left.fill` as
+ * `Highlight.Pointed@…compare.left.fill`, a kind's place keeping its prop; `head` before the
+ * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
+ * fewer, or text that names no label.
+ */
+export function elidedName(
+  text: string
+): { head: string; hidden: string; tail: string } | undefined {
+  const written = new RegExp(
+    String.raw`^((?:${name}(?:\.${name})*)?@)(${name}(?:\.${name})*)$`,
+    'u'
+  );
+  const match = written.exec(text);
+  if (!match) return undefined;
+  const [, head, path] = match;
+  const parts = path.split('.');
+  const prop = head.includes('.') && !/^(?:views|pointers)\./u.test(head) ? 1 : 0;
+  const cut = parts.length - prop - 2;
+  if (cut <= 0) return undefined;
+  return { head, hidden: `${parts.slice(0, cut).join('.')}.`, tail: parts.slice(cut).join('.') };
+}
+
+/**
  * Text split into its code and the rest, as an error message names code without marking it: a
  * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index@found`,
  * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
@@ -262,13 +287,65 @@ function kindKey(text: string): { segments: string[]; place?: string } | undefin
   return { segments: path.split('.'), place: place.join('.') };
 }
 
-/** A label: where the algorithm labels code with it, and where the view reads it. */
+/**
+ * A label, by its full name: where the algorithm and a listing declare it, each declaration named
+ * by the labels around it, so `@rise.compare.left` is never `@fall.compare.left`; and where the view
+ * reads it.
+ */
 function labelRanges(source: string, label: string): SourceRange[] {
-  const last = label.split('.').at(-1) ?? label;
   return sorted([
-    ...matches(source, new RegExp(String.raw`@${escape(last)}(?=[[{])`, 'gu')),
+    ...labelDeclarations(source)
+      .filter(({ full }) => full === label)
+      .map(({ from, to }) => ({ from, to })),
     ...matches(source, new RegExp(String.raw`(?<!\{)@${escape(label)}(?![\w$.[{])`, 'gu'))
   ]);
+}
+
+/**
+ * Every label declared in the algorithm block and the listings, `@name[` or `@name{` (a listing's
+ * only `@name[`), each with its full name and where its `@name` is. A `[` or `{` opening no label
+ * closes with its own match, as in `values[i]` or `A[i]`; strings and comments in the algorithm are
+ * skipped.
+ */
+function labelDeclarations(source: string): { full: string; from: number; to: number }[] {
+  const found: { full: string; from: number; to: number }[] = [];
+  const blocks = /<script\s+lang="sverlin"(\s+listing="[^"]*")?\s*>([\s\S]*?)<\/script>/gu;
+  for (const block of source.matchAll(blocks)) {
+    const listing = Boolean(block[1]);
+    const body = block[2];
+    const offset = (block.index ?? 0) + block[0].indexOf(body, block[0].indexOf('>'));
+    const open: (string | undefined)[] = [];
+    const names = () => open.filter((name): name is string => name !== undefined);
+    for (let at = 0; at < body.length; at++) {
+      const char = body[at];
+      if (!listing && (char === '"' || char === "'" || char === '`')) {
+        for (at++; at < body.length && body[at] !== char; at++) if (body[at] === '\\') at++;
+        continue;
+      }
+      if (!listing && body.startsWith('//', at)) {
+        at = body.indexOf('\n', at);
+        if (at < 0) break;
+        continue;
+      }
+      if (!listing && body.startsWith('/*', at)) {
+        at = body.indexOf('*/', at);
+        if (at < 0) break;
+        at++;
+        continue;
+      }
+      const declared = char === '@' ? /^@([A-Za-z_$][\w$]*)([[{])/u.exec(body.slice(at)) : null;
+      if (declared && (!listing || declared[2] === '[')) {
+        const full = [...names(), declared[1]].join('.');
+        found.push({ full, from: offset + at, to: offset + at + 1 + declared[1].length });
+        open.push(declared[1]);
+        at += declared[0].length - 1;
+        continue;
+      }
+      if (char === '[' || (!listing && char === '{')) open.push(undefined);
+      else if ((char === ']' || (!listing && char === '}')) && open.length) open.pop();
+    }
+  }
+  return found;
 }
 
 /** A snippet's declaration, or a declaration in a script; for `.Pointed`, the snippet's marks. */

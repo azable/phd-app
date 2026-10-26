@@ -4,6 +4,7 @@ import {
   codeIn,
   codeMarkdown,
   diagnosticRanges,
+  elidedName,
   ghostKey,
   referenceRanges
 } from './source-references';
@@ -23,9 +24,9 @@ const source = `<script lang="sverlin" domain>
 {#snippet Row(list: Values)}
   {#snippet Under()}<Node>i</Node>{/snippet}
 {/snippet}
-{@render Index(@left)}
-{@render Index(@right)}
-{@render Int(@swap.held)}`;
+{@render Index(@compare.left)}
+{@render Index(@compare.right)}
+{@render Int(@compare.swap.held)}`;
 
 /** The text each region covers. */
 const named = (text: string) =>
@@ -45,25 +46,62 @@ describe('references in messages', () => {
   });
 
   it('name a label where it labels code and where the view reads it', () => {
-    expect(named('@left')).toEqual(['@left', '@left']);
-    expect(named('@swap.held')).toEqual(['@held', '@swap.held']);
+    expect(named('@compare.left')).toEqual(['@left', '@compare.left']);
+    expect(named('@compare.swap.held')).toEqual(['@held', '@compare.swap.held']);
+  });
+
+  it('name a label by its full path, never another with the same last name', () => {
+    const twice = `<script lang="sverlin">
+  for (let i = Index(1); Before(i, end); i = Next(i)) @rise{
+    if (@compare[Greater(values[@left[Prev(i)]], values[i])]) { const s = "@left[x]"; }
+  }
+  for (let i = Index(1); Before(i, end); i = Next(i)) @fall{
+    if (@compare[Less(values[@left[Prev(i)]], values[i])]) {}
+  }
+</script>
+<script lang="sverlin" listing="code">
+  @rise[if @compare[A[@left[i - 1]] > A[i]]]
+  @fall[if @compare[A[@left[i - 1]] < A[i]]]
+</script>
+{@render Index(@rise.compare.left)}
+{@render Index(@fall.compare.left)}`;
+    const at = (label: string) => referenceRanges(twice, label).map(({ from }) => from);
+    const all = (text: string) =>
+      [...twice.matchAll(new RegExp(text.replace(/[.[()]/gu, '\\$&'), 'gu'))].map(
+        ({ index }) => index ?? 0
+      );
+    const declared = all('@left[');
+    // Two in the algorithm, the string skipped, then two in the listing, in that order.
+    expect(declared).toHaveLength(5);
+    expect(at('@rise.compare.left')).toEqual([
+      declared[0],
+      declared[3],
+      twice.indexOf('@rise.compare.left)')
+    ]);
+    expect(at('@fall.compare.left')).toEqual([
+      declared[2],
+      declared[4],
+      twice.indexOf('@fall.compare.left)')
+    ]);
   });
 
   it('name a design variable by its kind and place', () => {
     expect(named('Highlight.Pointed.fill')).toEqual(['Highlight', '<Pointed']);
-    expect(named('Highlight.Pointed@left.fill')).toEqual([
+    expect(named('Highlight.Pointed@compare.left.fill')).toEqual([
       'Highlight',
       '<Pointed',
-      '{@render Index(@left)}'
+      '{@render Index(@compare.left)}'
     ]);
-    expect(named('views.Int')).toEqual(['{@render Int(@swap.held)}']);
-    expect(named('pointers.Index@right')).toEqual(['{@render Index(@right)}']);
+    expect(named('views.Int')).toEqual(['{@render Int(@compare.swap.held)}']);
+    expect(named('pointers.Index@compare.right')).toEqual(['{@render Index(@compare.right)}']);
   });
 
   it('name lines, a line and column, or a run of lines', () => {
     expect(named('line 12')).toEqual(['{#snippet Highlight(p: Index)}<Pointed />{/snippet}']);
     expect(named('12:11')).toEqual(['Highlight(p: Index)}<Pointed />{/snippet}']);
-    expect(named('lines 16-17')).toEqual(['{@render Index(@left)}\n{@render Index(@right)}']);
+    expect(named('lines 16-17')).toEqual([
+      '{@render Index(@compare.left)}\n{@render Index(@compare.right)}'
+    ]);
     expect(named('line 99')).toEqual([]);
   });
 
@@ -191,7 +229,7 @@ describe('problems of a build', () => {
     ]);
     expect(ranges.map(({ from, to }) => source.slice(from, to))).toEqual([
       'Highlight',
-      'Index(@left)}'
+      'Index(@compare.left)}'
     ]);
   });
 });
@@ -226,5 +264,38 @@ describe('design variables with a row of their own', () => {
     expect(ghostKey('Highlight.Pointed@right.fill', design)).toBeUndefined();
     expect(ghostKey('@left', design)).toBeUndefined();
     expect(ghostKey('IntCell.fill')).toBeUndefined();
+  });
+});
+
+describe('long label names in pills', () => {
+  const shown = (text: string) => {
+    const parts = elidedName(text);
+    return parts ? `${parts.head}…${parts.tail}` : text;
+  };
+
+  it('keep the last two parts of a label, eliding those before', () => {
+    expect(shown('@insert.compare.left')).toBe('@…compare.left');
+    expect(shown('pause@insert.compare.left')).toBe('pause@…compare.left');
+    expect(shown('@sweep.pair.swap.a')).toBe('@…swap.a');
+    expect(elidedName('@insert.compare.left')).toEqual({
+      head: '@',
+      hidden: 'insert.',
+      tail: 'compare.left'
+    });
+  });
+
+  it("keep a kind's place's prop, and show names of two parts or fewer whole", () => {
+    expect(shown('Highlight.Pointed@insert.compare.left.fill')).toBe(
+      'Highlight.Pointed@…compare.left.fill'
+    );
+    expect(shown('pointers.Index@search.check.at')).toBe('pointers.Index@…check.at');
+    for (const text of [
+      '@swap.held',
+      '@left',
+      'pause@insert.swap',
+      'Ask.IntCell@g.a.fill',
+      'IntCell.fill'
+    ])
+      expect(elidedName(text)).toBeUndefined();
   });
 });

@@ -378,7 +378,7 @@ An operator is a type a view can take: `{#snippet Ask(g: Greater)}` is a view of
 {@render Board()}
 ```
 
-At a comparison step the caption reads "is 5 > 1? yes", its operands lifting out of their cells; at the swap after it, nothing, the two values trading places. With `pause@sweep.pair.test` off, the comparisons are no steps and the page plays the swaps alone, each comparison leading up to its swap; with `views.Greater` none, the caption is left out and the steps stay as they were. An operator is rendered only from the root and its parts, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, is left out. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is drawn through its type, like any view. `{@render Greater(@pair)}` draws only the application made inside the code labelled `@pair`, where an operator is applied in more than one place.
+At a comparison step the caption reads "is 5 > 1? yes", its operands lifting out of their cells; at the swap after it, nothing, the two values trading places. With `pause@sweep.pair.test` off, the comparisons are no steps and the page plays the swaps alone, each comparison leading up to its swap; with `views.Greater` none, the caption is left out and the steps stay as they were. An operator is rendered only from the root and its parts, with nothing between the brackets; one the input never applies, as binary search's `Left` when the target is always to the right, is left out. An operand cannot be called `value`, which names the result. A view named as an operator is, as a pointer view called `Next`, is drawn through its type, like any view. `{@render Greater(@sweep.pair)}` draws only the application made inside the code labelled `@pair`, where an operator is applied in more than one place.
 
 A label is read in the root and its parts as a value: `@name` is the value the expression labelled `name` gave since the step before, drawn at the step's after where it gave one, and missing where it gave none or several. It is held at each later step inside the run of the label around it that keeps it (see Steps), drawn from the step's before, so a mark stays until that code finishes, as the swap's two cells through the swap: always at the run's own end, and at the pauses inside it where the run accumulates. Drawing it turns on the pause at the statement labelled around it, as `@insert` here, where no step inside that run already came after the value. So a view shows what a step's code held, though no variable holds it at the step's edges: the values a swap exchanged, or the key a whole insertion inserts, out of scope once its block ends.
 
@@ -393,44 +393,49 @@ for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
 {#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
 ```
 
-A name may be written as its shortest ending that names one label (`@key` for `@insert.key`), and a label named exactly as written wins over one whose name only ends so (`@check` is `check`, not `check.check`); one naming none or several is a problem listing them. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root and its parts, never in a view.
+A label is read by its full name, the names of the labels around it first, as `@insert.key` for the `@key` inside `@insert`; a shorter ending, as `@key`, is refused with the full names it could stand for, so adding a label never changes or breaks what a name reads, in the markup or in a variant. Only a label on an expression gives a value, as `const key = @key[values[i]];`, not one on a statement. A label giving a position is drawn by a pointer, as `{@render Index(@check.at)}`, pointing while that code runs. Labels are read only in the root and its parts, never in a view.
 
 To mark what a step used, label it and render the position's type at each label, so every mark looks the same, here drawn by `Highlight`, a pointer view named for how it marks.
 
 ```js
-if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
-```
-
-```svelte
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{@render Index(@left)}
-{@render Index(@right)}
-```
-
-A label gives a value only where its code ran, `&&` skipping it included, so the marks come and go with the comparison; and it marks the position however the value is then used, read from its cell, copied into a variable, or compared in a loop's test. The labels say what a mark means, so render the type at each label rather than a view per mark, and mark with a label rather than a loop variable (`@right`, not `i`) where the mark is what the step used, not where the loop is. A label added for a mark starts off where a step already comes after it in the code around it, as the comparison it is read for; turned on, as `pause@insert.compare.left`, it is a step of its own, the page pausing as the left cell is picked.
-
-A place's look holds at every step, so `@left` cannot turn red only where the comparison came out one way, and a view cannot choose by a label's value (`{#if @compare}`). To mark only what a test let through, label the positions the code it guards uses and give those places their own look: here the pairs found out of order, the ones the swap exchanges, turn red. With `pause@insert.swap.to` on they turn red as a step of their own after the comparison, both cells read and nothing written yet, and stay red as they trade places; a pair in order stays as the comparison marked it, with no red step, as no swap runs.
-
-```js
-while (Before(Position(0), j) && Greater(values[@left[Prev(j)]], values[@right[j]])) @swap{
-  const moved = values[@from[Prev(j)]];
-  values[Prev(j)] = values[@to[j]];
-  values[j] = moved;
-  j = Prev(j);
+for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
+  if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
 }
 ```
 
 ```svelte
-{@render Position(@left)}
-{@render Position(@right)}
-{@render Position(@from)}
-{@render Position(@to)}
+{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{@render Index(@pair.left)}
+{@render Index(@pair.right)}
+```
+
+A label gives a value only where its code ran, `&&` skipping it included, so the marks come and go with the comparison; and it marks the position however the value is then used, read from its cell, copied into a variable, or compared in a loop's test. The labels say what a mark means, so render the type at each label rather than a view per mark, and mark with a label rather than a loop variable (`@right`, not `i`) where the mark is what the step used, not where the loop is. A label added for a mark starts off where a step already comes after it in the code around it, as the comparison it is read for; turned on, as `pause@pair.left`, it is a step of its own, the page pausing as the left cell is picked.
+
+A place's look holds at every step, so `@left` cannot turn red only where the comparison came out one way, and a view cannot choose by a label's value (`{#if @compare}`). To mark only what a test let through, label the positions the code it guards uses and give those places their own look: here the pairs found out of order, the ones the swap exchanges, turn red. With `pause@insert.swap.to` on they turn red as a step of their own after the comparison, both cells read and nothing written yet, and stay red as they trade places; a pair in order stays as the comparison marked it, with no red step, as no swap runs.
+
+```js
+for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  let j = i;
+  while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
+    const moved = values[@from[Prev(j)]];
+    values[Prev(j)] = values[@to[j]];
+    values[j] = moved;
+    j = Prev(j);
+  }
+}
+```
+
+```svelte
+{@render Position(@insert.compare.left)}
+{@render Position(@insert.compare.right)}
+{@render Position(@insert.swap.from)}
+{@render Position(@insert.swap.to)}
 ```
 
 ```json
 {
-  "Highlight.Pointed@from.fill": "red-100",
-  "Highlight.Pointed@to.fill": "red-100",
+  "Highlight.Pointed@insert.swap.from.fill": "red-100",
+  "Highlight.Pointed@insert.swap.to.fill": "red-100",
   "pause@insert.swap.to": "on"
 }
 ```
@@ -478,17 +483,17 @@ A kind that arranges its children, with a `layout`, a collection, or links, also
 
 ### Places
 
-A render with an argument is a place, named by what is written there after `@`: a label, a variable, or a field, as `{@render Index(@left)}` at `@left`, `{@render Index(found)}` at `@found`, and `{@render Int(g.a)}` in `Ask` at `Ask.` and `@g.a`. A render of another expression, or with nothing between the brackets, is none. Rendering a type keeps the page uniform, every render drawn by the view its type's variable chooses, in its kinds' looks; a place has variables of its own that fall back to those until a variant sets them, so one render is drawn apart with nothing declared:
+A render with an argument is a place, named by what is written there after `@`: a label, by its full name, a variable, or a field, as `{@render Index(@pair.left)}` at `@pair.left`, `{@render Index(found)}` at `@found`, and `{@render Int(g.a)}` in `Ask` at `Ask.` and `@g.a`. A render of another expression, or with nothing between the brackets, is none. Rendering a type keeps the page uniform, every render drawn by the view its type's variable chooses, in its kinds' looks; a place has variables of its own that fall back to those until a variant sets them, so one render is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it draws, as `pointers.Index@found` or `views.Int@swap.held`;
-- its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it can draw, nested snippets included, as `Highlight.Pointed@left.fill` or `IntTally.Tally@swap.held.shown`, though not for another view that view renders.
+- its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it can draw, nested snippets included, as `Highlight.Pointed@pair.left.fill` or `IntTally.Tally@swap.held.shown`, though not for another view that view renders.
 
 ```json
 {
   "pointers.Index": "Highlight",
   "pointers.Index@found": "Arrow",
   "Highlight.Pointed.fill": "amber-100",
-  "Highlight.Pointed@left.fill": "sky-100",
+  "Highlight.Pointed@pair.left.fill": "sky-100",
   "IntCell@swap.held.fill": "neutral-100"
 }
 ```

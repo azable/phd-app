@@ -124,7 +124,7 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Swapped()}<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>{/snippet}
+{#snippet Swapped()}<Node>swap {@render Int(@sweep.pair.swap.a)} and {@render Int(@sweep.pair.swap.b)}</Node>{/snippet}
 {#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}?</Node>{/snippet}
 {@render Cells()}
 {@render Greater()}

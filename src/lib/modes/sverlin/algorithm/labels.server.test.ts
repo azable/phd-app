@@ -89,7 +89,7 @@ describe('labels', () => {
           @f[e = Up(e);]
         }
       `)
-    ).toThrow('let e = Int(3); is in @pass but in none of the labels beside it (@b, @f)');
+    ).toThrow('let e = Int(3); is in @pass but in none of the labels beside it (@pass.b, @pass.f)');
     // A loop's header is its control code; the code around a labelled test needs no label.
     expect(
       problemOf(`

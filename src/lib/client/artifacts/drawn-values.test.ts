@@ -349,6 +349,22 @@ describe('variant markers', () => {
     expect(frameProps(presentations).map(({ name }) => name)).toEqual(['ratio']);
   });
 
+  it('names each pause by its label’s full name', () => {
+    const paused = presentations.map((presentation) => ({
+      ...presentation,
+      variant: {
+        ...presentation.variant,
+        'pause@insert.swap.to': 'on',
+        'pause@insert.compare.left': 'off'
+      }
+    }));
+    expect(frameProps(paused).map(({ name }) => name)).toEqual([
+      'ratio',
+      'pause@insert.compare.left',
+      'pause@insert.swap.to'
+    ]);
+  });
+
   it('flashes the view marker after a render a revealed region covers', () => {
     const view = '<Node>{@render Int(a)} and {@render Int(b)}</Node>';
     const second = view.indexOf('{@render Int(b)}');

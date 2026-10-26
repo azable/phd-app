@@ -260,7 +260,10 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  for (const [key, saved] of Object.entries(request.base ?? {})) {
+  const base = Object.fromEntries(
+    Object.entries(request.base ?? {}).map(([key, saved]) => [fullPlaceKey(space, key), saved])
+  );
+  for (const [key, saved] of Object.entries(base)) {
     const value = asPause(space, key, saved);
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
@@ -280,7 +283,6 @@ export function buildVariant(
     values[key] = value as DesignValue;
     origins[key] = 'chosen';
   }
-  const base = request.base ?? {};
   for (const [key, fallback] of Object.entries(fallbacks)) {
     const apart =
       Object.hasOwn(base, key) && base[key] !== base[fallback] && fits(space, key, base[key]);
@@ -290,6 +292,21 @@ export function buildVariant(
     origins[key] = origins[fallback];
   }
   return { values, origins };
+}
+
+/**
+ * A saved key written before places of labels took full names, as Highlight.Pointed@left.fill, as
+ * the one variable of the space it stands for, Highlight.Pointed@insert.compare.left.fill; any other
+ * key as it is.
+ */
+function fullPlaceKey(space: DesignSpace, key: string): string {
+  const at = key.indexOf('@');
+  if (at < 0 || Object.hasOwn(space, key)) return key;
+  const [head, place] = [key.slice(0, at + 1), key.slice(at + 1)];
+  const standing = Object.keys(space).filter(
+    (other) => other.startsWith(head) && other.endsWith(`.${place}`)
+  );
+  return standing.length === 1 ? standing[0] : key;
 }
 
 /**
