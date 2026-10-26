@@ -646,7 +646,7 @@ export function slotInsertions(
   const insertions: Insertion[] = [];
   const indexed = new Map<Part, string>();
   const text = (node: Part) => source.slice(node.start, node.end);
-  // The {:when} branch after a {#when} block or branch: an {:else if} on a key by now.
+  // The {:else if when(…)} branch after an {#if when(…)} block or branch, on a key by now.
   const whenBranchOf = (part: Part): Part | undefined => {
     const children = ((part.else as Part | undefined)?.children as Part[] | undefined) ?? [];
     const [next, ...rest] = children.filter(
@@ -794,7 +794,7 @@ export function slotInsertions(
         });
       return;
     }
-    // A {#when @label} block, an {#if} on the label's key by now (see label-values.ts): its
+    // An {#if when(@label)} block, an {#if} on the label's key by now (see label-values.ts): its
     // contents in a slot hidden where the step is inside no run of the label, keeping their room.
     // A chain, its branches {:else if} on their keys by now, is one box, a node keeping the largest
     // size it reaches, drawing only the branch the step is inside (see Chain.svelte).

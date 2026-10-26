@@ -1,5 +1,5 @@
 /**
- * {#when @label} blocks drawn in a real browser. Run with `pnpm run test:browser`, which the devenv
+ * {#if when(@label)} blocks drawn in a real browser. Run with `pnpm run test:browser`, which the devenv
  * gives a browser (SVERLIN_TEST_BROWSER).
  */
 
@@ -51,7 +51,7 @@ const insertion = `<script lang="sverlin" domain>
 {#snippet Board()}
   <Node layout="column">
     <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-    {#when @insert.swap}{@render Caption()}{/when}
+    {#if when(@insert.swap)}{@render Caption()}{/if}
   </Node>
 {/snippet}
 {@render Board()}`;
@@ -161,8 +161,8 @@ it.skipIf(!enabled)(
         "{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}\n{#snippet Ask(g: Greater)}<Node>Is {@render Int(g.a)} greater than {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}\n{#snippet Caption()}"
       )
       .replace(
-        '{#when @insert.swap}{@render Caption()}{/when}',
-        '{#when @insert.compare}{@render Greater(@insert.compare)}{:when @insert.swap}{@render Caption()}{/when}'
+        '{#if when(@insert.swap)}{@render Caption()}{/if}',
+        '{#if when(@insert.compare)}{@render Greater(@insert.compare)}{:else if when(@insert.swap)}{@render Caption()}{/if}'
       );
     const steps = await stepsOf(
       {

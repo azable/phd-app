@@ -578,8 +578,9 @@ async function recordSteps() {
   }
   // Record what every arrangement contains at every step, then solve each over all of them; a
   // nested arrangement's solution changes its size and so what its parent contains, so recording
-  // repeats until no solution changes. A {#when} chain draws other branches at other steps, each
-  // grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as shown.
+  // repeats until no solution changes. An {#if when(…)} chain draws other branches at other steps,
+  // each grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as
+  // shown.
   for (let round = 0; round < 3; round++) {
     let chainsGrew = false;
     for (let step = 0; step < states.length; step++)

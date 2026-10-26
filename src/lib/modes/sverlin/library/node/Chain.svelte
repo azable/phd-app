@@ -1,7 +1,8 @@
 <!--
-  A {#when} chain (see components.server.ts): one box drawing the branch the step is inside, a
-  node as a listing is, so it keeps the largest size it reaches at any step (see LayoutMemory) and
-  taking turns moves nothing around it. `ref` is the chain's line:column, the id it claims.
+  An {#if when(…)} chain (see components.server.ts): one box drawing the branch the step is
+  inside, a node as a listing is, so it keeps the largest size it reaches at any step (see
+  LayoutMemory) and taking turns moves nothing around it. `ref` is the chain's line:column, the id
+  it claims.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';

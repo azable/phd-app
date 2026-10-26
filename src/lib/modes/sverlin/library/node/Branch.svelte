@@ -1,6 +1,6 @@
 <!--
-  One branch of a {#when} chain (see Chain.svelte), drawn only at a step inside a run of its label:
-  `key` is the label's key, absent where the step is inside none.
+  One branch of an {#if when(…)} chain (see Chain.svelte), drawn only at a step inside a run of its
+  label: `key` is the label's key, absent where the step is inside none.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';

@@ -889,16 +889,16 @@ describe('scope', () => {
     ).toThrow('The view reads key itself, but key is out of scope at some steps');
   });
 
-  it('rejects choosing by a label value, pointing at {#when} and at labelling the guarded code', () => {
+  it('rejects choosing by a label value, pointing at when() and at labelling the guarded code', () => {
     const chosen = (test: string) =>
       source(
         `{#snippet Held()}<Node>held</Node>{/snippet}{#if ${test}}{@render Held()}{/if}`
       ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
     expect(() => prepareSvelteComponent(chosen('@key.at'))).toThrow(
-      "{#if @key.at} would choose what to draw by the label's value, which a view never does: {#when @key.at}…{/when}"
+      "{#if @key.at} would choose what to draw by the label's value, which a view never does: {#if when(@key.at)}…{/if}"
     );
     expect(() => prepareSvelteComponent(chosen('@key.at > 0'))).toThrow(
-      "A view cannot choose what to draw by a label's value, as {#if @key.at}: {#when @key.at}…{/when} draws"
+      "A view cannot choose what to draw by a label's value, as {#if @key.at}: {#if when(@key.at)}…{/if} draws"
     );
   });
 
@@ -1761,7 +1761,7 @@ describe('the view reaching the code only through labels', () => {
   });
 });
 
-describe('{#when @label}', () => {
+describe('{#if when(@label)}', () => {
   const caption = (block: string) => `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
@@ -1792,48 +1792,51 @@ describe('{#when @label}', () => {
   it('takes any label, a statement’s or an expression’s, keeping every position', () => {
     for (const label of ['@pass.look', '@pass.look.read', '@pass']) {
       const prepared = prepareSvelteComponent(
-        caption(`{#when ${label}}{@render Caption()}{/when}`)
+        caption(`{#if when(${label})}{@render Caption()}{/if}`)
       );
       expect(Object.values(prepared.during ?? {})).toEqual([label.slice(1)]);
     }
     // A problem after the block points where it is written.
-    expect(() =>
-      prepareSvelteComponent(caption('{#when @pass.look}{@render Caption()}{/when}<Bad />'))
-    ).toThrow(
+    const source = caption('{#if when(@pass.look)}{@render Caption()}{/if}<Bad />');
+    const before = source.slice(0, source.indexOf('<Bad />')).split('\n');
+    expect(() => prepareSvelteComponent(source)).toThrow(
       expect.objectContaining({
         message: expect.stringContaining('<Bad> is not allowed'),
-        line: 23,
-        column: 49
+        line: before.length,
+        column: before.at(-1)!.length + 1
       })
     );
   });
 
-  it('refuses {#if} on a label, an {:else}, no label, and a view', () => {
+  it('refuses {#if} on a label, an {:else}, no label, when() in another condition, and a view', () => {
     expect(() =>
       prepareSvelteComponent(caption('{#if @pass.look.read}{@render Caption()}{/if}'))
     ).toThrow(
-      "{#if @pass.look.read} would choose what to draw by the label's value, which a view never does: {#when @pass.look.read}…{/when} draws its contents at each step inside a run of the label."
+      "{#if @pass.look.read} would choose what to draw by the label's value, which a view never does: {#if when(@pass.look.read)}…{/if} draws its contents at each step inside a run of the label."
     );
     expect(() =>
       prepareSvelteComponent(
-        caption('{#when @pass}{@render Caption()}{:else}{@render Caption()}{/when}')
+        caption('{#if when(@pass)}{@render Caption()}{:else}{@render Caption()}{/if}')
       )
-    ).toThrow('{#when …} has no {:else}');
+    ).toThrow('An {#if when(…)} has no {:else}');
     expect(() =>
-      prepareSvelteComponent(caption('{#when step > 1}{@render Caption()}{/when}'))
-    ).toThrow('{#when …} takes a label by its full name, as {#when @insert.swap}…{/when}');
+      prepareSvelteComponent(caption('{#if when(step)}{@render Caption()}{/if}'))
+    ).toThrow('when() takes a label by its full name, as {#if when(@insert.swap)}…{/if}');
+    expect(() =>
+      prepareSvelteComponent(caption('{#if when(@pass) && values}{@render Caption()}{/if}'))
+    ).toThrow('when(@pass) is the whole test of an {#if} or {:else if}');
     expect(() =>
       prepareSvelteComponent(
         caption('{@render Int(values[0])}').replace(
           '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-          '{#snippet IntCell(value: Int)}<Node {value} />{#when @pass}<Node>!</Node>{/when}{/snippet}'
+          '{#snippet IntCell(value: Int)}<Node {value} />{#if when(@pass)}<Node>!</Node>{/if}{/snippet}'
         )
       )
-    ).toThrow('{#when @pass} is in a view, which draws only its value');
+    ).toThrow('when(@pass) is in a view, which draws only its value');
   });
 });
 
-describe('{#when} chains', () => {
+describe('{#if when(…)} chains', () => {
   const chain = (block: string) => `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
@@ -1863,7 +1866,7 @@ describe('{#when} chains', () => {
 {/snippet}
 {@render Board()}`;
   const looking =
-    '{#when @pass.look}{@render Looking()}{:when @pass.note}{@render Noting()}{/when}';
+    '{#if when(@pass.look)}{@render Looking()}{:else if when(@pass.note)}{@render Noting()}{/if}';
 
   it('takes a branch per label, keeping every position', () => {
     const prepared = prepareSvelteComponent(chain(looking));
@@ -1880,21 +1883,27 @@ describe('{#when} chains', () => {
     );
   });
 
-  it('refuses branches shown at one step, an {:else}, and a label too short for a branch', () => {
+  it('refuses branches shown at one step and an {:else}, and takes labels of any length', () => {
     expect(() =>
       prepareSvelteComponent(
-        chain('{#when @pass}{@render Looking()}{:when @pass.look}{@render Noting()}{/when}')
+        chain(
+          '{#if when(@pass)}{@render Looking()}{:else if when(@pass.look)}{@render Noting()}{/if}'
+        )
       )
     ).toThrow(
-      "The {#when} chain's branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3, inside runs of both"
+      "The {#if when(…)} chain's branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3, inside runs of both"
     );
     expect(() =>
-      prepareSvelteComponent(chain(looking.replace('{/when}', '{:else}<Node>!</Node>{/when}')))
-    ).toThrow('{#when …} has no {:else}');
-    expect(() =>
-      prepareSvelteComponent(chain(looking.replace('{:when @pass.note}', '{:when @no}')))
-    ).toThrow(
-      "{:when @no} names a label too short to read as a chain's branch: give it a name of 4 or more characters."
+      prepareSvelteComponent(chain(looking.replace('{/if}', '{:else}<Node>!</Node>{/if}')))
+    ).toThrow('An {#if when(…)} has no {:else}');
+    // A label of any length, as @n.
+    const short = chain(looking.replace('when(@pass.note)', 'when(@pass.n)')).replace(
+      '@note[',
+      '@n['
     );
+    expect(Object.values(prepareSvelteComponent(short).during ?? {})).toEqual([
+      'pass.look',
+      'pass.n'
+    ]);
   });
 });
