@@ -631,7 +631,12 @@ export function slotInsertions(
   /** Spans of the source drawn as pointers instead, and removed (see pointerCalls). */
   removed: readonly Insertion[] = [],
   /** The code of the place of each render at one, by where it starts (see Place). */
-  places: ReadonlyMap<number, string> = new Map()
+  places: ReadonlyMap<number, string> = new Map(),
+  /**
+   * The heap each reference refers into, by the path of the value (its indices as []), as
+   * `queue[]` into `ȟVertex`: a field read through one in the markup reads its node (see heapKey).
+   */
+  references: ReadonlyMap<string, string> = new Map()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -647,6 +652,62 @@ export function slotInsertions(
   const insertions: Insertion[] = [];
   const indexed = new Map<Part, string>();
   const text = (node: Part) => source.slice(node.start, node.end);
+  // The path of the value an expression reads, its indices as [], through a reference its node's
+  // place in the heap, as `ȟVertex[].name` for q.name with q an item of a queue of references.
+  const patternOf = (
+    node: Part | undefined,
+    locals: ReadonlyMap<string, Local>
+  ): string | undefined => {
+    if (node?.type === 'Identifier' && typeof node.name === 'string') {
+      const local = locals.get(node.name);
+      if (local?.kind === 'item') {
+        const of = patternOf(local.of, locals);
+        return of === undefined ? undefined : `${followed(of)}[]`;
+      }
+      return local || !stateNames.has(node.name) ? undefined : node.name;
+    }
+    if (node?.type !== 'MemberExpression') return undefined;
+    const object = patternOf(node.object as Part, locals);
+    if (object === undefined) return undefined;
+    const property = node.property as Part;
+    return node.computed ? `${followed(object)}[]` : `${followed(object)}.${property.name}`;
+  };
+  // A reference's path read as its node's, any other as it is.
+  const followed = (pattern: string) => {
+    const heap = references.get(pattern);
+    return heap === undefined ? pattern : `${heap}[]`;
+  };
+  // The heap an expression's value refers into, where it is a reference.
+  const heapOf = (node: Part | undefined, locals: ReadonlyMap<string, Local>) => {
+    const pattern = patternOf(node, locals);
+    return pattern === undefined ? undefined : references.get(pattern);
+  };
+  // An expression's text with each field read through a reference reading its node, as
+  // ȟVertex[q].name for q.name.
+  const followedText = (node: Part, locals: ReadonlyMap<string, Local>): string => {
+    if (node.type !== 'MemberExpression') return text(node);
+    const object = node.object as Part;
+    const heap = heapOf(object, locals);
+    const inner = followedText(object, locals);
+    return `${heap === undefined ? inner : `${heap}[${inner}]`}${source.slice(object.end, node.end)}`;
+  };
+  // Each field read through a reference in an expression reads its node instead.
+  const follow = (node: unknown, locals: ReadonlyMap<string, Local>): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => follow(child, locals));
+    const part = node as Part;
+    if (part.type === 'MemberExpression') {
+      const object = part.object as Part;
+      const heap = heapOf(object, locals);
+      if (heap !== undefined)
+        insertions.push(
+          { at: object.start ?? 0, text: `${heap}[` },
+          { at: object.end ?? 0, text: ']' }
+        );
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata') follow(child, locals);
+  };
   // The {:else if when(…)} branch after an {#if when(…)} block or branch, on a key by now.
   const whenBranchOf = (part: Part): Part | undefined => {
     const children = ((part.else as Part | undefined)?.children as Part[] | undefined) ?? [];
@@ -676,12 +737,13 @@ export function slotInsertions(
     if (argument?.type === 'Identifier' && typeof argument.name === 'string') {
       const local = locals.get(argument.name);
       if (local?.kind === 'value') return ' inherit';
-      if (local?.kind === 'item') return ` of={${text(local.of)}} at={${indexOf(local)}}`;
+      if (local?.kind === 'item')
+        return ` of={${followedText(local.of, locals)}} at={${indexOf(local)}}`;
       if (local?.kind === 'other') return ` of={${argument.name}}`;
       return stateNames.has(argument.name) ? ` path="${argument.name}"` : '';
     }
     if (argument?.type === 'MemberExpression') {
-      const object = text(argument.object as Part);
+      const object = followedText(argument.object as Part, locals);
       const property = argument.property as Part;
       return argument.computed
         ? ` of={${object}} at={${text(property)}}`
@@ -700,6 +762,10 @@ export function slotInsertions(
       return;
     }
     const part = node as Part;
+    // A field read through a reference, in what this part reads, reads its node.
+    const at = part.start ?? 0;
+    if (references.size && !removed.some((cut) => cut.at <= at && at < cut.at + (cut.remove ?? 0)))
+      follow(part.expression, locals);
     if (part.type === 'RenderTag') {
       const start = part.start ?? 0;
       if (removed.some(({ at, remove = 0 }) => at <= start && start < at + remove)) return;
@@ -784,7 +850,7 @@ export function slotInsertions(
         if (local?.kind === 'position') {
           insertions.push({
             at: (part.start ?? 0) + '<Link'.length,
-            text: ` __${end}In={${text(local.of)}}`
+            text: ` __${end}In={${followedText(local.of, locals)}}`
           });
           continue;
         }
@@ -862,7 +928,7 @@ export function slotInsertions(
         if (roots.length === 1 && root.type === 'InlineComponent' && root.name === 'Node')
           insertions.push({
             at: (root.start ?? 0) + '<Node'.length,
-            text: ` __itemOf={${text(local.of)}} __itemAt={${indexOf(local)}}`
+            text: ` __itemOf={${followedText(local.of, locals)}} __itemAt={${indexOf(local)}}`
           });
       } else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
       // The index of an {#each} over a collection is a position into it, as a link's end.
@@ -920,7 +986,7 @@ export function slotInsertions(
         if (each?.type === 'EachBlock' && !others.length && over)
           insertions.push({
             at: (part.start ?? 0) + '<Node'.length,
-            text: ` __items={${source.slice(over.start, over.end)}}`
+            text: ` __items={${followedText(over, locals)}}`
           });
       }
     }

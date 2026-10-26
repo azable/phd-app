@@ -43,6 +43,7 @@ import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
   heapKey,
+  isHeapKey,
   heapRecords,
   noDomain,
   operatorNames,
@@ -604,6 +605,21 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
       : noDomain;
     const { atoms } = domain;
+    // A reference to a node shows as its place in the heap, no value a participant can read.
+    for (const [start, type] of found.valueTypes) {
+      const structure = domain.structures[type] as {
+        kind?: string;
+        heap?: boolean;
+        element?: string;
+      };
+      if (structure?.kind === 'ref' && structure.heap)
+        viewProblems.push(
+          new InvalidSvelteSourceError(
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {@render Name(q.name)} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(v: ${type})}<Pointed />{/snippet}.`,
+            { code: 'view_component', start: sourcePosition(source, start) }
+          )
+        );
+    }
     // Views see an operator as a record of its operands and its result (see viewDomainOf), unless a
     // view has its name, as a pointer view called Next, which a render of Next then draws.
     const viewNamed = new Set(found.components.map(({ name }) => name));
@@ -1255,7 +1271,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         operators,
         slotted,
         pointers.removals,
-        placeSlots
+        placeSlots,
+        referencesOf(master)
       ),
       ...[...aliases.values()].map(({ alias, callee }) => ({
         at: callee.start,
@@ -3004,4 +3021,16 @@ function labelRuns(
     if (changes) count.drawn++;
   }
   return runs;
+}
+
+/**
+ * The heap each reference refers into, by the path of the value with its indices as [], as
+ * `queue[]` into `ȟVertex`, gathered over the steps given (see slotInsertions).
+ */
+function referencesOf(steps: readonly MasterStep[]): Map<string, string> {
+  const references = new Map<string, string>();
+  for (const step of steps)
+    for (const [path, target] of Object.entries(step.targets ?? {}))
+      if (isHeapKey(target)) references.set(path.replace(/\[\d+\]/gu, '[]'), target);
+  return references;
 }

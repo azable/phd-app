@@ -459,7 +459,11 @@ nodes `prev` and `cur` refer to both marked:
 - A field is read and written through a reference, `cur.next = prev`; a value of
   another type is refused, and reading or writing one through the end is a
   mistake at that step ("cur is an End ("end"), so it has no next"). A variable
-  holding a node or the end is made with the union, `let cur = Next(head);`.
+  holding a node or the end is made with the union, `let cur = Next(head);`. The
+  root and its parts read a field through a reference too, from the node it
+  refers to, as `{#each queue as q}{@render Name(q.name)}{/each}`; a view
+  drawing a reference itself as a value is refused, as it would show the node's
+  place.
 - A node lives while something refers to it: a variable in scope, a collection,
   or a live node. `all(ListNode)` is every live node, in the order made, drawn
   as a collection, each through the record's view; one no longer referred to

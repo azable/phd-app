@@ -1,0 +1,52 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Flag = type('boolean');
+  const Vertex = record({ name: Name, seen: Flag, out: Out });
+  const VertexRef = ref(Vertex);
+  const Out = collection(VertexRef);
+  const Queue = collection(VertexRef);
+
+  const Waiting = unop((q: Queue) => Flag(q.length > 0));
+  const Not = unop((f: Flag) => Flag(!f));
+  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
+  const Rest = unop((q: Queue) => Queue(q.slice(1)));
+</script>
+
+<script lang="sverlin" input>
+  const e = VertexRef(Vertex({ name: 'E', seen: false, out: [] }));
+  const d = VertexRef(Vertex({ name: 'D', seen: false, out: [e] }));
+  const b = VertexRef(Vertex({ name: 'B', seen: false, out: [d] }));
+  const c = VertexRef(Vertex({ name: 'C', seen: false, out: [d] }));
+  const a = VertexRef(Vertex({ name: 'A', seen: true, out: [b, c] }));
+</script>
+
+<script lang="sverlin">
+  let queue = Queue([a]);
+  while (Waiting(queue)) @visit{
+    @take[const current = queue[0];
+    queue = Rest(queue);]
+    for (const w of current.out) @look{
+      if (Not(@next[w].seen)) @add{
+        w.seen = true;
+        queue = Append(queue, w);
+      }
+    }
+  }
+</script>
+
+{#snippet NameText(name: Name)}<Node value={name} />{/snippet}
+{#snippet SeenMark(seen: Flag)}<Node>{seen ? '✓' : '·'}</Node>{/snippet}
+{#snippet VertexCard(v: Vertex)}
+  {#snippet OutField()}<Node>{#each v.out as w}<Link to={w} />{/each}</Node>{/snippet}
+  <Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}{@render OutField()}</Node>
+{/snippet}
+{#snippet Marked(v: VertexRef)}<Pointed />{/snippet}
+{#snippet Graph()}
+  <Node layout="free">{#each all(Vertex) as v}{@render Vertex(v)}{/each}</Node>
+{/snippet}
+
+{#snippet Line()}<Node>queue: {#each queue as q}{@render Name(q.name)}{/each}</Node>{/snippet}
+{@render Graph()}
+{@render Line()}
+{@render VertexRef(current)}
+{@render VertexRef(@visit.look.next)}

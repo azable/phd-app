@@ -9,6 +9,7 @@ import {
   prepareSvelteComponent
 } from './compile.server';
 import { linearSearchSource } from './contract';
+import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import { buildVariant } from './design.server';
@@ -1936,5 +1937,24 @@ describe('the bundle', () => {
     const { javascript, labels } = await bundlePresentation(prepared, 1);
     expect(labels.length).toBeGreaterThan(100);
     expect(javascript.length).toBeLessThan(1024 * 1024);
+  });
+});
+
+describe('references read in the view', () => {
+  it('read a field through a reference from its node in the heap', () => {
+    // queue holds references to vertices; q.name reads the name of the vertex q refers to.
+    const prepared = prepareSvelteComponent(bfsReferences);
+    expect(prepared.component).toContain("$$props['ȟVertex'][$.get(q)].name");
+  });
+
+  it('refuse a reference to a node drawn as a value, its place in the heap', () => {
+    const drawn = bfsReferences.replace(
+      '{#snippet Marked(v: VertexRef)}<Pointed />{/snippet}',
+      '{#snippet Marked(v: VertexRef)}<Pointed />{/snippet}\n{#snippet RefCard(v: VertexRef)}<Node value={v} />{/snippet}'
+    );
+    expect(drawn).toContain('RefCard');
+    expect(() => prepareSvelteComponent(drawn)).toThrow(
+      'A VertexRef refers to a Vertex and has no value of its own to show'
+    );
   });
 });
