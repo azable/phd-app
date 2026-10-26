@@ -1,16 +1,19 @@
 /** A listing as the page lights it: its text, and which parts of it each node of the source is. */
 
 /**
- * A part of a listing's text, as the node with the key (see spanKey) shows it there; with the code
- * it stands for (scope), which has run once the code being run is outside it, unless it holds other
- * statements (compound), which has run once its own code has.
+ * A part of a listing's text, as the node with the key (see spanKey) shows it in the region of the
+ * label, by its full name; with the code it stands for (scope), which has run once the code being
+ * run is outside it, unless it holds other statements (compound), which has run once its own code
+ * has: its test, where it has one, once the code being run has left it.
  */
 export type Mark = {
   key: string;
+  label: string;
   start: number;
   end: number;
   scope?: { start: number; end: number };
   compound?: boolean;
+  test?: { start: number; end: number };
 };
 
 /**

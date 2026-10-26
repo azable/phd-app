@@ -1,14 +1,15 @@
 /**
- * What each step lights in a listing: its code's own events, and the regions of the label it is a
- * run of, most strongly, and the code it keeps as having run before it more faintly: the events
- * logged in its trail (see MasterStep), those leading up to it and those earlier in each run
- * accumulating around it, or without a trail, those since the step before, each only where its code
- * is done. A step whose events light nothing keeps the lighting of the step before.
+ * What each step lights in a listing: only the code of labels it pauses at. Its own run's code and
+ * the regions of its label most strongly, and more faintly the code it keeps as having run before
+ * it, those earlier in each run accumulating around it, each stretch of its trail (see MasterStep)
+ * lighting only its run's labels' regions and the regions inside them, each only where its code is
+ * done. Without a trail, a step lights all its events' code, or where they light nothing, keeps the
+ * lighting of the step before.
  */
 
 import type { Span } from '../algorithm/block.server';
 import type { TraceEvent } from '../algorithm/events.server';
-import { spanKey } from '../algorithm/interpret.server';
+import { spanKey, type Stretch } from '../algorithm/interpret.server';
 import type { Listing, Mark } from './listing';
 
 export type Range = readonly [start: number, end: number];
@@ -21,19 +22,29 @@ type LitStep = {
   gap?: number;
   unit?: Span;
   seen?: number;
-  trail?: readonly (readonly [number, number])[];
+  trail?: readonly Stretch[];
 };
+
+/** Whether a mark is in the region of one of the labels or of a label inside one. */
+const inLabels = ({ label }: Mark, labels: readonly string[]) =>
+  labels.some((each) => label === each || label.startsWith(`${each}.`));
 
 export function lightSteps(listing: Listing, steps: readonly LitStep[]): Lit[] {
   const marks = new Map<string, Mark[]>();
   for (const mark of listing.marks) marks.set(mark.key, [...(marks.get(mark.key) ?? []), mark]);
   const lit: Lit[] = [];
-  const marksOf = (events: readonly TraceEvent[]) =>
-    events.flatMap((event) => marks.get(spanKey(event.at)) ?? []);
+  const marksOf = (event: TraceEvent) => marks.get(spanKey(event.at)) ?? [];
+  // The marks an event lights, numbered by how many were logged before it: those of the labels of
+  // the stretches holding it.
+  const lighting = (trail: readonly Stretch[] | undefined, event: TraceEvent, number: number) =>
+    marksOf(event).filter(
+      (mark) =>
+        !trail ||
+        trail.some(([from, to, labels]) => from <= number && number < to && inLabels(mark, labels))
+    );
   // The marks of the events a step's trail keeps, its own leading up to it and those of the steps
-  // before it, each event numbered by how many were logged before it.
-  const trailed = (index: number, trail: readonly (readonly [number, number])[]) => {
-    const kept = (at: number) => trail.some(([from, to]) => from <= at && at < to);
+  // before it.
+  const trailed = (index: number, trail: readonly Stretch[]) => {
     const first = Math.min(...trail.map(([from]) => from));
     const found: Mark[] = [];
     for (let back = index; back >= 0; back--) {
@@ -41,30 +52,39 @@ export function lightSteps(listing: Listing, steps: readonly LitStep[]): Lit[] {
       if (seen === undefined) break;
       const start = seen - events.length;
       events.forEach((event, at) => {
-        if ((back < index || at < gap) && kept(start + at)) found.push(...marksOf([event]));
+        if (back < index || at < gap) found.push(...lighting(trail, event, start + at));
       });
       if (start <= first) break;
     }
     return found;
   };
-  for (const [index, { events = [], gap = 0, unit, trail }] of steps.entries()) {
+  for (const [index, { events = [], gap = 0, unit, seen, trail }] of steps.entries()) {
     const leading: Mark[] = [];
     const latest: Mark[] = [];
+    const start = (seen ?? events.length) - events.length;
     events.forEach((event, at) =>
-      (at < gap ? leading : latest).push(...(marks.get(spanKey(event.at)) ?? []))
+      (at < gap ? leading : latest).push(...lighting(trail, event, start + at))
     );
     // What ran before a step lights only where its code is done: the code the step stops in, at its
     // last event, is outside it, or it holds other statements and its own code ran. So a statement
     // half run, as the swap's second line paused at its read of A[j], stays dark, as does a
-    // comparison whose operands are still being found.
+    // comparison whose operands are still being found, and a loop's line while its test is still
+    // running, as paused at the comparison in while j > 0 and A[j - 1] > A[j].
     const last = events.at(-1)?.at;
-    const done = ({ scope, compound }: Mark) =>
-      !scope || compound || !last || last.start < scope.start || scope.end < last.end;
+    const outside = (code: { start: number; end: number }) =>
+      !last || last.start < code.start || code.end < last.end;
+    const done = ({ scope, compound, test }: Mark) =>
+      !scope || outside(scope) || (!!compound && (!test || outside(test)));
     const before = (trail ? trailed(index, trail) : leading).filter(done);
-    // A label on a block or on statements in a row has no events of its own.
-    if (unit) latest.push(...(marks.get(spanKey(unit)) ?? []));
+    // A label on a block or on statements in a row has no events of its own; its regions are those
+    // of the step's own run, its trail's first stretch.
+    const own = trail?.[0]?.[2];
+    if (unit)
+      latest.push(
+        ...(marks.get(spanKey(unit)) ?? []).filter((mark) => !own || inLabels(mark, own))
+      );
     if (!latest.length && !leading.length && !before.length) {
-      lit.push(lit.at(-1) ?? { current: [], earlier: [] });
+      lit.push((!trail && lit.at(-1)) || { current: [], earlier: [] });
       continue;
     }
     const lighted = [leading, before, latest];
@@ -80,7 +100,7 @@ export function lightSteps(listing: Listing, steps: readonly LitStep[]): Lit[] {
         earlier.end <= unit.end &&
         (earlier.start !== unit.start || earlier.end !== unit.end);
       if (!within) break;
-      inside.push(...marksOf(steps[back].events ?? []));
+      inside.push(...(steps[back].events ?? []).flatMap(marksOf));
     }
     const ran = [...lighted.flat(), ...inside];
     const quiet = (listing.regions ?? []).filter(

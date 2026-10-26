@@ -124,6 +124,12 @@ const compound = new Set([
   'WhileStatement'
 ]);
 
+/** The code a node stands for, whether it holds other statements, and its test if it has one. */
+const flagsOf = (node: AnyNode): Pick<Mark, 'scope' | 'compound' | 'test'> => {
+  const test = 'test' in node && node.test ? spanOf(node.test) : undefined;
+  return { scope: spanOf(node), compound: compound.has(node.type), ...(test && { test }) };
+};
+
 const within = (inner: { start: number; end: number }, outer: { start: number; end: number }) =>
   outer.start <= inner.start && inner.end <= outer.end;
 
@@ -201,21 +207,19 @@ export function mappedListing(
   // run before a step only once the code has left its statement (see light.server.ts).
   const markOf = (part: AnyNode, label: string, region: Region): Mark[] => {
     const key = spanKey(spanOf(part));
-    const whole = { key, start: region.start, end: region.end };
+    const whole = { key, label, start: region.start, end: region.end };
     const marked = byName.get(label);
     if (!marked) return [whole];
-    if (marked.nodes.includes(part))
-      return [{ ...whole, scope: spanOf(part), compound: compound.has(part.type) }];
+    if (marked.nodes.includes(part)) return [{ ...whole, ...flagsOf(part) }];
     const statements = statementsOf(marked);
     const index = statements.findIndex((statement) => within(spanOf(part), spanOf(statement)));
     if (index < 0) return [whole];
     const statement = statements[index];
-    const scope = spanOf(statement);
     const lines = ownLines(text, region, regions);
     const line = lines.length === statements.length ? lines[index] : undefined;
-    const flags = { scope, compound: compound.has(statement.type) };
+    const flags = flagsOf(statement);
     return line
-      ? line.map(([start, end]) => ({ key, start, end, ...flags }))
+      ? line.map(([start, end]) => ({ key, label, start, end, ...flags }))
       : [{ ...whole, ...flags }];
   };
   const mapped = new Map<string, { text: string; line: number }[]>();

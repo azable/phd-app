@@ -1386,12 +1386,9 @@ describe('pauses accumulate', () => {
 
   it('show only each pause’s own part where the run around it is on', () => {
     const [left, right, compare] = firstSteps({ ...operands, 'insert.compare': 'on' });
-    // What led up to the comparison, outside it, is lit faintly; none of the comparison is.
-    expect(left).toEqual({
-      held: [],
-      current: ['j - 1'],
-      earlier: ['j = i\n  while j > 0 and']
-    });
+    // Only the operand lights: not what led up to the comparison, outside every pause, nor the rest
+    // of the comparison, which is on.
+    expect(left).toEqual({ held: [], current: ['j - 1'], earlier: [] });
     expect(right).toEqual({ held: [], current: ['j'], earlier: [] });
     // Its own end shows the whole of its run.
     expect(compare).toMatchObject({ held: ['left', 'right'], current: ['A[j - 1] > A[j]'] });
@@ -1418,14 +1415,15 @@ describe('pauses accumulate', () => {
     const { lit } = insertion.paced(new Map(Object.entries(fine)));
     const texts = (ranges: readonly (readonly [number, number])[]) =>
       ranges.map(([start, end]) => text.slice(start, end));
-    // Paused at the left operand: the comparison it is in has not been evaluated, so it is dark.
-    expect(texts(lit.code[1].earlier)).toEqual(['j = i\n  while j > 0 and']);
+    // Paused at the left operand: the comparison it is in has not been evaluated, so it is dark, and
+    // the code before it is in no run the page pauses at.
+    expect(texts(lit.code[1].earlier)).toEqual([]);
     // At the right operand, only the left one, done, is lit faintly.
     expect(texts(lit.code[2].earlier)).toEqual(['j - 1']);
     // Paused at the swap's read of A[j]: its first line ran; its second is half run and the rest
-    // has not run, so they stay dark.
+    // has not run, so they stay dark, as does the loop's line, in no run the page pauses at.
     expect(texts(lit.code[4].current)).toEqual(['j']);
-    expect(texts(lit.code[4].earlier)).toEqual(['while j > 0 and', 'moved = A[j - 1]']);
+    expect(texts(lit.code[4].earlier)).toEqual(['moved = A[j - 1]']);
   });
 
   it('nest: an accumulating run keeps its parts from before an inner run that is on', () => {

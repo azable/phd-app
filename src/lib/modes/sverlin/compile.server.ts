@@ -463,9 +463,9 @@ export function listingsOf(source: string): Record<string, Listing> {
 }
 
 /**
- * What each region of the source's own listings is mapped to, and whether a step lights it, its
- * steps paced as recordedTrace paces them, for the assistant to check its labels against; none
- * without such a listing.
+ * What each region of the source's own listings is mapped to, and whether the algorithm runs its
+ * code, its steps paced as recordedTrace paces them, for the assistant to check its labels against;
+ * none without such a listing.
  */
 export function listingMapsOf(
   source: string
@@ -483,7 +483,9 @@ export function listingMapsOf(
   const { listings, maps } = listingsFrom(source, traced, blocks.algorithm, listingBlocks);
   return Object.fromEntries(
     Object.entries(maps).map(([name, regions]) => {
-      const lit = lightSteps(listings[name], traced.steps).flatMap(({ current, earlier }) => [
+      // Lit wherever the algorithm runs its code, however the steps pause.
+      const everywhere = traced.steps.map(({ trail: _, ...step }) => step);
+      const lit = lightSteps(listings[name], everywhere).flatMap(({ current, earlier }) => [
         ...current,
         ...earlier
       ]);

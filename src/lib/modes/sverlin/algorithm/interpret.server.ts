@@ -105,6 +105,9 @@ export type StepSnapshot = {
  * pacing them differently line up by it. What runs after the last step is a step of its own, with
  * no code of its own.
  */
+/** Events logged from one count to another, lighting the code of the labels named. */
+export type Stretch = [from: number, to: number, labels: readonly string[]];
+
 export type MasterStep = {
   moment?: number;
   before?: StepSnapshot;
@@ -135,11 +138,12 @@ export type MasterStep = {
   /** How many events the algorithm had logged by the step's end; its events are the last of them. */
   seen?: number;
   /**
-   * The stretches of the events logged, each from the count logged before its first to that before
-   * the one after its last, whose code the step keeps lit as having run before it (see PauseMode):
-   * those leading up to it, and those earlier in each run that accumulates around it.
+   * The stretches of the events logged whose code the step lights, each from the count logged
+   * before its first to that before the one after its last, with the labels of its run, by full
+   * name, whose code alone it lights: its own run, and those earlier in each run that accumulates
+   * around it (see PauseMode).
    */
-  trail?: [number, number][];
+  trail?: Stretch[];
 };
 
 /**
@@ -486,7 +490,6 @@ class Interpreter {
   /** The values labelled expressions gave inside runs of the labels around them going on. */
   #labelGiven: Given[] = [];
   /** How many events had been logged at the last step. */
-  #recordedAt = 0;
   #runCount = 0;
   /** The label runs going on, outermost first. */
   readonly #runs: Run[] = [];
@@ -1522,9 +1525,9 @@ class Interpreter {
    * What a step ending `ending` (none at the algorithm's end) keeps of the runs around it: whether
    * a value given inside the runs `inside` is kept, its own run's always and those of the runs
    * accumulating around it, unless given inside a run nearer the step that is 'on'; and the
-   * stretches of events kept likewise, with those leading up to it outside every such run.
+   * stretches of events kept likewise, each lighting only its run's labels' code.
    */
-  #kept(ending?: Run): { keeps: (inside: readonly Run[]) => boolean; trail: [number, number][] } {
+  #kept(ending?: Run): { keeps: (inside: readonly Run[]) => boolean; trail: Stretch[] } {
     const now = this.#log.seen;
     const around = [...this.#runs].reverse();
     const keeps = (inside: readonly Run[]) => {
@@ -1536,14 +1539,15 @@ class Interpreter {
       }
       return false;
     };
-    const trail: [number, number][] = ending ? [[ending.start, now]] : [];
+    const labels = (run: Run) => this.#named.get(run.node) ?? [];
+    const trail: Stretch[] = ending ? [[ending.start, now, labels(ending)]] : [];
     let limit = now;
     for (const run of around) {
       const mode = this.#modeOf(run);
       if (mode === 'on') limit = Math.min(limit, run.start);
-      else if (mode === 'accumulate' && run.start < limit) trail.push([run.start, limit]);
+      else if (mode === 'accumulate' && run.start < limit)
+        trail.push([run.start, limit, labels(run)]);
     }
-    if (this.#recordedAt < limit) trail.push([this.#recordedAt, limit]);
     return { keeps, trail };
   }
 
@@ -1618,7 +1622,6 @@ class Interpreter {
       seen: this.#log.seen,
       trail
     });
-    this.#recordedAt = this.#log.seen;
     this.#applied = {};
     this.#labelled = {};
     this.#pendingApplied = [];

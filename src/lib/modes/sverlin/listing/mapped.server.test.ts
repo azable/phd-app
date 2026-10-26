@@ -67,8 +67,7 @@ describe('listings of the source’s own', () => {
     const { text } = prepared.listings!.textbook;
     const lit = prepared.paced(new Set(prepared.pauses.defaults)).lit.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
-    // The view draws the row, so the pauses are the shift and the placing, each step leading up from
-    // the one before.
+    // The view draws the row, so the pauses are the shift and the placing.
     const shown = lit.map(({ current, earlier }) => ({
       current: current.map(([start, end]) => text.slice(start, end)),
       earlier: earlier.map(([start, end]) => text.slice(start, end))
@@ -76,22 +75,24 @@ describe('listings of the source’s own', () => {
     // [2, 1]: the 2 shifts once, then j reaches 0 and the comparison never runs.
     // Step 0, the input as given, lights nothing.
     expect(shown[0]).toEqual({ current: [], earlier: [] });
-    expect(shown[1].current).toEqual(['A[j + 1] = A[j]']);
-    expect(shown[1].earlier).toEqual(
-      expect.arrayContaining(['key = A[i]', 'j = i - 1', 'j > 0 and A[j] > key'])
-    );
+    // Only the shift lights, not the code leading up to it, as no step pauses there.
+    expect(shown[1]).toEqual({ current: ['A[j + 1] = A[j]'], earlier: [] });
     expect(shown[2].current).toEqual(['A[j + 1] = key']);
   });
 
   it('light the bound alone where the comparison never runs', () => {
-    // The last step, placing the key, leads up from the shift: j moves to 0, and the test fails on
-    // its bound, its comparison never run.
+    // Paused at the test too: after the shift, j moves to 0, and the test fails on its bound, its
+    // comparison never run.
     const prepared = prepareSvelteComponent(insertion);
     const { text } = prepared.listings!.textbook;
-    const leaving = prepared.paced(new Set(prepared.pauses.defaults)).lit.textbook.at(-1)!;
-    const earlier = leaving.earlier.map(([start, end]) => text.slice(start, end));
-    expect(earlier).toContain('j > 0 and');
-    expect(earlier).not.toContain('A[j] > key');
+    const pauses = new Map(
+      [...prepared.pauses.defaults, 'test'].map((label) => [label, 'on'] as const)
+    );
+    const tests = prepared
+      .paced(pauses)
+      .lit.textbook.map(({ current }) => current.map(([start, end]) => text.slice(start, end)))
+      .filter((current) => current.some((piece) => piece.startsWith('j > 0')));
+    expect(tests.at(-1)).toEqual(['j > 0 and']);
   });
 
   it.each([

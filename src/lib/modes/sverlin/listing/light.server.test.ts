@@ -43,19 +43,14 @@ const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
 });
 
 describe('lighting', () => {
-  it('lights a step’s code strongly, and what led up to it faintly', () => {
+  it('lights only the code of the label each step is a run of, not what led up to it', () => {
     expect(problems).toEqual([]);
     const lit = lightSteps(listing, traced.steps);
-    expect(shown(listing, lit[0]).current).toEqual(['found = A[i] == x']);
-    expect(shown(listing, lit[0]).earlier).toEqual(expect.arrayContaining(['i = 0 to n - 1']));
-    // The second step tests found and goes round the loop; the stop inside the test ran nothing,
-    // so it stays dark.
-    expect(shown(listing, lit[1]).earlier).toEqual(
-      expect.arrayContaining(['i = 0 to n - 1', 'found then'])
-    );
+    expect(shown(listing, lit[0])).toEqual({ current: ['found = A[i] == x'], earlier: [] });
+    expect(shown(listing, lit[1])).toEqual({ current: ['found = A[i] == x'], earlier: [] });
   });
 
-  it('lights the last step, after the last step’s code, only faintly: it has no code of its own', () => {
+  it('lights nothing at the last step, after the last step’s code: it is no run of a label', () => {
     // The loop's exit only drops found and i, so it is no step: the page rests on the check that
     // found 8.
     expect(lightSteps(listing, traced.steps)).toHaveLength(2);
@@ -69,8 +64,7 @@ describe('lighting', () => {
     );
     const lit = lightSteps(mappedListing({ body: text }, ending).listing, ending.steps);
     expect(lit).toHaveLength(3);
-    expect(shown(listing, lit[2]).current).toEqual([]);
-    expect(shown(listing, lit[2]).earlier).toEqual(['found then stop']);
+    expect(shown(listing, lit[2])).toEqual({ current: [], earlier: [] });
   });
 
   it('lights faintly only code done: the code the step stops in is outside it, or it holds others', () => {
@@ -82,9 +76,9 @@ describe('lighting', () => {
     const lines: Listing = {
       text,
       marks: [
-        { key: spanKey(first), start: 0, end: 5, scope: first },
-        { key: spanKey(second), start: 6, end: 14, scope: second },
-        { key: spanKey(call), start: 6, end: 14, scope: second }
+        { key: spanKey(first), label: 'a', start: 0, end: 5, scope: first },
+        { key: spanKey(second), label: 'a', start: 6, end: 14, scope: second },
+        { key: spanKey(call), label: 'a', start: 6, end: 14, scope: second }
       ]
     };
     const event = (at: { start: number; end: number }) => ({ kind: 'read' as const, at });
@@ -100,8 +94,8 @@ describe('lighting', () => {
     const holding = (compound: boolean): Listing => ({
       text,
       marks: [
-        { key: spanKey(first), start: 0, end: 5, scope: around, compound },
-        { key: spanKey(call), start: 10, end: 14, scope: call }
+        { key: spanKey(first), label: 'a', start: 0, end: 5, scope: around, compound },
+        { key: spanKey(call), label: 'a', start: 10, end: 14, scope: call }
       ]
     });
     const kept = (listing: Listing) =>
@@ -109,6 +103,12 @@ describe('lighting', () => {
         .earlier;
     expect(kept(holding(false))).toEqual([]);
     expect(kept(holding(true))).toEqual(['a = 1']);
+    // Not while the step stops inside its test, as a loop's line paused at its comparison.
+    const testing: Listing = {
+      ...holding(true),
+      marks: holding(true).marks.map((mark, at) => (at ? mark : { ...mark, test: call }))
+    };
+    expect(kept(testing)).toEqual([]);
   });
 
   it('pairs a region’s own lines with its statements, so a node lights only its own line', () => {
