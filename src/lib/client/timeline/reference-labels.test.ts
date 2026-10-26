@@ -33,4 +33,15 @@ describe('presentation reference labels', () => {
     expect(singletonReferenceSegments(reference)).toEqual([reference]);
     expect(referenceChipLabel(reference)).toBe(presentationDisplayId(reference.presentationId));
   });
+
+  it('labels a presentation chip with the step it was viewed at', () => {
+    const reference = {
+      type: 'presentation-ref' as const,
+      presentationId: '12345678-1234-4123-8123-123456789ac1',
+      step: 2
+    };
+    const presentation = presentationDisplayId(reference.presentationId);
+    expect(referenceChipLabel(reference)).toBe(`${presentation} · S3`);
+    expect(referenceChipTitle(reference)).toBe(`${presentation} · step 3`);
+  });
 });

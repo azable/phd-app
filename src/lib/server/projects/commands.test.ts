@@ -1681,6 +1681,43 @@ describe('submitProjectFeedback', () => {
     expect(mocks.generatePrepared).not.toHaveBeenCalled();
   });
 
+  it('keeps the step a presentation was viewed at, refusing a step it does not have', async () => {
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      reply: markdownMessage('Noted.'),
+      decision: { action: 'respond' },
+      prompt: {},
+      generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
+    });
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject(
+      { title: 'Viewed step', creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const { presentationId } = presentedEvent(created).payload.presentation;
+    const submit = (step: number) =>
+      submitProjectFeedback(
+        {
+          projectId: created.projectId,
+          expectedHead: projectHead(created).id,
+          content: [{ type: 'presentation-ref', presentationId, step }, ...markdownMessage('Here')],
+          focus: [],
+          presentationCount: 1,
+          operationId: '12345678-1234-4123-8123-123456789abc'
+        },
+        commandDependencies
+      );
+
+    await expect(submit(99)).rejects.toThrow('has no step 100');
+    const result = await submit(1);
+    const feedback = result.document.events.find((event) => event.type === 'feedback.submitted');
+    expect(feedback?.type === 'feedback.submitted' && feedback.payload.content[0]).toEqual({
+      type: 'presentation-ref',
+      presentationId,
+      step: 1
+    });
+  });
+
   it('traces a referenced element to its node in the presentation source for the assistant', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('Noted.'),

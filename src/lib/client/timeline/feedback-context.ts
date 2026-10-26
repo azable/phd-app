@@ -6,12 +6,14 @@ import type { ReferenceSegment } from './reference-labels';
 
 /**
  * Describe what the participant is viewing with retained inline references: the elements selected
- * in a presentation, if any, or else the presentation itself; or a source chosen on its own.
+ * in a presentation, if any, or else the presentation itself at the step it shows (steps, by
+ * presentation id); or a source chosen on its own.
  */
 export function automaticFeedbackContext(
   presentations: readonly TimelinePresentation[],
   selections: readonly VisualSelection[] = [],
-  source?: string
+  source?: string,
+  steps: Readonly<Record<string, number>> = {}
 ): MessageContent {
   const visible = presentations.slice(0, 2);
   if (visible.length === 0)
@@ -22,7 +24,7 @@ export function automaticFeedbackContext(
     );
     return selection
       ? selectionReferences(selection)
-      : [{ type: 'presentation-ref' as const, presentationId: presentation.presentationId }];
+      : [presentationReference(presentation.presentationId, steps)];
   });
   if (references.length === 1) {
     return [
@@ -38,6 +40,19 @@ export function automaticFeedbackContext(
     ...references[1],
     { type: 'markdown', text: '.' }
   ];
+}
+
+/** A reference to a presentation, at the step it shows if it is visible. */
+export function presentationReference(
+  presentationId: string,
+  steps: Readonly<Record<string, number>> = {}
+): ReferenceSegment {
+  const step = steps[presentationId];
+  return {
+    type: 'presentation-ref',
+    presentationId,
+    ...(step !== undefined && step >= 0 ? { step } : {})
+  };
 }
 
 /** Prepend automatic context unless the participant deliberately inserted an inline reference. */

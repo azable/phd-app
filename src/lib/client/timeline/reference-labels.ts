@@ -20,16 +20,20 @@ export function referenceChipLabel(reference: ReferenceSegment): string {
   return detail ? `${presentation} · ${detail}` : presentation;
 }
 
-/** What an element chip adds to its presentation: the step and the element's label. */
+/** What a chip adds to its presentation: the step, and for an element, its label. */
 export function referenceChipDetail(reference: ReferenceSegment): string | undefined {
-  if (reference.type === 'presentation-ref') return undefined;
+  if (reference.type === 'presentation-ref')
+    return reference.step === undefined ? undefined : `S${reference.step + 1}`;
   return `S${reference.step + 1} · ${shortLabel(reference.element.label)}`;
 }
 
 /** Return the full description of one reference chip, shown on hover. */
 export function referenceChipTitle(reference: ReferenceSegment): string {
   const presentation = presentationDisplayId(reference.presentationId);
-  if (reference.type === 'presentation-ref') return presentation;
+  if (reference.type === 'presentation-ref')
+    return reference.step === undefined
+      ? presentation
+      : `${presentation} · step ${reference.step + 1}`;
   return `${presentation} · step ${reference.step + 1} · ${reference.element.label}`;
 }
 

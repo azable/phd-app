@@ -21,6 +21,23 @@ describe('automatic feedback context', () => {
     ]);
   });
 
+  it('references each visible presentation at the step it shows', () => {
+    expect(
+      automaticFeedbackContext(
+        [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
+        [],
+        undefined,
+        { [presentationIds[0]]: 2, [presentationIds[1]]: -1 }
+      )
+    ).toEqual([
+      { type: 'markdown', text: 'Comparing ' },
+      { type: 'presentation-ref', presentationId: presentationIds[0], step: 2 },
+      { type: 'markdown', text: ' with ' },
+      { type: 'presentation-ref', presentationId: presentationIds[1] },
+      { type: 'markdown', text: '.' }
+    ]);
+  });
+
   it('references selected elements in place of their presentation', () => {
     const element = { id: '62:7#2', label: 'Int 8' };
     expect(

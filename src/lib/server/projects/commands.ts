@@ -1795,8 +1795,26 @@ async function validateMessageContent(
       throw new Error(`Unknown referenced presentation ${segment.presentationId}.`);
     }
     if (segment.type === 'element-ref') validateElementReference(document, segment);
+    else if (segment.step !== undefined)
+      validateReferencedStep(document, segment.presentationId, segment.step);
   }
   return content;
+}
+
+/** A presentation referenced at a step must have that step. */
+function validateReferencedStep(
+  document: ProjectDocument,
+  presentationId: string,
+  step: number
+): void {
+  const presentation = document.events.find(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === presentationId
+  );
+  if (presentation?.type !== 'visualization.presented') return;
+  if (step >= presentationStepLabels(presentation.payload.presentation).length)
+    throw new Error(`Presentation ${presentationId} has no step ${step + 1}.`);
 }
 
 /** An element reference must name a step of a Sverlin presentation and a <Node> in its source. */

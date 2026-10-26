@@ -19,6 +19,7 @@
   import {
     automaticFeedbackContext,
     feedbackSubmissionContent,
+    presentationReference,
     selectionReferences
   } from './feedback-context';
   import {
@@ -40,6 +41,8 @@
     base?: string;
     /** That source's id, which the message says it is viewing. */
     baseSource?: string;
+    /** The step each visible presentation shows, by its id. */
+    steps?: Readonly<Record<string, number>>;
   };
 
   let {
@@ -50,7 +53,8 @@
     onSubmitted = () => {},
     onDraftChange = (_content: MessageContent, _focused: boolean) => {},
     base,
-    baseSource
+    baseSource,
+    steps = {}
   }: Props = $props();
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
@@ -59,14 +63,11 @@
   let editorRevision = $state(0);
   let focused = $state(false);
   const automaticContext = $derived(
-    automaticFeedbackContext(presentations, visualSelections, baseSource)
+    automaticFeedbackContext(presentations, visualSelections, baseSource, steps)
   );
 
   export function referencePresentation(presentation: TimelinePresentation): void {
-    insertReference({
-      type: 'presentation-ref',
-      presentationId: presentation.presentation.presentationId
-    });
+    insertReference(presentationReference(presentation.presentation.presentationId, steps));
   }
 
   export function referenceSelection(selection: VisualSelection): void {

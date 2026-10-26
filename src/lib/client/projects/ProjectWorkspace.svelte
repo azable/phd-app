@@ -281,6 +281,10 @@
     )
   );
   const playbackContext = $derived(presentationPlaybackContext(visiblePresentations));
+  // The step each visible presentation shows, which feedback says it is viewing.
+  const viewedSteps = $derived(
+    playbackContext.frames[presentationPlayback.stepFor(playbackContext)]?.localSteps ?? {}
+  );
 
   onMount(() => {
     void session.open();
@@ -638,6 +642,7 @@
                   presentations={chosen ? [] : visiblePresentations}
                   base={chosen?.presentationId}
                   baseSource={chosen?.sourceHash.slice(0, 6)}
+                  steps={viewedSteps}
                   visualSelections={visualSelections.current}
                   onSubmitted={() => {
                     chosenOf = undefined;

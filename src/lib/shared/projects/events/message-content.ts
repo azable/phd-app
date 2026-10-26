@@ -10,9 +10,11 @@ export const markdownMessageSegmentSchema = v.strictObject({
   text: textSchema
 });
 
+/** A presentation, with the step the participant was on where they were viewing it, from 0. */
 export const presentationReferenceSegmentSchema = v.strictObject({
   type: v.literal('presentation-ref'),
-  presentationId: presentationIdSchema
+  presentationId: presentationIdSchema,
+  step: v.optional(v.pipe(naturalSchema, v.maxValue(100_000)))
 });
 
 /**
@@ -156,7 +158,11 @@ export function plainMessageText(content: MessageContent): string {
         return [
           `[Element "${segment.element.label}" (${segment.element.id}) at step ${segment.step + 1} of presentation ${segment.presentationId}]`
         ];
-      return [`[Presentation ${segment.presentationId}]`];
+      return [
+        segment.step === undefined
+          ? `[Presentation ${segment.presentationId}]`
+          : `[Presentation ${segment.presentationId} at step ${segment.step + 1}]`
+      ];
     })
     .join(' ')
     .trim();

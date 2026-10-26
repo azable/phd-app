@@ -19,6 +19,15 @@ describe('plain message text', () => {
       ])
     ).toBe(`Compare [Presentation ${presentationId}]`);
   });
+
+  it('names the step the participant was viewing it at, counted from 1', () => {
+    expect(
+      plainMessageText([
+        { type: 'markdown', text: 'Viewing' },
+        { type: 'presentation-ref', presentationId, step: 2 }
+      ])
+    ).toBe(`Viewing [Presentation ${presentationId} at step 3]`);
+  });
 });
 
 describe('element references', () => {
