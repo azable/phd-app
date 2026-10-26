@@ -19,6 +19,8 @@ import {
   type LabelRun,
   type MasterStep,
   type Pacing,
+  type PauseMode,
+  type Pauses,
   type TraceState,
   type TypedState
 } from './algorithm/interpret.server';
@@ -168,14 +170,18 @@ export type PreparedComponent = {
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
   ownListings: string[];
-  /** Every label of the algorithm, by full name, and those the view pauses at by default. */
-  pauses: { labels: string[]; defaults: string[] };
   /**
-   * The steps pausing at the labels given, and what follows from them: the values the root reads
-   * for placement, measured with every value of their types, as each names a step of its own, and
-   * what each step lights in each listing. Made once per set of pauses.
+   * Every label of the algorithm, by full name, those the view pauses at by default, and those
+   * with no labels inside them, which pause only 'on'.
    */
-  paced: (pauses: ReadonlySet<string>) => PacedSteps;
+  pauses: { labels: string[]; defaults: string[]; leaves: string[] };
+  /**
+   * The steps pausing at the labels given, each as given or, given as a set, as it pauses where its
+   * variable is on (see pausing), and what follows from them: the values the root reads for
+   * placement, measured with every value of their types, as each names a step of its own, and what
+   * each step lights in each listing. Made once per way of pausing.
+   */
+  paced: (pauses: Pauses | ReadonlySet<string>) => PacedSteps;
   /** The source's identity, shared by its presentations however their steps are paced. */
   signature: string;
   atoms: AtomRegistry;
@@ -376,23 +382,43 @@ function paced(
 /** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
 export const pauseKey = (label: string): string => `pause@${label}`;
 
-/** The labels a variant pauses at: each whose pause@ variable is true, else the view's defaults. */
+/**
+ * Labels paused at, each as a label pauses where its variable is on: a label with labels inside it
+ * accumulating, one without, which has no pauses inside it, on.
+ */
+export function pausing(
+  labels: Iterable<string>,
+  leaves: ReadonlySet<string>
+): Map<string, PauseMode> {
+  return new Map([...labels].map((label) => [label, leaves.has(label) ? 'on' : 'accumulate']));
+}
+
+/**
+ * How a variant pauses at each label: as its pause@ variable says ('off' not at all), else as the
+ * view's defaults pause.
+ */
 export function pausesOf(
-  labels: readonly string[],
-  defaults: ReadonlySet<string>,
+  pauses: PreparedComponent['pauses'],
   values: Readonly<Record<string, unknown>>
-): Set<string> {
-  return new Set(
-    labels.filter((label) =>
-      typeof values[pauseKey(label)] === 'boolean'
-        ? values[pauseKey(label)] === true
-        : defaults.has(label)
-    )
+): Map<string, PauseMode> {
+  const leaves = new Set(pauses.leaves);
+  const defaults = pausing(pauses.defaults, leaves);
+  return new Map(
+    pauses.labels.flatMap((label): [string, PauseMode][] => {
+      const value = values[pauseKey(label)];
+      const mode = value === 'on' || value === 'accumulate' ? value : defaults.get(label);
+      if (value === 'off' || !mode) return [];
+      return [[label, leaves.has(label) ? 'on' : mode]];
+    })
   );
 }
 
-/** A set of pauses as a key, for the steps paced by them (see PreparedComponent.paced). */
-const pausesKey = (pauses: ReadonlySet<string>) => [...pauses].sort().join(',');
+/** How a source pauses, as a key, for the steps paced so (see PreparedComponent.paced). */
+const pausesKey = (pauses: Pauses) =>
+  [...pauses]
+    .map(([label, mode]) => `${label}=${mode}`)
+    .sort()
+    .join(',');
 
 /**
  * Each step as two, the state just before its code and just after it, as the page plays it: the
@@ -869,8 +895,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
     const labelNames = traced.labels.map(({ full }) => full);
+    const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
+    const leaves = new Set(labelNames.filter((label) => !parents.has(label)));
     // Pausing at every label, the finest the steps go, whose states those of any other pauses are
-    // among; where that outruns the limit, the defaults' alone.
+    // among, each accumulating, which holds the most; where that outruns the limit, the defaults'.
     let finest: MasterStep[] = [];
     try {
       finest = paced(
@@ -878,7 +906,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         algorithm,
         input,
         domain,
-        { ...pacing, pauses: new Set(labelNames) },
+        { ...pacing, pauses: pausing(labelNames, leaves) },
         keep
       ).steps;
     } catch {
@@ -1136,15 +1164,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       (node: { type?: string; expression?: { name?: string } }) =>
         !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
     );
-    // The steps each set of pauses makes, with what follows from them, made once each; the defaults'
-    // are the master's.
+    // The steps each way of pausing makes, with what follows from them, made once each; the
+    // defaults' are the master's.
     const pacedBy = new Map<string, PacedSteps>();
-    const pacedSteps = (pauses: ReadonlySet<string>): PacedSteps => {
+    const pacedSteps = (given: Pauses | ReadonlySet<string>): PacedSteps => {
+      const pauses: Pauses = 'get' in given ? given : pausing(given, leaves);
       const key = pausesKey(pauses);
       const made = pacedBy.get(key);
       if (made) return made;
       const steps =
-        key === pausesKey(traced.defaults)
+        key === pausesKey(pausing(traced.defaults, leaves))
           ? master
           : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
       const result: PacedSteps = {
@@ -1180,7 +1209,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ownListings,
       pauses: {
         labels: labelNames,
-        defaults: labelNames.filter((label) => traced.defaults.has(label))
+        defaults: labelNames.filter((label) => traced.defaults.has(label)),
+        leaves: [...leaves]
       },
       paced: pacedSteps,
       // Steps line up by their moments, so the identity tells presentations aligned that way from
@@ -1210,14 +1240,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
             choices: Object.values(placeChoices)
           }),
-          ...pauseSpace(labelNames)
+          ...pauseSpace(labelNames, leaves)
         },
         starter: {
           ...starterVariant(kinds, chosen, listing, ownListings, pointerChosen, {
             kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
             choices: Object.values(placeChoices)
           }),
-          ...starterPauses(labelNames, traced.defaults)
+          ...starterPauses(labelNames, traced.defaults, leaves)
         }
       },
       ...(listings ? { listings } : {}),
@@ -1317,10 +1347,8 @@ export async function bundlePresentation(
       pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
     )
   ]);
-  // The steps paced by the labels the variant pauses at, each placed by its moment.
-  const paced = prepared.paced(
-    pausesOf(prepared.pauses.labels, new Set(prepared.pauses.defaults), values)
-  );
+  // The steps paced as the variant pauses, each placed by its moment.
+  const paced = prepared.paced(pausesOf(prepared.pauses, values));
   const master = paced.steps;
   const masterSteps = master.map((_, index) => index);
   const moments = master.map(({ moment }, index) => moment ?? index);

@@ -66,19 +66,42 @@ export class DesignValueError extends Error {
 }
 
 /**
- * Where the steps pause: each label of the algorithm, by its full name, as pause@insert.swap.to,
- * on or off (see Pacing in algorithm/interpret.server.ts).
+ * Where and how the steps pause: each label of the algorithm, by its full name, as
+ * pause@insert.swap.to, accumulating, on, or off, the first how it pauses where it is switched on;
+ * one with no labels inside it, which has no pauses inside it, only on or off (see PauseMode in
+ * algorithm/interpret.server.ts).
  */
-export function pauseSpace(labels: readonly string[]): DesignSpace {
-  return Object.fromEntries(labels.map((label) => [`pause@${label}`, [true, false]]));
+export function pauseSpace(labels: readonly string[], leaves: ReadonlySet<string>): DesignSpace {
+  return Object.fromEntries(
+    labels.map((label) => [
+      `pause@${label}`,
+      leaves.has(label) ? ['on', 'off'] : ['accumulate', 'on', 'off']
+    ])
+  );
 }
 
-/** The pauses a source starts with: the labels the view gives a reason to pause at. */
+/** The pauses a source starts with: the labels the view gives a reason to pause at, switched on. */
 export function starterPauses(
   labels: readonly string[],
-  defaults: ReadonlySet<string>
-): Record<string, boolean> {
-  return Object.fromEntries(labels.map((label) => [`pause@${label}`, defaults.has(label)]));
+  defaults: ReadonlySet<string>,
+  leaves: ReadonlySet<string>
+): Record<string, DesignValue> {
+  return Object.fromEntries(
+    labels.map((label) => [
+      `pause@${label}`,
+      !defaults.has(label) ? 'off' : leaves.has(label) ? 'on' : 'accumulate'
+    ])
+  );
+}
+
+/**
+ * A pause@ value as saved before pauses had three ways: true, switched on (its first option), and
+ * false, off; any other value as it is.
+ */
+function asPause(space: DesignSpace, key: string, value: unknown): unknown {
+  if (!key.startsWith('pause@') || typeof value !== 'boolean' || !Object.hasOwn(space, key))
+    return value;
+  return value ? space[key][0] : 'off';
 }
 
 /**
@@ -222,7 +245,9 @@ export function buildVariant(
   seed: number,
   fallbacks: Readonly<Record<string, string>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
-  const chosen = Object.entries(request.chosen ?? {});
+  const chosen = Object.entries(request.chosen ?? {}).map(
+    ([key, value]) => [key, asPause(space, key, value)] as const
+  );
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
     .map(([key, value]) => unfit(space, key, value));
@@ -235,11 +260,13 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  for (const [key, value] of Object.entries(request.base ?? {}))
+  for (const [key, saved] of Object.entries(request.base ?? {})) {
+    const value = asPause(space, key, saved);
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
       origins[key] = 'kept';
     }
+  }
   const drawn =
     request.randomise === true
       ? randomised(space, values, seed)

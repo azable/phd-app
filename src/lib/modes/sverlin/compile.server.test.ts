@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MasterStep } from './algorithm/interpret.server';
+import type { MasterStep, PauseMode } from './algorithm/interpret.server';
 import {
   bundlePresentation,
   compileSvelteComponent,
   InvalidSvelteSourceError,
+  pausesOf,
   prepareSvelteComponent
 } from './compile.server';
 import { linearSearchSource } from './contract';
+import { buildVariant } from './design.server';
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
 const kindsOf = (space: Record<string, unknown>) =>
@@ -1154,16 +1156,18 @@ describe('pauses at labels', () => {
     const pauses = Object.entries(prepared.design.starter).filter(([key]) =>
       key.startsWith('pause@')
     );
+    // A label with labels inside it accumulates where it is on; one without is only on or off.
     expect(Object.fromEntries(pauses)).toEqual({
-      'pause@insert': false,
-      'pause@insert.compare': true,
-      'pause@insert.compare.left': false,
-      'pause@insert.compare.right': false,
-      'pause@insert.swap': true,
-      'pause@insert.swap.from': false,
-      'pause@insert.swap.to': false
+      'pause@insert': 'off',
+      'pause@insert.compare': 'accumulate',
+      'pause@insert.compare.left': 'off',
+      'pause@insert.compare.right': 'off',
+      'pause@insert.swap': 'accumulate',
+      'pause@insert.swap.from': 'off',
+      'pause@insert.swap.to': 'off'
     });
-    expect(prepared.design.space['pause@insert.swap.to']).toEqual([true, false]);
+    expect(prepared.design.space['pause@insert.compare']).toEqual(['accumulate', 'on', 'off']);
+    expect(prepared.design.space['pause@insert.swap.to']).toEqual(['on', 'off']);
     expect(played(prepared.master).slice(0, 5)).toEqual([
       '5,2,4,1 | 5 > 2: true | left right | ',
       '2,5,4,1 |  | from to | ',
@@ -1203,9 +1207,9 @@ describe('pauses at labels', () => {
     const coarse = await bundlePresentation(prepared, 1);
     const apart = await bundlePresentation(prepared, 1, {
       chosen: {
-        'pause@insert.compare.left': true,
-        'pause@insert.compare.right': true,
-        'pause@insert.swap.to': true
+        'pause@insert.compare.left': 'on',
+        'pause@insert.compare.right': 'on',
+        'pause@insert.swap.to': 'on'
       }
     });
     expect(apart.masterSignature).toBe(coarse.masterSignature);
@@ -1217,8 +1221,155 @@ describe('pauses at labels', () => {
   it('names a pause by the label’s full name, refusing its short ending', async () => {
     const prepared = prepareSvelteComponent(insertion);
     await expect(
-      bundlePresentation(prepared, 1, { chosen: { 'pause@left': true } })
+      bundlePresentation(prepared, 1, { chosen: { 'pause@left': 'on' } })
     ).rejects.toThrow('a pause names a label by its full name');
+  });
+});
+
+describe('pauses accumulate', () => {
+  const insertion = prepareSvelteComponent(
+    // The pauses-at-labels source, whose listing marks every label.
+    `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+<script lang="sverlin">
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+    let j = i;
+    while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
+      const moved = values[@from[Prev(j)]];
+      values[Prev(j)] = values[@to[j]];
+      values[j] = moved;
+      j = Prev(j);
+    }
+  }
+</script>
+<script lang="sverlin" listing="code">
+  for i = 1 to length(A) - 1
+    @insert[j = i
+    while j > 0 and @compare[A[@left[j - 1]] > A[@right[j]]]
+      @swap[moved = A[@from[j - 1]]
+      A[j - 1] = A[@to[j]]
+      A[j] = moved
+      j = j - 1]]
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}
+{#snippet Highlight(p: Position)}<Pointed />{/snippet}
+{#snippet Board()}
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+      {@render Greater()}
+    </Node>
+  </Node>
+{/snippet}
+{@render Board()}
+{@render Position(@left)}
+{@render Position(@right)}
+{@render Position(@from)}
+{@render Position(@to)}`
+  );
+  const { text } = insertion.listings!.code;
+  const operands = { 'insert.compare.left': 'on', 'insert.compare.right': 'on' } as const;
+  /** The first three steps' marks held, and the listing's text, current and earlier. */
+  const firstSteps = (modes: Record<string, PauseMode>) => {
+    const { steps, lit } = insertion.paced(new Map(Object.entries(modes)));
+    const texts = (ranges: readonly (readonly [number, number])[]) =>
+      ranges.map(([start, end]) => text.slice(start, end));
+    return [1, 2, 3].map((index) => ({
+      held: Object.keys(steps[index].held ?? {}).map((label) => label.split('.').at(-1)),
+      current: texts(lit.code[index].current),
+      earlier: texts(lit.code[index].earlier)
+    }));
+  };
+
+  it('keep the comparison’s earlier parts, marks and code alike, until it finishes', () => {
+    const [left, right, compare] = firstSteps({ ...operands, 'insert.compare': 'accumulate' });
+    expect(left).toMatchObject({ held: [], current: ['j - 1'] });
+    // At the right operand, the left one stays marked, and its code lit faintly.
+    expect(right.held).toEqual(['left']);
+    expect(right.current).toEqual(['j']);
+    expect(right.earlier.join(' ')).toContain('j - 1');
+    expect(compare).toMatchObject({ held: ['left', 'right'], current: ['A[j - 1] > A[j]'] });
+  });
+
+  it('show only each pause’s own part where the run around it is on', () => {
+    const [left, right, compare] = firstSteps({ ...operands, 'insert.compare': 'on' });
+    // What led up to the comparison, outside it, is lit faintly; none of the comparison is.
+    expect(left).toEqual({
+      held: [],
+      current: ['j - 1'],
+      earlier: ['j = i\n  while j > 0 and']
+    });
+    expect(right).toEqual({ held: [], current: ['j'], earlier: [] });
+    // Its own end shows the whole of its run.
+    expect(compare).toMatchObject({ held: ['left', 'right'], current: ['A[j - 1] > A[j]'] });
+  });
+
+  it('pass through a label that is off, to the runs around it', () => {
+    // Off, the comparison neither pauses nor keeps: the insertion around it, accumulating, keeps.
+    const kept = firstSteps({ ...operands, insert: 'accumulate', 'insert.swap': 'accumulate' });
+    expect(kept[1].held).toEqual(['left']);
+    expect(kept[1].earlier.join(' ')).toContain('j - 1');
+    // With nothing around it keeping, only the code since the step before is lit faintly, as the
+    // left operand's cell read.
+    const none = firstSteps({ ...operands, 'insert.swap': 'accumulate' });
+    expect(none[1]).toEqual({ held: [], current: ['j'], earlier: ['A[', '] > A[', ']'] });
+  });
+
+  it('nest: an accumulating run keeps its parts from before an inner run that is on', () => {
+    const [, right] = firstSteps({ ...operands, insert: 'accumulate', 'insert.compare': 'on' });
+    // The insertion's start, before the comparison, stays; the comparison's left operand does not.
+    expect(right.held).toEqual([]);
+    expect(right.earlier.join(' ')).toContain('j = i');
+    expect(right.earlier.join(' ')).not.toContain('j - 1');
+  });
+
+  it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
+    expect(
+      pausesOf(insertion.pauses, {
+        'pause@insert.compare.left': 'accumulate',
+        'pause@insert.compare': 'on'
+      })
+    ).toEqual(
+      new Map([
+        ['insert.compare', 'on'],
+        ['insert.compare.left', 'on'],
+        ['insert.swap', 'accumulate']
+      ])
+    );
+  });
+
+  it('read a pause saved as true or false as switched on in its first way, or off', async () => {
+    const saved = await bundlePresentation(insertion, 1, {
+      chosen: { 'pause@insert.compare.left': true, 'pause@insert.compare': false }
+    });
+    const named = await bundlePresentation(insertion, 1, {
+      chosen: { 'pause@insert.compare.left': 'on', 'pause@insert.compare': 'off' }
+    });
+    expect(saved.masterSteps).toEqual(named.masterSteps);
+    const { values, origins } = buildVariant(
+      insertion.design.space,
+      insertion.design.starter,
+      { base: { 'pause@insert': true, 'pause@insert.swap': false } },
+      1
+    );
+    expect(values['pause@insert']).toBe('accumulate');
+    expect(values['pause@insert.swap']).toBe('off');
+    expect(origins['pause@insert']).toBe('kept');
   });
 });
 

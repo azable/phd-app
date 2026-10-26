@@ -25,6 +25,9 @@ const search = `
   }
 `;
 const steps = (body: string, pacing?: Pacing) => traceAlgorithm(body, input, domain, pacing).steps;
+// Pausing at each label given, accumulating.
+const pausedAt = (...labels: string[]) =>
+  new Map(labels.map((label) => [label, 'accumulate' as const]));
 const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
 // A view drawing the collection and the count, and showing each comparison.
 const comparing: Pacing = {
@@ -85,7 +88,7 @@ describe('pauses at labels', () => {
     const run = traceAlgorithm(search, input, domain, comparing);
     expect([...run.defaults].sort()).toEqual(['pass.check', 'pass.count', 'start']);
     // Pausing at the checks alone: each count leads up to its check.
-    const checks = steps(search, { ...comparing, pauses: new Set(['pass.check']) });
+    const checks = steps(search, { ...comparing, pauses: pausedAt('pass.check') });
     expect(checks.map(({ before, state }) => [before?.state.checked, state.checked])).toEqual([
       [1, 1],
       [2, 2],
@@ -93,11 +96,9 @@ describe('pauses at labels', () => {
     ]);
     expect(checks.every(({ applied }) => applied?.Equal?.length === 1)).toBe(true);
     // Pausing at the pass as well, which ends after each check, adds a step that changes nothing.
-    expect(steps(search, { ...comparing, pauses: new Set(['pass', 'pass.check']) })).toHaveLength(
-      6
-    );
+    expect(steps(search, { ...comparing, pauses: pausedAt('pass', 'pass.check') })).toHaveLength(6);
     // Pausing nowhere leaves the end alone.
-    expect(steps(search, { ...comparing, pauses: new Set() })).toHaveLength(1);
+    expect(steps(search, { ...comparing, pauses: pausedAt() })).toHaveLength(1);
   });
 
   it('pause by default at an operator’s applications only inside the label a view is narrowed to', () => {
