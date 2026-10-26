@@ -1,341 +1,251 @@
 <!--
-The Sverlin language guide. bot.server.ts sends this file to the assistant after the instructions
-in assistant.md, with these HTML comments removed, so every other word here is model guidance.
-Comments are notes for maintainers. guide.server.test.ts builds every complete example and checks
-the documented Node and Link props and their named values against the compiler. Update this guide
-in the same change as the language, the library props, or the design space's options.
+The Sverlin language guide. bot.server.ts sends this file to the assistant after
+the instructions in assistant.md, and chooser.server.ts sends its Design section
+to the chooser, with these HTML comments removed, so every other word here is
+model guidance. Comments are notes for maintainers. guide.server.test.ts builds
+every complete example and checks the documented Node and Link props and their
+named values against the compiler. Update this guide in the same change as the
+language, the library props, or the design space's options. Say each rule once,
+here or in the prompt that owns it, and keep examples small and varied, so they
+show a mechanism without prescribing a look or structure to copy.
 -->
 
 # The Sverlin language
 
-A Sverlin component is one Svelte file that describes an algorithm/program
-visualization. It records the steps of an algorithm or program and draws a view
-of each step. The markup says what is drawn; how it looks is the design: every
-look of every kind of node is a variable the compiler finds in the markup. A
-presentation is one variant of the component: every presentation shows the same
-input and algorithm, with its own value for every variable. Participants compare
-presentations in pairs, so the two presentations of a pair should differ in how
-they show the algorithm.
+A Sverlin component is one Svelte file that records the steps of an algorithm or
+program and draws a view of each step. The markup says what is drawn; how it
+looks is the design: every look of every kind of node is a variable the compiler
+finds in the markup (see Design). A presentation is one variant of the
+component: every presentation shows the same input and algorithm, with its own
+value for every variable. Participants compare presentations in pairs, so the
+two presentations of a pair should differ in how they show the algorithm.
 
 ## Blocks
 
-A component describes its visualization in `<script lang="sverlin">` blocks,
-written in a restricted subset of JavaScript (see The subset), followed by a
-script-free Svelte view. The algorithm block is required; the domain and input
-blocks are optional.
+A component is `<script lang="sverlin">` blocks, written in a subset of
+JavaScript (see The subset), followed by a script-free Svelte view. Only the
+algorithm block is required, and there is no design block (see Design).
 
-1. `<script lang="sverlin" domain>`: the types: atomic types, and the
-   collections, records, and unions built from them, and the operators the
-   algorithm computes with (see Atomic types, Collections, records, and unions,
-   and Operators).
-2. `<script lang="sverlin" input>`: the fixed starting data. Declare the initial
-   state with `const` or `let`, such as `const values = Values([3, 8, 5]);` with
-   `Values` defined in the domain block as a collection of `Int`; every value
-   has a domain type.
+1. `<script lang="sverlin" domain>`: the types, atomic and the collections,
+   records, and unions built from them, and the operators the algorithm computes
+   with (see Atomic types; Collections, records, and unions; Operators).
+2. `<script lang="sverlin" input>`: the fixed starting data, declared with
+   `const` or `let`, as `const values = Values([3, 8, 5]);`; every value has a
+   domain type.
 3. `<script lang="sverlin">`: the algorithm. It starts from the input variables,
    may update them and declare more, may declare functions (see Loops and
    functions), and labels the code its steps are about (see Steps). It runs
    once.
-
-There is no design block: what presentations differ in is the design space (see
-Design).
+4. `<script lang="sverlin" listing="textbook">`, any number, any name but none:
+   texts of the algorithm to show beside the view (see Listing).
 
 ## View
 
 The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components,
-a `<Listing />` of the algorithm (see Listing), text inside nodes, and Svelte
-blocks and tags such as `{#if}`, `{#each}`, `{#snippet}`, `{@render}`, and
-`{@const}`, with `{#if when(@label)}` for the steps inside a label's runs (see
-Views of what a step computed). It has no `<script>` or `<style>` of its own,
-and no HTML or SVG elements: every visible thing is a node or a link, so
+a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
+`{#each}`, `{#snippet}`, `{@render}`, and `{@const}`, with no `<script>`,
+`<style>`, HTML, or SVG: every visible thing is a node or a link, so
 participants can select it and presentations can vary it. Nodes take no props
 that set a look: a node's kind is the snippet it is in, and the design gives
-each kind its look (see Design). The top level of the markup holds only renders,
-with `{#if}` and `{#each}` around them, and a `<Listing />`, so every node is in
-a snippet. A snippet without parameters is a part of the page, as
-`{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where the top
-level renders it, `{@render Title()}`; a part reads what the top level reads,
-renders other parts, views, and operators, and writes its text inside its nodes.
-Every input and algorithm variable in scope at the selected step, `step`,
-`seed`, and the library components are already in scope; never write `import`,
-and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
+each kind its look. Every input and algorithm variable in scope at the selected
+step, `step`, `seed`, and the library components are already in scope; never
+write `import`, and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
-Draw every value of a domain type through a view of its type, as
-`{@render Int(target)}` (see Views of types), and every position through a
-pointer (see Pointers); the markup around them arranges, labels, and explains.
-For a value used more than once or too long to read inline, use
-`{@const name = expression}` as the first child of the nearest component or
-block, such as directly inside a `<Node>`, `{#if}`, or `{#each}`.
-
-Facts about the algorithm, such as where the target was found, are clearer
-recorded as algorithm variables the view reads, as the position a search
-returns; how anything looks is the design's, never the algorithm's.
-
-A node that writes text around nodes or views, with no `layout`, reads as a line
-of text:
-`<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>` sets
-the two views inline in the sentence, each its own size, and the line wraps
-between words, also when `{#if}` chooses the sentence. Drawing a value through
-its view this way, rather than as `{target}`, keeps it sized and looking like
-the value elsewhere.
+- The top level holds only renders, with `{#if}` and `{#each}` around them, and
+  a `<Listing />`, so every node is in a snippet. A snippet without parameters
+  is a part of the page, as
+  `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where the top
+  level renders it, `{@render Title()}`; a part reads what the top level reads
+  and renders parts, views, and operators. Render the parts at the top level
+  rather than one part holding the whole view.
+- Draw every value of a domain type through a view of its type, as
+  `{@render Int(target)}`, and every position through a pointer; the markup
+  around them arranges, labels, and explains. A node of text and renders with no
+  `layout` reads as a line of text, its renders inline at their own sizes,
+  wrapping between words, as
+  `<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>`,
+  which keeps each value sized and looking as it does elsewhere, unlike
+  `{target}`.
+- `{@const name = expression}`, as the first child of the nearest component or
+  block, names a value used more than once or too long to read inline.
+- Write text in the participant's words about what the algorithm does, never an
+  operator's name: "the target is further right", not "Less is true".
+- How anything looks is the design's, never the algorithm's; what a step shows
+  is read from the algorithm's values and labels (see Steps).
 
 ## Views of types
 
-A view is a snippet that draws one value of one domain type: its one parameter
-has that type, as in `{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`,
-and the node showing that value, as `<Node {value} />` does, shows the type's
-unit too. A view reads only its value and other views, never the input or
-algorithm variables, except a pointer (see Pointers): how two values relate is
-drawn where both are in scope, in the view that holds them or by a pointer.
-Define views at the top level of the markup.
+A view is a snippet drawing one value of one domain type, its one parameter of
+that type, as `{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`; the
+node showing the value shows the type's unit too. Define views at the top level.
+A view reads only its value and other views, never the input or algorithm
+variables, a pointer apart: how two values relate is drawn where both are in
+scope, in the view holding them or by a pointer.
 
-A type is drawn by its name: `{@render Int(value)}` draws whichever view of
-`Int` the variant chooses, the variable `views.Int`, whose options are every
-view of `Int`, and `none`, which draws nothing. Name views after how they draw,
-as `IntCell` or `IntTally`: a view named after its type,
-`{#snippet Int(value: Int)}`, is an error, as it would leave nothing to choose.
-Which view draws a value is a look, the variant's, so a value is always rendered
-through its type: rendering a view by its own name, as
-`{@render IntCell(value)}`, is an error naming the fix, and one render is drawn
-apart through its place (see Places). Views differ in what they draw: two views
-that would differ only in their look, such as a cell and a round cell, are one
-view, the look the design's. Rendering a type no view draws is an error. In the
-view, a type's name is its view, never a constructor: draw values the state
-holds, made in the input and algorithm blocks, and show a loop's own index, as
-`k` in `{#each list as v, k}`, as text, `{k}`.
+A type is drawn by its name: `{@render Int(value)}` draws the view `views.Int`
+chooses, among every view of `Int` and `none`. Name views after how they draw,
+as `IntCell` or `IntTally`. Which view draws a value is the variant's, so a view
+named as its type (`{#snippet Int(value: Int)}`), rendering a view by its own
+name (`{@render IntCell(value)}`; one render is drawn apart through its place,
+see Places), and rendering a type no view draws are errors. Views differ in what
+they draw: two differing only in look, as a cell and a round cell, are one view.
+Offer more than one where the request leaves open what a value shows, as a
+number as a cell or a tally, a flag as a word or a tick. In the view a type's
+name is its view, never a constructor: draw values the state holds, and a loop's
+own index, `k` in `{#each list as v, k}`, as text, `{k}`.
 
 A view of a collection or record draws its parts through their types' views:
 
 ```svelte
 {#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet VertexCard(v: Vertex)}<Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
-{#snippet SeenText(seen: Flag)}<Node>{seen ? 'seen' : 'new'}</Node>{/snippet}
 ```
 
-A node whose only child is an `{#each}`, as in `Items`, holds a collection: its
-items sit on equal tracks, as large as the largest, so they line up evenly; they
-run as a row unless the node sets `layout`, and a collection inside another runs
-across it, so a collection of collections draws rows in a column or columns in a
-row. Put a title or caption for the collection in a node around it, not beside
-the `{#each}`.
-
-Every view is measured with every value its type allows, so its box keeps one
-size whatever value it shows and nothing moves between steps; the page moves
-each value from where it was to where it is (see Steps); participants can select
-it; and presentations vary how it looks. Offer more than one view of a type
-where the request leaves open what it shows, so presentations differ in what
-they draw as well as how it looks: a number as a cell or as a tally beside it, a
-flag as a word or a tick.
+A node whose only child is an `{#each}` holds a collection: its items sit on
+equal tracks, as large as the largest, in a row unless it sets `layout`, and a
+collection inside another runs across it, as rows in a column. Put a title for a
+collection in a node around it, not beside the `{#each}`. Every view is measured
+with every value its type allows, so its box keeps one size and nothing moves
+between steps.
 
 ## Pointers
 
 A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a
-pointer: it holds one `<Pointed>`, which stands for the element the position
-points at, drawn with its own view, and the nodes around it, placed by layout,
-annotate it:
+pointer: it holds one `<Pointed>`, standing for the element pointed at, drawn
+with its own view, and nodes around it, placed by layout, annotate it: a mark
+alone, `<Pointed />`; a bracket,
+`<Node layout="row"><Node>[</Node><Pointed /></Node>`; or a label below,
+`<Node layout="column"><Pointed />{@render Caption()}</Node>`, its snippet
+written in the view so the label is a kind of its own.
 
-- a label below: `<Node layout="column"><Pointed />{@render IName()}</Node>`,
-  with `{#snippet IName()}<Node>i</Node>{/snippet}` written in the view, so the
-  label is a kind of its own
-- a bracket: `<Node layout="row"><Node>[</Node><Pointed /></Node>`
-- a mark alone: `<Pointed />`
-
-`<Pointed>` takes no props: while the pointer is at it, the element is drawn in
-the pointer's kind, its view's name and `.Pointed`, so `Here.Pointed.fill` is
-the fill of the element `Here` points at. Write it in the pointer view itself,
-not in a snippet inside it. Its paint (fill, stroke, opacity, text colour) shows
-only where the pointer is, and the rest of its look holds in every slot, so
-every slot keeps one size. Render a pointer at the top level of the markup,
-outside snippets and blocks other than `{#if}`, with a position from the state:
-a variable (`{@render Index(i)}`), an element, or a field
-(`{@render Index(edges[e].to)}`). A position type draws as where it is rendered
-calls for: outside any node, as `{@render Index(i)}`, a mark, through its
-pointer views (`pointers.Index`), so every mark of it looks the same; inside a
-node, as `<Node>at {@render Index(i)}</Node>`, its number, through its other
-views (`views.Index`); each is a choice of its own. The page draws it around the
-element wherever the element is drawn. Every element keeps room for every
-pointer that can point into its collection, and a position a step shows past an
-end gets a slot there, so nothing moves as pointers move. Pointers at one
-element nest, the one rendered last outermost. A pointer whose position is out
-of scope, or points nowhere, draws nothing and keeps its room. Since it is drawn
-from the top level, a pointer view may read the input and algorithm variables,
-so its label can follow the state, as `<Node>{done ? 'last' : 'next'}</Node>`;
-one rendered in `{#if}` whose branch is not taken draws nothing and keeps its
-room. A pointer at an element drawn as a link, such as the current edge, gives
-the link its kind's stroke and width.
-
-Insertion sort, with the key drawn beside the row:
-
-```svelte
-<script lang="sverlin" domain>
-  const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
-  const Position = index(Values);
-  const Flag = type('boolean');
-
-  // walking the collection
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-
-  // what the algorithm does
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
-</script>
-
-<script lang="sverlin" input>
-  const values = Values([5, 2, 4, 1]);
-</script>
-
-<script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
-    @pick[const key = values[i];
-    let j = i;]
-    @shift[while (Before(Position(0), j) && Greater(values[Prev(j)], key)) {
-      values[j] = values[Prev(j)];
-      j = Prev(j);
-    }]
-    @place[values[j] = key;]
-  }
-</script>
-
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Mark(p: Position)}<Pointed />{/snippet}
-{#snippet Bracket(p: Position)}<Node layout="row"><Node>[</Node><Pointed /></Node>{/snippet}
-{#snippet Title()}<Node>Insertion sort</Node>{/snippet}
-{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
-{#snippet Board()}<Node layout="row">{@render Key()}{@render Values(values)}</Node>{/snippet}
-
-{@render Title()}
-{@render Board()}
-{@render Position(i)}
-{@render Position(j)}
-```
-
-Both marks are drawn by the view `pointers.Position` chooses, `Mark` to start,
-so they look alike; a variant draws one apart through its place, as
-`Mark.Pointed@j.fill` colouring the hole, or `pointers.Position@j` drawing it
-with `Bracket` (see Places). Each key is copied into its box, the larger values
-slide right, and the key drops into its place, each a step of its own, as each
-changes what the view draws (see Steps). A reference follows its element as it
-moves: with `const Tracked = ref(Values);` and
-`const tracked = Tracked(values[3]);`, `{@render Tracked(tracked)}` marks that
-value wherever the sort takes it.
+- `<Pointed>` takes no props and is written in the pointer view itself, not a
+  snippet inside it. Where the pointer is, the element is drawn in the pointer's
+  kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke, opacity,
+  text colour) shows only there, the rest of its look in every slot, so every
+  slot keeps one size.
+- Render a pointer at the top level, outside snippets and blocks other than
+  `{#if}`, with a position from the state: a variable (`{@render Index(i)}`), an
+  element, a field (`{@render Index(edges[e].to)}`), or a label (see Views of
+  what a step computed). Outside any node a position type draws as a mark,
+  through its pointer views (`pointers.Index`), so every mark of it looks the
+  same; inside a node, as `<Node>at {@render Index(i)}</Node>`, as its number,
+  through its other views (`views.Index`).
+- The page draws the pointer around the element wherever that is drawn. Every
+  element keeps room for every pointer that can point into its collection, and a
+  position shown past an end gets a slot there, so nothing moves as pointers
+  move. Pointers at one element nest, the one rendered last outermost. A pointer
+  out of scope, pointing nowhere, or in an `{#if}` branch not taken draws
+  nothing and keeps its room.
+- A pointer view may read the input and algorithm variables, so its label can
+  follow the state. A pointer at an element drawn as a link, as the edge being
+  examined, gives the link its kind's stroke and width.
+- A view knows nothing of the place it draws, so a name written into a pointer
+  view, as `i` under the mark, is right only where the variant chooses that view
+  for that place, and a randomised variant can choose it elsewhere. Prefer one
+  pointer view that names nothing; where views of one type must say different
+  things, each place's view is chosen by what it says, as `pointers.Position@j`
+  (see Places).
+- A reference follows its element as it moves: `{@render Tracked(tracked)}`,
+  with `const tracked = Tracked(values[3]);`, marks that value wherever a sort
+  takes it.
 
 ## Steps
 
-- A label marks code the steps are about. Write it around the code: `@name[…]`
-  around a statement, statements in a row, or an expression, as
-  `@place[values[j] = key;]` or
+- A label marks code the steps are about: `@name[…]` around a statement,
+  statements in a row, or an expression, as `@place[values[j] = key;]` or
   `while (@test[Before(Position(0), j) && Greater(values[Prev(j)], key)])`, or
   `@name{` on a block the code already has, a loop's, an `if`'s, or a function's
-  body, as `for (…) @insert{`. A name is one word, without dots. The algorithm
-  runs as if the marks were spaces. A labelled loop runs its code once per pass,
-  its test leading up to the pass.
-- The page pauses where labels finish, and only there: each label is a pause,
-  `"accumulate"`, `"on"`, or `"off"` in the variant as `pause@` and its full
-  name, as `"pause@insert.swap": "on"`. A pause at a label is a step at the end
-  of each of its runs. Every label is `"on"` to start with, and the variant
-  chooses where the steps pause: nothing in the view turns a pause on or off. So
-  label what a step can be about, as a comparison, `@compare[Greater(…)]`, and
-  the operands it reads, to pause at each. A step is shown as a change: the page
-  shows the state just before its code, then moves to the state just after it.
-  Code not paused at, inside a label that is off or outside every label, as a
-  loop's header, leads up to the next step, and what a label there gives, its
-  value or an application rendered at it, is drawn at that step, as a comparison
-  not paused at is at the swap it leads to.
-- A variant turns pauses on or off to pace the steps, and variants compare
-  pacing so: with `pause@sweep.pair.test` off, a sort plays through its swaps;
-  with labels on its operands (`values[@left[Prev(j)]]`), the page can pause as
-  each is picked, then at the comparison, and with `pause@insert.swap.to` at the
-  swap's second cell read, before anything is written. A label on is a pause at
-  each of its runs, so a check finding nothing is a step too. Presentations
-  paced differently step together, one holding its step while the other shows
-  the code between. What runs after the last step is a step of its own when it
-  changes a value still in scope or declares one, so the end of the algorithm is
-  shown; variables only leaving scope, as a loop's at its exit, make no step.
-- A label with labels inside it says what its pauses inside keep.
-  `"accumulate"`: each keeps what its run has done so far, its labels' values
-  drawn and its code lit faintly, until the run finishes, so paused at the right
-  operand, the left one is still marked and `j - 1` still lit. `"on"`: each
-  shows only its own part, and the code leading up to it outside the run. Either
-  way its own end shows its whole run. A label that is off passes through: what
-  its pauses inside keep is up to the labels around it. A step keeps the parts
-  of each run around it that accumulates, back to where a run nearer it that is
-  on began. A label with no labels inside it is only on or off.
+  body, as `for (…) @insert{`. A name is one word, without dots, and the
+  algorithm runs as if the marks were spaces. A labelled loop runs its code once
+  per pass, its test leading up to the pass; a label on a function's body runs
+  once per call, recursive calls included.
 - A label inside another takes its name as a prefix: `@shift[…]` inside
   `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's
-  body has labelled statements, every statement in it is inside one of them or
-  contains one, so only loops' headers and tests run outside every label; a
-  statement left out is an error naming the labels beside it. Declarations
-  leading a block, before its first labelled statement, need no label: as
-  `let min = i;` at the top of `@select{`, they run leading up to its first
-  step. A label on part of a statement, as `@test[…]`, asks nothing of the code
-  around it. An algorithm with no labels has one step, its end, for a picture
-  that does not move.
-- Every presentation opens on the input as given, step 0, before any of the
-  algorithm runs: what the algorithm declares, its labels' values, and its
-  operators' applications appear from the first step on, and the view reads a
-  variable itself only inside a <Node>, which is hidden until it is declared.
-- A label on a function's body, as
-  `function search(a, target, lo, hi) @call{ … }`, runs once per call, recursive
-  calls included. A step inside a run of a label, as in a call it makes, ends
-  that run's code so far: what it changes after the step is compared with the
-  step.
-- Each step records every variable in scope, before its code and after it: the
-  input's, the top level's, and those of the loops and blocks around it, as
-  `for (let j = Next(i); ...)` and `const key = values[i];` inside it. A
-  variable out of scope at a step, before its declaration or after its block
-  ends, is not part of it: whatever the view draws from it, a value or a
-  pointer, is missing there (see `shown` in Design). Declare a variable where it
-  belongs rather than at the top level with a stand-in value such as -1. A
-  variable a step's code declares is out of scope before it, so the view draws
-  it through a view or a pointer; the first step is shown only after its code. A
-  name is declared once among the blocks in scope: a loop inside another cannot
-  declare `j` again, while loops one after another can each have their own `j`.
-- A step is named by the label whose run it ends and which run of it that is, as
+  body has labelled statements, every statement in it is inside one or contains
+  one, so only loops' headers and tests run outside every label; a statement
+  left out is an error naming the labels beside it. Declarations leading a
+  block, before its first labelled statement, need no label, as `let min = i;`
+  at the top of `@select{`. A label on part of a statement asks nothing of the
+  code around it. An algorithm with no labels has one step, its end.
+- The page pauses where labels finish, and only there: a pause at a label is a
+  step at the end of each of its runs, so a check finding nothing is a step too.
+  Each label is a variable, `pause@` and its full name, as
+  `"pause@insert.swap": "on"`: `"accumulate"`, `"on"`, or `"off"`. Every label
+  is `"on"` to start with and the variant chooses where the steps pause; nothing
+  in the view turns a pause on or off. So label what a step can be about, as a
+  comparison, `@compare[Greater(…)]`, and the operands it reads.
+- A step shows a change: the state just before its code, then just after it.
+  Code not paused at, inside a label that is off or outside every label, leads
+  up to the next step, and what a label there gives, a value or an application
+  rendered at it, is drawn at that step, as a comparison not paused at is at the
+  swap it leads to. A step inside a run of a label, as in a call it makes, ends
+  that run's code so far: what it changes after is compared with the step.
+  Presentations paced differently step together, one holding its step while the
+  other shows the code between.
+- A label with labels inside it says what its pauses inside keep:
+  `"accumulate"`, what its run has done so far, its labels' values drawn and its
+  code lit, until the run finishes, so paused at the right operand the left one
+  is still marked and `j - 1` still lit; `"on"`, only its own part and the code
+  leading up to it outside the run. Either way its own end shows its whole run.
+  A label that is off passes through to the labels around it. A step keeps the
+  parts of each run around it that accumulates, back to where a run nearer it
+  that is on began. A label with no labels inside it is only on or off.
+- Step 0 is the input as given, before any code runs; what the algorithm
+  declares, its labels' values, and its applications appear from the first step
+  on, and the view reads a variable itself only inside a `<Node>`, which hides
+  until it is declared. What runs after the last step is a step of its own when
+  it changes or declares a value still in scope, so the end is shown; variables
+  only leaving scope make no step. `return;` stops the algorithm early.
+- Each step records every variable in scope, before and after its code: the
+  input's, the top level's, and those of the blocks around it. A variable out of
+  scope at a step is not part of it, so whatever the view draws from it is
+  missing there (see `shown` in Design): declare a variable where it belongs,
+  never at the top level with a stand-in such as -1, and draw one a step's code
+  declares through a view or a pointer. A name is declared once among the blocks
+  in scope: a loop inside another cannot declare `j` again, while loops one
+  after another can.
+- A step is named by the label whose run it ends and which run that is, as
   `@insert.swap#1` (`start` for the input as given, `end` for the end), the same
   in every variant, which numbers only the steps it shows. A step has no text:
-  the view says what each one shows, from the recorded variables and `step` (0
-  for the first). Record what the view should say about a step in the
-  algorithm's variables: an answer, as the position a search finds, is the value
-  its function returns, drawn with a view of its own, as
-  `{@render Index(found)}` in binary search below.
-- `return;` stops the algorithm early.
-- Between steps, the page moves each value from where the step before drew it,
-  so a swap shows as two values trading places: a value moved from one element
-  to another, as through a temporary variable, is the same value. A variable
-  holding a value a collection also holds shows a copy of it, as insertion
-  sort's `key` when it is picked up, and the copy keeps its place once the
-  collection's is overwritten, so the key moves back into the row when it is put
-  down. A value copied to a second place, as `values[j] = values[Prev(j)]` or
-  `Merge(merged, Append(merged, left[i]))`, starts where its source was, as do
-  the operands a view of an operator draws, each from the cell or variable it
-  was read from, so a comparison's values lift out of their cells into its
-  caption (a computed operand, as `Add(a, b)` given to another, fades in); a
-  value written anew, as `values[i] = 0`, fades in; one no longer held fades
-  out. Pointers slide from where they were. Links switch with the step.
+  the view says what it shows, from the recorded variables and `step` (0 for the
+  first), so what it should say is in the algorithm's variables, as an answer is
+  the value a search returns or where its loop stops.
+- Between steps the page moves each value from where it was drawn, so a swap
+  shows as two values trading places, a value moved through a temporary being
+  the same value. A variable holding a value a collection also holds shows a
+  copy, as insertion sort's `key`, which keeps its place once the collection's
+  is overwritten and moves back into the row when put down. A value copied to a
+  second place, as `values[j] = values[Prev(j)]`, starts where its source was,
+  as do an operator view's operands, lifting out of their cells into its caption
+  (a computed operand fades in); a value written anew fades in; one no longer
+  held fades out. Pointers slide; links switch with the step.
 
 ## Loops and functions
 
 The algorithm's loops and branches are JavaScript's: `for`,
 `for (const v of values)`, `while`, `do ... while`, `if` and `else`, `break`,
-and `continue`.
+and `continue`. End a loop with `break` or `return` where it has what it looks
+for, rather than a flag its test reads, and walk only what each step is about,
+as a vertex's own neighbours rather than every edge. Use
+`for (const v of values)` where a loop only reads the values and the view points
+at none of them, as a sum, and an index loop where the position matters: a
+pointer, a write back, a neighbour, or a position as the result. A `for … of`
+variable refers to the element it is at, as a reference does: with
+`const At = ref(Digits);` and a pointer view of `At`, `{@render At(v)}` marks
+the cell `v` is at in `for (const v of digits)`.
 
 A function is declared at the top level of the algorithm block, as
 `function search(a, target) { ... }`, and sees only its parameters: give it the
 collections it works on, and it changes them in place. Each call gives its
 parameters values of the types the first call gave them. `return i;` gives a
-value back, and a position into a collection the call was given points into the
-caller's. A function may call itself. A step inside a call records the call's
-variables, its parameters among them, and the top level's; the caller's are out
-of scope there, so with recursion a step shows the innermost call's `lo` and
-`hi`. A parameter hides a top-level variable of the same name. A position into a
-collection the call was given is drawn on that collection wherever the view
-draws it under its top-level name.
+value back. A position into a collection the call was given points into the
+caller's, and is drawn on that collection wherever the view draws it under its
+top-level name. A function may call itself. A step inside a call records the
+call's variables, its parameters among them, and the top level's; the caller's
+are out of scope there, so with recursion a step shows the innermost call's. A
+parameter hides a top-level variable of the same name.
 
-Binary search, written recursively:
+Binary search, stopping where it finds the target:
 
 ```svelte
 <script lang="sverlin" domain>
@@ -344,14 +254,11 @@ Binary search, written recursively:
   const Index = index(Values);
   const Flag = type('boolean');
 
-  // walking the collection
-  const After = binop((a: Index, b: Index) => Flag(a > b));
+  const NotAfter = binop((a: Index, b: Index) => Flag(a <= b));
   const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
   const Next = unop((p: Index) => Index(p + 1));
   const Prev = unop((p: Index) => Index(p - 1));
   const Last = unop((v: Values) => Index(v.length - 1));
-
-  // what the algorithm does
   const Equal = binop((a: Int, b: Int) => Flag(a === b));
   const Less = binop((a: Int, b: Int) => Flag(a < b));
 </script>
@@ -362,177 +269,131 @@ Binary search, written recursively:
 </script>
 
 <script lang="sverlin">
-  function search(a, target, lo, hi) @call{
-    if (After(lo, hi)) return Index(-1);
+  let lo = Index(0);
+  let hi = Last(values);
+  while (NotAfter(lo, hi)) @probe{
     const mid = Middle(lo, hi);
-    if (Equal(a[mid], target)) return mid;
-    if (Less(a[mid], target)) return search(a, target, Next(mid), hi);
-    return search(a, target, lo, Prev(mid));
+    @check[if (Equal(values[mid], target)) break;]
+    if (Less(values[mid], target)) @right{ lo = Next(mid); } else @left{ hi = Prev(mid); }
   }
-  const found = search(values, target, Index(0), Last(values));
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet Mark(p: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Binary search for {@render Int(target)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Bounds()}<Node>lo {@render Index(lo)}, hi {@render Index(hi)}</Node>{/snippet}
+{#snippet Range()}<Node>between {@render Index(lo)} and {@render Index(hi)}</Node>{/snippet}
 
 {@render Title()}
 {@render Cells()}
-{@render Bounds()}
+{@render Range()}
+{@render Index(lo)}
 {@render Index(mid)}
-{@render Index(found)}
+{@render Index(hi)}
 ```
 
-In `Bounds`, inside a node, `lo` and `hi` are drawn as numbers by `IndexText`;
-at the top level, `mid` and the answer are marks drawn by `Highlight`, which a
-variant colours apart at `@found`.
+Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; at the top
+level they and `mid` are marks, drawn by `Mark` unless a variant draws one apart
+through its place. The loop ends at `break` with `mid` on the target; a search
+for a value not there ends with `lo` past `hi`.
 
 ## Atomic types
 
-Give values meaning with atomic types. No types are predefined: define each one
-the request needs, including basic ones such as `Int`, in the domain block, each
-as a top-level `const`:
+No types are predefined: define each one the request needs, basic ones such as
+`Int` included, in the domain block, each as a top-level `const`, one per
+meaning (`Index`, `Distance`, `Visited`) rather than one general type:
 
-- a primitive kind: `'integer'` or `'number'` with both `min` and `max`, as in
-  `const Int = type('integer', { min: 0, max: 99 });`, or `'boolean'`, as in
-  `const Flag = type('boolean');`
+- a primitive: `'integer'` or `'number'` with both `min` and `max`, as
+  `const Int = type('integer', { min: 0, max: 99 });`, or `'boolean'`;
 - a refinement of a type defined earlier, with optional `unit`, `min`, and
-  `max`: `const Height = type(Int, { unit: 'cm', min: 0, max: 250 });`
-- an enumeration of allowed text or number values:
-  `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`. Name the
-  values plainly and leave how they look, such as `♠`, to its views (see Views
-  of types). Text types are always enumerations.
+  `max`: `const Height = type(Int, { unit: 'cm', min: 0, max: 250 });`;
+- an enumeration of text or number values, named plainly, leaving how they look
+  to views: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`.
+  Text types are always enumerations.
 
-Every type has a known, finite set of values, so the view can be drawn for each
-of them. Choose ranges that hold every value the algorithm reaches, such as a
-count up to the input's length. Positions (`index(...)`, below) need no range:
-their collection gives them one.
+Every type has a known, finite set of values, so a view can be drawn for each:
+choose ranges holding every value the algorithm reaches, as a count up to the
+input's length; positions need none. Type names cannot be variable names.
 
-Create typed values with a type's name in the input or algorithm block, such as
-`const target = Int(8);`. Input and algorithm values all have domain types:
-every number, boolean, and text that a variable, collection element, or record
-field holds is a typed value, so a loop index is `let i = Index(-1);`, a flag
-`let found = Found(false);`, and a distance `Distance(0)`. There is no `null`:
-every variable starts with a value, and "nothing yet" is a value of a type that
-says so, such as `Index(-1)`, or a union member such as `Unreached('unreached')`
-(see Collections, records, and unions). Reading a value that is not there, such
-as `queue[0]` of an empty queue, is an error. Define a type for each meaning,
-such as `Index`, `Distance`, or `Visited`, rather than reusing one general type.
+Every number, boolean, and text a variable, element, or field holds is typed,
+made with a type's name, as `const target = Int(8);` or `Index(0)`. There is no
+`null`: every variable starts with a value, and "nothing yet" is a member of a
+union that says so, as `Unreached('unreached')`, as is a result that may be
+missing, as a search returning a `union(Index, NotFound)`. Reading a value not
+there, as `queue[0]` of an empty queue, is an error. A variable keeps the type
+it was made with and a value assigned to it takes that type, as an element or
+field does: after `let found = Found(false);`,
+`found = Equal(values[i], target)` stores a `Found`, and `found = Count(1)` is
+an error; one made by a union, `let d = Dist(0);`, holds any member.
 
-A variable keeps the type it was made with, and a value assigned to it takes
-that type, as an element or field does: after `let found = Found(false);`,
-`found = true` and `found = Equal(values[i], target)` store a `Found`, while
-`found = Count(1)` is an error. A variable made by a union, as in
-`let d = Dist(0);`, can hold any of its members. The input and algorithm compute
-nothing themselves: comparisons, arithmetic, `.length`, and `Math` are operators
-the domain declares (see Operators), each giving a typed value.
-
-Typed values keep their type as the algorithm moves them between variables and
-arrays, and read as their plain values in conditions and indexing. Inside an
-operator's function, they behave like their plain values in comparisons and
-`===`, and arithmetic keeps types: `Int + Int` is an `Int`; a refined type
-combined with the type it refines or with a plain number keeps the refined type
-(`Height(150) + 5` is a `Height`); an integer type whose result is no longer
-whole, such as `Int(7) / Int(2)`, gives an untyped number. A number enumeration
-keeps its type in arithmetic, and the result must be one of its values: with
-`const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5, and
-`Weight(4) + Weight(4)` is an error, since 8 is not a `Weight`. To compute
-beyond a type's values, convert to another number type: `Distance(e.weight)`
-makes a `Distance` from a `Weight`. Combining or comparing unrelated types, such
-as a `Height` and a `Weight`, arithmetic on text enumerations or boolean types,
-and leaving a type's values, `min`, or `max` are errors. Type names cannot be
-used as variable names.
-
-The view receives plain values; a value's type chooses the views that draw it
-(see Views of types).
+Typed values keep their type as they move and read as plain values in conditions
+and indexing. Inside an operator they compare as plain values, and arithmetic
+keeps types: `Int + Int` is an `Int`; a refined type with the type it refines or
+a plain number keeps the refined type (`Height(150) + 5`); an integer result no
+longer whole, as `Int(7) / Int(2)`, is an untyped number. A number enumeration
+keeps its type, and the result must be one of its values: with
+`const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5 and
+`Weight(4) + Weight(4)` an error; convert to compute beyond, as
+`Distance(e.weight)`. Mixing unrelated types, arithmetic on text or booleans,
+and leaving a type's values, `min`, or `max` are errors. The view receives plain
+values; a value's type chooses the views that draw it.
 
 ## Collections, records, and unions
 
-Every array and object in the input and algorithm is made by a type, defined in
-the domain block from other types, in any order, each as a top-level `const`:
+Every array and object is made by a type defined in the domain block, in any
+order, each as a top-level `const`:
 
-- a collection of elements of one type: `const Values = collection(Int);`, and a
-  collection of collections for a table of rows:
-  `const Grid = collection(Values);`
-- a record with named fields:
-  `const Edge = record({ from: Vertex, to: Vertex, weight: Weight });`
-- a union, a value of one of several types, for a place that holds different
-  kinds of value: `const Dist = union(Distance, Unreached);`
-- a position in a collection, such as a loop index or a pointer:
-  `const Index = index(Values);`
-- a reference to an element of a collection of single values, which stays with
-  it as it moves: `const Front = ref(Queue);`, or to a node of a record type,
-  wherever it is: `const NodeRef = ref(ListNode);` (see Nodes and references)
+- a collection of one type, `collection(Int)`, and of collections for a table,
+  `collection(Values)`;
+- a record with named fields,
+  `record({ from: Vertex, to: Vertex, weight: Weight })`;
+- a union, a value of one of several types, `union(Distance, Unreached)`;
+- a position in a collection, `index(Values)`;
+- a reference to an element of a collection of single values, staying with it as
+  it moves, `ref(Queue)`, or to a node of a record type, wherever it is,
+  `ref(ListNode)` (see Nodes and references).
 
-Make one by calling its name, writing its contents as literals, which take their
-types from it: `Values([3, 8, 5])` holds three `Int`s, and
-`Edges([{ from: 0, to: 1, weight: 4 }])` holds one `Edge` whose fields are a
-`Vertex`, a `Vertex`, and a `Weight`. Values written into an element or a field
-take its types in the same way: `dist[v] = 0`, `edge.weight = 5`; a literal
-given to an operator takes the operand's type, as `queue = Append(queue, 3)`. An
-array or object literal anywhere else is an error, so there are no plain arrays
-or objects. A record has exactly its fields: leaving one out, or reading or
-writing another, is an error. `.slice()` of a collection gives a collection of
-the same type.
+Make one by calling its name with literals, which take their types from it:
+`Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
+`Vertex`, a `Vertex`, and a `Weight`. A literal written into an element or field
+takes its type, as `dist[v] = 0`, and one given to an operator the operand's, as
+`Append(queue, 3)`; an array or object literal anywhere else is an error. A
+record has exactly its fields. `.slice()` gives a collection of the same type.
 
-A position is any whole number, and 0 to length - 1 point at an element of its
-collection; others point nowhere, as -1 before a search starts or the length
-after it ends, or the length + 1 after `i = Skip(i)`. Reading or writing an
-element outside the collection is an error, except that writing at the length
-adds one. The view keeps room past an end for the positions its pointers draw,
-as far as they go and at most 4 places, so a pointer further out draws nothing;
-a position nothing draws keeps none. A variable is bound to its collection when
-it is declared: `let i = Index(-1);` points into the only `Values`, and with
-several, name the one, as in `let i = Index(left, 0);`. The binding stays with
-the variable, so `Move(k, Sum(i, j))` gives `k` a number and leaves it pointing
-into its own collection. A position stored in a record or collection keeps the
-collection it came from: `Take({ from: j })` points into `right` when `j` does,
-as does `Next(i)` when `i` does, and `const at = take.from;` declares `at`
-pointing there too. A number stored there, as in `Edges([{ from: 0, to: 1 }])`,
-points into the only collection of its type, and with several, name the one, as
-in `Take({ from: Index(left, 0) })`.
+A position is any whole number: 0 to length - 1 point at an element of its
+collection, others nowhere, as the length after a loop ends. Reading or writing
+outside the collection is an error, except that writing at the length adds one.
+The view keeps room past an end for the positions its pointers draw, at most 4
+places; a position nothing draws keeps none. A position is bound to its
+collection when declared: `Index(0)` points into the only `Values`, and with
+several, name it, as `Index(left, 0)`; the binding stays, so
+`Move(k, Sum(i, j))` keeps `k` in its collection. One stored in a record or
+collection keeps where it came from (`Take({ from: j })`, `Next(i)`,
+`const at = take.from;`), and a number stored there points into the only
+collection of its type, or the one named, as `Take({ from: Index(left, 0) })`.
+To point at a cell of a grid, hold the row in a variable: `let row = paths[r];`
+is the row itself, so `ColIndex(row, 1)` points into `paths`, and
+`NextRow(row, paths[r])` moves it.
 
-A grid is a collection of collections, as `const Table = collection(Counts);`.
-To point at a cell, hold the row in a variable and point into it:
-`let row = paths[r];` is that row itself, not a copy, so
-`let c = ColIndex(row, 1);` points at a cell of `paths`, and its pointer views
-draw there. Changing `row` to another row, as `NextRow(row, paths[r])`, moves
-`c` to the new row.
-
-A reference is made from an element, `const front = Front(queue[0]);`, and reads
-as it, as in `Same(edge.from, front)`. Where a position stays at its place as
-the collection changes, a reference stays with its element: after
-`queue = Rest(queue)` or a sort it is wherever the element went, and once the
-element has left the collection it refers to nothing, so its pointer views draw
-nothing and keep their room. A reference follows an element of a collection of
-its own type, even when the same value is also a field elsewhere, as an edge's
-end pushed onto the queue. Use a position to step to a neighbour.
+A reference, as `const front = Front(queue[0]);`, reads as its element. Where a
+position stays at its place as the collection changes, a reference stays with
+its element, after `queue = Rest(queue)` or a sort; once the element has left
+the collection it refers to nothing, and its pointer draws nothing, keeping its
+room. It follows an element of a collection of its own type, even when the same
+value is also a field elsewhere. Use a position to step to a neighbour.
 
 A union value is always one of its members: a literal becomes the member it
-fits, so `Distances([0, 'unreached'])` holds a `Distance` and an `Unreached`,
-and a literal that fits two members needs its type written, as in `Distance(4)`.
-Inside an operator's function, members compare with `===` and `!==`, where
-values of different members are unequal, but not with `<` or `>`; check which
-member a value is before ordering it:
+fits, as `Distances([0, 'unreached'])`, and one fitting two needs its type, as
+`Distance(4)`. Inside an operator, members compare with `===` and `!==`,
+different members unequal, but not with `<` or `>`, so check the member first:
 
 ```js
-// domain
 const Reached = unop((d: Dist) => Flag(d !== 'unreached'));
-const Through = binop((d: Dist, w: Weight) => Distance(d + Distance(w)));
 const Shorter = binop((a: Distance, b: Dist) => Flag(b === 'unreached' || a < b));
 ```
 
-```js
-// algorithm
-if (Reached(dist[e.from]) && Shorter(Through(dist[e.from], e.weight), dist[e.to]))
-  dist[e.to] = Through(dist[e.from], e.weight);
-```
-
-The view receives plain arrays and objects, drawn by the views of their types: a
-record's view draws its fields through theirs (see Views of types).
+The view receives plain arrays and objects, drawn by their types' views.
 
 ## Nodes and references
 
@@ -542,8 +403,8 @@ to a record type, `ref(ListNode)`, is that pointer: it refers to a node wherever
 it is, and always to one. "No node" is a value of a type of its own, joined to
 the reference with a union, so a field that may end says so, and the end is
 drawn and varied as any value is. A record holding itself other than through a
-reference or an index would never end, and is refused. A list given in the input
-and reversed:
+reference or an index would never end, and is refused. A list reversed, the
+nodes `prev` and `cur` refer to both marked:
 
 ```svelte
 <script lang="sverlin" domain>
@@ -586,50 +447,52 @@ and reversed:
 {/snippet}
 
 {@render Heap()}
+{@render NodeRef(prev)}
 {@render NodeRef(cur)}
 ```
 
-- `NodeRef(ListNode({ … }))` refers to a new node, as the input writes a list,
-  nested or a variable for each node; the algorithm makes one through a
+- `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
+  one variable each, as the graph under Link; the algorithm makes one through a
   structural operator, as
   `const NewNode = binop((v: Name, n: Next) => ListNode({ name: v, next: n }));`
-  and `head = NodeRef(NewNode(v, head))` to push one in front. A cycle is the
-  algorithm's to make.
-- A field is read and written through a reference, `cur.next`,
-  `cur.next = prev`; a value of another type written into a field is refused,
-  and reading or writing one through the end is a mistake at that step ("cur is
-  an End ("end"), so it has no next"). A variable that holds a node or the end
-  is made with the union, `let cur = Next(head);`, as a variable keeps the type
-  it was made with.
+  and `head = NodeRef(NewNode(v, head))`. A cycle is the algorithm's to make.
+- A field is read and written through a reference, `cur.next = prev`; a value of
+  another type is refused, and reading or writing one through the end is a
+  mistake at that step ("cur is an End ("end"), so it has no next"). A variable
+  holding a node or the end is made with the union, `let cur = Next(head);`.
 - A node lives while something refers to it: a variable in scope, a collection,
-  or a live node. `all(ListNode)` is every live node, in the order they were
-  made, drawn as a collection is, each through the record's view; a node no
-  longer referred to leaves it and fades out, and a node keeps its identity as
-  its links change, so it stays put. A step records a reference as its node's
-  place there, so a circular list stays finite. At most 64 nodes of a type are
-  live at once.
-- `<Link to={n.next} />` with no `from`, in a view of a node, leaves the node it
-  sits in, and the free layout around the nodes lays it out. Draw a node as
-  fields, as a textbook does, `[ A | next ]`, or a tree's
-  `[ left | key | right ]`: a node holding only such links is a field, a box as
-  a value is, its own snippet so it has its own look (`NodeBox.NextField`); the
-  arrow leaves the field, arcing over its node where it points back, and meets
-  the value of the node it points at. A tree's children are placed in the order
-  their links leave it, so the left field's child is on the left. Where `n.next`
-  is the end, the link draws the end in its field with its type's view
-  (`views.End`, as `EndMark`'s ∅), which a variant can switch or leave out. A
+  or a live node. `all(ListNode)` is every live node, in the order made, drawn
+  as a collection, each through the record's view; one no longer referred to
+  fades out, and a node keeps its identity as its links change, so it stays put.
+  A step records a reference as its node's place, so a circular list stays
+  finite. At most 64 nodes of a type are live at once.
+- `<Link to={n.next} />` with no `from`, in a node of the record's view, leaves
+  that node for the node the field refers to, and the free layout around the
+  nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
+  Write links there, reading the record's fields: one in a view of the reference
+  type itself, as
+  `{#snippet NextMark(value: Next)}<Link to={value} />{/snippet}`, ends at the
+  value drawn, not at a node. Draw a node as fields, as a textbook does,
+  `[ A | next ]` or a tree's `[ left | key | right ]`: a node holding only such
+  links is a field, its own snippet so it has its own look
+  (`NodeBox.NextField`); the arrow leaves the field, arcing over its node where
+  it points back. A tree's children are placed in the order their links leave
+  it, so the left field's child is on the left. Where the field is the end, the
+  link draws the end with its type's view (`views.End`, as `EndMark`'s ∅). A
   pointer view of the reference, as `Here`, marks the node a variable refers to,
   and draws nothing at the end.
-- An array-based structure keeps an index instead, `index(Nodes)`, where the
-  position is the point.
+- An array-based structure keeps an index instead, `index(Nodes)`.
 
 ## Operators
 
-The input and algorithm compute nothing themselves: everything they compute is
-an operator the domain declares, unary or binary: a function of its operands,
-each parameter typed, as `(a: Int, b: Int) => Flag(a > b)`. Type annotations are
-written only there. Writing stays plain: `=` puts a value, typically an
-operator's result, into a variable, an element, or a field.
+The input and algorithm compute nothing themselves: everything computed is an
+operator the domain declares, unary or binary, a function of typed operands, as
+`binop((a: Int, b: Int) => Flag(a > b))`, the only place types are written. The
+algorithm applies it as a call, each operand taking its parameter's type:
+`if (Equal(values[i], target)) break;`, `total = Add(total, v);`. Writing stays
+plain: `=` puts a value into a variable, element, or field. Name operators for
+what they compute, as `Before`, `Middle`, or `Shorter`, and keep those walking a
+collection apart from those for what the algorithm does:
 
 ```js
 // walking the collection
@@ -639,81 +502,60 @@ const Next = unop((p: Index) => Index(p + 1));
 
 // what the algorithm does
 const Equal = binop((a: Int, b: Int) => Flag(a === b));
-const Add = binop((a: Int, b: Int) => Int(a + b));
 ```
-
-The algorithm applies an operator as a call, its operands in order, each taking
-its operand's type as a function's argument does, and gets the value its
-function gives: `if (Equal(values[i], target)) break;`,
-`total = Add(total, v);`,
-`for (let i = Index(0); Before(i, Length(values)); i = Next(i))`. Name operators
-for what they compute, as `Before`, `Middle`, or `Shorter`, and declare each the
-algorithm needs, those that walk the collection apart from what the algorithm
-does, as above.
-
-A collection's methods compute too: an operator computes the new collection, and
-`=` writes it, in place, so the collection and each element it keeps stay the
-same values and move rather than reappear:
-
-```js
-const Append = binop((q: Queue, v: Vertex) => Queue([...q, v]));
-const Rest = unop((q: Queue) => Queue(q.slice(1)));
-```
-
-`queue = Append(queue, v);` adds `v` at the back, and
-`const u = queue[0]; queue = Rest(queue);` takes the front. A rearrangement is
-plain writes, labelled as one step, as a swap through a temporary:
-`@swap[const moved = values[i]; values[i] = values[Next(i)]; values[Next(i)] = moved;]`
-moves both values.
-
-Use `for (const v of values)` where a loop only reads the values and the view
-points at none of them, as a sum, and an index loop where the position matters:
-a pointer, a write back, a neighbour, or a position as the result.
 
 - Raw: control flow (`if`, loops, `break`, `continue`, `return`, the algorithm's
-  functions, `? :`, `&&`, `||`, `??`), declarations, writes with `=` (to a
-  variable declared with `let`, an element, or a field), reading elements and
-  fields, and typed values from literals, as `Index(0)`, `Index(-1)`, or
-  `Flag(true)`.
-- Declared as operators: every operator on values, as `<`, `===`, `+`, `!`, and
-  `-x`; `++`, `--`, and `+=`; `.length`; `Math`; template strings; and
-  collection methods, as `.push`, `.shift`, `.indexOf`, or `.slice`. Each
-  written raw is an error naming the declaration to add and what to write.
+  functions, `? :`, `&&`, `||`, `??`), declarations, writes with `=` (to a `let`
+  variable, an element, or a field), reading elements and fields, and typed
+  values from literals, as `Index(0)` or `Flag(true)`.
+- Declared as operators: every operator on values (`<`, `===`, `+`, `!`, `-x`),
+  `++`, `--`, `+=`, `.length`, `Math`, template strings, and collection methods
+  (`.push`, `.shift`, `.indexOf`, `.slice`). Each written raw is an error naming
+  the declaration to add.
 - An operator changes nothing, so an application whose result is unused, as
   `Append(served, front);` or a `for` update `Next(i)`, is an error naming the
-  write: `served = Append(served, front)`.
+  write, `served = Append(served, front)`.
+- A collection's method is an operator computing the new collection, written
+  back with `=` in place, so the collection and the elements it keeps move
+  rather than reappear: `queue = Append(queue, v)` with
+  `binop((q: Queue, v: Vertex) => Queue([...q, v]))`, or `queue = Rest(queue)`
+  with `unop((q: Queue) => Queue(q.slice(1)))`.
 - An operator giving a collection or record only rearranges its operands: each
-  element or field it builds is an operand, a read of one or of its parts
-  (`v[p]`, `e.to`), or a spread of one or of a slice of one (`...q`,
-  `...q.slice(1)`), as `Queue([...q, x])` or `Edge({ from: e.to, to: e.from })`.
-  A new element, computed or literal, is refused, as in
-  `Values([...v.slice(0, p), Int(v[p] + 1), ...v.slice(p + 1)])`: compute it
-  with a value operator and write it, `values[p] = Inc(values[p])`, or pass it
-  in as an operand. A collection filled at run time is built in a loop:
-  `for (const v of vertices) dist = Append(dist, unreached);`.
-- An operator is one primitive step, one a learner takes as a single action
-  (compare, add, take the next position, append), never a loop or a library
-  algorithm: a merge by `Values([...a, ...b].sort(…))` is refused, as `sort` is
-  an algorithm, and merging is written out in the algorithm block. Its function
-  is one expression of its operands, reading only them and `Math`, without
-  braces, nested functions, other operators, methods outside the subset, or the
-  state, and changing nothing, where JavaScript's operators and the collection
-  methods work on typed values as described under Atomic types. It gives a typed
-  value: wrap what it computes in a type, as `Flag(a > b)`, which is the
-  operator's result type.
+  element or field is an operand, a read of one or its parts (`v[p]`, `e.to`),
+  or a spread of one or a slice of one (`...q`, `...q.slice(1)`), as
+  `Queue([...q, x])` or `Edge({ from: e.to, to: e.from })`. A new element,
+  computed or literal, is refused: compute it with a value operator and write
+  it, `values[p] = Inc(values[p])`, or pass it in. A collection filled at run
+  time is built in a loop, `for (const v of vertices) dist = Append(dist, u);`.
+- An operator is one action a learner takes as one (compare, add, take the next
+  position, append), never a loop or a library algorithm, so
+  `[...a, ...b].sort(…)` is refused and merging is written in the algorithm. Its
+  function is one expression of its operands, reading only them and `Math`,
+  without braces, nested functions, other operators, methods outside the subset,
+  or the state, changing nothing, and wrapping what it computes in its result
+  type, as `Flag(a > b)`.
+- A rearrangement is plain writes labelled as one step, as a swap through a
+  temporary:
+  `@swap[const moved = values[i]; values[i] = values[Next(i)]; values[Next(i)] = moved;]`.
 
 ## Views of what a step computed
 
-An operator is a type a view can take: `{#snippet Ask(g: Greater)}` is a view of
-an application of `Greater`, its operands named by the operator's parameters
-(`g.a`, `g.b`) and its result `g.value`, each drawn through its type's view. It
-is reached at a label: `{@render Greater(@sweep.pair.test)}` in the root or a
-part of the page draws the application of `Greater` made inside the code
-labelled `@sweep.pair.test` since the step before, through the view
-`views.Greater` chooses; at a step where that code made none, as a swap, it
-draws nothing, keeping its room. So label an application to draw it, as
-`@test[Greater(…)]`; one outside every label, as a loop's `Before`, is never
-drawn. Bubble sort, each comparison a step and each swap another:
+An operator is a type a view can take: `{#snippet Ask(g: Greater)}` views an
+application of `Greater`, its operands named by the operator's parameters
+(`g.a`, `g.b`; none can be called `value`) and its result `g.value`, each drawn
+through its type's view. It is reached only at a label:
+`{@render Greater(@sweep.pair.test)}` in the root or a part draws the
+application made inside that label's code since the step before, through the
+view `views.Greater` chooses, and nothing, keeping its room, where that code
+made none. A label around more code, as `@sweep.pair`, draws one made anywhere
+inside it; one the input never makes there is left out; an application outside
+every label is never drawn; `{@render Greater()}` and `applied(Greater)` without
+a label are refused. The view never applies an operator itself, as `Next(p)`:
+label an application, as `@next[Next(i)]`, and read the label. A view named as
+an operator is, as a pointer view called `Next`, is drawn through its type.
+
+Bubble sort, the question at each comparison and a caption at each swap in one
+place:
 
 ```svelte
 <script lang="sverlin" domain>
@@ -722,13 +564,10 @@ drawn. Bubble sort, each comparison a step and each swap another:
   const Values = collection(Int);
   const Index = index(Values);
 
-  // walking the collection
   const Length = unop((v: Values) => Index(v.length));
   const Before = binop((a: Index, b: Index) => Flag(a < b));
   const Next = unop((p: Index) => Index(p + 1));
   const Prev = unop((p: Index) => Index(p - 1));
-
-  // what the algorithm does
   const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
@@ -753,75 +592,43 @@ drawn. Bubble sort, each comparison a step and each swap another:
 {#snippet Ask(g: Greater)}
   <Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
 {/snippet}
+{#snippet Swapping()}<Node>out of order, so they swap</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Board()}<Node layout="column">{@render Cells()}<Node>{@render Greater(@sweep.pair.test)}</Node></Node>{/snippet}
+{#snippet Board()}
+  <Node layout="column">
+    {@render Cells()}
+    {#if when(@sweep.pair.test)}
+      {@render Greater(@sweep.pair.test)}
+    {:else if when(@sweep.pair.swap)}
+      {@render Swapping()}
+    {/if}
+  </Node>
+{/snippet}
 
 {@render Board()}
 ```
 
-Paused at the comparisons and the swaps, at a comparison step the caption reads
-"is 5 > 1? yes", its operands lifting out of their cells; at the swap after it,
-nothing, the two values trading places. With `pause@sweep.pair.test` off, the
-comparisons are no steps and the page plays the swaps alone, each comparison
-leading up to its swap; with `views.Greater` none, the caption is left out and
-the steps stay as they were. An operator is rendered only from the root and its
-parts, at a label; one the input never applies there, as binary search's `Left`
-when the target is always to the right, is left out. An operand cannot be called
-`value`, which names the result. The view never applies an operator itself, as
-`Next(p)`: label an application in the algorithm, as `@next[Next(i)]`, and read
-the label. A view named as an operator is, as a pointer view called `Next`, is
-drawn through its type, like any view. A label around more code, as
-`{@render Greater(@sweep.pair)}`, draws the application made anywhere inside it.
+Paused at both, a comparison reads "is 5 > 1? yes", its operands lifting out of
+their cells, and the swap after it says why they trade places. With
+`pause@sweep.pair.test` off the page plays the swaps alone; with `views.Greater`
+none the question is left out and the steps stay as they were.
 
-A label is read in the root and its parts as a value: `@name` is the value the
-expression labelled `name` gave since the step before, drawn at the step's after
-where it gave one, and missing where it gave none or several. It is held at each
-later step inside the run of the label around it that keeps it (see Steps),
-drawn from the step's before, so a mark stays until that code finishes, as the
-swap's two cells through the swap: always at the run's own end, and at the
-pauses inside it where the run accumulates. So a view shows what a step's code
-held, though no variable holds it at the step's edges: the values a swap
-exchanged, or the key a whole insertion inserts, out of scope once its block
-ends.
-
-```js
-for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
-  const key = @key[values[i]];
-  // the shifting and placing, as above
-}
-```
-
-```svelte
-{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
-```
-
-A label is read by its full name, the names of the labels around it first, as
-`@insert.key` for the `@key` inside `@insert`; a shorter ending, as `@key`, is
-refused with the full names it could stand for, so adding a label never changes
-or breaks what a name reads, in the markup or in a variant. Only a label on an
-expression gives a value, as `const key = @key[values[i]];`, not one on a
-statement. A label giving a position is drawn by a pointer, as
-`{@render Index(@check.at)}`, pointing while that code runs. Labels are read
-only in the root and its parts, never in a view.
-
-`{#if when(@insert.swap)}…{/if}` draws its contents at each step inside a run of
-a label, any label, on a statement or an expression: the step that ends a run,
-and those inside it where labels within it pause, whatever the pauses; never at
-the steps leading up to it, nor after it. Elsewhere they are hidden, keeping
-their room, so nothing moves as they come and go. `when(@label)` is the whole
-test, never part of another condition; it never reads the label's value, and
-`{#if @label}` is refused for reading it; it has no `{:else}`. A caption for
-each swap, `{#if when(@insert.swap)}{@render Caption()}{/if}` with
-`{#snippet Caption()}<Node>Swap</Node>{/snippet}`, shows at the swap's steps
-alone. Branches that take turns share one place:
-`{#if when(@insert.compare)}{@render Greater(@insert.compare)}{:else if when(@insert.swap)}{@render Caption()}{/if}`
-is one line, the question at a comparison and "Swap" at a swap, as large as the
-larger. A chain's branches never show at one step, as a label and one inside it
-would, which is refused.
+A label is read in the root and its parts, never in a view, by its full name,
+the labels around it first, as `@insert.key` for `@key` inside `@insert`; a
+shorter ending is refused with the full names it could stand for, so adding a
+label never changes or breaks what a name reads, in the markup or a variant.
+Only a label on an expression gives a value, as `const key = @key[values[i]];`:
+`@name` is what that expression gave since the step before, drawn at the step's
+after, and missing where it gave none or several. It is held at later steps
+inside the run around it that keeps it (see Steps), drawn from the step's
+before, so a mark stays until that code finishes. So a view shows what a step's
+code held though no variable holds it, as the key a whole insertion inserts,
+`{@render Int(@insert.key)}`, out of scope once its block ends. A label giving a
+position is drawn by a pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
-so every mark looks the same, here drawn by `Highlight`, a pointer view named
-for how it marks.
+so every mark looks the same, marking with a label rather than a loop variable
+(`@right`, not `i`) where the mark is what the step used:
 
 ```js
 for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
@@ -830,74 +637,44 @@ for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
 ```
 
 ```svelte
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {@render Index(@pair.left)}
 {@render Index(@pair.right)}
 ```
 
 A label gives a value only where its code ran, `&&` skipping it included, so the
-marks come and go with the comparison; and it marks the position however the
-value is then used, read from its cell, copied into a variable, or compared in a
-loop's test. The labels say what a mark means, so render the type at each label
-rather than a view per mark, and mark with a label rather than a loop variable
-(`@right`, not `i`) where the mark is what the step used, not where the loop is.
-A label added for a mark is a pause too: on, as `pause@pair.left`, the page
-pauses as the left cell is picked; off, the mark shows at the step its code
-leads up to, as the comparison it is read for.
+marks come and go with the comparison, however the value is then used. A label
+added for a mark is a pause too: on, the page pauses as the cell is picked; off,
+the mark shows at the step its code leads up to.
 
-A place's look holds at every step, so `@left` cannot turn red only where the
-comparison came out one way, and a view cannot choose by a label's value
-(`{#if @compare}`). To mark only what a test let through, label the positions
-the code it guards uses and give those places their own look: here the pairs
-found out of order, the ones the swap exchanges, turn red. With
-`pause@insert.swap.to` on they turn red as a step of their own after the
-comparison, both cells read and nothing written yet, and stay red as they trade
-places; a pair in order stays as the comparison marked it, with no red step, as
-no swap runs.
+A place's look holds at every step, and a view cannot choose by a label's value
+(`{#if @compare}`), so to mark only what a test let through, label the positions
+the code it guards uses and give those places their own look: labelling a swap's
+reads, `values[@from[Prev(j)]]` and `values[@to[j]]`, with
+`Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-100`, turns only
+the pairs found out of order red, and with `pause@insert.swap.to` on, as a step
+of their own before anything is written. Showing or hiding something at some
+steps needs no flag, sentinel, or cast in the algorithm: a label, a pointer at a
+label, a view chosen per place, or `{#if when(@label)}` below does it.
 
-```js
-for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
-  let j = i;
-  while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-    const moved = values[@from[Prev(j)]];
-    values[Prev(j)] = values[@to[j]];
-    values[j] = moved;
-    j = Prev(j);
-  }
-}
-```
+`{#if when(@insert.swap)}…{/if}` draws its contents at each step inside a run of
+a label, any label: the step that ends a run and those inside it where labels
+within pause, whatever the pauses, never steps leading up to it or after it;
+elsewhere they are hidden, keeping their room. `when(@label)` is the whole test,
+never part of another condition, and never reads the label's value
+(`{#if @label}` is refused); no `{:else}`. Branches that take turns share one
+place, as large as the largest, `{#if when(@a)}…{:else if when(@b)}…{/if}`, as
+in bubble sort above; a chain whose branches would show at one step, as a label
+and one inside it, is refused.
+
+What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
+the label has given up to this step, and `applied(Equal, @check)`, every
+application of `Equal` made inside `@check` so far:
 
 ```svelte
-{@render Position(@insert.compare.left)}
-{@render Position(@insert.compare.right)}
-{@render Position(@insert.swap.from)}
-{@render Position(@insert.swap.to)}
-```
-
-```json
-{
-  "Highlight.Pointed@insert.swap.from.fill": "red-100",
-  "Highlight.Pointed@insert.swap.to.fill": "red-100",
-  "pause@insert.swap.to": "on"
-}
-```
-
-What has happened so far is a list, drawn with `{#each}`: `runs(@check.at)`,
-every value the label has given up to this step, and `applied(Equal, @check)`,
-every application of `Equal` made inside `@check` so far. A pointer for each of
-a label's positions marks the cells a search has checked, and an operator's view
-draws each application:
-
-```svelte
-{#snippet Checked(p: Index)}<Pointed />{/snippet}
 {#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}
 {#each runs(@check.at) as p}{@render Index(p)}{/each}
 {@render Asked()}
 ```
-
-A `for … of` variable refers to the element it is at, as a reference does: with
-`const At = ref(Digits);` and a pointer view of `At`, `{@render At(v)}` marks
-the cell `v` is at in `for (const v of digits)`, with no index.
 
 ## Design
 
@@ -907,17 +684,17 @@ The design space is every variable of a component's look, found in its markup:
   of types).
 - `pointers.Index`, for each position type rendered by name as a pointer: its
   pointer views and `none` (see Pointers).
-- `pause@insert.swap.to`, for each label of the algorithm, by its full name,
-  never a shorter ending, so a label added later changes no saved variant:
-  `"accumulate"`, `"on"`, or `"off"`, whether the page pauses where its code
-  finishes and what its pauses inside keep, one with no labels inside it only
-  `"on"` or `"off"` (see Steps). A variant saved with `true` reads as its first
-  option, `false` as `"off"`.
+- `pause@insert.swap.to`, for each label, by its full name, never a shorter
+  ending, so a label added later changes no saved variant: `"accumulate"`,
+  `"on"`, or `"off"`, one with no labels inside it only `"on"` or `"off"` (see
+  Steps). A variant saved with `true` reads as its first option, `false` as
+  `"off"`.
 - The page frame's: `frame.ratio`, `frame.justify`, `frame.align`,
   `frame.padding`, `frame.gap`, and `frame.layout` (see Page frame).
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
-  `listing.lit@insert.compare.left.fill` (see Listing).
+  `listing.lit@insert.compare.left.fill`, which follows its label's mark until
+  set (see Listing).
 - Each kind of node's props. A kind is the snippet a node is in: a view's or a
   part's name, as `Items` or `Title`, and for a snippet inside another, both, as
   `IntTally.Tally`; every node of a snippet is of its kind. A pointer view's
@@ -933,52 +710,45 @@ type, or an operator, so every kind is known before the view runs.
 
 Every kind of node has these props, each with a fixed set of options:
 
-- `shown`: whether its nodes are drawn at all; one left out takes its children
-  with it and keeps no room. A render is missing where its view is `none` or not
-  shown, or it draws a value absent: for a whole presentation it is left out,
-  keeping no room, and at one step hidden, keeping its room so nothing moves. A
-  node holding only text and renders is one statement: one missing takes the
-  node, so `<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>`
-  hides whole at a step that swaps nothing. A node holding other nodes has
-  parts, each node and each render in it: in
+- `shown`: whether its nodes are drawn; one left out takes its children and
+  keeps no room. A render is missing where its view is `none` or not shown or it
+  draws an absent value: for a whole presentation left out, keeping no room, and
+  at one step hidden, keeping its room. A node of only text and renders is one
+  statement that one missing render takes whole, so
+  `<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>` hides at
+  a step that swaps nothing; a node holding other nodes has parts, each node and
+  render in it, and goes only with all of them, so in
   `<Node layout="row"><Node>lo {@render Index(lo)}</Node><Node>mid {@render Index(mid)}</Node></Node>`
-  only the `mid` part hides while `mid` is out of scope, a column holding the
-  array and `{@render Greater(@sweep.pair.test)}` loses only the caption, and
-  such a node goes only with all its parts; a part of the page rendered in it
-  counts as its nodes do. Split a sentence into parts to keep what is there. A
-  node holding no render, as a title, stays. A `<Pointed>` kind has none: to
-  drop a pointer, leave out a node around its `<Pointed>`, give its type's view
-  `none`, or render it in `{#if}`; the elements it would point at are then drawn
+  only the `mid` part hides while `mid` is out of scope (a part of the page
+  rendered in it counts as its nodes do). Split a sentence into parts to keep
+  what is there. A node holding no render, as a title, stays. A `<Pointed>` kind
+  has no `shown`: to drop a pointer, leave out a node around its `<Pointed>`,
+  give its type's view `none`, or render it in `{#if}`, its elements then drawn
   as without it.
-- `fill` and `stroke`: `none` or a colour.
-- `color`: the text's colour.
-- `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels.
-- `strokeStyle`: its border solid, dashed, or dotted (dashed suits a place
-  rather than a value).
-- `opacity`: 0.25, 0.5, 0.75, or 1.
-- `font`: sans, serif, or mono.
-- `size`: the text's size, 0.75, 0.875, 1, 1.125, 1.25, 1.5, or 2 rem.
-- `weight`: normal or bold.
-- `padding`: 0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em.
-- `radius`: 0, 2, 4, 6, 8, or 12 pixels, or 999 for a circle or pill.
-- `minSize`: the least width and height, 0, 1, 1.5, 2, 2.5, 3, or 4 em.
+- `fill` and `stroke`: `none` or a colour; `color`: the text's colour.
+- `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels; `strokeStyle`: solid, dashed
+  (suiting a place rather than a value), or dotted; `opacity`: 0.25, 0.5, 0.75,
+  or 1.
+- `font`: sans, serif, or mono; `size`: 0.75, 0.875, 1, 1.125, 1.25, 1.5, or 2
+  rem; `weight`: normal or bold.
+- `padding`: 0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em; `radius`: 0, 2,
+  4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`, the least width
+  and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.
 
-A kind that arranges its children, with a `layout`, a collection, or links, also
-has `gap` (as `padding`), `align` (start, center, or end, across the layout),
-and `justify` (start, center, end, between, around, or evenly, along it). Where
-a collection's node has more room than its items' tracks need, as when every
-render of a view keeps the widest box any of them reaches, `justify` start,
-center, or end puts the room after, around, or before them, and between, around,
-or evenly spreads the tracks over it. Positions past a collection's ends are
-drawn in end slots beside it, kept only as far as the drawn positions go: a
-collection's kind has `overflow`, included (its end slots are tracks of its box)
-or excluded (they hang outside its box, so centring it centres its elements); a
-`<Pointed>` kind has `overflow` too, shown (drawn past the ends) or hidden
-(drawing nothing there, keeping no room). A link's kind has `shown`, `stroke`,
-`strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label. The colours
-are white, black, and 18 hues (neutral, red, orange, amber, yellow, lime, green,
-emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, and rose)
-in 11 shades from 50, the lightest, to 950, the darkest, as `blue-600`.
+A kind arranging its children, with a `layout`, a collection, or links, also has
+`gap` (as `padding`), `align` (start, center, or end, across) and `justify`
+(start, center, end, between, around, or evenly, along); where a collection's
+node has more room than its tracks need, `justify` start, center, or end puts
+the room after, around, or before them, and between, around, or evenly spreads
+the tracks over it. Positions past a collection's ends are drawn in end slots,
+kept only as far as drawn positions go: a collection's kind has `overflow`,
+included (end slots are tracks of its box) or excluded (they hang outside, so
+centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
+the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
+`stroke`, `strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label.
+The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
+lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
+pink, and rose) in 11 shades from 50, the lightest, to 950, as `blue-600`.
 
 ### Places
 
@@ -986,11 +756,10 @@ A render with an argument is a place, named by what is written there after `@`:
 a label, by its full name, a variable, or a field, as
 `{@render Index(@pair.left)}` at `@pair.left`, `{@render Index(found)}` at
 `@found`, and `{@render Int(g.a)}` in `Ask` at `Ask.` and `@g.a`. A render of
-another expression, or with nothing between the brackets, is none. Rendering a
-type keeps the page uniform, every render drawn by the view its type's variable
-chooses, in its kinds' looks; a place has variables of its own that fall back to
-those until a variant sets them, so one render is drawn apart with nothing
-declared:
+another expression, or with nothing between the brackets, is none. Every render
+is drawn by the view its type's variable chooses, in its kinds' looks; a place
+has variables of its own that fall back to those until a variant sets them, so
+one render is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it
   draws, as `pointers.Index@found` or `views.Int@swap.held`;
@@ -1003,7 +772,6 @@ declared:
 {
   "pointers.Index": "Highlight",
   "pointers.Index@found": "Arrow",
-  "Highlight.Pointed.fill": "amber-100",
   "Highlight.Pointed@pair.left.fill": "sky-100",
   "IntCell@swap.held.fill": "neutral-100"
 }
@@ -1015,15 +783,16 @@ an error: rename the label.
 
 ### Variants
 
-A variant gives every variable a value, and a presentation draws one. The first
-presentation of a source draws the starter: each type in its first view, and
-each kind in a plain look for what it is: values framed, text and layouts
-unframed, and pointers marked in amber. Other variants are chosen: the assistant
-chooses values with `vary`, the participant's Another variant randomises them,
-keeping which variables share a value, each colour's shade, and what is shown,
-and a presentation built after a change to the source keeps the values of the
-one it was made from. Only free layouts are drawn from the presentation's seed
-(see Free layout, links, and relations).
+A variant gives every variable a value, and a presentation draws one. The
+starter is each type in its first view, each kind in a plain look for what it
+is: values framed, text and layouts unframed, and pointers marked in amber, and
+every label paused `"on"`. After a change to the source, the chooser chooses
+each presentation's values, and a presentation built after a change keeps the
+values of the one it was made from where nothing else sets them; the assistant
+sets values with `vary`, and the participant's Another variant randomises them,
+keeping which variables share a value, each colour's shade, and what is shown.
+Only free layouts are drawn from the presentation's seed (see Free layout,
+links, and relations).
 
 ### Declare what varies
 
@@ -1031,73 +800,37 @@ The markup decides what can vary, so write it so the choices worth comparing are
 variables:
 
 - Draw everything that means something of its own in a snippet of its own, so
-  its look is a variable of its own: a title, a caption, an index, a pointer's
-  label. A snippet without parameters draws it: at the top level, a part of the
-  page; inside a view, a part of it that sees the view's value, as
-  `{#snippet Under()}<Node>{k}</Node>{/snippet}` inside the `{#each}` of
-  `Items`.
+  its look is a variable of its own and a variant can leave it out: a title, a
+  caption, an index, a pointer's label. A snippet without parameters draws it:
+  at the top level, a part of the page; inside a view, a part of it that sees
+  the view's value, as `Under` and `Tally` below.
 - Draw what the state means with views of its own: an answer, as the position a
-  search finds, is the value its function returns, drawn by a pointer of its own
-  (see Loops and functions), and a mark meaning something else at some steps is
-  another pointer, rendered in `{#if}`, so a found element can look different
-  from a checked one.
-- Offer more than one view of a type where the request leaves open what it shows
-  (see Views of types).
-- Give each annotation, such as the indices under the cells, its own snippet, so
-  a variant can leave it out.
-
-Never write a look into the markup: when the participant asks for one, it is the
-values of a kind.
-
-Example, with domain, input, algorithm, and a script-free view:
+  search finds, by a pointer of its own, and a mark meaning something else at
+  some steps by another pointer, rendered in `{#if}` or at a label, so a found
+  element can look different from a checked one.
+- Draw what each step changes that the participant follows; a step whose change
+  nothing draws looks like the step before, as a list reversal drawing only
+  `cur` would at each step changing `prev`.
+- Give a source a listing of the algorithm as taught (see Listing), and more
+  than one view of a type where the request leaves open what it shows (see Views
+  of types); the chooser decides whether a variant shows each (as
+  `listing.language` none).
+- Never write a look into the markup: a look the participant asks for is the
+  values of a kind.
 
 ```svelte
-<script lang="sverlin" domain>
-  const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
-  const Index = index(Values);
-  const Flag = type('boolean');
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-</script>
-
-<script lang="sverlin" input>
-  const values = Values([3, 8, 5]);
-</script>
-
-<script lang="sverlin">
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @visit{}
-</script>
-
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}
   {#snippet Tally()}<Node>{'•'.repeat(value)}</Node>{/snippet}
   <Node layout="column"><Node {value} />{@render Tally()}</Node>
 {/snippet}
-{#snippet IndexText(i: Index)}<Node value={i} />{/snippet}
 {#snippet Items(list: Values)}
   <Node>
     {#each list as v, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">
-        {@render Int(v)}
-        {@render Under()}
-      </Node>
+      <Node layout="column">{@render Int(v)}{@render Under()}</Node>
     {/each}
   </Node>
 {/snippet}
-{#snippet Here(i: Index)}
-  {#snippet IName()}<Node>i</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render IName()}</Node>
-{/snippet}
-{#snippet Title()}<Node>Array walk</Node>{/snippet}
-{#snippet Status()}<Node>Visiting index {@render Index(i)}.</Node>{/snippet}
-
-{@render Title()}
-{@render Values(values)}
-{@render Index(i)}
-{@render Status()}
 ```
 
 ## The subset
@@ -1123,94 +856,70 @@ Example, with domain, input, algorithm, and a script-free view:
 Nodes say nothing about what a structure means by themselves: nodes laid out as
 a row can show an array, a list of linked nodes, a queue, or anything else.
 Decide the meaning from the participant's request, and when they leave it open,
-offer views that draw each reading, so variants can show different
-interpretations.
+offer views that draw each reading.
 
 ### Page frame
 
 Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 pixels wide) and scaled to fit, so every presentation renders identically
-whatever the pane size. Its ratio is the variable `frame.ratio` (16:9, 4:3, 3:2,
-1:1, 3:4, or 9:16), 16:9 in the starter; keep 16:9 unless the participant asks
-for another shape. Participants select nodes by clicking or dragging a box, to
+whatever the pane size. Its ratio is `frame.ratio` (16:9, 4:3, 3:2, 1:1, 3:4, or
+9:16), 16:9 in the starter; keep 16:9 unless the participant asks for another
+shape. The frame stacks what the top level renders in a column or a row
+(`frame.layout`), `frame.gap` apart, spread and aligned by `frame.justify` and
+`frame.align`, as between to put a title at the top and a note at the bottom,
+with `frame.padding` inside its edge. Use its width: lay sequences out across it
+rather than down it. Participants select nodes by clicking or dragging a box, to
 point at them in feedback; they scroll to zoom, drag with the middle button or
 with Space held to pan, and double-click empty space to reset, and the view is
 kept as they step through. Every node is selectable, so draw each thing a
 participant might want to point at, such as a cell, a pointer name, or a
-caption, as a node of its own. The page frame stacks what the top level renders
-in a column or a row (`frame.layout`), `frame.gap` apart, spread and aligned by
-`frame.justify` and `frame.align`, as between to put a title at the top and a
-note at the bottom, with `frame.padding` inside its edge. To place nodes freely,
-relate them, or join them with links, put them in a `<Node layout="free">` (see
-Free layout, links, and relations). Use the frame's width: lay sequences out
-across it rather than down it. Render the parts of the page at the top level
-rather than one part holding the whole view.
+caption, as a node of its own.
 
 ### Listing
 
-`<Listing />` shows a text of the algorithm beside the view, such as the code or
-pseudocode the participant knows or a textbook's, exactly as written, lighting
-what each step ran: the code it finished, the code it keeps as run, and the code
-leading up to it, all in one look. Place it outside views, at the top level or
-in a part of the page, as
+`<Listing />` shows the algorithm as taught beside the view, the flow the
+participant follows, in the code or pseudocode they know or a textbook's,
+exactly as written, lighting the code each step ran. The algorithm block is what
+runs and the listing what is read, and they meet through labels, so the
+algorithm is written as the language needs (typed values, operators, labels)
+while the listing reads as the lesson; when the algorithm changes, its listing
+follows. Place it outside views, at the top level or in a part, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
+The text is a `<script lang="sverlin" listing="textbook">` block; with several,
+`listing.language` chooses which one a presentation shows, the first in the
+starter, or `none`.
 
-Write the text in a `<script lang="sverlin" listing="textbook">` block, with any
-name but none; a source may have several, and the variable `listing.language`
-chooses which one a presentation shows, the first in the starter, or `none`; a
-variant keeps it unless the participant asks for another. What a step lights is
-the code it finished and the code it keeps as run: leading up to it, and where a
-run around it accumulates, earlier in that run (see Steps), all in one look,
-`listing.lit`. It has a kind's `fill`, `stroke`, `strokeWidth`, `strokeStyle`,
-`radius`, `weight`, and `padding`, and `color`, `none` keeping the listing's
-ink, as `listing.lit.radius`: a stroke is drawn inside the lit text and its
-padding takes no room, so lighting never moves the text, and a `radius` of 999
-makes it a pill. A line lights from its first character to its last, never its
-indentation. Each region is a place, by its label's full name, with its own
-`fill`, `stroke`, and `color`, as `listing.lit@insert.compare.left.fill`,
-falling back to its label's mark where the root draws the label as a pointer, so
-the code a mark stands for looks as its cell does, and otherwise to
-`listing.lit`; the rest of the look holds for every region. A region drawn in
-another paint than the region around it is drawn inside it, so a comparison lit
-amber holds its operands in their cells' colours:
+Mark each part of the text that should light as a region with the algorithm's
+labels, written as they are there (see Steps): `@name[text]`, nested as finely
+as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside
+another taking its name as a prefix. A `[` without a name, as in `A[i]`, is
+text, and the marks are not shown. Every region must have a label and every
+label a region, as each label is a place the page can pause, lighting its region
+there.
 
-```json
-{
-  "Highlight.Pointed@insert.compare.left.fill": "sky-100",
-  "Highlight.Pointed@insert.compare.right.fill": "violet-100",
-  "listing.lit.fill": "none",
-  "listing.lit.stroke": "amber-500",
-  "listing.lit.strokeWidth": 1,
-  "listing.lit.radius": 999,
-  "listing.lit@insert.swap.to.fill": "red-200"
-}
-```
-
-Here `j - 1` and `j` light in their cells' sky and violet with no region set,
-the lit code is an outlined pill, and the swap's read of `A[j]` red. Mark each
-part of the text that should light as a region with the algorithm's labels,
-written as they are there (see Steps): `@name[text]`, nested as finely as
-needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside
-another taking its name as a prefix, so the names line up with the algorithm's.
-A `[` without a name, as in `A[i]`, is text, and the marks are not shown. Only
-the code of labels the steps pause at lights: a step lights its label's region,
-with the code inside it, and a run accumulating around it the parts of its
-region done so far, while other code stays dark, so label what should light and
-pause at it, as `@bound[j > 0]`. A region lights without the regions inside it
-that did not run since the code around them started, so once `j > 0` fails,
-`A[j] > key` stays dark. Code kept as run lights only once it is done: once the
-step has left it, or, for a loop or an `if`, once its test has finished; so a
-comparison whose operands are still being found, a line half run, or a loop's
-line while its test runs, stays dark. Where a region's own text, outside the
-regions inside it, has a line for each statement its label marks, each line
-lights for its own statement, as `@swap[moved = A[@from[j - 1]]` and the swap's
-next lines each for theirs; otherwise the region's own text lights as one. Every
-region must have a label, and every label a region, as each label is a place the
-page can pause, which lights its region there: label the operands a comparison
-reads, as `@compare[A[@left[j - 1]] > A[@right[j]]]`, to pause at each; the
-context's listingMaps says what each region is mapped to and whether the
-algorithm runs its code.
+- Only the code of labels the steps pause at lights, all in one look: a step's
+  label's region with the code inside it, and the parts done so far of a run
+  accumulating around it; other code stays dark, so label what should light, as
+  `@bound[j > 0]`, and pause at it.
+- A region lights without the regions inside it that did not run since the code
+  around them started, so once `j > 0` fails, `A[j] > key` stays dark. Code kept
+  as run lights only once it is done, once the step has left it or, for a loop
+  or an `if`, its test has finished, so a comparison whose operands are still
+  being found, a line half run, or a loop's line while its test runs stays dark.
+- Where a region's own text, outside the regions inside it, has a line for each
+  statement its label marks, each line lights for its own statement; otherwise
+  it lights as one. A line lights from its first character to its last, never
+  its indentation.
+- The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
+  `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
+  the listing's ink; a stroke is drawn inside the lit text and its padding takes
+  no room, so lighting never moves the text, and a `radius` of 999 makes a pill.
+  Each region is a place, by its label's full name, with its own `fill`,
+  `stroke`, and `color`, as `listing.lit@insert.compare.left.fill`, falling back
+  to its label's mark where the root draws the label as a pointer, so the code a
+  mark stands for looks as its cell does, otherwise to `listing.lit`. A region
+  in another paint than the region around it is drawn inside it.
 
 Insertion sort, beside a textbook's pseudocode:
 
@@ -1221,13 +930,10 @@ Insertion sort, beside a textbook's pseudocode:
   const Position = index(Values);
   const Flag = type('boolean');
 
-  // walking the collection
   const Length = unop((v: Values) => Position(v.length));
   const Before = binop((a: Position, b: Position) => Flag(a < b));
   const Next = unop((p: Position) => Position(p + 1));
   const Prev = unop((p: Position) => Position(p - 1));
-
-  // what the algorithm does
   const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
@@ -1260,15 +966,7 @@ Insertion sort, beside a textbook's pseudocode:
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Next(p: Position)}
-  {#snippet IName()}<Node>i</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render IName()}</Node>
-{/snippet}
-{#snippet Hole(p: Position)}
-  {#snippet JName()}<Node>j</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render JName()}</Node>
-{/snippet}
-{#snippet Title()}<Node>Insertion sort</Node>{/snippet}
+{#snippet Mark(p: Position)}<Pointed />{/snippet}
 {#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Board()}
@@ -1278,7 +976,6 @@ Insertion sort, beside a textbook's pseudocode:
   </Node>
 {/snippet}
 
-{@render Title()}
 {@render Board()}
 {@render Position(i)}
 {@render Position(j)}
@@ -1292,17 +989,10 @@ A node is one of three things:
   own node does with its value;
 - content: `<Node>any text or markup</Node>` shows its children, for titles,
   explanations, captions, indices, and pointer names, and with `layout` arranges
-  them, as a view of a collection arranges its elements' views;
+  them, as a view of a collection arranges its elements' views; without
+  `layout`, children flow as ordinary text;
 - a shape: `<Node />` has no value or children, and draws only its box, for
   marks such as dots, sized by its kind's padding and least size.
-
-Titles and annotations are nodes too:
-`{#snippet Title()}<Node>Linear search</Node>{/snippet}` makes a title, and
-arranging a node's children with `layout` puts an index, caption, or pointer
-name beside or above a value:
-`<Node layout="column">{@render Int(v)}{@render Under()}</Node>`, with
-`{#snippet Under()}<Node>{k}</Node>{/snippet}` in the `{#each}`. Without
-`layout`, children flow as ordinary text.
 
 ### Props
 
@@ -1326,31 +1016,32 @@ whatever its layout.
   as `<Node key="a" value={3} />`. Every direct child is placed, keyed or not;
   put content that belongs together, such as a value and its index, in one child
   node. A link attaches to the node its key names: give the key to the value
-  inside a child, or to a child holding one value among labels (such as a value
-  with an index above and a pointer name below), and the arrow meets the value,
-  not the labels.
+  inside a child, or to a child holding one value among labels, and the arrow
+  meets the value, not the labels.
 - `constraints`: an array of relations between children, each `'a relation b'`:
   `above`, `below`, `leftOf`, and `rightOf` place a directly above, below, left
   of, or right of b, centred on it and one gap away, and `sameRow` and
   `sameColumn` centre a and b on one horizontal or vertical line in either
   order. They work in free layouts, and in rows and columns as long as they
   agree with the line. Use relations for what the picture must show, such as a
-  pointer label above its node or a caption below the structure, and leave the
-  rest to the layout.
+  pointer label above its node or a caption below the structure, leave the rest
+  to the layout, and offer views with different relations where they are open.
 - `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
   downwards, as for a list or a tree; only forms that run that way are drawn.
-- `form`: the shape a free layout gives the structure its links make. The
-  structure is read from the arrows present at every step (a link that comes and
-  goes is drawn on top of it but does not change it): a path such as a linked
-  list, a cycle, a tree, or a layered graph (acyclic, with nodes that have
-  several parents). Any structure can lie along its reading order (a path in
-  link order, a tree depth first, a layered graph each node after its parents)
-  as `'line'`, `'snake'` (rows read back and forth), `'wave'`, `'arc'`, or
-  `'scatter'` (free positions that keep each node near the next). A cycle can
-  also take `'ring'`; a tree `'tree-down'`, `'tree-right'`, `'radial'`, or
-  `'indented'`; a layered graph `'layers-down'` or `'layers-right'`. Unset,
-  every presentation draws a form that suits the space it has and stretches it
-  to fill that space, and arrows curve round other nodes and labels.
+  Set it only when asked; an undirected graph has no flow, and its links are
+  `directed={false}`.
+- `form`: the shape a free layout gives the structure its links make, read from
+  the arrows present at every step (a link that comes and goes is drawn on top
+  of it but does not change it): a path such as a linked list, a cycle, a tree,
+  or a layered graph (acyclic, with nodes that have several parents). Any
+  structure can lie along its reading order (a path in link order, a tree depth
+  first, a layered graph each node after its parents) as `'line'`, `'snake'`
+  (rows read back and forth), `'wave'`, `'arc'`, or `'scatter'` (free positions
+  that keep each node near the next). A cycle can also take `'ring'`; a tree
+  `'tree-down'`, `'tree-right'`, `'radial'`, or `'indented'`; a layered graph
+  `'layers-down'` or `'layers-right'`. Leave it unset: every presentation draws
+  a form that suits the space it has and stretches it to fill that space, and
+  arrows curve round other nodes and labels.
 - `curve`: `'straight'` or `'curved'`, whether this node's arrows prefer to run
   straight or to curve; unset, each link draws its own.
 - `layoutSeed`: keeps this node's layout of its children the same in every
@@ -1361,52 +1052,28 @@ whatever its layout.
   so that layout stays while everything else still varies. Pin `curve` only if
   the participant names it.
 
-Leave `form` unset, set `flow` only when asked, such as for a list that must run
-left to right, and offer views with different relations where they are open. A
-flow suits directed structures; an undirected graph has no flow, and its links
-are `directed={false}`.
-
-```svelte
-{#snippet NameCard(name: Name)}<Node value={name} />{/snippet}
-{#snippet Next(pair: Pair)}<Link from={pair.from} to={pair.to} />{/snippet}
-{#snippet List()}
-  {#snippet Head()}<Node key="head">head</Node>{/snippet}
-  <Node layout="free" flow="x">
-    {#each names as name}{@render Name(name)}{/each}
-    {#each next as pair}{@render Pair(pair)}{/each}
-    {@render Head()}
-    <Link from="head" to={first} />
-  </Node>
-{/snippet}
-{@render List()}
-```
-
 ## Link
 
 `<Link from={edge.from} to={edge.to} />` draws a line, by default an arrow,
-between two nodes: a position from the state names the node drawing the element
-it points at, and a key names a child keyed so, such as a label. Put links among
-the children of the node whose children they join, beside the nodes they
-connect, or in a view rendered there, as of an edge or of an operator's
-application; never in a pointer view, which draws inside the element it marks.
-They take no space, and the node lays its children out with them: give it a
-`layout`, `"free"` for a linked structure or `"row"` or `"column"`, unless it
-holds a collection's `{#each}`, which runs as the collection. Only a free layout
-places its children with their links; in a row or column the links are drawn
-over the children, which stay where they would be without them, each arcing over
-ends side by side, or to the right of ends one above the other, clear of the
-boxes. Each link is a component of its own, so a participant can select it and
-refer to it in feedback, just as they can a node. Its look, its line's colour,
-width, opacity, and dashes and its label's colour, is its kind's (see Design); a
-link in `Arrow` is of kind `Arrow.Link`. A pointer at an element drawn as a
-link, such as the edge being examined, gives the link its kind's stroke and
-width (see Pointers).
+between two nodes. Put links among the children of the node whose children they
+join, or in a view rendered there, as of an edge, of a node (see Nodes and
+references), or of an operator's application; never in a pointer view, which
+draws inside the element it marks. They take no space; give the node a `layout`,
+`"free"` for a linked structure or `"row"` or `"column"`, unless it holds a
+collection's `{#each}`, which runs as the collection. Only a free layout places
+its children by their links; in a row or column links are drawn over the
+children, which stay where they would be without them, each arcing over ends
+side by side or beside ends one above the other, clear of the boxes. Each link
+is selectable, as a node is, and its look, line and label, is its kind's (see
+Design), as `Arrow.Link` for a link in `Arrow`.
 
-- `from` and `to`: positions from the state, as `edge.from`, labels giving
-  positions, as `@insert.swap.from`, or the keys of two nodes, or of nodes
-  inside them (see `key` above). In a view of an element, a link with no `from`
-  starts at the node drawing that element, as a node's `next` (see Nodes and
-  references).
+- `from` and `to`: positions from the state, as `edge.from`, naming the node
+  drawing the element each points at, the index of an `{#each}` over a
+  collection among them, as `k` in `{#each vertices as v, k}`; labels giving
+  positions, as `@insert.swap.from`; or the keys of two nodes, or of nodes
+  inside them, as `<Link from="head" to={first} />` beside a
+  `<Node key="head">head</Node>`. In a view of an element, a link with no `from`
+  starts at the node drawing that element, as a node's `next`.
 - `directed`: `false` for a plain line instead of an arrow.
 - `label`: a short text shown at the middle of the link, such as `next` or
   `head`.
@@ -1417,15 +1084,16 @@ width (see Pointers).
   link reports the bend it drew; when the participant likes a curve, set `bend`
   on that `<Link>` to the reported value.
 
-Links can come and go with the steps: wrap one in `{#if}` to show it only while
-it matters, such as the pointer being followed. A link whose end is a label, or
-a variable out of scope, shows only where it has a value, as a pointer at the
-label does: `<Link from={@insert.swap.from} to={@insert.swap.to} />` among the
-cells joins the two a swap trades, at its steps alone. Its place is kept across
-the animation, so nothing moves when it appears.
+Links come and go with the steps: one in `{#if}` shows only while it matters, as
+the pointer being followed, and one whose end is a label, or a variable out of
+scope, shows only where it has a value, as a pointer at the label does, so
+`<Link from={@insert.swap.from} to={@insert.swap.to} />` among the cells joins
+the two a swap trades, at its steps alone. Its place is kept across the
+animation, so nothing moves when it appears.
 
-Breadth-first search, with the vertex being visited and the edge being examined
-marked in the graph:
+Breadth-first search, each vertex with a list of its neighbours, drawn as arrows
+from each vertex `k` to them, with the vertex visited and the neighbour looked
+at marked and the queue drawn by number:
 
 ```svelte
 <script lang="sverlin" domain>
@@ -1434,19 +1102,11 @@ marked in the graph:
   const Vertex = record({ name: Name, seen: Flag });
   const Vertices = collection(Vertex);
   const VertexRef = index(Vertices);
-  const Edge = record({ from: VertexRef, to: VertexRef });
-  const Edges = collection(Edge);
-  const EdgeIndex = index(Edges);
+  const Out = collection(VertexRef);
+  const Adjacency = collection(Out);
   const Queue = collection(VertexRef);
 
-  // walking the edges
-  const Count = unop((es: Edges) => EdgeIndex(es.length));
-  const Before = binop((a: EdgeIndex, b: EdgeIndex) => Flag(a < b));
-  const Next = unop((e: EdgeIndex) => EdgeIndex(e + 1));
-
-  // what the algorithm does
   const Waiting = unop((q: Queue) => Flag(q.length > 0));
-  const Same = binop((a: VertexRef, b: VertexRef) => Flag(a === b));
   const Not = unop((f: Flag) => Flag(!f));
   const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
   const Rest = unop((q: Queue) => Queue(q.slice(1)));
@@ -1454,54 +1114,42 @@ marked in the graph:
 
 <script lang="sverlin" input>
   const vertices = Vertices([
-    { name: 'A', seen: false },
+    { name: 'A', seen: true },
     { name: 'B', seen: false },
     { name: 'C', seen: false },
     { name: 'D', seen: false },
     { name: 'E', seen: false }
   ]);
-  const edges = Edges([
-    { from: 0, to: 1 },
-    { from: 0, to: 2 },
-    { from: 1, to: 3 },
-    { from: 2, to: 3 },
-    { from: 3, to: 4 }
-  ]);
+  const out = Adjacency([[1, 2], [3], [3], [4], []]);
 </script>
 
 <script lang="sverlin">
-  @start[let queue = Queue([0]);
-  vertices[0].seen = true;]
+  let queue = Queue([0]);
   while (Waiting(queue)) @visit{
     @take[const current = queue[0];
     queue = Rest(queue);]
-    for (let e = EdgeIndex(0); Before(e, Count(edges)); e = Next(e)) @edge{
-      if (Same(edges[e].from, current)) {
-        if (Not(vertices[edges[e].to].seen)) {
-          vertices[edges[e].to].seen = true;
-          queue = Append(queue, edges[e].to);
-        }
+    for (const w of out[current]) @look{
+      if (Not(vertices[@next[w]].seen)) @add{
+        vertices[w].seen = true;
+        queue = Append(queue, w);
       }
     }
   }
 </script>
 
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
-{#snippet SeenWord(seen: Flag)}<Node>{seen ? 'seen' : 'new'}</Node>{/snippet}
 {#snippet SeenMark(seen: Flag)}<Node>{seen ? '✓' : '·'}</Node>{/snippet}
-{#snippet RefCard(v: VertexRef)}<Node value={v} />{/snippet}
 {#snippet VertexCard(v: Vertex)}<Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
-{#snippet Arrow(edge: Edge)}<Link from={edge.from} to={edge.to} />{/snippet}
+{#snippet RefCard(v: VertexRef)}<Node value={v} />{/snippet}
 {#snippet QueueItems(q: Queue)}<Node>{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
-{#snippet Visiting(c: VertexRef)}<Pointed />{/snippet}
-{#snippet Examining(e: EdgeIndex)}<Pointed />{/snippet}
+{#snippet Marked(v: VertexRef)}<Pointed />{/snippet}
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as v, k}
       {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
       <Node layout="column">{@render Vertex(v)}{@render VertexNumber()}</Node>
+      {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
-    {#each edges as edge}{@render Edge(edge)}{/each}
   </Node>
 {/snippet}
 {#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
@@ -1509,5 +1157,9 @@ marked in the graph:
 {@render Graph()}
 {@render QueueLine()}
 {@render VertexRef(current)}
-{@render EdgeIndex(e)}
+{@render VertexRef(@visit.look.next)}
+```
+
+```
+
 ```
