@@ -59,9 +59,9 @@ describe('positions', () => {
         @count[k = Sum(i, j);]
       }
     `,
-      { drawn: new Set(['k']) }
+      { pauses: new Map(['start', 'count'].map((label) => [label, 'on'])) }
     );
-    // Drawing k alone, the start and each count are steps; the loop's last test changes nothing,
+    // Pausing at the start and each count; the loop's last test changes nothing,
     // so the last count is the last step.
     expect(trace.map(({ state }) => state.merged)).toEqual([[], [1], [1, 2], [1, 2, 3]]);
     expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });

@@ -65,9 +65,9 @@ describe('listings of the source’s own', () => {
     expect(prepared.design.starter['listing.language']).toBe('textbook');
     expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
     const { text } = prepared.listings!.textbook;
-    const lit = prepared.paced(new Set(prepared.pauses.defaults)).lit.textbook;
+    const lit = prepared.paced(new Set(['shift', 'place'])).lit.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');
-    // The view draws the row, so the pauses are the shift and the placing.
+    // Pausing at the shift and the placing.
     const shown = lit.map(({ current, earlier }) => ({
       current: current.map(([start, end]) => text.slice(start, end)),
       earlier: earlier.map(([start, end]) => text.slice(start, end))
@@ -85,9 +85,7 @@ describe('listings of the source’s own', () => {
     // comparison never run.
     const prepared = prepareSvelteComponent(insertion);
     const { text } = prepared.listings!.textbook;
-    const pauses = new Map(
-      [...prepared.pauses.defaults, 'test'].map((label) => [label, 'on'] as const)
-    );
+    const pauses = new Map(['shift', 'place', 'test'].map((label) => [label, 'on'] as const));
     const tests = prepared
       .paced(pauses)
       .lit.textbook.map(({ current }) => current.map(([start, end]) => text.slice(start, end)))

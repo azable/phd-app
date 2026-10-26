@@ -77,9 +77,12 @@ it.skipIf(!enabled)(
     const prepared = prepareSvelteComponent(insertion);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
+        'pause@insert': 'off',
         'pause@insert.compare': 'accumulate',
         'pause@insert.compare.left': 'on',
         'pause@insert.compare.right': 'on',
+        'pause@insert.swap': 'accumulate',
+        'pause@insert.swap.from': 'off',
         'pause@insert.swap.to': 'on',
         'Highlight.Pointed@insert.compare.left.fill': 'sky-100',
         'Highlight.Pointed@insert.compare.right.fill': 'violet-100',

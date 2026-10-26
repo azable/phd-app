@@ -32,9 +32,9 @@ const body = `
 const text = `for @loop[i = 0 to n - 1]
     @check[found = @matches[A[i] == x]]
     if @test[found then @stop[stop]]`;
-// Drawing found: each step leads up to the check, then makes it.
-const drawingFound = { drawn: new Set(['found']) };
-const traced = traceAlgorithm(body, input, domain, drawingFound);
+// Pausing at the check: each step leads up to it, then makes it.
+const atCheck = { pauses: new Map([['check', 'on' as const]]) };
+const traced = traceAlgorithm(body, input, domain, atCheck);
 const { listing, problems } = mappedListing({ body: text }, traced);
 /** The text each range of a step's lighting covers. */
 const shown = ({ text }: Listing, { current, earlier }: Lit) => ({
@@ -60,7 +60,7 @@ describe('lighting', () => {
       `${body}\n  @done[const done = Flag(true);]`,
       input,
       domain,
-      drawingFound
+      atCheck
     );
     const lit = lightSteps(mappedListing({ body: text }, ending).listing, ending.steps);
     expect(lit).toHaveLength(3);
@@ -122,7 +122,7 @@ describe('lighting', () => {
 `.replace('@swap{', 'if (Before(a, Length(values))) @swap{'),
       input,
       domain,
-      { drawn: new Set(['a']) }
+      { pauses: new Map([['swap', 'accumulate']]) }
     );
     const { listing: paired, problems } = mappedListing(
       { body: 'if a < n\n  @swap[kept = A[@from[a]]\n  a = a + 1]' },

@@ -34,10 +34,14 @@ const domain = `<script lang="sverlin" domain>
   const Equal = binop((a: Int, b: Int) => Flag(a === b));
 </script>`;
 
-/** Each step's visible nodes, as kind:text, from the first step on. */
-async function stepsOf(source: string, count: number): Promise<string[][]> {
+/** Each step's visible nodes, as kind:text, from the first step on, pausing as chosen. */
+async function stepsOf(
+  source: string,
+  count: number,
+  chosen: Record<string, string> = {}
+): Promise<string[][]> {
   const prepared = prepareSvelteComponent(source);
-  const { javascript } = await bundlePresentation(prepared, 1);
+  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -90,7 +94,7 @@ it.skipIf(!enabled)(
 {#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
 {@render Cells()}
 {@render Inserting()}`;
-    const keys = (await stepsOf(source, 4)).map((nodes) =>
+    const keys = (await stepsOf(source, 4, { 'pause@insert.key': 'off' })).map((nodes) =>
       nodes.find((node) => node.startsWith('Inserting'))
     );
     // The page opens on the input, before any key, the node hidden whole; then one key per step.
@@ -129,9 +133,15 @@ it.skipIf(!enabled)(
 {@render Cells()}
 {@render Greater()}
 {@render Swapped()}`;
-    // Each comparison, labelled, is a step, and each swap, which gives both values the caption draws.
+    // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
-    const [, compare, swap, , , last] = await stepsOf(source, 6);
+    const [, compare, swap, , , last] = await stepsOf(source, 6, {
+      'pause@sweep': 'off',
+      'pause@sweep.pair': 'off',
+      'pause@sweep.pair.swap': 'accumulate',
+      'pause@sweep.pair.swap.a': 'off',
+      'pause@sweep.pair.swap.b': 'off'
+    });
     expect(swap).toContain('Swapped:swap 5 and 1');
     // At a comparison, the caption hides whole, its text with its values.
     expect(compare.some((node) => node.startsWith('Swapped'))).toBe(false);
@@ -159,7 +169,7 @@ it.skipIf(!enabled)(
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {@render Cells()}
 {#each runs(@check.at) as p}{@render Index(p)}{/each}`;
-    const checked = (await stepsOf(search, 4)).map((nodes) =>
+    const checked = (await stepsOf(search, 4, { 'pause@check.at': 'off' })).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
     // The input as given, nothing checked yet; then each check adds its cell.

@@ -82,13 +82,13 @@ describe('the event log', () => {
   });
 
   it('keeps each step’s latest events, counting every one', () => {
-    // Drawing only what the marks declare, the loop leads up to the first.
+    // Pausing only at the marks, the loop leads up to the first.
     const body = `@fill[let values = Values([]);
       for (let i = Int(0); Less(i, 1000); i = Up(i)) values = Append(values, i);]
       @mark[const a = Int(1);]
       @mark[const b = Int(2);]`;
     const { steps: trace } = traceAlgorithm(body, undefined, domain, {
-      drawn: new Set(['a', 'b'])
+      pauses: new Map([['mark', 'on']])
     });
     expect(trace).toHaveLength(2);
     expect(trace[0].events).toHaveLength(maximumStepEvents);

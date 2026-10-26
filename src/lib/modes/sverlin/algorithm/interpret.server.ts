@@ -245,16 +245,11 @@ export type Pauses = ReadonlyMap<string, PauseMode>;
 
 /**
  * Where the page pauses, which makes the steps: the end of each run of each label in `pauses`, by
- * full name; code outside them joins the next step. Without `pauses`, the labels the view gives a
- * reason to pause at, its defaults: a label with a run whose code changes a variable the view draws
- * (with none given, any variable) or applies an operator it shows (anywhere, or only inside the
- * spans given), where no step inside that run came after; and, where the view draws a label's
- * value, the statement labelled around it (else the label), where no step came after the value.
+ * full name, every label 'on' without them; code outside them joins the next step. `shown`: the
+ * operators the view shows applied (anywhere, or only inside the spans given), kept for it.
  */
 export type Pacing = {
   shown?: ReadonlyMap<string, readonly Span[] | undefined>;
-  drawn?: ReadonlySet<string>;
-  values?: ReadonlySet<string>;
   pauses?: Pauses;
 };
 
@@ -273,9 +268,8 @@ export function stepLabels(
 }
 
 /**
- * Interpret the algorithm, pausing at the labels given or else at its defaults (see Pacing): once to
- * find the defaults, then again recording the steps. Keeps its tree, labels, and code as parsed,
- * which its listings are mapped by.
+ * Interpret the algorithm, pausing at the labels given or else at every label (see Pacing), and
+ * record the steps. Keeps its tree, labels, and code as parsed, which its listings are mapped by.
  */
 export function traceAlgorithm(
   body: string,
@@ -294,8 +288,6 @@ export function traceAlgorithm(
   root: BlockStatement;
   labels: Label[];
   code: string;
-  /** The labels the view gives a reason to pause at, by full name (see Pacing). */
-  defaults: ReadonlySet<string>;
 } {
   const parsed = parseBlock(body, 'algorithm', domain);
   const { root, offset, code } = parsed;
@@ -308,49 +300,27 @@ export function traceAlgorithm(
     if (!statement && nodes.length === 1 && keep.labels?.has(full))
       captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
   const named = new Map<AnyNode, string[]>();
-  const giving = new Map<string, AnyNode>();
   const holding = new Map<string, AnyNode>();
-  for (const { full, nodes, statement, parent } of labelled.labels) {
+  for (const { full, nodes, parent } of labelled.labels) {
     named.set(nodes[0], [...(named.get(nodes[0]) ?? []), full]);
     if (parent) holding.set(full, parent.nodes[0]);
-    let around = statement ? undefined : parent;
-    while (around && !around.statement) around = around.parent;
-    if (around) giving.set(full, around.nodes[0]);
   }
-  const interpret = (pauses?: Pauses) =>
-    new Interpreter(root, offset, {
-      kind: 'algorithm',
-      initial: input,
-      domain,
-      code,
-      captured,
-      history: keep.history,
-      units: labelled.units,
-      named,
-      giving,
-      holding,
-      pacing,
-      pauses
-    });
-  const planning = interpret();
-  planning.run();
-  // The defaults pause as a label switched on does: accumulating, where labels are inside it.
-  const parents = new Set(labelled.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
-  const interpreter = interpret(
-    pacing.pauses ??
-      new Map<string, PauseMode>(
-        [...planning.defaults].map((label) => [label, parents.has(label) ? 'accumulate' : 'on'])
-      )
-  );
-  const steps = interpreter.run();
-  return {
-    steps,
-    opening: interpreter.opening!,
-    root,
-    labels: labelled.labels,
+  const interpreter = new Interpreter(root, offset, {
+    kind: 'algorithm',
+    initial: input,
+    domain,
     code,
-    defaults: planning.defaults
-  };
+    captured,
+    history: keep.history,
+    units: labelled.units,
+    named,
+    holding,
+    pacing,
+    pauses:
+      pacing.pauses ?? new Map(labelled.labels.map(({ full }): [string, PauseMode] => [full, 'on']))
+  });
+  const steps = interpreter.run();
+  return { steps, opening: interpreter.opening!, root, labels: labelled.labels, code };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -371,19 +341,14 @@ type Completion = 'normal' | 'break' | 'continue' | 'return';
  */
 type Since = { before: StepSnapshot; gap: number; applied: number };
 /**
- * A run of labelled code going on, numbered in the order runs start, and the scope it runs in: in
- * the first run, what the view drew there as it started or at the last step inside it, whether
- * code inside it has given a value the view draws since, and whether it applied an operator the
- * view shows since; in the second, where it is a step, since. It starts after `start` events.
+ * A run of labelled code going on, numbered in the order runs start, the scope it runs in, and,
+ * where it is a step, since. It starts after `start` events.
  */
 type Run = {
   node: AnyNode;
   number: number;
   scope: Scope;
   start: number;
-  drawn?: Map<string, string>;
-  gave?: boolean;
-  showed?: boolean;
   since?: Since;
 };
 /**
@@ -473,20 +438,12 @@ class Interpreter {
   /** The code labels mark, and the full names of the labels on each, by its first node. */
   readonly #units: FrameUnits;
   readonly #named: ReadonlyMap<AnyNode, readonly string[]>;
-  /** The first node of the statement labelled around each labelled expression, by its full name. */
-  readonly #giving: ReadonlyMap<string, AnyNode>;
   /** The first node of the label around each label, by its full name. */
   readonly #holding: ReadonlyMap<string, AnyNode>;
-  /** What the view shows, which gives the labels to pause at by default. */
+  /** What the view shows applied, kept for it. */
   readonly #pacing: Pacing;
-  /**
-   * The labels to pause at, by full name, given to the second run, which records the steps; the
-   * first finds the defaults (see Pacing).
-   */
+  /** The labels to pause at, by full name. */
   readonly #pauses: Pauses;
-  /** In the first run, the labels with a run the view gives a reason to pause at. */
-  readonly #defaults = new Set<string>();
-  readonly #recording: boolean;
   /** The values labelled expressions gave inside runs of the labels around them going on. */
   #labelGiven: Given[] = [];
   /** How many events had been logged at the last step. */
@@ -524,7 +481,6 @@ class Interpreter {
       domain?: DomainRegistry;
       units?: FrameUnits;
       named?: ReadonlyMap<AnyNode, readonly string[]>;
-      giving?: ReadonlyMap<string, AnyNode>;
       holding?: ReadonlyMap<string, AnyNode>;
       pacing?: Pacing;
       pauses?: Pauses;
@@ -538,11 +494,9 @@ class Interpreter {
     this.#history = options.history ?? new Set();
     this.#units = options.units ?? { nodes: new Set(), ranges: new Map() };
     this.#named = options.named ?? new Map();
-    this.#giving = options.giving ?? new Map();
     this.#holding = options.holding ?? new Map();
     this.#pacing = options.pacing ?? {};
     this.#pauses = options.pauses ?? new Map();
-    this.#recording = options.pauses !== undefined || options.kind !== 'algorithm';
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -620,17 +574,8 @@ class Interpreter {
     ];
   }
 
-  /** The labels to pause at by default, found by the first run (see Pacing). */
-  get defaults(): ReadonlySet<string> {
-    return this.#defaults;
-  }
-
-  /** Run the algorithm block and return its master trace; none from the first run. */
+  /** Run the algorithm block and return its master trace. */
   run(): MasterStep[] {
-    if (!this.#recording) {
-      this.#execute();
-      return [];
-    }
     // Every presentation opens on the input as given, before any of the algorithm runs.
     const opening = this.#state(this.#root, this.#topLevel);
     this.#execute();
@@ -1414,47 +1359,15 @@ class Interpreter {
     return { state, types, ...(targets ? { targets } : {}), ...(identities ? { identities } : {}) };
   }
 
-  /**
-   * What the view draws at a moment: each variable in scope it draws, as text, which the end of a
-   * label run is compared with. Within one variable, a value seen again is named by when it was
-   * first seen, so nodes linked in a cycle end.
-   */
-  #drawn(scope: Scope): Map<string, string> {
-    const { drawn } = this.#pacing;
-    // Drawing a heap draws every node a variable reaches.
-    const every = !drawn || [...this.#heaps.keys()].some((record) => drawn.has(heapKey(record)));
-    const shown = new Map<string, string>();
-    for (const [name, { value }] of this.#inScope(scope)) {
-      if (!every && !drawn?.has(name)) continue;
-      const seen = new Map<object, number>();
-      const text = (value: Value): string => {
-        if (value instanceof Atom) return `${value.type.name}(${JSON.stringify(value.value)})`;
-        if (value === null || typeof value !== 'object') return String(JSON.stringify(value));
-        const at = seen.get(value);
-        if (at !== undefined) return `#${at}`;
-        seen.set(value, seen.size);
-        return Array.isArray(value)
-          ? `[${value.map(text).join(',')}]`
-          : `{${Object.entries(value)
-              .map(([key, item]) => `${key}:${text(item)}`)
-              .join(',')}}`;
-      };
-      shown.set(name, text(value));
-    }
-    return shown;
-  }
-
   /** Start a run of labelled code; where its label is paused at, the state before it. */
   #begin(node: AnyNode, scope: Scope): void {
     const number = this.#runCount++;
-    const step =
-      this.#recording && (this.#named.get(node) ?? []).some((label) => this.#pauses.has(label));
+    const step = (this.#named.get(node) ?? []).some((label) => this.#pauses.has(label));
     this.#runs.push({
       node,
       number,
       scope,
       start: this.#log.seen,
-      ...(this.#recording ? {} : { drawn: this.#drawn(scope) }),
       ...(step
         ? {
             since: {
@@ -1467,52 +1380,13 @@ class Interpreter {
     });
   }
 
-  /**
-   * End a run of labelled code. The second run records a step where its label is paused at. The
-   * first finds the defaults: a run that changed what the view draws since it started, or since the
-   * last such run inside it, or applied an operator the view shows since, or where the view draws
-   * its label's value, makes its label one. Variables only leaving scope change nothing.
-   */
+  /** End a run of labelled code, recording a step where its label is paused at. */
   #end(node: AnyNode, scope: Scope): void {
     const run = this.#runs.pop();
     if (!run) return;
-    if (this.#recording) {
-      if (run.since) this.#record(run.node, node, scope, run.since, run);
-      // A value no longer inside a run of the label around it is never kept again.
-      this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
-      return;
-    }
-    const drawn = this.#drawn(scope);
-    const changed =
-      (run.showed ?? false) || [...drawn].some(([name, text]) => run.drawn?.get(name) !== text);
-    // A value the view draws makes a step of the run of the statement labelled around it, or of its
-    // own where none is, unless a step inside that run came after it.
-    let valued = run.gave ?? false;
-    for (const label of this.#named.get(run.node) ?? [])
-      if (this.#pacing.values?.has(label)) {
-        const around = this.#giving.get(label);
-        const giver = around && this.#runs.findLast((each) => each.node === around);
-        if (giver) giver.gave = true;
-        else valued = true;
-      }
-    if (changed || valued) {
-      for (const label of this.#named.get(run.node) ?? []) this.#defaults.add(label);
-      this.#planned();
-    }
-  }
-
-  /**
-   * In the first run, after a run making its label a default: the runs going on compare what is
-   * drawn with it, each in its scope, and start again on what they gave and applied.
-   */
-  #planned(): void {
-    const drawn = new Map<Scope, Map<string, string>>();
-    for (const run of this.#runs) {
-      if (!drawn.has(run.scope)) drawn.set(run.scope, this.#drawn(run.scope));
-      run.drawn = drawn.get(run.scope);
-      run.gave = false;
-      run.showed = false;
-    }
+    if (run.since) this.#record(run.node, node, scope, run.since, run);
+    // A value no longer inside a run of the label around it is never kept again.
+    this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
   }
 
   /** How the page pauses at a run's labels: accumulating if any of them does (see PauseMode). */
@@ -1687,7 +1561,7 @@ class Interpreter {
    */
   #capture(node: AnyNode, value: Value): void {
     const names = this.#captured.get(node);
-    if (!names || !this.#recording) return;
+    if (!names) return;
     for (const name of names) {
       const run: LabelRun = { state: { value: null }, types: {}, targets: {} };
       run.state.value = this.#snapshot(value, node, 'value', {
@@ -2278,7 +2152,7 @@ class Interpreter {
     });
     // An application of an operator the view shows is kept for it, copied as a step's state is;
     // so is any application of one whose applications so far a view draws.
-    if (this.#recording && (shows || this.#history.has(name))) {
+    if (shows || this.#history.has(name)) {
       const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
       const into = { types: application.types, targets: {}, placed: [] };
       parameters.forEach((parameter, index) => {
@@ -2303,9 +2177,6 @@ class Interpreter {
         ...(result instanceof Atom ? [{ path: 'value', value: result }] : [])
       ]);
     }
-    // An application the view shows makes the label run around it a default pause.
-    const around = shows && !this.#recording ? this.#runs.at(-1) : undefined;
-    if (around) around.showed = true;
     if (result !== null && typeof result === 'object' && !(result instanceof Atom))
       this.#computed.add(result);
     return result;

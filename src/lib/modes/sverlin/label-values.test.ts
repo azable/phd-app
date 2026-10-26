@@ -66,10 +66,11 @@ describe('labels read in the view', () => {
         sample: { state: { value: 2 }, types: { value: 'Int' }, targets: {} }
       }
     });
-    // The view draws the key, so each run of the insertion giving it is a step, whose own code gave
-    // it once.
+    // Pausing at the insertion, each run of it gives the key once in its own code.
     expect(
-      prepared.master.map((step) => step.labelled?.['insert.key']?.map((run) => run.state.value))
+      prepared
+        .paced(new Set(['insert']))
+        .steps.map((step) => step.labelled?.['insert.key']?.map((run) => run.state.value))
     ).toEqual([undefined, [2], [8], [1]]);
   });
 
@@ -147,7 +148,7 @@ describe('a for … of variable', () => {
       'for (const v of digits) @read{ const seen = @seen[v]; }',
       input,
       counting,
-      { values: new Set(['read.seen']) }
+      { pauses: new Map([['read', 'on']]) }
     ).steps;
     const { identities } = steps[1];
     expect(identities?.refs.v).toBe(identities?.ids['digits[1]']);

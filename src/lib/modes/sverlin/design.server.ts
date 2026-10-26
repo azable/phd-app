@@ -157,18 +157,9 @@ function litListingKey(key: string): string | undefined {
   return key;
 }
 
-/** The pauses a source starts with: the labels the view gives a reason to pause at, switched on. */
-export function starterPauses(
-  labels: readonly string[],
-  defaults: ReadonlySet<string>,
-  leaves: ReadonlySet<string>
-): Record<string, DesignValue> {
-  return Object.fromEntries(
-    labels.map((label) => [
-      `pause@${label}`,
-      !defaults.has(label) ? 'off' : leaves.has(label) ? 'on' : 'accumulate'
-    ])
-  );
+/** The pauses a source starts with: every label on, for the chooser to thin. */
+export function starterPauses(labels: readonly string[]): Record<string, DesignValue> {
+  return Object.fromEntries(labels.map((label) => [`pause@${label}`, 'on']));
 }
 
 /**

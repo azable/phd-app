@@ -88,7 +88,7 @@ describe('identities', () => {
 
   it('never bring back a value once it is no longer shown', () => {
     const paths = ['values[0]', 'values[1]', 'values[2]', 'values[3]', 'key'];
-    // Drawing only the row, the key picked up leads up to the shifts and the placing.
+    // Pausing where the row changes, the key picked up leads up to the shifts and the placing.
     const snapshots = shown(
       `@start[const values = Values([5, 2, 4, 1]);]
        for (let i = Count(1); Before(i, Size(values)); i = Up(i)) {
@@ -101,7 +101,7 @@ describe('identities', () => {
          @place[values[j] = key;]
        }`,
       paths,
-      { drawn: new Set(['values']) }
+      { pauses: new Map(['start', 'shift', 'place'].map((label) => [label, 'on'])) }
     );
     const gone = new Set<number>();
     let previous = new Set<number>();

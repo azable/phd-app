@@ -375,7 +375,7 @@ describe('single-component Svelte compilation', () => {
     expect(prepared.listings?.code.text).toBe('for i = 1 to n');
     // The input as given, lighting nothing, then a step per pass, each changing last; the loop's
     // end only drops i, so it is no step.
-    const { lit } = prepared.paced(new Set(prepared.pauses.defaults));
+    const { lit } = prepared.paced(pausesOf(prepared.pauses, {}));
     expect(lit.code).toHaveLength(3);
     expect(lit.code[0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
@@ -751,7 +751,7 @@ describe('typed view components', () => {
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Int(target)}{@render Cells()}`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
-    expect(prepared.paced(new Set(prepared.pauses.defaults)).placements).toEqual([
+    expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
     ]);
   });
@@ -760,7 +760,7 @@ describe('typed view components', () => {
     const prepared = prepareSvelteComponent(
       `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">@start[let i = Position(-1);] @move[i = Position(0);]</script>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}{@render Cells()}`
     );
-    expect(prepared.paced(new Set(prepared.pauses.defaults)).placements).toEqual([
+    expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
     ]);
   });
@@ -1007,21 +1007,21 @@ describe('views of what a step computed', () => {
 
   it('pause at each comparison its label runs, and apart from it at each swap', async () => {
     const prepared = prepareSvelteComponent(bubble);
+    const both = prepared.paced(new Set(['sweep.pair.test', 'sweep.pair.swap'])).steps;
     const steps = (master: typeof prepared.master) =>
       master.map(({ state, applied }) => [
         String(state.values),
         applied?.Greater?.map(({ state }) => `${state.a} > ${state.b}`) ?? []
       ]);
     // The comparison lifts its operands, then the swap moves them, each a step of its own.
-    expect(steps(prepared.master).slice(1, 5)).toEqual([
+    expect(steps(both).slice(1, 5)).toEqual([
       ['5,1,4,2,3', ['5 > 1']],
       ['1,5,4,2,3', []],
       ['1,5,4,2,3', ['5 > 4']],
       ['1,4,5,2,3', []]
     ]);
     // Ten comparisons and six swaps, after the input as given.
-    expect(prepared.master).toHaveLength(17);
-    expect(prepared.pauses.defaults).toEqual(['sweep.pair.test', 'sweep.pair.swap']);
+    expect(both).toHaveLength(17);
     // Not pausing at the comparisons, the sort plays through its swaps, each comparison leading up
     // to its swap and drawn there.
     const swaps = prepared.paced(new Set(['sweep.pair.swap'])).steps;
@@ -1030,7 +1030,11 @@ describe('views of what a step computed', () => {
       ['1,4,5,2,3', ['5 > 4']]
     ]);
     const paced = await bundlePresentation(prepared, 1, {
-      chosen: { 'pause@sweep.pair.test': false }
+      chosen: {
+        'pause@sweep': 'off',
+        'pause@sweep.pair': 'off',
+        'pause@sweep.pair.test': false
+      }
     });
     expect(paced.labels).toHaveLength(7);
     expect(paced.masterSignature).toBe((await bundlePresentation(prepared, 1)).masterSignature);
@@ -1151,24 +1155,34 @@ describe('pauses at labels', () => {
       ].join(' | ');
     });
 
-  it('offers a pause at every label, by its full name, on where the view gives a reason', () => {
+  it('offers a pause at every label, by its full name, each on to start with whatever the view draws', () => {
     const prepared = prepareSvelteComponent(insertion);
-    const pauses = Object.entries(prepared.design.starter).filter(([key]) =>
-      key.startsWith('pause@')
-    );
-    // A label with labels inside it accumulates where it is on; one without is only on or off.
-    expect(Object.fromEntries(pauses)).toEqual({
-      'pause@insert': 'off',
-      'pause@insert.compare': 'accumulate',
-      'pause@insert.compare.left': 'off',
-      'pause@insert.compare.right': 'off',
-      'pause@insert.swap': 'accumulate',
-      'pause@insert.swap.from': 'off',
-      'pause@insert.swap.to': 'off'
+    const starterPauses = (source: string) =>
+      Object.fromEntries(
+        Object.entries(prepareSvelteComponent(source).design.starter).filter(([key]) =>
+          key.startsWith('pause@')
+        )
+      );
+    expect(starterPauses(insertion)).toEqual({
+      'pause@insert': 'on',
+      'pause@insert.compare': 'on',
+      'pause@insert.compare.left': 'on',
+      'pause@insert.compare.right': 'on',
+      'pause@insert.swap': 'on',
+      'pause@insert.swap.from': 'on',
+      'pause@insert.swap.to': 'on'
     });
+    // Nothing the view draws changes them: without its marks or its comparison, the same.
+    const bare = insertion
+      .replace(/\{@render Position\(@[^)]*\)\}\n?/g, '')
+      .replace('{@render Greater()}', '');
+    expect(bare).not.toContain('{@render Position(@');
+    expect(starterPauses(bare)).toEqual(starterPauses(insertion));
+    // A label with labels inside it can accumulate; one without is only on or off.
     expect(prepared.design.space['pause@insert.compare']).toEqual(['accumulate', 'on', 'off']);
     expect(prepared.design.space['pause@insert.swap.to']).toEqual(['on', 'off']);
-    expect(played(prepared.master).slice(0, 5)).toEqual([
+    const coarse = prepared.paced(new Set(['insert.compare', 'insert.swap'])).steps;
+    expect(played(coarse).slice(0, 5)).toEqual([
       '5,2,4,1 | 5 > 2: true | left right | ',
       '2,5,4,1 |  | from to | ',
       '2,5,4,1 | 5 > 4: true | left right | ',
@@ -1204,9 +1218,19 @@ describe('pauses at labels', () => {
       .lit.code.slice(1, 4)
       .map(({ current }) => current.map(([start, end]) => text.slice(start, end)));
     expect(lit).toEqual([['j - 1'], ['j'], ['A[j - 1] > A[j]']]);
-    const coarse = await bundlePresentation(prepared, 1);
+    const coarseChoice = {
+      'pause@insert': 'off',
+      'pause@insert.compare': 'accumulate',
+      'pause@insert.compare.left': 'off',
+      'pause@insert.compare.right': 'off',
+      'pause@insert.swap': 'accumulate',
+      'pause@insert.swap.from': 'off',
+      'pause@insert.swap.to': 'off'
+    };
+    const coarse = await bundlePresentation(prepared, 1, { chosen: coarseChoice });
     const apart = await bundlePresentation(prepared, 1, {
       chosen: {
+        ...coarseChoice,
         'pause@insert.compare.left': 'on',
         'pause@insert.compare.right': 'on',
         'pause@insert.swap.to': 'on'
@@ -1437,8 +1461,13 @@ describe('pauses accumulate', () => {
   it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
     expect(
       pausesOf(insertion.pauses, {
+        'pause@insert': 'off',
         'pause@insert.compare.left': 'accumulate',
-        'pause@insert.compare': 'on'
+        'pause@insert.compare': 'on',
+        'pause@insert.compare.right': 'off',
+        'pause@insert.swap': 'accumulate',
+        'pause@insert.swap.from': 'off',
+        'pause@insert.swap.to': 'off'
       })
     ).toEqual(
       new Map([
