@@ -1319,6 +1319,13 @@ async function chosenBuild(
     if (!found) return undefined;
     return typeof found.options === 'string' ? design.options[found.options] : found.options;
   };
+  // The first build's values kept from the viewed variant, not those it took from the starter, so
+  // the rebuild's starter values are still recorded as the starter's.
+  const base = bundle.origins
+    ? Object.fromEntries(
+        Object.entries(bundle.variant).filter(([key]) => bundle.origins?.[key] !== 'starter')
+      )
+    : bundle.variant;
   const requests = options.seeds.map((seed, index) => {
     const variant = generation.result.variants[index];
     const chosen = Object.fromEntries(
@@ -1331,7 +1338,7 @@ async function chosenBuild(
     return {
       seed,
       variant: {
-        base: bundle.variant,
+        base,
         chosen,
         ...(!variant ? { randomise: true as const } : randomise.length ? { randomise } : {})
       }

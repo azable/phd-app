@@ -164,12 +164,12 @@ export function starterPauses(labels: readonly string[]): Record<string, DesignV
 
 /**
  * A pause@ value as saved before pauses had three ways: true, switched on (its first option), and
- * false, off; any other value as it is.
+ * false, off; accumulating at a label with no labels inside it as on; any other value as it is.
  */
 function asPause(space: DesignSpace, key: string, value: unknown): unknown {
-  if (!key.startsWith('pause@') || typeof value !== 'boolean' || !Object.hasOwn(space, key))
-    return value;
-  return value ? space[key][0] : 'off';
+  if (!key.startsWith('pause@') || !Object.hasOwn(space, key)) return value;
+  if (typeof value === 'boolean') return value ? space[key][0] : 'off';
+  return value === 'accumulate' && !space[key].includes(value) ? 'on' : value;
 }
 
 /**

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
+  designVariables,
   projectAiContext,
   projectAiTimelineEntry,
   projectConversationMessages
@@ -260,5 +261,16 @@ describe('source versions in the AI context', () => {
     expect(context.timeline.at(-1)?.summary).toBe(
       'Created assistant-edit source version cccccc: Highlights the target.'
     );
+  });
+});
+
+describe('design variables in the AI context', () => {
+  it('gives every pause its options, so a chosen pause is one of them', () => {
+    const design = designVariables({
+      variant: { 'pause@insert.swap': 'on', 'pause@insert.swap.to': 'on', 'Cell.fill': 'none' }
+    });
+    for (const key of ['pause@insert.swap', 'pause@insert.swap.to'])
+      expect(design.variables.find(({ variable }) => variable === key)?.options).toBe('pause');
+    expect(design.options.pause).toEqual(['accumulate', 'on', 'off']);
   });
 });

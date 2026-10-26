@@ -240,3 +240,15 @@ describe('listing regions', () => {
     expect(none['listing.lit@pass.fill']).toBe('amber-200');
   });
 });
+
+describe('pauses chosen', () => {
+  it('read accumulating as on at a label with no labels inside it', () => {
+    const space = { 'pause@sweep': ['accumulate', 'on', 'off'], 'pause@sweep.pair': ['on', 'off'] };
+    const starter = { 'pause@sweep': 'on', 'pause@sweep.pair': 'on' };
+    const chosen = { 'pause@sweep': 'accumulate', 'pause@sweep.pair': 'accumulate' };
+    expect(buildVariant(space, starter, { chosen }, 1).values).toEqual({
+      'pause@sweep': 'accumulate',
+      'pause@sweep.pair': 'on'
+    });
+  });
+});

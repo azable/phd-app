@@ -818,6 +818,12 @@ describe('submitProjectFeedback', () => {
     );
     expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual(['amber-100', 'blue-100']);
     expect(shown.map(({ origins }) => origins?.['Shown.fill'])).toEqual(['chosen', 'chosen']);
+    // What the chooser left is the starter's still, not kept from the first build.
+    expect(
+      Object.entries(shown[0].origins ?? {}).filter(
+        ([key, origin]) => key !== 'Shown.fill' && origin !== 'starter'
+      )
+    ).toEqual([]);
     expect(shown[0].variant).not.toHaveProperty('Shown.depth');
   });
 
