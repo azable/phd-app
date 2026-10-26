@@ -18,6 +18,7 @@ export type { LayoutMemory } from './type-context';
 export { provideEnds, providePointers } from './type-context';
 export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
+export { unpackStates, type PackedStates } from './trace-pack';
 export { arrangementLayout, describeFrame, describeStep, stepLayouts } from './scene';
 export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {

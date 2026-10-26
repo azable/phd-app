@@ -2,8 +2,8 @@
   The links of a node laid out in a row or column, drawn over it. They take no part in its layout:
   the node places its children as it would without them, and each link is drawn afterwards between
   the boxes of the elements its ends name, inside the node, as an arc that clears the boxes between
-  and around them, over a row or to the right of a column. Links in a free layout are placed with
-  their nodes instead (see Arranged.svelte).
+  and around them, over ends side by side or to the right of ends one above the other. Links in a
+  free layout are placed with their nodes instead (see Arranged.svelte).
 -->
 <script lang="ts">
   import { linkDashes, strokeStyleCss } from './design';
@@ -84,10 +84,15 @@
       const to = anchors[dataset.to ?? ''];
       if (!from || !to || from === to) return [];
       const [p, q] = [centre(from), centre(to)];
-      const across = axis === 'row' ? q.x - p.x : q.y - p.y;
+      // Ends side by side arc over them, ends one above the other beside them, wherever the link is
+      // written: a link in a column can join two cells of a row inside it.
+      const wide = Math.abs(q.x - p.x);
+      const tall = Math.abs(q.y - p.y);
+      const sideBySide = wide === tall ? axis === 'row' : wide > tall;
+      const across = sideBySide ? q.x - p.x : q.y - p.y;
       const bend = Number(dataset.bend);
-      // An exact bend is kept; a straight link runs straight; else it arcs over the row, or to the
-      // right of the column, further where the first arc would cross a box.
+      // An exact bend is kept; a straight link runs straight; else it arcs over ends side by side, or
+      // to the right of ends one above the other, further where the first arc would cross a box.
       const order = dataset.bend
         ? [bend]
         : dataset.curve === 'straight'

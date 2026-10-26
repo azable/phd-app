@@ -103,6 +103,7 @@ import {
   type KindRole
 } from './library/node/design';
 import { forms } from './library/node/forms';
+import { packStates } from './library/trace-pack';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 
@@ -991,7 +992,6 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const keep = { labels: new Set(Object.values(labelled).map(({ label }) => label)) };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
-    // A chain's branches take turns in one place: none may show at a step another shows at. The
     const runs = labelRuns(master, {
       state: new Set(
         [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
@@ -1002,6 +1002,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       operators: new Set(shown.keys()),
       during: new Set(Object.values(during))
     });
+    // A chain's branches take turns in one place: none may show at a step another shows at. The
     // master pauses at every label, so every step any pacing has is among its steps.
     const overlaps = whens.chains.flatMap(({ start, keys }) => {
       const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
@@ -1622,9 +1623,10 @@ export async function bundlePresentation(
         ])
       }
     : null;
+  const trace = JSON.stringify(packStates(states));
   const result = await bundle(
     prepared.component,
-    JSON.stringify(states),
+    trace,
     JSON.stringify(prepared.atoms),
     JSON.stringify({
       components: prepared.components,
@@ -1634,7 +1636,10 @@ export async function bundlePresentation(
   );
   const output = result.outputFiles[0];
   if (output.contents.byteLength > maximumBundleBytes) {
-    throw new InvalidSvelteSourceError('The compiled Svelte presentation is too large.');
+    const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    throw new InvalidSvelteSourceError(
+      `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; the variant pausing at fewer labels gives fewer steps.`
+    );
   }
   return {
     javascript: output.text,
@@ -2796,15 +2801,30 @@ function ifTestsOf(markup: unknown, is: (name: string) => boolean): Set<number> 
   return found;
 }
 
-/** Where each <Link> in a snippet starts that no <Node> in it holds. */
+/**
+ * Where each <Link> in a snippet starts that no <Node> in it holds and that has a from, as an edge's
+ * or an operator's view draws. One with no from leaves the element the view draws, as a node's next
+ * field, and is laid out by the free layout around the nodes (see Link.svelte's data-sv-hoist), not
+ * by the node the view is rendered in.
+ */
 function outerLinks(snippet: unknown): number[] {
   const found: number[] = [];
   const walk = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(walk);
-    const part = node as { type?: string; name?: string; start?: number };
+    const part = node as {
+      type?: string;
+      name?: string;
+      start?: number;
+      attributes?: { name?: string }[];
+    };
     if (part.type === 'InlineComponent' && part.name === 'Node') return;
-    if (part.type === 'InlineComponent' && part.name === 'Link') found.push(part.start ?? 0);
+    if (
+      part.type === 'InlineComponent' &&
+      part.name === 'Link' &&
+      part.attributes?.some((attribute) => attribute.name === 'from')
+    )
+      found.push(part.start ?? 0);
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
   };

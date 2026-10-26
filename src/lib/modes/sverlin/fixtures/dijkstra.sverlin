@@ -1,0 +1,121 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Int = type('integer', { min: 0, max: 99 });
+  const Weight = type(Int, { min: 1, max: 9 });
+  const Flag = type('boolean');
+
+  const Vertex = record({ name: Name, distance: Int, done: Flag });
+  const Vertices = collection(Vertex);
+  const VertexIndex = index(Vertices);
+  const Edge = record({ from: VertexIndex, to: VertexIndex, weight: Weight });
+  const Edges = collection(Edge);
+  const EdgeIndex = index(Edges);
+
+  const VertexCount = unop((vs: Vertices) => VertexIndex(vs.length));
+  const EdgeCount = unop((es: Edges) => EdgeIndex(es.length));
+  const NextVertex = unop((p: VertexIndex) => VertexIndex(p + 1));
+  const NextEdge = unop((p: EdgeIndex) => EdgeIndex(p + 1));
+  const BeforeVertex = binop((a: VertexIndex, b: VertexIndex) => Flag(a < b));
+  const BeforeEdge = binop((a: EdgeIndex, b: EdgeIndex) => Flag(a < b));
+
+  const SameVertex = binop((a: VertexIndex, b: VertexIndex) => Flag(a === b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Add = binop((a: Int, b: Weight) => Int(a + Int(b)));
+  const Not = unop((f: Flag) => Flag(!f));
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A', distance: 0, done: false },
+    { name: 'B', distance: 99, done: false },
+    { name: 'C', distance: 99, done: false },
+    { name: 'D', distance: 99, done: false },
+    { name: 'E', distance: 99, done: false }
+  ]);
+
+  const edges = Edges([
+    { from: 0, to: 1, weight: 4 },
+    { from: 0, to: 2, weight: 1 },
+    { from: 2, to: 1, weight: 2 },
+    { from: 2, to: 3, weight: 5 },
+    { from: 1, to: 3, weight: 1 },
+    { from: 1, to: 4, weight: 7 },
+    { from: 3, to: 4, weight: 3 }
+  ]);
+</script>
+
+<script lang="sverlin">
+  let current = VertexIndex(-1);
+
+  for (let round = VertexIndex(0); BeforeVertex(round, VertexCount(vertices)); round = NextVertex(round)) @round{
+    @reset[current = VertexIndex(-1);]
+
+    for (let v = VertexIndex(0); BeforeVertex(v, VertexCount(vertices)); v = NextVertex(v)) @choose{
+      if (Not(vertices[v].done) && (SameVertex(current, VertexIndex(-1)) || Less(vertices[v].distance, vertices[current].distance))) @select{
+        current = v;
+      }
+    }
+
+    if (Not(SameVertex(current, VertexIndex(-1)))) @visit{
+      @settle[vertices[current].done = true;]
+
+      for (let e = EdgeIndex(0); BeforeEdge(e, EdgeCount(edges)); e = NextEdge(e)) @edge{
+        if (SameVertex(edges[e].from, current)) @relax{
+          @candidate[const candidate = Add(vertices[current].distance, edges[e].weight);]
+          if (@check[Less(candidate, vertices[edges[e].to].distance)]) @update{
+            vertices[edges[e].to].distance = candidate;
+          }
+        }
+      }
+    }
+  }
+</script>
+
+{#snippet NameText(value: Name)}<Node value={value} />{/snippet}
+{#snippet IntCell(value: Int)}<Node value={value} />{/snippet}
+{#snippet FlagWord(value: Flag)}<Node>{value ? 'done' : 'open'}</Node>{/snippet}
+{#snippet IndexText(value: VertexIndex)}<Node value={value} />{/snippet}
+{#snippet CurrentMark(value: VertexIndex)}<Pointed />{/snippet}
+{#snippet EdgeMark(value: EdgeIndex)}<Pointed />{/snippet}
+
+{#snippet VertexCard(value: Vertex)}
+  <Node layout="column">
+    {@render Name(value.name)}
+    <Node>distance {@render Int(value.distance)}</Node>
+    {@render Flag(value.done)}
+  </Node>
+{/snippet}
+
+{#snippet EdgeLink(value: Edge)}
+  <Link from={value.from} to={value.to} label={value.weight} />
+{/snippet}
+
+{#snippet LessQuestion(value: Less)}
+  <Node>candidate {@render Int(value.a)} &lt; current distance {@render Int(value.b)}: {@render Flag(value.value)}</Node>
+{/snippet}
+
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as vertex}
+      {@render Vertex(vertex)}
+    {/each}
+    {#each edges as edge}
+      {@render Edge(edge)}
+    {/each}
+  </Node>
+{/snippet}
+
+{#snippet Title()}<Node>Dijkstra's shortest paths</Node>{/snippet}
+{#snippet Status()}
+  <Node layout="column">
+    <Node>Nearest chosen: {@render VertexIndex(current)}</Node>
+    {@render Less(@round.visit.edge.relax.check)}
+  </Node>
+{/snippet}
+
+{@render Title()}
+{@render Graph()}
+{@render Status()}
+{@render VertexIndex(current)}
+{@render EdgeIndex(e)}
+

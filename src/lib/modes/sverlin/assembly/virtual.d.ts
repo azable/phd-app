@@ -6,10 +6,12 @@ declare module 'virtual:component' {
   export default Main;
 }
 
-/** Each step's recorded values and the view each type draws, with atomic types by path under __types. */
+/** Each step's recorded values and the view each type draws, packed (see library/trace-pack.ts). */
 declare module 'virtual:trace' {
-  const states: Record<string, unknown>[];
-  export default states;
+  import type { PackedStates } from 'sverlin';
+
+  const packed: PackedStates;
+  export default packed;
 }
 
 /** The component's atomic types by name, as its domain block defines them. */

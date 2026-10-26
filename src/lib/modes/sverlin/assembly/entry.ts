@@ -17,6 +17,7 @@ import {
   stepLayouts,
   themeCss,
   widestInteger,
+  unpackStates,
   type FrameSettings,
   type DesignValues,
   type LayoutMemory,
@@ -26,7 +27,9 @@ import {
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
 import { components, listing, placements } from 'virtual:components';
-import states from 'virtual:trace';
+import packed from 'virtual:trace';
+
+const states = unpackStates(packed);
 
 // The page theme every node draws on: colour tokens, the canvas, and spacing for the page itself.
 const theme = document.createElement('style');

@@ -9,6 +9,8 @@ import {
   prepareSvelteComponent
 } from './compile.server';
 import { linearSearchSource } from './contract';
+import bst from './fixtures/bst.sverlin?raw';
+import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import { buildVariant } from './design.server';
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
@@ -878,9 +880,10 @@ describe('scope', () => {
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(source('{@render Int(key)}'));
     const { javascript } = await bundlePresentation(prepared, 1);
-    // After the loop, i and key are out of scope: they stand in from the step that had them.
-    expect(javascript).toContain('values:[5,2],i:1,key:2');
-    expect(javascript).toContain('__absent:["i","key"]');
+    // After the loop, i and key are out of scope: they stand in from the step that had them, and are
+    // listed absent (values, the same at every step, is kept once; see library/trace-pack.ts).
+    expect(javascript).toContain('i:1,key:2');
+    expect(javascript).toContain('["i","key"]');
   });
 
   it('rejects the view reading a variable out of scope at some step itself', () => {
@@ -1514,8 +1517,6 @@ describe('pauses accumulate', () => {
     for (const { name, state } of coarse) expect(byName.get(name)).toEqual(state);
   });
 
-  it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
-    expect(
   it('count each label’s runs and those changing what the view draws, for the chooser', () => {
     const { runs } = insertion.pauses;
     // Each comparison and swap changes what the board draws; an insertion's own end adds nothing
@@ -1525,6 +1526,8 @@ describe('pauses accumulate', () => {
     expect(runs['insert']).toEqual({ runs: 3, drawn: 0 });
   });
 
+  it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
+    expect(
       pausesOf(insertion.pauses, {
         'pause@insert': 'off',
         'pause@insert.compare.left': 'accumulate',
@@ -1741,6 +1744,14 @@ describe('the view reaching the code only through labels', () => {
     ).toThrow('A <Node> joining links needs a layout: layout="free" for a linked structure');
   });
 
+  it('leave a link with no from in a field’s view to the free layout, the field joining none', () => {
+    // A binary search tree whose fields render a view holding <Link to={value} />: the link leaves
+    // the element the view draws for the tree's free layout, so a field needs no layout of its own.
+    const unlaid = bst.replaceAll('<Node layout="row"><Node>', '<Node><Node>');
+    expect(unlaid).not.toContain('<Node layout="row"><Node>L');
+    expect(() => prepareSvelteComponent(unlaid)).not.toThrow();
+  });
+
   it('refuse a link in a pointer view, which draws inside the element it marks', () => {
     expect(() =>
       prepareSvelteComponent(
@@ -1914,5 +1925,16 @@ describe('{#if when(…)} chains', () => {
       'pass.look',
       'pass.n'
     ]);
+  });
+});
+
+describe('the bundle', () => {
+  it('embeds each value once where steps share it, so pausing at every label fits', async () => {
+    // Dijkstra on five vertices as an assistant wrote it, paused at every label (115 steps): each
+    // step's state repeating the variant made it more than 2 MB.
+    const prepared = prepareSvelteComponent(dijkstra);
+    const { javascript, labels } = await bundlePresentation(prepared, 1);
+    expect(labels.length).toBeGreaterThan(100);
+    expect(javascript.length).toBeLessThan(1024 * 1024);
   });
 });

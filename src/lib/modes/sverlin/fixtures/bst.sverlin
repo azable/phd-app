@@ -1,0 +1,82 @@
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Flag = type('boolean');
+  const Name = type(['end']);
+  const TreeNode = record({ key: Int, left: Next, right: Next });
+  const NodeRef = ref(TreeNode);
+  const Next = union(NodeRef, Name);
+  const Values = collection(Int);
+  const Index = index(Values);
+
+  const Length = unop((v: Values) => Index(v.length));
+  const Before = binop((a: Index, b: Index) => Flag(a < b));
+  const Advance = unop((p: Index) => Index(p + 1));
+
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const NewLeaf = binop((k: Int, e: Next) => TreeNode({
+    key: k,
+    left: e,
+    right: e
+  }));
+  const IsNode = unop((n: Next) => Flag(n !== 'end'));
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([8, 3, 10, 1, 6, 14, 4, 7, 13]);
+  const root = NodeRef(TreeNode({
+    key: values[0],
+    left: Next(Name('end')),
+    right: Next(Name('end'))
+  }));
+</script>
+
+<script lang="sverlin">
+  function insert(node, value) @insert{
+    if (@direction[Less(value, node.key)]) {
+      if (IsNode(node.left)) {
+        @descend[insert(node.left, value);]
+      } else @attach[node.left = NodeRef(NewLeaf(value, Next(Name('end'))));]
+    } else {
+      if (IsNode(node.right)) {
+        @descend[insert(node.right, value);]
+      } else @attach[node.right = NodeRef(NewLeaf(value, Next(Name('end'))));]
+    }
+  }
+
+  for (let i = Index(1); Before(i, Length(values)); i = Advance(i)) @sequence{
+    const value = @pick[values[i]];
+    insert(root, value);
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet EndMark(value: Name)}<Node>∅</Node>{/snippet}
+{#snippet NextMark(value: Next)}
+  {#if value === 'end'}
+    {@render Name(value)}
+  {:else}
+    <Link to={value} />
+  {/if}
+{/snippet}
+{#snippet TreeCard(node: TreeNode)}
+  <Node layout="column">
+    <Node>{@render Int(node.key)}</Node>
+    <Node layout="row">
+      <Node layout="row"><Node>L</Node>{@render Next(node.left)}</Node>
+      <Node layout="row"><Node>R</Node>{@render Next(node.right)}</Node>
+    </Node>
+  </Node>
+{/snippet}
+{#snippet Title()}<Node>Binary search tree insertion</Node>{/snippet}
+{#snippet Heap()}
+  <Node layout="free" flow="y" form="tree-down">
+    {#each all(TreeNode) as node}{@render TreeNode(node)}{/each}
+  </Node>
+{/snippet}
+{#snippet Status()}
+  <Node>Insert next value {@render Int(@sequence.pick)}</Node>
+{/snippet}
+
+{@render Title()}
+{@render Heap()}
+{@render Status()}

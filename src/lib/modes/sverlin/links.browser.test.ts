@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import bubble from './fixtures/bubble-arrow.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -223,6 +224,58 @@ it.skipIf(!enabled)(
     expect(await shown()).toEqual(['values[0] -> values[1]']);
     await go(3);
     expect(await shown()).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'arcs over two cells side by side though the link is written in a column',
+  { timeout: 120_000 },
+  async () => {
+    // Bubble sort as an assistant wrote it: the arrow is among a column's children, its ends two
+    // cells of the row inside it.
+    const prepared = prepareSvelteComponent(bubble);
+    const chosen = Object.fromEntries(
+      prepared.pauses.labels.map((label) => [
+        `pause@${label}`,
+        label === 'pass.pair.compare' || label === 'pass.pair.swap' ? 'accumulate' : 'off'
+      ])
+    );
+    const { javascript, labels } = await bundlePresentation(prepared, 1, { chosen });
+    const swap = labels.indexOf('@pass.pair.swap#1');
+    expect(swap).toBeGreaterThan(0);
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), swap);
+    await page.waitForTimeout(1500);
+    const drawn = await page.evaluate(() => {
+      const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+      const path = [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)].find(
+        (link) => link.style.opacity !== '0'
+      );
+      const cells = [...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-kind="IntCell"]`)]
+        .map((cell) => cell.getBoundingClientRect())
+        .toSorted((a, b) => a.left - b.left);
+      const box = path?.getBoundingClientRect();
+      return box
+        ? {
+            top: box.top,
+            width: box.width,
+            cellsTop: Math.min(...cells.map((cell) => cell.top)),
+            pitch: cells[1].left - cells[0].left
+          }
+        : undefined;
+    });
+    // Over the cells, and spanning from one cell's middle to the next's, not a stub in the gap.
+    expect(drawn).toBeDefined();
+    expect(drawn!.top).toBeLessThan(drawn!.cellsTop);
+    expect(drawn!.width).toBeGreaterThan(drawn!.pitch * 0.6);
     expect(errors).toEqual([]);
     await page.close();
   }
