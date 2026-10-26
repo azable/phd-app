@@ -495,18 +495,22 @@ async function recordSteps() {
       );
     });
   };
-  const measure = ({ layer }: Shown) => {
-    for (const node of layer.querySelectorAll<HTMLElement>('[data-sv-node]')) {
+  // Keep the largest size each node reaches; whether any grew.
+  const keepLargest = (nodes: Iterable<HTMLElement>) => {
+    let grew = false;
+    for (const node of nodes) {
       const id = node.dataset.svNode as string;
       const largest = reserved.get(id);
       // Layout sizes, unaffected by the frame's scale or the root's fit.
-      const width = node.offsetWidth;
-      const height = node.offsetHeight;
-      reserved.set(id, {
-        width: Math.max(largest?.width ?? 0, width),
-        height: Math.max(largest?.height ?? 0, height)
-      });
+      const width = Math.max(largest?.width ?? 0, node.offsetWidth);
+      const height = Math.max(largest?.height ?? 0, node.offsetHeight);
+      grew ||= width !== largest?.width || height !== largest?.height;
+      reserved.set(id, { width, height });
     }
+    return grew;
+  };
+  const measure = ({ layer }: Shown) => {
+    keepLargest(layer.querySelectorAll<HTMLElement>('[data-sv-node]'));
     for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
       const collection = box.dataset.svCollection;
       if (!collection) continue;
@@ -574,10 +578,16 @@ async function recordSteps() {
   }
   // Record what every arrangement contains at every step, then solve each over all of them; a
   // nested arrangement's solution changes its size and so what its parent contains, so recording
-  // repeats until no solution changes.
+  // repeats until no solution changes. A {#when} chain draws other branches at other steps, each
+  // grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as shown.
   for (let round = 0; round < 3; round++) {
-    for (let step = 0; step < states.length; step++) await pass(step, 'recording', () => {});
-    if (!settleSpans(scopes)) break;
+    let chainsGrew = false;
+    for (let step = 0; step < states.length; step++)
+      await pass(step, 'recording', ({ layer }) => {
+        chainsGrew =
+          keepLargest(layer.querySelectorAll<HTMLElement>('[data-sv-kind="chain"]')) || chainsGrew;
+      });
+    if (!settleSpans(scopes) && !chainsGrew) break;
   }
 }
 

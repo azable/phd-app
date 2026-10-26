@@ -872,9 +872,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
+          const block = reference.branch ? ':when' : '#when';
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(
-              `{#when ${asWritten(reference.key)}} is in a view, which draws only its value: write it in the root or a part of the page.`
+              `{${block} @${reference.path ?? ''}} is in a view, which draws only its value: write it in the root or a part of the page.`
+            );
+          else if (typeof reference.branch === 'number')
+            problem(
+              `{:when @${reference.path}} names a label too short to read as a chain's branch: give it a name of ${reference.branch} or more characters.`
             );
           else if (reference.path === undefined)
             problem(
@@ -930,10 +935,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         else if (filter) narrowed.set(reference.key, labelSpan(found.label));
         else labelled[reference.key] = { label: found.label.full };
       }
-    for (const start of whenElsesOf(ast.html))
+    const whens = whenChainsOf(ast.html);
+    for (const start of whens.elses)
       labelProblems.push(
         new InvalidSvelteSourceError(
-          "{#when …} has no {:else}: what shows outside the label's runs goes beside the block, where it shows at every step.",
+          "{#when …} has no {:else}: what shows outside the label's runs goes beside the block, where it shows at every step, and another label's steps take a branch of its own, {:when @insert.swap}.",
           { code: 'view_label', start: sourcePosition(source, start) }
         )
       );
@@ -984,6 +990,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const keep = { labels: new Set(Object.values(labelled).map(({ label }) => label)) };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
+    // A chain's branches take turns in one place: none may show at a step another shows at. The
+    // master pauses at every label, so every step any pacing has is among its steps.
+    const overlaps = whens.chains.flatMap(({ start, keys }) => {
+      const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
+      const both = master.flatMap((step) => {
+        const shown = labels.filter((label) => step.inside?.includes(label));
+        return shown.length > 1 ? [{ step: step.name ?? '', shown }] : [];
+      });
+      if (!both.length) return [];
+      const [{ shown }] = both;
+      const steps = [...new Set(both.map(({ step }) => step))];
+      return [
+        new InvalidSvelteSourceError(
+          `The {#when} chain's branches @${shown.join(' and @')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a chain's branches take turns in one place, so give each a label whose runs never meet the others', or write them as {#when} blocks of their own.`,
+          { code: 'view_label', start: sourcePosition(source, start) }
+        )
+      ];
+    });
+    if (overlaps.length) throw InvalidSvelteSourceError.combine(overlaps);
     const labelNames = traced.labels.map(({ full }) => full);
     const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
     const leaves = new Set(labelNames.filter((label) => !parents.has(label)));
@@ -2676,29 +2701,62 @@ function viewOperatorCalls(
   return found;
 }
 
-/** Where each {:else} of a {#when} block starts (see label-values.ts). */
-function whenElsesOf(markup: unknown): number[] {
-  const found: number[] = [];
+type IfPart = {
+  type?: string;
+  start?: number;
+  elseif?: boolean;
+  expression?: { type?: string; name?: string };
+  else?: { start?: number; children?: IfPart[] };
+};
+
+/** The {:when} branch following a {#when} block or branch, an {:else if} on a key by now. */
+function nextBranch(part: IfPart): IfPart | undefined {
+  const [next, ...rest] = (part.else?.children ?? []).filter(
+    (child) => child.type !== 'Text' || String((child as { data?: string }).data ?? '').trim()
+  );
+  return !rest.length &&
+    next?.type === 'IfBlock' &&
+    next.elseif &&
+    next.expression?.type === 'Identifier' &&
+    isDuringKey(next.expression.name ?? '')
+    ? next
+    : undefined;
+}
+
+/**
+ * Each {#when} block's chain of branches, by where it starts, its keys in order; and where each
+ * {:else} of one starts, as no branch (see label-values.ts).
+ */
+function whenChainsOf(markup: unknown): {
+  chains: { start: number; keys: string[] }[];
+  elses: number[];
+} {
+  const chains: { start: number; keys: string[] }[] = [];
+  const elses: number[] = [];
   const walk = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(walk);
-    const part = node as {
-      type?: string;
-      expression?: { type?: string; name?: string };
-      else?: { start?: number };
-    };
+    const part = node as IfPart;
     if (
       part.type === 'IfBlock' &&
+      !part.elseif &&
       part.expression?.type === 'Identifier' &&
-      isDuringKey(part.expression.name ?? '') &&
-      part.else
-    )
-      found.push(part.else.start ?? 0);
+      isDuringKey(part.expression.name ?? '')
+    ) {
+      const keys = [part.expression.name ?? ''];
+      let last = part;
+      for (let next = nextBranch(part); next; next = nextBranch(next)) {
+        keys.push(next.expression?.name ?? '');
+        last = next;
+      }
+      chains.push({ start: part.start ?? 0, keys });
+      if (last.else) elses.push(last.else.start ?? 0);
+    }
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
   };
   walk(markup);
-  return found;
+  return { chains, elses };
 }
 
 /** Where each {#if} whose test is a label read alone starts its test, as {#if @insert.swap}. */

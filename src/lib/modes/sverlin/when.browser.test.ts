@@ -63,9 +63,12 @@ const off = {
   'pause@insert.swap.from': 'off'
 };
 
-/** Each step's caption: whether "Swap" shows, and the board's size and cells' places, sorted. */
-async function stepsOf(chosen: Record<string, string>, count: number) {
-  const prepared = prepareSvelteComponent(insertion);
+/**
+ * Each step's captions: whether "Swap" shows and where, whether the question does and where, and the
+ * board's size and the row's cells' places, sorted.
+ */
+async function stepsOf(chosen: Record<string, string>, count: number, source = insertion) {
+  const prepared = prepareSvelteComponent(source);
   const { javascript } = await bundlePresentation(prepared, 1, { chosen });
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
@@ -74,20 +77,37 @@ async function stepsOf(chosen: Record<string, string>, count: number) {
   await page.waitForFunction(() =>
     document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
   );
-  const seen: { swap: boolean; board: string; cells: number[] }[] = [];
+  const seen: {
+    swap: boolean;
+    asked: boolean;
+    at: { swap?: string; asked?: string };
+    board: string;
+    cells: number[];
+  }[] = [];
   for (let step = 1; step <= count; step++) {
     await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), step);
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(1500);
     seen.push(
       await page.evaluate(() => {
         const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
         const caption = layer.querySelector<HTMLElement>('[data-sv-kind="Caption"]');
+        const question = layer.querySelector<HTMLElement>('[data-sv-kind="Ask"]');
         const board = layer.querySelector<HTMLElement>('[data-sv-kind="Board"]')!;
         const box = board.getBoundingClientRect();
+        const shows = (node: HTMLElement | null) =>
+          Boolean(node) && node?.dataset.svHidden !== 'true';
+        const place = (node: HTMLElement | null) => {
+          if (!node) return undefined;
+          const { top, height } = node.getBoundingClientRect();
+          return `${Math.round(top + height / 2)}`;
+        };
         return {
-          swap: Boolean(caption) && caption?.dataset.svHidden !== 'true',
+          swap: shows(caption),
+          asked: shows(question),
+          at: { swap: place(caption), asked: place(question) },
           board: `${Math.round(box.width)}x${Math.round(box.height)}`,
           cells: [...layer.querySelectorAll<HTMLElement>('[data-sv-kind="IntCell"]')]
+            .filter((cell) => !cell.closest('[data-sv-kind="Ask"]'))
             .map((cell) => Math.round(cell.getBoundingClientRect().left))
             .toSorted((a, b) => a - b)
         };
@@ -128,5 +148,42 @@ it.skipIf(!enabled)(
       4
     );
     expect(fine.map(({ swap }) => swap)).toEqual([false, true, true, false]);
+  }
+);
+
+it.skipIf(!enabled)(
+  'draws a chain of branches in one place, each at its label’s steps',
+  { timeout: 120_000 },
+  async () => {
+    const chained = insertion
+      .replace(
+        '{#snippet Caption()}',
+        "{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}\n{#snippet Ask(g: Greater)}<Node>Is {@render Int(g.a)} greater than {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}\n{#snippet Caption()}"
+      )
+      .replace(
+        '{#when @insert.swap}{@render Caption()}{/when}',
+        '{#when @insert.compare}{@render Greater(@insert.compare)}{:when @insert.swap}{@render Caption()}{/when}'
+      );
+    const steps = await stepsOf(
+      {
+        ...off,
+        'pause@insert.compare': 'accumulate',
+        'pause@insert.swap': 'accumulate',
+        'pause@insert.swap.to': 'off'
+      },
+      4,
+      chained
+    );
+    // The question at each comparison, "Swap" at each swap, never both.
+    expect(steps.map(({ asked, swap }) => [asked, swap])).toEqual([
+      [true, false],
+      [false, true],
+      [true, false],
+      [false, true]
+    ]);
+    // In one place: the question and "Swap" on one line, the board and its cells staying put.
+    expect(steps[0].at.asked).toBe(steps[1].at.swap);
+    expect(new Set(steps.map(({ board }) => board)).size).toBe(1);
+    expect(new Set(steps.map(({ cells }) => cells.join())).size).toBe(1);
   }
 );

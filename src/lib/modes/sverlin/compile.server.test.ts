@@ -1832,3 +1832,69 @@ describe('{#when @label}', () => {
     ).toThrow('{#when @pass} is in a view, which draws only its value');
   });
 });
+
+describe('{#when} chains', () => {
+  const chain = (block: string) => `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+</script>
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+<script lang="sverlin">
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @pass{
+    @look[const seen = values[i];]
+    @note[const again = values[i];]
+  }
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Looking()}<Node>Looking</Node>{/snippet}
+{#snippet Noting()}<Node>Noting</Node>{/snippet}
+{#snippet Board()}
+  <Node layout="column">
+    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    ${block}
+  </Node>
+{/snippet}
+{@render Board()}`;
+  const looking =
+    '{#when @pass.look}{@render Looking()}{:when @pass.note}{@render Noting()}{/when}';
+
+  it('takes a branch per label, keeping every position', () => {
+    const prepared = prepareSvelteComponent(chain(looking));
+    expect(Object.values(prepared.during ?? {})).toEqual(['pass.look', 'pass.note']);
+    // A problem after the chain points where it is written.
+    const source = chain(`${looking}<Bad />`);
+    const before = source.slice(0, source.indexOf('<Bad />')).split('\n');
+    expect(() => prepareSvelteComponent(source)).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining('<Bad> is not allowed'),
+        line: before.length,
+        column: before.at(-1)!.length + 1
+      })
+    );
+  });
+
+  it('refuses branches shown at one step, an {:else}, and a label too short for a branch', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        chain('{#when @pass}{@render Looking()}{:when @pass.look}{@render Noting()}{/when}')
+      )
+    ).toThrow(
+      "The {#when} chain's branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3, inside runs of both"
+    );
+    expect(() =>
+      prepareSvelteComponent(chain(looking.replace('{/when}', '{:else}<Node>!</Node>{/when}')))
+    ).toThrow('{#when …} has no {:else}');
+    expect(() =>
+      prepareSvelteComponent(chain(looking.replace('{:when @pass.note}', '{:when @no}')))
+    ).toThrow(
+      "{:when @no} names a label too short to read as a chain's branch: give it a name of 4 or more characters."
+    );
+  });
+});

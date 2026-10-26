@@ -8,6 +8,8 @@ export { default as Link } from './node/Link.svelte';
 export { default as Listing } from './listing/Listing.svelte';
 export { default as Node } from './node/Node.svelte';
 export { default as Pointed } from './node/Pointed.svelte';
+export { default as SverlinBranch } from './node/Branch.svelte';
+export { default as SverlinChain } from './node/Chain.svelte';
 export { default as SverlinSlot } from './node/Slot.svelte';
 export { themeCss } from './theme';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';

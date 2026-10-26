@@ -646,6 +646,21 @@ export function slotInsertions(
   const insertions: Insertion[] = [];
   const indexed = new Map<Part, string>();
   const text = (node: Part) => source.slice(node.start, node.end);
+  // The {:when} branch after a {#when} block or branch: an {:else if} on a key by now.
+  const whenBranchOf = (part: Part): Part | undefined => {
+    const children = ((part.else as Part | undefined)?.children as Part[] | undefined) ?? [];
+    const [next, ...rest] = children.filter(
+      (child) => child.type !== 'Text' || String(child.data ?? '').trim()
+    );
+    const test = next?.expression as Part | undefined;
+    return !rest.length &&
+      next?.type === 'IfBlock' &&
+      next.elseif &&
+      test?.type === 'Identifier' &&
+      isDuringKey(String(test.name ?? ''))
+      ? next
+      : undefined;
+  };
   const indexOf = (local: Extract<Local, { kind: 'item' }>): string => {
     if (local.each.index) return local.each.index;
     let added = indexed.get(local.each);
@@ -781,19 +796,41 @@ export function slotInsertions(
     }
     // A {#when @label} block, an {#if} on the label's key by now (see label-values.ts): its
     // contents in a slot hidden where the step is inside no run of the label, keeping their room.
+    // A chain, its branches {:else if} on their keys by now, is one box, a node keeping the largest
+    // size it reaches, drawing only the branch the step is inside (see Chain.svelte).
     const test = part.type === 'IfBlock' ? (part.expression as Part | undefined) : undefined;
     if (test?.type === 'Identifier' && isDuringKey(String(test.name ?? ''))) {
       const start = part.start ?? 0;
       const opened = source.indexOf('}', test.end ?? start) + 1;
-      insertions.push(
-        {
-          at: start,
-          text: `<SverlinSlot inherit reads={["${String(test.name)}"]}>`,
-          remove: opened - start
-        },
-        { at: (part.end ?? 0) - '{/if}'.length, text: '</SverlinSlot>', remove: '{/if}'.length }
-      );
-      walk(part.children, locals);
+      const branches = [part];
+      for (let next = whenBranchOf(part); next; next = whenBranchOf(next)) branches.push(next);
+      const chained = branches.length > 1;
+      const branch = (key: unknown) => `<SverlinBranch key="${String(key)}">`;
+      insertions.push({
+        at: start,
+        text: chained
+          ? `<SverlinChain ref="${siteOf(source, start)}">${branch(test.name)}`
+          : `<SverlinSlot inherit reads={["${String(test.name)}"]}>`,
+        remove: opened - start
+      });
+      // Each branch's own insertions first, so at a position both mark, what they open closes
+      // before the branch does (see withInsertions).
+      branches.forEach((each, which) => {
+        walk(each.children, locals);
+        const next = branches[which + 1]?.expression as Part | undefined;
+        if (!next) return;
+        const tag = source.lastIndexOf('{:else', next.start ?? 0);
+        insertions.push({
+          at: tag,
+          text: `</SverlinBranch>${branch(next.name)}`,
+          remove: source.indexOf('}', next.end ?? tag) + 1 - tag
+        });
+      });
+      insertions.push({
+        at: (part.end ?? 0) - '{/if}'.length,
+        text: chained ? '</SverlinBranch></SverlinChain>' : '</SverlinSlot>',
+        remove: '{/if}'.length
+      });
       return;
     }
     if (part.type === 'EachBlock') {

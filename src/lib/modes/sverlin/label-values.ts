@@ -3,13 +3,16 @@
  * labelled `swap.a` gave in a step's own code; `runs(@check.at)` every value it has given so far;
  * `applied(Equal, @inner)` every application of `Equal` made inside `@inner` so far; and
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
- * `{#when @swap}…{/when}` draws its contents at the steps inside a run of `@swap`. Beside them,
- * `all(Node)` is every live node of a record a reference refers to, its heap.
+ * `{#when @swap}…{/when}` draws its contents at the steps inside a run of `@swap`, and a chain,
+ * `{#when @compare}…{:when @swap}…{/when}`, each branch at its label's steps, in one place. Beside
+ * them, `all(Node)` is every live node of a record a reference refers to, its heap.
  *
  * Before Svelte parses the markup, each is rewritten as an identifier of the same length, so every
  * offset holds: `@swap.a` as `ℓswapˑa`, `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal,
- * @inner)` as `ǂEqualˑˑinner` and spaces, `all(Node)` as `ȟNode` and spaces, and `{#when @swap}` as
- * `{#if   ʬswap}`, `{/when}` as `{/if}` and spaces. The page is given each as a prop of that name.
+ * @inner)` as `ǂEqualˑˑinner` and spaces, `all(Node)` as `ȟNode` and spaces, `{#when @swap}` as
+ * `{#if   ʬswap}`, `{/when}` as `{/if}` and spaces, and a chain's further branch, `{:when @swap}`,
+ * as `{:else if ʬ0}` and spaces, numbered in the order the branches are written, as a label's own
+ * name would not fit. The page is given each as a prop of that name.
  */
 
 import { spanOf } from './algorithm/parse.server';
@@ -24,13 +27,15 @@ const dot = 'ˑ';
 
 /**
  * A label read in the markup, a label's values so far, an operator's applications so far, or a
- * label whose runs a {#when} block draws its contents in (none where the block names no label).
+ * label whose runs a {#when} block draws its contents in (none where the block names no label),
+ * or a further branch of a chain's (the shortest label name that leaves room for its key, where
+ * its own is shorter).
  */
 export type LabelReference =
   | { kind: 'value'; key: string; path: string; start: number }
   | { kind: 'runs'; key: string; path: string; start: number }
   | { kind: 'applied'; key: string; operator: string; path?: string; start: number }
-  | { kind: 'during'; key: string; path?: string; start: number };
+  | { kind: 'during'; key: string; path?: string; start: number; branch?: true | number };
 
 export const labelKey = (path: string): string => `${label}${path.replaceAll('.', dot)}`;
 export const isLabelKey = (name: string): boolean => name.startsWith(label);
@@ -55,6 +60,7 @@ const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
 const whenOpen = /^\{#when(\s+)@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(\s*)\}/u;
+const whenBranch = /^\{:when(\s+)@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(\s*)\}/u;
 
 /**
  * The markup with each label reference rewritten as an identifier of the same length, and the
@@ -68,6 +74,7 @@ export function markLabels(source: string): {
   const references: LabelReference[] = [];
   const heaps: { record: string; start: number }[] = [];
   let out = '';
+  let branches = 0;
   let depth = 0;
   let quote: string | undefined;
   for (let index = 0; index < source.length; index++) {
@@ -103,6 +110,26 @@ export function markLabels(source: string): {
         depth++;
       }
       continue;
+    }
+    // A chain's further branch, {:when @insert.swap}, as {:else if} on a numbered key; a label whose
+    // name is too short to leave room is refused when compiled.
+    if (char === '{' && depth === 0 && source.startsWith('{:when', index)) {
+      const branch = whenBranch.exec(source.slice(index));
+      if (branch) {
+        const key = `${during}${branches++}`;
+        const text = `{:else if ${key}`;
+        const fits = text.length + 1 <= branch[0].length;
+        references.push({
+          kind: 'during',
+          key,
+          path: branch[2],
+          start: index + 6 + branch[1].length,
+          branch: fits ? true : text.length + 1 - '{:when @}'.length
+        });
+        out += `${text}${' '.repeat(Math.max(branch[0].length - text.length - 1, 0))}}`;
+        index += branch[0].length - 1;
+        continue;
+      }
     }
     if (char === '{' && depth === 0 && source.startsWith('{/when}', index)) {
       out += '{/if}  ';
