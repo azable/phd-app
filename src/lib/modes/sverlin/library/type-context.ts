@@ -570,8 +570,11 @@ export function pointsInto(
 export function linkEnd(
   types: TypeContext | undefined,
   end: string | number,
-  where: { path?: string; of?: unknown; at?: string | number }
+  where: { path?: string; of?: unknown; at?: string | number; in?: unknown }
 ): string {
+  // An {#each} index, a position into the collection it walks.
+  const base = where.in === undefined ? undefined : types?.pathOf(where.in);
+  if (base !== undefined && typeof end === 'number') return `${base}[${end}]`;
   const path =
     where.path ?? (where.at === undefined ? undefined : elementOf(types, where.of, where.at));
   const target = path === undefined ? undefined : types?.targetOf(path);

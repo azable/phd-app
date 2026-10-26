@@ -641,6 +641,7 @@ export function slotInsertions(
   };
   type Local =
     | { kind: 'item'; of: Part; each: Part & { index?: string }; index?: string }
+    | { kind: 'position'; of: Part }
     | { kind: 'value' }
     | { kind: 'other' };
   const insertions: Insertion[] = [];
@@ -776,8 +777,18 @@ export function slotInsertions(
             : undefined;
         const slot = slotOf(expression, locals);
         reads.push(...stateReadsOf(expression, scoped, locals));
-        if (!/ (path|at)=/u.test(slot)) continue;
         const end = attribute.name;
+        // An {#each} index, as from={k} in {#each vertices as v, k}: a position into what it walks.
+        const local =
+          expression?.type === 'Identifier' ? locals.get(String(expression.name ?? '')) : undefined;
+        if (local?.kind === 'position') {
+          insertions.push({
+            at: (part.start ?? 0) + '<Link'.length,
+            text: ` __${end}In={${text(local.of)}}`
+          });
+          continue;
+        }
+        if (!/ (path|at)=/u.test(slot)) continue;
         insertions.push({
           at: (part.start ?? 0) + '<Link'.length,
           text: slot
@@ -854,7 +865,9 @@ export function slotInsertions(
             text: ` __itemOf={${text(local.of)}} __itemAt={${indexOf(local)}}`
           });
       } else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
-      if (typeof part.index === 'string') inner.set(part.index, { kind: 'other' });
+      // The index of an {#each} over a collection is a position into it, as a link's end.
+      if (typeof part.index === 'string')
+        inner.set(part.index, { kind: 'position', of: part.expression as Part });
       walk(part.children, inner);
       walk(part.else, locals);
       return;

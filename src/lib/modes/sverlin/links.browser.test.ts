@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import bfs from './fixtures/bfs-neighbours.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -276,6 +277,41 @@ it.skipIf(!enabled)(
     expect(drawn).toBeDefined();
     expect(drawn!.top).toBeLessThan(drawn!.cellsTop);
     expect(drawn!.width).toBeGreaterThan(drawn!.pitch * 0.6);
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'joins each vertex k to its neighbours, an {#each} index a position into what it walks',
+  { timeout: 120_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(bfs), 1);
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
+    await page.waitForTimeout(800);
+    const edges = await page.evaluate(
+      (layer) =>
+        [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)]
+          .filter((path) => path.style.opacity !== '0')
+          .map((path) => path.dataset.svEdge ?? '')
+          .sort(),
+      layer
+    );
+    expect(edges).toEqual([
+      'vertices[0] -> vertices[1]',
+      'vertices[0] -> vertices[2]',
+      'vertices[1] -> vertices[3]',
+      'vertices[2] -> vertices[3]',
+      'vertices[3] -> vertices[4]'
+    ]);
     expect(errors).toEqual([]);
     await page.close();
   }

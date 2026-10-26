@@ -45,6 +45,8 @@
     __toPath,
     __toOf,
     __toAt,
+    __fromIn,
+    __toIn,
     __reads = []
   }: {
     /** The key of the node the link starts from, or a position, as edge.from; none, the element its view draws. */
@@ -76,6 +78,9 @@
     __toPath?: string;
     __toOf?: unknown;
     __toAt?: string | number;
+    /** Internal: the collection an end that is an {#each} index points into. */
+    __fromIn?: unknown;
+    __toIn?: unknown;
     /** Internal: the variables and labels its ends read, as a slot's (see Slot.svelte). */
     __reads?: readonly string[];
   } = $props();
@@ -97,8 +102,8 @@
     from:
       from === undefined
         ? (drawnContext() ?? '')
-        : linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt }),
-    to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt })
+        : linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
+    to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt, in: __toIn })
   }));
   // The link's look is the variant's values for its kind; one a component draws for an element, as
   // an edge, takes the stroke of the kind of the root's pointer at it, as for the current edge, the

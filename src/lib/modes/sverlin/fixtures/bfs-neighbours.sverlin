@@ -1,0 +1,62 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Flag = type('boolean');
+  const Vertex = record({ name: Name, seen: Flag });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Out = collection(VertexRef);
+  const Adjacency = collection(Out);
+  const Queue = collection(VertexRef);
+
+  const Waiting = unop((q: Queue) => Flag(q.length > 0));
+  const Not = unop((f: Flag) => Flag(!f));
+  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
+  const Rest = unop((q: Queue) => Queue(q.slice(1)));
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]);
+  const out = Adjacency([[1, 2], [3], [3], [4], []]);
+</script>
+
+<script lang="sverlin">
+  let queue = Queue([0]);
+  while (Waiting(queue)) @visit{
+    @take[const current = queue[0];
+    queue = Rest(queue);]
+    for (const w of out[current]) @look{
+      if (Not(vertices[@next[w]].seen)) @add{
+        vertices[w].seen = true;
+        queue = Append(queue, w);
+      }
+    }
+  }
+</script>
+
+{#snippet NameText(name: Name)}<Node value={name} />{/snippet}
+{#snippet SeenMark(seen: Flag)}<Node>{seen ? '✓' : '·'}</Node>{/snippet}
+{#snippet VertexCard(v: Vertex)}<Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
+{#snippet RefCard(v: VertexRef)}<Node value={v} />{/snippet}
+{#snippet QueueItems(q: Queue)}<Node>{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
+{#snippet Marked(v: VertexRef)}<Pointed />{/snippet}
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as v, k}
+      {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
+      <Node layout="column">{@render Vertex(v)}{@render VertexNumber()}</Node>
+      {#each out[k] as w}<Link from={k} to={w} />{/each}
+    {/each}
+  </Node>
+{/snippet}
+{#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
+
+{@render Graph()}
+{@render QueueLine()}
+{@render VertexRef(current)}
+{@render VertexRef(@visit.look.next)}
