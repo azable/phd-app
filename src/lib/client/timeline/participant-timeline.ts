@@ -35,8 +35,12 @@ export type ParticipantTimelineItem =
       source: string;
       /** The source it was made from, where that has a card of its own. */
       parentHash?: string;
-      /** Its presentations, each a variant of its random values, oldest first. */
+      /** The presentations this turn made of it, each a variant of its values, oldest first. */
       variants: TimelinePresentation[];
+      /** Whether the source was first presented here, so this item says what it shows. */
+      first: boolean;
+      /** How many presentations the source has in all, wherever they were made. */
+      variantCount: number;
     }
   /** A note from the developer, as the demo project's examples carry, about the card before it. */
   | {
@@ -74,7 +78,7 @@ export function participantTimeline(
     [...presentations.values()].filter(({ presentation }) => isSverlinPresentation(presentation)),
     ({ presentation }) => (presentation as { source: { sha256: string } }).source.sha256
   );
-  // A source has one card, where it was first presented; later variants join it there.
+  // Each turn shows the variants it made, a card each; a source's first says what it shows.
   const placed = new Set<string>();
   const groups = Map.groupBy(events, ({ operationId }) => operationId);
   // The source presented last, by hash, which a note that follows is about.
@@ -127,6 +131,7 @@ export function participantTimeline(
         items.push({ id, kind: 'note', text: event.payload.message, eventId: event.id });
         if (presented) about.set(id, presented);
       }
+      const made = new Map<string, TimelinePresentation[]>();
       for (const event of related) {
         if (event.type !== 'visualization.presented') continue;
         const value = presentations.get(event.id);
@@ -137,14 +142,21 @@ export function participantTimeline(
         }
         const sourceHash = value.presentation.source.sha256;
         presented = sourceHash;
-        if (placed.has(sourceHash)) continue;
+        const turn = made.get(sourceHash);
+        if (turn) {
+          turn.push(value);
+          continue;
+        }
+        const turnVariants = [value];
+        made.set(sourceHash, turnVariants);
+        const first = !placed.has(sourceHash);
         placed.add(sourceHash);
         const version = versions.first.get(sourceHash);
         const parentHash = version?.payload.parent
           ? versions.hashes.get(version.payload.parent)
           : undefined;
         items.push({
-          id: `version-${sourceHash}`,
+          id: first ? `version-${sourceHash}` : `version-${sourceHash}-${event.id}`,
           kind: 'version',
           sourceHash,
           summary: version?.payload.summary ?? madeBy[version?.payload.origin.kind ?? 'none'],
@@ -153,7 +165,9 @@ export function participantTimeline(
           ...(parentHash && parentHash !== sourceHash && variants.has(parentHash)
             ? { parentHash }
             : {}),
-          variants: variants.get(sourceHash) ?? [value]
+          variants: turnVariants,
+          first,
+          variantCount: variants.get(sourceHash)?.length ?? 1
         });
       }
       const failure = related.findLast(({ type }) => type === 'operation.failed');
@@ -171,7 +185,9 @@ export function participantTimeline(
     });
   // A note is about the source presented before it, on that source's card.
   const cards = new Map(
-    items.flatMap((item) => (item.kind === 'version' ? [[item.sourceHash, item] as const] : []))
+    items.flatMap((item) =>
+      item.kind === 'version' && item.first ? [[item.sourceHash, item] as const] : []
+    )
   );
   for (const item of items) {
     const card = item.kind === 'note' ? cards.get(about.get(item.id) ?? '') : undefined;

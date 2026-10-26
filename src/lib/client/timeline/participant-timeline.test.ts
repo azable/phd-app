@@ -10,10 +10,10 @@ const presentationIds = [
 ] as const;
 
 describe('participant Timeline projection', () => {
-  it('keeps structured messages, preference actions, and one card per source', () => {
+  it('keeps structured messages, preference actions, and the variants each turn made', () => {
     const items = participantTimeline(events());
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'message', 'version', 'message']);
-    // Both presentations were built from one source, so they are two variants of its card.
+    // Both presentations were built from one source in one turn, so they are its two variants.
     // The card carries its source, which code its summary names is found in.
     expect(items[2]).toMatchObject({
       kind: 'version',
@@ -42,6 +42,35 @@ describe('participant Timeline projection', () => {
         { type: 'presentation-ref', presentationId: presentationIds[1] }
       ])
     });
+  });
+
+  it('shows a variant where it was made, after the turn that first showed its source', () => {
+    const later = '12345678-1234-4123-8123-123456789ac3';
+    const values = events();
+    const [, , first] = values;
+    if (
+      first.type !== 'visualization.presented' ||
+      first.payload.presentation.format !== 'browser-bundle-v1'
+    )
+      throw new Error('Missing presentation.');
+    values.push({
+      ...first,
+      id: 6,
+      operationId: '72345678-1234-4234-8234-123456789abc',
+      payload: {
+        ...first.payload,
+        slot: 0,
+        presentation: { ...first.payload.presentation, presentationId: later, seed: 9 }
+      }
+    });
+    const versions = participantTimeline(values).filter((item) => item.kind === 'version');
+    expect(versions).toMatchObject([
+      { id: `version-${'a'.repeat(64)}`, first: true, variantCount: 3 },
+      { id: `version-${'a'.repeat(64)}-6`, first: false, variantCount: 3 }
+    ]);
+    expect(
+      versions.map((item) => item.variants.map(({ presentation }) => presentation.presentationId))
+    ).toEqual([presentationIds.slice(0, 2), [later]]);
   });
 
   it('retains exact comparison references inline', () => {

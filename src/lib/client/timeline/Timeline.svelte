@@ -29,7 +29,7 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
-    /** The source chosen on its own, by its card, if any. */
+    /** The source chosen on its own, by a card's code button, if any. */
     chosenSource?: string;
     /** Choose a source on its own, or none, as when one of its variants is chosen. */
     onChooseSource?: (source: { sourceHash: string; parentHash?: string } | undefined) => void;

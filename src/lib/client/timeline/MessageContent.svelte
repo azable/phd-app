@@ -27,7 +27,7 @@
     onReferenceActivate?: (reference: ReferenceSegment, extend: boolean) => void;
     /** The source code it names is found in, where not the one the panel shows, as a card's own. */
     source?: string;
-    /** Before revealing in a source of its own: show that source, as by choosing its card. */
+    /** Before revealing in a source of its own: show that source, as a card's code button does. */
     onRevealSource?: () => void;
     /** What a build of that source records, which view choices it names are matched by. */
     design?: ReferenceDesign;

@@ -216,8 +216,9 @@
   // Links from messages and problems to the source panel.
   const sourceLinks = provideSourceLinks(new SourceLinks());
 
-  // A source chosen on its own, by its card: no visualization shows, and the source panel fills the
-  // stage with its source and what it changes from its parent, until a variant is chosen.
+  // A source chosen on its own, by a card's code button: no visualization shows, and the source
+  // panel fills the stage with its source and what it changes from its parent, until a variant is
+  // chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
   const chosen = $derived.by(() => {
     if (!chosenOf) return undefined;
