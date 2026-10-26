@@ -23,12 +23,14 @@ describe('single-component Svelte assistant', () => {
   });
 
   it('specifies the complete source and isolated step contract', () => {
-    expect(aiAssistant.initialPrompt).toContain('exactly one complete Sverlin component');
-    expect(aiAssistant.initialPrompt).toContain('`step`, `seed`, and the library components');
-    expect(aiAssistant.initialPrompt).toContain('never write `import`');
-    expect(aiAssistant.initialPrompt).toContain('already in scope');
-    expect(aiAssistant.initialPrompt).toContain('script-free');
-    expect(aiAssistant.initialPrompt).toContain('no network access');
+    // Markdown is wrapped, so phrases are matched whatever whitespace runs between their words.
+    const prompt = aiAssistant.initialPrompt.replace(/\s+/g, ' ');
+    expect(prompt).toContain('exactly one complete Sverlin component');
+    expect(prompt).toContain('`step`, `seed`, and the library components');
+    expect(prompt).toContain('never write `import`');
+    expect(prompt).toContain('already in scope');
+    expect(prompt).toContain('script-free');
+    expect(prompt).toContain('no network access');
   });
 
   it('rejects empty source and reply text consistently with its provider schema', () => {

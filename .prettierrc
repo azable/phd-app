@@ -8,6 +8,14 @@
   "tailwindStylesheet": "./src/routes/layout.css",
   "overrides": [
     {
+      "files": ["AGENTS.md", "README.md", "src/**/*.md"],
+      "options": {
+        "printWidth": 80,
+        "proseWrap": "always",
+        "embeddedLanguageFormatting": "off"
+      }
+    },
+    {
       "files": "*.svelte",
       "options": {
         "parser": "svelte"

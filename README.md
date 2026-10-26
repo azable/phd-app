@@ -1,10 +1,16 @@
 # Sverlin
 
-Sverlin is a SvelteKit research application for creating and reviewing algorithm visualizations. PostgreSQL stores each project as an immutable event Timeline. The web process accepts operations into the Timeline, runs them asynchronously with bounded in-process capacity, and records success or failure. Participants can discuss, edit, step through, and compare retained presentations.
+Sverlin is a SvelteKit research application for creating and reviewing algorithm
+visualizations. PostgreSQL stores each project as an immutable event Timeline.
+The web process accepts operations into the Timeline, runs them asynchronously
+with bounded in-process capacity, and records success or failure. Participants
+can discuss, edit, step through, and compare retained presentations.
 
 ## Visualization modes
 
-Developer-registered modes are listed in [`src/lib/modes/catalog.ts`](src/lib/modes/catalog.ts). Each mode folder owns its starter artifact, assistant, validation/build code, and playback component:
+Developer-registered modes are listed in
+[`src/lib/modes/catalog.ts`](src/lib/modes/catalog.ts). Each mode folder owns
+its starter artifact, assistant, validation/build code, and playback component:
 
 | Mode      | Authored artifact                                      | Playback                                                                                                  |
 | --------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
@@ -12,29 +18,213 @@ Developer-registered modes are listed in [`src/lib/modes/catalog.ts`](src/lib/mo
 | `html`    | A JSON manifest of script-free, complete HTML frames   | Sanitized HTML, one frame per step                                                                        |
 | `html-js` | JSON containing separate HTML and JavaScript           | Sanitized HTML plus JavaScript in an isolated browser frame                                               |
 
-Administrator projects offer a blank starter in every mode and one populated Svelte example, [linear search](src/lib/modes/sverlin/contract.ts). No other example programs are bundled.
+Administrator projects offer a blank starter in every mode and one populated
+Svelte example, [linear search](src/lib/modes/sverlin/contract.ts). No other
+example programs are bundled.
 
-Sverlin components use a small component library without importing it. The library's Svelte sources live in [`src/lib/modes/sverlin/library/`](src/lib/modes/sverlin/library/). The language, blocks and library together, is documented in one guide, [`src/lib/modes/sverlin/README.md`](src/lib/modes/sverlin/README.md), which the Sverlin assistant's prompt includes after its instructions in [`assistant.md`](src/lib/modes/sverlin/assistant.md), so editing either changes the model's guidance. HTML comments in both files are maintainer notes left out of the prompt, and [`guide.server.test.ts`](src/lib/modes/sverlin/guide.server.test.ts) builds its complete examples and checks its `Node` and `Link` props and named values against the compiler. [`src/lib/modes/sverlin/assembly/`](src/lib/modes/sverlin/assembly/) holds what the compiler adds around every authored component: `prelude.ts` is the import line injected into the module script (its names are reserved), and `entry.ts` mounts the component with the selected step and seed. The `sverlin` alias in [`svelte.config.js`](svelte.config.js) lets the editor resolve the library from those files. Projects keep the source they were created with, so starter or library changes do not rewrite existing artifacts.
+Sverlin components use a small component library without importing it. The
+library's Svelte sources live in
+[`src/lib/modes/sverlin/library/`](src/lib/modes/sverlin/library/). The
+language, blocks and library together, is documented in one guide,
+[`src/lib/modes/sverlin/README.md`](src/lib/modes/sverlin/README.md), which the
+Sverlin assistant's prompt includes after its instructions in
+[`assistant.md`](src/lib/modes/sverlin/assistant.md), so editing either changes
+the model's guidance. HTML comments in both files are maintainer notes left out
+of the prompt, and
+[`guide.server.test.ts`](src/lib/modes/sverlin/guide.server.test.ts) builds its
+complete examples and checks its `Node` and `Link` props and named values
+against the compiler.
+[`src/lib/modes/sverlin/assembly/`](src/lib/modes/sverlin/assembly/) holds what
+the compiler adds around every authored component: `prelude.ts` is the import
+line injected into the module script (its names are reserved), and `entry.ts`
+mounts the component with the selected step and seed. The `sverlin` alias in
+[`svelte.config.js`](svelte.config.js) lets the editor resolve the library from
+those files. Projects keep the source they were created with, so starter or
+library changes do not rewrite existing artifacts.
 
-Sverlin components are written in the language described in that guide: `domain`, `input`, and algorithm blocks in `<script lang="sverlin">`, followed by a view drawn only with `<Node>`, `<Pointed>`, and `<Link>`: the compiler rejects view scripts, `<style>`, HTML and SVG elements, text outside a node, and props that set a look, so every visible thing is selectable and its look is the design's. The server parses each block with acorn, rejects anything outside a small JavaScript subset, and runs it in its own interpreter in [`src/lib/modes/sverlin/algorithm/`](src/lib/modes/sverlin/algorithm/) under step, operation, size, and string limits. The input and algorithm do not see the seed, so every presentation of a source shares one master trace; its labels form the step signature. A presentation is a variant of its source's design space, which the compiler generates from the markup and the library ([`design.server.ts`](src/lib/modes/sverlin/design.server.ts), options in [`library/node/design.ts`](src/lib/modes/sverlin/library/node/design.ts)): each type rendered by name chooses among its views and none (`views.Int`), the page frame has its settings (`frame.ratio`, …), and every kind of node, a view and the tags a node has (`Here[current]`), has a variable per prop, each with a finite set of options. A kind a node takes only at some steps, by a tag the state decides, varies paint, text, and inset but not layout or what is shown, and such a node keeps the largest inset of every kind its tag can be, so nothing in it moves between steps. A build gives every variable a value: the starter's, a base variant's where it still fits, randomised (keeping the base's equal values equal, colours' shades, and what is shown), or chosen (an option the space lacks, or a variable it does not have, is an error). After the assistant changes the source, a chooser ([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second, smaller model call) picks each presentation's values from the design space the first build reports, starting from the viewed variant, and the presentations are built again with them, the first build standing if choosing fails; after a manual change the first presentation keeps the viewed variant's values and the second is randomised; Another variant randomises every presentation; the assistant's `vary` decision sets values without changing the source ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). Every presentation currently shows every master step. Every array and object is made by a collection or record type the domain block defines, and each step records the domain type of every value by path beside its plain values. Every view is mounted inside the page frame, [`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays it out at a fixed logical size and scales it to fit the page, as a zoomable, pannable canvas with a dashed outline; the sandboxed page loads once per presentation and the app sends each later step as a `sverlin:step` message: the page mounts the step in a hidden layer and swaps it in once its layout settles, so zoom and pan carry over and neither a blank page nor an unfinished layout shows, while `sverlin:view` messages report the view to the app. Every arrangement is a set of constraints over a node's measured children, and a node hugs them: rows, columns, and grids are solved by CSS, while `layout="free"`, or a row or column with `<Link>` children or `constraints`, is solved by WebCola ([`library/node/arrange.ts`](src/lib/modes/sverlin/library/node/arrange.ts)) from starting positions keyed by the seed, with nested arrangements laying out again as their children settle. A free layout takes a form from the structure its links make ([`library/node/forms.ts`](src/lib/modes/sverlin/library/node/forms.ts)), drawn per presentation from those that suit the space left for it and stretched to fill that space, unless the view sets `form`; arrows are cubic curves that bend round other nodes and labels, straight or curved as the seed prefers. Arrows are `<Link>` components: the compiler stamps them like nodes, and each drawn link is selectable and referencable by its id. Every arrangement draws its choices from a seed of its own, derived from the presentation seed and its place unless the view pins it with `layoutSeed`; selections report each element's surrounding layouts (arranging node, seed, form, curve) in its `element-ref`, so the assistant can keep a layout the participant liked by pinning that seed. On load the page first measures every node at every step and keeps the largest size each reaches as its least size, so changing content never resizes a box, and gives every item of a collection the largest size any of them reaches, so items line up even when only some change ([`assembly/entry.ts`](src/lib/modes/sverlin/assembly/entry.ts)); it then lays out every step hidden, recording what each arrangement contains, and solves each arrangement once over the union of every step, with every child, link, and relation that ever appears ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts), repeated until nested sizes settle); showing a step places children where that solution put them, drawing only that step's links, at a root fit shared by all steps, so positions are valid across the whole animation, so a seed gives the same layout for each step whichever step is shown first, and only what changes moves. The page frame is the root arrangement, scaled down when it would not fit and up, to 1.6 times, when it would leave the frame mostly empty. Participants' selections inside the frame reference nodes in feedback: the compiler stamps every `<Node>` with its tag's `line:column` as the reserved `__ref` prop, each rendered node gets an id from it, and a keyed node from its tag and key too, so it keeps its id as other nodes come and go ([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)), and the frame reports selections as `sverlin:selection` messages, which the app validates and keeps per presentation and step. Feedback records them as `element-ref` segments; the server checks each id names a `<Node>` in that presentation's source ([`element-ref.ts`](src/lib/modes/sverlin/element-ref.ts)) and gives the assistant the tag, its render, and the label the participant saw. The compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as `__view`, which with its `tags` gives its kind, and each node draws the variant's values for its kind. The compiler injects the library components and every input and algorithm value, the view each type rendered by name draws, `step`, and `seed` as props. Presentations record their kept `masterSteps`, their `variant`, where each value came from (`origins`), each type's views, and the kinds each tag can be, which the source editor shows as a chip in each tag that opens its kind's values in each visible presentation, flagging those a pair has differently, after each render of a type the view each visible presentation draws it with, and in the first top-level node's chip the page frame; presentations built while sources had design blocks keep their `parameters` and `draws`, which the source editor marks beside each call ([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Each shown step's page reports its constraint layouts as a `sverlin:drawn` message, so each tag that arranges one gets a chip, naming any a pair drew differently, which opens them under the tag as ghost props, as the view would set them (such as `layoutSeed={4821}`); while editing, clicking a ghost value writes that prop into the draft, pinning it. Views of a type no visible presentation chose are greyed out. These reports are not recorded. Comparisons align by master step, showing the previous step on the side that omits one.
+Sverlin components are written in the language described in that guide:
+`domain`, `input`, and algorithm blocks in `<script lang="sverlin">`, followed
+by a view drawn only with `<Node>`, `<Pointed>`, and `<Link>`: the compiler
+rejects view scripts, `<style>`, HTML and SVG elements, text outside a node, and
+props that set a look, so every visible thing is selectable and its look is the
+design's. The server parses each block with acorn, rejects anything outside a
+small JavaScript subset, and runs it in its own interpreter in
+[`src/lib/modes/sverlin/algorithm/`](src/lib/modes/sverlin/algorithm/) under
+step, operation, size, and string limits. The input and algorithm do not see the
+seed, so every presentation of a source shares one master trace; its labels form
+the step signature. A presentation is a variant of its source's design space,
+which the compiler generates from the markup and the library
+([`design.server.ts`](src/lib/modes/sverlin/design.server.ts), options in
+[`library/node/design.ts`](src/lib/modes/sverlin/library/node/design.ts)): each
+type rendered by name chooses among its views and none (`views.Int`), the page
+frame has its settings (`frame.ratio`, …), and every kind of node, a view and
+the tags a node has (`Here[current]`), has a variable per prop, each with a
+finite set of options. A kind a node takes only at some steps, by a tag the
+state decides, varies paint, text, and inset but not layout or what is shown,
+and such a node keeps the largest inset of every kind its tag can be, so nothing
+in it moves between steps. A build gives every variable a value: the starter's,
+a base variant's where it still fits, randomised (keeping the base's equal
+values equal, colours' shades, and what is shown), or chosen (an option the
+space lacks, or a variable it does not have, is an error). After the assistant
+changes the source, a chooser
+([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
+smaller model call) picks each presentation's values from the design space the
+first build reports, starting from the viewed variant, and the presentations are
+built again with them, the first build standing if choosing fails; after a
+manual change the first presentation keeps the viewed variant's values and the
+second is randomised; Another variant randomises every presentation; the
+assistant's `vary` decision sets values without changing the source
+([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). Every
+presentation currently shows every master step. Every array and object is made
+by a collection or record type the domain block defines, and each step records
+the domain type of every value by path beside its plain values. Every view is
+mounted inside the page frame,
+[`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
+it out at a fixed logical size and scales it to fit the page, as a zoomable,
+pannable canvas with a dashed outline; the sandboxed page loads once per
+presentation and the app sends each later step as a `sverlin:step` message: the
+page mounts the step in a hidden layer and swaps it in once its layout settles,
+so zoom and pan carry over and neither a blank page nor an unfinished layout
+shows, while `sverlin:view` messages report the view to the app. Every
+arrangement is a set of constraints over a node's measured children, and a node
+hugs them: rows, columns, and grids are solved by CSS, while `layout="free"`, or
+a row or column with `<Link>` children or `constraints`, is solved by WebCola
+([`library/node/arrange.ts`](src/lib/modes/sverlin/library/node/arrange.ts))
+from starting positions keyed by the seed, with nested arrangements laying out
+again as their children settle. A free layout takes a form from the structure
+its links make
+([`library/node/forms.ts`](src/lib/modes/sverlin/library/node/forms.ts)), drawn
+per presentation from those that suit the space left for it and stretched to
+fill that space, unless the view sets `form`; arrows are cubic curves that bend
+round other nodes and labels, straight or curved as the seed prefers. Arrows are
+`<Link>` components: the compiler stamps them like nodes, and each drawn link is
+selectable and referencable by its id. Every arrangement draws its choices from
+a seed of its own, derived from the presentation seed and its place unless the
+view pins it with `layoutSeed`; selections report each element's surrounding
+layouts (arranging node, seed, form, curve) in its `element-ref`, so the
+assistant can keep a layout the participant liked by pinning that seed. On load
+the page first measures every node at every step and keeps the largest size each
+reaches as its least size, so changing content never resizes a box, and gives
+every item of a collection the largest size any of them reaches, so items line
+up even when only some change
+([`assembly/entry.ts`](src/lib/modes/sverlin/assembly/entry.ts)); it then lays
+out every step hidden, recording what each arrangement contains, and solves each
+arrangement once over the union of every step, with every child, link, and
+relation that ever appears
+([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts), repeated
+until nested sizes settle); showing a step places children where that solution
+put them, drawing only that step's links, at a root fit shared by all steps, so
+positions are valid across the whole animation, so a seed gives the same layout
+for each step whichever step is shown first, and only what changes moves. The
+page frame is the root arrangement, scaled down when it would not fit and up, to
+1.6 times, when it would leave the frame mostly empty. Participants' selections
+inside the frame reference nodes in feedback: the compiler stamps every `<Node>`
+with its tag's `line:column` as the reserved `__ref` prop, each rendered node
+gets an id from it, and a keyed node from its tag and key too, so it keeps its
+id as other nodes come and go
+([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)),
+and the frame reports selections as `sverlin:selection` messages, which the app
+validates and keeps per presentation and step. Feedback records them as
+`element-ref` segments; the server checks each id names a `<Node>` in that
+presentation's source ([`element-ref.ts`](src/lib/modes/sverlin/element-ref.ts))
+and gives the assistant the tag, its render, and the label the participant saw.
+The compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as
+`__view`, which with its `tags` gives its kind, and each node draws the
+variant's values for its kind. The compiler injects the library components and
+every input and algorithm value, the view each type rendered by name draws,
+`step`, and `seed` as props. Presentations record their kept `masterSteps`,
+their `variant`, where each value came from (`origins`), each type's views, and
+the kinds each tag can be, which the source editor shows as a chip in each tag
+that opens its kind's values in each visible presentation, flagging those a pair
+has differently, after each render of a type the view each visible presentation
+draws it with, and in the first top-level node's chip the page frame;
+presentations built while sources had design blocks keep their `parameters` and
+`draws`, which the source editor marks beside each call
+([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Each shown
+step's page reports its constraint layouts as a `sverlin:drawn` message, so each
+tag that arranges one gets a chip, naming any a pair drew differently, which
+opens them under the tag as ghost props, as the view would set them (such as
+`layoutSeed={4821}`); while editing, clicking a ghost value writes that prop
+into the draft, pinning it. Views of a type no visible presentation chose are
+greyed out. These reports are not recorded. Comparisons align by master step,
+showing the previous step on the side that omits one.
 
-Choose the visualization mode before a starting template on the Projects page or in the workspace's **New project** dialog. HTML and HTML/JavaScript modes offer the blank starter; Sverlin also offers linear search.
+Choose the visualization mode before a starting template on the Projects page or
+in the workspace's **New project** dialog. HTML and HTML/JavaScript modes offer
+the blank starter; Sverlin also offers linear search.
 
-Each presentation's **Export** menu lists the render targets its mode offers ([`render-targets.ts`](src/lib/modes/render-targets.ts)); a mode's playback component offers them. Sverlin renders every target from scene data: each node's box, look, text lines, and palette names, and each link's curve, in the frame's logical coordinates. The sandboxed page lays every step out once more in hidden layers and describes it ([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)); the app checks what it sends ([`scene.ts`](src/lib/modes/sverlin/scene.ts)), then renders a target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with a page per step, its text set in embedded DejaVu fonts so every character can be drawn, or the scene data itself as JSON. Presentations built before scene export cannot describe their steps; build them again.
+Each presentation's **Export** menu lists the render targets its mode offers
+([`render-targets.ts`](src/lib/modes/render-targets.ts)); a mode's playback
+component offers them. Sverlin renders every target from scene data: each node's
+box, look, text lines, and palette names, and each link's curve, in the frame's
+logical coordinates. The sandboxed page lays every step out once more in hidden
+layers and describes it
+([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)); the app checks
+what it sends ([`scene.ts`](src/lib/modes/sverlin/scene.ts)), then renders a
+target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with
+a page per step, its text set in embedded DejaVu fonts so every character can be
+drawn, or the scene data itself as JSON. Presentations built before scene export
+cannot describe their steps; build them again.
 
-Generated JavaScript is compiled but **never executed by the server** or in the application origin; Sverlin algorithm blocks are interpreted by trusted server code, not handed to a JavaScript engine. Authored HTML is vetted with [`sanitize-html`](https://github.com/apostrophecms/sanitize-html); executable presentations use an opaque-origin, sandboxed iframe and a restrictive [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) that blocks external imports, resource loads, and network APIs. A browser sandbox alone cannot guarantee that arbitrary JavaScript never attempts to navigate its own frame to an external URL. The static HTML condition forbids scripts entirely. Source limits and import checks are in the mode build files, and iframe policy is in [`src/lib/modes/sandbox.ts`](src/lib/modes/sandbox.ts). Sverlin bundling also restricts module resolution: the entry, authored component, and library may reach only the Svelte runtime, the injected library, and the library's own files, so `require()` or any other module request cannot pull server files into a presentation. HTML/JS only transforms its script and never resolves modules.
+Generated JavaScript is compiled but **never executed by the server** or in the
+application origin; Sverlin algorithm blocks are interpreted by trusted server
+code, not handed to a JavaScript engine. Authored HTML is vetted with
+[`sanitize-html`](https://github.com/apostrophecms/sanitize-html); executable
+presentations use an opaque-origin, sandboxed iframe and a restrictive
+[Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
+that blocks external imports, resource loads, and network APIs. A browser
+sandbox alone cannot guarantee that arbitrary JavaScript never attempts to
+navigate its own frame to an external URL. The static HTML condition forbids
+scripts entirely. Source limits and import checks are in the mode build files,
+and iframe policy is in [`src/lib/modes/sandbox.ts`](src/lib/modes/sandbox.ts).
+Sverlin bundling also restricts module resolution: the entry, authored
+component, and library may reach only the Svelte runtime, the injected library,
+and the library's own files, so `require()` or any other module request cannot
+pull server files into a presentation. HTML/JS only transforms its script and
+never resolves modules.
 
-Shared project orchestration lives in [`src/lib/server/projects/`](src/lib/server/projects/) and its environment-neutral contracts in [`src/lib/shared/projects/`](src/lib/shared/projects/). The browser workspace lives in [`src/lib/client/projects/`](src/lib/client/projects/). Module-specific code stays under its mode folder; browser-safe contracts do not import server code.
+Shared project orchestration lives in
+[`src/lib/server/projects/`](src/lib/server/projects/) and its
+environment-neutral contracts in
+[`src/lib/shared/projects/`](src/lib/shared/projects/). The browser workspace
+lives in [`src/lib/client/projects/`](src/lib/client/projects/). Module-specific
+code stays under its mode folder; browser-safe contracts do not import server
+code.
 
-A **mode** owns the authoring workflow, validation/build implementation, and playback component. A **build** validates source and prepares a **presentation**; **playback** displays and steps through that presentation in the browser. Study conditions select a mode and configure its workspace; a study run's **kind** distinguishes participant runs from previews. Labels and artifact formats come from the mode catalogue.
+A **mode** owns the authoring workflow, validation/build implementation, and
+playback component. A **build** validates source and prepares a
+**presentation**; **playback** displays and steps through that presentation in
+the browser. Study conditions select a mode and configure its workspace; a study
+run's **kind** distinguishes participant runs from previews. Labels and artifact
+formats come from the mode catalogue.
 
 ## Development
 
-Use the Dev Container and its checked-in devenv environment. [`devenv.nix`](devenv.nix) supplies Node 24, pnpm 10, PostgreSQL 17, and the local process manager. Interactive terminals activate the environment through [`.envrc`](.envrc); for a non-interactive command, use `devenv shell -- COMMAND`. If `.env` does not exist, copy [`.env.example`](.env.example) to `.env` and set `OPENAI_API_KEY` for AI-assisted editing. Keep personal values out of Git.
+Use the Dev Container and its checked-in devenv environment.
+[`devenv.nix`](devenv.nix) supplies Node 24, pnpm 10, PostgreSQL 17, and the
+local process manager. Interactive terminals activate the environment through
+[`.envrc`](.envrc); for a non-interactive command, use
+`devenv shell -- COMMAND`. If `.env` does not exist, copy
+[`.env.example`](.env.example) to `.env` and set `OPENAI_API_KEY` for
+AI-assisted editing. Keep personal values out of Git.
 
-In VS Code, install the recommended Svelte extension. [`.vscode/settings.json`](.vscode/settings.json) enables its TypeScript plugin so `.ts` files can resolve Svelte components and their props. If component imports remain marked as missing, run **TypeScript: Restart TS Server** from the Command Palette. Use `pnpm run check` for project diagnostics; plain `tsc` does not understand Svelte component declarations.
+In VS Code, install the recommended Svelte extension.
+[`.vscode/settings.json`](.vscode/settings.json) enables its TypeScript plugin
+so `.ts` files can resolve Svelte components and their props. If component
+imports remain marked as missing, run **TypeScript: Restart TS Server** from the
+Command Palette. Use `pnpm run check` for project diagnostics; plain `tsc` does
+not understand Svelte component declarations.
 
-Server commands (`dev`, `dev:web`, `preview`, and `start`) reload the current `.env` through [`scripts/run-with-env.sh`](scripts/run-with-env.sh), overriding stale inherited values. Shells and server launches share [`scripts/load-env.sh`](scripts/load-env.sh); blank database and authentication settings receive development defaults only inside devenv. After editing `.env`, restart the web process (`devenv processes restart web` when managed by devenv); the process manager and PostgreSQL can stay running. Environment changes require a new server launch, rather than relying on Vite's hot reload. PostgreSQL tests keep their isolated database URL because the test runner invokes migrations directly.
+Server commands (`dev`, `dev:web`, `preview`, and `start`) reload the current
+`.env` through [`scripts/run-with-env.sh`](scripts/run-with-env.sh), overriding
+stale inherited values. Shells and server launches share
+[`scripts/load-env.sh`](scripts/load-env.sh); blank database and authentication
+settings receive development defaults only inside devenv. After editing `.env`,
+restart the web process (`devenv processes restart web` when managed by devenv);
+the process manager and PostgreSQL can stay running. Environment changes require
+a new server launch, rather than relying on Vite's hot reload. PostgreSQL tests
+keep their isolated database URL because the test runner invokes migrations
+directly.
 
 ```sh
 devenv up                 # PostgreSQL, migration, and the application
@@ -44,9 +234,28 @@ pnpm run dev              # migrate and run the application when managing Postgr
 pnpm run dev:web          # run the application when migrations are already current
 ```
 
-The application uses <http://localhost:5173>. Source edits, type checks, linting, and tests can run while the development server stays up; Vite applies source changes through hot reload; the long-lived operation executor dispatches through the latest loaded command module, so build, assistant, and library edits reach asynchronous operations, but changes to the executor class itself need a restart. Reuse that server for browser verification and check listening ports before starting another. PostgreSQL integration tests use an isolated test database, as described below. Coordinate changes that require a restart or may interrupt active work. The web process owns asynchronous work and cancels it on shutdown; see [`src/lib/server/runtime-state.ts`](src/lib/server/runtime-state.ts). `/api/health/ready` reports whether the local process is ready.
+The application uses <http://localhost:5173>. Source edits, type checks,
+linting, and tests can run while the development server stays up; Vite applies
+source changes through hot reload; the long-lived operation executor dispatches
+through the latest loaded command module, so build, assistant, and library edits
+reach asynchronous operations, but changes to the executor class itself need a
+restart. Reuse that server for browser verification and check listening ports
+before starting another. PostgreSQL integration tests use an isolated test
+database, as described below. Coordinate changes that require a restart or may
+interrupt active work. The web process owns asynchronous work and cancels it on
+shutdown; see
+[`src/lib/server/runtime-state.ts`](src/lib/server/runtime-state.ts).
+`/api/health/ready` reports whether the local process is ready.
 
-The consolidated [`drizzle/0000_lying_jean_grey.sql`](drizzle/0000_lying_jean_grey.sql) is a **fresh-database baseline**. It does not migrate projects or credentials from earlier compiler versions. The local development database was reset for this branch; any other existing database needs its own deliberate reset before applying this baseline, followed by new administrator registration. Do not treat `.devenv/state/postgres` as a disposable build cache. The canonical export command below is the supported way to inspect complete project histories or retained operation failures.
+The consolidated
+[`drizzle/0000_lying_jean_grey.sql`](drizzle/0000_lying_jean_grey.sql) is a
+**fresh-database baseline**. It does not migrate projects or credentials from
+earlier compiler versions. The local development database was reset for this
+branch; any other existing database needs its own deliberate reset before
+applying this baseline, followed by new administrator registration. Do not treat
+`.devenv/state/postgres` as a disposable build cache. The canonical export
+command below is the supported way to inspect complete project histories or
+retained operation failures.
 
 ```sh
 pnpm run check
@@ -59,14 +268,60 @@ pnpm run build
 pnpm run export:data -- --scope projects
 ```
 
-`test:postgres` creates an isolated test database and requires only PostgreSQL to be running. `test:browser` runs what only a browser shows, such as where a Sverlin step's moves start in two presentations stacked as the comparison view shows them ([`motion.browser.test.ts`](src/lib/modes/sverlin/motion.browser.test.ts)); devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it to a local Chrome or Chromium executable. `pnpm run export:data -- --scope projects --project PROJECT_ID` selects one project. Exports include complete Timelines, versioned study definitions, and interaction telemetry where available; see [`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Presentation load times are not exported: each time a Sverlin presentation first shows a step, or is still not showing one after 10 seconds, the browser reports it and the web process writes one `sverlin.presentation-load` JSON line to its log (devenv's `web` process output), with the time per layout phase and where a stalled page waits; see [`src/lib/shared/presentation-load-timing.ts`](src/lib/shared/presentation-load-timing.ts). The browser console shows the same as `[sverlin]` lines.
+`test:postgres` creates an isolated test database and requires only PostgreSQL
+to be running. `test:browser` runs what only a browser shows, such as where a
+Sverlin step's moves start in two presentations stacked as the comparison view
+shows them
+([`motion.browser.test.ts`](src/lib/modes/sverlin/motion.browser.test.ts));
+devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it
+to a local Chrome or Chromium executable.
+`pnpm run export:data -- --scope projects --project PROJECT_ID` selects one
+project. Exports include complete Timelines, versioned study definitions, and
+interaction telemetry where available; see
+[`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Presentation
+load times are not exported: each time a Sverlin presentation first shows a
+step, or is still not showing one after 10 seconds, the browser reports it and
+the web process writes one `sverlin.presentation-load` JSON line to its log
+(devenv's `web` process output), with the time per layout phase and where a
+stalled page waits; see
+[`src/lib/shared/presentation-load-timing.ts`](src/lib/shared/presentation-load-timing.ts).
+The browser console shows the same as `[sverlin]` lines.
 
-Project and export formats start at version 1. The fresh database baseline uses `mode` for visualization workflows and `kind` for participant/preview study runs.
+Project and export formats start at version 1. The fresh database baseline uses
+`mode` for visualization workflows and `kind` for participant/preview study
+runs.
 
 ## Study and operations
 
-[`src/lib/studies/main.ts`](src/lib/studies/main.ts) defines the sole main study (`main-study`, version 1), registered for enrollment in [`src/lib/shared/study/registry.ts`](src/lib/shared/study/registry.ts). Concrete study definitions live under `src/lib/studies/`; reusable study contracts, projections, and interaction schemas remain under [`src/lib/shared/study/`](src/lib/shared/study/). The main study compares Svelte-backed `sverlin` in a two-candidate workspace with script-free, per-frame `html` in a single-candidate workspace. The separate `html-js` mode is not a study condition. The protocol defines the counterbalanced order, 15-minute task duration, and interaction-capture policy; the comments beside its limits explain their sampling and delivery tradeoffs.
+[`src/lib/studies/main.ts`](src/lib/studies/main.ts) defines the sole main study
+(`main-study`, version 1), registered for enrollment in
+[`src/lib/shared/study/registry.ts`](src/lib/shared/study/registry.ts). Concrete
+study definitions live under `src/lib/studies/`; reusable study contracts,
+projections, and interaction schemas remain under
+[`src/lib/shared/study/`](src/lib/shared/study/). The main study compares
+Svelte-backed `sverlin` in a two-candidate workspace with script-free, per-frame
+`html` in a single-candidate workspace. The separate `html-js` mode is not a
+study condition. The protocol defines the counterbalanced order, 15-minute task
+duration, and interaction-capture policy; the comments beside its limits explain
+their sampling and delivery tradeoffs.
 
-New blank projects start by asking which algorithm to visualise before authoring. The assistants use a bounded five-call ladder: one initial call, up to three repairs, and a simpler fallback that explains what it reduced. Provider retries are disabled. The default 180-second request ceiling and study deadline bound each attempt; see [`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts), [`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts), and [`src/lib/server/projects/operations.ts`](src/lib/server/projects/operations.ts). Generated source, attempts, diagnostics, accepted artifacts, and presentations remain in the project Timeline. Each diagnostic records where the code it is about starts and ends, and the source editor underlines the problems of the latest build of the source it shows ([`source-diagnostics.ts`](src/lib/client/artifacts/source-diagnostics.ts)). Interrupted work is explicitly failed and can be retried by the user.
+New blank projects start by asking which algorithm to visualise before
+authoring. The assistants use a bounded five-call ladder: one initial call, up
+to three repairs, and a simpler fallback that explains what it reduced. Provider
+retries are disabled. The default 180-second request ceiling and study deadline
+bound each attempt; see
+[`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts),
+[`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts),
+and
+[`src/lib/server/projects/operations.ts`](src/lib/server/projects/operations.ts).
+Generated source, attempts, diagnostics, accepted artifacts, and presentations
+remain in the project Timeline. Each diagnostic records where the code it is
+about starts and ends, and the source editor underlines the problems of the
+latest build of the source it shows
+([`source-diagnostics.ts`](src/lib/client/artifacts/source-diagnostics.ts)).
+Interrupted work is explicitly failed and can be retried by the user.
 
-After resetting the database, open the app and register a new administrator passkey at the one-time setup page. From `/admin`, create a participant, assign the open study version, and use a preview to verify both conditions before inviting participants.
+After resetting the database, open the app and register a new administrator
+passkey at the one-time setup page. From `/admin`, create a participant, assign
+the open study version, and use a preview to verify both conditions before
+inviting participants.

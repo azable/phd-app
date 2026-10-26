@@ -8,7 +8,8 @@ import guide from './README.md?raw';
 /** Each documented prop with the quoted names its bullet lists, from bullets such as "- `a` and `b`: …". */
 function documentedProps(text: string): Map<string, Set<string>> {
   const props = new Map<string, Set<string>>();
-  for (const line of text.split('\n')) {
+  // A wrapped bullet goes on in indented lines.
+  for (const line of text.replace(/\n {2}(?=\S)/gu, ' ').split('\n')) {
     if (!line.startsWith('- `')) continue;
     const colon = line.indexOf(': ');
     const names = [...line.slice(0, colon).matchAll(/`(\w+)`/gu)].map(([, name]) => name);
