@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { interpretDomain, interpretInput, traceAlgorithm } from '../algorithm/interpret.server';
+import {
+  interpretDomain,
+  interpretInput,
+  spanKey,
+  traceAlgorithm
+} from '../algorithm/interpret.server';
 import { lightSteps, type Lit } from './light.server';
 import type { Listing } from './listing';
 import { mappedListing } from './mapped.server';
@@ -66,6 +71,68 @@ describe('lighting', () => {
     expect(lit).toHaveLength(3);
     expect(shown(listing, lit[2]).current).toEqual([]);
     expect(shown(listing, lit[2]).earlier).toEqual(['found then stop']);
+  });
+
+  it('lights faintly only code done: the code the step stops in is outside it, or it holds others', () => {
+    // Two lines, each a statement; the step leads up through the first into the second.
+    const text = 'a = 1\nb = f(a)';
+    const first = { start: 0, end: 5 };
+    const second = { start: 6, end: 14 };
+    const call = { start: 10, end: 14 };
+    const lines: Listing = {
+      text,
+      marks: [
+        { key: spanKey(first), start: 0, end: 5, scope: first },
+        { key: spanKey(second), start: 6, end: 14, scope: second },
+        { key: spanKey(call), start: 6, end: 14, scope: second }
+      ]
+    };
+    const event = (at: { start: number; end: number }) => ({ kind: 'read' as const, at });
+    const lit = (events: { kind: 'read'; at: { start: number; end: number } }[]) =>
+      shown(lines, lightSteps(lines, [{ events, gap: events.length - 1 }])[0]);
+    // Stopped in the second line, the first is done.
+    expect(lit([event(first), event(call)]).earlier).toEqual(['a = 1']);
+    // Stopped inside the second line, its part already run is not done.
+    expect(lit([event(call), event(call)]).earlier).toEqual([]);
+    // The first line's code taken as holding the second: not done while the step stops inside it,
+    // unless it is a statement holding others, done once its own code ran.
+    const around = { start: 0, end: 14 };
+    const holding = (compound: boolean): Listing => ({
+      text,
+      marks: [
+        { key: spanKey(first), start: 0, end: 5, scope: around, compound },
+        { key: spanKey(call), start: 10, end: 14, scope: call }
+      ]
+    });
+    const kept = (listing: Listing) =>
+      shown(listing, lightSteps(listing, [{ events: [event(first), event(call)], gap: 1 }])[0])
+        .earlier;
+    expect(kept(holding(false))).toEqual([]);
+    expect(kept(holding(true))).toEqual(['a = 1']);
+  });
+
+  it('pairs a region’s own lines with its statements, so a node lights only its own line', () => {
+    const swap = traceAlgorithm(
+      `
+  let a = Index(0);
+  @swap{
+    const kept = values[@from[a]];
+    a = Next(a);
+  }
+`.replace('@swap{', 'if (Before(a, Length(values))) @swap{'),
+      input,
+      domain,
+      { drawn: new Set(['a']) }
+    );
+    const { listing: paired, problems } = mappedListing(
+      { body: 'if a < n\n  @swap[kept = A[@from[a]]\n  a = a + 1]' },
+      swap
+    );
+    expect(problems).toEqual([]);
+    const second = paired.marks.filter(({ start }) => paired.text.slice(start).startsWith('a = a'));
+    // The second statement's nodes light its line only.
+    expect(second.length).toBeGreaterThan(0);
+    for (const { start, end } of second) expect(paired.text.slice(start, end)).toBe('a = a + 1');
   });
 
   it('keeps the lighting of the step before where a step lights nothing', () => {

@@ -2,8 +2,8 @@
  * What each step lights in a listing: its code's own events, and the regions of the label it is a
  * run of, most strongly, and the code it keeps as having run before it more faintly: the events
  * logged in its trail (see MasterStep), those leading up to it and those earlier in each run
- * accumulating around it, or without a trail, those since the step before. A step whose events
- * light nothing keeps the lighting of the step before.
+ * accumulating around it, or without a trail, those since the step before, each only where its code
+ * is done. A step whose events light nothing keeps the lighting of the step before.
  */
 
 import type { Span } from '../algorithm/block.server';
@@ -53,7 +53,14 @@ export function lightSteps(listing: Listing, steps: readonly LitStep[]): Lit[] {
     events.forEach((event, at) =>
       (at < gap ? leading : latest).push(...(marks.get(spanKey(event.at)) ?? []))
     );
-    const before = trail ? trailed(index, trail) : leading;
+    // What ran before a step lights only where its code is done: the code the step stops in, at its
+    // last event, is outside it, or it holds other statements and its own code ran. So a statement
+    // half run, as the swap's second line paused at its read of A[j], stays dark, as does a
+    // comparison whose operands are still being found.
+    const last = events.at(-1)?.at;
+    const done = ({ scope, compound }: Mark) =>
+      !scope || compound || !last || last.start < scope.start || scope.end < last.end;
+    const before = (trail ? trailed(index, trail) : leading).filter(done);
     // A label on a block or on statements in a row has no events of its own.
     if (unit) latest.push(...(marks.get(spanKey(unit)) ?? []));
     if (!latest.length && !leading.length && !before.length) {
@@ -90,9 +97,9 @@ export function lightSteps(listing: Listing, steps: readonly LitStep[]): Lit[] {
       (region) => latest.some(inRegion(region)) && !before.some(inRegion(region))
     );
     lit.push({
-      current: without(merged(latest)),
+      current: without(merged(latest, listing.text)),
       earlier: without(
-        merged(before).filter(
+        merged(before, listing.text).filter(
           (range) => !latest.some((mark) => mark.start <= range[0] && range[1] <= mark.end)
         ),
         holding
@@ -130,12 +137,14 @@ function holed(
   });
 }
 
-function merged(marks: readonly Mark[]): Range[] {
+/** The marks' text as ranges, those touching or with only spaces between them joined. */
+function merged(marks: readonly Mark[], text: string): Range[] {
   const sorted = [...marks].sort((a, b) => a.start - b.start || b.end - a.end);
   const ranges: [number, number][] = [];
   for (const { start, end } of sorted) {
     const last = ranges.at(-1);
-    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    if (last && (start <= last[1] || !text.slice(last[1], start).trim()))
+      last[1] = Math.max(last[1], end);
     else ranges.push([start, end]);
   }
   return ranges;

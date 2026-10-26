@@ -1324,10 +1324,30 @@ describe('pauses accumulate', () => {
     const kept = firstSteps({ ...operands, insert: 'accumulate', 'insert.swap': 'accumulate' });
     expect(kept[1].held).toEqual(['left']);
     expect(kept[1].earlier.join(' ')).toContain('j - 1');
-    // With nothing around it keeping, only the code since the step before is lit faintly, as the
-    // left operand's cell read.
+    // With nothing around it keeping, only the code since the step before could light faintly: the
+    // left operand's cell read, in the comparison still being run, which stays dark.
     const none = firstSteps({ ...operands, 'insert.swap': 'accumulate' });
-    expect(none[1]).toEqual({ held: [], current: ['j'], earlier: ['A[', '] > A[', ']'] });
+    expect(none[1]).toEqual({ held: [], current: ['j'], earlier: [] });
+  });
+
+  it('light as run only code that has run, a statement once the code has left it', () => {
+    const fine = {
+      ...operands,
+      'insert.compare': 'accumulate',
+      'insert.swap': 'accumulate',
+      'insert.swap.to': 'on'
+    } as const;
+    const { lit } = insertion.paced(new Map(Object.entries(fine)));
+    const texts = (ranges: readonly (readonly [number, number])[]) =>
+      ranges.map(([start, end]) => text.slice(start, end));
+    // Paused at the left operand: the comparison it is in has not been evaluated, so it is dark.
+    expect(texts(lit.code[1].earlier)).toEqual(['j = i\n  while j > 0 and']);
+    // At the right operand, only the left one, done, is lit faintly.
+    expect(texts(lit.code[2].earlier)).toEqual(['j - 1']);
+    // Paused at the swap's read of A[j]: its first line ran; its second is half run and the rest
+    // has not run, so they stay dark.
+    expect(texts(lit.code[4].current)).toEqual(['j']);
+    expect(texts(lit.code[4].earlier)).toEqual(['while j > 0 and', 'moved = A[j - 1]']);
   });
 
   it('nest: an accumulating run keeps its parts from before an inner run that is on', () => {

@@ -4,8 +4,8 @@
  * algorithm runs the code with that label (see algorithm/labels.server.ts). A region inside
  * another takes its name as a prefix, as a label does, so names line up with the algorithm's.
  * Every region needs a label, and every label a region, as each label is a place the page can
- * pause. A node without a label of its
- * own takes that of the nearest labelled node around it.
+ * pause. A node without a label of its own takes that of the nearest labelled node around it, and
+ * lights the line of that region's own text its statement shows where they pair up (see markOf).
  */
 
 import type { AnyNode, BlockStatement } from 'acorn';
@@ -111,6 +111,75 @@ export function readRegions(body: string): {
   };
 }
 
+/** Statements that hold others, which have run once their own code has, though code runs inside. */
+const compound = new Set([
+  'BlockStatement',
+  'DoWhileStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'ForStatement',
+  'FunctionDeclaration',
+  'IfStatement',
+  'SwitchStatement',
+  'WhileStatement'
+]);
+
+const within = (inner: { start: number; end: number }, outer: { start: number; end: number }) =>
+  outer.start <= inner.start && inner.end <= outer.end;
+
+/** The statements a label marks: a block's, or those it wraps, or its expression. */
+function statementsOf(label: Label): AnyNode[] {
+  const [first] = label.nodes;
+  return label.nodes.length === 1 && first.type === 'BlockStatement'
+    ? (first as BlockStatement).body
+    : label.nodes;
+}
+
+/**
+ * A region's own text, outside the regions inside it, by line: each line's pieces, trimmed of
+ * spaces, the lines with none left out. A region inside it spanning lines ends the line before it.
+ */
+function ownLines(
+  text: string,
+  region: Region,
+  regions: readonly Region[]
+): [start: number, end: number][][] {
+  const holes = regions
+    .filter(
+      (other) =>
+        other !== region &&
+        within(other, region) &&
+        (other.start !== region.start || other.end !== region.end)
+    )
+    .sort((a, b) => a.start - b.start);
+  const lines: [number, number][][] = [[]];
+  const piece = (start: number, end: number) => {
+    const slice = text.slice(start, end);
+    const lead = slice.length - slice.trimStart().length;
+    const trail = slice.length - slice.trimEnd().length;
+    if (end - trail > start + lead) lines.at(-1)!.push([start + lead, end - trail]);
+  };
+  const cut = (start: number, end: number) => {
+    let from = start;
+    for (let at = start; at < end; at++)
+      if (text[at] === '\n') {
+        piece(from, at);
+        lines.push([]);
+        from = at + 1;
+      }
+    piece(from, end);
+  };
+  let from = region.start;
+  for (const hole of holes) {
+    if (hole.start < from) continue;
+    cut(from, hole.start);
+    if (text.slice(hole.start, hole.end).includes('\n')) lines.push([]);
+    from = hole.end;
+  }
+  cut(from, region.end);
+  return lines.filter((line) => line.length);
+}
+
 /**
  * A mapped listing: its text, marked for each node with a label by the regions with that label, and
  * the problems with its labels; also what each region is mapped to.
@@ -125,7 +194,30 @@ export function mappedListing(
   for (const { full, nodes } of labels)
     for (const node of nodes) own.set(node, [...(own.get(node) ?? []), full]);
   const used = new Set(labels.map(({ full }) => full));
+  const byName = new Map(labels.map((label) => [label.full, label]));
   const marks: Mark[] = [];
+  // A node inside a label's code lights the line of the region's own text its statement shows,
+  // where the region's own lines and the label's statements pair up one to one; and it counts as
+  // run before a step only once the code has left its statement (see light.server.ts).
+  const markOf = (part: AnyNode, label: string, region: Region): Mark[] => {
+    const key = spanKey(spanOf(part));
+    const whole = { key, start: region.start, end: region.end };
+    const marked = byName.get(label);
+    if (!marked) return [whole];
+    if (marked.nodes.includes(part))
+      return [{ ...whole, scope: spanOf(part), compound: compound.has(part.type) }];
+    const statements = statementsOf(marked);
+    const index = statements.findIndex((statement) => within(spanOf(part), spanOf(statement)));
+    if (index < 0) return [whole];
+    const statement = statements[index];
+    const scope = spanOf(statement);
+    const lines = ownLines(text, region, regions);
+    const line = lines.length === statements.length ? lines[index] : undefined;
+    const flags = { scope, compound: compound.has(statement.type) };
+    return line
+      ? line.map(([start, end]) => ({ key, start, end, ...flags }))
+      : [{ ...whole, ...flags }];
+  };
   const mapped = new Map<string, { text: string; line: number }[]>();
   const lineOf = (offset: number) => code.slice(0, Math.max(offset, 0)).split('\n').length;
   const visit = (node: unknown, inherited: readonly string[]): void => {
@@ -139,8 +231,7 @@ export function mappedListing(
     if (span.start >= 0) {
       for (const label of names)
         for (const region of regions)
-          if (region.label === label)
-            marks.push({ key: spanKey(span), start: region.start, end: region.end });
+          if (region.label === label) marks.push(...markOf(part, label, region));
       for (const label of mine) {
         const source = code.slice(span.start, span.end).split('\n')[0].trim();
         mapped.set(label, [
