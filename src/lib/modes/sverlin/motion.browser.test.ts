@@ -641,7 +641,7 @@ const compared = `<script lang="sverlin" domain>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Ask(g: Greater)}<Node>{@render Int(g.a)} vs {@render Int(g.b)}</Node>{/snippet}
 {#snippet Board()}
-  <Node layout="column"><Node>{#each values as v}{@render Int(v)}{/each}</Node>{@render Greater()}</Node>
+  <Node layout="column"><Node>{#each values as v}{@render Int(v)}{/each}</Node>{@render Greater(@compare)}</Node>
 {/snippet}
 {@render Board()}`;
 

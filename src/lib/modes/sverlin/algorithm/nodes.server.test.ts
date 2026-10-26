@@ -16,10 +16,10 @@ const domain = interpretDomain(`
 const list = `const head = NodeRef(Node({ name: 'A', next:
   NodeRef(Node({ name: 'B', next: NodeRef(Node({ name: 'C', next: End('end') })) })) }));`;
 
-// Showing each test for a node, as a view of IsNode would.
+// Showing each test for a node, as a view of IsNode rendered at a label around it all would.
 const run = (algorithm: string, input = list) =>
   traceAlgorithm(algorithm, interpretInput(input, domain), domain, {
-    shown: new Map([['IsNode', undefined]])
+    shown: new Map([['IsNode', [{ start: 0, end: Infinity }]]])
   }).steps;
 
 describe('nodes and references', () => {

@@ -121,7 +121,7 @@ describe('labels read in the view', () => {
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Asking(e: Equal)}<Node>{@render Int(e.a)}</Node>{/snippet}
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
-{#snippet Asked()}<Node>{#each applied(Equal) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
+{#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
     const prepared = prepare(
       `{@render Equal(@check)}
 {#each runs(@check.at) as p}{@render Index(p)}{/each}
@@ -130,9 +130,14 @@ describe('labels read in the view', () => {
     );
     expect(prepared.appliedIn?.['Equal_ℓcheck']?.operator).toBe('Equal');
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);
-    expect(prepared.histories).toEqual({ ǂEqual: { operator: 'Equal' } });
+    // Both inside the code labelled @check.
+    expect(prepared.histories).toEqual({ ǂEqualˑˑcheck: prepared.appliedIn?.['Equal_ℓcheck'] });
     expect(() => prepare('{#each applied(Values) as e}{/each}', search)).toThrow(
       'applied(Values) takes an operator the domain declares, as applied(Equal).'
+    );
+    // What has happened is a label's too: with none, it names the label to write.
+    expect(() => prepare('{#each applied(Equal) as e}{/each}', search)).toThrow(
+      "applied(Equal) draws no label's applications: write applied(Equal, @check), a label around an application of Equal."
     );
   });
 });

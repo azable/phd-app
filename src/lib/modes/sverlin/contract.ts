@@ -60,7 +60,7 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
 {#snippet Caption()}<Node>Find {@render Int(target)} by checking each cell in order.</Node>{/snippet}
 {#snippet Ask(e: Equal)}<Node>is {@render Int(e.a)} equal to {@render Int(e.b)}?</Node>{/snippet}
-{#snippet Checking()}<Node>Checking index {@render Index(i)}: {@render Equal()}</Node>{/snippet}
+{#snippet Checking()}<Node>Checking index {@render Index(i)}: {@render Equal(@check)}</Node>{/snippet}
 {#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
 {@render Title()}
 {@render Caption()}

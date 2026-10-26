@@ -2,6 +2,7 @@
 
 import { posix } from 'node:path';
 
+import type { AnyNode } from 'acorn';
 import { build, type BuildFailure, type Plugin } from 'esbuild';
 import { compile, parse } from 'svelte/compiler';
 
@@ -24,9 +25,11 @@ import {
   type TraceState,
   type TypedState
 } from './algorithm/interpret.server';
-import { parseBlock } from './algorithm/parse.server';
+import type { Label } from './algorithm/labels.server';
+import { parseBlock, spanOf } from './algorithm/parse.server';
 import { lightSteps, type Lit } from './listing/light.server';
 import {
+  isDuringKey,
   isLabelKey,
   isRunsKey,
   labelSpan,
@@ -223,19 +226,21 @@ export type PreparedComponent = {
     { text: string; regions: { label: string; start: number; end: number }[] }
   >;
   /**
-   * The operators the root renders by name, as {@render Greater()}, each with an application from
-   * some step, which stands in hidden where a step has none or several of them.
+   * The operators the root renders at labels, as {@render Greater(@inner)}, by key, each with an
+   * application from some step, which stands in hidden where a step has none or several of them.
    */
   applied?: Record<string, Application>;
-  /** Of those, the renders taking only applications made inside a label, as {@render Greater(@inner)}. */
+  /** Each of those renders' operator, and the code of the label it takes applications made in. */
   appliedIn?: Record<string, { operator: string; start: number; end: number }>;
   /**
    * The labels the root reads, by key (see label-values.ts): a label's value at a step, or its
    * values so far; each with its full name and a value from some step to stand in.
    */
   labelled?: Record<string, { label: string; sample?: LabelRun }>;
-  /** The operators whose applications so far the root draws, by key, some only inside a label. */
-  histories?: Record<string, { operator: string; start?: number; end?: number }>;
+  /** The operators whose applications so far inside a label the root draws, by key. */
+  histories?: Record<string, { operator: string; start: number; end: number }>;
+  /** The labels {#when} blocks draw their contents in the runs of, by full name, by key. */
+  during?: Record<string, string>;
   /** The view's nodes and renders, and its views, for what each presentation leaves out. */
   leftOut?: { model: LeftOutModel; components: string[] };
 };
@@ -551,16 +556,35 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
     const paths = snippetPaths(ast.html);
+    // A view whose links sit outside its nodes joins the children of the node it is rendered in,
+    // which lays them out; a pointer view draws inside the element it marks, so its links join
+    // nothing there.
+    const linkProblems: InvalidSvelteSourceError[] = [];
+    const linkedTypes = new Set<string>();
+    for (const { name, type, node } of found.components) {
+      const links = outerLinks(node);
+      if (!links.length) continue;
+      if (found.pointers.has(name))
+        linkProblems.push(
+          new InvalidSvelteSourceError(
+            `${name} is a pointer view, drawn inside the element it marks, so its <Link> joins nothing: write the link among the elements, in the node holding them, with labels at its ends, as <Link from={@insert.swap.from} to={@insert.swap.to} />.`,
+            { code: 'link_placement', start: sourcePosition(source, links[0]) }
+          )
+        );
+      else linkedTypes.add(type);
+    }
     const { insertions, problems, kinds, tagKinds, nodeKinds, listing, listingAt } = withNodeRefs(
       svelteSource,
       ast,
       source,
       found.roots,
       found.valueTypes,
-      paths
+      paths,
+      linkedTypes
     );
     viewProblems = [
       ...problems,
+      ...linkProblems,
       ...found.problems.map(
         ({ message, start }) =>
           new InvalidSvelteSourceError(message, {
@@ -676,17 +700,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     if (wrongRender)
       throw new InvalidSvelteSourceError(
         wrongRender.argued
-          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}()}, with nothing between the brackets, draws the one a step's own code makes; {@render ${wrongRender.name}(@inner)} the one made inside @inner; and in {#each applied(${wrongRender.name}) as a}, {@render ${wrongRender.name}(a)} each so far.`
-          : `{@render ${wrongRender.name}()} draws the application of ${wrongRender.name} a step makes, which only the root and its parts know: render it there, outside any view.`,
+          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}(@compare)} draws the one made inside the code labelled @compare, and in {#each applied(${wrongRender.name}, @compare) as a}, {@render ${wrongRender.name}(a)} each so far.`
+          : `{@render ${wrongRender.name}(…)} draws an application of ${wrongRender.name} a step makes, which only the root and its parts know: render it there, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
-    // Each render of an applied operator by its key: the operator's name, and the label it is
+    // Each render of an applied operator by its key: the operator's name and the label it is
     // narrowed to (see appliedKey); one in {#each applied(…)} draws a value, as a type is rendered.
+    // A render with no label is refused once the labels are known.
     const appliedNames = [
       ...new Set(
-        appliedRenders.flatMap(({ name, filter, fromHistory }) =>
-          fromHistory ? [] : [filter ? `${name}_${filter}` : name]
-        )
+        appliedRenders.flatMap(({ name, filter }) => (filter ? [`${name}_${filter}`] : []))
       )
     ];
     const undrawn = rendered.find(({ name }) => !views[name]?.length);
@@ -830,20 +853,46 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const algorithm = blocks.algorithm;
     // The labels the markup reads, each resolved to one of the algorithm's; their problems wait for
     // the labels' own, which the first trace reports.
-    const algorithmLabels = interpretBlock(source, algorithm, (body) =>
-      stepLabels(parseBlock(body, 'algorithm', domain))
-    );
+    const algorithmLabels = interpretBlock(source, algorithm, (body) => {
+      const parsed = parseBlock(body, 'algorithm', domain);
+      return { ...stepLabels(parsed), calls: operatorCalls(parsed.root, operators) };
+    });
     const filters = new Set(appliedRenders.flatMap(({ filter }) => (filter ? [filter] : [])));
     const snippets = snippetRangesOf(ast.html);
     const labelled: Record<string, { label: string; sample?: LabelRun }> = {};
-    const histories: Record<string, { operator: string; start?: number; end?: number }> = {};
+    const histories: Record<string, { operator: string; start: number; end: number }> = {};
     const narrowed = new Map<string, { start: number; end: number }>();
+    // The labels {#when} blocks draw their contents in the runs of, by key.
+    const during: Record<string, string> = {};
+    const tested = ifTestsOf(ast.html);
     const labelProblems: InvalidSvelteSourceError[] = [];
     if (!algorithmLabels.problems.length)
       for (const reference of references) {
         const at = { code: 'view_label', start: sourcePosition(source, reference.start) };
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
+        if (reference.kind === 'during') {
+          if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
+            problem(
+              `{#when ${asWritten(reference.key)}} is in a view, which draws only its value: write it in the root or a part of the page.`
+            );
+          else if (reference.path === undefined)
+            problem(
+              '{#when …} takes a label by its full name, as {#when @insert.swap}…{/when}, and draws its contents at each step inside a run of that label.'
+            );
+          else {
+            const found = resolveLabel(reference.path, algorithmLabels.labels, false);
+            if ('problem' in found) problem(found.problem);
+            else during[reference.key] = found.label.full;
+          }
+          continue;
+        }
+        if (reference.kind === 'value' && tested.has(reference.start)) {
+          problem(
+            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: {#when ${asWritten(reference.key)}}…{/when} draws its contents at each step inside a run of the label.`
+          );
+          continue;
+        }
         if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end)) {
           problem(
             `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in the root and its parts, which pass what a view draws, as {@render Int(@swap.a)}.`
@@ -857,7 +906,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           continue;
         }
         if (reference.path === undefined) {
-          histories[reference.key] = { operator: (reference as { operator: string }).operator };
+          const { operator } = reference as { operator: string };
+          problem(
+            `applied(${operator}) draws no label's applications: ${labelledForm(operator, algorithmLabels, (path) => `applied(${operator}, ${path})`)}.`
+          );
           continue;
         }
         const filter = reference.kind === 'value' && filters.has(reference.key);
@@ -878,6 +930,41 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         else if (filter) narrowed.set(reference.key, labelSpan(found.label));
         else labelled[reference.key] = { label: found.label.full };
       }
+    for (const start of whenElsesOf(ast.html))
+      labelProblems.push(
+        new InvalidSvelteSourceError(
+          "{#when …} has no {:else}: what shows outside the label's runs goes beside the block, where it shows at every step.",
+          { code: 'view_label', start: sourcePosition(source, start) }
+        )
+      );
+    // Operators run in the algorithm: the view reads what a label on an application gave.
+    if (!algorithmLabels.problems.length)
+      for (const { name, start } of viewOperatorCalls(ast.html, operators)) {
+        const on = algorithmLabels.calls
+          .filter((call) => call.name === name)
+          .flatMap((call) =>
+            algorithmLabels.labels.filter((label) => {
+              const span = labelSpan(label);
+              return span.start === call.start && span.end === call.end;
+            })
+          );
+        const names = [...new Set(on.map(({ full }) => `@${full}`))];
+        labelProblems.push(
+          new InvalidSvelteSourceError(
+            `${name}(…) applies an operator in the view, which only draws what the algorithm computed: ${names.length ? `read ${names.join(' or ')}, a label on an application of ${name}, in the root or a part of the page` : `label an application of ${name} in the algorithm, as @next[${name}(i)], and read that label, by its full name, in the root or a part of the page`}.`,
+            { code: 'view_label', start: sourcePosition(source, start) }
+          )
+        );
+      }
+    if (!algorithmLabels.problems.length)
+      for (const { name, filter, fromHistory, start } of appliedRenders)
+        if (!filter && !fromHistory)
+          labelProblems.push(
+            new InvalidSvelteSourceError(
+              `{@render ${name}()} draws no label's application: ${labelledForm(name, algorithmLabels, (path) => `{@render ${name}(${path})}`)}.`,
+              { code: 'view_label', start: sourcePosition(source, start) }
+            )
+          );
     if (labelProblems.length) throw InvalidSvelteSourceError.combine(labelProblems);
     const appliedIn: Record<string, { operator: string; start: number; end: number }> = {};
     for (const { name, filter } of appliedRenders) {
@@ -885,27 +972,16 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       if (span) appliedIn[`${name}_${filter}`] = { operator: name, ...span };
     }
     // The page pauses where labels finish (see Pacing), at the labels a variant pauses at, else at
-    // every label; the operators the root renders applied, one at a time or so far, are kept.
-    const shown = new Map<string, { start: number; end: number }[] | undefined>();
-    for (const { operator, span } of [
-      ...appliedNames.map((key) => ({
-        operator: appliedIn[key]?.operator ?? key,
-        span: appliedIn[key]
-      })),
-      ...Object.values(histories).map(({ operator, start, end }) => ({
-        operator,
-        span: start === undefined ? undefined : { start, end: end ?? start }
-      }))
-    ]) {
-      const spans = shown.has(operator) ? shown.get(operator) : [];
-      shown.set(operator, span && spans ? [...spans, span] : undefined);
-    }
-    const labelValues = new Set(Object.values(labelled).map(({ label }) => label));
+    // every label; the applications made inside the labels the root renders an operator at, one at
+    // a time or so far, are kept.
+    const shown = new Map<string, { start: number; end: number }[]>();
+    for (const { operator, start, end } of [
+      ...Object.values(appliedIn),
+      ...Object.values(histories)
+    ])
+      shown.set(operator, [...(shown.get(operator) ?? []), { start, end }]);
     const pacing: Pacing = { shown };
-    const keep = {
-      labels: labelValues,
-      history: new Set(Object.values(histories).map(({ operator }) => operator))
-    };
+    const keep = { labels: new Set(Object.values(labelled).map(({ label }) => label)) };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
     const labelNames = traced.labels.map(({ full }) => full);
@@ -938,7 +1014,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       const made = seen
         .flatMap((step) => step.applied?.[operator] ?? [])
         .find((application) => within(application, appliedIn[name]));
-      const value = made ? undefined : (widest(name)?.widest[0] as TraceState | undefined);
+      const value = made ? undefined : (widest(operator)?.widest[0] as TraceState | undefined);
       applied[name] = made ?? {
         state: value ?? {},
         types: typesOf(viewing, operator, value)
@@ -947,10 +1023,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // A value of each label the root reads, from any step, to stand in hidden where a step gave
     // none or several.
     for (const entry of Object.values(labelled))
-      entry.sample = seen.flatMap((step) => [
-        ...(step.labelled?.[entry.label] ?? []),
-        ...(step.led?.labelled?.[entry.label] ?? [])
-      ])[0];
+      entry.sample = seen.flatMap((step) => step.labelled?.[entry.label] ?? [])[0];
     const written = listingsFrom(source, traced, algorithm, listingBlocks);
     if (listing && !listingBlocks.length)
       written.problems.push(
@@ -990,7 +1063,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ]);
     // What the root reads besides the state: labels' values, their values so far, and operators'
     // applications so far, each a prop of its key.
-    const viewState = new Set([...stateNames, ...Object.keys(labelled), ...Object.keys(histories)]);
+    const viewState = new Set([
+      ...stateNames,
+      ...Object.keys(labelled),
+      ...Object.keys(histories),
+      ...Object.keys(during)
+    ]);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
     const viewNames = new Set([
       ...Object.keys(components),
@@ -1107,7 +1185,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         scopedReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
+              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: {#when ${asWritten(name)}}…{/when} draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1172,6 +1250,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ...appliedNames.map(appliedKey),
           ...Object.keys(labelled),
           ...Object.keys(histories),
+          ...Object.keys(during),
           ...Object.keys(chosen),
           ...Object.keys(viewAliases)
         ],
@@ -1285,6 +1364,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ...(Object.keys(appliedIn).length ? { appliedIn } : {}),
       ...(Object.keys(labelled).length ? { labelled } : {}),
       ...(Object.keys(histories).length ? { histories } : {}),
+      ...(Object.keys(during).length ? { during } : {}),
       leftOut: {
         model: leftOut,
         components: [...Object.keys(components), ...paths.values()]
@@ -1392,6 +1472,7 @@ export async function bundlePresentation(
     const ownTypes: Record<string, string> = {};
     // An application's operands and result are copies made at the step, of where they were read.
     const ownIdentities: Record<string, number> = {};
+    const ownTargets: Record<string, string> = {};
     // A step's after holds the one application of each operator rendered its own code made; where
     // it made none or several, as at its before, one from another step stands in hidden.
     for (const [name, sample] of Object.entries(prepared.applied ?? {})) {
@@ -1408,6 +1489,8 @@ export async function bundlePresentation(
       (own ? ownApplied : standIn.state)[key] = application.state;
       for (const [path, type] of Object.entries(application.types))
         (own ? ownTypes : standIn.types)[`${key}.${path}`] = type;
+      for (const [path, target] of Object.entries(application.targets ?? {}))
+        (own ? ownTargets : standIn.targets)[`${key}.${path}`] = target;
       if (own)
         for (const [path, id] of Object.entries(application.identities ?? {}))
           ownIdentities[`${key}.${path}`] = id;
@@ -1415,16 +1498,14 @@ export async function bundlePresentation(
     // Each label the root reads: the value its expression gave in the step's own code, at its
     // after, where it gave one; else one from another step stands in hidden. Each label's values
     // so far, and each operator's applications so far, are lists, there at every step.
-    const ownTargets: Record<string, string> = {};
     const step = Math.floor(index / 2);
     const sofar = master.slice(0, step + 1);
     const at = (path: string, key: string) => key + path.slice('value'.length);
     for (const [key, { label, sample }] of Object.entries(prepared.labelled ?? {})) {
       if (isRunsKey(key)) {
-        const list = sofar.flatMap((past, which) => [
-          ...(past.led?.labelled?.[label] ?? []),
-          ...(which < step || index % 2 === 1 || index === 0 ? (past.labelled?.[label] ?? []) : [])
-        ]);
+        const list = sofar.flatMap((past, which) =>
+          which < step || index % 2 === 1 || index === 0 ? (past.labelled?.[label] ?? []) : []
+        );
         ownApplied[key] = list.map((run) => run.state.value);
         list.forEach((run, k) => {
           for (const [path, type] of Object.entries(run.types))
@@ -1446,21 +1527,23 @@ export async function bundlePresentation(
       for (const [path, target] of Object.entries(run.targets))
         (own ? ownTargets : standIn.targets)[at(path, key)] = target;
     }
+    // A {#when} block's label: there where the step is inside one of its runs, else hidden, its
+    // contents keeping their room.
+    for (const [key, label] of Object.entries(prepared.during ?? {}))
+      (phase.inside?.includes(label) ? ownApplied : standIn.state)[key] = true;
     for (const [key, history] of Object.entries(prepared.histories ?? {})) {
-      const span =
-        history.start === undefined ? undefined : { start: history.start, end: history.end ?? 0 };
       const list = sofar.flatMap((past, which) =>
-        [
-          ...(past.led?.applied?.[history.operator] ?? []),
-          ...(which < step || index % 2 === 1 || index === 0
-            ? (past.applied?.[history.operator] ?? [])
-            : [])
-        ].filter((application) => within(application, span))
+        (which < step || index % 2 === 1 || index === 0
+          ? (past.applied?.[history.operator] ?? [])
+          : []
+        ).filter((application) => within(application, history))
       );
       ownApplied[key] = list.map((application) => application.state);
       list.forEach((application, k) => {
         for (const [path, type] of Object.entries(application.types))
           ownTypes[`${key}[${k}].${path}`] = type;
+        for (const [path, target] of Object.entries(application.targets ?? {}))
+          ownTargets[`${key}[${k}].${path}`] = target;
       });
     }
     return {
@@ -1896,7 +1979,9 @@ function withNodeRefs(
   /** The <Node> tags showing their component's own value, by where they start, with its type. */
   valueTypes: ReadonlyMap<number, string>,
   /** Every snippet's path, by its name (see snippetPaths). */
-  paths: ReadonlyMap<string, string>
+  paths: ReadonlyMap<string, string>,
+  /** The types and operators with a view whose links its nodes leave to the node it is rendered in. */
+  linkedTypes: ReadonlySet<string> = new Set()
 ): {
   insertions: Insertion[];
   problems: InvalidSvelteSourceError[];
@@ -1973,6 +2058,10 @@ function withNodeRefs(
       );
       return;
     }
+    // A view whose links its nodes leave out joins the children of the node it is rendered in.
+    const callee = tag.type === 'RenderTag' ? tag.expression?.callee : undefined;
+    if (around && callee && linkedTypes.has((callee as { name?: string }).name ?? ''))
+      around.links = true;
     const library =
       tag.type === 'InlineComponent' &&
       (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
@@ -2118,6 +2207,23 @@ function withNodeRefs(
   const nodeKinds = new Map<number, string>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
   for (const entry of tags) {
+    // A node joining links says how its children are placed: freely, as a linked list or a graph,
+    // or in a row or column; one holding a collection's {#each} and links runs as the collection.
+    if (entry.name === 'Node' && entry.links) {
+      const attributes = entry.tag.attributes ?? [];
+      const children = (entry.tag.children ?? []).filter(
+        (child) =>
+          !(child.type === 'Text' && !child.data?.trim()) &&
+          !(child.type === 'InlineComponent' && child.name === 'Link')
+      );
+      const collection = children.length === 1 && children[0].type === 'EachBlock';
+      if (!attributes.some((attribute) => attribute.name === 'layout') && !collection)
+        reject(
+          'A <Node> joining links needs a layout: layout="free" for a linked structure, as a list, a tree, or a graph, or "row" or "column" for children in a line.',
+          'link_placement',
+          entry.start
+        );
+    }
     const role = roleOf(entry);
     const key = kindKey(
       entry.view,
@@ -2538,6 +2644,152 @@ function viewDomainOf(domain: DomainRegistry, viewed: ReadonlySet<string>): Doma
     }
   ]);
   return { ...domain, structures: { ...domain.structures, ...Object.fromEntries(records) } };
+}
+
+/** The operators the markup applies itself, as Next(p) in to={Next(p)}, by where each call starts. */
+function viewOperatorCalls(
+  markup: unknown,
+  operators: ReadonlySet<string>
+): { name: string; start: number }[] {
+  const found: { name: string; start: number }[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as {
+      type?: string;
+      start?: number;
+      callee?: { type?: string; name?: string };
+      expression?: { arguments?: unknown };
+    };
+    // A render's own call names what it draws; only its arguments are computed.
+    if (part.type === 'RenderTag') return walk(part.expression?.arguments);
+    if (
+      part.type === 'CallExpression' &&
+      part.callee?.type === 'Identifier' &&
+      operators.has(part.callee.name ?? '')
+    )
+      found.push({ name: part.callee.name ?? '', start: part.start ?? 0 });
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
+  };
+  walk(markup);
+  return found;
+}
+
+/** Where each {:else} of a {#when} block starts (see label-values.ts). */
+function whenElsesOf(markup: unknown): number[] {
+  const found: number[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as {
+      type?: string;
+      expression?: { type?: string; name?: string };
+      else?: { start?: number };
+    };
+    if (
+      part.type === 'IfBlock' &&
+      part.expression?.type === 'Identifier' &&
+      isDuringKey(part.expression.name ?? '') &&
+      part.else
+    )
+      found.push(part.else.start ?? 0);
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
+  };
+  walk(markup);
+  return found;
+}
+
+/** Where each {#if} whose test is a label read alone starts its test, as {#if @insert.swap}. */
+function ifTestsOf(markup: unknown): Set<number> {
+  const found = new Set<number>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as {
+      type?: string;
+      expression?: { type?: string; name?: string; start?: number };
+    };
+    if (
+      part.type === 'IfBlock' &&
+      part.expression?.type === 'Identifier' &&
+      isLabelKey(part.expression.name ?? '')
+    )
+      found.add(part.expression.start ?? -1);
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
+  };
+  walk(markup);
+  return found;
+}
+
+/** Where each <Link> in a snippet starts that no <Node> in it holds. */
+function outerLinks(snippet: unknown): number[] {
+  const found: number[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as { type?: string; name?: string; start?: number };
+    if (part.type === 'InlineComponent' && part.name === 'Node') return;
+    if (part.type === 'InlineComponent' && part.name === 'Link') found.push(part.start ?? 0);
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
+  };
+  walk((snippet as { body?: unknown; children?: unknown }).children ?? snippet);
+  return found;
+}
+
+/** Where the algorithm applies each operator, as spans in its block. */
+function operatorCalls(
+  root: AnyNode,
+  operators: ReadonlySet<string>
+): { name: string; start: number; end: number }[] {
+  const found: { name: string; start: number; end: number }[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const part = node as AnyNode & { callee?: { type?: string; name?: string } };
+    if (
+      part.type === 'CallExpression' &&
+      part.callee?.type === 'Identifier' &&
+      operators.has(part.callee.name ?? '')
+    )
+      found.push({ name: part.callee.name ?? '', ...spanOf(part) });
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && typeof child === 'object') walk(child);
+  };
+  walk(root);
+  return found;
+}
+
+/**
+ * How to write an operator's render or history at a label: at the labels around its applications,
+ * innermost first, or where none is, with a label to add around one.
+ */
+function labelledForm(
+  operator: string,
+  {
+    labels,
+    calls
+  }: { labels: readonly Label[]; calls: readonly { name: string; start: number }[] },
+  form: (path: string) => string
+): string {
+  const around = calls
+    .filter(({ name }) => name === operator)
+    .flatMap(({ start }) =>
+      labels
+        .filter((label) => {
+          const span = labelSpan(label);
+          return span.start <= start && start < span.end;
+        })
+        .sort((a, b) => b.full.length - a.full.length)
+        .slice(0, 1)
+    );
+  const names = [...new Set(around.map(({ full }) => `@${full}`))];
+  return names.length
+    ? `write ${names.map(form).join(' or ')}, a label around an application of ${operator}`
+    : `label an application of ${operator} in the algorithm, as @compare[${operator}(…)], and write ${form('@compare')} with the label's full name`;
 }
 
 /**

@@ -889,12 +889,16 @@ describe('scope', () => {
     ).toThrow('The view reads key itself, but key is out of scope at some steps');
   });
 
-  it('rejects choosing by a label value, pointing at labelling the guarded code', () => {
-    const chosen = source(
-      '{#snippet Held()}<Node>held</Node>{/snippet}{#if @key.at}{@render Held()}{/if}'
-    ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
-    expect(() => prepareSvelteComponent(chosen)).toThrow(
-      "A view cannot choose what to draw by a label's value, as {#if @key.at}"
+  it('rejects choosing by a label value, pointing at {#when} and at labelling the guarded code', () => {
+    const chosen = (test: string) =>
+      source(
+        `{#snippet Held()}<Node>held</Node>{/snippet}{#if ${test}}{@render Held()}{/if}`
+      ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
+    expect(() => prepareSvelteComponent(chosen('@key.at'))).toThrow(
+      "{#if @key.at} would choose what to draw by the label's value, which a view never does: {#when @key.at}…{/when}"
+    );
+    expect(() => prepareSvelteComponent(chosen('@key.at > 0'))).toThrow(
+      "A view cannot choose what to draw by a label's value, as {#if @key.at}: {#when @key.at}…{/when} draws"
     );
   });
 
@@ -988,17 +992,19 @@ describe('views of what a step computed', () => {
 {#snippet Board()}
   <Node layout="column">
     <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-    {@render Greater()}
+    {@render Greater(@sweep.pair.test)}
   </Node>
 {/snippet}
 
 {@render Title()}
 {@render Board()}`;
+  // The key of the render of Greater at @sweep.pair.test.
+  const greater = 'Greater_ℓsweepˑpairˑtest';
 
   it('take an operator as a type, its views a choice, and keep an application to stand in', () => {
     const prepared = prepareSvelteComponent(bubble);
     expect(prepared.design.space['views.Greater']).toEqual(['Ask', 'none']);
-    expect(prepared.applied?.Greater).toEqual({
+    expect(prepared.applied?.[greater]).toEqual({
       state: { a: 5, b: 1, value: true },
       types: { a: 'Int', b: 'Int', value: 'Flag' },
       at: expect.any(Number),
@@ -1047,18 +1053,28 @@ describe('views of what a step computed', () => {
     expect(paced.masterSignature).toBe((await bundlePresentation(prepared, 1)).masterSignature);
   });
 
-  it('reject an operator rendered with a value, or inside a view', () => {
+  it('reject an operator rendered with a value, inside a view, or at no label', () => {
     expect(() =>
-      prepareSvelteComponent(bubble.replace('{@render Greater()}', '{@render Greater(values)}'))
+      prepareSvelteComponent(
+        bubble.replace('{@render Greater(@sweep.pair.test)}', '{@render Greater(values)}')
+      )
     ).toThrow('draws a value of Greater, an operator, whose values are its applications');
     expect(() =>
       prepareSvelteComponent(
         bubble.replace(
           '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-          '{#snippet IntCell(value: Int)}<Node {value} />{@render Greater()}{/snippet}'
+          '{#snippet IntCell(value: Int)}<Node {value} />{@render Greater(@sweep.pair.test)}{/snippet}'
         )
       )
     ).toThrow('which only the root and its parts know: render it there');
+    // With no label, it names the label around Greater's application to write.
+    expect(() =>
+      prepareSvelteComponent(
+        bubble.replace('{@render Greater(@sweep.pair.test)}', '{@render Greater()}')
+      )
+    ).toThrow(
+      "{@render Greater()} draws no label's application: write {@render Greater(@sweep.pair.test)}, a label around an application of Greater."
+    );
   });
 
   it('stand in an operator no step applies with its widest value, hidden throughout', () => {
@@ -1068,14 +1084,22 @@ describe('views of what a step computed', () => {
           '  // what the algorithm does',
           '  const Less = binop((a: Int, b: Int) => Flag(a < b));\n  // what the algorithm does'
         )
-        .replace('{@render Greater()}', '{@render Greater()}{@render Less()}')
+        .replace(
+          '@test[Greater(values[Prev(i)], values[i])]',
+          '@test[Greater(values[Prev(i)], values[i])] || (Before(end, Index(0)) && @never[Less(values[0], values[1])])'
+        )
+        .replace(
+          '{@render Greater(@sweep.pair.test)}',
+          '{@render Greater(@sweep.pair.test)}{@render Less(@sweep.pair.never)}'
+        )
         .replace(
           '{#snippet FlagWord',
           '{#snippet Tell(l: Less)}<Node>{@render Flag(l.value)}</Node>{/snippet}\n{#snippet FlagWord'
         )
     );
-    expect(Object.keys(prepared.applied?.Less?.state ?? {})).toEqual(['a', 'b', 'value']);
-    expect(prepared.applied?.Less?.types).toEqual({ a: 'Int', b: 'Int', value: 'Flag' });
+    const less = prepared.applied?.['Less_ℓsweepˑpairˑnever'];
+    expect(Object.keys(less?.state ?? {})).toEqual(['a', 'b', 'value']);
+    expect(less?.types).toEqual({ a: 'Int', b: 'Int', value: 'Flag' });
   });
 });
 
@@ -1127,7 +1151,7 @@ describe('pauses at labels', () => {
     <Listing />
     <Node layout="column">
       <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-      {@render Greater()}
+      {@render Greater(@insert.compare)}
     </Node>
   </Node>
 {/snippet}
@@ -1182,7 +1206,7 @@ describe('pauses at labels', () => {
     // Nothing the view draws changes them: without its marks or its comparison, the same.
     const bare = insertion
       .replace(/\{@render Position\(@[^)]*\)\}\n?/g, '')
-      .replace('{@render Greater()}', '');
+      .replace('{@render Greater(@insert.compare)}', '');
     expect(bare).not.toContain('{@render Position(@');
     expect(starterPauses(bare)).toEqual(starterPauses(insertion));
     // A label with labels inside it can accumulate; one without is only on or off.
@@ -1381,7 +1405,7 @@ describe('pauses accumulate', () => {
     <Listing />
     <Node layout="column">
       <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-      {@render Greater()}
+      {@render Greater(@insert.compare)}
     </Node>
   </Node>
 {/snippet}
@@ -1644,5 +1668,167 @@ describe('nodes and references', () => {
     ]
   ])('refuses %s', (_name, markup, message) => {
     expect(() => prepareSvelteComponent(`${domain}${markup}`)).toThrow(message);
+  });
+});
+
+describe('the view reaching the code only through labels', () => {
+  const swaps = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+  const Prev = unop((p: Position) => Position(p - 1));
+  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+</script>
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+<script lang="sverlin">
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+    let j = i;
+    while (Before(Position(0), j) && @compare[Greater(values[Prev(j)], values[j])]) @swap{
+      const moved = values[@from[Prev(j)]];
+      values[Prev(j)] = values[@to[j]];
+      values[j] = moved;
+      j = Prev(j);
+    }
+  }
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Highlight(p: Position)}<Pointed />{/snippet}
+{#snippet Cells()}
+  <Node layout="row">
+    {#each values as v}{@render Int(v)}{/each}
+    <Link from={@insert.swap.from} to={@insert.swap.to} />
+  </Node>
+{/snippet}
+{@render Cells()}`;
+
+  it('take labels giving positions as a link’s ends, hiding it where either gave none', async () => {
+    const prepared = prepareSvelteComponent(swaps);
+    expect(Object.values(prepared.labelled ?? {}).map(({ label }) => label)).toEqual([
+      'insert.swap.from',
+      'insert.swap.to'
+    ]);
+    const { javascript } = await bundlePresentation(prepared, 1);
+    expect(javascript).toContain('__reads');
+  });
+
+  it('ask a node joining links for its layout, unless it runs as a collection', () => {
+    // A collection's {#each} beside links runs as the collection.
+    expect(() =>
+      prepareSvelteComponent(swaps.replace('<Node layout="row">\n    {#each', '<Node>\n    {#each'))
+    ).not.toThrow();
+    expect(() =>
+      prepareSvelteComponent(
+        swaps.replace(
+          '<Node layout="row">\n    {#each values as v}{@render Int(v)}{/each}',
+          '<Node>\n    {@render Int(values[0])}{@render Int(values[1])}'
+        )
+      )
+    ).toThrow('A <Node> joining links needs a layout: layout="free" for a linked structure');
+  });
+
+  it('refuse a link in a pointer view, which draws inside the element it marks', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        swaps
+          .replace(
+            '{#snippet Highlight(p: Position)}<Pointed />{/snippet}',
+            '{#snippet Highlight(p: Position)}<Pointed /><Link from={p} to={p} />{/snippet}'
+          )
+          .replace('{@render Cells()}', '{@render Cells()}\n{@render Position(@insert.swap.to)}')
+      )
+    ).toThrow(
+      'Highlight is a pointer view, drawn inside the element it marks, so its <Link> joins'
+    );
+  });
+
+  it('refuse an operator applied in the view, naming the labels on its applications', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        swaps.replace(
+          '<Link from={@insert.swap.from} to={@insert.swap.to} />',
+          '<Link from={@insert.swap.to} to={Prev(@insert.swap.to)} />'
+        )
+      )
+    ).toThrow(
+      'Prev(…) applies an operator in the view, which only draws what the algorithm computed: read @insert.swap.from, a label on an application of Prev, in the root or a part of the page.'
+    );
+  });
+});
+
+describe('{#when @label}', () => {
+  const caption = (block: string) => `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+  const Flag = type('boolean');
+  const Length = unop((v: Values) => Position(v.length));
+  const Before = binop((a: Position, b: Position) => Flag(a < b));
+  const Next = unop((p: Position) => Position(p + 1));
+</script>
+<script lang="sverlin" input>
+  const values = Values([5, 2, 4, 1]);
+</script>
+<script lang="sverlin">
+  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @pass{
+    @look[const seen = @read[values[i]];]
+  }
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Caption()}<Node>Looking</Node>{/snippet}
+{#snippet Board()}
+  <Node layout="column">
+    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    ${block}
+  </Node>
+{/snippet}
+{@render Board()}`;
+
+  it('takes any label, a statement’s or an expression’s, keeping every position', () => {
+    for (const label of ['@pass.look', '@pass.look.read', '@pass']) {
+      const prepared = prepareSvelteComponent(
+        caption(`{#when ${label}}{@render Caption()}{/when}`)
+      );
+      expect(Object.values(prepared.during ?? {})).toEqual([label.slice(1)]);
+    }
+    // A problem after the block points where it is written.
+    expect(() =>
+      prepareSvelteComponent(caption('{#when @pass.look}{@render Caption()}{/when}<Bad />'))
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining('<Bad> is not allowed'),
+        line: 23,
+        column: 49
+      })
+    );
+  });
+
+  it('refuses {#if} on a label, an {:else}, no label, and a view', () => {
+    expect(() =>
+      prepareSvelteComponent(caption('{#if @pass.look.read}{@render Caption()}{/if}'))
+    ).toThrow(
+      "{#if @pass.look.read} would choose what to draw by the label's value, which a view never does: {#when @pass.look.read}…{/when} draws its contents at each step inside a run of the label."
+    );
+    expect(() =>
+      prepareSvelteComponent(
+        caption('{#when @pass}{@render Caption()}{:else}{@render Caption()}{/when}')
+      )
+    ).toThrow('{#when …} has no {:else}');
+    expect(() =>
+      prepareSvelteComponent(caption('{#when step > 1}{@render Caption()}{/when}'))
+    ).toThrow('{#when …} takes a label by its full name, as {#when @insert.swap}…{/when}');
+    expect(() =>
+      prepareSvelteComponent(
+        caption('{@render Int(values[0])}').replace(
+          '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
+          '{#snippet IntCell(value: Int)}<Node {value} />{#when @pass}<Node>!</Node>{/when}{/snippet}'
+        )
+      )
+    ).toThrow('{#when @pass} is in a view, which draws only its value');
   });
 });

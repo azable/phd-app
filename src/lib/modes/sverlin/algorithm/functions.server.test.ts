@@ -24,7 +24,10 @@ const domain = interpretDomain(`
 `);
 const run = (body: string, pacing?: Pacing) =>
   traceAlgorithm(body, undefined, domain, pacing).steps;
-const showing = (operator: string): Pacing => ({ shown: new Map([[operator, undefined]]) });
+// As a view rendering the operator at a label around the whole algorithm.
+const showing = (operator: string): Pacing => ({
+  shown: new Map([[operator, [{ start: 0, end: Infinity }]]])
+});
 
 describe('functions', () => {
   it('are called with their arguments, giving back a position into the caller’s collection', () => {

@@ -16,6 +16,7 @@
     elementOf,
     elementSlot,
     endsContext,
+    hiddenContext,
     keyedRef,
     linkEnd,
     nodeIdsContext,
@@ -43,7 +44,8 @@
     __fromAt,
     __toPath,
     __toOf,
-    __toAt
+    __toAt,
+    __reads = []
   }: {
     /** The key of the node the link starts from, or a position, as edge.from; none, the element its view draws. */
     from?: string | number;
@@ -74,9 +76,16 @@
     __toPath?: string;
     __toOf?: unknown;
     __toAt?: string | number;
+    /** Internal: the variables and labels its ends read, as a slot's (see Slot.svelte). */
+    __reads?: readonly string[];
   } = $props();
 
   const types = typeContext();
+  // Hidden where an end reads a value absent, as a label that gave none, or its view is hidden, as an
+  // operator's at a step with no application: laid out, so nothing moves when it shows.
+  const hidden = untrack(
+    () => (hiddenContext() ?? false) || __reads.some((name) => types?.absent(name))
+  );
   // A link to an end, as a list's last next, draws the end where it is, with the end's view.
   const end = untrack(() => {
     const path = __toPath ?? (__toAt === undefined ? undefined : elementOf(types, __toOf, __toAt));
@@ -148,7 +157,7 @@
     data-label-colour={colourCss(look('color', false))}
     data-stroke={colourCss(look('stroke'))}
     data-stroke-width={look('strokeWidth')}
-    data-shown={look('shown', false) === false ? 'false' : undefined}
+    data-shown={hidden || look('shown', false) === false ? 'false' : undefined}
     data-opacity={look('opacity', false)}
     data-curve={curve}
     data-bend={typeof bend === 'number' && Number.isFinite(bend)

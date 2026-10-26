@@ -1,6 +1,6 @@
 /**
- * A step's application of an operator, drawn by {@render Greater()}, in a real browser. Run with
- * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
+ * A step's application of an operator, drawn by {@render Greater(@sweep.pair.test)}, in a real
+ * browser. Run with `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
 import { chromium, type Browser } from 'playwright-core';
@@ -62,7 +62,7 @@ const source = `<script lang="sverlin" domain>
 {#snippet Board()}
   <Node layout="column">
     <Node>{#each values as v}{@render Int(v)}{/each}</Node>
-    {@render Greater()}
+    {@render Greater(@sweep.pair.test)}
   </Node>
 {/snippet}
 

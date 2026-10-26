@@ -128,14 +128,14 @@ export type MasterStep = {
   dropped?: number;
   counts?: EventCounts;
   /**
-   * The operators the step's own code applied, and those the view shows applied in the code leading
-   * up to it, by name, each application in order.
+   * The applications made since the step before inside the labels the view renders their operators
+   * at (see Pacing), by operator, each in order.
    */
   applied?: Record<string, Application[]>;
-  /** The values each labelled expression gave in the step's own code, by the label's full name. */
+  /** The values each labelled expression gave since the step before, by the label's full name. */
   labelled?: Record<string, LabelRun[]>;
-  /** The applications and labelled values of the code leading up to the step, likewise. */
-  led?: { applied?: Record<string, Application[]>; labelled?: Record<string, LabelRun[]> };
+  /** The labels whose runs the step is inside, by full name: the run it ends and those around it. */
+  inside?: string[];
   /**
    * The values labelled expressions gave at earlier steps that the step keeps (see PauseMode),
    * drawn from its before on, so a mark stays until the run keeping it finishes.
@@ -159,6 +159,8 @@ export type MasterStep = {
 export type Application = {
   state: TraceState;
   types: TypeMap;
+  /** The collection each position in it points into, by path, as a step's targets. */
+  targets?: Record<string, string>;
   at?: number;
   /** In the step's own code, the id of each typed operand and the result, by path, as copies. */
   identities?: Record<string, number>;
@@ -252,10 +254,10 @@ export type Pauses = ReadonlyMap<string, PauseMode>;
 /**
  * Where the page pauses, which makes the steps: the end of each run of each label in `pauses`, by
  * full name, every label 'on' without them; code outside them joins the next step. `shown`: the
- * operators the view shows applied (anywhere, or only inside the spans given), kept for it.
+ * operators the view renders at labels, with the labels' spans, whose applications there are kept.
  */
 export type Pacing = {
-  shown?: ReadonlyMap<string, readonly Span[] | undefined>;
+  shown?: ReadonlyMap<string, readonly Span[]>;
   pauses?: Pauses;
 };
 
@@ -282,11 +284,8 @@ export function traceAlgorithm(
   input: TypedState = { state: {}, types: {} },
   domain: DomainRegistry = noDomain,
   pacing: Pacing = {},
-  /**
-   * What views draw beyond the state: the labels whose values are kept, by full name, and the
-   * operators whose applications leading up to a step are kept too, for what has happened.
-   */
-  keep: { labels?: ReadonlySet<string>; history?: ReadonlySet<string> } = {}
+  /** What views draw beyond the state: the labels whose values are kept, by full name. */
+  keep: { labels?: ReadonlySet<string> } = {}
 ): {
   steps: MasterStep[];
   /** Step 0: the input as given, before any of the algorithm runs (see run). */
@@ -317,7 +316,6 @@ export function traceAlgorithm(
     domain,
     code,
     captured,
-    history: keep.history,
     units: labelled.units,
     named,
     holding,
@@ -341,11 +339,8 @@ type Value = undefined | null | boolean | number | string | Atom | Value[] | Obj
  */
 type Binding = { value: Value; constant: boolean; type?: string; target?: string; of?: string };
 type Completion = 'normal' | 'break' | 'continue' | 'return';
-/**
- * Where a step's code starts: the state then, how many events led up to it, and how many of the
- * applications since the last step came before it.
- */
-type Since = { before: StepSnapshot; gap: number; applied: number };
+/** Where a step's code starts: the state then, and how many events led up to it. */
+type Since = { before: StepSnapshot; gap: number };
 /**
  * A run of labelled code going on, numbered in the order runs start, the scope it runs in, and,
  * where it is a step, since. It starts after `start` events.
@@ -472,8 +467,6 @@ class Interpreter {
   #pendingLabelled: [string, LabelRun][] = [];
   /** Each labelled expression's node, with the full names of the labels on it. */
   readonly #captured: ReadonlyMap<AnyNode, readonly string[]>;
-  /** The operators whose applications leading up to a step are kept, for what has happened. */
-  readonly #history: ReadonlySet<string>;
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
   /** What the last element or field read read from, and by which key. */
@@ -494,12 +487,10 @@ class Interpreter {
       pauses?: Pauses;
       code?: string;
       captured?: ReadonlyMap<AnyNode, readonly string[]>;
-      history?: ReadonlySet<string>;
     }
   ) {
     this.#root = root;
     this.#captured = options.captured ?? new Map();
-    this.#history = options.history ?? new Set();
     this.#units = options.units ?? { nodes: new Set(), ranges: new Map() };
     this.#named = options.named ?? new Map();
     this.#holding = options.holding ?? new Map();
@@ -592,8 +583,7 @@ class Interpreter {
     const last = this.#trace.at(-1);
     this.#record(this.#root, this.#root, this.#topLevel, {
       before: this.#snapshotOf(this.#root, this.#topLevel),
-      gap: this.#log.pending,
-      applied: this.#pendingApplied.length
+      gap: this.#log.pending
     });
     const end = this.#trace.at(-1)!;
     if (
@@ -1380,8 +1370,7 @@ class Interpreter {
         ? {
             since: {
               before: this.#snapshotOf(node, scope),
-              gap: this.#log.pending,
-              applied: this.#pendingApplied.length
+              gap: this.#log.pending
             }
           }
         : {})
@@ -1448,23 +1437,17 @@ class Interpreter {
     return { keeps, trail };
   }
 
-  /** Whether the view shows this application of an operator: anywhere, or inside a span it names. */
+  /** Whether the view renders this application of an operator: inside a label it renders it at. */
   #shows(name: string, node: AnyNode): boolean {
-    return this.#showsAt(name, this.#offset(node).start);
-  }
-
-  /** Whether the view shows an application of an operator made at this offset. */
-  #showsAt(name: string, at: number): boolean {
-    if (!this.#pacing.shown?.has(name)) return false;
-    const spans = this.#pacing.shown.get(name);
-    return !spans || spans.some(({ start, end }) => start <= at && at < end);
+    const at = this.#offset(node).start;
+    return (
+      this.#pacing.shown?.get(name)?.some(({ start, end }) => start <= at && at < end) ?? false
+    );
   }
 
   /**
    * Record a step whose code has just run: the state after it, and the events since the last. Its
-   * own applications are those since its code started and those of operators the view shows in the
-   * code leading up to it, as no step is theirs; the rest before it lead up to it. Its labelled
-   * values are all those given since the step before; those given at earlier steps inside a run of
+   * applications and labelled values are all those made since the step before; those given at earlier steps inside a run of
    * the label around them going on, or ending here, are held where the step keeps them (see
    * PauseMode). The runs going on start their code again after it.
    */
@@ -1486,16 +1469,15 @@ class Interpreter {
       for (const [name, item] of entries) (grouped[name] ??= []).push(item);
       return grouped;
     };
-    const leading = this.#pendingApplied.slice(0, since.applied);
-    const shown = ([name, { at }]: [string, Application]) => this.#showsAt(name, at ?? -1);
-    this.#applied = byName([
-      ...leading.filter(shown),
-      ...this.#pendingApplied.slice(since.applied)
-    ]);
+    this.#applied = byName(this.#pendingApplied);
     this.#labelled = byName(this.#pendingLabelled);
-    const ledApplied = byName(
-      leading.filter((entry) => !shown(entry) && this.#history.has(entry[0]))
-    );
+    const inside = [
+      ...new Set(
+        [...this.#runs, ...(ending ? [ending] : [])].flatMap(
+          (run) => this.#named.get(run.node) ?? []
+        )
+      )
+    ];
     const after = this.#state(node, scope, [], this.#operandPlaces(scope));
     this.#nameOperands(after.identities?.ids);
     const logged = this.#log.step(this.#offset, (value) => {
@@ -1511,12 +1493,12 @@ class Interpreter {
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name: ending ? this.#nameOf(ending) : 'end',
+      ...(inside.length ? { inside } : {}),
       ...after,
       ...logged,
       ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {}),
       ...(Object.keys(this.#labelled).length ? { labelled: this.#labelled } : {}),
       ...(Object.keys(held).length ? { held } : {}),
-      ...(Object.keys(ledApplied).length ? { led: { applied: ledApplied } } : {}),
       seen: this.#log.seen,
       trail
     });
@@ -1532,8 +1514,7 @@ class Interpreter {
         ...(targets ? { targets } : {}),
         ...(identities ? { identities } : {})
       },
-      gap: this.#log.pending,
-      applied: 0
+      gap: this.#log.pending
     };
     for (const run of this.#runs) if (run.since) run.since = again;
   }
@@ -2174,15 +2155,15 @@ class Interpreter {
       value: result,
       operands: values.map((value) => single(value) ?? null)
     });
-    // An application of an operator the view shows is kept for it, copied as a step's state is;
-    // so is any application of one whose applications so far a view draws.
-    if (shows || this.#history.has(name)) {
+    // An application the view renders is kept for it, copied as a step's state is.
+    if (shows) {
       const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
-      const into = { types: application.types, targets: {}, placed: [] };
+      const into = { types: application.types, targets: {} as Record<string, string>, placed: [] };
       parameters.forEach((parameter, index) => {
         application.state[parameter] = this.#snapshot(values[index], node, parameter, into);
       });
       application.state.value = this.#snapshot(result, node, 'value', into);
+      if (Object.keys(into.targets).length) application.targets = into.targets;
       this.#pendingApplied.push([name, application]);
       this.#operands.set(application, [
         ...parameters.flatMap((parameter, index) => {

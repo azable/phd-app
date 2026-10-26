@@ -29,8 +29,8 @@ const steps = (body: string, pacing?: Pacing) => traceAlgorithm(body, input, dom
 const pausedAt = (...labels: string[]) =>
   new Map(labels.map((label) => [label, 'accumulate' as const]));
 const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
-// A view showing each comparison.
-const shown: Pacing['shown'] = new Map([['Equal', undefined]]);
+// A view showing each comparison, rendered at a label around the whole algorithm.
+const shown: Pacing['shown'] = new Map([['Equal', [{ start: 0, end: Infinity }]]]);
 
 describe('pauses at labels', () => {
   it('step at the end of each run of a label paused at, from the state before it to the state after', () => {

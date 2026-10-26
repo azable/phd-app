@@ -8,6 +8,7 @@
   import { untrack, type Snippet } from 'svelte';
 
   import Arranged from './Arranged.svelte';
+  import LinkOverlay from './LinkOverlay.svelte';
   import type { Template } from './arrange';
   import type { Form } from './forms';
   import Node from './Node.svelte';
@@ -282,16 +283,13 @@
   });
 
   const collection = $derived(__items !== undefined);
-  // A collection runs as a row, or across the collection around it, as rows
-  // in a column do. Links need positions to join, so a node with links and no layout is laid out
-  // freely.
+  // A collection runs as a row, or across the collection around it, as rows in a column do. A
+  // node joining links states its layout (the compiler refuses one that does not).
   const around = collectionLayoutContext();
   const collectionLayout = $derived(
     around === 'row' ? 'column' : around === 'column' ? 'row' : 'row'
   );
-  const arrangement = $derived(
-    layout ?? (collection ? collectionLayout : __links ? 'free' : undefined)
-  );
+  const arrangement = $derived(layout ?? (collection ? collectionLayout : undefined));
   untrack(() => {
     if (arrangement) provideSequence(arrangement !== 'free');
     if (collection) provideCollectionLayout(arrangement);
@@ -325,14 +323,18 @@
           : undefined
       );
   });
-  // Free layouts, and rows or columns with links or relations, are placed by constraint layout;
-  // other arrangements are CSS flex and grid, which solve the same constraints in the browser.
+  // Free layouts, and rows or columns with relations, are placed by constraint layout; other
+  // arrangements are CSS flex and grid, which solve the same constraints in the browser. A row's
+  // or column's links never move its children: they are drawn over it (see LinkOverlay).
   const solved = $derived<Template | undefined>(
     arrangement === 'free'
       ? 'free'
-      : (arrangement === 'row' || arrangement === 'column') && (constraints?.length || __links)
+      : (arrangement === 'row' || arrangement === 'column') && constraints?.length
         ? arrangement
         : undefined
+  );
+  const overlaid = $derived(
+    __links && (arrangement === 'row' || arrangement === 'column') ? arrangement : undefined
   );
 </script>
 
@@ -444,9 +446,12 @@
           style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
             ? 'auto'
             : undefined}
-          style:position={excluded ? 'relative' : undefined}
+          style:position={excluded || overlaid ? 'relative' : undefined}
         >
           {@render contents()}
+          {#if overlaid}
+            <LinkOverlay axis={overlaid} />
+          {/if}
         </div>
       {:else if children}
         {@render children()}

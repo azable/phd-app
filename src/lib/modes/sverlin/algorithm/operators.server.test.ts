@@ -20,9 +20,9 @@ const domain = interpretDomain(`${types}
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(5);', domain);
 const run = (body: string, pacing?: Pacing) => traceAlgorithm(body, input, domain, pacing).steps;
-// A view showing the operators named.
+// A view showing the operators named, rendered at a label around the whole algorithm.
 const showing = (...operators: string[]): Pacing => ({
-  shown: new Map(operators.map((operator) => [operator, undefined]))
+  shown: new Map(operators.map((operator) => [operator, [{ start: 0, end: Infinity }]]))
 });
 
 describe('operators', () => {

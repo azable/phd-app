@@ -1,14 +1,15 @@
 /**
  * Labels read in the view's markup (labels as values): `@swap.a` is the value the expression
  * labelled `swap.a` gave in a step's own code; `runs(@check.at)` every value it has given so far;
- * `applied(Equal)` every application of `Equal` so far, `applied(Equal, @inner)` those made inside
- * `@inner`; and `{@render Greater(@inner)}` the application a step's own code made inside `@inner`.
- * Beside them, `all(Node)` is every live node of a record a reference refers to, its heap.
+ * `applied(Equal, @inner)` every application of `Equal` made inside `@inner` so far; and
+ * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
+ * `{#when @swap}…{/when}` draws its contents at the steps inside a run of `@swap`. Beside them,
+ * `all(Node)` is every live node of a record a reference refers to, its heap.
  *
  * Before Svelte parses the markup, each is rewritten as an identifier of the same length, so every
  * offset holds: `@swap.a` as `ℓswapˑa`, `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal,
- * @inner)` as `ǂEqualˑˑinner` and spaces, `all(Node)` as `ȟNode` and spaces. The page is given
- * each as a prop of that name.
+ * @inner)` as `ǂEqualˑˑinner` and spaces, `all(Node)` as `ȟNode` and spaces, and `{#when @swap}` as
+ * `{#if   ʬswap}`, `{/when}` as `{/if}` and spaces. The page is given each as a prop of that name.
  */
 
 import { spanOf } from './algorithm/parse.server';
@@ -18,21 +19,27 @@ import type { Label } from './algorithm/labels.server';
 const label = 'ℓ';
 const runs = 'ϟ';
 const history = 'ǂ';
+const during = 'ʬ';
 const dot = 'ˑ';
 
-/** A label read in the markup, a label's values so far, or an operator's applications so far. */
+/**
+ * A label read in the markup, a label's values so far, an operator's applications so far, or a
+ * label whose runs a {#when} block draws its contents in (none where the block names no label).
+ */
 export type LabelReference =
   | { kind: 'value'; key: string; path: string; start: number }
   | { kind: 'runs'; key: string; path: string; start: number }
-  | { kind: 'applied'; key: string; operator: string; path?: string; start: number };
+  | { kind: 'applied'; key: string; operator: string; path?: string; start: number }
+  | { kind: 'during'; key: string; path?: string; start: number };
 
 export const labelKey = (path: string): string => `${label}${path.replaceAll('.', dot)}`;
 export const isLabelKey = (name: string): boolean => name.startsWith(label);
 export const isRunsKey = (name: string): boolean => name.startsWith(runs);
 export const isHistoryKey = (name: string): boolean => name.startsWith(history);
+export const isDuringKey = (name: string): boolean => name.startsWith(during);
 /** A key as its author wrote it, for messages. */
 export function written(name: string): string {
-  if (isLabelKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;
+  if (isLabelKey(name) || isDuringKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;
   if (isRunsKey(name)) return `runs(@${name.slice(1).replaceAll(dot, '.')})`;
   if (isHistoryKey(name)) {
     const [operator, path] = name.slice(1).split(dot + dot);
@@ -47,6 +54,7 @@ const runsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
 const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
+const whenOpen = /^\{#when(\s+)@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(\s*)\}/u;
 
 /**
  * The markup with each label reference rewritten as an identifier of the same length, and the
@@ -77,6 +85,28 @@ export function markLabels(source: string): {
     if (depth > 0 && (char === '"' || char === "'" || char === '`')) {
       quote = char;
       out += char;
+      continue;
+    }
+    // {#when @insert.swap} and {/when}, which Svelte does not know, as an {#if} block of the same
+    // length, its test the label's key; one naming no label as {#if, refused when compiled.
+    if (char === '{' && depth === 0 && source.startsWith('{#when', index)) {
+      const open = whenOpen.exec(source.slice(index));
+      if (open) {
+        const key = `${during}${open[2].replaceAll('.', dot)}`;
+        references.push({ kind: 'during', key, path: open[2], start: index + 6 + open[1].length });
+        out += `{#if${' '.repeat(2 + open[1].length)}${key}${open[3]}}`;
+        index += open[0].length - 1;
+      } else {
+        references.push({ kind: 'during', key: '', start: index });
+        out += '{#if  ';
+        index += '{#when'.length - 1;
+        depth++;
+      }
+      continue;
+    }
+    if (char === '{' && depth === 0 && source.startsWith('{/when}', index)) {
+      out += '{/if}  ';
+      index += '{/when}'.length - 1;
       continue;
     }
     if (char === '{') depth++;
@@ -115,7 +145,10 @@ export function markLabels(source: string): {
         index += made[0].length - 1;
         continue;
       }
-      const read = char === '@' && before !== '{' && !word ? path.exec(rest) : null;
+      // A tag opens with {@, as {@render …}; an attribute's value may be a label, as from={@a}.
+      const brace = source.slice(0, index).trimEnd();
+      const attribute = brace.endsWith('{') && brace.slice(0, -1).trimEnd().endsWith('=');
+      const read = char === '@' && (before !== '{' || attribute) && !word ? path.exec(rest) : null;
       if (read) {
         const key = labelKey(read[1]);
         references.push({ kind: 'value', key, path: read[1], start: index });

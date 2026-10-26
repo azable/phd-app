@@ -12,6 +12,7 @@
 import type { TraceState, TypeMap } from './algorithm/interpret.server';
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
+import { isDuringKey } from './label-values';
 import { siteOf } from './left-out';
 
 /** Each component's type, by name. */
@@ -287,6 +288,11 @@ export function scopedReadsOf(
       walk(node.body ?? node.children, node, 'body');
       walk(node.fallback ?? node.else, node, 'fallback');
       return;
+    }
+    // A link's end read straight from a variable or label is drawn hidden where it is absent.
+    if (node.type === 'Attribute' && (node.name === 'from' || node.name === 'to')) {
+      const [only] = Array.isArray(node.value) ? (node.value as { expression?: unknown }[]) : [];
+      if ((only?.expression as { type?: string } | undefined)?.type === 'Identifier') return;
     }
     const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
     const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
@@ -741,6 +747,7 @@ export function slotInsertions(
     if (part.type === 'InlineComponent' && part.name === 'Link') {
       // A link's end given a position, as in from={edge.from}, joins the node drawing the element
       // it points at; the link is told where the position comes from, as a slot is.
+      const reads: string[] = [];
       for (const attribute of (part.attributes as Part[] | undefined) ?? []) {
         if (
           attribute.type !== 'Attribute' ||
@@ -753,6 +760,7 @@ export function slotInsertions(
             ? (value.expression as Part)
             : undefined;
         const slot = slotOf(expression, locals);
+        reads.push(...stateReadsOf(expression, scoped, locals));
         if (!/ (path|at)=/u.test(slot)) continue;
         const end = attribute.name;
         insertions.push({
@@ -763,6 +771,29 @@ export function slotInsertions(
             .replace(' at=', ` __${end}At=`)
         });
       }
+      // An end read from a variable out of scope or a label that gave no value draws the link hidden.
+      if (reads.length)
+        insertions.push({
+          at: (part.start ?? 0) + '<Link'.length,
+          text: ` __reads={${JSON.stringify([...new Set(reads)])}}`
+        });
+      return;
+    }
+    // A {#when @label} block, an {#if} on the label's key by now (see label-values.ts): its
+    // contents in a slot hidden where the step is inside no run of the label, keeping their room.
+    const test = part.type === 'IfBlock' ? (part.expression as Part | undefined) : undefined;
+    if (test?.type === 'Identifier' && isDuringKey(String(test.name ?? ''))) {
+      const start = part.start ?? 0;
+      const opened = source.indexOf('}', test.end ?? start) + 1;
+      insertions.push(
+        {
+          at: start,
+          text: `<SverlinSlot inherit reads={["${String(test.name)}"]}>`,
+          remove: opened - start
+        },
+        { at: (part.end ?? 0) - '{/if}'.length, text: '</SverlinSlot>', remove: '{/if}'.length }
+      );
+      walk(part.children, locals);
       return;
     }
     if (part.type === 'EachBlock') {
@@ -827,11 +858,13 @@ export function slotInsertions(
       );
       if (text && views && !attributes.some((attribute) => attribute.name === 'layout'))
         insertions.push({ at: (part.start ?? 0) + '<Node'.length, text: ' __text' });
-      // A node holding one {#each} and nothing else is a collection: told what the {#each} goes
-      // over, it arranges its items alike (see Node.svelte).
+      // A node holding one {#each} and nothing else but links between its items is a collection:
+      // told what the {#each} goes over, it arranges its items alike (see Node.svelte).
       else {
         const [each, ...others] = ((part.children as Part[] | undefined) ?? []).filter(
-          (child) => !(child.type === 'Text' && String(child.data ?? '').trim() === '')
+          (child) =>
+            !(child.type === 'Text' && String(child.data ?? '').trim() === '') &&
+            !(child.type === 'InlineComponent' && child.name === 'Link')
         );
         const over = each?.expression as Part | undefined;
         if (each?.type === 'EachBlock' && !others.length && over)

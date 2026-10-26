@@ -131,7 +131,7 @@ it.skipIf(!enabled)(
 {#snippet Swapped()}<Node>swap {@render Int(@sweep.pair.swap.a)} and {@render Int(@sweep.pair.swap.b)}</Node>{/snippet}
 {#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}?</Node>{/snippet}
 {@render Cells()}
-{@render Greater()}
+{@render Greater(@sweep.pair.test)}
 {@render Swapped()}`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
