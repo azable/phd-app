@@ -446,6 +446,18 @@ export function pointerIdentityContext(): string | undefined {
 }
 
 /**
+ * The element a pointer's view is drawn around, for the outermost node it draws, whether or not the
+ * pointer is there: so a free layout knows that node as the element (see Arranged.svelte).
+ */
+export function providePointerAround(slot: string | undefined): void {
+  setContext('sverlin:pointer-around', slot);
+}
+
+export function pointerAroundContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:pointer-around');
+}
+
+/**
  * Inside the hidden copy of an element that keeps an end slot's room: its nodes name no element, so
  * no pointer is drawn at them and no identity is shown twice.
  */

@@ -1,0 +1,154 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Distance = type('integer', { min: 0, max: 99 });
+  const Weight = type('integer', { min: 1, max: 20 });
+  const Infinity = type(['∞']);
+  const Dist = union(Distance, Infinity);
+  const None = type(['none']);
+  const PreviousName = union(Name, None);
+  const VisitedFlag = type('boolean');
+  const Flag = type('boolean');
+
+  const Vertex = record({ name: Name });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Choice = union(VertexRef, None);
+  const Distances = collection(Dist);
+  const Previous = collection(PreviousName);
+  const Visited = collection(VisitedFlag);
+
+  const Neighbour = record({ to: VertexRef, weight: Weight });
+  const Neighbours = collection(Neighbour);
+  const Adjacency = collection(Neighbours);
+  const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
+  const Edges = collection(Edge);
+
+  const Length = unop((v: Vertices) => VertexRef(v.length));
+  const Before = binop((a: VertexRef, b: VertexRef) => Flag(a < b));
+  const Next = unop((p: VertexRef) => VertexRef(p + 1));
+  const NotVisited = unop((v: VisitedFlag) => Flag(!v));
+  const Reachable = unop((d: Dist) => Flag(d !== '∞'));
+  const IsVertex = unop((p: Choice) => Flag(p !== 'none'));
+  const IsNone = unop((p: Choice) => Flag(p === 'none'));
+  const Shorter = binop((a: Dist, b: Dist) => Flag(a !== '∞' && (b === '∞' || a < b)));
+  const AddWeight = binop((d: Dist, w: Weight) => Dist(d === '∞' ? '∞' : d + Distance(w)));
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A' },
+    { name: 'B' },
+    { name: 'C' },
+    { name: 'D' },
+    { name: 'E' }
+  ]);
+  const source = VertexRef(0);
+  const adjacency = Adjacency([
+    [{ to: 1, weight: 4 }, { to: 2, weight: 2 }],
+    [{ to: 0, weight: 4 }, { to: 2, weight: 1 }, { to: 3, weight: 5 }],
+    [{ to: 0, weight: 2 }, { to: 1, weight: 1 }, { to: 3, weight: 8 }, { to: 4, weight: 10 }],
+    [{ to: 1, weight: 5 }, { to: 2, weight: 8 }, { to: 4, weight: 2 }],
+    [{ to: 2, weight: 10 }, { to: 3, weight: 2 }]
+  ]);
+  const edges = Edges([
+    { from: 0, to: 1, weight: 4 },
+    { from: 0, to: 2, weight: 2 },
+    { from: 1, to: 2, weight: 1 },
+    { from: 1, to: 3, weight: 5 },
+    { from: 2, to: 3, weight: 8 },
+    { from: 2, to: 4, weight: 10 },
+    { from: 3, to: 4, weight: 2 }
+  ]);
+</script>
+
+<script lang="sverlin">
+  let distances = Distances(['∞', '∞', '∞', '∞', '∞']);
+  let previous = Previous(['none', 'none', 'none', 'none', 'none']);
+  let visited = Visited([false, false, false, false, false]);
+  @initial[distances[source] = Distance(0);]
+
+  for (let round = VertexRef(0); Before(round, Length(vertices)); round = Next(round)) @round{
+    let current = Choice(None('none'));
+    for (let v = VertexRef(0); Before(v, Length(vertices)); v = Next(v)) @scan{
+      if (NotVisited(visited[v]) && Reachable(distances[v])) {
+        if (IsNone(current)) @first{
+          current = v;
+        } else if (Shorter(distances[v], distances[current])) @better{
+          current = v;
+        }
+      }
+    }
+    if (IsVertex(current)) @settle{
+      @mark[visited[current] = true;]
+      for (const edge of adjacency[current]) @edge{
+        const alternative = @sum[AddWeight(distances[current], edge.weight)];
+        if (@improve[Shorter(alternative, distances[edge.to])]) @relax{
+          distances[edge.to] = alternative;
+          previous[edge.to] = vertices[current].name;
+        }
+      }
+    }
+  }
+</script>
+
+<script lang="sverlin" listing="textbook">
+DIJKSTRA(graph, source)
+@initial[distance[source] = 0]
+@round[repeat once for each vertex
+  @scan[for each vertex v
+    if v is unvisited and reachable
+      @first[choose v if no vertex is chosen]
+      @better[otherwise choose v if its distance is shorter]]
+  @settle[with the closest vertex
+    @mark[mark it settled]
+    @edge[for each neighbouring edge
+      @sum[alternative = distance + edge weight]
+      if @improve[alternative is shorter]
+        @relax[update the neighbour's distance and predecessor]]]]
+</script>
+
+{#snippet NameText(value: Name)}<Node value={value} />{/snippet}
+{#snippet DistanceValue(value: Dist)}<Node value={value} />{/snippet}
+{#snippet PreviousValue(value: PreviousName)}<Node value={value === 'none' ? '—' : value} />{/snippet}
+{#snippet VisitedWord(value: VisitedFlag)}<Node>{value ? 'settled' : 'unsettled'}</Node>{/snippet}
+{#snippet ScanMark(value: VertexRef)}<Pointed />{/snippet}
+
+{#snippet Title()}
+  <Node>Dijkstra’s shortest paths from {@render Name(vertices[source].name)}</Node>
+{/snippet}
+
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      {#snippet DistanceLine()}<Node>distance {@render Dist(distances[k])}</Node>{/snippet}
+      {#snippet PreviousLine()}<Node>via {@render PreviousName(previous[k])}</Node>{/snippet}
+      <Node layout="column">
+        {@render Name(vertex.name)}
+        {@render DistanceLine()}
+        {@render PreviousLine()}
+        {@render VisitedFlag(visited[k])}
+      </Node>
+    {/each}
+    {#each edges as graphEdge}
+      <Link from={graphEdge.from} to={graphEdge.to} directed={false} label={graphEdge.weight} />
+    {/each}
+  </Node>
+{/snippet}
+
+{#snippet Key()}
+  <Node>Each edge label is its weight. “Via” records the predecessor on the best route found so far.</Node>
+{/snippet}
+
+{#snippet Board()}
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      {@render Graph()}
+      {@render Key()}
+    </Node>
+  </Node>
+{/snippet}
+
+{@render Title()}
+{@render Board()}
+{@render VertexRef(v)}

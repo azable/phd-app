@@ -1072,7 +1072,8 @@ is selectable, as a node is, and its look, line and label, is its kind's (see
 Design), as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
-  drawing the element each points at, the index of an `{#each}` over a
+  drawing the element each points at (or, where only its fields are drawn, the
+  node holding its whole `{#each}` item), the index of an `{#each}` over a
   collection among them, as `k` in `{#each vertices as v, k}`; labels giving
   positions, as `@insert.swap.from`; or the keys of two nodes, or of nodes
   inside them, as `<Link from="head" to={first} />` beside a

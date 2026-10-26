@@ -33,12 +33,14 @@
     overhangContext,
     provideOverhang,
     elementSlot,
+    pointerAroundContext,
     pointerIdentityContext,
     placeContext,
     pointersContext,
     pointsInto,
     reachesInto,
     provideComponentBox,
+    providePointerAround,
     providePointerIdentity,
     provideCollectionLayout,
     provideSequence,
@@ -184,6 +186,9 @@
   // the outermost node a pointer's view draws where the pointer is takes the pointer's.
   const pointerIdentity = pointerIdentityContext();
   if (pointerIdentity) providePointerIdentity(undefined);
+  // The element the outermost node of a pointer's view is drawn around, active or not.
+  const drawnAround = pointerAroundContext();
+  if (drawnAround) providePointerAround(undefined);
   const identity = untrack(() =>
     slot === undefined ? pointerIdentity : endSlot ? undefined : types?.identityOf(slot)
   );
@@ -389,6 +394,8 @@
       data-sv-component={__component}
       data-sv-slot={slot}
       data-sv-identity={identity}
+      data-sv-around={drawnAround}
+      data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
       data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
       data-sv-type={__type}
       data-sv-layout={arrangement}

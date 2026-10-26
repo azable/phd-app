@@ -211,14 +211,19 @@
     const drawn = (edge: ArrangeEdge) => edge.id !== undefined && present.has(edge.id);
     const fontSize = parseFloat(getComputedStyle(host).fontSize) || 16;
     const space = gap * fontSize;
+    // Pointers' views are drawn around a child (data-sv-around), the one at it taking the pointer's
+    // identity so it slides with the pointer in a row; here the child is still the element it is
+    // drawn around, known by that element's identity.
+    const identityOf = (element: HTMLElement) => {
+      const around = element.dataset.svAround;
+      if (around === undefined) return element.dataset.svIdentity;
+      const inner = element.querySelector<HTMLElement>(`[data-sv-slot="${CSS.escape(around)}"]`);
+      return inner?.dataset.svIdentity ?? element.dataset.svIdentity;
+    };
     const boxes = elements.map((element, index) => ({
       // A child without a key is known by the value it draws, as a node of a heap, which keeps its
       // place as others come and go, or else by its node id, the same at every step.
-      key:
-        element.dataset.svKey ??
-        element.dataset.svIdentity ??
-        element.dataset.svNode ??
-        `#${index}`,
+      key: element.dataset.svKey ?? identityOf(element) ?? element.dataset.svNode ?? `#${index}`,
       // Layout sizes, unaffected by the frame's scale; offsetWidth rounds, so a pixel more keeps
       // a fractional width from wrapping once placed.
       width: element.offsetWidth + 1,
@@ -228,6 +233,9 @@
     // holds one value cell among labels, that cell, so arrows meet the value and not its labels.
     const anchors: Record<string, Anchor> = {};
     const parts: Anchor[] = [];
+    // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
+    // item stands for it, so a link given its position still meets it.
+    const items: Record<string, Anchor> = {};
     elements.forEach((element, box) => {
       const frame = element.getBoundingClientRect();
       // Rects are scaled with the frame; the child's own size gives the scale back.
@@ -249,6 +257,9 @@
       for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-slot]')])
         if (inner.dataset.svSlot && !(inner.dataset.svSlot in anchors))
           anchors[inner.dataset.svSlot] = anchor(inner);
+      for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-item]')])
+        if (inner.dataset.svItem && !(inner.dataset.svItem in items))
+          items[inner.dataset.svItem] = anchor(inner);
       const cells = [...element.querySelectorAll('[data-sv-node]')].filter((inner) =>
         inner.querySelector(':scope > .value')
       );
@@ -269,6 +280,7 @@
         if (key && field && element.contains(field)) anchors[key] = anchor(field);
       }
     });
+    for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
     const options = {
       template,
       align,

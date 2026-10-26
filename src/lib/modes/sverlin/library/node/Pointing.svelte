@@ -13,6 +13,7 @@
     providePointed,
     providePlace,
     provideHidden,
+    providePointerAround,
     providePointerIdentity,
     provideSlot,
     type Pointer
@@ -51,6 +52,7 @@
   );
   provideHidden(!active);
   untrack(() => providePointerIdentity(active ? `pointer:${pointer.order}` : undefined));
+  untrack(() => providePointerAround(name));
   // The pointer view draws no element of its own; its <Pointed> draws the one it points at.
   provideSlot(undefined);
   untrack(() => providePlace(pointer.place));

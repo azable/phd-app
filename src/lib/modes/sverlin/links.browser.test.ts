@@ -10,6 +10,8 @@ import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import bfs from './fixtures/bfs-neighbours.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
+import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
+import list from './fixtures/list-markers.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -312,6 +314,98 @@ it.skipIf(!enabled)(
       'vertices[2] -> vertices[3]',
       'vertices[3] -> vertices[4]'
     ]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'keeps a node a pointer’s view is drawn around in the free layout, its links ending at it',
+  { timeout: 120_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(list), 1);
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    // Each drawn link's ends, and how far each is from the nearest list node's box.
+    const gaps = () =>
+      page.evaluate((layer) => {
+        const boxes = [...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-slot]`)]
+          .filter((node) => /^ȟListNode\[\d+\]$/u.test(node.dataset.svSlot ?? ''))
+          .map((node) => node.getBoundingClientRect());
+        const distance = (x: number, y: number) =>
+          Math.min(
+            ...boxes.map((box) =>
+              Math.hypot(
+                Math.max(box.left - x, 0, x - box.right),
+                Math.max(box.top - y, 0, y - box.bottom)
+              )
+            )
+          );
+        return [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)]
+          .filter((path) => path.style.opacity !== '0')
+          .map((path) => {
+            const matrix = path.getScreenCTM()!;
+            const start = path.getPointAtLength(0).matrixTransform(matrix);
+            const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+            return Math.round(Math.max(distance(start.x, start.y), distance(end.x, end.y)));
+          });
+      }, layer);
+    // The steps the evaluation found broken: B marked at step 1, C at step 9.
+    for (const step of [1, 9]) {
+      await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), step);
+      await page.waitForTimeout(1200);
+      const ends = await gaps();
+      expect(ends.length, `step ${step}`).toBeGreaterThan(0);
+      expect(Math.max(...ends), `step ${step}`).toBeLessThan(8);
+    }
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'draws edges to vertices drawn by their fields, the {#each} item standing for each',
+  { timeout: 120_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(dijkstra), 1);
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
+    await page.waitForTimeout(1200);
+    const drawn = await page.evaluate(
+      (layer) => ({
+        edges: [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)]
+          .filter((path) => path.style.opacity !== '0')
+          .map((path) => path.dataset.svEdge ?? '')
+          .sort(),
+        weights: [...document.querySelectorAll(`${layer} .links text.label`)]
+          .map((label) => label.textContent ?? '')
+          .sort()
+      }),
+      layer
+    );
+    expect(drawn.edges).toEqual([
+      'vertices[0] - vertices[1]',
+      'vertices[0] - vertices[2]',
+      'vertices[1] - vertices[2]',
+      'vertices[1] - vertices[3]',
+      'vertices[2] - vertices[3]',
+      'vertices[2] - vertices[4]',
+      'vertices[3] - vertices[4]'
+    ]);
+    expect(drawn.weights).toHaveLength(7);
     expect(errors).toEqual([]);
     await page.close();
   }

@@ -1,0 +1,141 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D']);
+  const Flag = type('boolean');
+  const End = type(['end']);
+  const ListNode = record({ name: Name, next: Next });
+  const NodeRef = ref(ListNode);
+  const Next = union(NodeRef, End);
+
+  const IsNode = unop((p: Next) => Flag(p !== 'end'));
+</script>
+
+<script lang="sverlin" input>
+  const head = NodeRef(ListNode({ name: 'A', next:
+    NodeRef(ListNode({ name: 'B', next:
+      NodeRef(ListNode({ name: 'C', next:
+        NodeRef(ListNode({ name: 'D', next: End('end') }))
+      }))
+    }))
+  }));
+</script>
+
+<script lang="sverlin">
+  let prev = Next(End('end'));
+  let cur = Next(head);
+  while (IsNode(cur)) @rewire{
+    @save[const after = cur.next;]
+    @reverse[cur.next = prev;]
+    @advance[prev = cur;
+    cur = after;]
+  }
+  @finish[const result = prev;]
+</script>
+
+<script lang="sverlin" listing="textbook">
+REVERSE(head)
+prev = ∅
+cur = head
+while cur ≠ ∅
+    @rewire[@save[next = cur.next]
+    @reverse[cur.next = prev]
+    @advance[prev = cur
+    cur = next]]
+@finish[return prev]
+</script>
+
+{#snippet NameCell(value: Name)}
+  <Node {value} />
+{/snippet}
+
+{#snippet EndMark(value: End)}
+  <Node>∅</Node>
+{/snippet}
+
+{#snippet NodeBox(node: ListNode)}
+  {#snippet NextField()}
+    <Node><Link to={node.next} /></Node>
+  {/snippet}
+  <Node layout="row">
+    {@render Name(node.name)}
+    {@render NextField()}
+  </Node>
+{/snippet}
+
+{#snippet Marker(pointer: NodeRef)}
+  {#snippet PointerLabel()}
+    <Node>{pointer === prev ? 'prev' : pointer === cur ? 'cur' : 'next'}</Node>
+  {/snippet}
+  <Node layout="column">
+    <Pointed />
+    {@render PointerLabel()}
+  </Node>
+{/snippet}
+
+{#snippet Title()}
+  <Node>Reverse a singly linked list</Node>
+{/snippet}
+
+{#snippet Heap()}
+  <Node layout="free">
+    {#each all(ListNode) as node}
+      {@render ListNode(node)}
+    {/each}
+  </Node>
+{/snippet}
+
+{#snippet StartNote()}
+  <Node>Start with prev at ∅ and cur at the head.</Node>
+{/snippet}
+
+{#snippet SaveNote()}
+  <Node>Save the next node before changing the link.</Node>
+{/snippet}
+
+{#snippet ReverseNote()}
+  <Node>Reverse cur’s link so it points to the finished prefix.</Node>
+{/snippet}
+
+{#snippet AdvanceNote()}
+  <Node>Move prev and cur one node forward.</Node>
+{/snippet}
+
+{#snippet FinishNote()}
+  <Node>prev is now the head of the reversed list.</Node>
+{/snippet}
+
+{#snippet StepNote()}
+  <Node>
+    {#if when(@rewire.save)}
+      {@render SaveNote()}
+    {:else if when(@rewire.reverse)}
+      {@render ReverseNote()}
+    {:else if when(@rewire.advance)}
+      {@render AdvanceNote()}
+    {:else if when(@finish)}
+      {@render FinishNote()}
+    {/if}
+    {#if step === 0}
+      {@render StartNote()}
+    {/if}
+  </Node>
+{/snippet}
+
+{#snippet Diagram()}
+  <Node layout="column">
+    {@render Heap()}
+    {@render StepNote()}
+  </Node>
+{/snippet}
+
+{#snippet Board()}
+  <Node layout="row">
+    <Listing />
+    {@render Diagram()}
+  </Node>
+{/snippet}
+
+{@render Title()}
+{@render Board()}
+{@render NodeRef(prev)}
+{@render NodeRef(cur)}
+{@render NodeRef(after)}
