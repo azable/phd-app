@@ -1,0 +1,47 @@
+<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Flag = type('boolean');
+
+  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
+  const Before = binop((a: Index, b: Index) => Flag(a <= b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+  const Last = unop((v: Values) => Index(v.length - 1));
+</script>
+
+<script lang="sverlin" input>
+  const values = Values([3, 8, 15, 23, 42, 57, 71]);
+  const target = Int(42);
+</script>
+
+<script lang="sverlin">
+  let lo = Index(0);
+  let hi = Last(values);
+  while (@open[Before(lo, hi)]) @probe{
+    const mid = @mid[Middle(lo, hi)];
+    if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
+    else @left[hi = Prev(mid);]
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+
+{#snippet IndexNumber(p: Index)}<Node value={p} />{/snippet}
+{#snippet IndexValue(p: Index)}{@render Int(at(p))}{/snippet}
+{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Bounds()}
+  <Node layout="row">
+    <Node>lo</Node>{@render Index(lo)}
+    <Node>hi</Node>{@render Index(hi)}
+  </Node>
+{/snippet}
+
+{@render Cells()}
+{@render Bounds()}
+{@render Index(lo)}
+{@render Index(hi)}

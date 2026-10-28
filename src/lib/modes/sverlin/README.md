@@ -485,7 +485,20 @@ nodes `prev` and `cur` refer to both marked:
   link draws the end with its type's view (`views.End`, as `EndMark`'s ∅). A
   pointer view of the reference, as `Here`, marks the node a variable refers to,
   and draws nothing at the end.
-- An array-based structure keeps an index instead, `index(Nodes)`.
+- References suit nodes made, linked, and dropped as the algorithm runs; where
+  it does arithmetic on places, or the structure is an array (an array-based
+  tree, a graph over a fixed list of vertices), keep a position instead,
+  `index(Nodes)`.
+- A view reads through a position with `at(p)`, the element it points at in the
+  collection it points into, as
+  `{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}`; the
+  root and its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a
+  `Vertex` and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and
+  a record of positions reads through twice, `at(edge.from).name`. What draws it
+  is the element itself, so it moves with it, and a pointer's view drawn round
+  the whole element marks it there too; past either end it draws nothing. A
+  position has no fields (`p.name` is refused), and its number may be drawn, as
+  an index means something.
 
 ## Operators
 
@@ -840,8 +853,8 @@ variables:
   `cur` would at each step changing `prev`.
 - Give a source a listing of the algorithm as taught (see Listing), and more
   than one view of a type where the request leaves open what it shows (see Views
-  of types); the chooser decides whether a variant shows each (as
-  `listing.language` none).
+  of types), as a position's number and its element's name; the chooser decides
+  whether a variant shows each (as `listing.language` none).
 - Never write a look into the markup: a look the participant asks for is the
   values of a kind.
 

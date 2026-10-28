@@ -61,6 +61,7 @@ import {
   probeMarkup,
   pointerCalls,
   probeValues,
+  positionReads,
   readsOf,
   unknownReadOf,
   rootPlacements,
@@ -1072,6 +1073,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         definesType(viewing, name) ||
         operators.has(name) ||
         name === 'Math' ||
+        name === 'at' ||
         isLabelKey(name) ||
         isRunsKey(name) ||
         isHistoryKey(name) ||
@@ -1081,6 +1083,24 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       throw new InvalidSvelteSourceError(
         `The view reads ${unread.name}, which no input or algorithm variable, snippet, type, operator, {#each}, or {@const} is named: read one that exists, as its block declares it.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
+      );
+    // at(p) reads the element a position points at, in the collection the steps say it points into.
+    const positions = positionReads(
+      ast.html,
+      source,
+      domain,
+      variableTypes(master),
+      pointedInto(master)
+    );
+    if (positions.problems.length)
+      throw InvalidSvelteSourceError.combine(
+        positions.problems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_position',
+              start: sourcePosition(source, start)
+            })
+        )
       );
     const labelNames = traced.labels.map(({ full }) => full);
     const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
@@ -1317,7 +1337,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         slotted,
         pointers.removals,
         placeSlots,
-        referencesOf(master)
+        referencesOf(master),
+        positions.targets
       ),
       ...[...aliases.values()].map(({ alias, callee }) => ({
         at: callee.start,
@@ -3132,4 +3153,25 @@ function referencesOf(steps: readonly MasterStep[]): Map<string, string> {
     for (const [path, target] of Object.entries(step.targets ?? {}))
       if (isHeapKey(target)) references.set(path.replace(/\[\d+\]/gu, '[]'), target);
   return references;
+}
+
+/** Each variable's type, as the steps record it, the first wherever one is a union's member. */
+function variableTypes(steps: readonly MasterStep[]): Map<string, string> {
+  const types = new Map<string, string>();
+  for (const step of steps)
+    for (const [path, type] of Object.entries(step.types ?? {}))
+      if (/^[A-Za-z_$][\w$]*$/u.test(path) && !types.has(path)) types.set(path, type);
+  return types;
+}
+
+/** The collections positions of each position type point into, as the steps record them. */
+function pointedInto(steps: readonly MasterStep[]): Map<string, Set<string>> {
+  const pointed = new Map<string, Set<string>>();
+  for (const step of steps)
+    for (const [path, target] of Object.entries(step.targets ?? {})) {
+      const type = step.types?.[path];
+      if (type && !isHeapKey(target))
+        pointed.set(type, (pointed.get(type) ?? new Set()).add(target));
+    }
+  return pointed;
 }

@@ -369,6 +369,157 @@ function freeReads(
   return read.filter(({ name }) => !declared.has(name));
 }
 
+/**
+ * Every `at(p)` in the markup, by where it starts, with the variable holding the collection the
+ * position `p` points into, as vertices for a VertexRef; and each read through a position written
+ * another way, or that the domain does not allow, with why. Types come from the domain: a view's
+ * parameter has the type it is written with, an {#each} item its collection's element, a variable
+ * the type the steps record, a field its record's, and `at(p)` the element of the collection p's
+ * type is an index into. The collection is the one variable of that collection type, or else the
+ * one the steps record positions of p's type pointing into.
+ */
+export function positionReads(
+  markup: unknown,
+  source: string,
+  domain: DomainRegistry,
+  variables: ReadonlyMap<string, string>,
+  pointed: ReadonlyMap<string, ReadonlySet<string>>
+): { targets: Map<number, string>; problems: { message: string; start: number }[] } {
+  type Part = Record<string, unknown> & {
+    type?: string;
+    name?: string;
+    start?: number;
+    end?: number;
+  };
+  const targets = new Map<number, string>();
+  const problems: { message: string; start: number }[] = [];
+  const text = (node: Part) => source.slice(node.start, node.end);
+  const collectionOf = (type: string | undefined) => {
+    const structure = type === undefined ? undefined : domain.structures[type];
+    return structure?.kind === 'collection' ? structure : undefined;
+  };
+  const recordOf = (type: string | undefined) => {
+    let structure = type === undefined ? undefined : domain.structures[type];
+    if (structure?.kind === 'ref') structure = domain.structures[structure.element];
+    return structure?.kind === 'record' ? structure : undefined;
+  };
+  const indexInto = (type: string | undefined) =>
+    type === undefined ? undefined : domain.atoms[type]?.index;
+  // The variable holding the collection a position of a type points into, or why there is none.
+  const holder = (position: string, collection: string): string | { problem: string } => {
+    const holding = [...variables].filter(([, type]) => type === collection).map(([name]) => name);
+    if (holding.length === 1) return holding[0];
+    const recorded = [...(pointed.get(position) ?? [])];
+    if (recorded.length === 1) return recorded[0];
+    return {
+      problem: holding.length
+        ? `at() reads the ${collection} a ${position} points into, and ${holding.join(' and ')} each hold one: read the element in the root or a part, as ${holding[0]}[p].`
+        : `at() reads the ${collection} a ${position} points into, and no variable holds one.`
+    };
+  };
+  const isAt = (node: Part | undefined) =>
+    node?.type === 'CallExpression' &&
+    (node.callee as Part | undefined)?.type === 'Identifier' &&
+    (node.callee as Part).name === 'at';
+  // Each expression is typed once, so a problem is told once however often it is asked about.
+  const typed = new Map<Part, string | undefined>();
+  const typeOf = (
+    node: Part | undefined,
+    scope: ReadonlyMap<string, string>
+  ): string | undefined => {
+    if (!node) return undefined;
+    if (!typed.has(node)) typed.set(node, typeNow(node, scope));
+    return typed.get(node);
+  };
+  const typeNow = (node: Part, scope: ReadonlyMap<string, string>): string | undefined => {
+    if (node.type === 'Identifier' && typeof node.name === 'string')
+      return scope.get(node.name) ?? variables.get(node.name);
+    if (node.type === 'MemberExpression') {
+      const object = node.object as Part;
+      const type = typeOf(object, scope);
+      if (node.computed) return collectionOf(type)?.element;
+      const property = node.property as Part;
+      const field = String(property.name ?? '');
+      const index = indexInto(type);
+      if (index !== undefined) {
+        problems.push({
+          message: `${text(object)} is a ${type}, a position into a ${index}, with no field ${field}: read the element it points at with at(), as at(${text(object)}).${field}.`,
+          start: property.start ?? 0
+        });
+        return undefined;
+      }
+      const record = recordOf(type);
+      if (!record) return undefined;
+      if (isAt(object) && !(field in record.fields))
+        problems.push({
+          message: `A ${record.name} has no field ${field}; its fields are ${Object.keys(record.fields).join(', ')}.`,
+          start: property.start ?? 0
+        });
+      return record.fields[field];
+    }
+    if (!isAt(node)) return undefined;
+    const [argument, ...more] = (node.arguments as Part[] | undefined) ?? [];
+    const type = typeOf(argument, scope);
+    const index = indexInto(type);
+    const start = node.start ?? 0;
+    if (!argument || more.length || index === undefined || type === undefined) {
+      problems.push({
+        message:
+          argument && !more.length
+            ? `at(${text(argument)}) reads through a position, and ${text(argument)} is ${type ? `of type ${type}` : 'no value whose type is known'}: give it a position, as at(p) in a view of a position type or at(queue[0]) for a queue of them.`
+            : 'at() takes one position, as at(p), and is the element it points at.',
+        start
+      });
+      return undefined;
+    }
+    const found = holder(type, index);
+    if (typeof found === 'string') targets.set(start, found);
+    else problems.push({ message: found.problem, start });
+    return collectionOf(index)?.element;
+  };
+  const visit = (value: unknown, scope: ReadonlyMap<string, string>): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach((item) => visit(item, scope));
+    const part = value as Part;
+    if (part.type === 'MemberExpression' || isAt(part)) typeOf(part, scope);
+    if (part.type === 'SnippetBlock') {
+      const inner = new Map(scope);
+      for (const parameter of (part.parameters as Part[] | undefined) ?? []) {
+        const annotation = (parameter.typeAnnotation as Part | undefined)?.typeAnnotation as
+          | Part
+          | undefined;
+        const written = (annotation?.typeName as Part | undefined)?.name;
+        if (typeof parameter.name === 'string' && typeof written === 'string')
+          inner.set(parameter.name, written);
+      }
+      return visit(part.children, inner);
+    }
+    if (part.type === 'EachBlock') {
+      visit(part.expression, scope);
+      const inner = new Map(scope);
+      const context = part.context as Part | undefined;
+      const element = collectionOf(typeOf(part.expression as Part, scope))?.element;
+      if (context?.type === 'Identifier' && typeof context.name === 'string' && element)
+        inner.set(context.name, element);
+      visit(part.children, inner);
+      return visit(part.else, scope);
+    }
+    if (part.type === 'ConstTag') {
+      const assigned = part.expression as Part | undefined;
+      visit(assigned?.right, scope);
+      const left = assigned?.left as Part | undefined;
+      const type = typeOf(assigned?.right as Part | undefined, scope);
+      if (left?.type === 'Identifier' && typeof left.name === 'string' && type)
+        (scope as Map<string, string>).set(left.name, type);
+      return;
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'typeAnnotation') visit(child, scope);
+  };
+  visit(markup, new Map());
+  return { targets, problems };
+}
+
 function collectPattern(pattern: unknown, into: Set<string>): void {
   if (!pattern || typeof pattern !== 'object') return;
   const node = pattern as Record<string, unknown> & { type?: string; name?: string };
@@ -667,7 +818,12 @@ export function slotInsertions(
    * The heap each reference refers into, by the path of the value (its indices as []), as
    * `queue[]` into `ȟVertex`: a field read through one in the markup reads its node (see heapKey).
    */
-  references: ReadonlyMap<string, string> = new Map()
+  references: ReadonlyMap<string, string> = new Map(),
+  /**
+   * The variable holding the collection each at(p) reads into, by where the call starts (see
+   * positionReads): at(p) reads its element, as vertices[p], and draws nothing past either end.
+   */
+  atTargets: ReadonlyMap<number, string> = new Map()
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -683,6 +839,12 @@ export function slotInsertions(
   const insertions: Insertion[] = [];
   const indexed = new Map<Part, string>();
   const text = (node: Part) => source.slice(node.start, node.end);
+  // An at(p) call, by the collection it reads into, and what it reads through.
+  const atCall = (node: Part | undefined) => {
+    const target = node?.type === 'CallExpression' ? atTargets.get(node.start ?? -1) : undefined;
+    const [argument] = (node?.arguments as Part[] | undefined) ?? [];
+    return target === undefined || !argument ? undefined : { target, argument };
+  };
   // The path of the value an expression reads, its indices as [], through a reference its node's
   // place in the heap, as `ȟVertex[].name` for q.name with q an item of a queue of references.
   const patternOf = (
@@ -697,6 +859,8 @@ export function slotInsertions(
       }
       return local || !stateNames.has(node.name) ? undefined : node.name;
     }
+    const read = atCall(node);
+    if (read) return `${followed(read.target)}[]`;
     if (node?.type !== 'MemberExpression') return undefined;
     const object = patternOf(node.object as Part, locals);
     if (object === undefined) return undefined;
@@ -716,19 +880,63 @@ export function slotInsertions(
   // An expression's text with each field read through a reference reading its node, as
   // ȟVertex[q].name for q.name.
   const followedText = (node: Part, locals: ReadonlyMap<string, Local>): string => {
+    const read = atCall(node);
+    if (read) return `${read.target}[${followedText(read.argument, locals)}]`;
     if (node.type !== 'MemberExpression') return text(node);
     const object = node.object as Part;
     const heap = heapOf(object, locals);
     const inner = followedText(object, locals);
-    return `${heap === undefined ? inner : `${heap}[${inner}]`}${source.slice(object.end, node.end)}`;
+    // Past either end at(p) is nothing, so what is read from it is nothing too.
+    const past = atCall(object) ? '?' + (node.computed ? '.' : '') : '';
+    return `${heap === undefined ? inner : `${heap}[${inner}]`}${past}${source.slice(object.end, node.end)}`;
+  };
+  // The test that an expression reads past an end through an at(p) in it, if one does.
+  const pastEnd = (node: unknown, locals: ReadonlyMap<string, Local>): string[] => {
+    if (!node || typeof node !== 'object') return [];
+    if (Array.isArray(node)) return node.flatMap((child) => pastEnd(child, locals));
+    const part = node as Part;
+    const read = atCall(part);
+    const own = read
+      ? [`${read.target}[${followedText(read.argument, locals)}] === undefined`]
+      : [];
+    return [
+      ...own,
+      ...Object.entries(part).flatMap(([key, child]) =>
+        key === 'parent' || key === 'metadata' ? [] : pastEnd(child, locals)
+      )
+    ];
   };
   // Each field read through a reference in an expression reads its node instead.
-  const follow = (node: unknown, locals: ReadonlyMap<string, Local>): void => {
+  const follow = (node: unknown, locals: ReadonlyMap<string, Local>, chained = ''): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach((child) => follow(child, locals));
     const part = node as Part;
+    // at(p) reads its element, as vertices[p]; past either end it is nothing, and so is what is
+    // read from it.
+    const read = atCall(part);
+    if (read) {
+      insertions.push(
+        {
+          at: part.start ?? 0,
+          text: `${read.target}[`,
+          remove: (read.argument.start ?? 0) - (part.start ?? 0)
+        },
+        {
+          at: read.argument.end ?? 0,
+          text: `]${chained}`,
+          remove: (part.end ?? 0) - (read.argument.end ?? 0)
+        }
+      );
+      follow(read.argument, locals);
+      return;
+    }
     if (part.type === 'MemberExpression') {
       const object = part.object as Part;
+      if (atCall(object)) {
+        follow(object, locals, part.computed ? '?.' : '?');
+        follow(part.property, locals);
+        return;
+      }
       const heap = heapOf(object, locals);
       if (heap !== undefined)
         insertions.push(
@@ -773,6 +981,8 @@ export function slotInsertions(
       if (local?.kind === 'other') return ` of={${argument.name}}`;
       return stateNames.has(argument.name) ? ` path="${argument.name}"` : '';
     }
+    const read = atCall(argument);
+    if (read) return ` of={${read.target}} at={${followedText(read.argument, locals)}}`;
     if (argument?.type === 'MemberExpression') {
       const object = followedText(argument.object as Part, locals);
       const property = argument.property as Part;
@@ -795,7 +1005,10 @@ export function slotInsertions(
     const part = node as Part;
     // A field read through a reference, in what this part reads, reads its node.
     const at = part.start ?? 0;
-    if (references.size && !removed.some((cut) => cut.at <= at && at < cut.at + (cut.remove ?? 0)))
+    if (
+      (references.size || atTargets.size) &&
+      !removed.some((cut) => cut.at <= at && at < cut.at + (cut.remove ?? 0))
+    )
       follow(part.expression, locals);
     if (part.type === 'RenderTag') {
       const start = part.start ?? 0;
@@ -847,10 +1060,11 @@ export function slotInsertions(
           ])
         ];
         rendered.set(part.start ?? 0, reads);
+        const past = pastEnd(argument, locals);
         insertions.push(
           {
             at: part.start ?? 0,
-            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
+            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''}${past.length ? ` missing={${past.join(' || ')}}` : ''} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
           },
           { at: part.end ?? 0, text: '</SverlinSlot>' }
         );

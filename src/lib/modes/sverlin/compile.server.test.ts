@@ -2019,3 +2019,68 @@ describe('references read in the view', () => {
     );
   });
 });
+
+describe('at(p), the element a position points at', () => {
+  const graph = (markup: string, more = '') =>
+    `<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Queue = collection(VertexRef);
+  const Edge = record({ from: VertexRef, to: VertexRef });
+  const Edges = collection(Edge);
+  const Int = type('integer', { min: 0, max: 9 });${more}
+</script>
+<script lang="sverlin" input>
+  const vertices = Vertices([{ name: 'A', seen: true }, { name: 'B', seen: false }, { name: 'C', seen: false }]);
+  const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }]);
+  const queue = Queue([1, 2]);
+  const n = Int(1);
+</script>
+<script lang="sverlin"></script>
+{#snippet NameText(value: Name)}<Node {value} />{/snippet}
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet VertexCard(vertex: Vertex)}<Node layout="column">{@render Name(vertex.name)}</Node>{/snippet}
+${markup}`;
+
+  it('reads the element in a view of a position, and through a position in a part', () => {
+    const { component } = prepareSvelteComponent(
+      graph(
+        `{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}
+{#snippet Queued()}<Node>{#each queue as q}{@render VertexRef(q)}{/each}</Node>{/snippet}
+{#snippet Ends()}<Node>{#each edges as edge}{@render Name(at(edge.from).name)}{@render Vertex(at(edge.to))}{/each}</Node>{/snippet}
+{@render Queued()}{@render Ends()}`
+      )
+    );
+    // The element, as vertices[p], and nothing past either end.
+    expect(component).toMatch(/vertices\[p\(\)\]\?\.name/u);
+    expect(component).toMatch(/vertices\[p\(\)\] === undefined/u);
+    expect(component).toMatch(/vertices\[[^\]]*edge[^\]]*\.from[^\]]*\]\?\.name/u);
+    expect(component).toMatch(/vertices\[[^\]]*edge[^\]]*\.to[^\]]*\]/u);
+  });
+
+  it('refuses a field read on a position, a field the element lacks, and at() of no position', () => {
+    const problem = (markup: string) => {
+      try {
+        prepareSvelteComponent(graph(`${markup}{@render Shown()}`));
+      } catch (error) {
+        return error as { code?: string; message: string };
+      }
+      return undefined;
+    };
+    expect(problem('{#snippet Shown()}<Node>{queue[0].name}</Node>{/snippet}')).toMatchObject({
+      code: 'view_position',
+      message: expect.stringContaining(
+        'read the element it points at with at(), as at(queue[0]).name'
+      )
+    });
+    expect(
+      problem('{#snippet Shown()}<Node>{at(queue[0]).weight}</Node>{/snippet}')?.message
+    ).toContain('A Vertex has no field weight; its fields are name, seen.');
+    expect(problem('{#snippet Shown()}<Node>{at(n)}</Node>{/snippet}')?.message).toContain(
+      'at(n) reads through a position, and n is of type Int'
+    );
+  });
+});

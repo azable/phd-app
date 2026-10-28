@@ -30,6 +30,7 @@
     at,
     inherit = false,
     reads = [],
+    missing = false,
     site,
     place,
     children
@@ -39,6 +40,8 @@
     at?: string | number;
     inherit?: boolean;
     reads?: readonly string[];
+    /** Whether the value reads past an end through at(p), where it is nothing and draws nothing. */
+    missing?: boolean;
     site?: string;
     place?: Place;
     children: Snippet;
@@ -64,6 +67,6 @@
   );
 </script>
 
-{#if !leftOut}
+{#if !leftOut && !missing}
   {@render children()}
 {/if}
