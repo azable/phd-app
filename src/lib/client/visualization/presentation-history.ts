@@ -110,8 +110,7 @@ function friendlyName(value: number): string {
  * A candidate's identifier, `<source>/<values>`: the source it was built from, as the start of the
  * source's hash, with a hue drawn from it so candidates of one source match at a glance; and the
  * values its random variables took, named from their hash, so two candidates that drew the same
- * values share a name. A layout drawn from the seed is one of those values, so the seed counts
- * where the source has a free layout or links.
+ * values share a name. The seed draws nothing the values do not record, so it plays no part.
  */
 export type CandidateId = { source: string; hue: number; values: string };
 
@@ -128,11 +127,7 @@ export function candidateId(presentation: RenderablePresentation): CandidateId {
   const { source, hue } = sourceId(hash);
   if (presentation.format !== 'browser-bundle-v1')
     return { source, hue, values: friendlyName(fnv(presentation.presentationId)) };
-  const seeded = /<Link\b|['"]free['"]/u.test(presentation.source.text);
-  const values = JSON.stringify([
-    sorted(presentation.variant ?? presentation.parameters ?? {}),
-    seeded ? presentation.seed : null
-  ]);
+  const values = JSON.stringify(sorted(presentation.variant ?? presentation.parameters ?? {}));
   return { source, hue, values: friendlyName(fnv(values)) };
 }
 

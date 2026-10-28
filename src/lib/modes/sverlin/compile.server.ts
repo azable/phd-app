@@ -34,6 +34,7 @@ import {
   isRunsKey,
   labelSpan,
   markLabels,
+  momentTarget,
   resolveLabel,
   written as asWritten
 } from './label-values';
@@ -553,7 +554,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const authoredScript = scripted ? (ast.instance ?? ast.module) : undefined;
     if (authoredScript)
       throw new InvalidSvelteSourceError(
-        'Views cannot have their own <script>: input and algorithm values, step, seed, and the library components are already in scope. Compute in markup, using {@const} inside a block or component for reuse.',
+        'Views cannot have their own <script>: input and algorithm values and the library components are already in scope. Compute in markup, using {@const} inside a block or component for reuse.',
         { code: 'view_script', start: sourcePosition(source, authoredScript.start) }
       );
     // The view is checked before any block runs, so its problems are reported with theirs.
@@ -897,19 +898,23 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
+          const call = reference.moment
+            ? `when(${reference.moment})`
+            : `when(@${reference.path ?? ''})`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(
-              `when(@${reference.path ?? ''}) is in a view, which draws only its value: write it in the root or a part of the page.`
+              `${call} is in a view, which draws only its value: write it in the root or a part of the page.`
             );
-          else if (reference.path === undefined)
+          else if (reference.path === undefined && !reference.moment)
             problem(
-              'when() takes a label by its full name, as {#if when(@insert.swap)}…{/if}, and draws its contents at each step inside a run of that label.'
+              'when() takes a label by its full name, as {#if when(@insert.swap)}…{/if}, and draws its contents at each step inside a run of that label; when(start) and when(end) draw them at the first step, the input as given, and the last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
-              `when(@${reference.path}) is the whole test of an {#if} or {:else if}, as {#if when(@${reference.path})}…{/if}, saying at which steps its contents show; it is never part of another condition.`
+              `${call} is the whole test of an {#if} or {:else if}, as {#if ${call}}…{/if}, saying at which steps its contents show; it is never part of another condition.`
             );
-          else {
+          else if (reference.moment) during[reference.key] = momentTarget(reference.moment);
+          else if (reference.path !== undefined) {
             const found = resolveLabel(reference.path, algorithmLabels.labels, false);
             if ('problem' in found) problem(found.problem);
             else during[reference.key] = found.label.full;
@@ -1041,8 +1046,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // master pauses at every label, so every step any pacing has is among its steps.
     const overlaps = whens.chains.flatMap(({ start, keys }) => {
       const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
-      const both = master.flatMap((step) => {
-        const shown = labels.filter((label) => step.inside?.includes(label));
+      const both = master.flatMap((step, at) => {
+        const shown = labels.filter((label) => atWhen(label, master, at));
         return shown.length > 1 ? [{ step: step.name ?? '', shown }] : [];
       });
       if (!both.length) return [];
@@ -1050,7 +1055,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       const steps = [...new Set(both.map(({ step }) => step))];
       return [
         new InvalidSvelteSourceError(
-          `The {#if when(…)} chain's branches @${shown.join(' and @')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a chain's branches take turns in one place, so give each a label whose runs never meet the others', or write them as blocks of their own.`,
+          `The {#if when(…)} chain's branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a chain's branches take turns in one place, so give each a label whose runs never meet the others', or write them as blocks of their own.`,
           { code: 'view_label', start: sourcePosition(source, start) }
         )
       ];
@@ -1604,7 +1609,7 @@ export async function bundlePresentation(
     // An {#if when(…)} block's label: there where the step is inside one of its runs, else hidden, its
     // contents keeping their room.
     for (const [key, label] of Object.entries(prepared.during ?? {}))
-      (phase.inside?.includes(label) ? ownApplied : standIn.state)[key] = true;
+      (atWhen(label, master, step) ? ownApplied : standIn.state)[key] = true;
     for (const [key, history] of Object.entries(prepared.histories ?? {})) {
       const list = sofar.flatMap((past, which) =>
         (which < step || index % 2 === 1 || index === 0
@@ -1803,7 +1808,7 @@ function sourcePosition(source: string, offset: number): { line: number; column:
 
 /**
  * Give the script-free view its scripts: the library prelude and every recorded value and the view
- * each type rendered by name draws, plus step and seed, as props. Both share the first line so authored line numbers are unchanged.
+ * each type rendered by name draws, as props. Both share the first line so authored line numbers are unchanged.
  */
 function withGeneratedScripts(
   source: string,
@@ -1821,8 +1826,6 @@ function withGeneratedScripts(
   const names = [
     ...props.map((name) => (choices[name] ? `${name}: __choice_${name}` : name)),
     ...Object.keys(pointerChoices).map((name) => `__pointer_${name}`),
-    'step',
-    'seed',
     '__probe'
   ].join(', ');
   const chosen = [
@@ -3068,6 +3071,17 @@ function labelRuns(
   }
   return runs;
 }
+
+/** Whether an {#if when(…)} draws at master step `at`: inside a run of its label, or the first or last step. */
+function atWhen(target: string, steps: readonly MasterStep[], at: number): boolean {
+  if (target === momentTarget('start')) return at === 0;
+  if (target === momentTarget('end')) return at === steps.length - 1;
+  return steps[at].inside?.includes(target) ?? false;
+}
+
+/** What an {#if when(…)} names, as written. */
+const whenText = (target: string) =>
+  target.startsWith('#') ? `when(${target.slice(1)})` : `@${target}`;
 
 /**
  * The heap each reference refers into, by the path of the value with its indices as [], as

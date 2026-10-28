@@ -119,7 +119,6 @@ describe('algorithm interpretation', () => {
     ],
     ['new', 'const d = new Date();', /New Expression/],
     ['loose equality', 'const f = Flag(1 == 1);', /Use ===/],
-    ['reserved names', 'let step = Int(0);', /reserved/],
     ['undeclared assignment', 'x = Int(1);', /must be declared/],
     [
       'object arithmetic',

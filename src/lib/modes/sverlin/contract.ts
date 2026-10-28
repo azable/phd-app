@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n{#snippet Caption()}<Node>Step {step + 1} · seed {seed}</Node>{/snippet}\n{@render Title()}\n{@render Caption()}\n'
+    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n{@render Title()}\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */

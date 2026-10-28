@@ -2,7 +2,7 @@
 declare module 'virtual:component' {
   import type { Component } from 'svelte';
 
-  const Main: Component<Record<string, unknown> & { step: number; seed: number }>;
+  const Main: Component<Record<string, unknown>>;
   export default Main;
 }
 

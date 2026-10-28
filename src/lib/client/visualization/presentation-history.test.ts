@@ -298,8 +298,8 @@ describe('candidate identifiers', () => {
     expect(candidate(1, drawn, 'source', 'b'.repeat(64)).source).toBe('bbbbbb');
   });
 
-  it('counts the seed where it has a free layout, whose positions it draws', () => {
+  it('names candidates by their values alone, whatever their seeds, a free layout included', () => {
     const free = '<Node layout="free"><Node key="a" /></Node>';
-    expect(candidate(1, {}, free).values).not.toBe(candidate(2, {}, free).values);
+    expect(candidate(1, {}, free).values).toBe(candidate(2, {}, free).values);
   });
 });

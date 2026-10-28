@@ -8,7 +8,6 @@ import {
   describe,
   domainFunctions,
   forbiddenProperties,
-  reservedNames,
   type BlockKind,
   type Span
 } from './block.server';
@@ -116,7 +115,7 @@ export function checkSubset(
           reject(node, 'Functions are declared at the top level of the algorithm block.');
         if (node.async || node.generator)
           reject(node, `Write function ${name}(...), without * or async.`);
-        if (constructors.has(name) || reservedNames.has(name) || name === 'Math')
+        if (constructors.has(name) || name === 'Math')
           reject(node, `"${name}" is taken; give the function another name.`);
         for (const param of node.params)
           if (param.type !== 'Identifier')
@@ -142,8 +141,6 @@ export function checkSubset(
         for (const declarator of node.declarations) {
           if (declarator.id.type !== 'Identifier')
             reject(declarator, 'Destructuring declarations are not supported.');
-          else if (reservedNames.has(declarator.id.name))
-            reject(declarator, `"${declarator.id.name}" is reserved for the view.`);
         }
         break;
       case 'ForOfStatement':

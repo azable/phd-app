@@ -1,5 +1,5 @@
 // Fixed browser entry for every presentation: mount the authored component inside the page frame,
-// with the state recorded for a step, plus the step and seed. The sandbox document injects the
+// with the state recorded for a step. The sandbox document injects the
 // first step; later steps arrive as messages from the app and are shown without reloading the page.
 // Nodes find the atomic types of their values, and each type's parent and unit, through the
 // 'sverlin:types' context.
@@ -59,7 +59,6 @@ type StepState = Record<string, unknown> & {
 
 const playback = window as typeof window & {
   __sverlinStep?: number;
-  __sverlinSeed?: number;
   __sverlinSelection?: unknown;
 };
 // Each step is two states, the one before its code runs and the one after (see phasesOf in
@@ -245,7 +244,7 @@ function mountStep(
       target: layer,
       props: {
         view: Main as Component<Record<string, unknown>>,
-        props: { ...state, step: stepOf(step), seed: playback.__sverlinSeed ?? 1, ...extra },
+        props: { ...state, ...extra },
         settings: frame,
         onsettled: () => settled(shown),
         onchanged: () => shown.changes++

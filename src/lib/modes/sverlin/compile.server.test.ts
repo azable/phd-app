@@ -1826,6 +1826,21 @@ describe('{#if when(@label)}', () => {
 {/snippet}
 {@render Board()}`;
 
+  it('takes start and end for the first and the last step, start chained with a label', () => {
+    const prepared = prepareSvelteComponent(
+      caption(
+        '{#if when(start)}{@render Caption()}{:else if when(@pass)}{@render Caption()}{/if}{#if when(end)}{@render Caption()}{/if}'
+      )
+    );
+    expect(Object.values(prepared.during ?? {})).toEqual(['#start', 'pass', '#end']);
+    // The last step ends the last pass, so the two would show at one step.
+    expect(() =>
+      prepareSvelteComponent(
+        caption('{#if when(@pass)}{@render Caption()}{:else if when(end)}{@render Caption()}{/if}')
+      )
+    ).toThrow('branches @pass and when(end) would both show');
+  });
+
   it('takes any label, a statement’s or an expression’s, keeping every position', () => {
     for (const label of ['@pass.look', '@pass.look.read', '@pass']) {
       const prepared = prepareSvelteComponent(

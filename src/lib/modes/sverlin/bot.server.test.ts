@@ -26,7 +26,7 @@ describe('single-component Svelte assistant', () => {
     // Markdown is wrapped, so phrases are matched whatever whitespace runs between their words.
     const prompt = aiAssistant.initialPrompt.replace(/\s+/g, ' ');
     expect(prompt).toContain('exactly one complete Sverlin component');
-    expect(prompt).toContain('`step`, `seed`, and the library components');
+    expect(prompt).toContain('step and the library components are already in scope');
     expect(prompt).toContain('never write `import`');
     expect(prompt).toContain('already in scope');
     expect(prompt).toContain('script-free');

@@ -114,7 +114,7 @@ while cur ≠ ∅
     {:else if when(@finish)}
       {@render FinishNote()}
     {/if}
-    {#if step === 0}
+    {#if when(start)}
       {@render StartNote()}
     {/if}
   </Node>

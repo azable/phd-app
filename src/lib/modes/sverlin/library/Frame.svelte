@@ -23,7 +23,7 @@
   }: {
     /** The authored view. */
     view: Component<Record<string, unknown>>;
-    /** The view's props: the step's state, the view each type draws, step, and seed. */
+    /** The view's props: the step's state and the view each type draws. */
     props: Record<string, unknown>;
     settings: FrameSettings;
     /** Called once the layout has stopped changing, so the page can be shown finished. */

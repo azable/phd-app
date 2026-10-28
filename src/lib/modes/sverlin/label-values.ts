@@ -5,7 +5,8 @@
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `{#if when(@swap)}…{/if}` draws its contents at the steps inside a run of `@swap`, and a chain,
  * `{#if when(@compare)}…{:else if when(@swap)}…{/if}`, each branch at its label's steps, in one
- * place. Beside them, `all(Node)` is every live node of a record a reference refers to, its heap.
+ * place; `when(start)` and `when(end)` name the first step, the input as given, and the last.
+ * Beside them, `all(Node)` is every live node of a record a reference refers to, its heap.
  *
  * Before Svelte parses the markup, each is rewritten as an identifier of the same length, so every
  * offset holds: `@swap.a` as `ℓswapˑa`, `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal,
@@ -31,7 +32,12 @@ export type LabelReference =
   | { kind: 'value'; key: string; path: string; start: number }
   | { kind: 'runs'; key: string; path: string; start: number }
   | { kind: 'applied'; key: string; operator: string; path?: string; start: number }
-  | { kind: 'during'; key: string; path?: string; start: number };
+  | { kind: 'during'; key: string; path?: string; moment?: Moment; start: number };
+
+/** The steps an {#if when(…)} can name besides a label's runs: the first, the input as given, and the last. */
+export type Moment = 'start' | 'end';
+/** What an {#if when(…)} naming a moment draws in, as a label's full name never is. */
+export const momentTarget = (moment: Moment): string => `#${moment}`;
 
 export const labelKey = (path: string): string => `${label}${path.replaceAll('.', dot)}`;
 export const isLabelKey = (name: string): boolean => name.startsWith(label);
@@ -40,6 +46,7 @@ export const isHistoryKey = (name: string): boolean => name.startsWith(history);
 export const isDuringKey = (name: string): boolean => name.startsWith(during);
 /** A key as its author wrote it, for messages. */
 export function written(name: string): string {
+  if (isDuringKey(name) && name[1] === dot) return `when(${name.slice(2)})`;
   if (isLabelKey(name) || isDuringKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;
   if (isRunsKey(name)) return `runs(@${name.slice(1).replaceAll(dot, '.')})`;
   if (isHistoryKey(name)) {
@@ -55,7 +62,7 @@ const runsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
 const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
-const whenCall = /^when\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
+const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(start|end))\s*\)/u;
 
 /**
  * The markup with each label reference rewritten as an identifier of the same length, and the
@@ -103,12 +110,19 @@ export function markLabels(source: string): {
         index += ran[0].length - 1;
         continue;
       }
-      // when(@swap), the test of an {#if} drawing its contents in the label's runs; one naming no
-      // label is kept as written, refused when compiled.
+      // when(@swap), the test of an {#if} drawing its contents in the label's runs, or when(start) or
+      // when(end) at the first or last step; one naming neither is kept as written, refused when compiled.
       const within = !word && rest.startsWith('when(') ? whenCall.exec(rest) : null;
       if (within) {
-        const key = `${during}${within[1].replaceAll('.', dot)}`;
-        references.push({ kind: 'during', key, path: within[1], start: index });
+        const moment = within[2] as Moment | undefined;
+        const key = moment
+          ? `${during}${dot}${moment}`
+          : `${during}${within[1].replaceAll('.', dot)}`;
+        references.push(
+          moment
+            ? { kind: 'during', key, moment, start: index }
+            : { kind: 'during', key, path: within[1], start: index }
+        );
         out += pad(key, within[0].length);
         index += within[0].length - 1;
         continue;

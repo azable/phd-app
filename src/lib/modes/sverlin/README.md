@@ -48,8 +48,8 @@ a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
 participants can select it and presentations can vary it. Nodes take no props
 that set a look: a node's kind is the snippet it is in, and the design gives
 each kind its look. Every input and algorithm variable in scope at the selected
-step, `step`, `seed`, and the library components are already in scope; never
-write `import`, and never declare names `Node`, `Link`, `Pointed`, or `Listing`.
+step and the library components are already in scope; never write `import`, and
+never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
 - The top level holds only renders, with `{#if}` and `{#each}` around them, and
   a `<Listing />`, so every node is in a snippet. A snippet without parameters
@@ -207,9 +207,9 @@ written in the view so the label is a kind of its own.
 - A step is named by the label whose run it ends and which run that is, as
   `@insert.swap#1` (`start` for the input as given, `end` for the end), the same
   in every variant, which numbers only the steps it shows. A step has no text:
-  the view says what it shows, from the recorded variables and `step` (0 for the
-  first), so what it should say is in the algorithm's variables, as an answer is
-  the value a search returns or where its loop stops.
+  the view says what it shows, from the recorded variables, so what it should
+  say is in the algorithm's variables, as an answer is the value a search
+  returns or where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value a collection also holds shows a
@@ -663,12 +663,14 @@ label, a view chosen per place, or `{#if when(@label)}` below does it.
 `{#if when(@insert.swap)}…{/if}` draws its contents at each step inside a run of
 a label, any label: the step that ends a run and those inside it where labels
 within pause, whatever the pauses, never steps leading up to it or after it;
-elsewhere they are hidden, keeping their room. `when(@label)` is the whole test,
-never part of another condition, and never reads the label's value
-(`{#if @label}` is refused); no `{:else}`. Branches that take turns share one
-place, as large as the largest, `{#if when(@a)}…{:else if when(@b)}…{/if}`, as
-in bubble sort above; a chain whose branches would show at one step, as a label
-and one inside it, is refused.
+elsewhere they are hidden, keeping their room. `when(start)` and `when(end)`
+draw them at the first step, the input as given, and at the last, as a note on
+what the algorithm starts from or ends with. `when(…)` is the whole test, never
+part of another condition, and never reads the label's value (`{#if @label}` is
+refused); no `{:else}`. Branches that take turns share one place, as large as
+the largest, `{#if when(@a)}…{:else if when(@b)}…{/if}`, as in bubble sort
+above; a chain whose branches would show at one step, as a label and one inside
+it, is refused.
 
 What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
 the label has given up to this step, and `applied(Equal, @check)`, every
@@ -870,9 +872,8 @@ variables:
   `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
 - Not allowed: `null` and `undefined`, other functions, such as arrow functions
   outside an operator and functions inside blocks, `new`, classes, `this`, `==`,
-  string methods, other globals, the names `step` and `seed`, and array or
-  object literals except inside a type or `.push`/`.unshift`, or assigned to an
-  element or field.
+  string methods, other globals, and array or object literals except inside a
+  type or `.push`/`.unshift`, or assigned to an element or field.
 - Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object,
   and 10,000 characters per string.
 
