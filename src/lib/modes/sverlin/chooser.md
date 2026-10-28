@@ -13,8 +13,11 @@ project.design lists every variable of the design space (see Design below), by
 its key, with its options, by name from project.design.options or listed, and
 its value in the variant the presentations start from: the one the participant
 was viewing, with the starter’s values for anything new. project.source is the
-new source, project.summary what the assistant’s change does, and project.runs
-each label’s runs; the conversation says what the participant asked for.
+new source, project.summary what the assistant’s change does, project.runs each
+label’s runs, and project.structures each free layout kind’s structure as its
+data makes it (path, cycle, tree, layers, or none), whose forms are its form’s
+options, so a pair contrasting forms can show the structure in shapes that
+really differ; the conversation says what the participant asked for.
 
 Return project.count variants. Each lists only the values it changes, every one
 an option of its variable, and the variables to draw afresh at random;
@@ -42,14 +45,14 @@ pauses of labels already seen unless the participant asks for other steps.
 What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.
 Everything else is open, and yours to explore across the conversation: views,
-colours, shapes, spacing, pacing, and what is shown at all (a listing or none,
-as listing.language none; a type’s view or none; a kind’s shown false), so some
-designs show an element others leave out, keeping shown what the participant
-asked for, and the participant sees real alternatives rather than one design
-repeated. A pair is also a question, so choose it to learn the most from the
-participant’s answer: from the conversation and earlier preferences, judge which
-open choices are still uncertain and likely to matter to them, as a listing or
-none, or coarse or fine steps, and make the two variants differ in those few and
-stay alike elsewhere, so their preference says which they prefer. Do not
-contrast what earlier preferences have settled or what they have shown they do
-not mind; move on to other choices in later pairs.
+colours, shapes, spacing, a free layout’s form, pacing, and what is shown at all
+(a listing or none, as listing.language none; a type’s view or none; a kind’s
+shown false), so some designs show an element others leave out, keeping shown
+what the participant asked for, and the participant sees real alternatives
+rather than one design repeated. A pair is also a question, so choose it to
+learn the most from the participant’s answer: from the conversation and earlier
+preferences, judge which open choices are still uncertain and likely to matter
+to them, as a listing or none, or coarse or fine steps, and make the two
+variants differ in those few and stay alike elsewhere, so their preference says
+which they prefer. Do not contrast what earlier preferences have settled or what
+they have shown they do not mind; move on to other choices in later pairs.

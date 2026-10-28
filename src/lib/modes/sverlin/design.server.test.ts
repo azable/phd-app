@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { linearSearchSource } from './contract';
+import bst from './fixtures/bst.sverlin?raw';
+import bfs from './fixtures/bfs-visit-order.sverlin?raw';
+import { formsFor } from './library/node/forms';
 import {
   buildVariant,
   DesignValueError,
@@ -249,6 +252,56 @@ describe('pauses chosen', () => {
     expect(buildVariant(space, starter, { chosen }, 1).values).toEqual({
       'pause@sweep': 'accumulate',
       'pause@sweep.pair': 'on'
+    });
+  });
+});
+
+describe('free layouts', () => {
+  const tree = prepareSvelteComponent(bst).design;
+
+  it('give the kind arranging one its form, curve, and layout seed', () => {
+    expect(tree.space['Heap.form']).toEqual(formsFor('tree', 'y'));
+    expect(tree.space['Heap.curve']).toEqual(['straight', 'curved']);
+    expect(tree.space['Heap.layoutSeed']).toContain(1);
+    expect(tree.starter).toMatchObject({
+      'Heap.form': 'tree-down',
+      'Heap.curve': 'straight',
+      'Heap.layoutSeed': 1
+    });
+    // Rows and columns have no such look.
+    expect(Object.keys(space).filter((key) => key.endsWith('.form'))).toEqual([]);
+    expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Heap.form']);
+  });
+
+  it('keep the layout of the variant built on unless a value changes it', () => {
+    const base = { ...tree.starter, 'Heap.form': 'indented', 'Heap.layoutSeed': 7 };
+    const paced = buildVariant(tree.space, tree.starter, { base, chosen: {} }, 99).values;
+    expect(paced).toMatchObject({ 'Heap.form': 'indented', 'Heap.layoutSeed': 7 });
+    const contrasted = buildVariant(
+      tree.space,
+      tree.starter,
+      { base, chosen: { 'Heap.form': 'snake' } },
+      99
+    ).values;
+    expect(contrasted).toMatchObject({ 'Heap.form': 'snake', 'Heap.layoutSeed': 7 });
+    // A form the structure cannot take is refused, naming the ones it can.
+    expect(() =>
+      buildVariant(tree.space, tree.starter, { chosen: { 'Heap.form': 'ring' } }, 1)
+    ).toThrow(DesignValueError);
+  });
+
+  it('give a link’s kind its curve and bend, which a vary keeps', () => {
+    const graph = prepareSvelteComponent(bfs).design;
+    expect(graph.space['Graph.Link.curve']).toEqual(['layout', 'straight', 'curved']);
+    expect(graph.space['Graph.Link.bend']).toContain('none');
+    expect(graph.starter).toMatchObject({
+      'Graph.Link.curve': 'layout',
+      'Graph.Link.bend': 'none'
+    });
+    const base = { ...graph.starter, 'Graph.Link.curve': 'curved', 'Graph.Link.bend': 0.3 };
+    expect(buildVariant(graph.space, graph.starter, { base }, 5).values).toMatchObject({
+      'Graph.Link.curve': 'curved',
+      'Graph.Link.bend': 0.3
     });
   });
 });

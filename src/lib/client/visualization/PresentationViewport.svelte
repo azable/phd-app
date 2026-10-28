@@ -6,7 +6,6 @@
   import type { CanvasView } from '$lib/modes/sandbox';
   import type { RenderedFile, RenderTarget } from '$lib/modes/render-targets';
   import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
-  import type { DrawnStep } from '$lib/shared/projects/events/message-content';
   import {
     presentationMode,
     type RenderablePresentation,
@@ -21,8 +20,6 @@
     selection?: readonly string[];
     onSelectionChange?: (elements: SelectedElement[]) => void;
     onViewChange?: (view: CanvasView) => void;
-    /** What the step on screen drew implicitly, in modes that report it. */
-    onDrawnChange?: (drawn: DrawnStep) => void;
     /** The presentation's own code failed as it drew, in modes that run authored code. */
     onRuntimeError?: (failure: { step?: number; message: string }) => void;
     /** How long the presentation took to appear, in modes that report it. */
@@ -36,7 +33,6 @@
     selection,
     onSelectionChange,
     onViewChange,
-    onDrawnChange,
     onRuntimeError,
     onLoadTiming
   }: Omit<ViewportProps, 'presentation'> & { presentation?: RenderablePresentation } = $props();
@@ -81,7 +77,6 @@
       {selection}
       {onSelectionChange}
       {onViewChange}
-      {onDrawnChange}
       {onRuntimeError}
       {onLoadTiming}
     />

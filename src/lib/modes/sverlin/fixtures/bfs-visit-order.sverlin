@@ -1,0 +1,152 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Neighbours = collection(VertexRef);
+  const Adjacency = collection(Neighbours);
+  const Queue = collection(VertexRef);
+  const VisitOrder = collection(VertexRef);
+  const Flag = type('boolean');
+
+  const Waiting = unop((q: Queue) => Flag(q.length > 0));
+  const NotSeen = unop((seen: Seen) => Flag(!seen));
+  const Rest = unop((q: Queue) => Queue(q.slice(1)));
+  const Enqueue = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
+  const RecordVisit = binop((order: VisitOrder, v: VertexRef) => VisitOrder([...order, v]));
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false },
+    { name: 'F', seen: false }
+  ]);
+  const adjacency = Adjacency([
+    [1, 2],
+    [3, 4],
+    [4],
+    [5],
+    [5],
+    []
+  ]);
+</script>
+
+<script lang="sverlin">
+  let queue = Queue([0]);
+  let order = VisitOrder([]);
+  while (Waiting(queue)) @visit{
+    @take[const current = queue[0];
+    queue = Rest(queue);
+    order = RecordVisit(order, current);]
+    for (const neighbour of adjacency[current]) @look{
+      if (NotSeen(vertices[@next[neighbour]].seen)) @add{
+        vertices[neighbour].seen = true;
+        queue = Enqueue(queue, neighbour);
+      }
+    }
+  }
+</script>
+
+<script lang="sverlin" listing="textbook">
+BFS(start)
+  queue = [start]
+  while queue is not empty
+    @visit[@take[current = remove front of queue
+    record current as visited]
+    for each neighbour of current
+      @look[if @next[neighbour has not been seen]
+        @add[mark neighbour as seen
+        add neighbour to the queue]]]
+</script>
+
+{#snippet NameText(value: Name)}<Node value={value} />{/snippet}
+{#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
+{#snippet VertexNumber(value: VertexRef)}<Node value={value} />{/snippet}
+
+{#snippet VertexCard(vertex: Vertex)}
+  <Node layout="column">
+    {@render Name(vertex.name)}
+    {@render Seen(vertex.seen)}
+  </Node>
+{/snippet}
+
+{#snippet QueueItems(items: Queue)}
+  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+{/snippet}
+
+{#snippet OrderItems(items: VisitOrder)}
+  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+{/snippet}
+
+{#snippet PositionMark(value: VertexRef)}<Pointed />{/snippet}
+
+{#snippet Title()}
+  <Node>Breadth-first search from A</Node>
+{/snippet}
+
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      {#snippet IndexLabel()}<Node>{k}</Node>{/snippet}
+      <Node layout="column">
+        {@render Vertex(vertex)}
+        {@render IndexLabel()}
+      </Node>
+      {#each adjacency[k] as neighbour}
+        <Link from={k} to={neighbour} />
+      {/each}
+    {/each}
+  </Node>
+{/snippet}
+
+{#snippet QueueLine()}
+  <Node layout="row">
+    <Node>queue</Node>
+    {@render Queue(queue)}
+  </Node>
+{/snippet}
+
+{#snippet OrderLine()}
+  <Node layout="row">
+    <Node>visit order</Node>
+    {@render VisitOrder(order)}
+  </Node>
+{/snippet}
+
+{#snippet CurrentInfo()}
+  <Node>removing vertex {@render VertexRef(current)} and exploring its neighbours</Node>
+{/snippet}
+
+{#snippet NeighbourInfo()}
+  <Node>checking neighbour {@render VertexRef(@visit.look.next)}</Node>
+{/snippet}
+
+{#snippet StatePanel()}
+  <Node layout="column">
+    {@render QueueLine()}
+    {@render OrderLine()}
+    {@render CurrentInfo()}
+    {@render NeighbourInfo()}
+  </Node>
+{/snippet}
+
+{#snippet Lesson()}
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      {@render Graph()}
+      {@render StatePanel()}
+    </Node>
+  </Node>
+{/snippet}
+
+{@render Title()}
+{@render Lesson()}
+{@render VertexRef(current)}
+{@render VertexRef(@visit.look.next)}
+

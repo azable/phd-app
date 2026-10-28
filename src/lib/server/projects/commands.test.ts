@@ -1831,7 +1831,7 @@ describe('submitProjectFeedback', () => {
                 layouts: [
                   {
                     node: `${line}:${column}`,
-                    seed: 7,
+                    layoutSeed: 7,
                     form: 'snake',
                     source: expect.objectContaining({ line, column })
                   }

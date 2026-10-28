@@ -63,9 +63,6 @@
     key,
     constraints,
     flow,
-    form,
-    curve,
-    layoutSeed,
     __view = 'root',
     __over,
     __ref,
@@ -91,21 +88,6 @@
     constraints?: readonly string[];
     /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
     flow?: 'x' | 'y';
-    /**
-     * In a free layout, the form its linked structure takes: in sequence ('line', 'snake', 'wave',
-     * 'arc', 'scatter'), as a 'ring', as a tree ('tree-down', 'tree-right', 'radial', 'indented'), or in
-     * layers ('layers-down', 'layers-right'), as the structure allows. Unset, each presentation draws
-     * one that suits the space.
-     */
-    form?: Form;
-    /** In a free layout, whether arrows prefer to run straight or to curve; unset, each presentation draws it. */
-    curve?: 'straight' | 'curved';
-    /**
-     * Keeps this node's layout of its children the same in every presentation: its shape, spacing,
-     * and curves come from this seed instead of the presentation's. Selections report the seed a
-     * layout used, so a layout the participant liked can be kept while everything else varies.
-     */
-    layoutSeed?: number;
     /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
     __view?: string;
     /**
@@ -276,9 +258,6 @@
     key,
     constraints,
     flow,
-    form,
-    curve,
-    layoutSeed,
     __view,
     __ref,
     __type,
@@ -423,9 +402,10 @@
           align={resolvedAlign}
           {constraints}
           {flow}
-          {form}
-          {curve}
-          {layoutSeed}
+          form={look('form') as Form | undefined}
+          curve={look('curve') as 'straight' | 'curved' | undefined}
+          layoutSeed={look('layoutSeed') as number | undefined}
+          kind={__over?.kind ?? __view}
           {gap}
           scope={id ?? 'node'}
         >

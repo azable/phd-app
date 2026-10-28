@@ -97,14 +97,16 @@ import {
   type LeftOutModel
 } from './left-out';
 import {
+  freeLayoutProps,
   kindKey,
   placeProps,
   roleProps,
   starterListing,
+  type DesignProp,
   type KindRole
 } from './library/node/design';
-import { forms } from './library/node/forms';
 import { packStates } from './library/trace-pack';
+import { layoutStructures, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 
@@ -222,6 +224,8 @@ export type PreparedComponent = {
     fallbacks: Record<string, Fallback>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
+    /** Each free layout kind's structure, as its data makes it, for the chooser. */
+    structures: Record<string, LayoutStructure>;
   };
   /** Where the view places a <Listing />, the algorithm's text in each language. */
   listings?: Record<
@@ -576,15 +580,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         );
       else linkedTypes.add(type);
     }
-    const { insertions, problems, kinds, tagKinds, nodeKinds, listing, listingAt } = withNodeRefs(
-      svelteSource,
-      ast,
-      source,
-      found.roots,
-      found.valueTypes,
-      paths,
-      linkedTypes
-    );
+    const {
+      insertions,
+      problems,
+      kinds: unlaid,
+      freeNodes,
+      flows,
+      tagKinds,
+      nodeKinds,
+      listing,
+      listingAt
+    } = withNodeRefs(svelteSource, ast, source, found.roots, found.valueTypes, paths, linkedTypes);
     viewProblems = [
       ...problems,
       ...linkProblems,
@@ -844,7 +850,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         if (alias) aliases.set(start, { alias, callee: site.callee });
       }
       for (const view of options)
-        for (const kind of kinds)
+        for (const kind of unlaid)
           if (kind.key === view || kind.key.startsWith(`${view}.`))
             placeKinds.set(`${within}${kind.key}${at}`, { base: kind.key, role: kind.role });
       // A label the root marks: its listing region's paint falls back to the mark's.
@@ -852,7 +858,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         labelMarks.set(at.slice(1), {
           kinds: Object.fromEntries(
             options
-              .filter((view) => kinds.some(({ key }) => key === kindKey(view, 'Pointed')))
+              .filter((view) => unlaid.some(({ key }) => key === kindKey(view, 'Pointed')))
               .map((view) => [view, `${kindKey(view, 'Pointed')}${at}`])
           ),
           ...(options.length > 1 ? { by: `pointers.${name}${at}` } : {})
@@ -1017,6 +1023,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       labels: new Set(Object.values(labelled).map(({ label }) => label)),
       operators: new Set(shown.keys()),
       during: new Set(Object.values(during))
+    });
+    // Each free layout's look starts from the structure its data makes, which the chooser is told.
+    const structures = layoutStructures({
+      free: freeNodes,
+      views: found.components,
+      stateNames,
+      domain,
+      steps: master
+    });
+    const kinds = unlaid.map((kind): DesignKind => {
+      const structure = structures[kind.key];
+      const flow = flows.get(kind.key);
+      return structure ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } } : kind;
     });
     // A chain's branches take turns in one place: none may show at a step another shows at. The
     // master pauses at every label, so every step any pacing has is among its steps.
@@ -1383,6 +1402,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       design: {
         views: chosen,
         pointers: pointerChosen,
+        structures,
         tags: tagKinds,
         renders: renderVariables,
         places: placeChoices,
@@ -1867,19 +1887,14 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     children: null,
     key: null,
     constraints: null,
-    flow: named({ x: 0, y: 0 }, false),
-    form: named(Object.fromEntries(forms.map((name) => [name, name])), false),
-    curve: named({ straight: 0, curved: 0 }, false),
-    layoutSeed: null
+    flow: named({ x: 0, y: 0 }, false)
   },
   Pointed: {},
   Link: {
     from: null,
     to: null,
     directed: null,
-    label: null,
-    curve: named({ straight: 0, curved: 0 }, false),
-    bend: null
+    label: null
   }
 };
 
@@ -1905,14 +1920,16 @@ const designProps = new Set([
 
 /**
  * Reject a prop a library component does not take, or a written value it cannot use, such as
- * layout="grid", which would otherwise be ignored without a word.
+ * layout="grid", which would otherwise be ignored without a word. The kind is the snippet the
+ * component is in, which a look belongs to.
  */
 function checkProps(
   component: 'Node' | 'Link' | 'Pointed',
   attributes: readonly Attribute[],
   start: number,
   source: string,
-  problems: InvalidSvelteSourceError[]
+  problems: InvalidSvelteSourceError[],
+  kind: string
 ): void {
   const props = libraryProps[component];
   for (const attribute of attributes) {
@@ -1924,11 +1941,15 @@ function checkProps(
         new InvalidSvelteSourceError(
           attribute.name === 'tags'
             ? `<${component}> takes no tags: its kind is the snippet it is in, so name the node by a snippet, as {#snippet Caption()}<Node>…</Node>{/snippet}, and its look is a variable of that kind.`
-            : designProps.has(attribute.name)
-              ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
-              : named.length
-                ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
-                : `<${component}> takes no props.`,
+            : component === 'Node' && freeLayoutProps.includes(attribute.name as DesignProp)
+              ? `<Node> ${attribute.name} is a free layout's look, which the variant gives the kind of node arranging it, not the markup: here the variable ${kind}.${attribute.name}.`
+              : component === 'Link' && (attribute.name === 'curve' || attribute.name === 'bend')
+                ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name}.`
+                : designProps.has(attribute.name)
+                  ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
+                  : named.length
+                    ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
+                    : `<${component}> takes no props.`,
           { code: 'unknown_prop', ...at }
         )
       );
@@ -2044,6 +2065,9 @@ function withNodeRefs(
   insertions: Insertion[];
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
+  /** The <Node layout="free"> tags of each kind that has one, and the flow the first sets. */
+  freeNodes: Map<string, unknown[]>;
+  flows: Map<string, 'x' | 'y'>;
   /** The kind of each <Node>, <Pointed>, and <Link> tag, by its line:column, for the editor to show. */
   tagKinds: Record<string, string[]>;
   /** Each <Node> tag's kind, by where it starts, for what a presentation leaves out. */
@@ -2177,7 +2201,8 @@ function withNodeRefs(
           tag.attributes ?? [],
           tag.start,
           source,
-          problems
+          problems,
+          view
         );
       const entry = { start: tag.start, name: tag.name as string, links: false, view, tag };
       tags.push(entry);
@@ -2261,6 +2286,19 @@ function withNodeRefs(
   // A kind several roles share takes the plainest look, and every prop any of them has.
   const plainest: KindRole[] = ['container', 'text', 'value', 'pointed', 'link'];
   const kinds = new Map<string, KindRole>();
+  // A kind with a node laid out freely has that layout's look among its props, and the structure
+  // its data makes (see structure.server.ts), read from those nodes and the flow they set.
+  const freeNodes = new Map<string, Tag[]>();
+  const flows = new Map<string, 'x' | 'y'>();
+  const laidOutFreely = ({ name, tag }: Entry) =>
+    name === 'Node' &&
+    (tag.attributes ?? []).some(({ name: prop, value }) => {
+      if (prop !== 'layout' || !Array.isArray(value) || value.length !== 1) return false;
+      const [part] = value;
+      return part.type === 'Text'
+        ? part.data === 'free'
+        : possibleValues(part.expression).includes('free');
+    });
   const tagKinds: Record<string, string[]> = {};
   const nodeKinds = new Map<number, string>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
@@ -2295,6 +2333,13 @@ function withNodeRefs(
         entry.start
       );
     kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
+    if (laidOutFreely(entry)) {
+      freeNodes.set(key, [...(freeNodes.get(key) ?? []), entry.tag]);
+      const flow = (entry.tag.attributes ?? []).find(({ name }) => name === 'flow')?.value;
+      const [part] = Array.isArray(flow) ? flow : [];
+      if (!flows.has(key) && part?.type === 'Text' && (part.data === 'x' || part.data === 'y'))
+        flows.set(key, part.data);
+    }
     if (entry.name === 'Node') nodeKinds.set(entry.start, key);
     const { line, column } = sourcePosition(source, entry.start);
     tagKinds[`${line}:${column + 1}`] = [key];
@@ -2320,6 +2365,8 @@ function withNodeRefs(
     insertions,
     problems,
     kinds: [...kinds].map(([key, role]) => ({ key, role })),
+    freeNodes,
+    flows,
     tagKinds,
     nodeKinds
   };

@@ -30,6 +30,7 @@ import type {
 import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
+  linkCurveOptions,
   listingOptions,
   listingPropOptions,
   overflowOptions,
@@ -171,18 +172,19 @@ export type AiSelectedElement = {
   label: string;
   source: ElementLocation;
   /**
-   * The constraint layouts around the element: the one placing it and the one placing its children.
-   * Each gives the arranging node (its tag in the source), the seed its layout drew from, and what
-   * it drew; setting that node's layoutSeed to the seed keeps the layout in every presentation.
+   * The free layouts around the element: the one placing it and the one placing its children. Each
+   * gives the arranging node (its tag in the source), its kind, that kind's layoutSeed, and the form
+   * and curve it drew; varying the kind's form and layoutSeed to these keeps the layout.
    */
   layouts: Array<{
     node: string;
     source?: ElementLocation;
-    seed: number;
+    kind?: string;
+    layoutSeed: number;
     form?: string;
     curve?: string;
   }>;
-  /** For a link, the curve it drew; setting bend on its <Link> to this value keeps that curve. */
+  /** For a link, the curve it drew; varying its kind's bend to the nearest option keeps it. */
   bend?: number;
 };
 
@@ -519,9 +521,9 @@ function selectedElement(
       label: reference.element.label,
       source,
       ...(reference.element.bend !== undefined ? { bend: reference.element.bend } : {}),
-      layouts: (reference.element.layouts ?? []).map((layout) => {
+      layouts: (reference.element.layouts ?? []).map(({ seed, ...layout }) => {
         const located = locateElement(presentation.source.text, layout.node);
-        return { ...layout, ...(located ? { source: located } : {}) };
+        return { ...layout, layoutSeed: seed, ...(located ? { source: located } : {}) };
       })
     }
   ];
@@ -669,16 +671,18 @@ export function designVariables(
       : key.startsWith('frame.') || key === 'listing.language'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
-    // A pointer's overflow and a collection's have options of their own, as does a listing's
-    // text colour, which can keep the listing's ink.
+    // A pointer's overflow and a collection's have options of their own, as do a listing's text
+    // colour, which can keep the listing's ink, and a link's curve, which can follow its layout's.
     const set =
-      prop === 'overflow'
-        ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
-          ? 'overflow.pointer'
-          : 'overflow.collection'
-        : prop === 'color' && key.startsWith('listing.')
-          ? 'listing.color'
-          : prop;
+      prop === 'curve' && key.endsWith('.Link.curve')
+        ? 'link.curve'
+        : prop === 'overflow'
+          ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
+            ? 'overflow.pointer'
+            : 'overflow.collection'
+          : prop === 'color' && key.startsWith('listing.')
+            ? 'listing.color'
+            : prop;
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
@@ -686,6 +690,7 @@ export function designVariables(
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection,
+      'link.curve': linkCurveOptions,
       // A label with no labels inside it reads accumulating as on.
       pause: ['accumulate', 'on', 'off']
     };

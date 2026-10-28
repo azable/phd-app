@@ -91,11 +91,11 @@ describe('structure over a whole animation', () => {
   it('reads the structure from links present at every step, drawing the rest on top', () => {
     const steps = [step(path, 3), step([...path, { from: 'b', to: 'd', id: '4:1' }], 3)];
     // The link that comes and goes would make a layered graph; only the path counts, so a layered
-    // form does not apply.
+    // form does not apply, and one that suits the path is drawn instead.
     for (const input of steps) input.options.form = 'layers-down';
     const span = solveSpan(steps);
     expect(span.choices.form).not.toBe('layers-down');
-    expect(span.problems.join(' ')).toMatch(/make a path/u);
+    expect(span.problems).toEqual([]);
     expect(span.edges.map(({ id }) => id)).toEqual(['1:1', '2:1', '3:1', '4:1']);
   });
 

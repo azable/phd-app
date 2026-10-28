@@ -9,12 +9,7 @@
 <script lang="ts">
   import { flushSync, untrack, type Component } from 'svelte';
 
-  import {
-    layoutMemoryContext,
-    provideArrangementParent,
-    provideNodeIds,
-    provideSeed
-  } from './type-context';
+  import { layoutMemoryContext, provideArrangementParent, provideNodeIds } from './type-context';
   import { alignments, frameRatios, frameWidth, justifications } from './node/scales';
   import type { FrameSettings } from './node/props';
   import { arrangementLayout } from './scene';
@@ -38,7 +33,6 @@
   } = $props();
 
   provideNodeIds();
-  provideSeed(untrack(() => (typeof props.seed === 'number' ? props.seed : 1)));
   const memory = layoutMemoryContext();
 
   let frameElement = $state<HTMLDivElement>();

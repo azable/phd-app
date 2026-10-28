@@ -25,22 +25,15 @@ import {
 } from '$lib/modes/sverlin/library/node/design';
 import type { DesignDraw, DesignValues } from '$lib/shared/presentations';
 
-/**
- * One prop a tag left to the seed, such as its layoutSeed, and what each visible presentation drew
- * for it; `pin` is the prop as the view would write it to keep that value, where one can.
- */
+/** One prop of a tag, its kind's variable, and the value each visible presentation gave it. */
 export type GhostProp = {
   name: string;
-  values: { label?: string; text: string; color?: string; title: string; pin?: string }[];
+  values: { label?: string; text: string; color?: string; title: string }[];
   differs: boolean;
   /** The design variable its row shows, as `Highlight.Pointed@left.fill`, which links reveal. */
   key?: string;
 };
 
-/** A prop as a view writes it: a text value quoted, anything else in braces. */
-export function propText(name: string, value: unknown): string {
-  return typeof value === 'string' ? `${name}="${value}"` : `${name}={${JSON.stringify(value)}}`;
-}
 import { tagEnd } from './selection-highlights';
 import {
   revealedField,
@@ -49,18 +42,6 @@ import {
   revealedRegions,
   setRevealedKeys
 } from './source-reveal';
-
-/**
- * A constraint layout the step on screen drew: the line and column (both from 1) of the tag that
- * arranges it, the seed it drew from, and its form and curve when it drew them.
- */
-export type DrawnLayout = {
-  line: number;
-  column: number;
-  seed: number;
-  form?: string;
-  curve?: string;
-};
 
 /** What one shown presentation drew, with the label that tells it apart in a comparison. */
 export type DrawnPresentation = {
@@ -82,16 +63,12 @@ export type DrawnPresentation = {
   leftOut?: readonly string[];
   /** The draws of a presentation built while sources had design blocks; none for others. */
   draws: readonly DesignDraw[];
-  layouts?: readonly DrawnLayout[];
 };
 
 /** Replace the shown presentations' drawn values. */
 export const setDrawnValues = StateEffect.define<{
   presentations: readonly DrawnPresentation[];
 }>();
-
-/** Remove one ghost prop, once it has been written into the source. */
-const removeGhost = StateEffect.define<{ at: number; name: string }>();
 
 /** What each shown presentation drew at one design-block draw call, from `from` to `to`. */
 export type DrawnMarker = {
@@ -309,9 +286,7 @@ function variable(
 
 /**
  * The ghost props of every <Node>, <Pointed>, and <Link> tag in the document: its kind's values in
- * each shown presentation's variant, a tag of several kinds, as across sources, naming each by its kind,
- * and the layout it arranged (its form, curve, and layoutSeed). A tag rendered more than once, as
- * in an {#each}, shows each layout value it drew once, and can be pinned only where it drew one.
+ * each shown presentation's variant, a tag of several kinds, as across sources, naming each by its kind.
  */
 export function tagGhosts(
   state: EditorState,
@@ -357,38 +332,6 @@ export function tagGhosts(
       const line = state.doc.lineAt(match.index);
       add(line.number, match.index - line.from + 1, listingProps, ['listing']);
     }
-  const arranged = new Map<string, { line: number; column: number }>();
-  for (const { layouts = [] } of presentations)
-    for (const { line, column } of layouts) arranged.set(`${line}:${column}`, { line, column });
-  for (const { line, column } of arranged.values()) {
-    const drawn = presentations.map(({ label, layouts = [] }) => ({
-      label,
-      layouts: layouts.filter((layout) => layout.line === line && layout.column === column)
-    }));
-    const prop = (name: 'form' | 'curve' | 'layoutSeed'): GhostProp | undefined => {
-      const values = drawn.map(({ label, layouts }) => {
-        const distinct = [
-          ...new Set(layouts.map((layout) => (name === 'layoutSeed' ? layout.seed : layout[name])))
-        ].filter((value) => value !== undefined);
-        if (!distinct.length) return { label, text: '–', title: `No ${name} drawn here` };
-        return {
-          label,
-          text: distinct.length > 1 ? `${distinct.length} values` : String(distinct[0]),
-          title: `${name}: ${distinct.join(', ')}`,
-          ...(distinct.length === 1 ? { pin: propText(name, distinct[0]) } : {})
-        };
-      });
-      if (values.every(({ text }) => text === '–')) return undefined;
-      // Seeds differ wherever they are not pinned, so a pair is compared by its forms and curves.
-      const differs = name !== 'layoutSeed' && new Set(values.map(({ text }) => text)).size > 1;
-      return { name, values, differs };
-    };
-    add(
-      line,
-      column,
-      (['form', 'curve', 'layoutSeed'] as const).flatMap((name) => prop(name) ?? [])
-    );
-  }
   return [...ghosts]
     .map(([at, { props, kinds }]) => ({ at, props, kinds }))
     .sort((a, b) => a.at - b.at);
@@ -752,8 +695,7 @@ class GhostChipWidget extends WidgetType {
 
 /**
  * Under a tag's line: its ghost props, one row each, written as the view would set them, with a
- * column per shown presentation. In an editable editor, a value with a pin writes that prop into
- * the tag at `at`, where its chip is.
+ * column per shown presentation.
  */
 class GhostTableWidget extends WidgetType {
   constructor(
@@ -772,7 +714,7 @@ class GhostTableWidget extends WidgetType {
     );
   }
 
-  toDOM(view: EditorView): HTMLElement {
+  toDOM(): HTMLElement {
     const table = document.createElement('div');
     table.className = 'cm-ghost-table';
     const columns = this.props[0]?.values.length ?? 1;
@@ -796,28 +738,18 @@ class GhostTableWidget extends WidgetType {
         `${name}=`
       );
       if (key) named.dataset.key = key;
-      for (const { label, text, color, title, pin } of values) {
+      for (const { label, text, color, title } of values) {
         const value = cell(
           `${differs ? 'cm-ghost-value cm-drawn-differs' : 'cm-ghost-value'}${shown}`,
           color ? '' : text
         );
-        value.title = `${label ? `${label}: ` : ''}${title}${pin ? `\nWhile editing, click to write ${pin}` : ''}`;
+        value.title = `${label ? `${label}: ` : ''}${title}`;
         if (color) {
           const swatch = document.createElement('span');
           swatch.className = 'cm-drawn-swatch';
           swatch.style.backgroundColor = color;
           value.append(swatch, ` ${text}`);
         }
-        if (!pin) continue;
-        value.dataset.pin = pin;
-        value.addEventListener('mousedown', (event) => {
-          if (view.state.readOnly) return;
-          event.preventDefault();
-          view.dispatch({
-            changes: { from: this.at, insert: ` ${pin}` },
-            effects: removeGhost.of({ at: this.at, name })
-          });
-        });
       }
     }
     return table;
@@ -1002,17 +934,6 @@ const drawnField = StateField.define<DrawnState>({
             : [...next.open, at]
         };
       }
-      if (effect.is(removeGhost)) {
-        const at = changes.mapPos(effect.value.at, 1);
-        next = {
-          ...next,
-          ghosts: next.ghosts.map((tag) =>
-            tag.at === at
-              ? { ...tag, props: tag.props.filter(({ name }) => name !== effect.value.name) }
-              : tag
-          )
-        };
-      }
     }
     return next;
   },
@@ -1118,10 +1039,6 @@ const drawnTheme = EditorView.baseTheme({
   },
   '.cm-ghost-value.cm-drawn-differs': {
     backgroundColor: 'color-mix(in oklab, #d97706 20%, transparent)'
-  },
-  '.cm-content[contenteditable="true"] .cm-ghost-value[data-pin]:hover': {
-    cursor: 'pointer',
-    outline: '1px solid color-mix(in oklab, var(--card-foreground) 40%, transparent)'
   },
   '.cm-drawn-swatch': {
     display: 'inline-block',

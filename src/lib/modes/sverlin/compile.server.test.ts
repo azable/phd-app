@@ -307,7 +307,23 @@ describe('single-component Svelte compilation', () => {
       compileSvelteComponent(
         `<script lang="sverlin"></script>\n{#snippet V()}${markup}{/snippet}{@render V()}`
       );
-    await expect(view('<Node form="spiral" />')).rejects.toMatchObject({
+    // A free layout's look is its kind's, so the markup cannot set it.
+    for (const prop of ['form="ring"', 'curve="straight"', 'layoutSeed={3}'])
+      await expect(view(`<Node layout="free" ${prop} />`)).rejects.toMatchObject({
+        code: 'unknown_prop',
+        line: 2,
+        message: expect.stringContaining(`here the variable V.${prop.split('=')[0]}`)
+      });
+    for (const prop of ['curve="curved"', 'bend={0.3}'])
+      await expect(
+        view(
+          `<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" ${prop} /></Node>`
+        )
+      ).rejects.toMatchObject({
+        code: 'unknown_prop',
+        message: expect.stringContaining(`here the variable V.Link.${prop.split('=')[0]}`)
+      });
+    await expect(view('<Node flow="z" />')).rejects.toMatchObject({
       code: 'invalid_prop',
       line: 2
     });

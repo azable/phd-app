@@ -750,6 +750,30 @@ included (end slots are tracks of its box) or excluded (they hang outside, so
 centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
 the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
 `stroke`, `strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label.
+
+A kind with a free layout (see Free layout, links, and relations) also has that
+layout's look. `form` is the shape it gives the structure its links make, read
+from the arrows present at every step (a link that comes and goes is drawn on
+top of it but does not change it): a path such as a linked list, a cycle, a
+tree, or a layered graph (acyclic, with nodes that have several parents). Any
+structure can lie along its reading order (a path in link order, a tree depth
+first, a layered graph each node after its parents) as `line`, `snake` (rows
+read back and forth), `wave`, `arc`, or `scatter` (free positions that keep each
+node near the next); a cycle can also take `ring`, a tree `tree-down`,
+`tree-right`, `radial`, or `indented`, and a layered graph `layers-down` or
+`layers-right`, as its `flow` allows. A layout's options are the forms its
+data's structure can take, and it starts in that structure's natural form: a
+path in a `line` (as does a layout whose data links nothing), a cycle in a
+`ring`, a tree `tree-down` and a layered graph `layers-down` (`-right` along
+`flow` x); where the page finds the links it draws make another structure, a
+form that one cannot take is drawn in its natural form. `curve`, `straight` (the
+start) or `curved`, is how its arrows prefer to run. `layoutSeed`, 1 to 32, is
+what its spacing and nudges are drawn from. The same values draw the same
+picture whatever the space. A link's kind has `curve` too, `layout` (as its
+layout's arrows run, the start), `straight`, or `curved`, and `bend`, `none`
+(the start) or how far it bows to one side as a fraction of its length: -0.5,
+-0.3, -0.15, 0, 0.15, 0.3, or 0.5.
+
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
 pink, and rose) in 11 shades from 50, the lightest, to 950, as `blue-600`.
@@ -795,8 +819,6 @@ each presentation's values, and a presentation built after a change keeps the
 values of the one it was made from where nothing else sets them; the assistant
 sets values with `vary`, and the participant's Another variant randomises them,
 keeping which variables share a value, each colour's shade, and what is shown.
-Only free layouts are drawn from the presentation's seed (see Free layout,
-links, and relations).
 
 ### Declare what varies
 
@@ -1018,7 +1040,7 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 for linked structures such as linked lists, trees, and graphs, joined by
 `<Link>` components (see Link), and for groups whose arrangement is open, with
 or without links. The children are kept clear of each other and gathered
-compactly, starting from the presentation's seed. A node hugs its children
+compactly, as their kind's look says (see Design). A node hugs its children
 whatever its layout.
 
 - `key`: a name for a child that its parent's links and relations refer to, such
@@ -1039,27 +1061,13 @@ whatever its layout.
   downwards, as for a list or a tree; only forms that run that way are drawn.
   Set it only when asked; an undirected graph has no flow, and its links are
   `directed={false}`.
-- `form`: the shape a free layout gives the structure its links make, read from
-  the arrows present at every step (a link that comes and goes is drawn on top
-  of it but does not change it): a path such as a linked list, a cycle, a tree,
-  or a layered graph (acyclic, with nodes that have several parents). Any
-  structure can lie along its reading order (a path in link order, a tree depth
-  first, a layered graph each node after its parents) as `'line'`, `'snake'`
-  (rows read back and forth), `'wave'`, `'arc'`, or `'scatter'` (free positions
-  that keep each node near the next). A cycle can also take `'ring'`; a tree
-  `'tree-down'`, `'tree-right'`, `'radial'`, or `'indented'`; a layered graph
-  `'layers-down'` or `'layers-right'`. Leave it unset: every presentation draws
-  a form that suits the space it has and stretches it to fill that space, and
-  arrows curve round other nodes and labels.
-- `curve`: `'straight'` or `'curved'`, whether this node's arrows prefer to run
-  straight or to curve; unset, each link draws its own.
-- `layoutSeed`: keeps this node's layout of its children the same in every
-  presentation. Each arrangement draws its shape, spacing, and curves from a
-  seed of its own, which selections report with the element; when the
-  participant likes a layout ("keep this layout but …"), set `layoutSeed` on the
-  node that arranges it to the reported seed, and `form` to the reported form,
-  so that layout stays while everything else still varies. Pin `curve` only if
-  the participant names it.
+
+A free layout's look, `form`, `curve`, and `layoutSeed`, is its kind's (see
+Design), never a prop, and arrows bend round other nodes and labels. A selection
+reports each free layout around the element, with its kind, its `layoutSeed`,
+and the form it drew: to keep a layout the participant liked ("keep this layout
+but …"), vary that kind's `form` and `layoutSeed` to them, and its `curve` only
+if they name it.
 
 ## Link
 
@@ -1087,12 +1095,10 @@ Design), as `Arrow.Link` for a link in `Arrow`.
 - `directed`: `false` for a plain line instead of an arrow.
 - `label`: a short text shown at the middle of the link, such as `next` or
   `head`.
-- `curve`: `'straight'` or `'curved'` for this link alone; unset, it draws its
-  own, whatever its siblings do.
-- `bend`: an exact curve, how far the link bows to one side as a fraction of its
-  length (`0` straight, `0.3` a clear arc, negative the other side). A selected
-  link reports the bend it drew; when the participant likes a curve, set `bend`
-  on that `<Link>` to the reported value.
+
+How a link curves is its kind's `curve` and `bend` (see Design), never a prop. A
+selected link reports the bend it drew; when the participant likes a curve, vary
+its kind's `bend` to the nearest option.
 
 Links come and go with the steps: one in `{#if}` shows only while it matters, as
 the pointer being followed, and one whose end is a label, or a variable out of

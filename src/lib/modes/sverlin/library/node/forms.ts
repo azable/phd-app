@@ -36,22 +36,41 @@ export type Structure =
   | { kind: 'tree'; nodes: number[]; root: number; children: Map<number, number[]> }
   | { kind: 'layers'; nodes: number[]; parents: Map<number, number[]> };
 
+/** What a structure is: a path, a cycle, a tree, or a layered graph. */
+export type StructureKind = Structure['kind'];
+
+/** The forms whose links would run against a flow, which a layout with that flow leaves out. */
+const against: Record<'x' | 'y', readonly Form[]> = {
+  x: ['tree-down', 'layers-down', 'radial', 'indented'],
+  y: ['tree-right', 'layers-right', 'radial']
+};
+
 /**
- * The forms a structure can take. Any structure can be laid out in sequence along its reading order,
- * with links that skip ahead curving round; a cycle can also close into a ring, a tree branch out,
- * and a layered graph stack its layers. Its shape widens the choice, rather than dictating one.
+ * The forms a structure can take, along its flow if it has one. Any structure can be laid out in
+ * sequence along its reading order, with links that skip ahead curving round; a cycle can also
+ * close into a ring, a tree branch out, and a layered graph stack its layers.
  */
-export function formsFor(structure: Structure): readonly Form[] {
-  switch (structure.kind) {
-    case 'path':
-      return sequenceForms;
-    case 'cycle':
-      return [...cycleForms, ...sequenceForms];
-    case 'tree':
-      return [...sequenceForms, ...treeForms];
-    case 'layers':
-      return [...sequenceForms, ...layerForms];
-  }
+export function formsFor(kind: StructureKind, flow?: 'x' | 'y'): readonly Form[] {
+  const forms: readonly Form[] =
+    kind === 'cycle'
+      ? [...cycleForms, ...sequenceForms]
+      : kind === 'tree'
+        ? [...sequenceForms, ...treeForms]
+        : kind === 'layers'
+          ? [...sequenceForms, ...layerForms]
+          : sequenceForms;
+  return flow ? forms.filter((form) => !against[flow].includes(form)) : forms;
+}
+
+/**
+ * The form a structure takes unless its kind names another it can take: a path in a line, a cycle
+ * in a ring, a tree branching down, or rightwards along x, a layered graph in layers likewise.
+ */
+export function naturalForm(kind: StructureKind, flow?: 'x' | 'y'): Form {
+  if (kind === 'cycle') return 'ring';
+  if (kind === 'tree') return flow === 'x' ? 'tree-right' : 'tree-down';
+  if (kind === 'layers') return flow === 'x' ? 'layers-right' : 'layers-down';
+  return 'line';
 }
 
 /**

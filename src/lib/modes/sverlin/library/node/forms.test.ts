@@ -80,11 +80,11 @@ describe('structures', () => {
       [2, 0]
     ]) as Structure;
     for (const structure of [tree, layers, cycle])
-      expect(formsFor(structure)).toEqual(expect.arrayContaining([...sequenceForms]));
-    expect(formsFor(tree)).toEqual(expect.arrayContaining(['tree-down', 'radial']));
-    expect(formsFor(tree)).not.toContain('ring');
-    expect(formsFor(layers)).toEqual(expect.arrayContaining(['layers-down', 'layers-right']));
-    expect(formsFor(cycle)).toContain('ring');
+      expect(formsFor(structure.kind)).toEqual(expect.arrayContaining([...sequenceForms]));
+    expect(formsFor(tree.kind)).toEqual(expect.arrayContaining(['tree-down', 'radial']));
+    expect(formsFor(tree.kind)).not.toContain('ring');
+    expect(formsFor(layers.kind)).toEqual(expect.arrayContaining(['layers-down', 'layers-right']));
+    expect(formsFor(cycle.kind)).toContain('ring');
   });
 });
 
@@ -111,7 +111,7 @@ describe('form placement', () => {
 
   it('places every node of every form clear of the others, for any seed', () => {
     for (const structure of structures)
-      for (const form of formsFor(structure))
+      for (const form of formsFor(structure.kind))
         for (const seed of [1, 2, 3, 4]) {
           const centres = formCentres(form, structure, () => size, {
             room: 20,

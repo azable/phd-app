@@ -43,8 +43,6 @@
     MessageContent
   } from '$lib/shared/projects/events/message-content';
   import { activeProjectOperation } from '$lib/shared/projects/operations';
-  import type { DrawnStep } from '$lib/shared/projects/events/message-content';
-  import { locateElement } from '$lib/modes/sverlin/element-ref';
   import type {
     StudyInteractionCapturePolicy,
     StudyWorkspaceObservation
@@ -179,8 +177,6 @@
   let interactionRecorder = $state.raw<ProjectInteractionRecorder>();
   // The canvas view each visible presentation was last left at, for study observations.
   let canvasViews = $state.raw<Record<string, { zoom: number; panX: number; panY: number }>>({});
-  // What each visible presentation's step on screen drew implicitly, as its page last reported it.
-  let drawnSteps = $state.raw<Record<string, DrawnStep>>({});
   let timelineObservation = $state<StudyWorkspaceObservation['timeline']>();
   let draftObservation = $state<StudyWorkspaceObservation['draft']>({
     hasContent: false,
@@ -268,13 +264,6 @@
               ...(presentation.leftOut ? { leftOut: presentation.leftOut } : {}),
               ...(presentation.origins ? { origins: presentation.origins } : {}),
               unrecorded: presentation.variant === undefined && presentation.draws === undefined,
-              layouts: (drawnSteps[presentation.presentationId]?.layouts ?? []).flatMap(
-                ({ node, seed, form, curve }) => {
-                  const tag =
-                    node === 'frame' ? undefined : locateElement(presentation.source.text, node);
-                  return tag ? [{ line: tag.line, column: tag.column, seed, form, curve }] : [];
-                }
-              ),
               ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
             }
           ]
@@ -705,8 +694,6 @@
             onReferenceSelection={(selected) => feedbackComposer?.referenceSelection(selected)}
             onViewChange={(presentationId, view) =>
               (canvasViews = { ...canvasViews, [presentationId]: view })}
-            onDrawnChange={(presentationId, drawn) =>
-              (drawnSteps = { ...drawnSteps, [presentationId]: drawn })}
             disabled={mutationsDisabled}
           />
           {#if auditedRequest}

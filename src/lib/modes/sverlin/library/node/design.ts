@@ -4,6 +4,8 @@
  * ../../design.server.ts); the page reads a variant's values through them.
  */
 
+import { forms } from './forms';
+
 /** Hues of the colour range, each in every shade; neutral has no hue. */
 export const hues = [
   'neutral',
@@ -87,7 +89,11 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
 
 const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
-/** Each prop's options: lengths in em, except size in rem and radius and strokeWidth in pixels. */
+/**
+ * Each prop's options: lengths in em, except size in rem and radius and strokeWidth in pixels; a
+ * free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn from; and a
+ * link's own bend, as a fraction of its length to one side, or none.
+ */
 export const propOptions = {
   shown: [true, false],
   fill: ['none', ...colours],
@@ -105,7 +111,11 @@ export const propOptions = {
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
-  overflow: ['shown', 'hidden', 'included', 'excluded']
+  overflow: ['shown', 'hidden', 'included', 'excluded'],
+  form: forms,
+  curve: ['straight', 'curved'],
+  layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
+  bend: ['none', -0.5, -0.3, -0.15, 0, 0.15, 0.3, 0.5]
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;
@@ -198,8 +208,20 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   value: nodeProps,
   text: nodeProps,
   pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
-  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color']
+  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color', 'curve', 'bend']
 };
+
+/** The props a kind arranging a free layout has besides its role's: how the layout looks. */
+export const freeLayoutProps: readonly DesignProp[] = ['form', 'curve', 'layoutSeed'];
+
+/** A free layout's starting look, besides its form, which its structure gives (see forms.ts). */
+export const starterFreeLayout: Record<string, string | number> = {
+  curve: 'straight',
+  layoutSeed: 1
+};
+
+/** A link's curve: as its layout's arrows run, or its own. */
+export const linkCurveOptions = ['layout', 'straight', 'curved'] as const;
 
 /**
  * A prop's options for a role: overflow says, for a pointer, whether it is drawn past its
@@ -215,6 +237,7 @@ export function optionsOf(
   role: KindRole,
   prop: DesignProp
 ): readonly (string | number | boolean)[] {
+  if (role === 'link' && prop === 'curve') return linkCurveOptions;
   if (prop !== 'overflow') return propOptions[prop];
   return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
 }
@@ -343,7 +366,9 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeWidth: 2,
     opacity: 1,
     strokeStyle: 'solid',
-    color: 'neutral-600'
+    color: 'neutral-600',
+    curve: 'layout',
+    bend: 'none'
   }
 };
 

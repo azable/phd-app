@@ -1301,7 +1301,10 @@ async function chosenBuild(
       ...(options.summary ? { summary: options.summary } : {}),
       count: options.seeds.length,
       design,
-      ...(bundle.runs ? { runs: bundle.runs } : {})
+      ...(bundle.runs ? { runs: bundle.runs } : {}),
+      ...(bundle.structures && Object.keys(bundle.structures).length
+        ? { structures: bundle.structures }
+        : {})
     },
     attempt: 1
   });

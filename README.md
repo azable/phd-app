@@ -93,20 +93,26 @@ a row or column with `<Link>` children or `constraints`, is solved by WebCola
 from starting positions keyed by the seed, with nested arrangements laying out
 again as their children settle. A free layout takes a form from the structure
 its links make
-([`library/node/forms.ts`](src/lib/modes/sverlin/library/node/forms.ts)), drawn
-per presentation from those that suit the space left for it and stretched to
-fill that space, unless the view sets `form`; arrows are cubic curves that bend
-round other nodes and labels, straight or curved as the seed prefers. Arrows are
-`<Link>` components: the compiler stamps them like nodes, and each drawn link is
-selectable and referencable by its id. Every arrangement draws its choices from
-a seed of its own, derived from the presentation seed and its place unless the
-view pins it with `layoutSeed`; selections report each element's surrounding
-layouts (arranging node, seed, form, curve) in its `element-ref`, so the
-assistant can keep a layout the participant liked by pinning that seed. On load
-the page first measures every node at every step and keeps the largest size each
-reaches as its least size, so changing content never resizes a box, and gives
-every item of a collection the largest size any of them reaches, so items line
-up even when only some change
+([`library/node/forms.ts`](src/lib/modes/sverlin/library/node/forms.ts)), its
+kind's `form` or, where that structure cannot take it, the structure's natural
+form, never chosen by the space; arrows are cubic curves that bend round other
+nodes and labels, straight or curved as the layout's kind's `curve`, or the
+link's kind's `curve` and `bend`, prefer. The server gives each free layout kind
+the structure its data makes
+([`structure.server.ts`](src/lib/modes/sverlin/structure.server.ts)): it reads
+statically which data the layout's links are drawn from and follows it through
+the trace, without running the view, so the form's options and starter fit it
+and the chooser is told it. Arrows are `<Link>` components: the compiler stamps
+them like nodes, and each drawn link is selectable and referencable by its id.
+Every arrangement draws its choices from a seed of its own, derived from its
+kind's `layoutSeed` and its place, so the presentation seed decides no layout
+and a layout changes only with those variant values; selections report each
+element's surrounding free layouts (arranging node, kind, layout seed, form,
+curve) in its `element-ref`, so the assistant can keep a layout the participant
+liked by varying those values. On load the page first measures every node at
+every step and keeps the largest size each reaches as its least size, so
+changing content never resizes a box, and gives every item of a collection the
+largest size any of them reaches, so items line up even when only some change
 ([`assembly/entry.ts`](src/lib/modes/sverlin/assembly/entry.ts)); it then lays
 out every step hidden, recording what each arrangement contains, and solves each
 arrangement once over the union of every step, with every child, link, and
@@ -140,13 +146,8 @@ has differently, after each render of a type the view each visible presentation
 draws it with, and in the first top-level node's chip the page frame;
 presentations built while sources had design blocks keep their `parameters` and
 `draws`, which the source editor marks beside each call
-([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Each shown
-step's page reports its constraint layouts as a `sverlin:drawn` message, so each
-tag that arranges one gets a chip, naming any a pair drew differently, which
-opens them under the tag as ghost props, as the view would set them (such as
-`layoutSeed={4821}`); while editing, clicking a ghost value writes that prop
-into the draft, pinning it. Views of a type no visible presentation chose are
-greyed out. These reports are not recorded. Comparisons align by master step,
+([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Views of a type
+no visible presentation chose are greyed out. Comparisons align by master step,
 showing the previous step on the side that omits one.
 
 Choose the visualization mode before a starting template on the Projects page or

@@ -14,7 +14,6 @@ import {
   motionCss,
   Frame,
   settleSpans,
-  stepLayouts,
   themeCss,
   widestInteger,
   unpackStates,
@@ -413,16 +412,6 @@ function show(step: number, shownBefore?: () => void) {
       pending = undefined;
       return;
     }
-    // What the step drew implicitly, so the app can show it beside the tags that drew it.
-    if (window.parent !== window)
-      window.parent.postMessage(
-        {
-          type: 'sverlin:drawn',
-          step: stepOf(step),
-          layouts: stepLayouts(shown.layer)
-        },
-        '*'
-      );
     // The first step shown means the page is ready, so the app can take its loader away.
     if (!ready) reportTiming({ phase: 'ready', ms: Math.round(performance.now() - pageStarted) });
     if (!ready && window.parent !== window)

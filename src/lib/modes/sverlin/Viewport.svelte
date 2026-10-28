@@ -11,11 +11,7 @@
     layoutPassSchema,
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
-  import {
-    drawnStepSchema,
-    selectedElementSchema,
-    type DrawnStep
-  } from '$lib/shared/projects/events/message-content';
+  import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
   import { sceneMessageSchema, type SverlinScene } from './scene';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
@@ -27,7 +23,6 @@
     selection = [],
     onSelectionChange = () => {},
     onViewChange = () => {},
-    onDrawnChange = () => {},
     onRuntimeError = () => {},
     onLoadTiming = () => {}
   }: {
@@ -39,8 +34,6 @@
     onSelectionChange?: (elements: SelectedElement[]) => void;
     /** The canvas zoom and pan the participant left the presentation at. */
     onViewChange?: (view: CanvasView) => void;
-    /** What the step on screen drew implicitly: its layouts, and the defaults each node took. */
-    onDrawnChange?: (drawn: DrawnStep) => void;
     /** The view's own code failed as it drew a step (or, without a step, at some other moment). */
     onRuntimeError?: (failure: { step?: number; message: string }) => void;
     /** How long the page took to show its first step, or that it had not after a while. */
@@ -157,8 +150,6 @@
     type: v.literal('sverlin:selection'),
     elements: v.pipe(v.array(selectedElementSchema), v.maxLength(50))
   });
-
-  const drawnMessage = v.object({ type: v.literal('sverlin:drawn'), ...drawnStepSchema.entries });
 
   // The view's own code can fail as it draws a step; the page reports it, and it is shown here.
   const errorMessage = v.object({
@@ -305,11 +296,6 @@
             ...(parsed.output.step === undefined ? {} : { step: parsed.output.step })
           });
         }
-        return;
-      }
-      if (data?.type === 'sverlin:drawn') {
-        const parsed = v.safeParse(drawnMessage, data);
-        if (parsed.success) onDrawnChange(parsed.output);
         return;
       }
       if (data?.type === 'sverlin:selection') {

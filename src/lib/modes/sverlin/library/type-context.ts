@@ -152,15 +152,6 @@ export function listingContext(): ShownListing | undefined {
   return getContext<ShownListing | undefined>('sverlin:listing');
 }
 
-/** Make the presentation's seed available to library components that vary by it. */
-export function provideSeed(seed: number): void {
-  setContext('sverlin:seed', seed);
-}
-
-export function seedContext(): number {
-  return getContext<number | undefined>('sverlin:seed') ?? 1;
-}
-
 /** The arrangement around a node, told when a nested arrangement's size settles. */
 export type ArrangementParent = { changed(): void };
 

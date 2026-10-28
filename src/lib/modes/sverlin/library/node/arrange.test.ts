@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { sequenceForms } from './forms';
 import {
   arrange,
   keyedRandom,
@@ -69,15 +70,14 @@ describe('constraint arrangement', () => {
     expect(result.edges.every(({ directed }) => directed)).toBe(true);
   });
 
-  it('repeats a layout for a seed and varies it between seeds', () => {
+  it('repeats a layout for a seed, and a form drawn from it varies between seeds', () => {
     const again = arrange(boxes, { ...options, random: keyedRandom(1, 'diagram') });
     expect(again.placements).toEqual(result.placements);
-    const others = [2, 3, 4].map(
-      (seed) => arrange(boxes, { ...options, random: keyedRandom(seed, 'diagram') }).placements
-    );
-    expect(
-      others.some((placements) => JSON.stringify(placements) !== JSON.stringify(result.placements))
-    ).toBe(true);
+    const scattered = (seed: number) =>
+      arrange(boxes, { ...options, form: 'scatter', random: keyedRandom(seed, 'diagram') })
+        .placements;
+    const first = JSON.stringify(scattered(1));
+    expect([2, 3, 4].some((seed) => JSON.stringify(scattered(seed)) !== first)).toBe(true);
   });
 
   it('reports links and relations it cannot use, and lays out the rest', () => {
@@ -207,29 +207,49 @@ describe('links along a flow', () => {
     expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(1);
   });
 
-  it('draws varied shapes for a chain across seeds, filling the space without overlaps', () => {
+  it('draws a chain in each form it names, without overlaps', () => {
     const list = Array.from({ length: 8 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
     const links = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
     const looks = new Set<string>();
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+    for (const form of sequenceForms) {
       const result = arrange(list, {
         template: 'free',
         links,
         gap: 8,
         aspect: 2,
-        random: keyedRandom(seed, 'list')
+        form,
+        random: keyedRandom(1, 'list')
       });
+      expect(result.choices.form).toBe(form);
       looks.add(
         JSON.stringify(result.placements.map(({ x, y }) => [Math.round(x), Math.round(y)]))
       );
-      // Stretched to suit a space twice as wide as tall, within half again.
-      expect(Math.abs(Math.log(result.width / result.height / 2))).toBeLessThan(Math.log(1.6));
       for (const [i, a] of result.placements.entries())
         for (const b of result.placements.slice(i + 1))
           expect(Math.abs(a.x - b.x) >= 40 - 0.5 || Math.abs(a.y - b.y) >= 40 - 0.5).toBe(true);
       for (const edge of result.edges) expect(edge.path).toMatch(/^M[\d.-]+,[\d.-]+ C/u);
     }
-    expect(looks.size).toBeGreaterThan(5);
+    expect(looks.size).toBe(sequenceForms.length);
+  });
+
+  it('draws the structure’s natural form, whatever the space, where none fits', () => {
+    const list = Array.from({ length: 6 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
+    const chain = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
+    const tree = ['n0 -> n1', 'n0 -> n2', 'n1 -> n3', 'n1 -> n4', 'n2 -> n5'];
+    for (const aspect of [0.5, 1, 3])
+      for (const [links, flow, natural] of [
+        [chain, undefined, 'line'],
+        [tree, undefined, 'tree-down'],
+        [tree, 'x', 'tree-right']
+      ] as const) {
+        const random = keyedRandom(aspect, 'list');
+        const unnamed = arrange(list, { template: 'free', links, gap: 8, aspect, flow, random });
+        const unfit = arrange(list, {
+          ...{ template: 'free', links, gap: 8, aspect, flow, random },
+          form: 'ring'
+        });
+        expect([unnamed.choices.form, unfit.choices.form]).toEqual([natural, natural]);
+      }
   });
 });
 

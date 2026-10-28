@@ -10,8 +10,7 @@
   import {
     arrangementParentContext,
     layoutMemoryContext,
-    provideArrangementParent,
-    seedContext
+    provideArrangementParent
   } from '../type-context';
   import {
     arrange,
@@ -34,6 +33,7 @@
     form,
     curve,
     layoutSeed,
+    kind,
     gap,
     scope,
     children
@@ -42,14 +42,13 @@
     align?: Align;
     constraints?: readonly string[];
     flow?: 'x' | 'y';
-    /** The form the linked structure takes; unset, the seed draws one. */
+    /** The form the linked structure takes; unset, or one it cannot take, its natural one. */
     form?: Form;
     curve?: 'straight' | 'curved';
-    /**
-     * A seed for this arrangement alone, so a layout a participant liked stays the same in every
-     * presentation.
-     */
+    /** The seed of its kind's layout, the variant's; unset, as for a row with relations, 1. */
     layoutSeed?: number;
+    /** The kind whose variables hold its look, reported with a selection. */
+    kind?: string;
     gap: Spacing;
     /** Keys this arrangement's random starts, such as the node's id. */
     scope: string;
@@ -73,12 +72,10 @@
     return Number.isFinite(pixels) && style?.strokeWidth ? `${pixels}px` : '2px';
   };
 
-  const seed = seedContext();
   const memory = layoutMemoryContext();
-  // The seed this arrangement draws every choice from: its own pinned layoutSeed, or else one derived
-  // from the presentation's seed and its place, so arrangements differ from each other. Selections
-  // report it, and pinning it as layoutSeed reproduces the layout exactly, wherever the node moves.
-  const drawSeed = $derived(layoutSeed ?? layoutSeedFor(seed, scope));
+  // The seed this arrangement draws every choice from: its kind's, mixed with its place, so two
+  // arrangements of one kind differ, and each stays the same while the variant keeps that seed.
+  const drawSeed = $derived(layoutSeedFor(layoutSeed ?? 1, scope));
 
   // Node ids hold : and #, which an SVG fragment reference cannot. A fragment reference finds the
   // first element with its id in the page, and two steps' layers are in the page while one replaces
@@ -348,7 +345,8 @@
 
 <div
   class="sv-arranged"
-  data-sv-layout-seed={drawSeed}
+  data-sv-layout-seed={layoutSeed}
+  data-sv-layout-kind={layoutSeed === undefined ? undefined : kind}
   data-sv-form={result?.choices.form}
   data-sv-curve={result?.choices.curve}
   style:width={result ? `${result.width}px` : undefined}

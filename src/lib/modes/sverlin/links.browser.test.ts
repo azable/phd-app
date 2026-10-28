@@ -12,6 +12,7 @@ import bfs from './fixtures/bfs-neighbours.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
 import list from './fixtures/list-markers.sverlin?raw';
+import visitOrder from './fixtures/bfs-visit-order.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -408,5 +409,75 @@ it.skipIf(!enabled)(
     expect(drawn.weights).toHaveLength(7);
     expect(errors).toEqual([]);
     await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'draws a graph alike in presentations that differ only in a pause, whatever their seeds',
+  { timeout: 120_000 },
+  async () => {
+    // Eval2's BFS: "show some more steps" turned on one pause, and the graph took another form.
+    const prepared = prepareSvelteComponent(visitOrder);
+    const placed = async (seed: number, chosen: Record<string, string | number>) => {
+      const { javascript } = await bundlePresentation(prepared, seed, { chosen });
+      const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.setContent(sandboxDocument('', javascript, 0, seed));
+      await page.waitForFunction(() =>
+        document.querySelector('.sv-layer:not(.pending) [data-sv-layout-kind="Graph"]')
+      );
+      await page.waitForTimeout(800);
+      const positions = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-layout-kind="Graph"] > .placed > *'
+          )
+        ].map((child) => [child.style.left, child.style.top])
+      );
+      expect(errors).toEqual([]);
+      await page.close();
+      return positions;
+    };
+    const fewer = await placed(1546190931, { 'pause@visit.look': 'off' });
+    expect(fewer.length).toBeGreaterThan(1);
+    expect(await placed(487362115, { 'pause@visit.look': 'on' })).toEqual(fewer);
+    // The graph's own layout seed does move it.
+    expect(await placed(1546190931, { 'Graph.layoutSeed': 2 })).not.toEqual(fewer);
+  }
+);
+
+it.skipIf(!enabled)(
+  'draws the same form from the same values whatever the space, listing shown or not',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(visitOrder);
+    const formOf = async (language: string, width: number) => {
+      const { javascript } = await bundlePresentation(prepared, 1, {
+        chosen: { 'listing.language': language }
+      });
+      // A comparison gives each presentation half the stage.
+      const page = await browser!.newPage({ viewport: { width, height: 700 } });
+      await page.setContent(sandboxDocument('', javascript, 0, 1));
+      await page.waitForFunction(() =>
+        document.querySelector(
+          '.sv-layer:not(.pending) [data-sv-layout-kind="Graph"][data-sv-form]'
+        )
+      );
+      const form = await page.evaluate(
+        () =>
+          document.querySelector<HTMLElement>(
+            '.sv-layer:not(.pending) [data-sv-layout-kind="Graph"]'
+          )?.dataset.svForm
+      );
+      await page.close();
+      return form;
+    };
+    const forms = [
+      await formOf('textbook', 1200),
+      await formOf('none', 1200),
+      await formOf('textbook', 600)
+    ];
+    expect(forms).toEqual(['layers-down', 'layers-down', 'layers-down']);
   }
 );

@@ -6,9 +6,12 @@
  */
 
 import { keyedRandom } from './algorithm/random.server';
+import { formsFor, naturalForm } from './library/node/forms';
+import type { LayoutStructure } from './structure.server';
 import {
   colourParts,
   frameOptions,
+  freeLayoutProps,
   listingOptions,
   listingPropOptions,
   listingRegionProps,
@@ -16,8 +19,10 @@ import {
   placeProps,
   roleProps,
   starterFrame,
+  starterFreeLayout,
   starterListing,
   starterLooks,
+  type DesignProp,
   type DesignValues,
   type KindRole
 } from './library/node/design';
@@ -25,10 +30,33 @@ import {
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
 
-/** A kind of node: its key, the snippet it is in (as Compared.Pointed), and what it is, giving its props. */
-export type DesignKind = { key: string; role: KindRole };
+/**
+ * A kind of node: its key, the snippet it is in (as Compared.Pointed), what it is, giving its props,
+ * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
+ * (see structure.server.ts) and the flow its node sets.
+ */
+export type DesignKind = {
+  key: string;
+  role: KindRole;
+  free?: { structure: LayoutStructure; flow?: 'x' | 'y' };
+};
 
-const propsOf = ({ role }: DesignKind) => roleProps[role];
+const propsOf = ({ role, free }: DesignKind) =>
+  free ? [...roleProps[role], ...freeLayoutProps] : roleProps[role];
+
+// A layout whose data makes no structure lies in sequence, as a path would.
+const formKind = (free: NonNullable<DesignKind['free']>) =>
+  free.structure === 'none' ? 'path' : free.structure;
+
+/** A kind's options for a prop: a free layout's forms are those its structure can take. */
+const optionsFor = ({ role, free }: DesignKind, prop: DesignProp) =>
+  prop === 'form' && free ? formsFor(formKind(free), free.flow) : optionsOf(role, prop);
+
+/** A kind's starting value for a prop: a free layout's form is its structure's natural one. */
+const starterLook = ({ role, free }: DesignKind, prop: string) =>
+  prop === 'form' && free
+    ? naturalForm(formKind(free), free.flow)
+    : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
@@ -201,7 +229,7 @@ export function designSpace(
       : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsFor(kind, prop)])
       )
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
@@ -239,7 +267,7 @@ export function starterVariant(
       : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLook(kind, prop)])
       )
     ),
     // A place starts as its type and kinds do.

@@ -34,8 +34,6 @@
     to,
     directed = true,
     label,
-    curve,
-    bend,
     __view = 'root',
     __ref,
     __component,
@@ -57,14 +55,6 @@
     directed?: boolean;
     /** Text shown along the link, at its middle. */
     label?: string;
-    /** Whether this link runs straight or curves, whatever its arrangement prefers. */
-    curve?: 'straight' | 'curved';
-    /**
-     * An exact curve: how far the link bows to one side, as a fraction of its length (0 is straight,
-     * 0.3 a clear arc, negative the other side). Selections report the bend a link drew, so a curve
-     * the participant liked can be kept.
-     */
-    bend?: number;
     /** Internal: the view this link is in, added by the compiler. */
     __view?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
@@ -135,6 +125,9 @@
     (over && pointer?.__kind
       ? lookUp(design, pointer.__kind, pointer.__placed, prop)
       : undefined) ?? lookUp(design, kind, placed, prop);
+  // How it curves is its kind's: as its layout's arrows run, a curve of its own, or an exact bend.
+  const curve = $derived(look('curve', false));
+  const bend = $derived(look('bend', false));
   const nodeIds = nodeIdsContext();
   // A link from a node's field is known by the nodes it joins, not their places in the heap, which
   // shift as nodes come and go: so another node's link never takes over its route.
@@ -164,10 +157,8 @@
     data-stroke-width={look('strokeWidth')}
     data-shown={hidden || look('shown', false) === false ? 'false' : undefined}
     data-opacity={look('opacity', false)}
-    data-curve={curve}
-    data-bend={typeof bend === 'number' && Number.isFinite(bend)
-      ? Math.min(Math.max(bend, -1), 1)
-      : undefined}
+    data-curve={curve === 'layout' ? undefined : curve}
+    data-bend={typeof bend === 'number' ? bend : undefined}
   ></span>
 {/if}
 

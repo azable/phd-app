@@ -13,8 +13,8 @@ import chooser from './chooser.md?raw';
 import guide from './README.md?raw';
 
 /**
- * What the chooser is given: the new source, what it changes, how many variants, its design, and
- * each label's runs, with how many change what the view draws.
+ * What the chooser is given: the new source, what it changes, how many variants, its design, each
+ * label's runs, with how many change what the view draws, and each free layout kind's structure.
  */
 export type ChooserProject = {
   source: string;
@@ -22,6 +22,7 @@ export type ChooserProject = {
   count: number;
   design: AiDesign;
   runs?: Record<string, { runs: number; drawn: number }>;
+  structures?: Record<string, string>;
 };
 
 const designValue = v.union([v.string(), v.number(), v.boolean()]);

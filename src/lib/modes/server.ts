@@ -44,6 +44,8 @@ export type ModeBuildResult =
         leftOut?: string[];
         // Each label's runs, and how many change what the view draws, for the chooser.
         runs?: Record<string, { runs: number; drawn: number }>;
+        // Each free layout kind's structure, as its data makes it, for the chooser.
+        structures?: Record<string, string>;
       };
     }
   | {

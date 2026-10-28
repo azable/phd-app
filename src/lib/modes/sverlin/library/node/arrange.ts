@@ -2,14 +2,20 @@
  * Constraint layout for a node's children with WebCola. Every arrangement is a set of constraints
  * over the children's measured boxes: a row lines them up on one horizontal line in order, a gap
  * apart; a column does the same vertically; free placement only keeps them clear of each other.
- * Links and relations such as "note below cells" add to any of these. Free layouts start from the
- * presentation's seed, so each presentation settles into its own arrangement, and the same seed
- * always gives the same one.
+ * Links and relations such as "note below cells" add to any of these. Free layouts start from
+ * their kind's layout seed, a variable of the design, and the same seed always gives the same one.
  */
 
 import { Layout } from 'webcola/dist/src/layout';
 
-import { extentOf, findStructure, formCentres, formsFor, sequenceForms, type Form } from './forms';
+import {
+  findStructure,
+  formCentres,
+  formsFor,
+  naturalForm,
+  sequenceForms,
+  type Form
+} from './forms';
 import { routeCurve, type Box } from './route';
 
 /** One child to place: its key and its size in pixels. */
@@ -76,7 +82,7 @@ export type ArrangeOptions = {
   gap: number;
   /** A random number in [0, 1) for a key, or undefined to start every child at the centre. */
   random?: (key: string) => number;
-  /** The form the linked structure takes; unset, the seed draws one that suits the space. */
+  /** The form the linked structure takes, if it can; unset, or one it cannot take, its natural one. */
   form?: Form;
   /** Keys (see linkKey) of the links present at every step; only these decide the structure. Unset, all do. */
   permanent?: ReadonlySet<string>;
@@ -293,8 +299,8 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
 
   // The links of a free arrangement are read for the structure they make, such as a path, a tree,
   // or a layered graph, from links present at every step only, so a link that comes and goes is
-  // drawn but does not change it. The structure takes a form: the view's, or one the seed draws from
-  // those whose proportions suit the space, so presentations vary in look.
+  // drawn but does not change it. The structure takes its kind's form where it can, else its natural
+  // one, so the same values draw the same form whatever the space.
   // A node's links are read in the order they leave it, by where they start inside it, so a tree's
   // left field leads to the child placed left of its right field's.
   const leaving = (link: (typeof laidLinks)[number]) =>
@@ -335,33 +341,11 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       ? new Map([...centres].map(([node, { x, y }]) => [node, { x: y, y: x }]))
       : centres;
   };
-  let form: Form | undefined;
-  if (structure) {
-    // A flow the view sets rules out forms whose links would run another way.
-    const against: Record<'x' | 'y', readonly Form[]> = {
-      x: ['tree-down', 'layers-down', 'radial', 'indented'],
-      y: ['tree-right', 'layers-right', 'radial']
-    };
-    const candidates = formsFor(structure).filter(
-      (candidate) => !options.flow || !against[options.flow].includes(candidate)
-    );
-    if (options.form && candidates.includes(options.form)) form = options.form;
-    else {
-      if (options.form)
-        problems.push(
-          `The links make a ${structure.kind}, which cannot take the form "${options.form}".`
-        );
-      // Only forms that can fill the space once stretched, within half again of its proportions.
-      const fitting = candidates.filter((candidate) => {
-        const centres = placedIn(candidate);
-        if (!centres) return false;
-        const { width, height } = extentOf([...centres.values()], [...centres.keys()].map(sizeOf));
-        return Math.abs(Math.log(width / Math.max(1, height) / aspect)) < Math.log(1.5);
-      });
-      const choices = fitting.length ? fitting : candidates;
-      form = choices[Math.floor((options.random?.('form') ?? 0) * choices.length)];
-    }
-  }
+  const form: Form | undefined = !structure
+    ? undefined
+    : options.form && formsFor(structure.kind, options.flow).includes(options.form)
+      ? options.form
+      : naturalForm(structure.kind, options.flow);
   const formed = form ? placedIn(form) : undefined;
   const inStructure = new Set(formed ? formed.keys() : []);
 
@@ -614,9 +598,9 @@ export function keyedRandom(seed: number, scope: string): (key: string) => numbe
 }
 
 /**
- * The seed an arrangement draws its choices from, derived from the presentation's seed and the
- * arrangement's scope, so each arrangement differs; pinning it as a node's layoutSeed reproduces
- * that arrangement's layout in any presentation.
+ * The seed an arrangement draws its choices from, derived from its kind's layout seed and the
+ * arrangement's scope, so arrangements of one kind differ, and each is reproduced wherever its kind
+ * keeps that seed.
  */
 export function layoutSeedFor(seed: number, scope: string): number {
   return Math.floor(keyedRandom(seed, scope)('layout seed') * 2 ** 31);

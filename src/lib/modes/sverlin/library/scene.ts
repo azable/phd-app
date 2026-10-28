@@ -116,27 +116,30 @@ export function describeFrame(layer: HTMLElement): SceneFrame | undefined {
     : undefined;
 }
 
-/** The constraint layout an arrangement drew: the node it arranges, its seed, form, and curve. */
-export type ArrangementLayout = { node: string; seed: number; form?: string; curve?: string };
+/**
+ * The free layout an arrangement drew: the node it arranges, the kind whose variables hold its look,
+ * that kind's layout seed, and the form and curve it drew.
+ */
+export type ArrangementLayout = {
+  node: string;
+  kind?: string;
+  seed: number;
+  form?: string;
+  curve?: string;
+};
 
 /** The layout of one arrangement (an .sv-arranged element), once it has laid out. */
 export function arrangementLayout(arranged: HTMLElement): ArrangementLayout | undefined {
   const node = arranged.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode;
-  const { svLayoutSeed, svForm, svCurve } = arranged.dataset;
+  const { svLayoutSeed, svLayoutKind, svForm, svCurve } = arranged.dataset;
   if (!node || !Number.isFinite(Number(svLayoutSeed))) return undefined;
   return {
     node,
+    ...(svLayoutKind ? { kind: svLayoutKind } : {}),
     seed: Number(svLayoutSeed),
     ...(svForm ? { form: svForm } : {}),
     ...(svCurve ? { curve: svCurve } : {})
   };
-}
-
-/** The layout of every arrangement in a layer, once its step has settled. */
-export function stepLayouts(layer: HTMLElement): ArrangementLayout[] {
-  return [...layer.querySelectorAll<HTMLElement>('.sv-arranged')].flatMap(
-    (arranged) => arrangementLayout(arranged) ?? []
-  );
 }
 
 /** Describe the step a layer shows, once its layout has settled. */

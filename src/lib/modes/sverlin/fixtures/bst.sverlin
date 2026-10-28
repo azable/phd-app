@@ -69,7 +69,7 @@
 {/snippet}
 {#snippet Title()}<Node>Binary search tree insertion</Node>{/snippet}
 {#snippet Heap()}
-  <Node layout="free" flow="y" form="tree-down">
+  <Node layout="free" flow="y">
     {#each all(TreeNode) as node}{@render TreeNode(node)}{/each}
   </Node>
 {/snippet}
