@@ -30,6 +30,7 @@ import { parseBlock, spanOf } from './algorithm/parse.server';
 import { lightSteps, type Lit } from './listing/light.server';
 import {
   isDuringKey,
+  isHistoryKey,
   isLabelKey,
   isRunsKey,
   labelSpan,
@@ -61,6 +62,7 @@ import {
   pointerCalls,
   probeValues,
   readsOf,
+  unknownReadOf,
   rootPlacements,
   scopedReadsOf,
   snippetPaths,
@@ -1061,6 +1063,25 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ];
     });
     if (overlaps.length) throw InvalidSvelteSourceError.combine(overlaps);
+    // A name nothing gives the page would fail only in the browser.
+    const unread = unknownReadOf(
+      ast.html,
+      (name) =>
+        stateNames.includes(name) ||
+        paths.has(name) ||
+        definesType(viewing, name) ||
+        operators.has(name) ||
+        name === 'Math' ||
+        isLabelKey(name) ||
+        isRunsKey(name) ||
+        isHistoryKey(name) ||
+        isDuringKey(name)
+    );
+    if (unread)
+      throw new InvalidSvelteSourceError(
+        `The view reads ${unread.name}, which no input or algorithm variable, snippet, type, operator, {#each}, or {@const} is named: read one that exists, as its block declares it.`,
+        { code: 'view_name', start: sourcePosition(source, unread.start) }
+      );
     const labelNames = traced.labels.map(({ full }) => full);
     const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
     const leaves = new Set(labelNames.filter((label) => !parents.has(label)));

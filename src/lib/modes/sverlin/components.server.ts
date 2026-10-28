@@ -310,8 +310,31 @@ export function scopedReadsOf(
  * member and key names, and less its parameters and the names its blocks and {@const} tags declare.
  */
 export function readsOf(snippet: SvelteNode): Set<string> {
-  const declared = new Set((snippet.parameters ?? []).map(({ name }) => name ?? ''));
-  const read = new Set<string>();
+  const parameters = (snippet.parameters ?? []).map(({ name }) => name ?? '');
+  return new Set(freeReads(snippet.children, parameters).map(({ name }) => name));
+}
+
+/**
+ * The first name the markup reads that nothing in it declares and `known` does not give, with where
+ * it is: a name the page would not have, failing only in the browser.
+ */
+export function unknownReadOf(
+  markup: unknown,
+  known: (name: string) => boolean
+): { name: string; start: number } | undefined {
+  return freeReads(markup).find(({ name }) => !known(name));
+}
+
+/**
+ * The identifiers markup reads, with where each is, less member and key names and the names it
+ * declares: snippets' names and parameters, {#each} names, and {@const} names, wherever they are.
+ */
+function freeReads(
+  markup: unknown,
+  given: readonly string[] = []
+): { name: string; start: number }[] {
+  const declared = new Set(given);
+  const read: { name: string; start: number }[] = [];
   const walk = (value: unknown, parent?: Record<string, unknown>, key?: string): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
@@ -322,20 +345,28 @@ export function readsOf(snippet: SvelteNode): Set<string> {
     if (node.type === 'Identifier' && typeof node.name === 'string') {
       const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
       const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
-      if (!member && !property) read.add(node.name);
+      if (!member && !property)
+        read.push({ name: node.name, start: (node.start as number | undefined) ?? 0 });
     }
-    // Names an {#each} or {@const} declares, and declarators anywhere.
+    if (node.type === 'SnippetBlock') {
+      collectPattern(node.expression, declared);
+      for (const parameter of (node.parameters as unknown[] | undefined) ?? [])
+        collectPattern(parameter, declared);
+    }
     if (node.type === 'EachBlock') {
       collectPattern(node.context, declared);
       if (typeof node.index === 'string') declared.add(node.index);
     }
     if (node.type === 'VariableDeclarator') collectPattern(node.id, declared);
+    // {@const x = …} parses as an assignment to x.
+    if (node.type === 'ConstTag')
+      collectPattern((node.expression as { left?: unknown } | undefined)?.left, declared);
     for (const [childKey, child] of Object.entries(node))
-      if (childKey !== 'parent' && childKey !== 'typeAnnotation') walk(child, node, childKey);
+      if (childKey !== 'parent' && childKey !== 'loc' && childKey !== 'typeAnnotation')
+        walk(child, node, childKey);
   };
-  walk(snippet.children);
-  for (const name of declared) read.delete(name);
-  return read;
+  walk(markup);
+  return read.filter(({ name }) => !declared.has(name));
 }
 
 function collectPattern(pattern: unknown, into: Set<string>): void {

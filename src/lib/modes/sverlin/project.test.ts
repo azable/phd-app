@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>{step}</Node>{/snippet}{@render Shown()}{@render Int(n)}';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>n</Node>{/snippet}{@render Shown()}{@render Int(n)}';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
