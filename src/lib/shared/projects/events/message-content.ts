@@ -76,7 +76,7 @@ export const selectedElementSchema = v.strictObject({
   id: elementIdSchema,
   label: elementLabelSchema,
   layouts: v.optional(v.pipe(v.array(elementLayoutSchema), v.maxLength(2))),
-  /** For a link, the curve it drew: how far it bows to one side, as a fraction of its length. */
+  /** Retired: a link's bend, which selections no longer report; kept so stored ones still parse. */
   bend: v.optional(v.pipe(v.number(), v.minValue(-1), v.maxValue(1)))
 });
 

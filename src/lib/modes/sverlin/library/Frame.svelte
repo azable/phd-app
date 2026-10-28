@@ -244,14 +244,11 @@
         element.dataset.svLabel ??
         ([element.dataset.svType, text].filter(Boolean).join(' ') || 'node');
       const label = typed.length > maxLabel ? `${typed.slice(0, maxLabel - 1)}…` : typed;
-      const bend = element.dataset.svBend;
       return [
         {
           id,
           label,
-          layouts: layoutsOf(element),
-          // A link reports the curve it drew, so it can be kept.
-          ...(bend !== undefined && Number.isFinite(Number(bend)) ? { bend: Number(bend) } : {})
+          layouts: layoutsOf(element)
         }
       ];
     });

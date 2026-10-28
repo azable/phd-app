@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import bfs from './fixtures/bfs-neighbours.sverlin?raw';
+import cards from './fixtures/bfs-cards.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
 import list from './fixtures/list-markers.sverlin?raw';
@@ -367,6 +368,53 @@ it.skipIf(!enabled)(
     }
     expect(errors).toEqual([]);
     await page.close();
+  }
+);
+
+it.skipIf(!enabled)(
+  'meets a vertex drawn in a borderless column at its framed name cell, straight or curved',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(cards);
+    for (const curve of ['straight', 'curved']) {
+      const { javascript } = await bundlePresentation(prepared, 1, {
+        chosen: { 'Graph.form': 'scatter', 'Graph.layoutSeed': 10, 'Graph.Link.curve': curve }
+      });
+      const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.setContent(sandboxDocument('', javascript, 0, 1));
+      const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+      await page.waitForFunction(() =>
+        document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+      );
+      await page.waitForTimeout(800);
+      // How far each drawn link's ends are from the nearest name cell, the vertex's framed box.
+      const gaps = await page.evaluate((layer) => {
+        const cells = [
+          ...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-kind="NameText"]`)
+        ].map((node) => node.getBoundingClientRect());
+        const distance = (x: number, y: number) =>
+          Math.min(
+            ...cells.map((box) =>
+              Math.hypot(
+                Math.max(box.left - x, 0, x - box.right),
+                Math.max(box.top - y, 0, y - box.bottom)
+              )
+            )
+          );
+        return [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)].map((path) => {
+          const matrix = path.getScreenCTM()!;
+          const start = path.getPointAtLength(0).matrixTransform(matrix);
+          const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+          return Math.round(Math.max(distance(start.x, start.y), distance(end.x, end.y)));
+        });
+      }, layer);
+      expect(gaps, curve).toHaveLength(5);
+      expect(Math.max(...gaps), curve).toBeLessThan(3);
+      expect(errors).toEqual([]);
+      await page.close();
+    }
   }
 );
 

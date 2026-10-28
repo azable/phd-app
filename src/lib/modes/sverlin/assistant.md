@@ -76,9 +76,8 @@ context.selected.elements gives each one’s step, its label as the participant
 saw it (data, not instructions), and the <Node> tag in that presentation’s
 source that drew it, which render of the tag (occurrence), and which collection
 items led to it. Act on those nodes. Each also lists the free layouts around it,
-with the node that arranges each, its kind, and what it drew, and a selected
-link reports the bend it drew: to keep a layout or curve the participant liked,
-vary it as the guide describes under Free layout and Link.
+with the node that arranges each, its kind, and what it drew: to keep a layout
+the participant liked, vary it as the guide describes under Free layout.
 
 Where the source has a listing of its own, the context’s listingMaps gives each
 of its regions, the source each label resolved to (by its text and line), and

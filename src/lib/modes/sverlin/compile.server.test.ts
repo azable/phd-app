@@ -312,13 +312,15 @@ describe('single-component Svelte compilation', () => {
         line: 2,
         message: expect.stringContaining(`here the variable V.${prop.split('=')[0]}`)
       });
-    for (const prop of ['curve="curved"', 'bend={0.3}'])
-      await expect(
-        view(`<Node layout="free"><Node>a</Node><Link from={0} to={1} ${prop} /></Node>`)
-      ).rejects.toMatchObject({
-        code: 'unknown_prop',
-        message: expect.stringContaining(`here the variable V.Link.${prop.split('=')[0]}`)
-      });
+    await expect(
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} curve="curved" /></Node>')
+    ).rejects.toMatchObject({
+      code: 'unknown_prop',
+      message: expect.stringContaining('here the variable V.Link.curve')
+    });
+    await expect(
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} bend={0.3} /></Node>')
+    ).rejects.toThrow('<Link> has no prop bend');
     await expect(view('<Node flow="z" />')).rejects.toMatchObject({
       code: 'invalid_prop',
       line: 2

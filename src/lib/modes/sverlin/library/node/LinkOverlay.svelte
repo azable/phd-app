@@ -8,13 +8,13 @@
 <script lang="ts">
   import { linkDashes, strokeStyleCss } from './design';
   import { routeCurve, type Box } from './route';
+  import { seenParts, unionOf } from './visible';
 
   let { axis }: { axis: 'row' | 'column' } = $props();
 
   type Drawn = {
     path: string;
     middle: { x: number; y: number };
-    bend: number;
     link: string;
     id?: string;
     directed: boolean;
@@ -64,12 +64,13 @@
         child.hasAttribute('data-sv-link') &&
         !child.hasAttribute('data-sv-hoist')
     );
-    // An end names a keyed node, or the node drawing an element of the state, the outermost first.
+    // An end names the node drawing an element of the state, the outermost first, met where it is
+    // seen (see visible.ts).
     const anchors: Record<string, Box> = {};
     for (const child of children)
       for (const inner of [child, ...child.querySelectorAll<HTMLElement>('[data-sv-slot]')]) {
         const name = inner.dataset.svSlot;
-        if (name && !(name in anchors)) anchors[name] = boxOf(inner);
+        if (name && !(name in anchors)) anchors[name] = unionOf(seenParts(inner).map(boxOf));
       }
     const boxes = children.map(boxOf);
     const centre = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 });
@@ -87,12 +88,10 @@
       const tall = Math.abs(q.y - p.y);
       const sideBySide = wide === tall ? axis === 'row' : wide > tall;
       const across = sideBySide ? q.x - p.x : q.y - p.y;
-      const bend = Number(dataset.bend);
-      // An exact bend is kept; a straight link runs straight; else it arcs over ends side by side, or
-      // to the right of ends one above the other, further where the first arc would cross a box.
-      const order = dataset.bend
-        ? [bend]
-        : dataset.curve === 'straight'
+      // A straight link runs straight; else it arcs over ends side by side, or to the right of ends one
+      // above the other, further where the first arc would cross a box.
+      const order =
+        dataset.curve === 'straight'
           ? [0]
           : across
             ? [-0.8, -1.1].map((amount) => amount * Math.sign(across))
@@ -104,7 +103,6 @@
         {
           path: routed.path,
           middle: routed.halfway,
-          bend: routed.bend,
           link: `${dataset.from}${directed ? ' -> ' : ' - '}${dataset.to}`,
           ...(dataset.svLink ? { id: dataset.svLink } : {}),
           directed,
@@ -183,7 +181,6 @@
         class="hit"
         d={link.path}
         data-sv-node={link.id}
-        data-sv-bend={Math.round(link.bend * 100) / 100}
         data-sv-label={link.label ?? link.link.replace(' -> ', ' → ').replace(' - ', ' – ')}
       />
     {/if}

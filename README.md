@@ -97,8 +97,9 @@ form from the structure its links make
 kind's `form` or, where that structure cannot take it, the structure's natural
 form, never chosen by the space; arrows are cubic curves that bend round other
 nodes and labels, straight or curved as the layout's kind's `curve`, or the
-link's kind's `curve` and `bend`, prefer. The server gives each free layout kind
-the structure its data makes
+link's kind's `curve`, prefer, meeting the bordered or filled boxes of the
+element each end names where the node drawing it has neither. The server gives
+each free layout kind the structure its data makes
 ([`structure.server.ts`](src/lib/modes/sverlin/structure.server.ts)): it reads
 statically which data the layout's links are drawn from and follows it through
 the trace, without running the view, so the form's options and starter fit it

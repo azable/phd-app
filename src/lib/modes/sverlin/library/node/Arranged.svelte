@@ -23,6 +23,7 @@
   import { linkDashes, strokeStyleCss } from './design';
   import type { Form } from './forms';
   import type { Spacing } from './props';
+  import { seenParts, unionOf } from './visible';
 
   let {
     flow,
@@ -171,9 +172,6 @@
       ...(marker.dataset.svLink ? { id: marker.dataset.svLink } : {}),
       ...(marker.dataset.curve === 'straight' || marker.dataset.curve === 'curved'
         ? { curve: marker.dataset.curve }
-        : {}),
-      ...(marker.dataset.bend !== undefined && Number.isFinite(Number(marker.dataset.bend))
-        ? { bend: Number(marker.dataset.bend) }
         : {})
     }));
     const styles: Record<string, LinkStyle> = Object.fromEntries(
@@ -239,14 +237,38 @@
           height: rect.height * ratio
         };
       };
+      // What is seen of a node (see visible.ts). Where that is boxes inside it, an arrow crossing the
+      // node's other content to reach them stops at the nearest box around them it draws, if any.
+      const seen = (node: HTMLElement): Anchor => {
+        const shown = seenParts(node);
+        if (shown[0] === node) return anchor(node);
+        const edges = shown.map((inner) => {
+          const { x, y, width, height } = anchor(inner);
+          return { left: x, top: y, right: x + width, bottom: y + height };
+        });
+        const { left, top, right, bottom } = unionOf(edges);
+        const around = shown[0].parentElement?.closest<HTMLElement>('[data-sv-framed]');
+        const outer =
+          around && element.contains(around) && shown.every((inner) => around.contains(inner))
+            ? anchor(around)
+            : undefined;
+        return {
+          box,
+          x: left,
+          y: top,
+          width: right - left,
+          height: bottom - top,
+          frame: outer ? { x: outer.x, y: outer.y, width: outer.width, height: outer.height } : null
+        };
+      };
       // A node drawing an element of the state is also found by it, as vertices[2], the outermost
-      // such node first, so a link given a position meets the element's whole view.
+      // such node first, so a link given a position meets the element's whole view, as it is seen.
       for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-slot]')])
         if (inner.dataset.svSlot && !(inner.dataset.svSlot in anchors))
-          anchors[inner.dataset.svSlot] = anchor(inner);
+          anchors[inner.dataset.svSlot] = seen(inner);
       for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-item]')])
         if (inner.dataset.svItem && !(inner.dataset.svItem in items))
-          items[inner.dataset.svItem] = anchor(inner);
+          items[inner.dataset.svItem] = seen(inner);
       // A child drawing a node whose fields link onward, as [ A | next ], is met at its one value
       // cell, never the field an arrow leaves.
       const fields = element.querySelector('[data-sv-link][data-sv-hoist]');
@@ -388,7 +410,6 @@
             class="hit"
             d={edge.path}
             data-sv-node={edge.id}
-            data-sv-bend={Math.round(edge.bend * 100) / 100}
             data-sv-label={style?.label ?? edge.link.replace(' -> ', ' → ').replace(' - ', ' – ')}
           />
         {/if}

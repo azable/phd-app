@@ -40,8 +40,6 @@ export type ArrangeEdge = {
   id?: string;
   /** The middle of the curve, where a label goes. */
   middle: { x: number; y: number };
-  /** The bend the curve took, as a fraction of its length to one side: 0 is straight. */
-  bend: number;
 };
 
 export type ArrangeResult = {
@@ -94,8 +92,6 @@ export type LinkSpec = {
   directed: boolean;
   id?: string;
   curve?: 'straight' | 'curved';
-  /** An exact bend for this link, as a fraction of its length to one side (0 is straight). */
-  bend?: number;
   /**
    * The anchor it starts at inside its from child, as a node's next field: it leaves that field
    * itself, arcing over its node, rather than the child's edge.
@@ -128,8 +124,19 @@ class BoundedLayout extends Layout {
   }
 }
 
-/** A box a link attaches to: inside child `box`, relative to that child's top-left. */
-export type Anchor = { box: number; x: number; y: number; width: number; height: number };
+/**
+ * A box a link attaches to: inside child `box`, relative to that child's top-left. `frame` is the box
+ * around it where an arrow crossing the child's other content stops instead: unset, the whole child;
+ * null, none, as for what is seen of a node that draws no box of its own (see visible.ts).
+ */
+export type Anchor = {
+  box: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  frame?: { x: number; y: number; width: number; height: number } | null;
+};
 
 // The least room left for an arrow between the boxes it joins, so it is always visible.
 const arrowRoom = 28;
@@ -189,7 +196,6 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
             id: spec.id,
             key: spec.id ?? text,
             curve: spec.curve,
-            bend: spec.bend,
             field: spec.start !== undefined
           }
         ];
@@ -389,7 +395,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const overlaps = (a: Box, b: Box) =>
     Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
     Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-  const edges = links.map(({ from: tail, to: head, directed, text, id, curve, bend, field }) => {
+  const edges = links.map(({ from: tail, to: head, directed, text, id, curve, field }) => {
     const [from, to] = [boxAt(tail), boxAt(head)];
     const obstacles = [
       ...boxes.flatMap((_, box) =>
@@ -400,10 +406,12 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
         .map(boxAt)
         .filter((part) => !overlaps(part, from) && !overlaps(part, to))
     ];
-    // An end inside a bigger child, such as a record's pointer field, knows that child and its other
-    // content, so the arrow can meet the child's edge rather than cross that content.
+    // An end inside a bigger child, such as a record's pointer field, knows the box around it (its
+    // frame, else the child) and the child's other content, so the arrow can meet that box's edge
+    // rather than cross that content.
     const surround = (anchor: Anchor, box: Box) => {
-      const outer = boxAt(whole(anchor.box));
+      if (anchor.frame === null) return undefined;
+      const outer = boxAt(anchor.frame ? { ...anchor.frame, box: anchor.box } : whole(anchor.box));
       const inside =
         outer.right - outer.left > box.right - box.left + 1 ||
         outer.bottom - outer.top > box.bottom - box.top + 1;
@@ -415,14 +423,14 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       return { outer, parts };
     };
     // Each link draws its own curve, from a seed keyed by its id: straight where it can or curving,
-    // and to which side, unless its own curve or bend, or its arrangement's curve, says otherwise. A
-    // bend is used exactly; otherwise the link takes the first bend in its order that is clear.
+    // and to which side, unless its own curve, or its arrangement's curve, says otherwise; it takes
+    // the first bend in its order that is clear.
     const draw = (key: string) => options.random?.(`link ${id ?? text}.${key}`) ?? 0.5;
     const style = curve ?? options.curve;
     const curvy = style ? style === 'curved' : form === 'scatter' || draw('style') >= 0.5;
     const side = draw('side') < 0.5 ? 1 : -1;
     const bends = [0.15, 0.3, 0.5].flatMap((amount) => [amount * side, -amount * side]);
-    const order = bend !== undefined ? [bend] : curvy ? [...bends, 0] : [0, ...bends];
+    const order = curvy ? [...bends, 0] : [0, ...bends];
     const routed = routeCurve(from, to, obstacles, order, {
       from: field ? undefined : surround(tail, from),
       to: surround(head, to)
@@ -436,7 +444,6 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       directed,
       link: text,
       middle: routed.halfway,
-      bend: routed.bend,
       ...(id ? { id } : {})
     };
   });

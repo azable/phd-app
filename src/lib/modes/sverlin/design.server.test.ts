@@ -290,18 +290,14 @@ describe('free layouts', () => {
     ).toThrow(DesignValueError);
   });
 
-  it('give a link’s kind its curve and bend, which a vary keeps', () => {
+  it('give a link’s kind its curve, which a vary keeps, and no bend', () => {
     const graph = prepareSvelteComponent(bfs).design;
     expect(graph.space['Graph.Link.curve']).toEqual(['layout', 'straight', 'curved']);
-    expect(graph.space['Graph.Link.bend']).toContain('none');
-    expect(graph.starter).toMatchObject({
-      'Graph.Link.curve': 'layout',
-      'Graph.Link.bend': 'none'
-    });
-    const base = { ...graph.starter, 'Graph.Link.curve': 'curved', 'Graph.Link.bend': 0.3 };
+    expect(graph.space['Graph.Link.bend']).toBeUndefined();
+    expect(graph.starter).toMatchObject({ 'Graph.Link.curve': 'layout' });
+    const base = { ...graph.starter, 'Graph.Link.curve': 'curved' };
     expect(buildVariant(graph.space, graph.starter, { base }, 5).values).toMatchObject({
-      'Graph.Link.curve': 'curved',
-      'Graph.Link.bend': 0.3
+      'Graph.Link.curve': 'curved'
     });
   });
 });

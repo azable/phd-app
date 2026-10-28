@@ -1965,7 +1965,7 @@ function checkProps(
             ? `<${component}> takes no tags: its kind is the snippet it is in, so name the node by a snippet, as {#snippet Caption()}<Node>…</Node>{/snippet}, and its look is a variable of that kind.`
             : component === 'Node' && freeLayoutProps.includes(attribute.name as DesignProp)
               ? `<Node> ${attribute.name} is a free layout's look, which the variant gives the kind of node arranging it, not the markup: here the variable ${kind}.${attribute.name}.`
-              : component === 'Link' && (attribute.name === 'curve' || attribute.name === 'bend')
+              : component === 'Link' && attribute.name === 'curve'
                 ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name}.`
                 : designProps.has(attribute.name)
                   ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`

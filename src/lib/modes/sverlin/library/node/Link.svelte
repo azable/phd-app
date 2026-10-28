@@ -125,9 +125,8 @@
     (over && pointer?.__kind
       ? lookUp(design, pointer.__kind, pointer.__placed, prop)
       : undefined) ?? lookUp(design, kind, placed, prop);
-  // How it curves is its kind's: as its layout's arrows run, a curve of its own, or an exact bend.
+  // How it curves is its kind's: as its layout's arrows run, or a curve of its own.
   const curve = $derived(look('curve', false));
-  const bend = $derived(look('bend', false));
   const nodeIds = nodeIdsContext();
   // A link from a node's field is known by the nodes it joins, not their places in the heap, which
   // shift as nodes come and go: so another node's link never takes over its route.
@@ -158,7 +157,6 @@
     data-shown={hidden || look('shown', false) === false ? 'false' : undefined}
     data-opacity={look('opacity', false)}
     data-curve={curve === 'layout' ? undefined : curve}
-    data-bend={typeof bend === 'number' ? bend : undefined}
   ></span>
 {/if}
 

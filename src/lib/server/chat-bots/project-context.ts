@@ -184,8 +184,6 @@ export type AiSelectedElement = {
     form?: string;
     curve?: string;
   }>;
-  /** For a link, the curve it drew; varying its kind's bend to the nearest option keeps it. */
-  bend?: number;
 };
 
 /** Strongly typed, consumer-specific context supplied to the AI assistant. */
@@ -520,7 +518,6 @@ function selectedElement(
       elementId: reference.element.id,
       label: reference.element.label,
       source,
-      ...(reference.element.bend !== undefined ? { bend: reference.element.bend } : {}),
       layouts: (reference.element.layouts ?? []).map(({ seed, ...layout }) => {
         const located = locateElement(presentation.source.text, layout.node);
         return { ...layout, layoutSeed: seed, ...(located ? { source: located } : {}) };

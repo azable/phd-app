@@ -284,37 +284,6 @@ describe('link components', () => {
   });
 });
 
-describe('link bends', () => {
-  const boxes = [
-    { key: 'a', width: 40, height: 40 },
-    { key: 'b', width: 40, height: 40 }
-  ];
-
-  it('draws a pinned bend exactly, and reports the bend each link drew', () => {
-    for (const seed of [1, 2, 3]) {
-      const result = arrange(boxes, {
-        gap: 8,
-        links: [
-          { from: 'a', to: 'b', directed: true, id: '3:1', bend: -0.3 },
-          { from: 'b', to: 'a', directed: true, id: '4:1' }
-        ],
-        random: keyedRandom(seed, 'layout')
-      });
-      expect(result.edges[0].bend).toBe(-0.3);
-      const again = arrange(boxes, {
-        gap: 8,
-        links: [
-          { from: 'a', to: 'b', directed: true, id: '3:1', bend: -0.3 },
-          { from: 'b', to: 'a', directed: true, id: '4:1', bend: result.edges[1].bend }
-        ],
-        random: keyedRandom(seed + 10, 'layout')
-      });
-      // Pinning the reported bend keeps the curve's shape relative to its ends.
-      expect(again.edges[1].bend).toBe(result.edges[1].bend);
-    }
-  });
-});
-
 describe('forms along a flow', () => {
   const tree = ['r', 'a', 'b', 'c', 'd'].map((key) => ({ key, width: 40, height: 30 }));
   const links = ['r -> a', 'r -> b', 'a -> c', 'a -> d'];

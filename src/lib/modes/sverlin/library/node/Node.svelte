@@ -276,6 +276,16 @@
   const borderWidth = $derived(
     strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
   );
+  // Whether its own look draws a box, a stroke or a fill, whatever a pointer at it paints at a step:
+  // an arrow to an element whose node draws none meets the boxes inside it that do (see visible.ts).
+  const framed = $derived.by(() => {
+    const own = (prop: string) => lookUp(design, __view, placed, prop);
+    const width = look('strokeWidth');
+    return (
+      colourCss(own('fill')) !== undefined ||
+      (colourCss(own('stroke')) !== undefined && typeof width === 'number' && width > 0)
+    );
+  });
   const font = $derived(look('font'));
   const weight = $derived(look('weight'));
   const gap = $derived((look('gap') as number | undefined) ?? 0);
@@ -363,6 +373,7 @@
       data-sv-fill={look('fill')}
       data-sv-stroke={look('stroke')}
       data-sv-color={look('color')}
+      data-sv-framed={framed ? 'true' : undefined}
       class:cell={(!arrangement && !children && !__text) || __field}
       class:text={__text}
       style:font-size={measured('size', 'rem')}

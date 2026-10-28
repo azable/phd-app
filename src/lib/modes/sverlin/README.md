@@ -772,8 +772,8 @@ its natural form. `curve`, `straight` (the start) or `curved`, is how its arrows
 prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are drawn
 from. The same values draw the same picture whatever the space. A link's kind
 has `curve` too, `layout` (as its layout's arrows run, the start), `straight`,
-or `curved`, and `bend`, `none` (the start) or how far it bows to one side as a
-fraction of its length: -0.5, -0.3, -0.15, 0, 0.15, 0.3, or 0.5.
+or `curved`, each arrow choosing its own side and how far to bow round what is
+in its way.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -1077,14 +1077,14 @@ Design), as `Arrow.Link` for a link in `Arrow`.
   collection among them, as `k` in `{#each vertices as v, k}`; labels giving
   positions, as `@insert.swap.from`; never text written in the view. In a view
   of an element, a link with no `from` starts at the node drawing that element,
-  as a node's `next`.
+  as a node's `next`. An arrow meets what is seen of its end: a node with no
+  stroke or fill of its own is met at the bordered or filled boxes inside it, as
+  a vertex's name cell rather than the column holding it and its caption.
 - `directed`: `false` for a plain line instead of an arrow.
 - `label`: a short text shown at the middle of the link, such as `next` or
   `head`.
 
-How a link curves is its kind's `curve` and `bend` (see Design), never a prop. A
-selected link reports the bend it drew; when the participant likes a curve, vary
-its kind's `bend` to the nearest option.
+How a link curves is its kind's `curve` (see Design), never a prop.
 
 Links come and go with the steps: one in `{#if}` shows only while it matters, as
 the pointer being followed, and one whose end is a label, or a variable out of

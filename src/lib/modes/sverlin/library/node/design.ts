@@ -91,8 +91,7 @@ const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
  * Each prop's options: lengths in em, except size in rem and radius and strokeWidth in pixels; a
- * free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn from; and a
- * link's own bend, as a fraction of its length to one side, or none.
+ * free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn from.
  */
 export const propOptions = {
   shown: [true, false],
@@ -114,8 +113,7 @@ export const propOptions = {
   overflow: ['shown', 'hidden', 'included', 'excluded'],
   form: forms,
   curve: ['straight', 'curved'],
-  layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
-  bend: ['none', -0.5, -0.3, -0.15, 0, 0.15, 0.3, 0.5]
+  layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1)
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;
@@ -208,7 +206,7 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   value: nodeProps,
   text: nodeProps,
   pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
-  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color', 'curve', 'bend']
+  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color', 'curve']
 };
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
@@ -367,8 +365,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     opacity: 1,
     strokeStyle: 'solid',
     color: 'neutral-600',
-    curve: 'layout',
-    bend: 'none'
+    curve: 'layout'
   }
 };
 
