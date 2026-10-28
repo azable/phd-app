@@ -751,28 +751,27 @@ centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
 the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
 `stroke`, `strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label.
 
-A kind with a free layout (see Free layout, links, and relations) also has that
-layout's look. `form` is the shape it gives the structure its links make, read
-from the arrows present at every step (a link that comes and goes is drawn on
-top of it but does not change it): a path such as a linked list, a cycle, a
-tree, or a layered graph (acyclic, with nodes that have several parents). Any
-structure can lie along its reading order (a path in link order, a tree depth
-first, a layered graph each node after its parents) as `line`, `snake` (rows
-read back and forth), `wave`, `arc`, or `scatter` (free positions that keep each
-node near the next); a cycle can also take `ring`, a tree `tree-down`,
-`tree-right`, `radial`, or `indented`, and a layered graph `layers-down` or
-`layers-right`, as its `flow` allows. A layout's options are the forms its
-data's structure can take, and it starts in that structure's natural form: a
-path in a `line` (as does a layout whose data links nothing), a cycle in a
-`ring`, a tree `tree-down` and a layered graph `layers-down` (`-right` along
-`flow` x); where the page finds the links it draws make another structure, a
-form that one cannot take is drawn in its natural form. `curve`, `straight` (the
-start) or `curved`, is how its arrows prefer to run. `layoutSeed`, 1 to 32, is
-what its spacing and nudges are drawn from. The same values draw the same
-picture whatever the space. A link's kind has `curve` too, `layout` (as its
-layout's arrows run, the start), `straight`, or `curved`, and `bend`, `none`
-(the start) or how far it bows to one side as a fraction of its length: -0.5,
--0.3, -0.15, 0, 0.15, 0.3, or 0.5.
+A kind with a free layout (see Free layout and links) also has that layout's
+look. `form` is the shape it gives the structure its links make, read from the
+arrows present at every step (a link that comes and goes is drawn on top of it
+but does not change it): a path such as a linked list, a cycle, a tree, or a
+layered graph (acyclic, with nodes that have several parents). Any structure can
+lie along its reading order (a path in link order, a tree depth first, a layered
+graph each node after its parents) as `line`, `snake` (rows read back and
+forth), `wave`, `arc`, or `scatter` (free positions that keep each node near the
+next); a cycle can also take `ring`, a tree `tree-down`, `tree-right`, `radial`,
+or `indented`, and a layered graph `layers-down` or `layers-right`, as its
+`flow` allows. A layout's options are the forms its data's structure can take,
+and it starts in that structure's natural form: a path in a `line` (as does a
+layout whose data links nothing), a cycle in a `ring`, a tree `tree-down` and a
+layered graph `layers-down` (`-right` along `flow` x); where the page finds the
+links it draws make another structure, a form that one cannot take is drawn in
+its natural form. `curve`, `straight` (the start) or `curved`, is how its arrows
+prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are drawn
+from. The same values draw the same picture whatever the space. A link's kind
+has `curve` too, `layout` (as its layout's arrows run, the start), `straight`,
+or `curved`, and `bend`, `none` (the start) or how far it bows to one side as a
+fraction of its length: -0.5, -0.3, -0.15, 0, 0.15, 0.3, or 0.5.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -1031,10 +1030,10 @@ A node's props say what it is and how its children are arranged; its look is its
 kind's (see Design). Props starting with `__` are reserved for the library.
 
 - `value`: the number, string, or boolean a value node shows.
-- `layout`: `'row'`, `'column'`, or `'free'` (placed by layout; see Free layout,
-  links, and relations); arranges a node's children.
+- `layout`: `'row'`, `'column'`, or `'free'` (placed by layout; see Free layout
+  and links); arranges a node's children.
 
-## Free layout, links, and relations
+## Free layout and links
 
 `layout="free"` places a node's children by layout instead of in a line: use it
 for linked structures such as linked lists, trees, and graphs, joined by
@@ -1043,20 +1042,12 @@ or without links. The children are kept clear of each other and gathered
 compactly, as their kind's look says (see Design). A node hugs its children
 whatever its layout.
 
-- `key`: a name for a child that its parent's links and relations refer to, such
-  as `<Node key="a" value={3} />`. Every direct child is placed, keyed or not;
-  put content that belongs together, such as a value and its index, in one child
+- `key`: a name for a child that its parent's links refer to, such as
+  `<Node key="a" value={3} />`. Every direct child is placed, keyed or not; put
+  content that belongs together, such as a value and its index, in one child
   node. A link attaches to the node its key names: give the key to the value
   inside a child, or to a child holding one value among labels, and the arrow
   meets the value, not the labels.
-- `constraints`: an array of relations between children, each `'a relation b'`:
-  `above`, `below`, `leftOf`, and `rightOf` place a directly above, below, left
-  of, or right of b, centred on it and one gap away, and `sameRow` and
-  `sameColumn` centre a and b on one horizontal or vertical line in either
-  order. They work in free layouts, and in rows and columns as long as they
-  agree with the line. Use relations for what the picture must show, such as a
-  pointer label above its node or a caption below the structure, leave the rest
-  to the layout, and offer views with different relations where they are open.
 - `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
   downwards, as for a list or a tree; only forms that run that way are drawn.
   Set it only when asked; an undirected graph has no flow, and its links are

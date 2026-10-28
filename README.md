@@ -87,12 +87,12 @@ page mounts the step in a hidden layer and swaps it in once its layout settles,
 so zoom and pan carry over and neither a blank page nor an unfinished layout
 shows, while `sverlin:view` messages report the view to the app. Every
 arrangement is a set of constraints over a node's measured children, and a node
-hugs them: rows, columns, and grids are solved by CSS, while `layout="free"`, or
-a row or column with `<Link>` children or `constraints`, is solved by WebCola
+hugs them: rows, columns, and grids are solved by CSS, with any links drawn over
+them, while `layout="free"` is solved by WebCola
 ([`library/node/arrange.ts`](src/lib/modes/sverlin/library/node/arrange.ts))
-from starting positions keyed by the seed, with nested arrangements laying out
-again as their children settle. A free layout takes a form from the structure
-its links make
+from starting positions drawn from its kind's `layoutSeed`, with nested
+arrangements laying out again as their children settle. A free layout takes a
+form from the structure its links make
 ([`library/node/forms.ts`](src/lib/modes/sverlin/library/node/forms.ts)), its
 kind's `form` or, where that structure cannot take it, the structure's natural
 form, never chosen by the space; arrows are cubic curves that bend round other
@@ -115,8 +115,8 @@ changing content never resizes a box, and gives every item of a collection the
 largest size any of them reaches, so items line up even when only some change
 ([`assembly/entry.ts`](src/lib/modes/sverlin/assembly/entry.ts)); it then lays
 out every step hidden, recording what each arrangement contains, and solves each
-arrangement once over the union of every step, with every child, link, and
-relation that ever appears
+arrangement once over the union of every step, with every child and link that
+ever appears
 ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts), repeated
 until nested sizes settle); showing a step places children where that solution
 put them, drawing only that step's links, at a root fit shared by all steps, so

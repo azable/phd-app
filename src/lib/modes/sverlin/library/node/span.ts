@@ -1,7 +1,7 @@
 /**
  * Layouts that hold for a whole animation. Each step records what an arrangement contains, and the
  * arrangement is then solved once over the union of every step: every child that ever appears, at
- * its largest size, with every link and relation. Each step places its children where that solution
+ * its largest size, with every link. Each step places its children where that solution
  * put them and draws only the links it has, so nothing moves between steps but what changes, and a
  * node that appears later already has a place kept for it.
  */
@@ -28,10 +28,7 @@ export type SpanInput = {
   boxes: ArrangeBox[];
   anchors: Record<string, KeyedAnchor>;
   parts: KeyedAnchor[];
-  options: Pick<
-    ArrangeOptions,
-    'template' | 'align' | 'links' | 'constraints' | 'flow' | 'form' | 'curve' | 'gap' | 'aspect'
-  >;
+  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'curve' | 'gap' | 'aspect'>;
 };
 
 /** An arrangement solved over every step, with each child's place by key. */
@@ -64,9 +61,6 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
         if (found) anchors[key] = found;
       }
   const parts = inputs.flatMap((input) => input.parts.flatMap((part) => located(part) ?? []));
-  const union = (lists: readonly (readonly string[] | undefined)[]) => [
-    ...new Set(lists.flatMap((list) => list ?? []).map((text) => text.trim()))
-  ];
   const [first] = inputs;
   // Links at every step where both their ends are decide the structure, so a tree that grows keeps
   // each link from when its child joins; ones that come and go are drawn on top of it.
@@ -97,7 +91,6 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
   const solved = arrange(boxes, {
     ...first.options,
     links: unionLinks(inputs.map(({ options }) => options.links)),
-    constraints: union(inputs.map(({ options }) => options.constraints)),
     // The tightest space any step leaves, so the layout fits at every step.
     aspect: Math.min(...inputs.map(({ options }) => options.aspect ?? 16 / 9)),
     anchors,

@@ -1886,7 +1886,6 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
     children: null,
     key: null,
-    constraints: null,
     flow: named({ x: 0, y: 0 }, false)
   },
   Pointed: {},

@@ -9,7 +9,6 @@
 
   import Arranged from './Arranged.svelte';
   import LinkOverlay from './LinkOverlay.svelte';
-  import type { Template } from './arrange';
   import type { Form } from './forms';
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
@@ -61,7 +60,6 @@
     layout,
     children,
     key,
-    constraints,
     flow,
     __view = 'root',
     __over,
@@ -82,10 +80,8 @@
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
     children?: Snippet;
-    /** A name its parent's links and relations refer to this node by. */
+    /** A name its parent's links refer to this node by. */
     key?: string;
-    /** Relations between children by key: above, below, leftOf, rightOf, sameRow, sameColumn. */
-    constraints?: readonly string[];
     /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
     flow?: 'x' | 'y';
     /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
@@ -256,7 +252,6 @@
     layout,
     children,
     key,
-    constraints,
     flow,
     __view,
     __ref,
@@ -307,16 +302,9 @@
           : undefined
       );
   });
-  // Free layouts, and rows or columns with relations, are placed by constraint layout; other
-  // arrangements are CSS flex and grid, which solve the same constraints in the browser. A row's
-  // or column's links never move its children: they are drawn over it (see LinkOverlay).
-  const solved = $derived<Template | undefined>(
-    arrangement === 'free'
-      ? 'free'
-      : (arrangement === 'row' || arrangement === 'column') && constraints?.length
-        ? arrangement
-        : undefined
-  );
+  // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS flex and
+  // grid, and their links never move their children: they are drawn over them (see LinkOverlay).
+  const free = $derived(arrangement === 'free');
   const overlaid = $derived(
     __links && (arrangement === 'row' || arrangement === 'column') ? arrangement : undefined
   );
@@ -396,11 +384,8 @@
       style:min-height={least(measured('minSize', 'em'), reserved?.height)}
       style:opacity={look('opacity') as number | undefined}
     >
-      {#if solved}
+      {#if free}
         <Arranged
-          template={solved}
-          align={resolvedAlign}
-          {constraints}
           {flow}
           form={look('form') as Form | undefined}
           curve={look('curve') as 'straight' | 'curved' | undefined}

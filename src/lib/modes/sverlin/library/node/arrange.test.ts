@@ -18,9 +18,7 @@ const boxes: ArrangeBox[] = [
   { key: 'note', width: 150, height: 32 }
 ];
 const options: ArrangeOptions = {
-  template: 'free',
   links: ['a -> b', 'b -> c', 'head -> a'],
-  constraints: ['head above a', 'note below b', 'c rightOf b'],
   flow: 'x',
   gap: 12
 };
@@ -39,19 +37,8 @@ function rect(result: ArrangeResult, key: string) {
   };
 }
 
-describe('constraint arrangement', () => {
+describe('free arrangement', () => {
   const result = arrange(boxes, { ...options, random: keyedRandom(1, 'diagram') });
-
-  it('places related nodes directly above, below, or beside each other, a gap apart', () => {
-    const [a, b, c, head, note] = ['a', 'b', 'c', 'head', 'note'].map((key) => rect(result, key));
-    expect(head.bottom + 12).toBeLessThanOrEqual(a.top + 0.5);
-    expect(Math.abs(head.cx - a.cx)).toBeLessThan(0.5);
-    expect(note.top).toBeGreaterThanOrEqual(b.bottom + 12 - 0.5);
-    expect(Math.abs(note.cx - b.cx)).toBeLessThan(0.5);
-    expect(c.left).toBeGreaterThanOrEqual(b.right + 12 - 0.5);
-    expect(Math.abs(c.cy - b.cy)).toBeLessThan(0.5);
-    expect(result.problems).toEqual([]);
-  });
 
   it('keeps every node clear of the others and measures the whole', () => {
     const rects = boxes.map(({ key }) => rect(result, key));
@@ -80,24 +67,20 @@ describe('constraint arrangement', () => {
     expect([2, 3, 4].some((seed) => JSON.stringify(scattered(seed)) !== first)).toBe(true);
   });
 
-  it('reports links and relations it cannot use, and lays out the rest', () => {
+  it('reports links it cannot use, and lays out the rest', () => {
     const partial = arrange(boxes, {
-      template: 'free',
       links: ['a -> missing', 'a => b'],
-      constraints: ['a near b', 'a below'],
       gap: 12
     });
     expect(partial.problems).toEqual([
       '"a -> missing" names no node with key "missing".',
-      '"a => b" is not a link such as "a -> b".',
-      '"a near b" is not a relation such as "a below b" (above, below, leftOf, rightOf, sameRow, sameColumn).',
-      '"a below" is not a relation such as "a below b" (above, below, leftOf, rightOf, sameRow, sameColumn).'
+      '"a => b" is not a link such as "a -> b".'
     ]);
     expect(partial.placements).toHaveLength(boxes.length);
   });
 });
 
-describe('arrangement templates', () => {
+describe('unlinked children', () => {
   const overlaps = (result: ArrangeResult) =>
     boxes.some((first, i) =>
       boxes.slice(i + 1).some((second, offset) => {
@@ -112,27 +95,8 @@ describe('arrangement templates', () => {
       })
     );
 
-  it('lays a row out in order a gap apart, lined up across it', () => {
-    const row = [
-      { key: 'a', width: 40, height: 40 },
-      { key: 'b', width: 30, height: 20 },
-      { key: 'c', width: 50, height: 30 }
-    ];
-    const tops = (align: 'start' | 'end') => {
-      const { placements } = arrange(row, { template: 'row', align, gap: 10 });
-      expect(placements[1].x - placements[0].x).toBeCloseTo(50, 0);
-      expect(placements[2].x - placements[1].x).toBeCloseTo(40, 0);
-      return placements.map(({ y }, i) => (align === 'start' ? y : y + row[i].height));
-    };
-    for (const align of ['start', 'end'] as const) {
-      const edges = tops(align);
-      expect(edges.every((edge) => Math.abs(edge - edges[0]) < 0.5)).toBe(true);
-    }
-  });
-
   it('gathers unlinked children compactly in a free arrangement, varying with the seed', () => {
-    const free = (seed: number) =>
-      arrange(boxes, { template: 'free', gap: 10, random: keyedRandom(seed, 'frame') });
+    const free = (seed: number) => arrange(boxes, { gap: 10, random: keyedRandom(seed, 'frame') });
     const first = free(1);
     expect(overlaps(first)).toBe(false);
     // Together the boxes cover about 9000 square pixels; a compact arrangement stays near that.
@@ -156,7 +120,6 @@ describe('links along a flow', () => {
   };
   // A line, with arrows preferring to run straight (the seed's curve style below one half).
   const chain = arrange(columns, {
-    template: 'free',
     links: ['n0 -> n1', 'n1 -> n2'],
     flow: 'x',
     form: 'line',
@@ -186,7 +149,6 @@ describe('links along a flow', () => {
 
   it('lays a cycle out as a ring, every node on one circle', () => {
     const ring = arrange(columns, {
-      template: 'free',
       links: ['n0 -> n1', 'n1 -> n2', 'n2 -> n0'],
       form: 'ring',
       aspect: 1,
@@ -213,7 +175,6 @@ describe('links along a flow', () => {
     const looks = new Set<string>();
     for (const form of sequenceForms) {
       const result = arrange(list, {
-        template: 'free',
         links,
         gap: 8,
         aspect: 2,
@@ -243,9 +204,9 @@ describe('links along a flow', () => {
         [tree, 'x', 'tree-right']
       ] as const) {
         const random = keyedRandom(aspect, 'list');
-        const unnamed = arrange(list, { template: 'free', links, gap: 8, aspect, flow, random });
+        const unnamed = arrange(list, { links, gap: 8, aspect, flow, random });
         const unfit = arrange(list, {
-          ...{ template: 'free', links, gap: 8, aspect, flow, random },
+          ...{ links, gap: 8, aspect, flow, random },
           form: 'ring'
         });
         expect([unnamed.choices.form, unfit.choices.form]).toEqual([natural, natural]);
@@ -260,13 +221,11 @@ describe('layout choices', () => {
   it('reports what the seed chose, and reproduces it from the same layout seed', () => {
     const seed = layoutSeedFor(5, '50:1');
     const first = arrange(list, {
-      template: 'free',
       links,
       gap: 8,
       random: keyedRandom(seed, 'layout')
     });
     const again = arrange(list, {
-      template: 'free',
       links,
       gap: 8,
       random: keyedRandom(seed, 'layout')
@@ -283,7 +242,6 @@ describe('layout choices', () => {
   it('keeps a pinned form and curve style', () => {
     for (const seed of [1, 2, 3]) {
       const result = arrange(list, {
-        template: 'free',
         links,
         gap: 8,
         form: 'wave',
@@ -303,7 +261,6 @@ describe('link components', () => {
       { key: 'c', width: 40, height: 40 }
     ];
     const result = arrange(boxes, {
-      template: 'free',
       gap: 8,
       curve: 'straight',
       links: ['a -> b', { from: 'b', to: 'c', directed: false, id: '12:3', curve: 'curved' }],
@@ -336,7 +293,6 @@ describe('link bends', () => {
   it('draws a pinned bend exactly, and reports the bend each link drew', () => {
     for (const seed of [1, 2, 3]) {
       const result = arrange(boxes, {
-        template: 'free',
         gap: 8,
         links: [
           { from: 'a', to: 'b', directed: true, id: '3:1', bend: -0.3 },
@@ -346,7 +302,6 @@ describe('link bends', () => {
       });
       expect(result.edges[0].bend).toBe(-0.3);
       const again = arrange(boxes, {
-        template: 'free',
         gap: 8,
         links: [
           { from: 'a', to: 'b', directed: true, id: '3:1', bend: -0.3 },
@@ -367,14 +322,12 @@ describe('forms along a flow', () => {
   it('draws only forms whose links run the way the flow points', () => {
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       const across = arrange(tree, {
-        template: 'free',
         links,
         gap: 8,
         flow: 'x',
         random: keyedRandom(seed, 'layout')
       });
       const down = arrange(tree, {
-        template: 'free',
         links,
         gap: 8,
         flow: 'y',
@@ -400,7 +353,6 @@ describe('a tree drawn from its fields', () => {
   it('places the child its left field leads to left of its right field’s, whatever the link order', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const result = arrange(nodes, {
-        template: 'free',
         // Written right first, so only where each starts says which child is left.
         links: [
           { from: 'r.right', to: 'b', directed: true },

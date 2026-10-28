@@ -1,5 +1,5 @@
 <!--
-  Places a node's children by constraint layout (see arrange.ts): it measures each child as laid out
+  Places a free layout's children by constraint layout (see arrange.ts): it measures each child as laid out
   inside, solves for their positions, places them, and takes the size that hugs them, drawing any
   links as lines or arrows. A nested arrangement that settles later asks its parent to lay out
   again, so sizes flow up and the final layout uses every child's final size.
@@ -18,17 +18,13 @@
     layoutSeedFor,
     type Anchor,
     type ArrangeEdge,
-    type LinkSpec,
-    type Template
+    type LinkSpec
   } from './arrange';
   import { linkDashes, strokeStyleCss } from './design';
   import type { Form } from './forms';
-  import type { Align, Spacing } from './props';
+  import type { Spacing } from './props';
 
   let {
-    template,
-    align,
-    constraints = [],
     flow,
     form,
     curve,
@@ -38,14 +34,11 @@
     scope,
     children
   }: {
-    template: Template;
-    align?: Align;
-    constraints?: readonly string[];
     flow?: 'x' | 'y';
     /** The form the linked structure takes; unset, or one it cannot take, its natural one. */
     form?: Form;
     curve?: 'straight' | 'curved';
-    /** The seed of its kind's layout, the variant's; unset, as for a row with relations, 1. */
+    /** The seed of its kind's layout, the variant's; unset, 1. */
     layoutSeed?: number;
     /** The kind whose variables hold its look, reported with a selection. */
     kind?: string;
@@ -279,10 +272,7 @@
     });
     for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
     const options = {
-      template,
-      align,
       links: specs,
-      constraints,
       flow,
       form,
       curve,
