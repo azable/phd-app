@@ -211,16 +211,15 @@
       return inner?.dataset.svIdentity ?? element.dataset.svIdentity;
     };
     const boxes = elements.map((element, index) => ({
-      // A child without a key is known by the value it draws, as a node of a heap, which keeps its
-      // place as others come and go, or else by its node id, the same at every step.
-      key: element.dataset.svKey ?? identityOf(element) ?? element.dataset.svNode ?? `#${index}`,
+      // A child is known by the value it draws, as a node of a heap, which keeps its place as others
+      // come and go, or else by its node id, the same at every step.
+      key: identityOf(element) ?? element.dataset.svNode ?? `#${index}`,
       // Layout sizes, unaffected by the frame's scale; offsetWidth rounds, so a pixel more keeps
       // a fractional width from wrapping once placed.
       width: element.offsetWidth + 1,
       height: element.offsetHeight + 1
     }));
-    // Links attach to the node they name: a keyed node inside a child, or, for a keyed child that
-    // holds one value cell among labels, that cell, so arrows meet the value and not its labels.
+    // Links attach to the node drawing the element they name.
     const anchors: Record<string, Anchor> = {};
     const parts: Anchor[] = [];
     // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
@@ -240,8 +239,6 @@
           height: rect.height * ratio
         };
       };
-      for (const inner of element.querySelectorAll<HTMLElement>('[data-sv-key]'))
-        if (inner.dataset.svKey) anchors[inner.dataset.svKey] = anchor(inner);
       // A node drawing an element of the state is also found by it, as vertices[2], the outermost
       // such node first, so a link given a position meets the element's whole view.
       for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-slot]')])
@@ -250,14 +247,12 @@
       for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-item]')])
         if (inner.dataset.svItem && !(inner.dataset.svItem in items))
           items[inner.dataset.svItem] = anchor(inner);
+      // A child drawing a node whose fields link onward, as [ A | next ], is met at its one value
+      // cell, never the field an arrow leaves.
+      const fields = element.querySelector('[data-sv-link][data-sv-hoist]');
       const cells = [...element.querySelectorAll('[data-sv-node]')].filter((inner) =>
         inner.querySelector(':scope > .value')
       );
-      if (element.dataset.svKey && cells.length === 1)
-        anchors[element.dataset.svKey] = anchor(cells[0]);
-      // So does a child drawing a node whose fields link onward, as [ A | next ]: arrows to it meet
-      // its value, never the field an arrow leaves.
-      const fields = element.querySelector('[data-sv-link][data-sv-hoist]');
       if (element.dataset.svSlot && fields && cells.length === 1)
         anchors[element.dataset.svSlot] = anchor(cells[0]);
       // The content inside a child, which arrows bend round: its innermost nodes.

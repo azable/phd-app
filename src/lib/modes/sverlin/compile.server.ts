@@ -1909,7 +1909,6 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     value: null,
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
     children: null,
-    key: null,
     flow: named({ x: 0, y: 0 }, false)
   },
   Pointed: {},
@@ -1979,6 +1978,25 @@ function checkProps(
       continue;
     }
     const allowed = props[attribute.name];
+    // A link's ends are what the data points at, never names written in the view.
+    if (
+      component === 'Link' &&
+      (attribute.name === 'from' || attribute.name === 'to') &&
+      Array.isArray(attribute.value) &&
+      attribute.value.some(
+        (part) =>
+          part.type === 'Text' ||
+          (part.expression?.type === 'Literal' && typeof part.expression.value === 'string')
+      )
+    ) {
+      problems.push(
+        new InvalidSvelteSourceError(
+          `<Link ${attribute.name}="…"> names an end by text; its ends are what the data points at: a position, as ${attribute.name}={k} for an {#each} index or ${attribute.name}={edge.${attribute.name}}, a reference, as to={node.next}, or a label, as ${attribute.name}={@swap.${attribute.name}}.`,
+          { code: 'invalid_prop', ...at }
+        )
+      );
+      continue;
+    }
     if (!allowed) continue;
     const parts = Array.isArray(attribute.value) ? attribute.value : [];
     const [part] = parts;

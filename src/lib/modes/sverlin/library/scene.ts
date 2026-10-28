@@ -35,7 +35,6 @@ export type SceneNode = {
   id: string;
   /** The node it sits in, if any. */
   parent?: string;
-  key?: string;
   /** Its atomic type name, if typed. */
   type?: string;
   /** Its kind of node, as Compared.Pointed: what its look is the variant's values for. */
@@ -222,7 +221,6 @@ function describeNode(
   return {
     id: dataset.svNode ?? '',
     ...(parent ? { parent } : {}),
-    ...(dataset.svKey ? { key: dataset.svKey } : {}),
     ...(dataset.svType ? { type: dataset.svType } : {}),
     ...(dataset.svKind ? { kind: dataset.svKind } : {}),
     ...(layouts.includes(dataset.svLayout ?? '') ? { layout: dataset.svLayout as Layout } : {}),

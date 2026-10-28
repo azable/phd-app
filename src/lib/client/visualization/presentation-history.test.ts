@@ -299,7 +299,7 @@ describe('candidate identifiers', () => {
   });
 
   it('names candidates by their values alone, whatever their seeds, a free layout included', () => {
-    const free = '<Node layout="free"><Node key="a" /></Node>';
+    const free = '<Node layout="free"><Node>a</Node></Node>';
     expect(candidate(1, {}, free).values).toBe(candidate(2, {}, free).values);
   });
 });

@@ -572,7 +572,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1]);</script><script lang="sverlin"></script>{#snippet Pair()}<Node layout="free"><Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" /></Node>{/snippet}{@render Pair()}`
+      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}{@render Pair()}`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {

@@ -120,9 +120,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(view('<Node size={1}>x</Node>')).rejects.toThrow('size is a look');
     await expect(
-      view(
-        '<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" stroke="red" /></Node>'
-      )
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} stroke="red" /></Node>')
     ).rejects.toThrow('<Link> stroke is a look');
   });
 
@@ -233,7 +231,7 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">let i = Position(0);</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" /></Node>{/snippet}{@render Cells()}{@render Position(i)}{@render Note()}{@render Pair()}`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">let i = Position(0); let j = Position(1);</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}{@render Cells()}{@render Position(i)}{@render Note()}{@render Pair()}`
     );
     expect(kindsOf(design.space)).toEqual(
       [
@@ -316,9 +314,7 @@ describe('single-component Svelte compilation', () => {
       });
     for (const prop of ['curve="curved"', 'bend={0.3}'])
       await expect(
-        view(
-          `<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" ${prop} /></Node>`
-        )
+        view(`<Node layout="free"><Node>a</Node><Link from={0} to={1} ${prop} /></Node>`)
       ).rejects.toMatchObject({
         code: 'unknown_prop',
         message: expect.stringContaining(`here the variable V.Link.${prop.split('=')[0]}`)
@@ -332,10 +328,17 @@ describe('single-component Svelte compilation', () => {
       code: 'unknown_prop',
       message: expect.stringContaining('<Node> has no prop class')
     });
+    // A child is not named by hand, and a link's ends are what the data points at.
+    await expect(view('<Node key="a" />')).rejects.toThrow('<Node> has no prop key');
+    for (const end of ['from="a" to={1}', 'from={"a"} to={1}'])
+      await expect(
+        view(`<Node layout="free"><Node>a</Node><Link ${end} /></Node>`)
+      ).rejects.toMatchObject({
+        code: 'invalid_prop',
+        message: expect.stringContaining('<Link from="…"> names an end by text')
+      });
     await expect(
-      view(
-        '<Node layout="free"><Node key="a" /><Node key="b" /><Link from="a" to="b" bow={1} /></Node>'
-      )
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} bow={1} /></Node>')
     ).rejects.toMatchObject({ code: 'unknown_prop' });
     // Values worked out in markup, and props passed on by a spread, are left to the component.
     await expect(
@@ -577,20 +580,21 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
-    const algorithm = '<script lang="sverlin"></script>';
+    const algorithm =
+      '<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}';
     const nested = prepareSvelteComponent(
-      `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  <Node key="a">a</Node><Node key="b">b</Node>\n  {#if true}<Link from="a" to="b" />{/if}\n</Node>{/snippet}{@render Pair()}`
+      `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{@render Int(v)}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}{@render Pair()}`
     );
     expect(nested.component).toMatch(/__ref: ['"]4:13['"]/u);
     expect(nested.component).toMatch(/__links: true/u);
     expect(() =>
       prepareSvelteComponent(
-        `${algorithm}{#snippet Pair()}<Node key="a">a</Node><Node key="b">b</Node><Link from="a" to="b" />{/snippet}{@render Pair()}`
+        `${algorithm}{#snippet Pair()}<Node>{#each values as v}{@render Int(v)}{/each}</Node><Link from={i} to={j} />{/snippet}{@render Pair()}`
       )
     ).toThrow('put it, with the nodes it joins, in a <Node layout="free">');
     expect(() =>
       prepareSvelteComponent(
-        `${algorithm}\n{#snippet Pair()}<Node layout="free"><Link from="a" to="b" __id="x" /></Node>{/snippet}{@render Pair()}`
+        `${algorithm}\n{#snippet Pair()}<Node layout="free"><Link from={i} to={j} __id="x" /></Node>{/snippet}{@render Pair()}`
       )
     ).toThrow('Link props starting with __, such as __id, are reserved');
   });

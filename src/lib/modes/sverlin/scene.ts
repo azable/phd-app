@@ -37,7 +37,6 @@ const sceneTextSchema = v.strictObject({
 const sceneNodeSchema = v.strictObject({
   id: text,
   parent: v.optional(text),
-  key: v.optional(text),
   type: v.optional(text),
   kind: v.optional(text),
   layout: v.optional(v.picklist(['row', 'column', 'free'])),

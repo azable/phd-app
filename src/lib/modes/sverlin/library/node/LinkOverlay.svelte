@@ -67,11 +67,8 @@
     // An end names a keyed node, or the node drawing an element of the state, the outermost first.
     const anchors: Record<string, Box> = {};
     for (const child of children)
-      for (const inner of [
-        child,
-        ...child.querySelectorAll<HTMLElement>('[data-sv-slot], [data-sv-key]')
-      ]) {
-        const name = inner.dataset.svKey ?? inner.dataset.svSlot;
+      for (const inner of [child, ...child.querySelectorAll<HTMLElement>('[data-sv-slot]')]) {
+        const name = inner.dataset.svSlot;
         if (name && !(name in anchors)) anchors[name] = boxOf(inner);
       }
     const boxes = children.map(boxOf);

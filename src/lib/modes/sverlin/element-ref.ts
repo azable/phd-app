@@ -8,7 +8,7 @@ export type ElementLocation = {
   /** Line and column (both from 1) of the element's <Node>, <Link>, or <Listing> tag. */
   line: number;
   column: number;
-  /** A keyed node's key, which names the element whichever render of the tag drew it. */
+  /** A link's ends or a listing line's number, which name the element whichever render of the tag drew it. */
   key?: string;
   /** Which render of that tag (and key) it was, from 1, such as the third time round a loop. */
   occurrence: number;

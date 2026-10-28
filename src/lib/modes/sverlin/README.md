@@ -1041,14 +1041,9 @@ for linked structures such as linked lists, trees, and graphs, joined by
 `<Link>` components (see Link), and for groups whose arrangement is open, with
 or without links. The children are kept clear of each other and gathered
 compactly, as their kind's look says (see Design). A node hugs its children
-whatever its layout.
+whatever its layout. Every direct child is placed; put content that belongs
+together, such as a value and its index, in one child node.
 
-- `key`: a name for a child that its parent's links refer to, such as
-  `<Node key="a" value={3} />`. Every direct child is placed, keyed or not; put
-  content that belongs together, such as a value and its index, in one child
-  node. A link attaches to the node its key names: give the key to the value
-  inside a child, or to a child holding one value among labels, and the arrow
-  meets the value, not the labels.
 - `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
   downwards, as for a list or a tree; only forms that run that way are drawn.
   Set it only when asked; an undirected graph has no flow, and its links are
@@ -1080,10 +1075,9 @@ Design), as `Arrow.Link` for a link in `Arrow`.
   drawing the element each points at (or, where only its fields are drawn, the
   node holding its whole `{#each}` item), the index of an `{#each}` over a
   collection among them, as `k` in `{#each vertices as v, k}`; labels giving
-  positions, as `@insert.swap.from`; or the keys of two nodes, or of nodes
-  inside them, as `<Link from="head" to={first} />` beside a
-  `<Node key="head">head</Node>`. In a view of an element, a link with no `from`
-  starts at the node drawing that element, as a node's `next`.
+  positions, as `@insert.swap.from`; never text written in the view. In a view
+  of an element, a link with no `from` starts at the node drawing that element,
+  as a node's `next`.
 - `directed`: `false` for a plain line instead of an arrow.
 - `label`: a short text shown at the middle of the link, such as `next` or
   `head`.

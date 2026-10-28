@@ -26,7 +26,6 @@
     provideHidden,
     insideComponentBox,
     leftOutContext,
-    keyedRef,
     layoutMemoryContext,
     nodeIdsContext,
     overhangContext,
@@ -59,7 +58,6 @@
     value,
     layout,
     children,
-    key,
     flow,
     __view = 'root',
     __over,
@@ -80,8 +78,6 @@
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
     children?: Snippet;
-    /** A name its parent's links refer to this node by. */
-    key?: string;
     /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
     flow?: 'x' | 'y';
     /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
@@ -130,7 +126,7 @@
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
   const id = untrack(() =>
-    endSlot ? undefined : (__id ?? (__ref ? nodeIds?.claim(keyedRef(__ref, key)) : undefined))
+    endSlot ? undefined : (__id ?? (__ref ? nodeIds?.claim(__ref) : undefined))
   );
   // The element of the state this node draws: a collection's item, or a component's root, which
   // draws the element its call was given (see Slot.svelte). A hidden copy draws none.
@@ -251,7 +247,6 @@
     value,
     layout,
     children,
-    key,
     flow,
     __view,
     __ref,
@@ -356,7 +351,6 @@
     <div
       class="sv-node {typeof font === 'string' ? font : ''}"
       data-sv-node={id}
-      data-sv-key={key}
       data-sv-kind={__over?.active ? __over.kind : __view}
       data-sv-component={__component}
       data-sv-slot={slot}
