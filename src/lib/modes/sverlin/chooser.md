@@ -33,8 +33,11 @@ what the view draws (drawn): a label whose runs change nothing drawn only
 repeats the step before, so turn it off, and around labels kept on, one whose
 own runs add nothing beyond theirs is off too, or "accumulate" where its run
 builds up from the parts paused at inside it, as a comparison from its operands.
-Pace each new label of a new source so; keep the pauses of labels already seen
-unless the participant asks for other steps.
+Where a listing shows, a pause at a loop’s or an if’s body lights all the code
+its run ran, and one at its test only the test’s line, though it draws nothing
+new: pause at either or neither, by whether a step should show a pass’s work or
+where the code goes next. Pace each new label of a new source so; keep the
+pauses of labels already seen unless the participant asks for other steps.
 
 What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.

@@ -900,6 +900,11 @@ as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside
 another taking its name as a prefix. A `[` without a name, as in `A[i]`, is
 text, and the marks are not shown. Every region must have a label and every
 label a region, as each label is a place the page can pause, lighting its region
+there. A region holds the text of what its label marks and no more: a loop's or
+an `if`'s own line goes with its test's label or none, never inside its body's,
+as `for i = 2 to n` stays outside `@insert[…]`; a test with a line of its own
+has a label of its own, as `while (@more[Waiting(queue)])` with
+`while @more[the queue is not empty]`, and the chooser decides whether to pause
 there.
 
 - Only the code of labels the steps pause at lights, all in one look: a step's
