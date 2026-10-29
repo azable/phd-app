@@ -65,8 +65,8 @@ describe('participant Timeline projection', () => {
     });
     const versions = participantTimeline(values).filter((item) => item.kind === 'version');
     expect(versions).toMatchObject([
-      { id: `version-${'a'.repeat(64)}`, first: true, variantCount: 3 },
-      { id: `version-${'a'.repeat(64)}-6`, first: false, variantCount: 3 }
+      { id: `version-${'a'.repeat(64)}`, first: true },
+      { id: `version-${'a'.repeat(64)}-6`, first: false }
     ]);
     expect(
       versions.map((item) => item.variants.map(({ presentation }) => presentation.presentationId))

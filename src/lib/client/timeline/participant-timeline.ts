@@ -39,8 +39,6 @@ export type ParticipantTimelineItem =
       variants: TimelinePresentation[];
       /** Whether the source was first presented here, so this item says what it shows. */
       first: boolean;
-      /** How many presentations the source has in all, wherever they were made. */
-      variantCount: number;
     }
   /** A note from the developer, as the demo project's examples carry, about the card before it. */
   | {
@@ -166,8 +164,7 @@ export function participantTimeline(
             ? { parentHash }
             : {}),
           variants: turnVariants,
-          first,
-          variantCount: variants.get(sourceHash)?.length ?? 1
+          first
         });
       }
       const failure = related.findLast(({ type }) => type === 'operation.failed');

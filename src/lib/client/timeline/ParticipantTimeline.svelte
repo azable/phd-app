@@ -337,10 +337,7 @@
               ></button>
               <div class="pointer-events-none relative flex items-center gap-1">
                 <span class="min-w-0 overflow-hidden whitespace-nowrap"
-                  ><CandidateIdPill
-                    {...source}
-                    {...item.variantCount > 1 ? { values } : {}}
-                  /></span
+                  ><CandidateIdPill {...source} {values} /></span
                 >
                 <button
                   type="button"
