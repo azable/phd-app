@@ -332,7 +332,7 @@ inviting participants.
 
 The study runs on [Render](https://render.com) from the Blueprint
 [`render.yaml`](render.yaml): one always-on Node web service and one managed
-PostgreSQL 17 database, about $13 a month in total. The free plans do not fit: a
+PostgreSQL 17 database, about $31 a month in total. The free plans do not fit: a
 free web service sleeps when idle, cutting off running operations, and a free
 database expires after 30 days.
 

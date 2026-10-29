@@ -4,7 +4,8 @@ services:
     type: web
     runtime: node
     # Paid: the free plan sleeps after 15 idle minutes, cutting off running operations.
-    plan: 0.5c-512mb
+    # 2 GB: an out-of-memory restart would cut off a participant's operation; 512 MB ran near 60%.
+    plan: 1c-2g
     region: singapore
     # Deploys main only after the GitHub CI checks pass.
     autoDeployTrigger: checksPass
