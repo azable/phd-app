@@ -609,6 +609,26 @@ function closesCycle(
   return false;
 }
 
+// Arrangements solved alone, by everything they were solved from: laying out draws many steps
+// alike, and each again once its children are observed, and a seed always gives the same layout.
+const solvedAlone = new Map<string, ArrangeResult>();
+
+/** Arrange children alone, with their choices drawn from a seed, solving each problem only once. */
+export function arrangeOnce(
+  seed: number,
+  boxes: readonly ArrangeBox[],
+  options: Omit<ArrangeOptions, 'random'>
+): ArrangeResult {
+  const key = JSON.stringify([seed, boxes, options]);
+  let solved = solvedAlone.get(key);
+  if (!solved)
+    solvedAlone.set(
+      key,
+      (solved = arrange(boxes, { ...options, random: keyedRandom(seed, 'layout') }))
+    );
+  return solved;
+}
+
 /**
  * A random number in [0, 1) for each key, fixed by a seed and a scope (such as a node's id):
  * FNV-1a over the three, finished with mulberry32.

@@ -9,7 +9,7 @@
 <script lang="ts">
   import { headTrim } from './heads';
   import LinkLines, { type Line } from './LinkLines.svelte';
-  import { labelsIn, markerLook, placeLabel } from './markers';
+  import { labelsIn, markerLook, placeLabels, type PlacedLabel } from './markers';
   import { curvePath, routeCurve, wirePath, type Box } from './route';
   import { seenParts, unionOf } from './visible';
   import { routeWires } from './wires';
@@ -100,6 +100,7 @@
         wired.map(({ from, to }) => ({ from: wireEnd(from), to: wireEnd(to) }))
       ).map((corners, i) => [wired[i], corners])
     );
+    const placed: PlacedLabel[] = [];
     drawn = linked.map((link) => {
       const { marker, from, to, route, head } = link;
       const { dataset } = marker;
@@ -135,7 +136,7 @@
         middle = routed.halfway;
       }
       const label = dataset.svLink ? labels.get(dataset.svLink) : undefined;
-      if (label) placeLabel(host, label, middle);
+      if (label) placed.push({ label, middle });
       return {
         path,
         link: `${dataset.from}${directed ? ' -> ' : ' - '}${dataset.to}`,
@@ -145,6 +146,7 @@
         style: link.style
       };
     });
+    placeLabels(host, placed);
   };
 
   $effect(() => {

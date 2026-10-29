@@ -69,6 +69,18 @@ const clampStep = (step: number) => Math.min(Math.max(step, 0), stepCount - 1);
 const afterOf = (step: number) => 2 * step + 1;
 const stepOf = (phase: number) => Math.floor(phase / 2);
 
+// Each state, by the first state drawn exactly like it: the same values and the same listing lines
+// lit. Laying out draws only the first of each, as the others would come out the same.
+const drawnLike: number[] = [];
+const firstDrawn = new Map<string, number>();
+states.forEach((state, phase) => {
+  const lit = listing?.lit[stepOf(phase)] ?? [];
+  const key = JSON.stringify([state, lit]);
+  if (!firstDrawn.has(key)) firstDrawn.set(key, phase);
+  drawnLike.push(firstDrawn.get(key) as number);
+});
+const distinct = [...firstDrawn.values()];
+
 // Every collection or record each variable holds at any step, by identity, so a pointer through a
 // variable, as c into row = paths[r], keeps room in every row it can point into.
 const held = new Map<string, Set<number>>();
@@ -177,7 +189,7 @@ const root = document.getElementById('app') ?? document.body;
 let current: Shown | undefined;
 let pending: Shown | undefined;
 
-// Layouts for every step, made once in step order before any step is shown (see LayoutMemory).
+// Layouts for every step, made once before any step is shown (see LayoutMemory).
 const scopes: LayoutMemory['scopes'] = new Map();
 const fits: LayoutMemory['fits'] = new Map();
 const reserved: LayoutMemory['reserved'] = new Map();
@@ -186,6 +198,9 @@ const lines: LayoutMemory['lines'] = new Set();
 
 /** Measuring finds each node's natural sizes, recording makes the layouts, showing replays them. */
 type Phase = 'measuring' | 'recording' | 'showing';
+
+/** How long a batch of passes run together goes on mounting before it waits for them to settle. */
+const batchMounting = 100;
 
 /**
  * Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. `extra`
@@ -459,23 +474,23 @@ async function whenShown() {
  * arrangement contains at every step and solve each once over all of them. The items of a
  * collection all keep the largest size any of them reaches: an item's own largest size depends on
  * the steps it took part in (the last cell of a search never holds the pointer), and items of
- * different sizes would not line up in a centred row.
+ * different sizes would not line up in a centred row. Each pass over the steps draws them together,
+ * a few at a time, and only the first of the states drawn alike (see drawnLike); a pass reads only
+ * what the passes before it wrote, so the order steps settle in changes nothing.
  */
 async function recordSteps() {
   // The ids of each collection's items, by the collection's id, gathered over every step.
   const collections = new Map<string, Set<string>>();
-  const pass = async (
+  const pass = (
     step: number,
     phase: Phase,
     finish: (shown: Shown) => void,
     extra?: Record<string, unknown>,
     substituted?: StepState
-  ) => {
-    await whenShown();
-    let mounted: Shown | undefined;
-    const timed = timePass(phase, step, () => mounted);
-    await new Promise<void>((done) => {
-      mounted = mountStep(
+  ) =>
+    new Promise<void>((done) => {
+      const timed = timePass(phase, step, () => mounted);
+      const mounted = mountStep(
         step,
         phase,
         (shown) => {
@@ -488,18 +503,43 @@ async function recordSteps() {
         substituted
       );
     });
+  // Passes that read nothing another of them writes run together: each batch is mounted for at
+  // most a moment, then all of it settles over the same frames.
+  const together = async (passes: (() => Promise<void>)[]) => {
+    for (let next = 0; next < passes.length; ) {
+      await whenShown();
+      const started = performance.now();
+      const batch: Promise<void>[] = [];
+      do batch.push(passes[next++]());
+      while (next < passes.length && performance.now() - started < batchMounting);
+      await Promise.all(batch);
+    }
   };
-  // Keep the largest size each node reaches; whether any grew.
-  const keepLargest = (nodes: Iterable<HTMLElement>) => {
+  // Keep the largest size each node reaches, in reserved or other sizes; whether any grew.
+  const keepLargest = (nodes: Iterable<HTMLElement>, sizes = reserved) => {
     let grew = false;
     for (const node of nodes) {
       const id = node.dataset.svNode as string;
-      const largest = reserved.get(id);
+      const largest = sizes.get(id);
       // Layout sizes, unaffected by the frame's scale or the root's fit.
       const width = Math.max(largest?.width ?? 0, node.offsetWidth);
       const height = Math.max(largest?.height ?? 0, node.offsetHeight);
       grew ||= width !== largest?.width || height !== largest?.height;
-      reserved.set(id, { width, height });
+      sizes.set(id, { width, height });
+    }
+    return grew;
+  };
+  // Keep sizes a round reached, where larger than those kept; whether any grew.
+  const keepReached = (sizes: Map<string, { width: number; height: number }>) => {
+    let grew = false;
+    for (const [id, { width, height }] of sizes) {
+      const kept = reserved.get(id);
+      const largest = {
+        width: Math.max(kept?.width ?? 0, width),
+        height: Math.max(kept?.height ?? 0, height)
+      };
+      grew ||= largest.width !== kept?.width || largest.height !== kept?.height;
+      reserved.set(id, largest);
     }
     return grew;
   };
@@ -527,27 +567,39 @@ async function recordSteps() {
   };
   // The links each step shows, by pair and way, for the pairs drawn as one line (see linePairs).
   const shownLinks: Set<string>[] = [];
-  for (let step = 0; step < states.length; step++)
-    await pass(step, 'measuring', (shown) => {
-      measure(shown);
-      shownLinks[step] = new Set(
-        [
-          ...shown.layer.querySelectorAll<HTMLElement>('[data-sv-pair]:not([data-shown="false"])')
-        ].map(({ dataset }) => `${dataset.svPair}|${dataset.svWay}`)
-      );
-    });
+  await together(
+    distinct.map(
+      (step) => () =>
+        pass(step, 'measuring', (shown) => {
+          measure(shown);
+          shownLinks[step] = new Set(
+            [
+              ...shown.layer.querySelectorAll<HTMLElement>(
+                '[data-sv-pair]:not([data-shown="false"])'
+              )
+            ].map(({ dataset }) => `${dataset.svPair}|${dataset.svWay}`)
+          );
+        })
+    )
+  );
+  states.forEach((_, step) => (shownLinks[step] = shownLinks[drawnLike[step]]));
   for (const pair of linePairs(shownLinks)) lines.add(pair);
   // Values the root reads for placement are measured with every value of their types, in a step
   // where they are recorded, so it has room for values the trace never reaches.
-  for (const { path, step, values } of placements)
-    for (const value of values)
-      await pass(
-        step,
-        'measuring',
-        measure,
-        undefined,
-        withValue(states[step] as StepState, path, value)
-      );
+  await together(
+    placements.flatMap(({ path, step, values }) =>
+      values.map(
+        (value) => () =>
+          pass(
+            step,
+            'measuring',
+            measure,
+            undefined,
+            withValue(states[step] as StepState, path, value)
+          )
+      )
+    )
+  );
   // A collection's items all keep the largest size any of them reaches.
   const lineUp = () => {
     for (const items of collections.values()) {
@@ -568,28 +620,31 @@ async function recordSteps() {
   for (const { name, cases, range } of components) {
     let font: string | undefined;
     const probe = (values: unknown[]) =>
-      pass(
-        0,
-        'measuring',
-        ({ layer }) => {
-          const nodes = layer.querySelectorAll<HTMLElement>(
-            `[data-sv-component="${CSS.escape(name)}"]`
-          );
-          let { width, height } = componentSizes.get(name) ?? { width: 0, height: 0 };
-          for (const node of nodes) {
-            // One holding a free layout is sized by its solution, which a probe does not draw.
-            if (node.querySelector('.sv-arranged')) continue;
-            width = Math.max(width, node.offsetWidth + 1);
-            height = Math.max(height, node.offsetHeight + 1);
-          }
-          if (width || height) componentSizes.set(name, { width, height });
-          const value = layer.querySelector<HTMLElement>(
-            `[data-sv-component="${CSS.escape(name)}"] .value`
-          );
-          if (value) font ??= fontOf(value);
-        },
-        { __probe: { component: name, cases: values } }
-      );
+      together([
+        () =>
+          pass(
+            0,
+            'measuring',
+            ({ layer }) => {
+              const nodes = layer.querySelectorAll<HTMLElement>(
+                `[data-sv-component="${CSS.escape(name)}"]`
+              );
+              let { width, height } = componentSizes.get(name) ?? { width: 0, height: 0 };
+              for (const node of nodes) {
+                // One holding a free layout is sized by its solution, which a probe does not draw.
+                if (node.querySelector('.sv-arranged')) continue;
+                width = Math.max(width, node.offsetWidth + 1);
+                height = Math.max(height, node.offsetHeight + 1);
+              }
+              if (width || height) componentSizes.set(name, { width, height });
+              const value = layer.querySelector<HTMLElement>(
+                `[data-sv-component="${CSS.escape(name)}"] .value`
+              );
+              if (value) font ??= fontOf(value);
+            },
+            { __probe: { component: name, cases: values } }
+          )
+      ]);
     await probe(cases);
     // Digits differ in width in most fonts, and the font is drawn per presentation, so a range too
     // large to draw whole is drawn again with the integer that prints widest in the value's font.
@@ -603,18 +658,38 @@ async function recordSteps() {
   // repeats until no solution changes. An {#if when(…)} chain draws other branches at other steps,
   // each grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as
   // shown. The nodes holding a free layout keep the largest size they reach in the last round, the
-  // first with every layout drawn as solved, at the size it is shown at.
+  // first with every layout drawn as solved, at the size it is shown at. Every step of a round is
+  // drawn with the sizes kept before it, and what the round reaches is kept once it ends.
   for (let round = 0; round < 3; round++) {
-    let chainsGrew = false;
     for (const id of holding) reserved.delete(id);
-    for (let step = 0; step < states.length; step++)
-      await pass(step, 'recording', ({ layer }) => {
-        const nodes = [...layer.querySelectorAll<HTMLElement>('[data-sv-node]')];
-        const held = (node: HTMLElement) => holding.has(node.dataset.svNode as string);
-        const chains = nodes.filter((node) => node.dataset.svKind === 'chain' && !held(node));
-        chainsGrew = keepLargest(chains) || chainsGrew;
-        keepLargest(nodes.filter(held));
-      });
+    const chains = new Map<string, { width: number; height: number }>();
+    const holders = new Map<string, { width: number; height: number }>();
+    await together(
+      distinct.map(
+        (step) => () =>
+          pass(step, 'recording', ({ layer }) => {
+            const nodes = [...layer.querySelectorAll<HTMLElement>('[data-sv-node]')];
+            const held = (node: HTMLElement) => holding.has(node.dataset.svNode as string);
+            keepLargest(
+              nodes.filter((node) => node.dataset.svKind === 'chain' && !held(node)),
+              chains
+            );
+            keepLargest(nodes.filter(held), holders);
+          })
+      )
+    );
+    const chainsGrew = keepReached(chains);
+    keepReached(holders);
+    states.forEach((_, step) => {
+      const like = drawnLike[step];
+      if (like === step) return;
+      const fit = fits.get(like);
+      if (fit !== undefined) fits.set(step, fit);
+      for (const { inputs } of scopes.values()) {
+        const input = inputs.get(like);
+        if (input) inputs.set(step, input);
+      }
+    });
     if (!settleSpans(scopes) && !chainsGrew) break;
   }
   lineUp();

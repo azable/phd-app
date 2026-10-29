@@ -15,8 +15,7 @@
     provideArrangementParent
   } from '../type-context';
   import {
-    arrange,
-    keyedRandom,
+    arrangeOnce,
     layoutSeedFor,
     type Anchor,
     type ArrangeEdge,
@@ -24,7 +23,7 @@
   } from './arrange';
   import type { Form } from './forms';
   import LinkLines, { type LineStyle } from './LinkLines.svelte';
-  import { labelsIn, markerLook, placeLabel } from './markers';
+  import { labelsIn, markerLook, placeLabels } from './markers';
   import type { Spacing } from './props';
   import { seenParts, unionOf } from './visible';
 
@@ -280,9 +279,7 @@
         styles
       };
     } else {
-      const solved = untrack(() =>
-        arrange(boxes, { ...options, anchors, parts, random: keyedRandom(drawSeed, 'layout') })
-      );
+      const solved = untrack(() => arrangeOnce(drawSeed, boxes, { ...options, anchors, parts }));
       for (const problem of solved.problems) console.warn(`Node layout: ${problem}`);
       placements = solved.placements;
       shown = {
@@ -297,10 +294,13 @@
       element.style.left = `${placements[index].x}px`;
       element.style.top = `${placements[index].y}px`;
     });
-    for (const edge of shown.edges) {
-      const label = edge.id === undefined ? undefined : labels.get(edge.id);
-      if (label) placeLabel(host, label, edge.middle);
-    }
+    placeLabels(
+      host,
+      shown.edges.flatMap((edge) => {
+        const label = edge.id === undefined ? undefined : labels.get(edge.id);
+        return label ? [{ label, middle: edge.middle }] : [];
+      })
+    );
     const resized =
       untrack(() => result?.width) !== shown.width ||
       untrack(() => result?.height) !== shown.height;
