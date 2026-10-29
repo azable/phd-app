@@ -27,6 +27,7 @@
     insideComponentBox,
     leftOutContext,
     layoutMemoryContext,
+    movingIdentity,
     nodeIdsContext,
     overhangContext,
     provideOverhang,
@@ -46,6 +47,7 @@
     sequenceContext,
     slotContext,
     provideDrawn,
+    throughContext,
     typeContext,
     wrappedContext,
     type Pointer
@@ -156,15 +158,20 @@
   );
   const position = element?.index ?? -1;
   const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
-  // The value this node draws keeps its identity across steps, so it can be followed as it moves;
-  // the outermost node a pointer's view draws where the pointer is takes the pointer's.
+  // The value this node draws keeps its identity across steps, so it can be followed as it moves,
+  // or read through a position, its place's; the outermost node a pointer's view draws where the
+  // pointer is takes the pointer's.
   const pointerIdentity = pointerIdentityContext();
   if (pointerIdentity) providePointerIdentity(undefined);
   // The element the outermost node of a pointer's view is drawn around, active or not.
   const drawnAround = pointerAroundContext();
   if (drawnAround) providePointerAround(undefined);
   const identity = untrack(() =>
-    slot === undefined ? pointerIdentity : endSlot ? undefined : types?.identityOf(slot)
+    slot === undefined
+      ? pointerIdentity
+      : endSlot
+        ? undefined
+        : movingIdentity(types, throughContext(), slot)
   );
   // The end slots, as far past each end as any step puts one of the pointers' positions: none
   // where the trace never goes past.

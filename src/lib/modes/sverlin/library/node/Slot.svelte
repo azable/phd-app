@@ -7,6 +7,8 @@
   value stands in from another step, drawn hidden as a copy, so it keeps its room. `site` is the
   render's line:column: one the presentation leaves out draws nothing and keeps no room. `place` is
   the render's place, whose own variables the kinds of the view it draws take (see placedKind).
+  `through` marks a value read through at(p), drawn inside a slot naming p: its nodes move as p,
+  not as the element, which is drawn where it is held too (see movingIdentity).
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -15,11 +17,14 @@
     copyContext,
     elementOf,
     leftOutContext,
+    movingIdentity,
     provideCopy,
     providePlace,
     provideHidden,
     provideSlot,
+    provideThrough,
     slotContext,
+    throughContext,
     typeContext
   } from '../type-context';
   import type { Place } from './design';
@@ -31,6 +36,7 @@
     inherit = false,
     reads = [],
     missing = false,
+    through = false,
     site,
     place,
     children
@@ -42,6 +48,8 @@
     reads?: readonly string[];
     /** Whether the value reads past an end through at(p), where it is nothing and draws nothing. */
     missing?: boolean;
+    /** Whether the value is read through at(p): its nodes move as the slot around, naming p. */
+    through?: boolean;
     site?: string;
     place?: Place;
     children: Snippet;
@@ -56,15 +64,20 @@
     provideHidden(true);
     provideCopy();
   }
-  provideSlot(
-    untrack(() =>
-      absent || copyContext()
-        ? undefined
-        : inherit
-          ? slotContext()
-          : (path ?? (at === undefined ? undefined : elementOf(types, of, at)))
-    )
+  const enclosing = slotContext();
+  const slot = untrack(() =>
+    absent || copyContext()
+      ? undefined
+      : inherit
+        ? enclosing
+        : (path ?? (at === undefined ? undefined : elementOf(types, of, at)))
   );
+  provideSlot(slot);
+  if (untrack(() => through) && slot)
+    provideThrough({
+      element: slot,
+      identity: enclosing && movingIdentity(types, throughContext(), enclosing)
+    });
 </script>
 
 {#if !leftOut && !missing}

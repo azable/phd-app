@@ -162,6 +162,31 @@ describe('identities', () => {
     expect(left.ids).toEqual([two, three, undefined]);
   });
 
+  it('move the front taken to a variable, though another collection holds it too', () => {
+    const [, joined, left] = identities(
+      `@start[const listed = Values([1, 2]);
+       let queue = Values([]);]
+       @join[queue = Append(queue, listed[0]);
+       queue = Append(queue, listed[1]);]
+       @leave[const front = queue[0];
+       queue = Rest(queue);]`,
+      ['queue[0]', 'queue[1]', 'listed[0]', 'front']
+    );
+    const [first, second, listed] = joined.ids;
+    // The front and its listed value are one value in two places; taken, it goes with front.
+    expect(left.ids).toEqual([second, undefined, listed, first]);
+    expect(left.copies).toEqual({});
+    // Taken while the queue still holds it, it is a copy, as before.
+    const [, , picked] = identities(
+      `@start[const listed = Values([1, 2]);
+       let queue = Values([]);]
+       @join[queue = Append(queue, listed[0]);]
+       @pick[const front = queue[0];]`,
+      ['queue[0]', 'front']
+    );
+    expect(picked.copies).toEqual({ [picked.ids[1]!]: picked.ids[0] });
+  });
+
   it('follow values rearranged by writes in one step, as a re-insert', () => {
     const [before, after] = identities(
       `@start[const values = Values([1, 2, 3]);]

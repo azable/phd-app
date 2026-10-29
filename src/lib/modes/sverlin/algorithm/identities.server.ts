@@ -5,8 +5,10 @@
  * a literal makes anew, so the same value can sit in two places, as after values[j] = values[j - 1];
  * the place that held it at the previous step keeps its id, and the other is a copy. Collections
  * and records hold values first: a variable holding a value one of them holds is a copy of it, so
- * a swap through a temporary moves both values. A variable has the value's own id only while it
- * alone holds it; once a copy, as insertion sort's key as its step begins, it stays that copy.
+ * a swap through a temporary moves both values, unless one of them gave the value up at that step,
+ * as a queue's front taken: then it moved to the variable. A variable has the value's own id only
+ * while it alone holds it, or took it so; once a copy, as insertion sort's key as its step begins,
+ * it stays that copy.
  */
 
 /**
@@ -45,7 +47,7 @@ export class Identities {
   readonly #structures = new WeakMap<object, number>();
   /** The id each value last had, so one that was out of every place for a while keeps it. */
   readonly #last = new WeakMap<object, number>();
-  #previous = new Map<string, { value: object; id: number }>();
+  #previous = new Map<string, { value: object; id: number; held: boolean }>();
 
   /**
    * Ids for one snapshot's places, matched with the snapshot before it, a step's before with the
@@ -77,7 +79,11 @@ export class Identities {
       }
       // A copy it already was at the previous step stays the same copy.
       const before = this.#previous.get(path);
+      // One its place gave up at this step, as a queue's front taken, moved here, though another
+      // place, as a list of neighbours, holds it too.
+      const left = this.#leftBehind(value, claimed);
       if (before?.value === value && !claimed.has(before.id)) ids[path] = before.id;
+      else if (left !== undefined) ids[path] = left;
       else copies[(ids[path] = this.#next++)] = source;
       claimed.add(ids[path]);
     }
@@ -86,7 +92,9 @@ export class Identities {
     const values = placed.filter(([, , kind]) => kind === 'held' || kind === 'variable');
     for (const [path, value] of values)
       if (!(ids[path] in copies)) this.#last.set(value, ids[path]);
-    this.#previous = new Map(values.map(([path, value]) => [path, { value, id: ids[path] }]));
+    this.#previous = new Map(
+      values.map(([path, value, kind]) => [path, { value, id: ids[path], held: kind === 'held' }])
+    );
 
     const valueAt = new Map(values.map(([path, value]) => [path, value]));
     for (const [path, value, kind, element] of placed) {
@@ -136,6 +144,13 @@ export class Identities {
       ids[path] = id;
       claimed.add(id);
     }
+  }
+
+  /** The id a collection or record held a value by at the previous step, if no place claims it now. */
+  #leftBehind(value: object, claimed: ReadonlySet<number>): number | undefined {
+    for (const before of this.#previous.values())
+      if (before.held && before.value === value && !claimed.has(before.id)) return before.id;
+    return undefined;
   }
 
   #structureId(value: object): number {

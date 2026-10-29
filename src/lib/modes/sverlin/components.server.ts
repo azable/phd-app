@@ -845,6 +845,9 @@ export function slotInsertions(
     const [argument] = (node?.arguments as Part[] | undefined) ?? [];
     return target === undefined || !argument ? undefined : { target, argument };
   };
+  // The at(p) a value is read through, as at(p).name.
+  const readThrough = (node: Part | undefined): ReturnType<typeof atCall> =>
+    node?.type === 'MemberExpression' ? readThrough(node.object as Part) : atCall(node);
   // The path of the value an expression reads, its indices as [], through a reference its node's
   // place in the heap, as `ȟVertex[].name` for q.name with q an item of a queue of references.
   const patternOf = (
@@ -1061,12 +1064,14 @@ export function slotInsertions(
         ];
         rendered.set(part.start ?? 0, reads);
         const past = pastEnd(argument, locals);
+        // A value read through at(p) is drawn inside a slot naming p, the place its nodes move as.
+        const through = readThrough(argument);
         insertions.push(
           {
             at: part.start ?? 0,
-            text: `<SverlinSlot${slotOf(argument, locals)}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''}${past.length ? ` missing={${past.join(' || ')}}` : ''} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
+            text: `${through ? `<SverlinSlot${slotOf(through.argument, locals)}>` : ''}<SverlinSlot${slotOf(argument, locals)}${through ? ' through' : ''}${reads.length ? ` reads={${JSON.stringify(reads)}}` : ''}${past.length ? ` missing={${past.join(' || ')}}` : ''} site="${siteOf(source, part.start ?? 0)}"${placeOf(part)}>`
           },
-          { at: part.end ?? 0, text: '</SverlinSlot>' }
+          { at: part.end ?? 0, text: `</SverlinSlot>${through ? '</SverlinSlot>' : ''}` }
         );
       }
       return;

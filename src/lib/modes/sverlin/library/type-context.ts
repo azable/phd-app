@@ -239,6 +239,38 @@ export function slotContext(): string | undefined {
 }
 
 /**
+ * Inside a component call reading through a position, as {@render Name(at(p).name)}: the element
+ * it draws, and the identity of the place it is drawn for, as the queue entry p is. The element is
+ * drawn where it is held too, so its nodes here move as that place (see movingIdentity).
+ */
+export type Through = { element: string; identity: string | undefined };
+
+export function provideThrough(through: Through): void {
+  setContext('sverlin:through', through);
+}
+
+export function throughContext(): Through | undefined {
+  return getContext<Through | undefined>('sverlin:through');
+}
+
+/**
+ * The identity a node drawing the value at a path moves by: the value's own, or inside a call
+ * reading through a position, its place's, followed by the path below the element, as 29.seen.
+ */
+export function movingIdentity(
+  types: TypeContext | undefined,
+  through: Through | undefined,
+  path: string
+): string | undefined {
+  const below =
+    through && path.startsWith(through.element) ? path.slice(through.element.length) : undefined;
+  if (through && below !== undefined && /^(?:[.[]|$)/u.test(below))
+    return through.identity && through.identity + below;
+  const identity = types?.identityOf(path);
+  return identity === undefined ? undefined : String(identity);
+}
+
+/**
  * A pointer the root renders, as in {@render Arrow(i)}: drawn not where it is written but around
  * the element its position points at, so the compiler hoists the call into the root's script.
  * `path`, or `of` with `at`, names the position as Slot.svelte names an element.

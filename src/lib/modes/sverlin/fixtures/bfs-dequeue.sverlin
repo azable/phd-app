@@ -1,0 +1,95 @@
+<script lang="sverlin" domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = collection(Vertex);
+  const VertexRef = index(Vertices);
+  const Neighbours = collection(VertexRef);
+  const Adjacency = collection(Neighbours);
+  const Queue = collection(VertexRef);
+  const Flag = type('boolean');
+
+  const Waiting = unop((q: Queue) => Flag(q.length > 0));
+  const Unseen = unop((seen: Seen) => Flag(!seen));
+  const Rest = unop((q: Queue) => Queue(q.slice(1)));
+  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
+</script>
+
+<script lang="sverlin" input>
+  const vertices = Vertices([
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]);
+  const neighbours = Adjacency([[1, 2], [3], [3], [4], []]);
+  const start = VertexRef(0);
+</script>
+
+<script lang="sverlin">
+  let queue = Queue([start]);
+  while (@more[Waiting(queue)]) @visit{
+    @take[const current = queue[0];]
+    @remove[queue = Rest(queue);]
+    for (const w of neighbours[current]) @look{
+      if (@unseen[Unseen(vertices[w].seen)]) @add{
+        vertices[w].seen = true;
+        queue = Append(queue, w);
+      }
+    }
+  }
+</script>
+
+{#snippet NameText(value: Name)}<Node {value} />{/snippet}
+{#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
+{#snippet VertexCard(vertex: Vertex)}
+  <Node layout="column">
+    {@render Name(vertex.name)}
+    {@render Seen(vertex.seen)}
+  </Node>
+{/snippet}
+
+{#snippet VertexNumber(p: VertexRef)}<Node value={p} />{/snippet}
+{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}
+{#snippet VertexMini(p: VertexRef)}{@render Vertex(at(p))}{/snippet}
+
+{#snippet QueueItems(items: Queue)}
+  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+{/snippet}
+
+{#snippet Outline(p: VertexRef)}<Pointed />{/snippet}
+
+{#snippet Title()}<Node>Breadth-first search from A</Node>{/snippet}
+{#snippet Graph()}
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      {@render Vertex(vertex)}
+      {#each neighbours[k] as w}
+        <Link from={k} to={w} />
+      {/each}
+    {/each}
+  </Node>
+{/snippet}
+{#snippet QueueLine()}
+  <Node layout="row">
+    <Node>queue</Node>
+    {@render Queue(queue)}
+  </Node>
+{/snippet}
+{#snippet Board()}
+  <Node layout="column">
+    {@render Graph()}
+    {@render QueueLine()}
+  </Node>
+{/snippet}
+
+{@render Title()}
+{@render Board()}
+{#snippet Taken()}
+  <Node layout="row">
+    <Node>current</Node>
+    {@render VertexRef(current)}
+  </Node>
+{/snippet}
+{@render Taken()}

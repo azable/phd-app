@@ -495,10 +495,11 @@ nodes `prev` and `cur` refer to both marked:
   root and its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a
   `Vertex` and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and
   a record of positions reads through twice, `at(edge.from).name`. What draws it
-  is the element itself, so it moves with it, and a pointer's view drawn round
-  the whole element marks it there too; past either end it draws nothing. A
-  position has no fields (`p.name` is refused), and its number may be drawn, as
-  an index means something.
+  is the element itself, so a pointer's view drawn round the whole element marks
+  it there too; but it moves as the position, so a name in a queue slides with
+  its entry and fades out as it leaves while the element stays where it is held;
+  past either end it draws nothing. A position has no fields (`p.name` is
+  refused), and its number may be drawn, as an index means something.
 
 ## Operators
 

@@ -2059,6 +2059,9 @@ ${markup}`;
     expect(component).toMatch(/vertices\[p\(\)\] === undefined/u);
     expect(component).toMatch(/vertices\[[^\]]*edge[^\]]*\.from[^\]]*\]\?\.name/u);
     expect(component).toMatch(/vertices\[[^\]]*edge[^\]]*\.to[^\]]*\]/u);
+    // Drawn as read through the position, inside a slot naming it: edge.from's, as at="from".
+    expect(component).toMatch(/through: true/u);
+    expect(component).toMatch(/at: ['"]from['"]/u);
   });
 
   it('refuses a field read on a position, a field the element lacks, and at() of no position', () => {

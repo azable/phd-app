@@ -2,8 +2,9 @@
  * Moving from one step to the next. Each step is drawn in a layer of its own, laid out before it
  * shows, so a node drawing the same value, or the same pointer, in both layers (data-sv-identity)
  * starts where it was and moves to its new place: it is drawn in place and translated back, then
- * the translation runs out. A copy of a value starts where its source was; a new value fades in;
- * a value gone fades out with the layer it was in, kept over the new one until then.
+ * the translation runs out. A copy of a value starts where its source was; a new value fades in,
+ * unless it is part of one that moves; a value gone fades out with the layer it was in, kept over
+ * the new one until then.
  */
 
 /**
@@ -41,6 +42,19 @@ function placedByIdentity(layer: HTMLElement): Map<string, Placed[]> {
   return found;
 }
 
+/**
+ * The identity a copied value was copied from, as 29 for 31 where 31 is a copy of 29; for a value
+ * read through a position (see movingIdentity), its place's, with the rest, as 29.seen for 31.seen.
+ */
+function copiedFrom(
+  identity: string,
+  copies: Readonly<Record<number, number>>
+): string | undefined {
+  const [, place = '', below = ''] = /^(\d+)(.*)$/su.exec(identity) ?? [];
+  const copied = copies[Number(place)];
+  return copied === undefined ? undefined : `${copied}${below}`;
+}
+
 /** How much an element is scaled on screen, by the frame's fit and any ancestor's. */
 function scaleOf(element: HTMLElement, box: DOMRect): number {
   return element.offsetWidth ? box.width / element.offsetWidth : 1;
@@ -64,8 +78,7 @@ export function animateStep(
   const moves = new Map<HTMLElement, { x: number; y: number; scale: number }>();
   const appearing: HTMLElement[] = [];
   for (const [identity, placed] of now) {
-    const copied = copies[Number(identity)];
-    const from = old.get(identity) ?? (copied === undefined ? undefined : old.get(String(copied)));
+    const from = old.get(identity) ?? old.get(copiedFrom(identity, copies) ?? '');
     placed.forEach(({ element, box }, index) => {
       const source = from?.[Math.min(index, from.length - 1)];
       if (!source) appearing.push(element);
@@ -91,15 +104,24 @@ export function animateStep(
       easing
     });
   }
-  for (const element of appearing)
+  // A part of a value that moves, as a card's name where only the name was drawn before, rides
+  // with it in view; anything else new fades in.
+  const ridesWith = (element: HTMLElement): boolean => {
+    const outer = element.parentElement?.closest<HTMLElement>('[data-sv-identity]');
+    if (!outer || !element.dataset.svIdentity?.startsWith(`${outer.dataset.svIdentity}.`))
+      return false;
+    return moves.has(outer) || ridesWith(outer);
+  };
+  for (const element of appearing.filter((element) => !ridesWith(element)))
     element.animate([{ opacity: 0 }, { opacity: getComputedStyle(element).opacity }], {
       duration: motionDuration,
       easing
     });
 
-  const gone = [...old]
-    .filter(([identity]) => !now.has(identity))
-    .flatMap(([, placed]) => placed.map(({ element }) => element));
+  // Gone too: a value drawn more times before than now, its last ones, which no node pairs with.
+  const gone = [...old].flatMap(([identity, placed]) =>
+    placed.slice(now.get(identity)?.length ?? 0).map(({ element }) => element)
+  );
   for (const element of gone) element.dataset.svGone = '';
   return { gone };
 }
