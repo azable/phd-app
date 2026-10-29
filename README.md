@@ -327,3 +327,44 @@ After resetting the database, open the app and register a new administrator
 passkey at the one-time setup page. From `/admin`, create a participant, assign
 the open study version, and use a preview to verify both conditions before
 inviting participants.
+
+## Deployment
+
+The study runs on [Render](https://render.com) from the Blueprint
+[`render.yaml`](render.yaml): one always-on Node web service and one managed
+PostgreSQL 17 database, about $13 a month in total. The free plans do not fit: a
+free web service sleeps when idle, cutting off running operations, and a free
+database expires after 30 days.
+
+Once set up, a release is a merge to `main`. The GitHub workflow
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the type check,
+lint, unit, and PostgreSQL tests; when they pass, Render builds the commit,
+applies migrations (`preDeployCommand`), and switches traffic to the new
+instance once `/api/health/ready` answers. A failed build, migration, or health
+check leaves the previous version serving. The old instance gets up to five
+minutes to finish its operations; any it cannot finish fail and can be retried,
+as after any interruption. Avoid releasing during a participant's session. To
+roll back, choose an earlier deploy under the service's **Events** and select
+**Rollback**; a rollback does not undo migrations.
+
+First setup:
+
+1. In Render, choose **New → Blueprint**, connect the GitHub repository, and
+   apply `render.yaml`.
+2. When prompted, set `BETTER_AUTH_URL` and `ORIGIN` to the service's public URL
+   (`https://sverlin.onrender.com`, or another name if Render reports that one
+   taken) and `OPENAI_API_KEY`. Passkeys are bound to the URL's hostname, so add
+   any custom domain before the next step; changing it later means registering
+   passkeys again. Render generates `BETTER_AUTH_SECRET`.
+3. After the first deploy, open the URL and register the administrator passkey
+   at the one-time setup page; then continue as in
+   [Study and operations](#study-and-operations).
+
+Later changes to `sync: false` values are made in the service's **Environment**
+page, not in `render.yaml`; saving them restarts the service.
+
+To export research data, copy the database's **External Database URL** from
+Render and run
+`DATABASE_URL='…' PGSSLMODE=require pnpm run export:data -- --scope projects`
+from the Dev Container. Paid Render databases keep a few days of point-in-time
+recovery; export regularly during the study to keep your own copy.

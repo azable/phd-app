@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "bash scripts/run-with-env.sh sh -c 'pnpm run db:migrate && pnpm run dev:web'",
     "dev:web": "bash scripts/run-with-env.sh node node_modules/vite/bin/vite.js dev --configLoader native",
