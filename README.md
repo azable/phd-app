@@ -351,11 +351,13 @@ First setup:
 
 1. In Render, choose **New → Blueprint**, connect the GitHub repository, and
    apply `render.yaml`.
-2. When prompted, set `BETTER_AUTH_URL` and `ORIGIN` to the service's public URL
-   (`https://sverlin.onrender.com`, or another name if Render reports that one
-   taken) and `OPENAI_API_KEY`. Passkeys are bound to the URL's hostname, so add
-   any custom domain before the next step; changing it later means registering
-   passkeys again. Render generates `BETTER_AUTH_SECRET`.
+2. Set `BETTER_AUTH_URL` and `ORIGIN` to the service's public URL
+   (`https://phd-app.onrender.com`, or another name if Render reports that one
+   taken) and `OPENAI_API_KEY`. Render prompts for them only when it creates a
+   Blueprint; for resources an existing Blueprint adds, set them in the
+   service's **Environment** page. Passkeys are bound to the URL's hostname, so
+   add any custom domain before the next step; changing it later means
+   registering passkeys again. Render generates `BETTER_AUTH_SECRET`.
 3. After the first deploy, open the URL and register the administrator passkey
    at the one-time setup page; then continue as in
    [Study and operations](#study-and-operations).
