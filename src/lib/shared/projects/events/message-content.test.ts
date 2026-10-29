@@ -110,10 +110,6 @@ describe('element references', () => {
       [{ node: '50:1', seed: 1.5 }]
     ])
       expect(v.is(messageContentSegmentSchema, layout(bad))).toBe(false);
-    // References saved before chain was renamed form still load, as a form.
-    expect(
-      v.parse(messageContentSegmentSchema, layout([{ node: '50:1', seed: 1, chain: 'ring' }]))
-    ).toStrictEqual(layout([{ node: '50:1', seed: 1, form: 'ring' }]));
   });
 });
 

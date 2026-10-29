@@ -56,28 +56,19 @@ const layoutFormSchema = v.picklist([
  * the page), the kind whose variables hold its look, that kind's layout seed, and the form and curve
  * it drew, so feedback can keep it by setting those variables.
  */
-export const elementLayoutSchema = v.pipe(
-  v.strictObject({
-    node: v.union([v.literal('frame'), elementIdSchema]),
-    kind: v.optional(v.pipe(v.string(), v.maxLength(200))),
-    seed: v.pipe(v.number(), v.safeInteger()),
-    form: v.optional(layoutFormSchema),
-    /** The earlier name for form, read so references saved before the rename still load. */
-    chain: v.optional(layoutFormSchema),
-    curve: v.optional(v.picklist(['straight', 'curved']))
-  }),
-  v.transform(({ chain, ...layout }) =>
-    chain === undefined || layout.form !== undefined ? layout : { ...layout, form: chain }
-  )
-);
+export const elementLayoutSchema = v.strictObject({
+  node: v.union([v.literal('frame'), elementIdSchema]),
+  kind: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  seed: v.pipe(v.number(), v.safeInteger()),
+  form: v.optional(layoutFormSchema),
+  curve: v.optional(v.picklist(['straight', 'curved']))
+});
 
 /** A selected element: its id, a label from what it showed, and the layouts around it. */
 export const selectedElementSchema = v.strictObject({
   id: elementIdSchema,
   label: elementLabelSchema,
-  layouts: v.optional(v.pipe(v.array(elementLayoutSchema), v.maxLength(2))),
-  /** Retired: a link's bend, which selections no longer report; kept so stored ones still parse. */
-  bend: v.optional(v.pipe(v.number(), v.minValue(-1), v.maxValue(1)))
+  layouts: v.optional(v.pipe(v.array(elementLayoutSchema), v.maxLength(2)))
 });
 
 /** One element a participant selected in a presentation at a step, referenced in a message. */
