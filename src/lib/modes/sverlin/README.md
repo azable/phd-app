@@ -785,14 +785,18 @@ graph each node after its parents) as `line`, `snake` (rows read back and
 forth), `wave`, `arc`, or `scatter` (free positions that keep each node near the
 next); a cycle can also take `ring`, a tree `tree-down`, `tree-right`, `radial`,
 or `indented`, and a layered graph `layers-down` or `layers-right`, as its
-`flow` allows. A layout's options are the forms its data's structure can take,
-and it starts in that structure's natural form: a path in a `line` (as does a
-layout whose data links nothing), a cycle in a `ring`, a tree `tree-down` and a
-layered graph `layers-down` (`-right` along `flow` x); where the page finds the
-links it draws make another structure, a form that one cannot take is drawn in
-its natural form. `curve`, `straight` (the start) or `curved`, is how its arrows
-prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are drawn
-from. The same values draw the same picture whatever the space.
+`flow` allows; an undirected graph's layers are each node's distance from its
+first. A layout's options are the forms its data's structure can take, and it
+starts in that structure's natural form: a path in a `line`, a cycle in a
+`ring`, a tree `tree-down` and a layered graph `layers-down` (`-right` along
+`flow` x); a layout whose data makes no structure has no `form` and is laid out
+freely. Where the page finds the links it draws make another structure, a form
+that one cannot take is drawn in its natural form. `curve`, `straight` (the
+start) or `curved`, is how its arrows prefer to run. `layoutSeed`, 1 to 32, is
+what its spacing and nudges are drawn from. A free layout keeps its form's own
+proportions and takes the size of everything it draws, its links' curves, heads
+and labels included, so the same values draw the same layout wherever it is,
+whatever the frame or what is beside it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,

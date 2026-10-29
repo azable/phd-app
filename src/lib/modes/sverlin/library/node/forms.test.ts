@@ -157,7 +157,6 @@ describe('form placement', () => {
         for (const seed of [1, 2, 3, 4]) {
           const centres = formCentres(form, structure, () => size, {
             room: 20,
-            aspect: 16 / 9,
             random: keyedRandom(seed, form)
           });
           const points = structure.nodes.map((node) => centres.get(node));
@@ -170,5 +169,46 @@ describe('form placement', () => {
                 `${form} (seed ${seed}) keeps nodes apart`
               ).toBe(true);
         }
+  });
+
+  it('rows a snake from its count and its nodes alone, as near a square as they go', () => {
+    const rowsOf = (count: number) => {
+      const path = linked(
+        count,
+        Array.from({ length: count - 1 }, (_, i) => [i, i + 1] as [number, number])
+      ) as Structure;
+      const centres = formCentres('snake', path, () => ({ width: 40, height: 40 }), {
+        room: 20,
+        random: keyedRandom(1, 'snake')
+      });
+      return new Set([...centres.values()].map(({ y }) => Math.round(y))).size;
+    };
+    expect([rowsOf(4), rowsOf(9), rowsOf(16)]).toEqual([2, 3, 4]);
+  });
+
+  it('layers an undirected graph by distance, links within a layer lying along it', () => {
+    // Dijkstra's graph: A joins B and C, which join each other, D and E; D joins E.
+    const graph = findStructure(
+      5,
+      (
+        [
+          [0, 1],
+          [0, 2],
+          [1, 2],
+          [1, 3],
+          [2, 3],
+          [2, 4],
+          [3, 4]
+        ] as [number, number][]
+      ).map(([source, target]) => ({ source, target, directed: false }))
+    ) as Structure;
+    expect(graph.kind).toBe('layers');
+    const centres = formCentres('layers-right', graph, () => size, {
+      room: 20,
+      random: keyedRandom(1, 'layers')
+    });
+    const column = (node: number) => Math.round(centres.get(node)!.x);
+    expect([column(1), column(3)]).toEqual([column(2), column(4)]);
+    expect(new Set([0, 1, 2, 3, 4].map(column)).size).toBe(3);
   });
 });

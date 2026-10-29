@@ -28,7 +28,7 @@ export type SpanInput = {
   boxes: ArrangeBox[];
   anchors: Record<string, KeyedAnchor>;
   parts: KeyedAnchor[];
-  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'curve' | 'gap' | 'aspect'>;
+  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'curve' | 'gap'>;
 };
 
 /** An arrangement solved over every step, with each child's place by key. */
@@ -91,8 +91,6 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
   const solved = arrange(boxes, {
     ...first.options,
     links: unionLinks(inputs.map(({ options }) => options.links)),
-    // The tightest space any step leaves, so the layout fits at every step.
-    aspect: Math.min(...inputs.map(({ options }) => options.aspect ?? 16 / 9)),
     anchors,
     parts,
     permanent,
@@ -140,8 +138,12 @@ export function settleSpans(
     if (!entry.inputs.size) continue;
     const steps = [...entry.inputs.keys()].sort((a, b) => a - b);
     const span = solveSpan(steps.map((step) => entry.inputs.get(step) as SpanInput));
+    // To a tenth of a pixel: a step measured at another scale gives its anchors other last digits.
     const shape = (layout?: SpanLayout) =>
-      layout && JSON.stringify([layout.positions, layout.width, layout.height]);
+      layout &&
+      JSON.stringify([layout.positions, layout.width, layout.height], (_, value: unknown) =>
+        typeof value === 'number' ? Math.round(value * 10) / 10 : value
+      );
     if (shape(span) !== shape(entry.span)) changed = true;
     entry.span = span;
   }

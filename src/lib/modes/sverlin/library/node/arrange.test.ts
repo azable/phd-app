@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { sequenceForms } from './forms';
+import { pathBounds } from './route';
 import {
   arrange,
   keyedRandom,
@@ -151,7 +152,6 @@ describe('links along a flow', () => {
     const ring = arrange(columns, {
       links: ['n0 -> n1', 'n1 -> n2', 'n2 -> n0'],
       form: 'ring',
-      aspect: 1,
       gap: 6,
       anchors,
       random: keyedRandom(3, 'list')
@@ -177,7 +177,6 @@ describe('links along a flow', () => {
       const result = arrange(list, {
         links,
         gap: 8,
-        aspect: 2,
         form,
         random: keyedRandom(1, 'list')
       });
@@ -193,20 +192,20 @@ describe('links along a flow', () => {
     expect(looks.size).toBe(sequenceForms.length);
   });
 
-  it('draws the structure’s natural form, whatever the space, where none fits', () => {
+  it('draws the structure’s natural form, whatever the seed, where none fits', () => {
     const list = Array.from({ length: 6 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
     const chain = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
     const tree = ['n0 -> n1', 'n0 -> n2', 'n1 -> n3', 'n1 -> n4', 'n2 -> n5'];
-    for (const aspect of [0.5, 1, 3])
+    for (const seed of [1, 2, 3])
       for (const [links, flow, natural] of [
         [chain, undefined, 'line'],
         [tree, undefined, 'tree-down'],
         [tree, 'x', 'tree-right']
       ] as const) {
-        const random = keyedRandom(aspect, 'list');
-        const unnamed = arrange(list, { links, gap: 8, aspect, flow, random });
+        const random = keyedRandom(seed, 'list');
+        const unnamed = arrange(list, { links, gap: 8, flow, random });
         const unfit = arrange(list, {
-          ...{ links, gap: 8, aspect, flow, random },
+          ...{ links, gap: 8, flow, random },
           form: 'ring'
         });
         expect([unnamed.choices.form, unfit.choices.form]).toEqual([natural, natural]);
@@ -281,6 +280,40 @@ describe('link components', () => {
       Math.abs((x2 - x1) * (cy1 - y1) - (y2 - y1) * (cx1 - x1)) / Math.hypot(x2 - x1, y2 - y1);
     expect(offLine(numbers[0])).toBeLessThan(1);
     expect(offLine(numbers[1])).toBeGreaterThan(1);
+  });
+
+  it('takes the size of everything it draws, arcs, heads and labels as well as children', () => {
+    // Four in a line, the first joined to the last by an arc over the others, with a label.
+    const line = ['a', 'b', 'c', 'd'].map((key) => ({ key, width: 40, height: 40 }));
+    const head = { shape: 'arrow', size: 16 };
+    const result = arrange(line, {
+      gap: 8,
+      form: 'line',
+      links: [
+        { from: 'a', to: 'b', directed: true, head },
+        { from: 'b', to: 'c', directed: true, head },
+        { from: 'c', to: 'd', directed: true, head },
+        {
+          ...{ from: 'a', to: 'd', directed: true, id: 'arc', route: 'curved' as const, head },
+          label: { width: 30, height: 20 }
+        }
+      ],
+      random: keyedRandom(1, 'layout')
+    });
+    const children = Math.max(...result.placements.map(({ y }) => y)) + 40;
+    // The arc bows out past the children, and the box takes it in.
+    expect(result.height).toBeGreaterThan(children);
+    for (const edge of result.edges) {
+      const bounds = pathBounds(edge.path);
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(result.width);
+      expect(bounds.bottom).toBeLessThanOrEqual(result.height);
+    }
+    const arc = result.edges.find(({ id }) => id === 'arc')!;
+    expect(arc.middle.y - 10).toBeGreaterThanOrEqual(0);
+    expect(arc.middle.y + 10).toBeLessThanOrEqual(result.height);
+    for (const { x, y } of result.placements) expect(Math.min(x, y)).toBeGreaterThanOrEqual(0);
   });
 });
 

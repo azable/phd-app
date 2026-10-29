@@ -103,6 +103,42 @@ export function wirePath(
   };
 }
 
+/** The points a path drawn by curvePath or wirePath passes through, a curve's sampled along it. */
+function pathPoints(path: string): Point[] {
+  const points: Point[] = [];
+  for (const [, command, coordinates] of path.matchAll(/([MLC])([^MLC]*)/gu)) {
+    const given = [...coordinates.matchAll(/(-?[\d.]+),(-?[\d.]+)/gu)].map(([, x, y]) => ({
+      x: Number(x),
+      y: Number(y)
+    }));
+    const from = points[points.length - 1];
+    if (command === 'C' && from && given.length === 3)
+      for (let i = 1; i <= 24; i++)
+        points.push(cubicAt(from, given[0], given[1], given[2], i / 24));
+    else points.push(...given);
+  }
+  return points;
+}
+
+/** The box a path drawn by curvePath or wirePath covers, a curve where it bows out included. */
+export function pathBounds(path: string): Box {
+  const points = pathPoints(path);
+  return {
+    left: Math.min(...points.map(({ x }) => x)),
+    top: Math.min(...points.map(({ y }) => y)),
+    right: Math.max(...points.map(({ x }) => x)),
+    bottom: Math.max(...points.map(({ y }) => y))
+  };
+}
+
+/** A path drawn by curvePath or wirePath, moved by an offset. */
+export function shiftPath(path: string, dx: number, dy: number): string {
+  return path.replace(
+    /(-?[\d.]+),(-?[\d.]+)/gu,
+    (_, x: string, y: string) => `${round(Number(x) + dx)},${round(Number(y) + dy)}`
+  );
+}
+
 /**
  * A cubic curve from one box to another that crosses as few obstacles as it can: it tries bends to
  * either side of the straight line, in an order the seed sets, and keeps the first that crosses

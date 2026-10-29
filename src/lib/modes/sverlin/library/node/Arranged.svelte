@@ -1,8 +1,10 @@
 <!--
-  Places a free layout's children by constraint layout (see arrange.ts): it measures each child as laid out
-  inside, solves for their positions, places them, and takes the size that hugs them, drawing any
-  links over them (see LinkLines.svelte) and placing their labels on their middles. A nested arrangement that settles later asks its parent to lay out
-  again, so sizes flow up and the final layout uses every child's final size.
+  Places a free layout's children by constraint layout (see arrange.ts): it measures each child as
+  laid out inside, solves for their positions, places them, and takes the size that holds everything
+  it draws, drawing any links over them (see LinkLines.svelte) and placing their labels on their
+  middles. Its layout follows from its children, its links and its kind's values alone, never from
+  the space around it. A nested arrangement that settles later asks its parent to lay out again, so
+  sizes flow up and the final layout uses every child's final size.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -83,30 +85,6 @@
       });
     }
   });
-
-  /**
-   * The width to height of the space this arrangement has: the frame's inside, less what the other
-   * top-level nodes take when the root is a column or row, so shapes fill what is left.
-   */
-  function spaceAspect(): number {
-    const frame = host?.closest<HTMLElement>('.sv-frame');
-    if (!frame || !host) return 16 / 9;
-    const style = getComputedStyle(frame);
-    let width = frame.clientWidth - parseFloat(style.paddingLeft) * 2;
-    let height = frame.clientHeight - parseFloat(style.paddingTop) * 2;
-    const flow = host.closest<HTMLElement>('.sv-flow');
-    const top = flow
-      ? [...flow.children].find((child) => child.contains(host as Element))
-      : undefined;
-    if (flow && top) {
-      const others = [...flow.children].filter((child) => child !== top) as HTMLElement[];
-      const gap = parseFloat(getComputedStyle(flow).rowGap) || 0;
-      if (flow.style.flexDirection === 'row')
-        width -= others.reduce((sum, child) => sum + child.offsetWidth + gap, 0);
-      else height -= others.reduce((sum, child) => sum + child.offsetHeight + gap, 0);
-    }
-    return Math.max(width, 50) / Math.max(height, 50);
-  }
 
   // Lay out again whenever a child's size changes: a page loaded while hidden measures every child
   // as empty, and children only take their sizes once it is shown.
@@ -271,8 +249,7 @@
       flow,
       form,
       curve,
-      gap: space,
-      aspect: spaceAspect()
+      gap: space
     };
     // While recording, note what this arrangement contains at this step, by key, so it can be
     // solved once over every step (see node/span.ts).

@@ -15,8 +15,8 @@ import {
   sequenceForms,
   type Form
 } from './forms';
-import { headTrim, type HeadEnds } from './heads';
-import { curvePath, routeCurve, wirePath, type Box } from './route';
+import { headDrawing, headTrim, type HeadEnds } from './heads';
+import { curvePath, pathBounds, routeCurve, shiftPath, wirePath, type Box } from './route';
 import { routeWires } from './wires';
 
 /** One child to place: its key and its size in pixels. */
@@ -50,7 +50,7 @@ export type ArrangeEdge = {
 export type ArrangeResult = {
   placements: Placement[];
   edges: ArrangeEdge[];
-  /** The size that hugs every child. */
+  /** The size that holds everything drawn: every child, and its links' curves, heads and labels. */
   width: number;
   height: number;
   /** Links that were ignored, with why. */
@@ -79,8 +79,6 @@ export type ArrangeOptions = {
   permanent?: ReadonlySet<string>;
   /** Whether arrows prefer to run straight or to curve; unset, the seed draws it. */
   curve?: 'straight' | 'curved';
-  /** The width to height of the space the arrangement has, which shapes fill. */
-  aspect?: number;
   /** Content inside children, such as labels beside a value, which arrows bend round. */
   parts?: readonly Anchor[];
   /**
@@ -237,7 +235,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   // The links of a free arrangement are read for the structure they make, such as a path, a tree,
   // or a layered graph, from links present at every step only, so a link that comes and goes is
   // drawn but does not change it. The structure takes its kind's form where it can, else its natural
-  // one, so the same values draw the same form whatever the space.
+  // one, in the form's own proportions, so the same values draw the same layout wherever it is.
   // A node's links are read in the order they leave it, by where they start inside it, so a tree's
   // left field leads to the child placed left of its right field's.
   const leaving = (link: (typeof laidLinks)[number]) =>
@@ -255,7 +253,6 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
           (firstFrom.get(a.source) ?? 0) - (firstFrom.get(b.source) ?? 0) || leaving(a) - leaving(b)
       )
   );
-  const aspect = options.aspect ?? 16 / 9;
   const along = options.flow === 'y' ? 'y' : 'x';
   const sizeOf = (node: number) => boxes[node];
   // Sequence forms lie along x; a vertical flow turns them, swapping each centre's axes.
@@ -264,7 +261,6 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     const turned = along === 'y' && (sequenceForms as readonly Form[]).includes(form);
     const centres = formCentres(form, structure, sizeOf, {
       room,
-      aspect: turned ? 1 / aspect : aspect,
       random: options.random ?? (() => 0.5)
     });
     return turned
@@ -543,11 +539,42 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     ? routeAll(first.map((edge, i) => links[i].label && labelAt(edge.middle, links[i].label)))
     : first;
 
+  // The arrangement's box holds everything it draws: the children, curves that bow out past them,
+  // the heads at their ends, and labels, so what is placed beside it stays clear of all of them.
+  const drawn: Box[] = [{ left: 0, top: 0, right: width, bottom: height }];
+  edges.forEach((edge, i) => {
+    drawn.push(pathBounds(edge.path));
+    // A head lies within its size of the end the line stops at.
+    const reach = headDrawing(links[i].head?.shape) ? (links[i].head?.size ?? 0) : 0;
+    const ends = [edge.heads.start && { x: edge.x1, y: edge.y1 }, { x: edge.x2, y: edge.y2 }];
+    for (const end of ends)
+      if (end && reach)
+        drawn.push({
+          left: end.x - reach,
+          top: end.y - reach,
+          right: end.x + reach,
+          bottom: end.y + reach
+        });
+    const label = links[i].label;
+    if (label) drawn.push(labelAt(edge.middle, label));
+  });
+  const [outerLeft, outerTop] = [
+    Math.min(...drawn.map((box) => box.left)),
+    Math.min(...drawn.map((box) => box.top))
+  ];
+  const shift = (point: Point) => ({ x: point.x - outerLeft, y: point.y - outerTop });
+
   return {
-    placements,
-    edges,
-    width,
-    height,
+    placements: placements.map(({ key, ...point }) => ({ key, ...shift(point) })),
+    edges: edges.map((edge) => ({
+      ...edge,
+      ...{ x1: edge.x1 - outerLeft, y1: edge.y1 - outerTop },
+      ...{ x2: edge.x2 - outerLeft, y2: edge.y2 - outerTop },
+      path: shiftPath(edge.path, -outerLeft, -outerTop),
+      middle: shift(edge.middle)
+    })),
+    width: Math.max(...drawn.map((box) => box.right)) - outerLeft,
+    height: Math.max(...drawn.map((box) => box.bottom)) - outerTop,
     problems,
     choices: { ...(form ? { form } : {}), ...(options.curve ? { curve: options.curve } : {}) }
   };

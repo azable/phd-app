@@ -124,7 +124,7 @@ describe('free layout structures', () => {
   });
 
   it('start each layout in its structure’s natural form, offering the forms it can take', () => {
-    const starts = [list, bst, ring, bfs, unlinked].map((source) => {
+    const starts = [list, bst, ring, bfs].map((source) => {
       const { space, starter } = designOf(source);
       const [kind] = Object.keys(space)
         .filter((key) => key.endsWith('.form'))
@@ -135,17 +135,15 @@ describe('free layout structures', () => {
         offers: space[`${kind}.form`].includes(starter[`${kind}.form`])
       };
     });
-    expect(starts.map(({ form }) => form)).toEqual([
-      'line',
-      'tree-down',
-      'ring',
-      'layers-down',
-      'line'
-    ]);
+    expect(starts.map(({ form }) => form)).toEqual(['line', 'tree-down', 'ring', 'layers-down']);
     expect(starts.every(({ curve, offers }) => curve === 'straight' && offers)).toBe(true);
     // The tree runs downwards (flow="y"), so forms running across are not offered.
     expect(designOf(bst).space['Heap.form']).not.toContain('tree-right');
     expect(designOf(ring).space['Ring.form']).toContain('ring');
     expect(designOf(list).space['Heap.form']).not.toContain('ring');
+    // A layout whose data makes no structure has no form, as the page lays it out freely.
+    const free = designOf(unlinked).space;
+    expect(Object.keys(free).some((key) => key.endsWith('.form'))).toBe(false);
+    expect(Object.keys(free).some((key) => key.endsWith('.layoutSeed'))).toBe(true);
   });
 });

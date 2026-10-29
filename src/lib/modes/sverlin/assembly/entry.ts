@@ -503,8 +503,19 @@ async function recordSteps() {
     }
     return grew;
   };
+  // The nodes holding a free layout, by id: a free layout takes its size from its solution over
+  // every step (see node/span.ts), so these keep the sizes they reach drawn that way, never the
+  // sizes of a step laid out alone.
+  const holding = new Set<string>();
   const measure = ({ layer }: Shown) => {
     keepLargest(layer.querySelectorAll<HTMLElement>('[data-sv-node]'));
+    for (const arranged of layer.querySelectorAll('.sv-arranged'))
+      for (
+        let node = arranged.parentElement?.closest<HTMLElement>('[data-sv-node]');
+        node;
+        node = node.parentElement?.closest<HTMLElement>('[data-sv-node]')
+      )
+        holding.add(node.dataset.svNode as string);
     for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
       const collection = box.dataset.svCollection;
       if (!collection) continue;
@@ -537,14 +548,18 @@ async function recordSteps() {
         undefined,
         withValue(states[step] as StepState, path, value)
       );
-  for (const items of collections.values()) {
-    const sizes = [...items].flatMap((id) => reserved.get(id) ?? []);
-    const largest = {
-      width: Math.max(0, ...sizes.map((size) => size.width)),
-      height: Math.max(0, ...sizes.map((size) => size.height))
-    };
-    for (const id of items) reserved.set(id, largest);
-  }
+  // A collection's items all keep the largest size any of them reaches.
+  const lineUp = () => {
+    for (const items of collections.values()) {
+      const sizes = [...items].flatMap((id) => reserved.get(id) ?? []);
+      const largest = {
+        width: Math.max(0, ...sizes.map((size) => size.width)),
+        height: Math.max(0, ...sizes.map((size) => size.height))
+      };
+      for (const id of items) reserved.set(id, largest);
+    }
+  };
+  lineUp();
   // A typed component is drawn once with each value of its type it is sized by, and its root keeps
   // the largest box it reaches: every value has room, whether or not this trace ever shows it.
   // Components come after those they render, whose boxes they are drawn with.
@@ -562,6 +577,8 @@ async function recordSteps() {
           );
           let { width, height } = componentSizes.get(name) ?? { width: 0, height: 0 };
           for (const node of nodes) {
+            // One holding a free layout is sized by its solution, which a probe does not draw.
+            if (node.querySelector('.sv-arranged')) continue;
             width = Math.max(width, node.offsetWidth + 1);
             height = Math.max(height, node.offsetHeight + 1);
           }
@@ -585,16 +602,22 @@ async function recordSteps() {
   // nested arrangement's solution changes its size and so what its parent contains, so recording
   // repeats until no solution changes. An {#if when(…)} chain draws other branches at other steps,
   // each grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as
-  // shown.
+  // shown. The nodes holding a free layout keep the largest size they reach in the last round, the
+  // first with every layout drawn as solved, at the size it is shown at.
   for (let round = 0; round < 3; round++) {
     let chainsGrew = false;
+    for (const id of holding) reserved.delete(id);
     for (let step = 0; step < states.length; step++)
       await pass(step, 'recording', ({ layer }) => {
-        chainsGrew =
-          keepLargest(layer.querySelectorAll<HTMLElement>('[data-sv-kind="chain"]')) || chainsGrew;
+        const nodes = [...layer.querySelectorAll<HTMLElement>('[data-sv-node]')];
+        const held = (node: HTMLElement) => holding.has(node.dataset.svNode as string);
+        const chains = nodes.filter((node) => node.dataset.svKind === 'chain' && !held(node));
+        chainsGrew = keepLargest(chains) || chainsGrew;
+        keepLargest(nodes.filter(held));
       });
     if (!settleSpans(scopes) && !chainsGrew) break;
   }
+  lineUp();
 }
 
 /**

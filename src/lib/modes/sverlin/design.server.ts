@@ -6,7 +6,7 @@
  */
 
 import { keyedRandom } from './algorithm/random.server';
-import { formsFor, naturalForm } from './library/node/forms';
+import { formsFor, naturalForm, type StructureKind } from './library/node/forms';
 import type { LayoutStructure } from './structure.server';
 import {
   colourParts,
@@ -43,12 +43,18 @@ export type DesignKind = {
   lines?: true;
 };
 
+// A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
+// the natural form of a structure it finds that the trace could not show.
 const propsOf = ({ role, free }: DesignKind) =>
-  free ? [...roleProps[role], ...freeLayoutProps] : roleProps[role];
+  free
+    ? [
+        ...roleProps[role],
+        ...freeLayoutProps.filter((prop) => prop !== 'form' || free.structure !== 'none')
+      ]
+    : roleProps[role];
 
-// A layout whose data makes no structure lies in sequence, as a path would.
-const formKind = (free: NonNullable<DesignKind['free']>) =>
-  free.structure === 'none' ? 'path' : free.structure;
+// Only a layout whose data makes a structure has a form (see propsOf).
+const formKind = (free: NonNullable<DesignKind['free']>) => free.structure as StructureKind;
 
 /** A kind's options for a prop: a free layout's forms are those its structure can take. */
 const optionsFor = ({ role, free }: DesignKind, prop: DesignProp) =>

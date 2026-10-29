@@ -10,7 +10,7 @@ const input = (
   boxes,
   anchors: {},
   parts: [],
-  options: { links, gap: 8, aspect: 2 }
+  options: { links, gap: 8 }
 });
 
 describe('layouts over a whole animation', () => {
@@ -77,8 +77,7 @@ describe('structure over a whole animation', () => {
     parts: [],
     options: {
       links: links.map((link) => ({ ...link, directed: true })),
-      gap: 8,
-      aspect: 2
+      gap: 8
     }
   });
   const path = [
@@ -113,7 +112,6 @@ describe('structure over a whole animation', () => {
       options: {
         links: tree.slice(0, count - 1).map((link) => ({ ...link, directed: true })),
         gap: 8,
-        aspect: 2,
         form: 'tree-down' as const
       }
     });
