@@ -1,7 +1,7 @@
 <!--
   Places a free layout's children by constraint layout (see arrange.ts): it measures each child as laid out
   inside, solves for their positions, places them, and takes the size that hugs them, drawing any
-  links as lines or arrows. A nested arrangement that settles later asks its parent to lay out
+  links over them (see LinkLines.svelte) and placing their labels on their middles. A nested arrangement that settles later asks its parent to lay out
   again, so sizes flow up and the final layout uses every child's final size.
 -->
 <script lang="ts">
@@ -20,8 +20,9 @@
     type ArrangeEdge,
     type LinkSpec
   } from './arrange';
-  import { linkDashes, strokeStyleCss } from './design';
   import type { Form } from './forms';
+  import LinkLines, { type LineStyle } from './LinkLines.svelte';
+  import { labelsIn, markerLook, placeLabel } from './markers';
   import type { Spacing } from './props';
   import { seenParts, unionOf } from './visible';
 
@@ -49,23 +50,6 @@
     children?: Snippet;
   } = $props();
 
-  /** How a link component is drawn: its kind's look, as CSS (see Link.svelte). */
-  type LinkStyle = {
-    strokeStyle?: 'dashed' | 'dotted';
-    label?: string;
-    stroke?: string;
-    strokeWidth?: string;
-    labelColour?: string;
-    opacity?: string;
-    shown: boolean;
-  };
-  // A link drawn by no <Link>, as a relation's, is a fine muted line.
-  const colourOf = (style?: LinkStyle) => style?.stroke ?? 'var(--sv-muted)';
-  const widthOf = (style?: LinkStyle) => {
-    const pixels = Number(style?.strokeWidth);
-    return Number.isFinite(pixels) && style?.strokeWidth ? `${pixels}px` : '2px';
-  };
-
   const memory = layoutMemoryContext();
   // The seed this arrangement draws every choice from: its kind's, mixed with its place, so two
   // arrangements of one kind differ, and each stays the same while the variant keeps that seed.
@@ -84,7 +68,7 @@
     height: number;
     edges: ArrangeEdge[];
     choices: { form?: string; curve?: 'straight' | 'curved' };
-    styles: Record<string, LinkStyle>;
+    styles: Record<string, LineStyle>;
   }>();
   // Bumped when a nested arrangement settles, to lay out again with its new size.
   let revision = $state(0);
@@ -157,41 +141,35 @@
     ];
     const elements = [...host.children].filter(
       (child): child is HTMLElement =>
-        child instanceof HTMLElement && !child.hasAttribute('data-sv-link')
+        child instanceof HTMLElement &&
+        !child.hasAttribute('data-sv-link') &&
+        !child.hasAttribute('data-sv-link-label')
     );
+    // Each link's label, measured so the link leaves room for it, then placed on its middle.
+    const labels = labelsIn(host);
     // A link with no from starts at the node it sits in, as a node's next field, not its whole box.
     const origin = (marker: HTMLElement) =>
       marker.hasAttribute('data-sv-hoist') && marker.dataset.svLink
         ? `${marker.dataset.from ?? ''}↦${marker.dataset.svLink}`
         : undefined;
-    const specs: LinkSpec[] = markers.map((marker) => ({
-      from: marker.dataset.from ?? '',
-      to: marker.dataset.to ?? '',
-      ...(origin(marker) ? { start: origin(marker) } : {}),
-      directed: marker.dataset.directed !== 'false',
-      ...(marker.dataset.svLink ? { id: marker.dataset.svLink } : {}),
-      ...(marker.dataset.curve === 'straight' || marker.dataset.curve === 'curved'
-        ? { curve: marker.dataset.curve }
-        : {})
-    }));
-    const styles: Record<string, LinkStyle> = Object.fromEntries(
-      markers.flatMap(({ dataset }) =>
-        dataset.svLink
-          ? [
-              [
-                dataset.svLink,
-                {
-                  strokeStyle: strokeStyleCss(dataset.strokeStyle),
-                  label: dataset.label,
-                  stroke: dataset.stroke,
-                  strokeWidth: dataset.strokeWidth,
-                  labelColour: dataset.labelColour,
-                  opacity: dataset.opacity,
-                  shown: dataset.shown !== 'false'
-                }
-              ]
-            ]
-          : []
+    const looks = markers.map(markerLook);
+    const specs: LinkSpec[] = markers.map((marker, index) => {
+      const label = labels.get(marker.dataset.svLink ?? '');
+      const { route, head } = looks[index];
+      return {
+        from: marker.dataset.from ?? '',
+        to: marker.dataset.to ?? '',
+        ...(origin(marker) ? { start: origin(marker) } : {}),
+        directed: marker.dataset.directed !== 'false',
+        ...(marker.dataset.svLink ? { id: marker.dataset.svLink } : {}),
+        ...(route ? { route } : {}),
+        ...(head ? { head } : {}),
+        ...(label ? { label: { width: label.offsetWidth, height: label.offsetHeight } } : {})
+      };
+    });
+    const styles: Record<string, LineStyle> = Object.fromEntries(
+      markers.flatMap(({ dataset }, index) =>
+        dataset.svLink ? [[dataset.svLink, looks[index].style]] : []
       )
     );
     // Links this step draws, by their components' ids.
@@ -342,6 +320,10 @@
       element.style.left = `${placements[index].x}px`;
       element.style.top = `${placements[index].y}px`;
     });
+    for (const edge of shown.edges) {
+      const label = edge.id === undefined ? undefined : labels.get(edge.id);
+      if (label) placeLabel(host, label, edge.middle);
+    }
     const resized =
       untrack(() => result?.width) !== shown.width ||
       untrack(() => result?.height) !== shown.height;
@@ -367,62 +349,14 @@
   <!-- Arrows are drawn over the nodes, so filled boxes never hide them. -->
   {#if result?.edges.length}
     {@const shown = result}
-    {@const styleOf = (edge: ArrangeEdge) => (edge.id ? shown.styles[edge.id] : undefined)}
-    {@const colours = [...new Set(shown.edges.map((edge) => colourOf(styleOf(edge))))]}
     <svg class="links" width={shown.width} height={shown.height} aria-hidden="true">
-      <defs>
-        {#each colours as colour, index (colour)}
-          <marker
-            id="{markerId}-{index}"
-            viewBox="0 0 10 10"
-            refX="10"
-            refY="5"
-            markerUnits="userSpaceOnUse"
-            markerWidth="9"
-            markerHeight="9"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,0 L10,5 L0,10 z" style:fill={colour} />
-          </marker>
-        {/each}
-      </defs>
-      {#each shown.edges as edge, index (index)}
-        {@const style = styleOf(edge)}
-        {@const colour = colourOf(style)}
-        <path
-          class="link"
-          d={edge.path}
-          data-sv-edge={edge.link}
-          data-sv-edge-id={edge.id}
-          style:stroke={colour}
-          style:stroke-width={widthOf(style)}
-          style:opacity={style?.shown === false ? 0 : style?.opacity}
-          data-stroke-style={style?.strokeStyle}
-          stroke-dasharray={style?.strokeStyle
-            ? linkDashes[style.strokeStyle].join(' ')
-            : undefined}
-          stroke-linecap={style?.strokeStyle === 'dotted' ? 'round' : undefined}
-          marker-end={edge.directed ? `url(#${markerId}-${colours.indexOf(colour)})` : undefined}
-        />
-        {#if edge.id}
-          <!-- A wider, invisible line along a link component, so it can be clicked and selected. -->
-          <path
-            class="hit"
-            d={edge.path}
-            data-sv-node={edge.id}
-            data-sv-label={style?.label ?? edge.link.replace(' -> ', ' → ').replace(' - ', ' – ')}
-          />
-        {/if}
-        {#if style?.label}
-          <text
-            class="label"
-            x={edge.middle.x}
-            y={edge.middle.y}
-            style:fill={style.labelColour}
-            style:opacity={style.shown === false ? 0 : style.opacity}>{style.label}</text
-          >
-        {/if}
-      {/each}
+      <LinkLines
+        prefix={markerId}
+        lines={shown.edges.map((edge) => ({
+          ...edge,
+          ...(edge.id && shown.styles[edge.id] ? { style: shown.styles[edge.id] } : {})
+        }))}
+      />
     </svg>
   {/if}
 </div>
@@ -445,25 +379,5 @@
     inset: 0;
     overflow: visible;
     pointer-events: none;
-  }
-  .links .link {
-    fill: none;
-    stroke: var(--sv-muted);
-    stroke-width: 1.5;
-  }
-  .links .hit {
-    fill: none;
-    stroke: transparent;
-    stroke-width: 12px;
-    pointer-events: stroke;
-  }
-  .links .label {
-    font-size: 0.75em;
-    fill: var(--sv-muted);
-    text-anchor: middle;
-    dominant-baseline: central;
-    paint-order: stroke;
-    stroke: var(--sv-surface);
-    stroke-width: 4px;
   }
 </style>

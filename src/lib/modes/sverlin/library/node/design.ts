@@ -5,6 +5,7 @@
  */
 
 import { forms } from './forms';
+import { headShapes, headSizes } from './heads';
 
 /** Hues of the colour range, each in every shade; neutral has no hue. */
 export const hues = [
@@ -90,8 +91,9 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
 const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
- * Each prop's options: lengths in em, except size in rem and radius and strokeWidth in pixels; a
- * free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn from.
+ * Each prop's options: lengths in em, except size in rem and radius, strokeWidth and headSize in
+ * pixels; a free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn
+ * from; and how a link runs, as its layout's arrows or its own way, and the heads at its ends.
  */
 export const propOptions = {
   shown: [true, false],
@@ -113,6 +115,9 @@ export const propOptions = {
   overflow: ['shown', 'hidden', 'included', 'excluded'],
   form: forms,
   curve: ['straight', 'curved'],
+  route: ['layout', 'straight', 'curved', 'wire'],
+  head: headShapes,
+  headSize: headSizes,
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1)
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
@@ -206,7 +211,7 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   value: nodeProps,
   text: nodeProps,
   pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
-  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'color', 'curve']
+  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'route', 'head', 'headSize']
 };
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
@@ -217,9 +222,6 @@ export const starterFreeLayout: Record<string, string | number> = {
   curve: 'straight',
   layoutSeed: 1
 };
-
-/** A link's curve: as its layout's arrows run, or its own. */
-export const linkCurveOptions = ['layout', 'straight', 'curved'] as const;
 
 /**
  * A prop's options for a role: overflow says, for a pointer, whether it is drawn past its
@@ -235,7 +237,6 @@ export function optionsOf(
   role: KindRole,
   prop: DesignProp
 ): readonly (string | number | boolean)[] {
-  if (role === 'link' && prop === 'curve') return linkCurveOptions;
   if (prop !== 'overflow') return propOptions[prop];
   return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
 }
@@ -364,8 +365,9 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeWidth: 2,
     opacity: 1,
     strokeStyle: 'solid',
-    color: 'neutral-600',
-    curve: 'layout'
+    route: 'layout',
+    head: 'arrow',
+    headSize: 9
   }
 };
 

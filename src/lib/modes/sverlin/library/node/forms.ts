@@ -74,12 +74,13 @@ export function naturalForm(kind: StructureKind, flow?: 'x' | 'y'): Form {
 }
 
 /**
- * The structure the largest group of linked nodes makes, from directed links in the order written,
- * or undefined when it is too small (fewer than three nodes) or has cycles beyond a single ring.
+ * The structure the largest group of linked nodes makes, from links in the order written, or
+ * undefined when it is too small (fewer than three nodes) or has cycles beyond a single ring. A link
+ * with directed false, a pair drawn as one line, joins its nodes either way (see oriented).
  */
 export function findStructure(
   count: number,
-  links: readonly { source: number; target: number }[]
+  links: readonly { source: number; target: number; directed?: boolean }[]
 ): Structure | undefined {
   const edges = links.filter(
     ({ source, target }) => source < count && target < count && source !== target
@@ -100,7 +101,10 @@ export function findStructure(
   const nodes = [...sizes.values()].sort((a, b) => b.length - a.length || a[0] - b[0])[0];
   if (!nodes || nodes.length < 3) return undefined;
   const members = new Set(nodes);
-  const inside = edges.filter(({ source }) => members.has(source));
+  const inside = oriented(
+    nodes,
+    edges.filter(({ source }) => members.has(source))
+  );
   const children = new Map<number, number[]>();
   const parents = new Map<number, number[]>();
   for (const { source, target } of inside) {
@@ -152,6 +156,59 @@ export function findStructure(
     ready.sort((a, b) => a - b);
   }
   return { kind: 'layers', nodes: order, parents };
+}
+
+/**
+ * A group's links with each undirected one given the direction it is read in: away from a root,
+ * nearer first and, at one distance, from the earlier node, so an undirected graph reads as a tree
+ * or layers from its first node. All undirected, a ring is read round from its first node and a
+ * path from its first end, as directed ones are.
+ */
+function oriented(
+  nodes: readonly number[],
+  edges: readonly { source: number; target: number; directed?: boolean }[]
+): { source: number; target: number }[] {
+  if (edges.every(({ directed }) => directed !== false)) return [...edges];
+  const neighbours = new Map<number, Set<number>>(nodes.map((node) => [node, new Set()]));
+  for (const { source, target } of edges) {
+    neighbours.get(source)?.add(target);
+    neighbours.get(target)?.add(source);
+  }
+  const degree = (node: number) => neighbours.get(node)?.size ?? 0;
+  const pairs = nodes.reduce((sum, node) => sum + degree(node), 0) / 2;
+  const plain = edges.every(({ directed }) => directed === false);
+  const first = Math.min(...nodes);
+  if (plain && pairs === nodes.length && nodes.every((node) => degree(node) === 2)) {
+    const ring: { source: number; target: number }[] = [];
+    for (let at = first, next = Math.min(...(neighbours.get(first) ?? [])); ; ) {
+      ring.push({ source: at, target: next });
+      if (next === first) return ring;
+      const after = [...(neighbours.get(next) ?? [])].find((node) => node !== at) as number;
+      [at, next] = [next, after];
+    }
+  }
+  const pointedAt = new Set(
+    edges.flatMap(({ target, directed }) => (directed === false ? [] : [target]))
+  );
+  const root =
+    plain && pairs === nodes.length - 1 && nodes.every((node) => degree(node) <= 2)
+      ? Math.min(...nodes.filter((node) => degree(node) === 1))
+      : (nodes.filter((node) => !pointedAt.has(node)).sort((a, b) => a - b)[0] ?? first);
+  const depth = new Map([[root, 0]]);
+  for (const queue = [root]; queue.length; ) {
+    const node = queue.shift() as number;
+    for (const next of [...(neighbours.get(node) ?? [])].sort((a, b) => a - b))
+      if (!depth.has(next)) {
+        depth.set(next, (depth.get(node) as number) + 1);
+        queue.push(next);
+      }
+  }
+  return edges.map(({ source, target, directed }) => {
+    const [from, to] = [depth.get(source) ?? 0, depth.get(target) ?? 0];
+    return directed !== false || from < to || (from === to && source < target)
+      ? { source, target }
+      : { source: target, target: source };
+  });
 }
 
 function acyclic(nodes: readonly number[], children: ReadonlyMap<number, number[]>): boolean {

@@ -104,13 +104,25 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
   };
 }
 
-/** Every link any step has, once each: a link component by its id, a written link by its text. */
+/**
+ * Every link any step has, once each: a link component by its id, a written link by its text; a
+ * label keeps room for its largest size at any step.
+ */
 function unionLinks(lists: readonly (readonly (string | LinkSpec)[] | undefined)[]) {
   const seen = new Map<string, string | LinkSpec>();
   for (const link of lists.flatMap((list) => list ?? [])) {
     const key =
       typeof link === 'string' ? `text:${link.trim()}` : `id:${link.id ?? JSON.stringify(link)}`;
-    if (!seen.has(key)) seen.set(key, typeof link === 'string' ? link.trim() : link);
+    const known = seen.get(key);
+    if (!known) seen.set(key, typeof link === 'string' ? link.trim() : link);
+    else if (typeof known !== 'string' && typeof link !== 'string' && link.label)
+      seen.set(key, {
+        ...known,
+        label: {
+          width: Math.max(known.label?.width ?? 0, link.label.width),
+          height: Math.max(known.label?.height ?? 0, link.label.height)
+        }
+      });
   }
   return [...seen.values()];
 }

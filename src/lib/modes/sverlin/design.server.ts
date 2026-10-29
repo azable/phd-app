@@ -33,12 +33,14 @@ export type DesignValue = string | number | boolean;
 /**
  * A kind of node: its key, the snippet it is in (as Compared.Pointed), what it is, giving its props,
  * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
- * (see structure.server.ts) and the flow its node sets.
+ * (see structure.server.ts) and the flow its node sets; and, for a link's kind, whether every link
+ * of it is a two-way line, whose head starts as none.
  */
 export type DesignKind = {
   key: string;
   role: KindRole;
   free?: { structure: LayoutStructure; flow?: 'x' | 'y' };
+  lines?: true;
 };
 
 const propsOf = ({ role, free }: DesignKind) =>
@@ -52,11 +54,16 @@ const formKind = (free: NonNullable<DesignKind['free']>) =>
 const optionsFor = ({ role, free }: DesignKind, prop: DesignProp) =>
   prop === 'form' && free ? formsFor(formKind(free), free.flow) : optionsOf(role, prop);
 
-/** A kind's starting value for a prop: a free layout's form is its structure's natural one. */
-const starterLook = ({ role, free }: DesignKind, prop: string) =>
+/**
+ * A kind's starting value for a prop: a free layout's form is its structure's natural one, and a
+ * link's head none where every link of its kind is a two-way line, as an undirected graph's edges.
+ */
+const starterLook = ({ role, free, lines }: DesignKind, prop: string) =>
   prop === 'form' && free
     ? naturalForm(formKind(free), free.flow)
-    : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
+    : prop === 'head' && lines
+      ? 'none'
+      : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a

@@ -51,6 +51,48 @@ describe('structures', () => {
     });
   });
 
+  it('reads undirected links away from the first node, as a path, ring, tree, or layers', () => {
+    const plain = (count: number, pairs: [number, number][]) =>
+      findStructure(
+        count,
+        pairs.map(([source, target]) => ({ source, target, directed: false }))
+      );
+    // A path from its first end, whichever way each link was written.
+    expect(
+      plain(4, [
+        [1, 0],
+        [1, 2],
+        [3, 2]
+      ])
+    ).toEqual({ kind: 'path', nodes: [0, 1, 2, 3] });
+    expect(
+      plain(4, [
+        [0, 1],
+        [2, 1],
+        [2, 3],
+        [3, 0]
+      ])
+    ).toMatchObject({ kind: 'cycle', nodes: [0, 1, 2, 3] });
+    expect(
+      plain(5, [
+        [1, 0],
+        [0, 2],
+        [3, 1],
+        [1, 4]
+      ])
+    ).toMatchObject({ kind: 'tree', root: 0, nodes: [0, 1, 3, 4, 2] });
+    // A cycle inside, which directed links could not take, reads in layers by distance.
+    expect(
+      plain(5, [
+        [0, 1],
+        [0, 2],
+        [1, 3],
+        [2, 3],
+        [3, 4]
+      ])
+    ).toMatchObject({ kind: 'layers', nodes: [0, 1, 2, 3, 4] });
+  });
+
   it('finds nothing in too few links, or in a graph with a cycle inside', () => {
     expect(linked(3, [[0, 1]])).toBeUndefined();
     expect(

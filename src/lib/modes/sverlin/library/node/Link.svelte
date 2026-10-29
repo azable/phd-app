@@ -1,14 +1,15 @@
 <!--
-  A link between two children of the node it sits in, drawn as a line or an arrow between the nodes
-  its keys name. It takes no space itself: the arranging node reads it, lays its children out with
-  it, and draws it over them. Each link has an id from its place in the source and its ends, so a
+  A link between two children of the node it sits in, drawn as a line between the nodes its keys
+  name, with heads at the ends it points to; its children, if any, are its label. It takes no space
+  itself: the arranging node reads it, lays its children out with it, and draws it and places its
+  label over them. Each link has an id from its place in the source and its ends, so a
   participant can select it and refer to it in feedback, and a link whose ends change between steps
   is a different link rather than the same one drawn to its old ends. One with no `from`, in a view
   of an element, starts at the node drawing that element, as a node's `next` does, and is laid out
   by the free layout around the elements.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   import {
     drawnContext,
@@ -18,6 +19,7 @@
     endsContext,
     hiddenContext,
     keyedRef,
+    layoutMemoryContext,
     linkEnd,
     nodeIdsContext,
     placeContext,
@@ -27,13 +29,14 @@
     typeContext
   } from '../type-context';
   import { colourCss, kindKey, lookUp, placedKind, strokeStyleCss } from './design';
+  import { byPlace, pairOf } from './lines';
+  import LinkLabel from './LinkLabel.svelte';
   import { designContext } from '../type-context';
 
   let {
     from,
     to,
-    directed = true,
-    label,
+    children,
     __view = 'root',
     __ref,
     __component,
@@ -51,10 +54,8 @@
     from?: string | number;
     /** The key of the node the link goes to, or a position, as edge.to. */
     to: string | number;
-    /** An arrow (true, the default) or a plain line. */
-    directed?: boolean;
-    /** Text shown along the link, at its middle. */
-    label?: string;
+    /** Its label: text, views of values, or nodes, drawn at the link's middle over its line. */
+    children?: Snippet;
     /** Internal: the view this link is in, added by the compiler. */
     __view?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
@@ -125,8 +126,11 @@
     (over && pointer?.__kind
       ? lookUp(design, pointer.__kind, pointer.__placed, prop)
       : undefined) ?? lookUp(design, kind, placed, prop);
-  // How it curves is its kind's: as its layout's arrows run, or a curve of its own.
-  const curve = $derived(look('curve', false));
+  // How it runs is its kind's: as its layout's arrows run, a curve of its own, or a wire; and its
+  // heads, drawn at the ends it points to, its kind's shape and size.
+  const route = $derived(look('route', false));
+  const head = $derived(look('head', false) as string | undefined);
+  const headSize = $derived(look('headSize', false) as number | undefined);
   const nodeIds = nodeIdsContext();
   // A link from a node's field is known by the nodes it joins, not their places in the heap, which
   // shift as nodes come and go: so another node's link never takes over its route.
@@ -134,13 +138,35 @@
   const id = untrack(() =>
     __ref ? nodeIds?.claim(keyedRef(__ref, `${named(ends.from)}->${named(ends.to)}`)) : undefined
   );
+  // One with no from, in a view a record's fields render, is told apart by the field it draws, so
+  // a doubly linked list's next and prev drawn by one view of a reference stay two links.
+  const field = untrack(() =>
+    from === undefined
+      ? typeof __toAt === 'string'
+        ? __toAt
+        : /\.([A-Za-z_$][\w$]*)$/u.exec(slotContext() ?? '')?.[1]
+      : undefined
+  );
+  // An arrow, unless this <Link> also joins its ends the other way at exactly the same steps, as an
+  // undirected graph lists each edge from both its ends: then the pair is one line, drawn by the
+  // link from the end first in order, and the other draws nothing (see lines.ts).
+  const joined = untrack(() => ({
+    pair:
+      __ref &&
+      pairOf(field ? `${__ref}.${field}` : __ref, String(named(ends.from)), String(named(ends.to))),
+    forward: byPlace(String(named(ends.from)), String(named(ends.to))) < 0
+  }));
+  const line = untrack(
+    () => !!joined.pair && (layoutMemoryContext()?.lines.has(joined.pair) ?? false)
+  );
+  const unseen = untrack(() => hidden || look('shown', false) === false);
   // The end it draws is no element of the state, so it draws none.
   provideSlot(undefined);
 </script>
 
 {#if end}
   {@render end(to)}
-{:else}
+{:else if !line || joined.forward}
   <span
     class="sv-link"
     hidden
@@ -148,16 +174,19 @@
     data-sv-hoist={from === undefined ? 'true' : undefined}
     data-from={ends.from}
     data-to={ends.to}
-    data-directed={directed ? 'true' : 'false'}
+    data-directed={line ? 'false' : 'true'}
+    data-sv-pair={joined.pair || undefined}
+    data-sv-way={joined.forward ? 'forward' : 'back'}
     data-stroke-style={strokeStyleCss(look('strokeStyle', false))}
-    data-label={label}
-    data-label-colour={colourCss(look('color', false))}
     data-stroke={colourCss(look('stroke'))}
     data-stroke-width={look('strokeWidth')}
-    data-shown={hidden || look('shown', false) === false ? 'false' : undefined}
+    data-shown={unseen ? 'false' : undefined}
     data-opacity={look('opacity', false)}
-    data-curve={curve === 'layout' ? undefined : curve}
+    data-route={route === 'layout' ? undefined : route}
+    data-head={head}
+    data-head-size={headSize}
   ></span>
+  {#if children}<LinkLabel link={id ?? ''} hidden={unseen}>{@render children()}</LinkLabel>{/if}
 {/if}
 
 <style>

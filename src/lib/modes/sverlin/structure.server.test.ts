@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareSvelteComponent } from './compile.server';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
+import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import reversal from './fixtures/list-markers.sverlin?raw';
 
 const list = `<script lang="sverlin" domain>
@@ -92,6 +93,29 @@ describe('free layout structures', () => {
 
   it('follow neighbour lists an {#each} inside the layout walks, making layers', () => {
     expect(designOf(bfs).structures).toEqual({ Graph: 'layers' });
+  });
+
+  it('read neighbour lists naming each other as undirected, a tree or layers from the first', () => {
+    expect(designOf(undirected).structures).toEqual({ Graph: 'layers' });
+    const edges = (lists: string) =>
+      designOf(undirected.replace('[[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]', lists)).structures;
+    // Directed, B and C both lead to D, in layers; both ways, A to B, C, D and B to E make a tree.
+    expect(edges('[[1, 2], [3], [3], [4], []]')).toEqual({ Graph: 'layers' });
+    expect(edges('[[1, 2, 3], [0, 4], [0], [0], [1]]')).toEqual({ Graph: 'tree' });
+    expect(edges('[[1], [0, 2], [1, 3], [2, 4], [3]]')).toEqual({ Graph: 'path' });
+    expect(edges('[[1, 4], [0, 2], [1, 3], [2, 4], [3, 0]]')).toEqual({ Graph: 'cycle' });
+  });
+
+  it('pair links into two-way lines only within one <Link>', () => {
+    // Each edge listed from its source alone, drawn forward by one <Link> and back by another:
+    // two arrows each way, so no undirected structure, and arrows to start.
+    const twoTags = undirected
+      .replace('[[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]', '[[1, 2], [3], [3], [4], []]')
+      .replace('<Link from={k} to={w} />', '<Link from={k} to={w} /><Link from={w} to={k} />');
+    const design = designOf(twoTags);
+    expect(design.structures).not.toEqual(designOf(undirected).structures);
+    expect(design.starter).toMatchObject({ 'Graph.Link.head': 'arrow' });
+    expect(designOf(undirected).starter).toMatchObject({ 'Graph.Link.head': 'none' });
   });
 
   it('are none where nothing links the elements, or the links change from step to step', () => {

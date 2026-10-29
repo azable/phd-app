@@ -4,6 +4,7 @@ import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { linearSearchSource } from './contract';
 import bst from './fixtures/bst.sverlin?raw';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
+import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import { formsFor } from './library/node/forms';
 import {
   buildVariant,
@@ -290,14 +291,39 @@ describe('free layouts', () => {
     ).toThrow(DesignValueError);
   });
 
-  it('give a link’s kind its curve, which a vary keeps, and no bend', () => {
+  it('give a link’s kind its route, head, and head size, which a vary keeps', () => {
     const graph = prepareSvelteComponent(bfs).design;
-    expect(graph.space['Graph.Link.curve']).toEqual(['layout', 'straight', 'curved']);
-    expect(graph.space['Graph.Link.bend']).toBeUndefined();
-    expect(graph.starter).toMatchObject({ 'Graph.Link.curve': 'layout' });
-    const base = { ...graph.starter, 'Graph.Link.curve': 'curved' };
+    expect(graph.space['Graph.Link.route']).toEqual(['layout', 'straight', 'curved', 'wire']);
+    expect(graph.space['Graph.Link.head']).toEqual([
+      'none',
+      'arrow',
+      'open',
+      'vee',
+      'dot',
+      'diamond',
+      'bar'
+    ]);
+    expect(graph.space['Graph.Link.headSize']).toEqual([6, 9, 12, 16]);
+    expect(graph.space['Graph.Link.curve']).toBeUndefined();
+    expect(graph.space['Graph.Link.color']).toBeUndefined();
+    expect(graph.starter).toMatchObject({
+      'Graph.Link.route': 'layout',
+      'Graph.Link.head': 'arrow',
+      'Graph.Link.headSize': 9
+    });
+    const base = { ...graph.starter, 'Graph.Link.route': 'wire', 'Graph.Link.head': 'vee' };
     expect(buildVariant(graph.space, graph.starter, { base }, 5).values).toMatchObject({
-      'Graph.Link.curve': 'curved'
+      'Graph.Link.route': 'wire',
+      'Graph.Link.head': 'vee'
+    });
+  });
+
+  it('start a link’s head at none where every link of its kind is a two-way line', () => {
+    expect(prepareSvelteComponent(undirected).design.starter).toMatchObject({
+      'Graph.Link.head': 'none'
+    });
+    expect(prepareSvelteComponent(bfs).design.starter).toMatchObject({
+      'Graph.Link.head': 'arrow'
     });
   });
 });

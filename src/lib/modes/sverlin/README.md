@@ -765,7 +765,15 @@ kept only as far as drawn positions go: a collection's kind has `overflow`,
 included (end slots are tracks of its box) or excluded (they hang outside, so
 centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
 the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
-`stroke`, `strokeWidth`, `opacity`, `strokeStyle`, and `color` for its label.
+`stroke`, `strokeWidth`, `opacity`, and `strokeStyle`; `route`, `layout` (as its
+layout's arrows run, the start), `straight`, `curved` (each arrow choosing its
+own side and how far to bow round what is in its way), or `wire` (straight runs
+turning only at right angles, round the boxes, side by side apart); `head`, the
+mark at each end a link points to, `none`, `arrow` (a filled triangle), `open`
+(an outlined one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none`
+where every link of the kind is a two-way line and `arrow` otherwise; and
+`headSize`, 6, 9 (the start), 12, or 16 pixels. A label's look is its own nodes'
+kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -784,10 +792,7 @@ layered graph `layers-down` (`-right` along `flow` x); where the page finds the
 links it draws make another structure, a form that one cannot take is drawn in
 its natural form. `curve`, `straight` (the start) or `curved`, is how its arrows
 prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are drawn
-from. The same values draw the same picture whatever the space. A link's kind
-has `curve` too, `layout` (as its layout's arrows run, the start), `straight`,
-or `curved`, each arrow choosing its own side and how far to bow round what is
-in its way.
+from. The same values draw the same picture whatever the space.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -1060,8 +1065,7 @@ together, such as a value and its index, in one child node.
 
 - `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
   downwards, as for a list or a tree; only forms that run that way are drawn.
-  Set it only when asked; an undirected graph has no flow, and its links are
-  `directed={false}`.
+  Set it only when asked; an undirected graph has no flow.
 
 A free layout's look, `form`, `curve`, and `layoutSeed`, is its kind's (see
 Design), never a prop, and arrows bend round other nodes and labels. A selection
@@ -1072,18 +1076,18 @@ if they name it.
 
 ## Link
 
-`<Link from={edge.from} to={edge.to} />` draws a line, by default an arrow,
-between two nodes. Put links among the children of the node whose children they
-join, or in a view rendered there, as of an edge, of a node (see Nodes and
-references), or of an operator's application; never in a pointer view, which
-draws inside the element it marks. They take no space; give the node a `layout`,
-`"free"` for a linked structure or `"row"` or `"column"`, unless it holds a
-collection's `{#each}`, which runs as the collection. Only a free layout places
-its children by their links; in a row or column links are drawn over the
-children, which stay where they would be without them, each arcing over ends
-side by side or beside ends one above the other, clear of the boxes. Each link
-is selectable, as a node is, and its look, line and label, is its kind's (see
-Design), as `Arrow.Link` for a link in `Arrow`.
+`<Link from={edge.from} to={edge.to} />` draws a link between two nodes. Put
+links among the children of the node whose children they join, or in a view
+rendered there, as of an edge, of a node (see Nodes and references), or of an
+operator's application; never in a pointer view, which draws inside the element
+it marks. They take no space; give the node a `layout`, `"free"` for a linked
+structure or `"row"` or `"column"`, unless it holds a collection's `{#each}`,
+which runs as the collection. Only a free layout places its children by their
+links; in a row or column links are drawn over the children, which stay where
+they would be without them, each arcing over ends side by side or beside ends
+one above the other, clear of the boxes. Each link is selectable, as a node is,
+and its look, how it runs and its heads, is its kind's (see Design), never a
+prop, as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the
@@ -1094,11 +1098,20 @@ Design), as `Arrow.Link` for a link in `Arrow`.
   as a node's `next`. An arrow meets what is seen of its end: a node with no
   stroke or fill of its own is met at the bordered or filled boxes inside it, as
   a vertex's name cell rather than the column holding it and its caption.
-- `directed`: `false` for a plain line instead of an arrow.
-- `label`: a short text shown at the middle of the link, such as `next` or
-  `head`.
 
-How a link curves is its kind's `curve` (see Design), never a prop.
+A link's children are its label, drawn at its middle over the line (on a wire,
+its longest run), the link long enough to hold it and other links bending round
+it: text, as `<Link from={k} to={w}>next</Link>`, or views of values and nodes,
+as `<Link from={u} to={v}>{@render Weight(cost)}</Link>`, each of its own kind,
+so a weight can be a white pill on the line, followed from step to step as any
+value is.
+
+A link's direction follows from the data. Where the same `<Link>` joins two
+elements both ways at exactly the same steps, as neighbour lists naming each
+edge from both its ends, the pair is one two-way line, its kind's head at both
+ends, and a free layout reads it as undirected: an undirected graph lists each
+edge from both ends, a directed one from its source alone. Two `<Link>`s are
+never one line, so a doubly linked list's next and prev stay two arrows.
 
 Links come and go with the steps: one in `{#if}` shows only while it matters, as
 the pointer being followed, and one whose end is a label, or a variable out of

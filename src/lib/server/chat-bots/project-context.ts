@@ -30,7 +30,6 @@ import type {
 import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
-  linkCurveOptions,
   listingOptions,
   listingPropOptions,
   overflowOptions,
@@ -668,18 +667,16 @@ export function designVariables(
       : key.startsWith('frame.') || key === 'listing.language'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
-    // A pointer's overflow and a collection's have options of their own, as do a listing's text
-    // colour, which can keep the listing's ink, and a link's curve, which can follow its layout's.
+    // A pointer's overflow and a collection's have options of their own, as does a listing's text
+    // colour, which can keep the listing's ink.
     const set =
-      prop === 'curve' && key.endsWith('.Link.curve')
-        ? 'link.curve'
-        : prop === 'overflow'
-          ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
-            ? 'overflow.pointer'
-            : 'overflow.collection'
-          : prop === 'color' && key.startsWith('listing.')
-            ? 'listing.color'
-            : prop;
+      prop === 'overflow'
+        ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
+          ? 'overflow.pointer'
+          : 'overflow.collection'
+        : prop === 'color' && key.startsWith('listing.')
+          ? 'listing.color'
+          : prop;
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
@@ -687,7 +684,6 @@ export function designVariables(
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection,
-      'link.curve': linkCurveOptions,
       // A label with no labels inside it reads accumulating as on.
       pause: ['accumulate', 'on', 'off']
     };

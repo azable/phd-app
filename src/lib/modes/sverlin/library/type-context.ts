@@ -196,6 +196,8 @@ export type LayoutMemory = {
   scopes: Map<string, { inputs: Map<number, SpanInput>; span?: SpanLayout }>;
   /** The root's fit at each step. */
   fits: Map<number, number>;
+  /** The pairs of links drawn as one two-way line at every step (see node/lines.ts). */
+  lines: Set<string>;
 };
 
 export function layoutMemoryContext(): LayoutMemory | undefined {

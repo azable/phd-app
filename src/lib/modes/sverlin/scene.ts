@@ -6,6 +6,7 @@
 import * as v from 'valibot';
 
 import type { SceneFrame, SceneStep } from './library';
+import { headShapes } from './library/node/heads';
 
 // A view draws at most a few nodes per value the algorithm keeps, and a trace holds at most 200,000
 // values over at most 200 steps (algorithmLimits in algorithm/interpret.server.ts); these bounds sit
@@ -68,17 +69,26 @@ const sceneNodeSchema = v.strictObject({
   )
 });
 
+const sceneHeadSchema = v.strictObject({
+  shape: v.picklist(headShapes),
+  size: length,
+  back: point,
+  tip: point
+});
+
 const sceneLinkSchema = v.strictObject({
   id: v.optional(text),
   from: text,
   to: text,
   directed: v.boolean(),
-  arrowSize: v.optional(length),
   strokeStyle: v.optional(strokeStyle),
   stroke: colour,
   strokeWidth: length,
-  curve: v.tuple([point, point, point, point]),
-  label: v.optional(v.strictObject({ text, at: point, color: colour, font, fontSize: length }))
+  curve: v.optional(v.tuple([point, point, point, point])),
+  wire: v.optional(v.pipe(v.array(point), v.minLength(2), v.maxLength(maximumNodes))),
+  heads: v.optional(
+    v.strictObject({ start: v.optional(sceneHeadSchema), end: v.optional(sceneHeadSchema) })
+  )
 });
 
 const sceneStepSchema = v.strictObject({

@@ -7,6 +7,7 @@
 
 import { linkSpecOf } from './node/arrange';
 import { strokeStyleCss } from './node/design';
+import { headShapes, headTrim, type HeadShape } from './node/heads';
 import type { Layout } from './node/props';
 
 export type ScenePoint = { x: number; y: number };
@@ -72,17 +73,23 @@ export type SceneLink = {
   /** The keys of the nodes it joins. */
   from: string;
   to: string;
+  /** Whether it points one way, rather than being a two-way line. */
   directed: boolean;
-  /** An arrow's head, as long as it is wide, its tip at the curve's end. */
-  arrowSize?: number;
   strokeStyle?: 'dashed' | 'dotted';
   stroke: string;
   strokeWidth: number;
-  /** A cubic curve: its start, two control points, and end. */
-  curve: [ScenePoint, ScenePoint, ScenePoint, ScenePoint];
-  /** Text at the curve's middle, centred on `at`. */
-  label?: { text: string; at: ScenePoint; color: string; font: string; fontSize: number };
+  /** A cubic curve: its start, two control points, and end; or a wire, its corners in order. */
+  curve?: [ScenePoint, ScenePoint, ScenePoint, ScenePoint];
+  wire?: ScenePoint[];
+  /** The heads at its ends, each in the line's colour. */
+  heads?: { start?: SceneHead; end?: SceneHead };
 };
+
+/**
+ * A head: its shape (see node/heads.ts), as long as it is wide, from its back to its tip along the
+ * line where it ends.
+ */
+export type SceneHead = { shape: HeadShape; size: number; back: ScenePoint; tip: ScenePoint };
 
 export type SceneStep = {
   nodes: SceneNode[];
@@ -335,9 +342,13 @@ function describeLink(
 ): SceneLink | undefined {
   const svg = path.ownerSVGElement;
   const spec = linkSpecOf(path.dataset.svEdge ?? '');
-  // Every link is drawn as one cubic curve (see node/route.ts): M x,y C x,y x,y x,y.
-  const numbers = (path.getAttribute('d') ?? '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/giu)?.map(Number);
-  if (!svg || !spec || numbers?.length !== 8) return undefined;
+  // A link is drawn as one cubic curve, M x,y C x,y x,y x,y, or a wire, M x,y L x,y …
+  // (see node/route.ts).
+  const d = path.getAttribute('d') ?? '';
+  const numbers = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/giu)?.map(Number) ?? [];
+  const curved = d.includes('C');
+  if (!svg || !spec || (curved ? numbers.length !== 8 : numbers.length < 4 || numbers.length % 2))
+    return undefined;
   const area = svg.getBoundingClientRect();
   const units = svg.width.baseVal.value;
   // Screen pixels per unit of the drawing, which the frame and the root's fit both scale.
@@ -345,36 +356,46 @@ function describeLink(
   const at = (x: number, y: number) => point(area.left + x * toScreen, area.top + y * toScreen);
   const scale = toScreen * ratio;
   const style = getComputedStyle(path);
-  let label: SVGTextElement | undefined;
-  for (
-    let next = path.nextElementSibling;
-    next && !next.matches('path.link');
-    next = next.nextElementSibling
-  )
-    if (next instanceof SVGTextElement && next.classList.contains('label')) label = next;
-  const [x0, y0, x1, y1, x2, y2, x3, y3] = numbers;
-  // An arrowhead is a marker as long as it is wide, drawn in the units of the curve.
-  const marker = /^url\(#(.+)\)$/u.exec(path.getAttribute('marker-end') ?? '')?.[1];
-  const head = marker ? svg.querySelector<SVGMarkerElement>(`#${CSS.escape(marker)}`) : null;
-  const labelStyle = label && getComputedStyle(label);
+  const corners = Array.from({ length: numbers.length / 2 }, (_, i) =>
+    at(numbers[2 * i], numbers[2 * i + 1])
+  );
+  // A head lies along the line where it ends, pointing away from the point before that end: its
+  // back at the end where the line stops short for it, else its tip there.
+  const shape = headShapes.find((each) => each === path.dataset.head);
+  const size = Number(path.dataset.headSize) * scale;
+  const head = (end: ScenePoint, before: readonly ScenePoint[]): SceneHead | undefined => {
+    if (!shape || !Number.isFinite(size)) return undefined;
+    const from = before.find(({ x, y }) => x !== end.x || y !== end.y);
+    if (!from) return undefined;
+    const length = Math.hypot(end.x - from.x, end.y - from.y);
+    const [dx, dy] = [(end.x - from.x) / length, (end.y - from.y) / length];
+    const shifted = { x: round(end.x + dx * size), y: round(end.y + dy * size) };
+    const behind = { x: round(end.x - dx * size), y: round(end.y - dy * size) };
+    return headTrim(shape, size)
+      ? { shape, size: round(size), back: end, tip: shifted }
+      : { shape, size: round(size), back: behind, tip: end };
+  };
+  const reversed = [...corners].reverse();
+  const heads = {
+    ...(path.hasAttribute('marker-start') ? { start: head(corners[0], corners.slice(1)) } : {}),
+    ...(path.hasAttribute('marker-end') ? { end: head(reversed[0], reversed.slice(1)) } : {})
+  };
   return {
     ...(path.dataset.svEdgeId ? { id: path.dataset.svEdgeId } : {}),
     from: spec.from,
     to: spec.to,
-    directed: !!head,
-    ...(head ? { arrowSize: round(head.markerWidth.baseVal.value * scale) } : {}),
+    directed: spec.directed,
     ...broken(path.dataset.strokeStyle),
     stroke: style.stroke,
     strokeWidth: round((parseFloat(style.strokeWidth) || 0) * scale),
-    curve: [at(x0, y0), at(x1, y1), at(x2, y2), at(x3, y3)],
-    ...(label?.textContent && labelStyle
+    ...(curved
+      ? { curve: corners as [ScenePoint, ScenePoint, ScenePoint, ScenePoint] }
+      : { wire: corners }),
+    ...(heads.start || heads.end
       ? {
-          label: {
-            text: label.textContent,
-            at: at(label.x.baseVal[0]?.value ?? 0, label.y.baseVal[0]?.value ?? 0),
-            color: labelStyle.fill,
-            font: labelStyle.fontFamily,
-            fontSize: round((parseFloat(labelStyle.fontSize) || 0) * scale)
+          heads: {
+            ...(heads.start ? { start: heads.start } : {}),
+            ...(heads.end ? { end: heads.end } : {})
           }
         }
       : {})

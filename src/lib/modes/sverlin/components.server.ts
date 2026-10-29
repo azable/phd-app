@@ -1119,6 +1119,8 @@ export function slotInsertions(
           at: (part.start ?? 0) + '<Link'.length,
           text: ` __reads={${JSON.stringify([...new Set(reads)])}}`
         });
+      // Its label, its children, draws views as any node does.
+      walk(part.children as Part[] | undefined, locals);
       return;
     }
     // An {#if when(@label)} block, an {#if} on the label's key by now (see label-values.ts): its

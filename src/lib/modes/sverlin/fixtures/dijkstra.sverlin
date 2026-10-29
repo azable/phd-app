@@ -73,6 +73,7 @@
 
 {#snippet NameText(value: Name)}<Node value={value} />{/snippet}
 {#snippet IntCell(value: Int)}<Node value={value} />{/snippet}
+{#snippet WeightText(value: Weight)}<Node value={value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'done' : 'open'}</Node>{/snippet}
 {#snippet IndexText(value: VertexIndex)}<Node value={value} />{/snippet}
 {#snippet CurrentMark(value: VertexIndex)}<Pointed />{/snippet}
@@ -87,7 +88,7 @@
 {/snippet}
 
 {#snippet EdgeLink(value: Edge)}
-  <Link from={value.from} to={value.to} label={value.weight} />
+  <Link from={value.from} to={value.to}>{@render Weight(value.weight)}</Link>
 {/snippet}
 
 {#snippet LessQuestion(value: Less)}

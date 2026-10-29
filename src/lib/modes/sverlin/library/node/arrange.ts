@@ -15,7 +15,9 @@ import {
   sequenceForms,
   type Form
 } from './forms';
-import { routeCurve, type Box } from './route';
+import { headTrim, type HeadEnds } from './heads';
+import { curvePath, routeCurve, wirePath, type Box } from './route';
+import { routeWires } from './wires';
 
 /** One child to place: its key and its size in pixels. */
 export type ArrangeBox = { key: string; width: number; height: number };
@@ -24,8 +26,8 @@ export type ArrangeBox = { key: string; width: number; height: number };
 export type Placement = { key: string; x: number; y: number };
 
 /**
- * A link from one child's edge to another's, drawn as a curve (an SVG path) with an arrowhead if
- * directed; x1, y1 and x2, y2 are where it leaves and arrives.
+ * A link from one child's edge to another's, drawn as a curve or a wire (an SVG path), stopped short
+ * of the ends its heads are drawn at; x1, y1 and x2, y2 are where the path leaves and arrives.
  */
 export type ArrangeEdge = {
   x1: number;
@@ -34,11 +36,14 @@ export type ArrangeEdge = {
   y2: number;
   path: string;
   directed: boolean;
+  /** The ends its heads are drawn at, and their shape and size. */
+  heads: HeadEnds;
+  head?: LinkHead;
   /** The link this edge draws, as written, such as 'a -> b'. */
   link: string;
   /** The id of the link component it draws, if it came from one. */
   id?: string;
-  /** The middle of the curve, where a label goes. */
+  /** The middle of the curve, or of a wire's longest run, where a label goes. */
   middle: { x: number; y: number };
 };
 
@@ -85,13 +90,21 @@ export type ArrangeOptions = {
   anchors?: Readonly<Record<string, Anchor>>;
 };
 
-/** A link from a <Link> component: its ends by key, its id, and a curve style of its own, if any. */
+/** A link's head: its shape (see heads.ts) and its size in pixels. */
+export type LinkHead = { shape: string; size: number };
+
+/**
+ * A link from a <Link> component: its ends by key, whether it points one way, its id, its own
+ * route, if any, its head, and its label's size, which the link leaves room for.
+ */
 export type LinkSpec = {
   from: string;
   to: string;
   directed: boolean;
   id?: string;
-  curve?: 'straight' | 'curved';
+  route?: 'straight' | 'curved' | 'wire';
+  head?: LinkHead;
+  label?: { width: number; height: number };
   /**
    * The anchor it starts at inside its from child, as a node's next field: it leaves that field
    * itself, arcing over its node, rather than the child's edge.
@@ -195,21 +208,28 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
             text,
             id: spec.id,
             key: spec.id ?? text,
-            curve: spec.curve,
+            route: spec.route,
+            head: spec.head,
+            label: spec.label,
             field: spec.start !== undefined
           }
         ];
   });
 
-  // Each link's length comes from its own two boxes: half of each plus room for the arrow. With a
-  // flow, a directed link's target sits that far along the flow axis, so arrows run along it.
+  // Each link's length comes from its own two boxes: half of each plus room for the arrow and its
+  // label. With a flow, a directed link's target sits that far along the flow axis, so arrows run
+  // along it. A form spaces every link alike, with room for the largest label.
   const flowExtent = options.flow === 'y' ? 'height' : 'width';
-  const room = Math.max(3 * options.gap, arrowRoom);
-  const laidLinks = links.map(({ source, target, from, to, directed, id, key }) => {
-    const along = (from[flowExtent] + to[flowExtent]) / 2 + room;
+  const labelRoom = ({ label }: { label?: { width: number; height: number } }) =>
+    label ? Math.max(label.width, label.height) : 0;
+  const room = Math.max(3 * options.gap, arrowRoom) + Math.max(0, ...links.map(labelRoom));
+  const laidLinks = links.map((link) => {
+    const { source, target, from, to, directed, id, key } = link;
+    const own = Math.max(3 * options.gap, arrowRoom) + labelRoom(link);
+    const along = (from[flowExtent] + to[flowExtent]) / 2 + own;
     const ideal = options.flow
       ? along
-      : (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + room;
+      : (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + own;
     return { source, target, from, to, ideal, along, directed, id, key };
   });
   const solvedLinks: { source: number; target: number; ideal: number }[] = [...laidLinks];
@@ -229,7 +249,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const structure = findStructure(
     boxes.length,
     laidLinks
-      .filter(({ directed, key }) => directed && (!options.permanent || options.permanent.has(key)))
+      .filter(({ key }) => !options.permanent || options.permanent.has(key))
       .sort(
         (a, b) =>
           (firstFrom.get(a.source) ?? 0) - (firstFrom.get(b.source) ?? 0) || leaving(a) - leaving(b)
@@ -395,7 +415,75 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const overlaps = (a: Box, b: Box) =>
     Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
     Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-  const edges = links.map(({ from: tail, to: head, directed, text, id, curve, field }) => {
+  // Wires turn only at right angles, routed all together so their runs keep apart, between the
+  // boxes they meet: a child, or a box inside it, as a vertex's name cell, they may run in to reach.
+  const wired = links.filter(({ route }) => route === 'wire');
+  const smaller = (anchor: Anchor) =>
+    anchor.width < boxes[anchor.box].width - 1 || anchor.height < boxes[anchor.box].height - 1;
+  const inner = boxes.map(() => [] as Anchor[]);
+  for (const { from, to } of wired)
+    for (const anchor of [from, to])
+      if (
+        smaller(anchor) &&
+        !inner[anchor.box].some((each) => each.x === anchor.x && each.y === anchor.y)
+      )
+        inner[anchor.box].push(anchor);
+  const wireEnd = (anchor: Anchor) => {
+    const ends = inner[anchor.box];
+    const end = ends.findIndex((each) => each.x === anchor.x && each.y === anchor.y);
+    return { child: anchor.box, ...(ends.length ? { end: Math.max(0, end) } : {}) };
+  };
+  const wires = new Map(
+    routeWires(
+      boxes.map((_, box) => ({ box: boxAt(whole(box)), ends: inner[box].map(boxAt) })),
+      wired.map(({ from, to }) => ({ from: wireEnd(from), to: wireEnd(to) }))
+    ).map((corners, i) => [wired[i], corners])
+  );
+  // A label sits on its link's middle, and every other curve bends round it: curves are routed once
+  // to find where the labels go, and again round them.
+  const labelAt = (middle: { x: number; y: number }, label: { width: number; height: number }) => ({
+    left: middle.x - label.width / 2,
+    top: middle.y - label.height / 2,
+    right: middle.x + label.width / 2,
+    bottom: middle.y + label.height / 2
+  });
+  const routeAll = (labels: readonly (Box | undefined)[]) =>
+    links.map((link, index) =>
+      routeLink(
+        link,
+        labels.filter((_, other) => other !== index)
+      )
+    );
+  const routeLink = (
+    link: (typeof links)[number],
+    labels: readonly (Box | undefined)[]
+  ): ArrangeEdge => {
+    const { from: tail, to: head, directed, text, id, route, field } = link;
+    const heads = { start: !directed, end: true };
+    const trim = {
+      start: heads.start ? headTrim(link.head?.shape, link.head?.size ?? 0) : 0,
+      end: headTrim(link.head?.shape, link.head?.size ?? 0)
+    };
+    const shown = {
+      directed,
+      heads,
+      ...(link.head ? { head: link.head } : {}),
+      link: text,
+      ...(id ? { id } : {})
+    };
+    const corners = wires.get(link);
+    if (corners?.length) {
+      const wire = wirePath(corners, trim);
+      return {
+        x1: wire.start.x,
+        y1: wire.start.y,
+        x2: wire.end.x,
+        y2: wire.end.y,
+        path: wire.path,
+        middle: wire.middle,
+        ...shown
+      };
+    }
     const [from, to] = [boxAt(tail), boxAt(head)];
     const obstacles = [
       ...boxes.flatMap((_, box) =>
@@ -404,7 +492,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       ...(options.parts ?? [])
         .filter(({ box }) => box === tail.box || box === head.box)
         .map(boxAt)
-        .filter((part) => !overlaps(part, from) && !overlaps(part, to))
+        .filter((part) => !overlaps(part, from) && !overlaps(part, to)),
+      ...labels.flatMap((label) =>
+        label && !overlaps(label, from) && !overlaps(label, to) ? [label] : []
+      )
     ];
     // An end inside a bigger child, such as a record's pointer field, knows the box around it (its
     // frame, else the child) and the child's other content, so the arrow can meet that box's edge
@@ -426,7 +517,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     // and to which side, unless its own curve, or its arrangement's curve, says otherwise; it takes
     // the first bend in its order that is clear.
     const draw = (key: string) => options.random?.(`link ${id ?? text}.${key}`) ?? 0.5;
-    const style = curve ?? options.curve;
+    const style = route === 'wire' ? undefined : (route ?? options.curve);
     const curvy = style ? style === 'curved' : form === 'scatter' || draw('style') >= 0.5;
     const side = draw('side') < 0.5 ? 1 : -1;
     const bends = [0.15, 0.3, 0.5].flatMap((amount) => [amount * side, -amount * side]);
@@ -435,18 +526,22 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       from: field ? undefined : surround(tail, from),
       to: surround(head, to)
     });
+    const drawn = curvePath(routed.curve, trim);
     return {
-      x1: routed.start.x,
-      y1: routed.start.y,
-      x2: routed.end.x,
-      y2: routed.end.y,
-      path: routed.path,
-      directed,
-      link: text,
+      x1: drawn.start.x,
+      y1: drawn.start.y,
+      x2: drawn.end.x,
+      y2: drawn.end.y,
+      path: drawn.path,
       middle: routed.halfway,
-      ...(id ? { id } : {})
+      ...shown
     };
-  });
+  };
+  const first = routeAll([]);
+  const labelled = links.some(({ label }) => label);
+  const edges = labelled
+    ? routeAll(first.map((edge, i) => links[i].label && labelAt(edge.middle, links[i].label)))
+    : first;
 
   return {
     placements,

@@ -13,6 +13,7 @@ import {
   leaveLayer,
   motionCss,
   Frame,
+  linePairs,
   settleSpans,
   themeCss,
   widestInteger,
@@ -181,6 +182,7 @@ const scopes: LayoutMemory['scopes'] = new Map();
 const fits: LayoutMemory['fits'] = new Map();
 const reserved: LayoutMemory['reserved'] = new Map();
 const componentSizes: LayoutMemory['components'] = new Map();
+const lines: LayoutMemory['lines'] = new Set();
 
 /** Measuring finds each node's natural sizes, recording makes the layouts, showing replays them. */
 type Phase = 'measuring' | 'recording' | 'showing';
@@ -237,7 +239,8 @@ function mountStep(
     scopes,
     fits,
     reserved,
-    components: componentSizes
+    components: componentSizes,
+    lines
   };
   try {
     shown.app = mount(Frame, {
@@ -511,7 +514,18 @@ async function recordSteps() {
       collections.set(collection, items);
     }
   };
-  for (let step = 0; step < states.length; step++) await pass(step, 'measuring', measure);
+  // The links each step shows, by pair and way, for the pairs drawn as one line (see linePairs).
+  const shownLinks: Set<string>[] = [];
+  for (let step = 0; step < states.length; step++)
+    await pass(step, 'measuring', (shown) => {
+      measure(shown);
+      shownLinks[step] = new Set(
+        [
+          ...shown.layer.querySelectorAll<HTMLElement>('[data-sv-pair]:not([data-shown="false"])')
+        ].map(({ dataset }) => `${dataset.svPair}|${dataset.svWay}`)
+      );
+    });
+  for (const pair of linePairs(shownLinks)) lines.add(pair);
   // Values the root reads for placement are measured with every value of their types, in a step
   // where they are recorded, so it has room for values the trace never reaches.
   for (const { path, step, values } of placements)

@@ -82,7 +82,19 @@ async function play(source: string, count: number) {
             const { x, y } = path.getPointAtLength(length);
             return new DOMPoint(x, y).matrixTransform(matrix);
           };
-          const [start, end] = [at(0), at(path.getTotalLength())];
+          // A head the line stops short for reaches on, its tip at the end the arrow meets.
+          const total = path.getTotalLength();
+          const { x, y } = path.getPointAtLength(total);
+          const before = path.getPointAtLength(Math.max(0, total - 1));
+          const reach = ['arrow', 'open', 'dot', 'diamond'].includes(path.dataset.head ?? '')
+            ? Number(path.dataset.headSize)
+            : 0;
+          const span = Math.hypot(x - before.x, y - before.y) || 1;
+          const tip = new DOMPoint(
+            x + ((x - before.x) / span) * reach,
+            y + ((y - before.y) / span) * reach
+          ).matrixTransform(matrix);
+          const [start, end] = [at(0), tip];
           const from = near(start, 'NodeBox.NextField')?.closest<HTMLElement>(
             '[data-sv-kind="NodeBox"]'
           )?.dataset.svSlot;

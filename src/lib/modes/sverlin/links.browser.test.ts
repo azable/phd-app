@@ -372,13 +372,13 @@ it.skipIf(!enabled)(
 );
 
 it.skipIf(!enabled)(
-  'meets a vertex drawn in a borderless column at its framed name cell, straight or curved',
+  'meets a vertex drawn in a borderless column at its framed name cell, straight, curved, or wired',
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(cards);
-    for (const curve of ['straight', 'curved']) {
+    for (const curve of ['straight', 'curved', 'wire']) {
       const { javascript } = await bundlePresentation(prepared, 1, {
-        chosen: { 'Graph.form': 'scatter', 'Graph.layoutSeed': 10, 'Graph.Link.curve': curve }
+        chosen: { 'Graph.form': 'scatter', 'Graph.layoutSeed': 10, 'Graph.Link.route': curve }
       });
       const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
       const errors: string[] = [];
@@ -406,7 +406,16 @@ it.skipIf(!enabled)(
         return [...document.querySelectorAll<SVGPathElement>(`${layer} path.link`)].map((path) => {
           const matrix = path.getScreenCTM()!;
           const start = path.getPointAtLength(0).matrixTransform(matrix);
-          const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+          // The head the line stops short for reaches on to the end it meets.
+          const total = path.getTotalLength();
+          const last = path.getPointAtLength(total);
+          const before = path.getPointAtLength(Math.max(0, total - 1));
+          const reach = Number(path.dataset.headSize) || 0;
+          const span = Math.hypot(last.x - before.x, last.y - before.y) || 1;
+          const end = new DOMPoint(
+            last.x + ((last.x - before.x) / span) * reach,
+            last.y + ((last.y - before.y) / span) * reach
+          ).matrixTransform(matrix);
           return Math.round(Math.max(distance(start.x, start.y), distance(end.x, end.y)));
         });
       }, layer);
@@ -439,8 +448,10 @@ it.skipIf(!enabled)(
           .filter((path) => path.style.opacity !== '0')
           .map((path) => path.dataset.svEdge ?? '')
           .sort(),
-        weights: [...document.querySelectorAll(`${layer} .links text.label`)]
-          .map((label) => label.textContent ?? '')
+        weights: [
+          ...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-link-label][data-sv-placed]`)
+        ]
+          .map((label) => label.innerText.trim())
           .sort()
       }),
       layer

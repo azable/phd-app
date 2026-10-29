@@ -15,6 +15,9 @@
  * library/node/span.ts), and findStructure classifies them. Links inside {#if} are left out, and a
  * variant may draw no links where the data has them; there the page finds its own structure, and a
  * form it cannot take falls back to that structure's natural one.
+ *
+ * The same reading, over every node holding links, row and column alike, tells which kinds of link
+ * are all two-way lines, as an undirected graph's edges are, whose heads start as none.
  */
 
 import type { MasterStep } from './algorithm/interpret.server';
@@ -26,6 +29,7 @@ export type LayoutStructure = StructureKind | 'none';
 
 type Node = {
   type?: string;
+  start?: number;
   name?: string;
   children?: Node[];
   else?: Node;
@@ -56,82 +60,141 @@ type Scope = { over: Expression; item?: string; position?: string };
 /** The work one source may take, in link ends evaluated, before its structures are given up. */
 const evaluationLimit = 200_000;
 
+/** A link a step draws: the <Link> that draws it (its tag, or the field it draws), and its ends. */
+type Drawn = { tag: string; from: string; to: string };
+
+const drawnKey = ({ tag, from, to }: Drawn) => `${tag}|${from} -> ${to}`;
+
 /**
- * Each free layout kind's structure: its free layouts' nodes (by kind), the view's components, the
- * state's names, the domain, and the trace's steps.
+ * What the links make: each free layout kind's structure, and the kinds of link every one of whose
+ * links is a two-way line, as the page draws one (see library/node/lines.ts): its <Link> joins
+ * the same two elements the other way at exactly the same steps. Read from the free layouts' nodes
+ * (by kind), every node holding written links (by the kind of those links), the view's components,
+ * the state's names, the domain, and the trace's steps.
  */
-export function layoutStructures(options: {
+export function linkFacts(options: {
   free: ReadonlyMap<string, readonly unknown[]>;
-  views: readonly { type: string; node: unknown }[];
+  linked: readonly { kind: string; node: unknown }[];
+  views: readonly { name: string; type: string; node: unknown }[];
   stateNames: readonly string[];
   domain: DomainRegistry;
   steps: readonly MasterStep[];
-}): Record<string, LayoutStructure> {
+}): { structures: Record<string, LayoutStructure>; lines: Set<string> } {
   // Parsed Svelte markup (svelte/compiler's legacy AST), read only for the parts named in Node.
   const fields = linkedFields(
-    options.views as readonly { type: string; node: Node }[],
+    options.views as readonly { name: string; type: string; node: Node }[],
     options.domain
   );
   const state = new Set(options.stateNames);
   let evaluations = 0;
-  return Object.fromEntries(
-    [...(options.free as ReadonlyMap<string, readonly Node[]>)].map(([kind, nodes]) => {
-      const links = nodes.flatMap((node) => writtenLinks(node.children ?? [], []));
-      const walked = new Set(
-        nodes.flatMap((node) => walkedCollections(node.children ?? [], state))
-      );
-      const present = new Map<string, boolean[]>();
-      for (const [index, step] of options.steps.entries()) {
-        const edges = new Set<string>();
-        for (const { from, to, scopes } of links)
-          for (const env of bindings(scopes, new Map(), step, state)) {
-            if (++evaluations > evaluationLimit) return [kind, 'none'];
-            const ends = [read(from, env, step, state), read(to, env, step, state)].map((end) =>
-              end ? endOf(end, step) : undefined
-            );
-            if (ends[0] && ends[1]) edges.add(`${ends[0]} -> ${ends[1]}`);
-          }
-        for (const [path, target] of Object.entries(step.targets ?? {})) {
-          const field = /^(.+)\[(\d+)\]\.([A-Za-z_$][\w$]*)$/u.exec(path);
-          if (!field || !walked.has(field[1])) continue;
-          const record = step.types?.[`${field[1]}[${field[2]}]`];
-          const value = valueAt(step.state, path);
-          if (record && fields.has(`${record}.${field[3]}`) && typeof value === 'number')
-            edges.add(`${field[1]}[${field[2]}] -> ${target}[${value}]`);
+  // Each link drawn at some step, with the steps it is drawn at; undefined past the work allowed.
+  const presence = (nodes: readonly Node[]) => {
+    const links = nodes.flatMap((node) => writtenLinks(node.children ?? [], []));
+    const walked = new Set(nodes.flatMap((node) => walkedCollections(node.children ?? [], state)));
+    const present = new Map<string, { drawn: Drawn; seen: boolean[] }>();
+    for (const [index, step] of options.steps.entries()) {
+      const drawn: Drawn[] = [];
+      for (const { tag, from, to, scopes } of links)
+        for (const env of bindings(scopes, new Map(), step, state)) {
+          if (++evaluations > evaluationLimit) return undefined;
+          const ends = [read(from, env, step, state), read(to, env, step, state)].map((end) =>
+            end ? endOf(end, step) : undefined
+          );
+          if (ends[0] && ends[1]) drawn.push({ tag, from: ends[0], to: ends[1] });
         }
-        for (const edge of edges) {
-          const seen = present.get(edge) ?? [];
-          seen[index] = true;
-          present.set(edge, seen);
-        }
+      for (const [path, target] of Object.entries(step.targets ?? {})) {
+        const field = /^(.+)\[(\d+)\]\.([A-Za-z_$][\w$]*)$/u.exec(path);
+        if (!field || !walked.has(field[1])) continue;
+        const record = step.types?.[`${field[1]}[${field[2]}]`];
+        const value = valueAt(step.state, path);
+        const drawnBy = record ? fields.get(`${record}.${field[3]}`) : undefined;
+        if (drawnBy && typeof value === 'number')
+          drawn.push({
+            tag: `${record}.${field[3]}`,
+            from: `${field[1]}[${field[2]}]`,
+            to: `${target}[${value}]`
+          });
       }
-      const lasting = [...present].flatMap(([edge, seen]) => {
-        const [from, to] = edge.split(' -> ');
+      for (const each of drawn) {
+        const key = drawnKey(each);
+        const entry = present.get(key) ?? { drawn: each, seen: [] };
+        entry.seen[index] = true;
+        present.set(key, entry);
+      }
+    }
+    return present;
+  };
+  // A link is one of a two-way line where its <Link> draws it the other way at the same steps.
+  const twoWay = (present: ReadonlyMap<string, { drawn: Drawn; seen: boolean[] }>, key: string) => {
+    const { drawn, seen } = present.get(key) as { drawn: Drawn; seen: boolean[] };
+    const back = present.get(drawnKey({ ...drawn, from: drawn.to, to: drawn.from }));
+    return (
+      drawn.from !== drawn.to &&
+      !!back &&
+      options.steps.every((_, index) => !!seen[index] === !!back.seen[index])
+    );
+  };
+
+  const structures = Object.fromEntries(
+    [...(options.free as ReadonlyMap<string, readonly Node[]>)].map(([kind, nodes]) => {
+      const present = presence(nodes);
+      if (!present) return [kind, 'none'];
+      const lasting = [...present].flatMap(([key, { drawn, seen }]) => {
         const always = options.steps.every(
-          (step, index) => seen[index] || !exists(step, from) || !exists(step, to)
+          (step, index) => seen[index] || !exists(step, drawn.from) || !exists(step, drawn.to)
         );
-        return always ? [[from, to] as const] : [];
+        return always ? [{ key, ...drawn }] : [];
       });
-      const ids = [...new Set(lasting.flat())].sort(byElement);
+      const ids = [...new Set(lasting.flatMap(({ from, to }) => [from, to]))].sort(byElement);
+      // A link lasting both ways by one <Link> is present at the same steps both ways, as both
+      // ends are: one undirected link, as the page draws it.
+      const kept = new Set(lasting.map(({ key }) => key));
       const structure = findStructure(
         ids.length,
-        lasting.map(([from, to]) => ({ source: ids.indexOf(from), target: ids.indexOf(to) }))
+        lasting.flatMap((link) => {
+          const back = drawnKey({ ...link, from: link.to, to: link.from });
+          return !kept.has(back)
+            ? [{ source: ids.indexOf(link.from), target: ids.indexOf(link.to) }]
+            : byElement(link.from, link.to) < 0
+              ? [{ source: ids.indexOf(link.from), target: ids.indexOf(link.to), directed: false }]
+              : [];
+        })
       );
       return [kind, structure?.kind ?? 'none'];
     })
-  );
+  ) as Record<string, LayoutStructure>;
+
+  // Each kind of link's links, from the nodes holding them and the fields its views draw; a kind
+  // with any link drawn one way only, or past the work allowed, is not all lines.
+  const kinds = new Map<string, boolean>();
+  const note = (kind: string, isLine: boolean) =>
+    kinds.set(kind, (kinds.get(kind) ?? true) && isLine);
+  for (const { kind, node } of options.linked as readonly { kind: string; node: Node }[]) {
+    const present = presence([node]);
+    if (!present) {
+      note(kind, false);
+      continue;
+    }
+    for (const [key, { drawn }] of present)
+      note(fields.get(drawn.tag) ?? kind, twoWay(present, key));
+  }
+  return {
+    structures,
+    lines: new Set([...kinds].flatMap(([kind, isLine]) => (isLine ? [kind] : [])))
+  };
 }
 
 /**
- * The record fields whose references views draw as links with no from: `<Link to={node.next} />`
- * in a view of a record draws its next field; `<Link to={value} />` in a view of a type draws every
- * record field of that type, or of a union holding it.
+ * The record fields whose references views draw as links with no from, each with the kind of the
+ * link drawing it: `<Link to={node.next} />` in a view of a record draws its next field;
+ * `<Link to={value} />` in a view of a type draws every record field of that type, or of a union
+ * holding it.
  */
 function linkedFields(
-  views: readonly { type: string; node: Node }[],
+  views: readonly { name: string; type: string; node: Node }[],
   domain: DomainRegistry
-): Set<string> {
-  const fields = new Set<string>();
+): Map<string, string> {
+  const fields = new Map<string, string>();
   const records = Object.values(domain.structures).flatMap((structure) =>
     structure.kind === 'record' ? [structure] : []
   );
@@ -139,13 +202,14 @@ function linkedFields(
     const structure = domain.structures[declared];
     return declared === type || (structure?.kind === 'union' && structure.members.includes(type));
   };
-  for (const { type, node } of views) {
+  for (const { name, type, node } of views) {
     const parameter = node.parameters?.[0]?.name;
+    const kind = `${name}.Link`;
     for (const to of fromlessEnds(node.children ?? [])) {
       if (to.type === 'Identifier' && to.name === parameter)
         for (const record of records)
           for (const [field, declared] of Object.entries(record.fields))
-            if (holds(declared, type)) fields.add(`${record.name}.${field}`);
+            if (holds(declared, type)) fields.set(`${record.name}.${field}`, kind);
       if (
         to.type === 'MemberExpression' &&
         !to.computed &&
@@ -153,7 +217,7 @@ function linkedFields(
         to.object.name === parameter &&
         to.property?.type === 'Identifier'
       )
-        fields.add(`${type}.${to.property.name}`);
+        fields.set(`${type}.${to.property.name}`, kind);
     }
   }
   return fields;
@@ -189,12 +253,12 @@ function fromlessEnds(nodes: readonly Node[]): Expression[] {
 function writtenLinks(
   nodes: readonly Node[],
   scopes: readonly Scope[]
-): { from: Expression; to: Expression; scopes: readonly Scope[] }[] {
+): { tag: string; from: Expression; to: Expression; scopes: readonly Scope[] }[] {
   return nodes.flatMap((node) => {
     if (node.type === 'IfBlock' || node.type === 'SnippetBlock') return [];
     if (isLink(node)) {
       const [from, to] = [attribute(node, 'from'), attribute(node, 'to')];
-      return from && to ? [{ from, to, scopes }] : [];
+      return from && to ? [{ tag: `${node.start ?? ''}`, from, to, scopes }] : [];
     }
     const inner =
       node.type === 'EachBlock' && node.expression

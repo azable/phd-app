@@ -110,7 +110,7 @@ import {
   type KindRole
 } from './library/node/design';
 import { packStates } from './library/trace-pack';
-import { layoutStructures, type LayoutStructure } from './structure.server';
+import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 
@@ -589,6 +589,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       problems,
       kinds: unlaid,
       freeNodes,
+      linkedNodes,
       flows,
       tagKinds,
       nodeKinds,
@@ -1032,9 +1033,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       operators: new Set(shown.keys()),
       during: new Set(Object.values(during))
     });
-    // Each free layout's look starts from the structure its data makes, which the chooser is told.
-    const structures = layoutStructures({
+    // Each free layout's look starts from the structure its data makes, which the chooser is told,
+    // and each kind of link's head from whether its links are all two-way lines.
+    const { structures, lines } = linkFacts({
       free: freeNodes,
+      linked: linkedNodes,
       views: found.components,
       stateNames,
       domain,
@@ -1043,7 +1046,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const kinds = unlaid.map((kind): DesignKind => {
       const structure = structures[kind.key];
       const flow = flows.get(kind.key);
-      return structure ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } } : kind;
+      return structure
+        ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } }
+        : kind.role === 'link' && lines.has(kind.key)
+          ? { ...kind, lines: true }
+          : kind;
     });
     // A chain's branches take turns in one place: none may show at a step another shows at. The
     // master pauses at every label, so every step any pacing has is among its steps.
@@ -1936,10 +1943,12 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
   Link: {
     from: null,
     to: null,
-    directed: null,
-    label: null
+    children: null
   }
 };
+
+/** A link's looks, the variables of its kind, as Graph.Link.route. */
+const linkLooks = new Set(['curve', 'route', 'head', 'headSize']);
 
 /** Props that set a look, which belongs to the design, not the markup. */
 const designProps = new Set([
@@ -1986,13 +1995,17 @@ function checkProps(
             ? `<${component}> takes no tags: its kind is the snippet it is in, so name the node by a snippet, as {#snippet Caption()}<Node>…</Node>{/snippet}, and its look is a variable of that kind.`
             : component === 'Node' && freeLayoutProps.includes(attribute.name as DesignProp)
               ? `<Node> ${attribute.name} is a free layout's look, which the variant gives the kind of node arranging it, not the markup: here the variable ${kind}.${attribute.name}.`
-              : component === 'Link' && attribute.name === 'curve'
-                ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name}.`
-                : designProps.has(attribute.name)
-                  ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
-                  : named.length
-                    ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
-                    : `<${component}> takes no props.`,
+              : component === 'Link' && attribute.name === 'directed'
+                ? `<Link> takes no directed: a link is an arrow from its from to its to, and its direction follows from the data. Where the same <Link> joins two elements both ways at the same steps, as neighbour lists naming each edge from both its ends, the pair is one two-way line, with its kind's head at both ends.`
+                : component === 'Link' && attribute.name === 'label'
+                  ? `<Link> takes no label: write its label as its children, drawn at its middle, as <Link from={u} to={v}>{@render Weight(cost)}</Link>, or text, as <Link from={u} to={v}>next</Link>.`
+                  : component === 'Link' && linkLooks.has(attribute.name)
+                    ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
+                    : designProps.has(attribute.name)
+                      ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
+                      : named.length
+                        ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
+                        : `<${component}> takes no props.`,
           { code: 'unknown_prop', ...at }
         )
       );
@@ -2129,6 +2142,8 @@ function withNodeRefs(
   kinds: DesignKind[];
   /** The <Node layout="free"> tags of each kind that has one, and the flow the first sets. */
   freeNodes: Map<string, unknown[]>;
+  /** Each <Node> holding links, with the kind of the links written in it. */
+  linkedNodes: { kind: string; node: unknown }[];
   flows: Map<string, 'x' | 'y'>;
   /** The kind of each <Node>, <Pointed>, and <Link> tag, by its line:column, for the editor to show. */
   tagKinds: Record<string, string[]>;
@@ -2428,6 +2443,9 @@ function withNodeRefs(
     problems,
     kinds: [...kinds].map(([key, role]) => ({ key, role })),
     freeNodes,
+    linkedNodes: tags.flatMap(({ name, links, view, tag }) =>
+      name === 'Node' && links ? [{ kind: kindKey(view, 'Link'), node: tag }] : []
+    ),
     flows,
     tagKinds,
     nodeKinds
@@ -2509,9 +2527,16 @@ const allowedImports: Record<string, (path: string) => boolean> = {
       'sverlin'
     ].includes(path),
   component: (path) => runtime(path) || path === 'sverlin',
-  // The constraint layout engine, by its one module, which needs none of WebCola's d3 adaptor.
-  library: (path) => runtime(path) || /^\.\.?\//u.test(path) || path === 'webcola/dist/src/layout'
+  // The constraint layout engine and the grid router wires take (see library/node/wires.ts), by
+  // their own modules, which need none of WebCola's d3 adaptor.
+  library: (path) => runtime(path) || /^\.\.?\//u.test(path) || webcolaModules.includes(path)
 };
+
+const webcolaModules = [
+  'webcola/dist/src/layout',
+  'webcola/dist/src/gridrouter',
+  'webcola/dist/src/rectangle'
+];
 
 function sandboxModules(
   component: string,

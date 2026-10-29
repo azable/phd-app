@@ -20,8 +20,6 @@
   const Neighbour = record({ to: VertexRef, weight: Weight });
   const Neighbours = collection(Neighbour);
   const Adjacency = collection(Neighbours);
-  const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
-  const Edges = collection(Edge);
 
   const Length = unop((v: Vertices) => VertexRef(v.length));
   const Before = binop((a: VertexRef, b: VertexRef) => Flag(a < b));
@@ -49,15 +47,6 @@
     [{ to: 0, weight: 2 }, { to: 1, weight: 1 }, { to: 3, weight: 8 }, { to: 4, weight: 10 }],
     [{ to: 1, weight: 5 }, { to: 2, weight: 8 }, { to: 4, weight: 2 }],
     [{ to: 2, weight: 10 }, { to: 3, weight: 2 }]
-  ]);
-  const edges = Edges([
-    { from: 0, to: 1, weight: 4 },
-    { from: 0, to: 2, weight: 2 },
-    { from: 1, to: 2, weight: 1 },
-    { from: 1, to: 3, weight: 5 },
-    { from: 2, to: 3, weight: 8 },
-    { from: 2, to: 4, weight: 10 },
-    { from: 3, to: 4, weight: 2 }
   ]);
 </script>
 
@@ -109,6 +98,7 @@ DIJKSTRA(graph, source)
 
 {#snippet NameText(value: Name)}<Node value={value} />{/snippet}
 {#snippet DistanceValue(value: Dist)}<Node value={value} />{/snippet}
+{#snippet WeightText(value: Weight)}<Node value={value} />{/snippet}
 {#snippet PreviousValue(value: PreviousName)}<Node value={value === 'none' ? '—' : value} />{/snippet}
 {#snippet VisitedWord(value: VisitedFlag)}<Node>{value ? 'settled' : 'unsettled'}</Node>{/snippet}
 {#snippet ScanMark(value: VertexRef)}<Pointed />{/snippet}
@@ -129,8 +119,10 @@ DIJKSTRA(graph, source)
         {@render VisitedFlag(visited[k])}
       </Node>
     {/each}
-    {#each edges as graphEdge}
-      <Link from={graphEdge.from} to={graphEdge.to} directed={false} label={graphEdge.weight} />
+    {#each vertices as vertex, k}
+      {#each adjacency[k] as neighbour}
+        <Link from={k} to={neighbour.to}>{@render Weight(neighbour.weight)}</Link>
+      {/each}
     {/each}
   </Node>
 {/snippet}

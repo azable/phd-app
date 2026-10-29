@@ -263,7 +263,7 @@ describe('link components', () => {
     const result = arrange(boxes, {
       gap: 8,
       curve: 'straight',
-      links: ['a -> b', { from: 'b', to: 'c', directed: false, id: '12:3', curve: 'curved' }],
+      links: ['a -> b', { from: 'b', to: 'c', directed: false, id: '12:3', route: 'curved' }],
       random: keyedRandom(2, 'layout')
     });
     expect(result.edges.map(({ link, id, directed }) => ({ link, id, directed }))).toEqual([

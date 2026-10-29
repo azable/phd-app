@@ -312,15 +312,36 @@ describe('single-component Svelte compilation', () => {
         line: 2,
         message: expect.stringContaining(`here the variable V.${prop.split('=')[0]}`)
       });
+    // How a link runs and its heads are its kind's; curve, as it was once called, names its route.
+    for (const [prop, variable] of [
+      ['curve="curved"', 'route'],
+      ['route="wire"', 'route'],
+      ['head="vee"', 'head'],
+      ['headSize={12}', 'headSize']
+    ])
+      await expect(
+        view(`<Node layout="free"><Node>a</Node><Link from={0} to={1} ${prop} /></Node>`)
+      ).rejects.toMatchObject({
+        code: 'unknown_prop',
+        message: expect.stringContaining(`here the variable V.Link.${variable}`)
+      });
+    // A label is the link's children, drawn as nodes are.
     await expect(
-      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} curve="curved" /></Node>')
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} label="next" /></Node>')
     ).rejects.toMatchObject({
       code: 'unknown_prop',
-      message: expect.stringContaining('here the variable V.Link.curve')
+      message: expect.stringContaining('write its label as its children')
     });
     await expect(
       view('<Node layout="free"><Node>a</Node><Link from={0} to={1} bend={0.3} /></Node>')
     ).rejects.toThrow('<Link> has no prop bend');
+    // A link's direction follows from the data: both ways at once is a line.
+    await expect(
+      view('<Node layout="free"><Node>a</Node><Link from={0} to={1} directed={false} /></Node>')
+    ).rejects.toMatchObject({
+      code: 'unknown_prop',
+      message: expect.stringContaining('its direction follows from the data')
+    });
     await expect(view('<Node flow="z" />')).rejects.toMatchObject({
       code: 'invalid_prop',
       line: 2

@@ -7,8 +7,9 @@
 
 import { GState, jsPDF } from 'jspdf';
 
-import type { SceneLink, SceneNode, SceneText } from '../library';
+import type { SceneHead, SceneLink, SceneNode, SceneText } from '../library';
 import { linkDashes } from '../library/node/design';
+import { headDrawing } from '../library/node/heads';
 import type { SverlinScene } from '../scene';
 
 export type FontFamily = 'sans' | 'serif' | 'mono';
@@ -81,8 +82,6 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     for (const node of step.nodes)
       for (const run of node.runs ?? [])
         used.add(`${fontFamily(run.font)} ${fontStyle(run.fontWeight)}`);
-    for (const link of step.links)
-      if (link.label) used.add(`${fontFamily(link.label.font)} normal`);
   }
   await Promise.all(
     [...used].map(async (font) => {
@@ -179,7 +178,6 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
   }
 
   function drawLink(link: SceneLink) {
-    const [start, first, second, end] = link.curve;
     const [r, g, b, a] = resources.colour(link.stroke);
     setOpacity(a);
     doc.setDrawColor(r, g, b);
@@ -191,40 +189,49 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       dashed: linkDashes.dashed.map((length) => length * unit),
       dotted: linkDashes.dotted.map((length) => length * unit)
     });
-    doc.moveTo(px(start.x), px(start.y));
-    doc.curveTo(px(first.x), px(first.y), px(second.x), px(second.y), px(end.x), px(end.y));
+    if (link.curve) {
+      const [start, first, second, end] = link.curve;
+      doc.moveTo(px(start.x), px(start.y));
+      doc.curveTo(px(first.x), px(first.y), px(second.x), px(second.y), px(end.x), px(end.y));
+    } else if (link.wire) {
+      const [start, ...rest] = link.wire;
+      doc.moveTo(px(start.x), px(start.y));
+      for (const corner of rest) doc.lineTo(px(corner.x), px(corner.y));
+    }
     doc.stroke();
     setStrokeStyle(undefined);
-    if (link.directed && link.arrowSize) {
-      // The head points along the curve where it ends: from the last control point that differs.
-      const from = [second, first, start].find(({ x, y }) => x !== end.x || y !== end.y) ?? start;
-      const length = Math.hypot(end.x - from.x, end.y - from.y) || 1;
-      const [dx, dy] = [(end.x - from.x) / length, (end.y - from.y) / length];
-      const size = link.arrowSize;
-      const back = { x: end.x - dx * size, y: end.y - dy * size };
-      doc.triangle(
-        px(end.x),
-        px(end.y),
-        px(back.x - (dy * size) / 2),
-        px(back.y + (dx * size) / 2),
-        px(back.x + (dy * size) / 2),
-        px(back.y - (dx * size) / 2),
-        'F'
-      );
+    for (const head of [link.heads?.start, link.heads?.end]) if (head) drawHead(head, link);
+  }
+
+  /** A head, as the page draws its marker (see node/heads.ts): its 10 by 10 box laid along it. */
+  function drawHead(head: SceneHead, link: SceneLink) {
+    const drawing = headDrawing(head.shape);
+    if (!drawing) return;
+    const length = Math.hypot(head.tip.x - head.back.x, head.tip.y - head.back.y) || 1;
+    const [dx, dy] = [(head.tip.x - head.back.x) / length, (head.tip.y - head.back.y) / length];
+    const scale = head.size / 10;
+    // A point of the box: along the line from the back, and across it from its middle.
+    const at = (x: number, y: number) => ({
+      x: px(head.back.x + dx * x * scale - dy * (y - 5) * scale),
+      y: px(head.back.y + dy * x * scale + dx * (y - 5) * scale)
+    });
+    doc.setLineWidth(px(link.strokeWidth));
+    doc.setLineJoin('round');
+    doc.setLineCap('round');
+    if (head.shape === 'dot') {
+      const centre = at(5, 5);
+      doc.circle(centre.x, centre.y, px(head.size / 2), 'F');
+      return;
     }
-    if (link.label) {
-      const label = { ...link.label, fontWeight: 400 };
-      const [lr, lg, lb, la] = resources.colour(link.label.color);
-      setOpacity(la);
-      // A halo in the frame's colour keeps the label readable over the curve, as on the page.
-      const [hr, hg, hb] = resources.colour(frame.background);
-      doc.setDrawColor(hr, hg, hb);
-      doc.setLineWidth(px(4));
-      doc.setLineJoin('round');
-      doc.setTextColor(lr, lg, lb);
-      drawText(label, link.label.at, { outline: true });
-      drawText(label, link.label.at);
-    }
+    const points = [...drawing.path.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/gu)].map(([, x, y]) =>
+      at(Number(x), Number(y))
+    );
+    const [first, ...rest] = points;
+    doc.moveTo(first.x, first.y);
+    for (const point of rest) doc.lineTo(point.x, point.y);
+    if (drawing.path.endsWith('z')) doc.close();
+    if (drawing.filled) doc.fill();
+    else doc.stroke();
   }
 
   scene.steps.forEach((step, index) => {
