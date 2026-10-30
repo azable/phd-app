@@ -138,12 +138,8 @@ export function settleSpans(
     if (!entry.inputs.size) continue;
     const steps = [...entry.inputs.keys()].sort((a, b) => a - b);
     const span = solveSpan(steps.map((step) => entry.inputs.get(step) as SpanInput));
-    // To a tenth of a pixel: a step measured at another scale gives its anchors other last digits.
     const shape = (layout?: SpanLayout) =>
-      layout &&
-      JSON.stringify([layout.positions, layout.width, layout.height], (_, value: unknown) =>
-        typeof value === 'number' ? Math.round(value * 10) / 10 : value
-      );
+      layout && JSON.stringify([layout.positions, layout.width, layout.height]);
     if (shape(span) !== shape(entry.span)) changed = true;
     entry.span = span;
   }

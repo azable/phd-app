@@ -9,6 +9,7 @@ import { linkSpecOf } from './node/arrange';
 import { strokeStyleCss } from './node/design';
 import { headShapes, headTrim, type HeadShape } from './node/heads';
 import type { Layout } from './node/props';
+import { screenScale } from './node/unscaled';
 
 export type ScenePoint = { x: number; y: number };
 export type SceneBox = ScenePoint & { width: number; height: number };
@@ -185,8 +186,9 @@ function describeNode(
     width: round(rect.width * ratio),
     height: round(rect.height * ratio)
   };
-  // Lengths inside a node are scaled on screen by the frame and by the root's fit to it.
-  const scale = element.offsetWidth ? box.width / element.offsetWidth : ratio;
+  // Lengths inside a node are scaled on screen by the frame and by the root's fit to it; read from
+  // the transforms, not the node's width, which rounds, and so is far off for a narrow node.
+  const scale = screenScale(element) * ratio;
   const length = (css: string) => round((parseFloat(css) || 0) * scale);
   const style = getComputedStyle(element);
   const transparent = (colour: string) =>

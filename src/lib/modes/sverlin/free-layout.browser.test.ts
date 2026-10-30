@@ -63,11 +63,7 @@ async function graphOf(source: string, chosen: Record<string, string | number>, 
         height: arranged.offsetHeight,
         children: [...placed.children]
           .filter((child) => !child.hasAttribute('data-sv-link'))
-          // To a tenth of a pixel: the solver's last digits are rounding.
-          .map((child) => [
-            Math.round(parseFloat((child as HTMLElement).style.left) * 10) / 10,
-            Math.round(parseFloat((child as HTMLElement).style.top) * 10) / 10
-          ])
+          .map((child) => [(child as HTMLElement).style.left, (child as HTMLElement).style.top])
       },
       nodeHeight: node.offsetHeight,
       box: rect(arranged),
@@ -123,5 +119,77 @@ it.skipIf(!enabled)(
     );
     expect(square.layout).toEqual(wide.layout);
     expect(neighbour.layout).toEqual(wide.layout);
+  }
+);
+
+type SceneGeometry = { nodes: { id: string; box: object }[]; links: object[] }[];
+
+/**
+ * Every step's nodes and links, as the frame describes them, drawn in a frame of a size in a page.
+ * `busy` puts a frame before it that holds the page for a moment first, so this one starts before
+ * its page has been laid out, as the second of two frames written in a page's markup can.
+ */
+async function geometryOf(javascript: string, width: number, height: number, busy = false) {
+  const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+  const frame = (document: string, id = '') =>
+    `<iframe ${id} sandbox="allow-scripts" style="width:${width}px;height:${height}px;border:0" srcdoc="${escape(document)}"></iframe>`;
+  const holding =
+    '<script>const until = performance.now() + 2000; while (performance.now() < until);</script>';
+  const page = await browser!.newPage({ viewport: { width, height: 2 * height } });
+  await page.route('https://sverlin.test/', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<body style="margin:0">${busy ? frame(holding) : ''}${frame(sandboxDocument('', javascript, 0, 2), 'id="shown"')}</body>`
+    })
+  );
+  await page.goto('https://sverlin.test/');
+  const scene = await page.evaluate(
+    () =>
+      new Promise<{ steps: SceneGeometry }>((resolve) => {
+        addEventListener('message', ({ data }) => {
+          if (data?.type === 'sverlin:scene') resolve(data);
+        });
+        const target = document.querySelector<HTMLIFrameElement>('#shown')?.contentWindow;
+        target?.postMessage({ type: 'sverlin:describe', request: 'geometry' }, '*');
+      })
+  );
+  await page.close();
+  return scene.steps.map(({ nodes, links }) => ({
+    nodes: nodes.map(({ id, box }) => ({ id, box })),
+    links
+  }));
+}
+
+/** The largest difference between two scenes' numbers, or Infinity where their shapes differ. */
+function largestDifference(a: unknown, b: unknown): number {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b);
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length
+      ? Math.max(0, ...a.map((item, index) => largestDifference(item, b[index])))
+      : Infinity;
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return Math.max(
+      0,
+      ...[...keys].map((key) =>
+        largestDifference((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+      )
+    );
+  }
+  return a === b ? 0 : Infinity;
+}
+
+it.skipIf(!enabled)(
+  'lays a free layout out alike whenever its frame starts and at any frame size',
+  { timeout: 180_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(dijkstra), 2, {});
+    const alone = await geometryOf(javascript, 1300, 300);
+    // Started before its page had a layout, its free layout was once solved for children that
+    // measured empty, which then wrapped their text to fit it and kept that shape.
+    expect(largestDifference(await geometryOf(javascript, 1300, 300, true), alone)).toBe(0);
+    // Another size scales the frame on screen; scenes are in the frame's pixels, rounded to
+    // hundredths, so only a last digit can differ.
+    expect(largestDifference(await geometryOf(javascript, 700, 380), alone)).toBeLessThan(0.011);
   }
 );

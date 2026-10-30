@@ -7,6 +7,7 @@
 import { strokeStyleCss } from './design';
 import { headSizes } from './heads';
 import type { LineStyle } from './LinkLines.svelte';
+import { screenScale, unscaled } from './unscaled';
 
 const routes = ['straight', 'curved', 'wire'] as const;
 
@@ -62,14 +63,17 @@ export type PlacedLabel = { label: HTMLElement; middle: { x: number; y: number }
 export function placeLabels(host: HTMLElement, placed: readonly PlacedLabel[]): void {
   if (!placed.length) return;
   const outer = host.getBoundingClientRect();
-  const ratio = outer.width ? host.offsetWidth / outer.width : 1;
+  const scale = screenScale(host);
   const corners = placed.map(({ label, middle }) => {
     const parent = (label.offsetParent as HTMLElement | null) ?? host;
     const inner = parent.getBoundingClientRect();
     const offset =
       parent === host
         ? { x: 0, y: 0 }
-        : { x: (inner.left - outer.left) * ratio, y: (inner.top - outer.top) * ratio };
+        : {
+            x: unscaled(inner.left - outer.left, scale),
+            y: unscaled(inner.top - outer.top, scale)
+          };
     return {
       left: middle.x - offset.x - label.offsetWidth / 2,
       top: middle.y - offset.y - label.offsetHeight / 2

@@ -439,6 +439,20 @@ function show(step: number, shownBefore?: () => void) {
 }
 
 /**
+ * Settles once the page has first been laid out. A frame in its page's markup can run while its
+ * page is still loading, when the window already has a size but nothing in it has a box yet: every
+ * node measures empty, and a free layout solved for empty children squeezes them once they have
+ * sizes, so their text wraps and they keep that shape. An observer reports only after layout.
+ */
+const laidOut = new Promise<void>((resume) => {
+  const observer = new ResizeObserver(() => {
+    observer.disconnect();
+    resume();
+  });
+  observer.observe(document.documentElement);
+});
+
+/**
  * Wait until the page is shown and has a size. A hidden page, such as one in a covered window or a
  * background tab, has no animation frames and throttled timers, so each layout pass would crawl.
  * A sandboxed frame can also start before its size arrives, and the browser does not always fire
@@ -446,6 +460,7 @@ function show(step: number, shownBefore?: () => void) {
  * size as soon as it is no longer zero. How long it waited, and for what, is reported.
  */
 async function whenShown() {
+  await laidOut;
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   let waitedFor: 'size' | 'visibility' | undefined;

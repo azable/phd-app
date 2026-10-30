@@ -25,6 +25,7 @@
   import LinkLines, { type LineStyle } from './LinkLines.svelte';
   import { labelsIn, markerLook, placeLabels } from './markers';
   import type { Spacing } from './props';
+  import { screenScale, unscaledBox } from './unscaled';
   import { seenParts, unionOf } from './visible';
 
   let {
@@ -178,20 +179,11 @@
     // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
     // item stands for it, so a link given its position still meets it.
     const items: Record<string, Anchor> = {};
+    // Rects are scaled with the frame; read back in layout pixels, they are the same at any scale.
+    const scale = screenScale(host);
     elements.forEach((element, box) => {
       const frame = element.getBoundingClientRect();
-      // Rects are scaled with the frame; the child's own size gives the scale back.
-      const ratio = frame.width ? element.offsetWidth / frame.width : 1;
-      const anchor = (inner: Element): Anchor => {
-        const rect = inner.getBoundingClientRect();
-        return {
-          box,
-          x: (rect.left - frame.left) * ratio,
-          y: (rect.top - frame.top) * ratio,
-          width: rect.width * ratio,
-          height: rect.height * ratio
-        };
-      };
+      const anchor = (inner: Element): Anchor => ({ box, ...unscaledBox(inner, frame, scale) });
       // What is seen of a node (see visible.ts). Where that is boxes inside it, an arrow crossing the
       // node's other content to reach them stops at the nearest box around them it draws, if any.
       const seen = (node: HTMLElement): Anchor => {
@@ -347,9 +339,12 @@
     position: absolute;
     inset: 0;
   }
-  /* Every child is placed by the layout, at its natural size. */
+  /* Every child is placed by the layout, at its natural size: never narrowed by the room left
+     to its right, as by a layout solved before the children had sizes, which would wrap their
+     text and keep them in that shape. */
   .placed > :global(*) {
     position: absolute;
+    width: max-content;
   }
   .links {
     position: absolute;
