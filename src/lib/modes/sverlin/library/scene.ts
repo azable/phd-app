@@ -162,9 +162,14 @@ export function describeStep(layer: HTMLElement): SceneStep {
     y: round((y - origin.top) * ratio)
   });
   return {
-    // Hidden nodes only keep room, as a pointer's where it is not.
+    // Hidden nodes only keep room, as a pointer's where it is not; a label whose link is not drawn,
+    // its ends left out, is placed nowhere and not seen.
     nodes: [...frame.querySelectorAll<HTMLElement>(nodeSelector)]
-      .filter((element) => element.dataset.svHidden !== 'true')
+      .filter(
+        (element) =>
+          element.dataset.svHidden !== 'true' &&
+          !element.closest('.sv-link-label:not([data-sv-placed])')
+      )
       .map((element) => describeNode(element, point, ratio)),
     links: [...frame.querySelectorAll<SVGPathElement>('path[data-sv-edge]')].flatMap((path) => {
       const link = describeLink(path, point, ratio);

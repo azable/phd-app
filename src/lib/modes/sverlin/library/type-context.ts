@@ -343,6 +343,9 @@ export function providePointers(calls: readonly PointerCall[]): void {
       : [];
   });
   const pointers = each.flatMap((call, order): Pointer[] => {
+    // A pointer the variant draws as none is no pointer.
+    const view = call.view();
+    if (!view) return [];
     const kinds = call.kinds?.();
     const shown = (kind: string) =>
       design[`${placedKind(call.place, kind) ?? kind}.shown`] ?? design[`${kind}.shown`];
@@ -386,7 +389,7 @@ export function providePointers(calls: readonly PointerCall[]): void {
     return collection
       ? [
           {
-            view: call.view(),
+            view,
             collection,
             position,
             order,
