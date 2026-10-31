@@ -4,6 +4,11 @@
  * starting value unless another option is clearly likelier; each further variant changes the
  * variables the answers were least sure of to their next likeliest, so a pair differs in the few
  * choices still open and stays alike elsewhere.
+ *
+ * Asked so, every answer keeps its starting value with probability 0.99 to 1, so more variants of
+ * a source as it is (a resample) are asked differently: each visible choice (what is shown, the
+ * listing, views, forms, pacing) is asked which other option is most worth showing next, or to keep
+ * it, and every variant changes the few the answers most want changed, never one already seen.
  */
 
 import {
@@ -29,6 +34,12 @@ const changedPerVariant = 3;
  * answered alone, each question drifts from its starting value even where nothing asks it to.
  */
 const changeMargin = 0.3;
+
+/** How many visible choices each variant of a resample changes. */
+const changedPerResample = 2;
+
+/** The answer keeping a variable as it is, among a resample question's alternatives. */
+const keep = '(keep)';
 
 /** What is shown, views, forms and pacing are asked first where a design has more variables than a request can ask. */
 function priority(key: string): number {
@@ -63,6 +74,80 @@ export function chooserQuestions(asked: readonly Asked[]): ChoiceQuestion[] {
     instructions: `The value of ${variable} in the next variant. It starts as ${JSON.stringify(value)}: keep it unless the conversation asks for another, or another is a choice still open and worth showing.`,
     choices: options.map((option) => ({ value: encoded(option) }))
   }));
+}
+
+/** The choices a participant sees change at once: what is shown, the listing, views, forms, pacing. */
+const visible = (variable: string) => priority(variable) < 4;
+
+/** Resample questions: for each visible choice, which other option is most worth showing, or keep. */
+export function resampleQuestions(asked: readonly Asked[]): ChoiceQuestion[] {
+  return asked.map(({ variable, value, options }) => ({
+    type: 'choice',
+    name: variable,
+    instructions: `The participant asked for another variant of this visualization, without changing its source; project.seen lists the variants already shown. ${variable} is now ${JSON.stringify(value)}. Choose the other option most worth showing next, or ${JSON.stringify(keep)} if the conversation or earlier preferences settled it, or changing it would not help.`,
+    choices: [
+      ...options.filter((option) => option !== value).map((option) => ({ value: String(option) })),
+      { value: keep }
+    ]
+  }));
+}
+
+/**
+ * The variants of a resample: each changes the next few visible choices the answers most want
+ * changed (the likeliest answer other than keep), so it always differs from where it started, and
+ * skips a set of changes already seen.
+ */
+export function resampledVariants(
+  asked: readonly Asked[],
+  count: number,
+  response: Pick<DecisionsResponse, 'answers'>,
+  seen: readonly Record<string, DesignValue>[] = []
+): ChooserOutput {
+  const questions = resampleQuestions(asked);
+  const ranked = asked
+    .map((variable, index) => {
+      const answer =
+        response.answers.find(({ name }) => name === variable.variable) ?? response.answers[index];
+      const probabilities = answer
+        ? optionProbabilities(answer, questions[index].choices)
+        : new Map<string | boolean, number>();
+      const alternatives = variable.options.filter((option) => option !== variable.value);
+      const [alternative] = [...alternatives].sort(
+        (a, b) => (probabilities.get(String(b)) ?? 0) - (probabilities.get(String(a)) ?? 0)
+      );
+      // Without an answer, the change is as wanted as keeping it.
+      const wanted = probabilities.size ? 1 - (probabilities.get(keep) ?? 0) : 0.5;
+      return {
+        variable: variable.variable,
+        alternative,
+        wanted,
+        order: priority(variable.variable)
+      };
+    })
+    .filter(({ alternative }) => alternative !== undefined)
+    .sort((a, b) => b.wanted - a.wanted || a.order - b.order);
+  const isSeen = (values: readonly { variable: string; value: DesignValue }[]) =>
+    seen.some(
+      (variant) =>
+        Object.keys(variant).length === values.length &&
+        values.every(({ variable, value }) => variant[variable] === value)
+    );
+  const variants: ChooserOutput['variants'] = [];
+  let start = 0;
+  while (variants.length < count && ranked.length) {
+    const values = Array.from(
+      { length: Math.min(changedPerResample, ranked.length) },
+      (_, offset) => {
+        const { variable, alternative } = ranked[(start + offset) % ranked.length];
+        return { variable, value: alternative };
+      }
+    );
+    start += 1;
+    if (isSeen(values) && start < ranked.length * 2) continue;
+    variants.push({ values, randomise: [] });
+    start += changedPerResample - 1;
+  }
+  return { variants };
 }
 
 function decisionsInput(request: ChatAdapterRequest): string {
@@ -120,17 +205,20 @@ export const decisionsChooserAdapter: ChatAdapter = {
   id: 'openai-decisions',
   async generateReply(request) {
     const project = (request.context as { project: ChooserProject }).project;
-    const asked = askedVariables(project);
+    const resample = project.purpose === 'resample';
+    const asked = askedVariables(project).filter(({ variable }) => !resample || visible(variable));
     const response = await createDecisions(
       {
         model: request.parameters.model,
         input: decisionsInput(request),
-        questions: chooserQuestions(asked)
+        questions: resample ? resampleQuestions(asked) : chooserQuestions(asked)
       },
       request.signal
     );
     return {
-      output: chosenVariants(asked, project.count, response),
+      output: resample
+        ? resampledVariants(asked, project.count, response, project.seen)
+        : chosenVariants(asked, project.count, response),
       providerResponse: response,
       generation: {
         ...(response.model ? { model: response.model } : {}),
