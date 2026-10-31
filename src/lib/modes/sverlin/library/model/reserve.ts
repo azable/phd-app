@@ -48,8 +48,11 @@ export type ReserveOptions = {
 export type Reservation = {
   /** Typed components whose box their roots keep. */
   components: number;
-  /** Nodes keeping the largest size they reach over the steps, and free layouts solved. */
-  nodes: number;
+  /**
+   * Nodes keeping the largest size they reach over the steps, as no component's box holds them,
+   * how many by their kind; and free layouts solved over the steps.
+   */
+  nodes: Record<string, number>;
   arrangements: number;
   /** Elements laid out on the model, each laid out once for all those alike. */
   layouts: number;
@@ -469,7 +472,12 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
         )
       )
     ).size,
-    nodes: keysOf('n:').length,
+    nodes: keysOf('n:').reduce<Record<string, number>>((counts, key) => {
+      const [{ element }] = instances.get(key) ?? [];
+      const kind = element?.attributes['data-sv-kind'] ?? 'node';
+      counts[kind] = (counts[kind] ?? 0) + 1;
+      return counts;
+    }, {}),
     arrangements: keysOf('a:').length,
     layouts: model.layouts()
   };

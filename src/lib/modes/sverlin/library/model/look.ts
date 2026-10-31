@@ -56,6 +56,8 @@ type Inherited = {
   lineHeight: { number: number } | { px: number } | 'normal';
   whiteSpace: string;
   tabSize: number;
+  /** Custom properties, by name, as written: they pass down, and var() reads them where used. */
+  custom: Readonly<Record<string, string>>;
 };
 
 const rootFontSize = 16;
@@ -67,8 +69,22 @@ const initial: Inherited = {
   fontFamily: 'sans-serif',
   lineHeight: 'normal',
   whiteSpace: 'normal',
-  tabSize: 8
+  tabSize: 8,
+  custom: {}
 };
+
+/** A value with its var() references replaced by the custom properties they name, or fallbacks. */
+function substituted(value: string, custom: Readonly<Record<string, string>>): string {
+  if (!value.includes('var(')) return value;
+  return value.replace(
+    /var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/gu,
+    (whole, name: string, fallback?: string) => {
+      const found = custom[name] ?? fallback;
+      if (found === undefined) throw new Error(`Layout model: ${name} is not set (${whole})`);
+      return substituted(found.trim(), custom);
+    }
+  );
+}
 
 /** The browser's own display of each element a view draws. */
 const displays: Record<string, string> = {
@@ -287,11 +303,16 @@ export function lookOf(
   rules: readonly Rule[],
   devicePixelRatio: number
 ): Styled {
-  const declared = new Map<string, string>();
-  for (const [property, value] of cascade(rules, element, ancestors))
-    for (const [longhand, each] of longhands(property, value))
-      if (!unlaid.test(longhand)) declared.set(longhand, each);
   const from = parent?.inherited ?? initial;
+  const applying = cascade(rules, element, ancestors);
+  let custom = from.custom;
+  for (const [property, value] of applying)
+    if (property.startsWith('--')) custom = { ...custom, [property]: value };
+  const declared = new Map<string, string>();
+  for (const [property, value] of applying)
+    if (!property.startsWith('--'))
+      for (const [longhand, each] of longhands(property, value))
+        if (!unlaid.test(longhand)) declared.set(longhand, substituted(each, custom));
   const get = (property: string) => {
     const value = declared.get(property);
     return value === 'inherit' || value === 'unset' ? undefined : value;
@@ -323,7 +344,8 @@ export function lookOf(
     fontFamily: get('font-family') ?? from.fontFamily,
     lineHeight,
     whiteSpace: get('white-space') ?? from.whiteSpace,
-    tabSize: get('tab-size') === undefined ? from.tabSize : parseFloat(get('tab-size') as string)
+    tabSize: get('tab-size') === undefined ? from.tabSize : parseFloat(get('tab-size') as string),
+    custom
   };
   const length = (property: string, fallback = '0px'): Length =>
     evaluate(get(property) ?? fallback, { em: fontSize });

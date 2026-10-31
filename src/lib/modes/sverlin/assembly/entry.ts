@@ -672,7 +672,8 @@ async function describeSteps(
 let ready = false;
 let requested = clampStep(playback.__sverlinStep ?? 0);
 let recorded = false;
-const recording = recordSteps();
+// Laying out that fails says why, and the steps are still shown, laid out as they come.
+const recording = recordSteps().catch((cause: unknown) => reportError(cause));
 
 // The app sends each new step, with the selection to show in it; the page and its layout engine
 // stay loaded, and the canvas view carries over. It can also ask for every step as scene data.

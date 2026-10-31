@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cascade, parseSheet } from './css';
 import { layOut, type TextMeasure } from './layout';
-import { lookOf } from './look';
+import { lookOf, styler } from './look';
 import type { ModelElement, ModelNode } from './tree';
 
 /** Every character as wide as half its font's size; a font's ascent 0.8 of it, descent 0.2. */
@@ -93,6 +93,23 @@ describe('look', () => {
 
   it('takes logical margins as physical ones', () => {
     expect(lookIn({ 'margin-inline-end': 'auto' }).margin[1]).toBe('auto');
+  });
+
+  it('reads custom properties where var() uses them, as passed down, in its own font size', () => {
+    const look = lookIn(
+      { 'font-size': '20px', 'padding-left': 'var(--gap)', 'padding-right': 'var(--none, 3px)' },
+      { '--gap': '0.5em' }
+    );
+    expect(look.padding).toEqual([0, 3, 0, 10]);
+    expect(() => lookIn({ 'padding-left': 'var(--none)' })).toThrow(/--none is not set/u);
+  });
+
+  it('shares one look between elements alike under parents alike', () => {
+    const look = styler([], 1);
+    const parent = div({ 'font-size': '20px' });
+    const above = look(parent, [], undefined);
+    expect(look(div({}), [parent], above)).toBe(look(div({}), [parent], above));
+    expect(look(div({ width: '1px' }), [parent], above)).not.toBe(look(div({}), [parent], above));
   });
 
   it('makes inline boxes blocks in a grid', () => {

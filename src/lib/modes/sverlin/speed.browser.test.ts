@@ -2,9 +2,9 @@
  * How long a presentation takes to be ready in a real browser, from the page loading to its first
  * step shown, as the app's loader waits for it. Run with `pnpm run test:browser`, which the devenv
  * gives a browser (SVERLIN_TEST_BROWSER). The budgets are for a developer's machine running the
- * other browser tests alongside, two to three times what each takes alone there, and well under
- * what each took before passes ran together, so they fail when laying out slows, not when the
- * machine is busy.
+ * other browser tests alongside, about three times what each takes alone there, and well under
+ * what each took when steps were mounted to lay them out, so they fail when laying out slows, not
+ * when the machine is busy.
  */
 
 import { chromium, type Browser } from 'playwright-core';
@@ -31,7 +31,7 @@ type Timing = { phase: string; step?: number; ms: number; waiting?: boolean };
 
 /** Load a presentation in a frame, as the app does, and collect the times it reports. */
 async function timingsOf(source: string) {
-  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1);
+  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
 <script>
@@ -53,29 +53,27 @@ async function timingsOf(source: string) {
   );
   const timings = await page.evaluate(() => (window as unknown as { timings: Timing[] }).timings);
   await page.close();
-  // Each step is two states, the one before its code and the one after.
-  return { timings, states: 2 * labels.length };
+  return { timings };
 }
 
 it.skipIf(!enabled)(
-  'lays out a breadth-first search of 36 steps within 5 seconds, drawing states alike once',
+  'lays out a breadth-first search of 36 steps within a second, mounting only the step shown',
   { timeout: 120_000 },
   async () => {
-    const { timings, states } = await timingsOf(bfs);
-    const ready = timings.find((timing) => timing.phase === 'ready')!;
-    expect(ready.ms).toBeLessThan(5000);
-    // Recording takes at least two rounds over the states; states drawn alike are drawn once each.
-    const recorded = timings.filter((timing) => timing.phase === 'recording');
-    expect(recorded.length).toBeLessThan(2 * states);
+    const { timings } = await timingsOf(bfs);
+    const ready = timings.findIndex((timing) => timing.phase === 'ready');
+    expect(timings[ready].ms).toBeLessThan(1000);
+    // Every step is laid out on the layout model; the page mounts one step, the one it shows.
+    expect(timings.slice(0, ready).filter((timing) => timing.phase === 'showing')).toHaveLength(1);
   }
 );
 
 it.skipIf(!enabled)(
-  'lays out Dijkstra of 97 steps, with a free layout, within 15 seconds',
+  'lays out Dijkstra of 97 steps, with a free layout, within 2 seconds',
   { timeout: 120_000 },
   async () => {
     const { timings } = await timingsOf(dijkstra);
     const ready = timings.find((timing) => timing.phase === 'ready')!;
-    expect(ready.ms).toBeLessThan(15_000);
+    expect(ready.ms).toBeLessThan(2000);
   }
 );
