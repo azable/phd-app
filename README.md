@@ -72,7 +72,9 @@ from the viewed variant, given the variants of that source already shown. The
 choosers are interchangeable
 ([`choosers.ts`](src/lib/server/projects/choosers.ts)): the model
 ([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
-smaller model call) or a random draw. A study condition names one (`chooser`), else
+smaller model call), OpenAI's Decisions API
+([`chooser-decisions.server.ts`](src/lib/modes/sverlin/chooser-decisions.server.ts)),
+or a random draw. A study condition names one (`chooser`), else
 `SVERLIN_CHOOSER`, else the model; a chooser that fails, or keeps a participant
 waiting on Another variant over 20 seconds, gives way to the random draw. After
 the assistant's change the presentations are built again with the chosen values,

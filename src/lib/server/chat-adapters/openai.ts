@@ -32,7 +32,7 @@ export class ChatContextOverflowError extends Error {
   }
 }
 
-function readApiKey() {
+export function readApiKey(): string {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
   if (!apiKey) throw new OpenAIConfigurationError();
@@ -72,7 +72,7 @@ export function strictSchema(schema: unknown): unknown {
   );
 }
 
-function readRequestTimeoutMs(): number {
+export function readRequestTimeoutMs(): number {
   const configured = Number.parseInt(process.env.CHATBOT_REQUEST_TIMEOUT_MS ?? '', 10);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : defaultRequestTimeoutMs;
 }

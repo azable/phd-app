@@ -9,6 +9,9 @@ import sverlinChooser, {
   type ChooserOutput,
   type ChooserProject
 } from '$lib/modes/sverlin/chooser.server';
+import sverlinDecisionsChooser, {
+  decisionsChooserAdapter
+} from '$lib/modes/sverlin/chooser-decisions.server';
 
 import {
   participantIntakeClassifier,
@@ -88,14 +91,15 @@ const modeChatbots = Object.fromEntries(
 
 const intakeClassifier = createChatbot(participantIntakeClassifier, openAIAdapter);
 const choosers = {
-  model: createChatbot(sverlinChooser, openAIAdapter)
+  model: createChatbot(sverlinChooser, openAIAdapter),
+  decisions: createChatbot(sverlinDecisionsChooser, decisionsChooserAdapter)
 };
 
 /** Return the bot that chooses the variants a Sverlin source's presentations are built with. */
 export function getSverlinChooser(
-  id: string = 'model'
-): Chatbot<ChooserProject, ChooserOutput> | undefined {
-  return choosers[id as keyof typeof choosers];
+  id: keyof typeof choosers = 'model'
+): Chatbot<ChooserProject, ChooserOutput> {
+  return choosers[id];
 }
 
 /** Return the source-authoring bot recorded by a Sverlin project. */
