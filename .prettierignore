@@ -18,3 +18,7 @@ coverage
 
 # Installed Codex/shadcn skills are vendored documentation and metadata.
 .agents/skills/**
+
+# Font licences as their authors wrote them, and the list scripts/fonts/build.sh writes.
+src/lib/modes/sverlin/fonts/LICENSE-*
+src/lib/modes/sverlin/fonts/faces.json

@@ -5,6 +5,7 @@
   import * as v from 'valibot';
 
   import { sandboxDocument, type CanvasView } from '../sandbox';
+  import { embeddedFontsHead } from './fonts';
   import type { SelectedElement } from '$lib/client/visualization/visual-selection.svelte';
   import type { BrowserBundlePresentation } from '$lib/shared/presentations';
   import {
@@ -53,7 +54,8 @@
       untrack(() => step),
       presentation.seed,
       undefined,
-      untrack(() => selection)
+      untrack(() => selection),
+      embeddedFontsHead
     );
   });
   // Whether the page has loaded and listens for steps; a new document starts unloaded.

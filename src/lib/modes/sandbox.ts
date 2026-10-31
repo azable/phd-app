@@ -9,7 +9,9 @@ export function sandboxDocument(
   step = 0,
   seed = 1,
   view?: CanvasView,
-  selection?: readonly string[]
+  selection?: readonly string[],
+  /** Markup for the head, after its own, such as the fonts a mode embeds. */
+  head = ''
 ): string {
   const policy = [
     "default-src 'none'",
@@ -29,5 +31,5 @@ export function sandboxDocument(
       /<\/script/giu,
       '<\\/script'
     );
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;font-family:system-ui,sans-serif}</style></head><body><div id="app">${html}</div><script>${script}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;font-family:system-ui,sans-serif}</style>${head}</head><body><div id="app">${html}</div><script>${script}</script></body></html>`;
 }

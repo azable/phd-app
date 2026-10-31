@@ -1,0 +1,45 @@
+{
+  "version": "f22583e9f39071dd",
+  "faces": [
+    {
+      "file": "sans-400",
+      "family": "Sverlin Sans",
+      "weight": 400
+    },
+    {
+      "file": "sans-700",
+      "family": "Sverlin Sans",
+      "weight": 700
+    },
+    {
+      "file": "serif-400",
+      "family": "Sverlin Serif",
+      "weight": 400
+    },
+    {
+      "file": "serif-700",
+      "family": "Sverlin Serif",
+      "weight": 700
+    },
+    {
+      "file": "mono-400",
+      "family": "Sverlin Mono",
+      "weight": 400
+    },
+    {
+      "file": "mono-700",
+      "family": "Sverlin Mono",
+      "weight": 700
+    },
+    {
+      "file": "symbols-400",
+      "family": "Sverlin Symbols",
+      "weight": 400
+    },
+    {
+      "file": "symbols-700",
+      "family": "Sverlin Symbols",
+      "weight": 700
+    }
+  ]
+}

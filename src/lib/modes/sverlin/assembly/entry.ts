@@ -2,8 +2,8 @@
 // with the state recorded for a step. The sandbox document injects the
 // first step; later steps arrive as messages from the app and are shown without reloading the page.
 // Nodes find the atomic types of their values, and each type's parent and unit, through the
-// 'sverlin:types' context. Every step's layout is worked out before any is shown (see
-// library/record.ts).
+// 'sverlin:types' context. Every step's layout is worked out before any is shown, in the fonts the
+// page embeds (see library/record.ts).
 
 import { mount, unmount, type Component } from 'svelte';
 import { render } from 'svelte/server';
@@ -296,11 +296,22 @@ async function whenShown() {
 }
 
 /**
+ * The embedded fonts every text is drawn in, loaded before anything is measured, so text is
+ * measured and drawn in them and never in a font the page falls back to while they load. The
+ * sandbox document declares them (see ../fonts).
+ */
+async function loadFonts(): Promise<void> {
+  // One that fails to load is drawn and measured alike in the font the page falls back to.
+  await Promise.all([...document.fonts].map((face) => face.load().catch(() => face)));
+}
+
+/**
  * Work out every step's layout before any is shown, without mounting any (see library/record.ts).
  * Laying out gives the page back for a moment between its parts, so a long presentation never
  * holds its page up for long.
  */
 async function recordSteps() {
+  await loadFonts();
   let started = performance.now();
   playback.__sverlinReservation = await recordLayouts({
     steps,
