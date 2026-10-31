@@ -478,13 +478,13 @@
     vertical-align: middle;
   }
   .sans {
-    font-family: system-ui, sans-serif;
+    font-family: 'Sverlin Sans', system-ui, sans-serif;
   }
   .serif {
-    font-family: ui-serif, Georgia, 'Times New Roman', serif;
+    font-family: 'Sverlin Serif', 'Sverlin Sans', ui-serif, Georgia, 'Times New Roman', serif;
   }
   .mono {
-    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    font-family: 'Sverlin Mono', 'Sverlin Sans', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   }
   .value {
     white-space: nowrap;

@@ -128,7 +128,7 @@
 
 <style>
   .sv-listing {
-    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    font-family: 'Sverlin Mono', 'Sverlin Sans', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
     font-size: 0.85rem;
     line-height: 1.5;
     color: var(--sv-ink);

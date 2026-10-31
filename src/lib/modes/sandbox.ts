@@ -29,5 +29,5 @@ export function sandboxDocument(
       /<\/script/giu,
       '<\\/script'
     );
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;font-family:system-ui,sans-serif}</style></head><body><div id="app">${html}</div><script>${script}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;font-family:'Sverlin Sans',system-ui,sans-serif}</style></head><body><div id="app">${html}</div><script>${script}</script></body></html>`;
 }

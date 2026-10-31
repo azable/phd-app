@@ -7,6 +7,8 @@
 import { mount, unmount, type Component } from 'svelte';
 import {
   checkLayout,
+  dumpLayout,
+  pageSheets,
   describeFrame,
   describeStep,
   animateStep,
@@ -22,6 +24,7 @@ import {
   type FrameSettings,
   type DesignValues,
   type LayoutCheck,
+  type LayoutDump,
   type LayoutMemory,
   type SceneFrame,
   type SceneStep
@@ -718,11 +721,19 @@ async function recordSteps() {
  * layout model is from the page's layout of each (see library/model/check.ts).
  */
 async function describeSteps(
-  check: boolean
-): Promise<{ frame?: SceneFrame; steps: SceneStep[]; checks?: LayoutCheck[] }> {
+  check: boolean,
+  dump = false
+): Promise<{
+  frame?: SceneFrame;
+  steps: SceneStep[];
+  checks?: LayoutCheck[];
+  dumps?: LayoutDump[];
+  sheets?: string[];
+}> {
   let frame: SceneFrame | undefined;
   const steps: SceneStep[] = [];
   const checks: LayoutCheck[] = [];
+  const dumps: LayoutDump[] = [];
   for (let step = 0; step < stepCount; step++) {
     await whenShown();
     steps.push(
@@ -731,19 +742,28 @@ async function describeSteps(
           frame ??= describeFrame(shown.layer);
           const flow = shown.layer.querySelector<HTMLElement>('.sv-flow');
           if (check && flow) checks.push(checkLayout(flow));
+          if (dump && flow) dumps.push(dumpLayout(flow));
           done(describeStep(shown.layer));
           remove(shown);
         });
       })
     );
   }
-  return { frame, steps, ...(check ? { checks } : {}) };
+  return {
+    frame,
+    steps,
+    ...(check ? { checks } : {}),
+    ...(dump ? { dumps, sheets: pageSheets() } : {})
+  };
 }
 
 let ready = false;
 let requested = clampStep(playback.__sverlinStep ?? 0);
 let recorded = false;
-const recording = recordSteps();
+// Embedded fonts load before anything is measured, so canvas and layout use them, not a fallback.
+const recording = Promise.all([...document.fonts].map((face) => face.load().catch(() => face))).then(
+  () => recordSteps()
+);
 
 // The app sends each new step, with the selection to show in it; the page and its layout engine
 // stay loaded, and the canvas view carries over. It can also ask for every step as scene data.
@@ -759,7 +779,7 @@ addEventListener('message', (event: MessageEvent) => {
   if (data?.type === 'sverlin:describe' && typeof data.request === 'string') {
     const request = data.request;
     void recording
-      .then(() => describeSteps(data.check === true))
+      .then(() => describeSteps(data.check === true, (data as { dump?: unknown }).dump === true))
       .then((scene) => window.parent.postMessage({ type: 'sverlin:scene', request, ...scene }, '*'))
       .catch((cause: unknown) =>
         window.parent.postMessage(

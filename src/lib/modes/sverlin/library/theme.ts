@@ -20,7 +20,7 @@ export const themeCss = `
   --sv-purple-line: #8b5cf6;
   --sv-radius: 10px;
   --sv-select: #2563eb;
-  font-family: system-ui, sans-serif;
+  font-family: 'Sverlin Sans', system-ui, sans-serif;
 }
 body {
   margin: 0;

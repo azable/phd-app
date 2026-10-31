@@ -45,7 +45,7 @@ export function fontFamily(css: string): FontFamily {
     .replace(/^['"]|['"]$/gu, '')
     .toLowerCase();
   if (/mono|menlo|consolas|courier/u.test(first)) return 'mono';
-  if (/^(ui-)?serif$|georgia|times/u.test(first)) return 'serif';
+  if (/^(sverlin |ui-)?serif$|georgia|times/u.test(first)) return 'serif';
   return 'sans';
 }
 
