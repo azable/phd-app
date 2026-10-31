@@ -80,7 +80,8 @@ export const buildPurposeSchema = v.picklist([
   'seed-change',
   'manual-edit',
   'assistant-edit',
-  'restore'
+  'restore',
+  'variant-fallback'
 ]);
 
 /** Validation fields shared by every immutable project event. */

@@ -263,6 +263,8 @@ const timelineCases = {
   'visualization.preference-recorded': (event) =>
     `Preferred presentation ${event.payload.preferred} over ${event.payload.presentations.find((id) => id !== event.payload.preferred) ?? 'the alternative'} at step ${event.payload.step}.`,
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
+  'visualization.variant-reverted': (event) =>
+    `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(event.payload.values)}, though its source draws without them; shown instead with ${JSON.stringify(event.payload.shown)} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
   'assistant.responded': () => 'Assistant responded to the user.',
   'system.notified': (event) => `System ${event.payload.severity}: ${event.payload.message}`
 } satisfies ProjectEventCases<string>;
@@ -294,6 +296,8 @@ const conversationCases = {
       content: `[Reported automatically by the participant’s browser, not written by the participant] ${runtimeFailureText(event)} Fix the view so that every step draws.`
     } as const
   ],
+  // A variant's failure, already shown as before, is not the source's to fix.
+  'visualization.variant-reverted': () => [],
   // Written with its pair's differences, which need the presentations (projectConversationMessages).
   'visualization.preference-recorded': () => [],
   'assistant.responded': (event) => [
@@ -322,10 +326,18 @@ export function projectConversationMessages(
   events: readonly ProjectEvent[]
 ): ConversationMessage[] {
   const variants = presentedVariants(events);
+  // A failure its variant caused asks for no fix of the source (see visualization.variant-reverted).
+  const reverted = new Set(
+    events.flatMap((event) =>
+      event.type === 'visualization.variant-reverted' ? [event.payload.presentationId] : []
+    )
+  );
   return events.flatMap((event) =>
     event.type === 'visualization.preference-recorded'
       ? [{ role: 'user', content: preferenceMessage(event, variants) } as const]
-      : matchProjectEvent<ConversationMessage[]>(event, conversationCases)
+      : event.type === 'visualization.runtime-failed' && reverted.has(event.payload.presentationId)
+        ? []
+        : matchProjectEvent<ConversationMessage[]>(event, conversationCases)
   );
 }
 

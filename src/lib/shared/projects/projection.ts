@@ -64,6 +64,7 @@ const stateTransitions = {
   },
   'visualization.preference-recorded': null,
   'visualization.runtime-failed': null,
+  'visualization.variant-reverted': null,
   'assistant.responded': null,
   'revision.edits-rejected': null,
   'system.notified': null

@@ -348,8 +348,10 @@ const maximumAutomaticRepairs = 2;
 
 /**
  * Record that a presentation's view failed as it drew a step in the participant's browser, once
- * per presentation and message, so the assistant sees it and can fix the view. A failure of the
- * current source also queues an assistant turn to repair it, once per source and at most
+ * per presentation and message. A failure of a variant made from another, where the source draws
+ * without the values it changed, is that variant's: it is shown again as it was made from (see
+ * revertVariant), and nothing asks the assistant to change the source. Any other failure of the
+ * current source queues an assistant turn to repair it, once per source and at most
  * maximumAutomaticRepairs times in a row, so a view that keeps failing waits for the participant.
  */
 export function reportRuntimeFailure(
@@ -380,8 +382,7 @@ export function reportRuntimeFailure(
         event.payload.message === options.message
     );
     if (known) return commandResult(before, before);
-    const failureEventId = projectHead(before).id + 1;
-    const document = await appendProjectEvents(
+    const failed = await appendProjectEvents(
       before,
       [
         draftEvent({
@@ -393,22 +394,155 @@ export function reportRuntimeFailure(
             message: options.message,
             ...(options.step === undefined ? {} : { step: options.step })
           }
-        }),
-        ...(repairsAutomatically(before, presented.payload.presentation)
-          ? [
-              draftEvent({
-                type: 'assistant.turn-requested',
-                actor: { kind: 'system' },
-                operationId: options.operationId,
-                payload: { interactionEventId: failureEventId, presentationCount: 1 }
-              })
-            ]
-          : [])
+        })
       ],
       dependencies
     );
+    // A variant's failure is shown as before, where the source draws without it; only a failure
+    // of what the source draws as it was made goes to the assistant.
+    const reverted = await revertVariant(failed, presented, options.operationId, dependencies);
+    if (reverted.handled) return commandResult(before, reverted.document);
+    const document = repairsAutomatically(before, presented.payload.presentation)
+      ? await appendProjectEvents(
+          reverted.document,
+          [
+            draftEvent({
+              type: 'assistant.turn-requested',
+              actor: { kind: 'system' },
+              operationId: options.operationId,
+              payload: { interactionEventId: projectHead(failed).id, presentationCount: 1 }
+            })
+          ],
+          dependencies
+        )
+      : reverted.document;
     return commandResult(before, document);
   });
+}
+
+/**
+ * The variant a failed presentation was made from, when the failure may be its own: built from
+ * another variant with values chosen or drawn at random, it is built again from that variant
+ * alone, keeping its pauses so it still shows the steps of the presentations beside it. Built from
+ * its variant as it was, or from the starter, there is nothing else to show: the failure is the
+ * source's.
+ */
+function variantMadeFrom(
+  document: ProjectDocument,
+  presented: ProjectEventOf<'visualization.presented'>
+): { request: VariantRequest; sourceLabel: string } | undefined {
+  const presentation = presented.payload.presentation;
+  if (!isSverlinPresentation(presentation)) return undefined;
+  const built = document.events.findLast(
+    (event): event is ProjectEventOf<'build.requested'> =>
+      event.type === 'build.requested' &&
+      event.id < presented.id &&
+      event.payload.seed === presentation.seed &&
+      event.payload.source.sha256 === presentation.source.sha256
+  );
+  const variant = built?.payload.variant;
+  if (!built || !variant) return undefined;
+  if (!variant.randomise && !Object.keys(variant.chosen ?? {}).length) return undefined;
+  const pauses = Object.fromEntries(
+    Object.entries(presentationVariant(presentation)).filter(([key]) => key.startsWith('pause@'))
+  );
+  return {
+    request: {
+      ...(variant.base ? { base: variant.base } : {}),
+      ...(Object.keys(pauses).length ? { chosen: pauses } : {})
+    },
+    sourceLabel: built.payload.sourceLabel
+  };
+}
+
+/**
+ * Show a failed presentation of the current source again from the variant it was made from (see
+ * variantMadeFrom), with the presentations shown beside it as they were, as a new set; record
+ * which of its values it could not draw with, and take the old set out.
+ */
+async function revertVariant(
+  document: ProjectDocument,
+  presented: ProjectEventOf<'visualization.presented'>,
+  operationId: string,
+  dependencies: ProjectServiceDependencies
+): Promise<{ handled: boolean; document: ProjectDocument }> {
+  const presentation = presented.payload.presentation;
+  const snapshot = projectSnapshotAt(document);
+  const current = snapshot.artifacts[snapshot.entryArtifactId]?.content.sha256;
+  const madeFrom = variantMadeFrom(document, presented);
+  if (!isSverlinPresentation(presentation) || presentation.source.sha256 !== current || !madeFrom)
+    return { handled: false, document };
+  const bySlot = new Map<number, ProjectEventOf<'visualization.presented'>>();
+  for (const event of document.events)
+    if (
+      event.type === 'visualization.presented' &&
+      event.payload.displaySetId === presented.payload.displaySetId
+    )
+      bySlot.set(event.payload.slot, event);
+  const set = [...bySlot.values()].toSorted((a, b) => a.payload.slot - b.payload.slot);
+  const failedAt = set.findIndex(
+    (event) => event.payload.presentation.presentationId === presentation.presentationId
+  );
+  const requests = set.map((event, index): BuildRequest => {
+    const shown = event.payload.presentation;
+    if (index === failedAt) return { seed: presentation.seed, variant: madeFrom.request };
+    const values = presentationVariant(shown);
+    return {
+      seed: shown.format === 'browser-bundle-v1' ? shown.seed : presentation.seed,
+      ...(Object.keys(values).length ? { variant: { base: values } } : {})
+    };
+  });
+  const recorded = await buildProjectSourceBatch(
+    {
+      document,
+      sourceContent: presentation.source.text,
+      source: presentation.source,
+      sourceLabel: madeFrom.sourceLabel,
+      requests,
+      purpose: 'variant-fallback',
+      input: 'committed-artifact',
+      operationId
+    },
+    dependencies
+  );
+  const rebuilt = recorded.builds[failedAt]?.result;
+  if (!rebuilt?.ok || recorded.builds.some(({ result }) => !result.ok))
+    return { handled: false, document: recorded.document };
+  const before = presentationVariant(presentation);
+  const after = rebuilt.bundle.variant ?? {};
+  const values = Object.fromEntries(
+    Object.entries(before).filter(([key, value]) => after[key] !== value)
+  );
+  if (!Object.keys(values).length) return { handled: false, document: recorded.document };
+  const activated = await activateBuiltPresentations(recorded, dependencies);
+  const replacements = activated.events
+    .slice(recorded.document.events.length)
+    .flatMap((event) =>
+      event.type === 'visualization.presented' ? [event.payload.presentation.presentationId] : []
+    );
+  return {
+    handled: true,
+    document: await appendProjectEvents(
+      activated,
+      [
+        draftEvent({
+          type: 'visualization.variant-reverted',
+          actor: { kind: 'system' },
+          operationId,
+          payload: {
+            presentationId: presentation.presentationId,
+            values,
+            shown: Object.fromEntries(
+              Object.keys(values).flatMap((key) => (key in after ? [[key, after[key]]] : []))
+            ),
+            presentations: set.map((event) => event.payload.presentation.presentationId),
+            replacements
+          }
+        })
+      ],
+      dependencies
+    )
+  };
 }
 
 /** Whether a failure of this presentation queues a repair, as reportRuntimeFailure describes. */

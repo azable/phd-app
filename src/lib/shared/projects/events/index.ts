@@ -35,6 +35,7 @@ import { revisionEditsRejectedEventSchema } from './revision-edits-rejected';
 import { systemNotifiedEventSchema } from './system-notified';
 import { visualizationCandidatesAdvancedEventSchema } from './visualization-candidates-advanced';
 import { visualizationRuntimeFailedEventSchema } from './visualization-runtime-failed';
+import { visualizationVariantRevertedEventSchema } from './visualization-variant-reverted';
 import {
   visualizationPreferenceRecordedEventSchema,
   visualizationPresentedEventSchema
@@ -63,6 +64,7 @@ export const projectEventSchema = v.variant('type', [
   visualizationPreferenceRecordedEventSchema,
   visualizationCandidatesAdvancedEventSchema,
   visualizationRuntimeFailedEventSchema,
+  visualizationVariantRevertedEventSchema,
   assistantRespondedEventSchema,
   systemNotifiedEventSchema
 ]);

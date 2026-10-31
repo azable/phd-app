@@ -33,6 +33,7 @@ export function presentationBufferState(
   const consumedPresentationIds = new Set(
     events.flatMap((event) => {
       if (event.type === 'visualization.preference-recorded') return event.payload.presentations;
+      if (event.type === 'visualization.variant-reverted') return event.payload.presentations;
       return event.type === 'visualization.candidates-advanced' ? event.payload.presentations : [];
     })
   );

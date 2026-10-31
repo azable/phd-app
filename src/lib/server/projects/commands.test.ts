@@ -262,6 +262,125 @@ describe('createProject', () => {
     ).rejects.toThrow('Only a presented visualization');
   });
 
+  it('shows a variant that fails as before, asking the assistant for no repair', async () => {
+    const { getProjectTemplate } = await import('./starter-catalog');
+    const { buildProjectPresentations, createProject, reportRuntimeFailure } =
+      await import('./service');
+    const { presentationBufferState } = await import('$lib/shared/projects/presentation-buffer');
+    const { projectConversationMessages } = await import('$lib/server/chat-bots/project-context');
+    const created = await createProject(
+      { creation: { templateId: getProjectTemplate('linear-search').id } },
+      serviceDependencies
+    );
+    const starter = created.events.find((event) => event.type === 'visualization.presented');
+    if (starter?.type !== 'visualization.presented') throw new Error('Expected a presentation.');
+    // A pair of new variants, each drawn at random from the starter's values.
+    const pair = await buildProjectPresentations(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        operationId: crypto.randomUUID(),
+        from: starter.payload.presentation.presentationId,
+        presentationCount: 2
+      },
+      serviceDependencies
+    );
+    const shown = pair.appendedEvents.filter(
+      (event): event is ProjectEventOf<'visualization.presented'> =>
+        event.type === 'visualization.presented'
+    );
+    expect(shown).toHaveLength(2);
+    const [beside, failing] = shown.map(({ payload }) => payload.presentation);
+    if (failing.format !== 'browser-bundle-v1' || beside.format !== 'browser-bundle-v1')
+      throw new Error('Expected browser bundles.');
+
+    const reported = await reportRuntimeFailure(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(pair.document).id,
+        operationId: crypto.randomUUID(),
+        presentationId: failing.presentationId,
+        step: 0,
+        message: 'l.view is not a function'
+      },
+      serviceDependencies
+    );
+
+    const appended = reported.appendedEvents.map(({ type }) => type);
+    expect(appended[0]).toBe('visualization.runtime-failed');
+    expect(appended).toContain('visualization.variant-reverted');
+    expect(appended).not.toContain('assistant.turn-requested');
+    const reverted = reported.appendedEvents.find(
+      (event): event is ProjectEventOf<'visualization.variant-reverted'> =>
+        event.type === 'visualization.variant-reverted'
+    )!;
+    expect(reverted.payload).toMatchObject({
+      presentationId: failing.presentationId,
+      presentations: [beside.presentationId, failing.presentationId]
+    });
+    expect(Object.keys(reverted.payload.values).length).toBeGreaterThan(0);
+    // Built again from the starter's values, the one beside it as it was, as a new pair.
+    const again = reported.appendedEvents.filter(
+      (event): event is ProjectEventOf<'visualization.presented'> =>
+        event.type === 'visualization.presented'
+    );
+    expect(again.map(({ payload }) => payload.presentation.presentationId)).toEqual(
+      reverted.payload.replacements
+    );
+    const [besideAgain, failingAgain] = again.map(({ payload }) => payload.presentation);
+    if (failingAgain.format !== 'browser-bundle-v1' || besideAgain.format !== 'browser-bundle-v1')
+      throw new Error('Expected browser bundles.');
+    expect(besideAgain.variant).toEqual(beside.variant);
+    expect(failingAgain.seed).toBe(failing.seed);
+    const starterValues =
+      starter.payload.presentation.format === 'browser-bundle-v1'
+        ? starter.payload.presentation.variant
+        : undefined;
+    for (const [key, value] of Object.entries(reverted.payload.shown))
+      if (!key.startsWith('pause@')) expect(value).toEqual(starterValues?.[key]);
+    expect(reported.appendedEvents.find((event) => event.type === 'build.requested')).toMatchObject(
+      { payload: { purpose: 'variant-fallback' } }
+    );
+    // The pair that failed is taken out; the new pair is what shows.
+    const available = presentationBufferState(reported.document, 0).available.map(
+      ({ presentationId }) => presentationId
+    );
+    expect(available).not.toContain(failing.presentationId);
+    expect(available).not.toContain(beside.presentationId);
+    expect(available).toEqual(expect.arrayContaining(reverted.payload.replacements));
+    // The assistant is not asked to fix the source for it.
+    expect(
+      projectConversationMessages(reported.document.events).some((message) =>
+        message.content.includes('l.view is not a function')
+      )
+    ).toBe(false);
+  });
+
+  it('asks for a repair when what the source draws as it was made fails', async () => {
+    const { getProjectTemplate } = await import('./starter-catalog');
+    const { createProject, reportRuntimeFailure } = await import('./service');
+    const created = await createProject(
+      { creation: { templateId: getProjectTemplate('linear-search').id } },
+      serviceDependencies
+    );
+    const starter = created.events.find((event) => event.type === 'visualization.presented');
+    if (starter?.type !== 'visualization.presented') throw new Error('Expected a presentation.');
+    const reported = await reportRuntimeFailure(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        operationId: crypto.randomUUID(),
+        presentationId: starter.payload.presentation.presentationId,
+        message: 't.before is not a function'
+      },
+      serviceDependencies
+    );
+    expect(reported.appendedEvents.map(({ type }) => type)).toEqual([
+      'visualization.runtime-failed',
+      'assistant.turn-requested'
+    ]);
+  });
+
   it('adds the selected assistant introduction to blank projects without a model request', async () => {
     const { createProject } = await import('./service');
 

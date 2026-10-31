@@ -195,6 +195,13 @@ const presenters = {
       'Recording the failure…',
       'destructive'
     ),
+  'visualization.variant-reverted': (event) =>
+    details(
+      'Variant could not draw; shown as before',
+      variantText(event.payload.values, event.payload.shown),
+      'visualization',
+      'Showing it as before…'
+    ),
   'system.notified': (event) =>
     details(
       'System notice',
@@ -218,6 +225,16 @@ function details(
   tone: TimelineEventPresentation['tone'] = 'default'
 ): TimelineEventPresentation {
   return { title, detail, icon, progress, tone };
+}
+
+/** The values a variant could not draw with, and what those variables are drawn as instead. */
+function variantText(
+  values: Readonly<Record<string, unknown>>,
+  shown: Readonly<Record<string, unknown>>
+): string {
+  return Object.entries(values)
+    .map(([key, value]) => `${key} ${String(value)} → ${String(shown[key] ?? 'unset')}`)
+    .join(' · ');
 }
 
 function operationLabel(kind: string): string {
