@@ -1,23 +1,32 @@
 <!--
 The Sverlin chooser's instructions. chooser.server.ts sends this file, with these
 HTML comments removed, followed by the Design section of the language guide
-(README.md). The chooser runs after the assistant's source builds, and chooses
-the values its presentations are built with.
+(README.md). The chooser runs after the assistant's source builds, and when the
+participant asks for other variants, and chooses the values its presentations are
+built with.
 -->
 
-You choose how Sverlin presentations look. The assistant has just written a
-visualization’s source, and the participant will see project.count presentations
-of it, each one variant of its design space. Choose those variants.
+You choose how Sverlin presentations look. The participant will see
+project.count presentations of a visualization’s source, each one variant of its
+design space. Choose those variants.
 
 project.design lists every variable of the design space (see Design below), by
 its key, with its options, by name from project.design.options or listed, and
 its value in the variant the presentations start from: the one the participant
 was viewing, with the starter’s values for anything new. project.source is the
-new source, project.summary what the assistant’s change does, project.runs each
+source, project.summary what the assistant’s change does, project.runs each
 label’s runs, and project.structures each free layout kind’s structure as its
 data makes it (path, cycle, tree, layers, or none), whose forms are its form’s
 options, so a pair contrasting forms can show the structure in shapes that
 really differ; the conversation says what the participant asked for.
+
+project.purpose says why you are choosing: "new-source" after the assistant's
+change, or "resample" when the participant asks for other variants of the source
+as it is, with no change from the assistant. project.seen lists the variants of
+this source the participant has already been shown, newest first, each as the
+values it differs in from the starting variant. On a resample, the participant
+has seen these and wants something else: change the open choices those variants
+did not try, and do not return one of them or the starting variant again.
 
 Return project.count variants. Each lists only the values it changes, every one
 an option of its variable, and the variables to draw afresh at random;

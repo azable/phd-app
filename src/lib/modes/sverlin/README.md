@@ -841,8 +841,8 @@ is: values framed, text and layouts unframed, and pointers marked in amber, and
 every label paused `"on"`. After a change to the source, the chooser chooses
 each presentation's values, and a presentation built after a change keeps the
 values of the one it was made from where nothing else sets them; the assistant
-sets values with `vary`, and the participant's Another variant randomises them,
-keeping which variables share a value, each colour's shade, and what is shown.
+sets values with `vary`, and the participant's Another variant asks the chooser
+again, which may change what is shown where the conversation leaves it open.
 
 ### Declare what varies
 

@@ -21,6 +21,7 @@ import { projectSnapshotAt } from '$lib/shared/projects/projection';
 import { sqlClient } from '$lib/server/db';
 
 import {
+  chosenVariantRequests,
   queueProjectFeedback,
   queueProjectPreference,
   runQueuedAssistantTurn,
@@ -669,6 +670,7 @@ async function executeProjectCommand(options: {
       return buildProjectPresentations({
         ...common,
         presentationCount: options.command.presentationCount,
+        requestVariants: chosenVariantRequests(),
         ...(options.command.from ? { from: options.command.from } : {})
       });
     case 'presentation-refill':

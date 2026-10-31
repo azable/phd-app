@@ -87,11 +87,15 @@ const modeChatbots = Object.fromEntries(
 ) as Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>>;
 
 const intakeClassifier = createChatbot(participantIntakeClassifier, openAIAdapter);
-const chooser = createChatbot(sverlinChooser, openAIAdapter);
+const choosers = {
+  model: createChatbot(sverlinChooser, openAIAdapter)
+};
 
 /** Return the bot that chooses the variants a Sverlin source's presentations are built with. */
-export function getSverlinChooser(): Chatbot<ChooserProject, ChooserOutput> {
-  return chooser;
+export function getSverlinChooser(
+  id: string = 'model'
+): Chatbot<ChooserProject, ChooserOutput> | undefined {
+  return choosers[id as keyof typeof choosers];
 }
 
 /** Return the source-authoring bot recorded by a Sverlin project. */

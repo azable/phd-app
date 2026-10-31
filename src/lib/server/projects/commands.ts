@@ -83,10 +83,23 @@ import {
   defaultProjectServiceDependencies,
   draftEvent,
   freshPresentationSeeds,
+  randomVariantRequests,
   type ProjectServiceDependencies,
   type RecordedBuild,
-  type RecordedBuildBatch
+  type RecordedBuildBatch,
+  type VariantRequester
 } from './service';
+import {
+  chooseVariants,
+  chosenRequests,
+  differences,
+  offeredOptions,
+  randomChooser,
+  type ChooserId,
+  type DesignSource,
+  type VariantChooser
+} from './choosers';
+import { projectChooserId } from './chooser-config';
 
 /** Replaceable AI and persistence boundaries used by command unit tests. */
 export type ProjectCommandDependencies = {
@@ -95,8 +108,12 @@ export type ProjectCommandDependencies = {
   getChatbot: typeof getChatbot;
   getCandidateChatbot: typeof getCandidateChatbot;
   getParticipantIntakeClassifier: typeof getParticipantIntakeClassifier;
-  /** The bot choosing a built source's variants; without one, a turn shows its first build. */
+  /** The bot choosing variants by its id; without one, variants are drawn at random. */
   getChooser?: typeof getSverlinChooser;
+  /** Which chooser a project's variants come from. */
+  chooserFor?: (projectId: string) => Promise<ChooserId>;
+  /** How long Another variant waits for a chooser bot before drawing at random. */
+  resampleTimeLimitMs?: number;
 };
 
 export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
@@ -105,8 +122,177 @@ export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
   getChatbot,
   getCandidateChatbot,
   getParticipantIntakeClassifier,
-  getChooser: getSverlinChooser
+  getChooser: getSverlinChooser,
+  chooserFor: projectChooserId
 };
+
+/**
+ * How long a participant waits for a model chooser's variants of the source as it is before they
+ * are drawn at random instead: they are waiting on the button, unlike after an assistant's turn.
+ */
+const resampleTimeLimitMs = 20_000;
+
+/** The chooser a project's variants come from, the random draw where none is configured. */
+async function projectChooser(
+  projectId: string,
+  dependencies: ProjectCommandDependencies,
+  timeLimitMs?: number
+): Promise<VariantChooser> {
+  const id = (await dependencies.chooserFor?.(projectId)) ?? 'model';
+  const bot = id === 'random' ? undefined : dependencies.getChooser?.(id);
+  return bot ? botChooser(id, bot, dependencies, timeLimitMs) : randomChooser;
+}
+
+/**
+ * A chooser bot (the model, or the Decisions API) behind the chooser interface, its generation
+ * recorded on the Timeline; failing, or past its time limit, it returns no choices.
+ */
+function botChooser(
+  id: ChooserId,
+  bot: NonNullable<ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>>,
+  dependencies: ProjectCommandDependencies,
+  timeLimitMs?: number
+): VariantChooser {
+  return {
+    id,
+    async choose(request) {
+      const design = designVariables(request.design);
+      const prompt = await bot.preparePrompt({
+        messages: projectConversationMessages(request.document.events),
+        project: {
+          purpose: request.purpose,
+          source: request.source,
+          ...(request.summary ? { summary: request.summary } : {}),
+          count: request.count,
+          design,
+          ...(request.seen.length ? { seen: request.seen } : {}),
+          ...(request.design.runs ? { runs: request.design.runs } : {}),
+          ...(request.design.structures && Object.keys(request.design.structures).length
+            ? { structures: request.design.structures }
+            : {})
+        },
+        attempt: 1
+      });
+      const operation = currentProjectOperationSignal();
+      const signals = [
+        ...(operation ? [operation] : []),
+        ...(timeLimitMs ? [AbortSignal.timeout(timeLimitMs)] : [])
+      ];
+      const signal = signals.length ? AbortSignal.any(signals) : undefined;
+      const generation = await runPreparedGeneration(
+        {
+          document: request.document,
+          attempt: request.attempt,
+          operationId: request.operationId,
+          prompt,
+          generate: () => bot.generatePrepared(prompt, { signal }),
+          validateResult: () => {},
+          fallbackResponse: (result) => ({ variants: result.variants }),
+          notifyFailure: false
+        },
+        dependencies
+      );
+      if (!generation.ok) return { document: generation.document };
+      return {
+        document: generation.document,
+        choices: generation.result.variants.map((variant) => ({
+          // Only values the space offers, so an invalid repeat of a variable does not replace a valid one.
+          chosen: Object.fromEntries(
+            variant.values
+              .filter(({ variable, value }) => offeredOptions(design, variable)?.includes(value))
+              .map(({ variable, value }) => [variable, value])
+          ),
+          randomise: variant.randomise
+        }))
+      };
+    }
+  };
+}
+
+/**
+ * New variants of the source as it is, from the presentation they are made from (or the newest of
+ * the source), as the project's chooser picks them: given the variants of the source already seen,
+ * so they differ in what is still open.
+ */
+export function chosenVariantRequests(
+  dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
+): VariantRequester {
+  return async (options) => {
+    const snapshot = projectSnapshotAt(options.document);
+    const artifact = snapshot.artifacts[snapshot.entryArtifactId];
+    const shown = sourcePresentations(options.document, artifact?.content.sha256);
+    const from = options.from
+      ? shown.find(({ presentationId }) => presentationId === options.from)
+      : shown.at(-1);
+    if (!artifact || !from?.variant) return randomVariantRequests(options);
+    const chooser = await projectChooser(
+      options.document.projectId,
+      dependencies,
+      dependencies.resampleTimeLimitMs ?? resampleTimeLimitMs
+    );
+    const design: DesignSource = {
+      ...from,
+      ...sourceBuildFacts(options.document, from.source.sha256)
+    };
+    const chosen = await chooseVariants(chooser, {
+      document: options.document,
+      purpose: 'resample',
+      source: artifact.content.text,
+      count: options.seeds.length,
+      design,
+      seen: differences(
+        shown
+          .slice(-recentlySeen)
+          .reverse()
+          .flatMap(({ variant }) => (variant ? [variant] : [])),
+        from.variant
+      ),
+      operationId: options.operationId,
+      attempt: 1
+    });
+    return {
+      document: chosen.document,
+      requests: chosenRequests(options.seeds, designVariables(design), from.variant, chosen.choices)
+    };
+  };
+}
+
+/** How many of a source's newest presentations a chooser is told were already seen. */
+const recentlySeen = 8;
+
+/** The presentations of a source, oldest first. */
+function sourcePresentations(document: ProjectDocument, sha256: string | undefined) {
+  return document.events.flatMap((event) =>
+    event.type === 'visualization.presented' &&
+    event.payload.presentation.format === 'browser-bundle-v1' &&
+    event.payload.presentation.source.sha256 === sha256
+      ? [event.payload.presentation]
+      : []
+  );
+}
+
+/** A source's runs and structures, from its newest successful build, which every variant shares. */
+function sourceBuildFacts(
+  document: ProjectDocument,
+  sha256: string
+): Pick<DesignSource, 'runs' | 'structures'> {
+  const builds = new Set(
+    document.events.flatMap((event) =>
+      event.type === 'build.requested' && event.payload.source.sha256 === sha256
+        ? [event.payload.buildId]
+        : []
+    )
+  );
+  const built = document.events.findLast(
+    (event) => event.type === 'build.succeeded' && builds.has(event.payload.buildId)
+  );
+  if (built?.type !== 'build.succeeded') return {};
+  const bundle = JSON.parse(built.payload.bundle.text) as Pick<DesignSource, 'runs' | 'structures'>;
+  return {
+    ...(bundle.runs ? { runs: bundle.runs } : {}),
+    ...(bundle.structures ? { structures: bundle.structures } : {})
+  };
+}
 
 /** Validate and durably queue participant feedback without waiting for the assistant. */
 export function queueProjectFeedback(
@@ -1289,44 +1475,23 @@ async function chosenBuild(
   dependencies: ProjectCommandDependencies
 ): Promise<{ document: ProjectDocument; recorded: RecordedBuildBatch }> {
   const firstBuild = { document: options.document, recorded: options.recorded };
-  const chooser = dependencies.getChooser?.();
   const [first] = options.recorded.builds;
   const bundle = first?.result.ok && 'bundle' in first ? first.result.bundle : undefined;
-  if (!chooser || !bundle?.variant) return firstBuild;
-  const design = designVariables(bundle);
-  const prompt = await chooser.preparePrompt({
-    messages: projectConversationMessages(options.document.events),
-    project: {
-      source: options.candidate,
-      ...(options.summary ? { summary: options.summary } : {}),
-      count: options.seeds.length,
-      design,
-      ...(bundle.runs ? { runs: bundle.runs } : {}),
-      ...(bundle.structures && Object.keys(bundle.structures).length
-        ? { structures: bundle.structures }
-        : {})
-    },
-    attempt: 1
+  const chooser = await projectChooser(options.document.projectId, dependencies);
+  // With the random draw, the first build already keeps what was viewed and draws what is new.
+  if (chooser.id === 'random' || !bundle?.variant) return firstBuild;
+  const chosen = await chooseVariants(chooser, {
+    document: options.document,
+    purpose: 'new-source',
+    source: options.candidate,
+    ...(options.summary ? { summary: options.summary } : {}),
+    count: options.seeds.length,
+    design: bundle,
+    seen: [],
+    operationId: options.operationId,
+    attempt: options.attempt
   });
-  const generation = await runPreparedGeneration(
-    {
-      document: options.document,
-      attempt: options.attempt,
-      operationId: options.operationId,
-      prompt,
-      generate: () => chooser.generatePrepared(prompt, { signal: currentProjectOperationSignal() }),
-      validateResult: () => {},
-      fallbackResponse: (result) => ({ variants: result.variants }),
-      notifyFailure: false
-    },
-    dependencies
-  );
-  if (!generation.ok) return { ...firstBuild, document: generation.document };
-  const offered = (key: string) => {
-    const found = design.variables.find(({ variable }) => variable === key);
-    if (!found) return undefined;
-    return typeof found.options === 'string' ? design.options[found.options] : found.options;
-  };
+  if (chosen.chooser === 'random') return { ...firstBuild, document: chosen.document };
   // The first build's values kept from the viewed variant, not those it took from the starter, so
   // the rebuild's starter values are still recorded as the starter's.
   const base = bundle.origins
@@ -1334,27 +1499,10 @@ async function chosenBuild(
         Object.entries(bundle.variant).filter(([key]) => bundle.origins?.[key] !== 'starter')
       )
     : bundle.variant;
-  const requests = options.seeds.map((seed, index) => {
-    const variant = generation.result.variants[index];
-    const chosen = Object.fromEntries(
-      (variant?.values ?? [])
-        .filter(({ variable, value }) => offered(variable)?.includes(value))
-        .map(({ variable, value }) => [variable, value])
-    );
-    const randomise = (variant?.randomise ?? []).filter((key) => offered(key));
-    // A variant the chooser left out is drawn at random, so a pair still has two.
-    return {
-      seed,
-      variant: {
-        base,
-        chosen,
-        ...(!variant ? { randomise: true as const } : randomise.length ? { randomise } : {})
-      }
-    };
-  });
+  const requests = chosenRequests(options.seeds, designVariables(bundle), base, chosen.choices);
   const rebuilt = await buildCandidateBatch(
     {
-      document: generation.document,
+      document: chosen.document,
       candidate: options.candidate,
       requests,
       operationId: options.operationId,

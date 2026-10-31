@@ -66,13 +66,19 @@ in it moves between steps. A build gives every variable a value: the starter's,
 a base variant's where it still fits, randomised (keeping the base's equal
 values equal, colours' shades, and what is shown), or chosen (an option the
 space lacks, or a variable it does not have, is an error). After the assistant
-changes the source, a chooser
+changes the source, and when the participant asks for Another variant or a New
+pair, a chooser picks each presentation's values from the design space, starting
+from the viewed variant, given the variants of that source already shown. The
+choosers are interchangeable
+([`choosers.ts`](src/lib/server/projects/choosers.ts)): the model
 ([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
-smaller model call) picks each presentation's values from the design space the
-first build reports, starting from the viewed variant, and the presentations are
-built again with them, the first build standing if choosing fails; after a
-manual change the first presentation keeps the viewed variant's values and the
-second is randomised; Another variant randomises every presentation; the
+smaller model call) or a random draw. A study condition names one (`chooser`), else
+`SVERLIN_CHOOSER`, else the model; a chooser that fails, or keeps a participant
+waiting on Another variant over 20 seconds, gives way to the random draw. After
+the assistant's change the presentations are built again with the chosen values,
+the first build standing if choosing fails; after a manual change the first
+presentation keeps the viewed variant's values and the second is randomised;
+refills of the presentation buffer stay random, as most are never shown; the
 assistant's `vary` decision sets values without changing the source
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). Every
 presentation currently shows every master step. Every array and object is made

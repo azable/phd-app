@@ -1019,6 +1019,138 @@ describe('submitProjectFeedback', () => {
     ).toHaveLength(1);
   });
 
+  describe('Another variant', () => {
+    const chooserWith = (generatePrepared: ReturnType<typeof vi.fn>) =>
+      ({
+        preparePrompt: async (request: { project: unknown }) => ({
+          initialPrompt: 'Choose',
+          messages: [],
+          context: { project: request.project },
+          attempt: { number: 1, purpose: 'choosing' },
+          parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
+          responseFormat: { name: 'design_variants', schema: {} }
+        }),
+        generatePrepared,
+        requestTimeoutMs: () => 180_000
+      }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>;
+
+    /** A project whose source has been shown once, without a chooser. */
+    async function shownProject() {
+      mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
+      const { createProject } = await import('./service');
+      const { submitProjectFeedback } = await import('./commands');
+      const created = await createProject({ title: 'Resampled' }, serviceDependencies);
+      const result = await submitProjectFeedback(
+        {
+          projectId: created.projectId,
+          expectedHead: projectHead(created).id,
+          content: markdownMessage('Show one'),
+          focus: [],
+          presentationCount: 1,
+          operationId: '12345678-1234-4123-8123-123456789abc'
+        },
+        commandDependencies
+      );
+      const presented = result.document.events.findLast(
+        (event) => event.type === 'visualization.presented'
+      ) as ProjectEventOf<'visualization.presented'>;
+      return { document: result.document, from: presented.payload.presentation.presentationId };
+    }
+
+    async function resample(dependencies: ProjectCommandDependencies) {
+      const { document, from } = await shownProject();
+      const { buildProjectPresentations } = await import('./service');
+      const { chosenVariantRequests } = await import('./commands');
+      const result = await buildProjectPresentations(
+        {
+          projectId: document.projectId,
+          expectedHead: projectHead(document).id,
+          operationId: '22345678-1234-4123-8123-123456789abc',
+          presentationCount: 2,
+          from,
+          requestVariants: chosenVariantRequests(dependencies)
+        },
+        serviceDependencies
+      );
+      const shown = result.appendedEvents.flatMap((event) =>
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.format === 'browser-bundle-v1'
+          ? [event.payload.presentation]
+          : []
+      );
+      return { result, shown };
+    }
+
+    it('asks the chooser, as a resample, and shows what it picks', async () => {
+      const choose = vi.fn(async (prompt: { context: { project: Record<string, unknown> } }) => ({
+        variants: [
+          { values: [{ variable: 'Shown.fill', value: 'amber-100' }], randomise: [] },
+          { values: [{ variable: 'Shown.fill', value: 'blue-100' }], randomise: [] }
+        ],
+        prompt,
+        generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
+      }));
+      const { shown } = await resample({
+        ...commandDependencies,
+        getChooser: () => chooserWith(choose),
+        chooserFor: async () => 'model'
+      });
+
+      const [{ context }] = choose.mock.calls[0];
+      expect(context.project.purpose).toBe('resample');
+      expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual([
+        'amber-100',
+        'blue-100'
+      ]);
+    });
+
+    it('draws at random when the chooser fails', async () => {
+      const { result, shown } = await resample({
+        ...commandDependencies,
+        getChooser: () => chooserWith(vi.fn().mockRejectedValue(new Error('Unavailable.'))),
+        chooserFor: async () => 'model'
+      });
+
+      expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(
+        true
+      );
+      expect(result.appendedEvents.some((event) => event.type === 'system.notified')).toBe(false);
+      expect(shown).toHaveLength(2);
+    });
+
+    it('draws at random when the chooser is past its time limit', async () => {
+      const hang = vi.fn(
+        (_prompt: unknown, options?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) =>
+            options?.signal?.addEventListener('abort', () => reject(options.signal?.reason))
+          )
+      );
+      const { result, shown } = await resample({
+        ...commandDependencies,
+        getChooser: () => chooserWith(hang),
+        chooserFor: async () => 'model',
+        resampleTimeLimitMs: 50
+      });
+
+      expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(
+        true
+      );
+      expect(shown).toHaveLength(2);
+    });
+
+    it('asks no bot when the random draw is configured', async () => {
+      const choose = vi.fn();
+      const { shown } = await resample({
+        ...commandDependencies,
+        getChooser: () => chooserWith(choose),
+        chooserFor: async () => 'random'
+      });
+
+      expect(choose).not.toHaveBeenCalled();
+      expect(shown).toHaveLength(2);
+    });
+  });
+
   it('repairs a failed component batch using the same two seeds', async () => {
     mocks.generatePrepared
       .mockReset()

@@ -233,6 +233,28 @@ export async function baseOnPresentation(
   );
 }
 
+/**
+ * Chooses the build requests for new variants of the committed source, from the presentation they
+ * are made from (when one is named), recording whatever it does on the document.
+ */
+export type VariantRequester = (options: {
+  document: ProjectDocument;
+  seeds: readonly number[];
+  from?: string;
+  operationId: string;
+}) => Promise<{ document: ProjectDocument; requests: BuildRequest[] }>;
+
+/** New variants with no chooser: every one randomised, from the one it was made from. */
+export const randomVariantRequests: VariantRequester = async ({ document, seeds, from }) => ({
+  document,
+  requests: basedRequests(
+    seeds,
+    from ? presentedValues(document, from) : undefined,
+    undefined,
+    true
+  )
+});
+
 /** Build the accepted artifact for an explicit seed or a fresh presentation set. */
 export function buildProjectPresentations(
   options: {
@@ -241,7 +263,10 @@ export function buildProjectPresentations(
     operationId: string;
     /** The candidate whose source to build, when it is not the newest. */
     from?: string;
-  } & ({ seed: number; purpose: BuildPurpose } | { presentationCount: 1 | 2 }),
+  } & (
+    | { seed: number; purpose: BuildPurpose }
+    | { presentationCount: 1 | 2; requestVariants?: VariantRequester }
+  ),
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
@@ -249,15 +274,31 @@ export function buildProjectPresentations(
     const based = options.from
       ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
       : before;
-    // New variants of the source as it is: every one randomised, from the one it was made from.
-    const document = await buildDocument(
-      based,
-      'seed' in options ? [options.seed] : freshPresentationSeeds(options.presentationCount),
-      'seed' in options ? options.purpose : 'seed-change',
+    if ('seed' in options) {
+      const document = await buildDocument(
+        based,
+        [options.seed],
+        options.purpose,
+        options.operationId,
+        dependencies,
+        options.from ? presentedValues(before, options.from) : undefined,
+        true
+      );
+      return commandResult(before, document);
+    }
+    // New variants of the source as it is, as the project's chooser picks them.
+    const chosen = await (options.requestVariants ?? randomVariantRequests)({
+      document: based,
+      seeds: freshPresentationSeeds(options.presentationCount),
+      ...(options.from ? { from: options.from } : {}),
+      operationId: options.operationId
+    });
+    const document = await buildRequestedDocument(
+      chosen.document,
+      chosen.requests,
+      'seed-change',
       options.operationId,
-      dependencies,
-      options.from ? presentedValues(before, options.from) : undefined,
-      true
+      dependencies
     );
     return commandResult(before, document);
   });
@@ -288,14 +329,18 @@ export function replenishProjectPresentations(
           ? [event.payload.presentation.seed]
           : []
       );
-      const next = await buildDocument(
+      // Refills stay random: they build ahead of anyone asking, and most are never shown.
+      const chosen = await randomVariantRequests({
         document,
-        freshPresentationSeeds(count, usedSeeds),
+        seeds: freshPresentationSeeds(count, usedSeeds),
+        operationId: options.operationId
+      });
+      const next = await buildRequestedDocument(
+        chosen.document,
+        chosen.requests,
         'seed-change',
         options.operationId,
-        dependencies,
-        undefined,
-        true
+        dependencies
       );
       const nextState = presentationBufferState(next, options.target);
       document = next;
@@ -792,13 +837,34 @@ async function buildDocument(
     );
   }
   if (seeds.length === 0) throw new Error('At least one seed is required.');
+  return buildRequestedDocument(
+    document,
+    basedRequests(seeds, base, chosen, randomiseAll),
+    purpose,
+    operationId,
+    dependencies
+  );
+}
+
+/** Build the committed source for these requests, presenting them when every build succeeds. */
+async function buildRequestedDocument(
+  document: ProjectDocument,
+  requests: readonly BuildRequest[],
+  purpose: BuildPurpose,
+  operationId: string,
+  dependencies: ProjectServiceDependencies
+) {
+  const snapshot = projectSnapshotAt(document);
+  const artifact = snapshot.artifacts[snapshot.entryArtifactId];
+  if (!artifact) throw new Error('The project has no entry artifact.');
+  if (requests.length === 0) throw new Error('At least one seed is required.');
   const recorded = await buildProjectSourceBatch(
     {
       document,
       sourceContent: artifact.content.text,
       source: artifact.content,
       sourceLabel: artifact.path,
-      requests: basedRequests(seeds, base, chosen, randomiseAll),
+      requests,
       purpose,
       input: 'committed-artifact',
       operationId

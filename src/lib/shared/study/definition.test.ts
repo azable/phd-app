@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mainStudy } from '$lib/studies/main';
 import { registeredStudies, registerStudies, studyDefinition } from './registry';
-import { resolveStudyArm } from './definition';
+import { defineStudy, resolveStudyArm } from './definition';
 
 describe('study definition', () => {
   it('counterbalances the two mode orders from one central protocol', () => {
@@ -38,5 +38,16 @@ describe('study definition', () => {
         { definition: mainStudy, enrollment: 'closed' }
       ])
     ).toThrow('must be unique');
+  });
+
+  it('rejects a condition naming an unknown chooser', () => {
+    const definition = {
+      ...mainStudy,
+      conditions: {
+        ...mainStudy.conditions,
+        sverlin: { ...mainStudy.conditions.sverlin, chooser: 'oracle' as never }
+      }
+    };
+    expect(() => defineStudy(definition)).toThrow('unknown chooser');
   });
 });
