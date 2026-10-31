@@ -21,6 +21,7 @@ import {
   recordArrangement,
   type ArrangementProps
 } from '../node/arrangement';
+import { overlayRoom, routeOverlay, type Sides } from '../node/overlay';
 import type { Reader } from '../node/reader';
 import { solveSpan, type SpanInput } from '../node/span';
 import type { LayoutMemory } from '../type-context';
@@ -183,11 +184,71 @@ function sizer(options: ReserveOptions) {
       least: (element) => (element === root && !ownLeast ? undefined : leastOf(at, element)),
       adjust: (element): Partial<Look> | undefined => {
         const size = arrangedSize(at, element);
+        if (size)
+          return { width: { px: size.width, percent: 0 }, height: { px: size.height, percent: 0 } };
+        const room = roomOf(at, element);
+        const own = at.styled.get(element)?.look.padding;
         return (
-          size && { width: { px: size.width, percent: 0 }, height: { px: size.height, percent: 0 } }
+          room &&
+          own && {
+            padding: [
+              own[0] + room.top,
+              own[1] + room.right,
+              own[2] + room.bottom,
+              own[3] + room.left
+            ]
+          }
         );
       }
     });
+  }
+
+  // A row or column holding links keeps room for what they draw past its children in its padding
+  // (see node/overlay.ts), worked out once for all alike; while it is, it is laid out without it.
+  const rooms = new Map<string, Sides>();
+  const rooming = new Set<ModelElement>();
+  function roomOf(at: Read, host: ModelElement): Sides | undefined {
+    if (host.attributes['data-sv-overlaid'] === undefined || rooming.has(host)) return undefined;
+    const key = wholeSignature(at, host);
+    let room = rooms.get(key);
+    if (!room) {
+      rooming.add(host);
+      const model = layOutAlone(at, host);
+      const axis = classesOf(host).includes('row') ? 'row' : 'column';
+      const { children, reached } = routeOverlay(layoutReader(at, model), host, axis);
+      rooming.delete(host);
+      const [top, right, bottom, left] = at.styled.get(host)?.look.padding ?? [0, 0, 0, 0];
+      room = overlayRoom(children, reached, { top, right, bottom, left });
+      rooms.set(key, room);
+    }
+    return room;
+  }
+  /** What sets an element's room apart, for a row or column holding links. */
+  const roomTag = (at: Read, element: ModelElement) => {
+    const room = roomOf(at, element);
+    return room ? `~${room.top},${room.right},${room.bottom},${room.left}` : '';
+  };
+
+  /** Elements read from one layout of them. */
+  function layoutReader(at: Read, model: ModelLayout): Reader<ModelElement> {
+    const boxOf = (element: ModelElement) =>
+      model.boxes.get(element) ?? { x: 0, y: 0, width: 0, height: 0 };
+    return {
+      attribute: (element, name) => element.attributes[name],
+      children: (element) => elementsOf(element).filter((child) => child.tag !== 'svg'),
+      parent: (element) => at.parents.get(element),
+      boxIn(inner, outer) {
+        const a = boxOf(inner);
+        const b = boxOf(outer);
+        return { x: a.x - b.x, y: a.y - b.y, width: a.width, height: a.height };
+      },
+      // Whole pixels, as offsetWidth and offsetHeight round.
+      size(element) {
+        const { width, height } = boxOf(element);
+        return { width: Math.round(width), height: Math.round(height) };
+      },
+      fontSize: (element) => at.styled.get(element)?.look.fontSize ?? 16
+    };
   }
 
   // Everything a free layout's child is read by: its attributes too, as keys and ends, and the
@@ -199,7 +260,9 @@ function sizer(options: ReserveOptions) {
     const size = leastOf(at, element) ?? arrangedSize(at, element);
     known = `${idOf(at.styled.get(element))}${size ? `@${size.width}x${size.height}` : ''}${JSON.stringify(element.attributes)}(`;
     for (const child of element.children)
-      known += isElement(child) ? wholeSignature(at, child) : JSON.stringify(child);
+      known += isElement(child)
+        ? wholeSignature(at, child) + roomTag(at, child)
+        : JSON.stringify(child);
     known += ')';
     wholeSignatures.set(element, known);
     return known;
@@ -270,7 +333,7 @@ function sizer(options: ReserveOptions) {
       const size = leastOf(at, child) ?? arrangedSize(at, child);
       text += size
         ? `[${idOf(at.styled.get(child))}:${size.width}x${size.height}]`
-        : signature(at, child);
+        : signature(at, child) + roomTag(at, child);
     }
     known = `${text})`;
     signatures.set(element, known);
@@ -279,7 +342,7 @@ function sizer(options: ReserveOptions) {
   const sizes = new Map<string, Size>();
   /** An element's own size laid out on its own, in whole pixels; once for all elements alike. */
   function sizeAlone(at: Read, element: ModelElement): Size {
-    const key = signature(at, element);
+    const key = signature(at, element) + roomTag(at, element);
     let size = sizes.get(key);
     if (!size) {
       const box = layOutAlone(at, element).boxes.get(element);

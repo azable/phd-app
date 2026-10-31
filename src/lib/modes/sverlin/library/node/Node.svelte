@@ -410,11 +410,13 @@
         </Arranged>
       {:else if arrangement}
         <!-- data-sv-collection marks the items of one collection, so the page gives them all the
-             largest size any of them reaches (see assembly/entry.ts) and they line up. -->
+             largest size any of them reaches (see model/reserve.ts) and they line up;
+             data-sv-overlaid, a row or column whose links are drawn over it (see LinkOverlay). -->
         <div
           class="items {arrangement}"
           class:uniform={collection}
           data-sv-collection={collection ? id : undefined}
+          data-sv-overlaid={overlaid ? '' : undefined}
           style:gap={`${gap}em`}
           style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
           style:justify-items={collection
