@@ -14,6 +14,20 @@ export function defaultChooserId(): ChooserId {
   return isChooserId(configured) ? configured : 'model';
 }
 
+/**
+ * A command as the server runs it: a resample's own chooser is honoured only from an administrator
+ * (who alone has dev mode), and dropped from anyone else, who gets the configured chooser.
+ */
+export function withDevChooser<Command extends { type: string; chooser?: ChooserId }>(
+  command: Command,
+  administrator: boolean
+): Command {
+  if (command.type !== 'resample' || command.chooser === undefined || administrator) return command;
+  const rest = { ...command };
+  delete rest.chooser;
+  return rest;
+}
+
 export async function projectChooserId(projectId: string): Promise<ChooserId> {
   return (await studyProjectContext(projectId))?.chooser ?? defaultChooserId();
 }

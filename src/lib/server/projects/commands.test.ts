@@ -1057,7 +1057,10 @@ describe('submitProjectFeedback', () => {
       return { document: result.document, from: presented.payload.presentation.presentationId };
     }
 
-    async function resample(dependencies: ProjectCommandDependencies) {
+    async function resample(
+      dependencies: ProjectCommandDependencies,
+      picked?: 'model' | 'decisions' | 'random'
+    ) {
       const { document, from } = await shownProject();
       const { buildProjectPresentations } = await import('./service');
       const { chosenVariantRequests } = await import('./commands');
@@ -1068,7 +1071,7 @@ describe('submitProjectFeedback', () => {
           operationId: '22345678-1234-4123-8123-123456789abc',
           presentationCount: 2,
           from,
-          requestVariants: chosenVariantRequests(dependencies)
+          requestVariants: chosenVariantRequests(dependencies, picked)
         },
         serviceDependencies
       );
@@ -1135,6 +1138,21 @@ describe('submitProjectFeedback', () => {
       expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(
         true
       );
+      expect(shown).toHaveLength(2);
+    });
+
+    it('uses the chooser picked in dev mode over the configured one', async () => {
+      const choose = vi.fn();
+      const { shown } = await resample(
+        {
+          ...commandDependencies,
+          getChooser: () => chooserWith(choose),
+          chooserFor: async () => 'model'
+        },
+        'random'
+      );
+
+      expect(choose).not.toHaveBeenCalled();
       expect(shown).toHaveLength(2);
     });
 

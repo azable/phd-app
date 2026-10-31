@@ -27,7 +27,7 @@ beforeEach(() => {
     operationId,
     acceptedEventId: 5
   });
-  mocks.requireMutation.mockResolvedValue({});
+  mocks.requireMutation.mockResolvedValue({ principal: { kind: 'participant' } });
   mocks.loadProjectResource.mockResolvedValue({
     document: { schemaVersion: 1, projectId: 'project-test', events: [] },
     projects: []
@@ -83,6 +83,7 @@ describe('project JSON API', () => {
 
   it('passes the server-authoritative study deadline into asynchronous work', async () => {
     mocks.requireMutation.mockResolvedValueOnce({
+      principal: { kind: 'participant' },
       study: { deadlineAt: '2026-08-30T12:15:00.000Z' }
     });
     const { POST } = await import('./+server');
@@ -117,6 +118,28 @@ describe('project JSON API', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.accept).not.toHaveBeenCalled();
+  });
+
+  it('honours a resample’s chooser only from an administrator', async () => {
+    const { POST } = await import('./+server');
+    const resample = {
+      type: 'resample',
+      operationId,
+      expectedHead: 4,
+      presentationCount: 2,
+      chooser: 'random'
+    };
+
+    await POST(request('POST', resample));
+    expect(mocks.accept.mock.calls[0][0].command).not.toHaveProperty('chooser');
+
+    mocks.requireMutation.mockResolvedValueOnce({ principal: { kind: 'admin' } });
+    await POST(request('POST', resample));
+    expect(mocks.accept.mock.calls[1][0].command).toMatchObject({ chooser: 'random' });
+
+    mocks.requireMutation.mockResolvedValueOnce({ principal: { kind: 'admin' } });
+    const unknown = await POST(request('POST', { ...resample, chooser: 'oracle' }));
+    expect(unknown.status).toBe(400);
   });
 
   it('accepts a request for fresh variants of the unchanged Sverlin source', async () => {

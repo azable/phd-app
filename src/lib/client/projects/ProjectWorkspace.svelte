@@ -29,7 +29,10 @@
     presentationPlaybackContext,
     PresentationPlayback
   } from '$lib/client/visualization/presentation-playback.svelte';
-  import { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
+  import {
+    baseCandidate,
+    PresentationSelection
+  } from '$lib/client/visualization/presentation-selection.svelte';
   import {
     candidateId,
     timelinePresentations
@@ -49,6 +52,8 @@
   } from '$lib/shared/study/interactions';
 
   import NewProjectDialog from './NewProjectDialog.svelte';
+  import VariantControls from './VariantControls.svelte';
+  import type { ChooserId } from '$lib/shared/choosers';
   import AgentRequestAudit from './AgentRequestAudit.svelte';
   import ProjectArtifactPanel, {
     type ProjectArtifactEditMode
@@ -57,7 +62,7 @@
   import { provideSourceLinks, SourceLinks } from './source-links.svelte';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
   import { diagnosticRanges } from '$lib/client/artifacts/source-references';
-  import { shouldShowPhaseExpiredDialog } from './study-controls';
+  import { shouldShowPhaseExpiredDialog, showsVariantControls } from './study-controls';
 
   type StudyTask =
     | {
@@ -96,6 +101,8 @@
     isAdmin?: boolean;
     at?: EventId;
     devMode?: boolean;
+    /** The chooser a resample uses unless dev mode picks another. */
+    configuredChooser?: ChooserId;
     readOnly?: boolean;
     study?: StudyTask;
   };
@@ -107,6 +114,7 @@
     isAdmin = false,
     at,
     devMode = false,
+    configuredChooser,
     readOnly = false,
     study
   }: Props = $props();
@@ -657,6 +665,20 @@
           {#if showAdminControls}
             <div class="flex items-center gap-2 border-b px-3 py-1.5 text-sm">
               <div class="ml-auto flex items-center gap-1">
+                {#if showsVariantControls( { developerView, mode: session.snapshot.mode, buffered: presentationSelection.buffered } )}
+                  <VariantControls
+                    {session}
+                    {layout}
+                    from={chosen?.presentationId ?? baseCandidate(visiblePresentations)}
+                    {configuredChooser}
+                    disabled={mutationsDisabled}
+                    onMade={() => {
+                      chosenOf = undefined;
+                      chosenFailure = undefined;
+                      presentationSelection.returnToLatest();
+                    }}
+                  />
+                {/if}
                 <div class="flex items-center gap-1">
                   <Switch
                     id="dev-mode"

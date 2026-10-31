@@ -3,7 +3,6 @@
 
   import EditIcon from '@lucide/svelte/icons/edit-3';
   import SaveIcon from '@lucide/svelte/icons/save';
-  import ShuffleIcon from '@lucide/svelte/icons/shuffle';
   import XIcon from '@lucide/svelte/icons/x';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
@@ -107,16 +106,6 @@
     }
   });
   const showingChanges = $derived(chosen?.parent !== undefined && editMode === 'readonly');
-
-  async function anotherVariant() {
-    if (!chosen) return;
-    const made = await session.runCommand({
-      type: 'resample',
-      presentationCount,
-      from: chosen.presentationId
-    });
-    if (made) onSaved();
-  }
 
   let draft = $state('');
   // The source a draft was started from, which its markers keep their places in.
@@ -404,13 +393,6 @@
               >
             {/each}
           </span>
-          <Button
-            size="sm"
-            variant="outline"
-            onclick={anotherVariant}
-            disabled={!!session.pending || session.readOnly}
-            ><ShuffleIcon data-icon="inline-start" />Another variant</Button
-          >
           <Button
             size="icon-sm"
             variant="ghost"

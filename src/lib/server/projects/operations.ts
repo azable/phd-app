@@ -670,7 +670,7 @@ async function executeProjectCommand(options: {
       return buildProjectPresentations({
         ...common,
         presentationCount: options.command.presentationCount,
-        requestVariants: chosenVariantRequests(),
+        requestVariants: chosenVariantRequests(undefined, options.command.chooser),
         ...(options.command.from ? { from: options.command.from } : {})
       });
     case 'presentation-refill':

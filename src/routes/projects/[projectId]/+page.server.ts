@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 
 import { projectInspectionContext, requireAdmin } from '$lib/server/authorization';
 import { listProjectTemplates } from '$lib/server/projects/starter-catalog';
+import { projectChooserId } from '$lib/server/projects/chooser-config';
 import { forceStudyPreview, studyRunState } from '$lib/server/study';
 
 import type { Actions, PageServerLoad } from './$types';
@@ -53,6 +54,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     isAdmin: principal.kind === 'admin',
     readOnly: inspection.readOnly,
     templates: principal.kind === 'admin' && !inspection.readOnly ? listProjectTemplates() : [],
+    // The chooser the dev-mode chooser picker starts from.
+    ...(principal.kind === 'admin' ? { chooser: await projectChooserId(params.projectId) } : {}),
     study
   };
 };

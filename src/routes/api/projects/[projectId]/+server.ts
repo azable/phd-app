@@ -8,6 +8,7 @@ import {
   requireProjectAccess,
   requireProjectMutationAccess
 } from '$lib/server/authorization';
+import { withDevChooser } from '$lib/server/projects/chooser-config';
 import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { ProjectConflictError, ProjectNotFoundError } from '$lib/server/projects/repository';
 import { loadProjectResource } from '$lib/server/projects/service';
@@ -29,7 +30,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     const inspection = await requireProjectMutationAccess(locals, params.projectId);
-    const command = parseProjectCommand(await request.json());
+    const command = withDevChooser(
+      parseProjectCommand(await request.json()),
+      inspection.principal.kind === 'admin'
+    );
     const accepted = await projectOperationExecutor.accept({
       projectId: params.projectId,
       operationId: command.operationId,

@@ -136,9 +136,10 @@ const resampleTimeLimitMs = 20_000;
 async function projectChooser(
   projectId: string,
   dependencies: ProjectCommandDependencies,
-  timeLimitMs?: number
+  timeLimitMs?: number,
+  chosen?: ChooserId
 ): Promise<VariantChooser> {
-  const id = (await dependencies.chooserFor?.(projectId)) ?? 'model';
+  const id = chosen ?? (await dependencies.chooserFor?.(projectId)) ?? 'model';
   const bot = id === 'random' ? undefined : dependencies.getChooser?.(id);
   return bot ? botChooser(id, bot, dependencies, timeLimitMs) : randomChooser;
 }
@@ -215,7 +216,9 @@ function botChooser(
  * so they differ in what is still open.
  */
 export function chosenVariantRequests(
-  dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
+  dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies,
+  /** A chooser picked for this resample in dev mode, over the project's. */
+  picked?: ChooserId
 ): VariantRequester {
   return async (options) => {
     const snapshot = projectSnapshotAt(options.document);
@@ -228,7 +231,8 @@ export function chosenVariantRequests(
     const chooser = await projectChooser(
       options.document.projectId,
       dependencies,
-      dependencies.resampleTimeLimitMs ?? resampleTimeLimitMs
+      dependencies.resampleTimeLimitMs ?? resampleTimeLimitMs,
+      picked
     );
     const design: DesignSource = {
       ...from,

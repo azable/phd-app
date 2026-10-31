@@ -66,22 +66,24 @@ in it moves between steps. A build gives every variable a value: the starter's,
 a base variant's where it still fits, randomised (keeping the base's equal
 values equal, colours' shades, and what is shown), or chosen (an option the
 space lacks, or a variable it does not have, is an error). After the assistant
-changes the source, and when the participant asks for Another variant or a New
-pair, a chooser picks each presentation's values from the design space, starting
-from the viewed variant, given the variants of that source already shown. The
+changes the source, and on Another variant or New pair (dev mode only, in the
+top bar beside the Dev switch, with a picker of the chooser for that press), a
+chooser picks each presentation's values from the design space, starting from
+the viewed variant, given the variants of that source already shown. The
 choosers are interchangeable
 ([`choosers.ts`](src/lib/server/projects/choosers.ts)): the model
 ([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
 smaller model call), OpenAI's Decisions API
 ([`chooser-decisions.server.ts`](src/lib/modes/sverlin/chooser-decisions.server.ts)),
 or a random draw. A study condition names one (`chooser`), else
-`SVERLIN_CHOOSER`, else the model; a chooser that fails, or keeps a participant
-waiting on Another variant over 20 seconds, gives way to the random draw. After
-the assistant's change the presentations are built again with the chosen values,
-the first build standing if choosing fails; after a manual change the first
-presentation keeps the viewed variant's values and the second is randomised;
-refills of the presentation buffer stay random, as most are never shown; the
-assistant's `vary` decision sets values without changing the source
+`SVERLIN_CHOOSER`, else the model (a resample's own chooser is honoured only
+from an administrator); a chooser that fails, or keeps Another variant waiting
+over 20 seconds, gives way to the random draw. After the assistant's change the
+presentations are built again with the chosen values, the first build standing
+if choosing fails; after a manual change the first presentation keeps the viewed
+variant's values and the second is randomised; refills of the presentation
+buffer stay random, as most are never shown; the assistant's `vary` decision
+sets values without changing the source
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). Every
 presentation currently shows every master step. Every array and object is made
 by a collection or record type the domain block defines, and each step records

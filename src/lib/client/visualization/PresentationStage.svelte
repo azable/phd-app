@@ -3,7 +3,6 @@
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import DownloadIcon from '@lucide/svelte/icons/download';
-  import ShuffleIcon from '@lucide/svelte/icons/shuffle';
   import { fly } from 'svelte/transition';
 
   import { Button } from '$lib/client/components/ui/button';
@@ -15,7 +14,7 @@
   import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
   import { elidedName } from '$lib/client/artifacts/source-references';
 
-  import { baseCandidate, type PresentationSelection } from './presentation-selection.svelte';
+  import { type PresentationSelection } from './presentation-selection.svelte';
   import {
     localPresentationStep,
     presentationHeld,
@@ -169,18 +168,6 @@
     }
   }
 
-  async function generateVariants() {
-    const from = baseCandidate(visible);
-    const succeeded = await session.runCommand({
-      type: 'resample',
-      presentationCount: layout === 'comparison' ? 2 : 1,
-      ...(from ? { from } : {})
-    });
-    if (succeeded) {
-      selection.returnToLatest();
-    }
-  }
-
   function localStep(entry: (typeof visible)[number]) {
     return localPresentationStep(playbackContext, entry.presentation.presentationId, step);
   }
@@ -263,24 +250,6 @@
         {disabled}
       >
         Next pair
-      </Button>
-    {/if}
-    {#if !selection.buffered && session.snapshot.mode === 'sverlin'}
-      <Button
-        size="sm"
-        variant="outline"
-        aria-label={layout === 'comparison'
-          ? 'Generate another visualization pair'
-          : 'Generate another visualization variant'}
-        onclick={generateVariants}
-        disabled={disabled || !session.atHead}
-      >
-        {#if session.pending?.type === 'resample'}
-          <Spinner data-icon="inline-start" /> Generating…
-        {:else}
-          <ShuffleIcon data-icon="inline-start" />
-          {layout === 'comparison' ? 'New pair' : 'Another variant'}
-        {/if}
       </Button>
     {/if}
   </div>
