@@ -13,7 +13,7 @@ const asked = [
 
 const answers = {
   answers: [
-    { type: 'choice', name: 'listing.language', choice: 'none', probabilities: [0.45, 0.55] },
+    { type: 'choice', name: 'listing.language', choice: 'none', probabilities: [0.2, 0.8] },
     { type: 'choice', name: 'Cell.fill', choice: 'white', probabilities: [0.9, 0.06, 0.04] },
     { type: 'choice', name: 'Cell.radius', choice: '8', probabilities: [0.2, 0.3, 0.5] },
     { type: 'choice', name: 'Cell.shown', choice: true, probabilities: [0.99, 0.01] }
@@ -29,15 +29,16 @@ describe('chooserQuestions', () => {
 });
 
 describe('chosenVariants', () => {
-  it('takes each likeliest option first, then changes the least sure', () => {
+  it('keeps starting values unless another is clearly likelier, then changes the least sure', () => {
     const { variants } = chosenVariants(asked, 2, answers);
-    expect(variants[0].values).toEqual([
-      { variable: 'listing.language', value: 'none' },
+    // The listing's none is 0.6 likelier than its start; the radius's 8 only 0.2, so it stays 4.
+    expect(variants[0].values).toEqual([{ variable: 'listing.language', value: 'none' }]);
+    // The three least sure, the radius (0.3), the listing (0.8) and the fill (0.9), each to its next
+    // likeliest; the listing so comes back to where it started.
+    expect(variants[1].values).toEqual([
+      { variable: 'Cell.fill', value: 'blue-100' },
       { variable: 'Cell.radius', value: 8 }
     ]);
-    // The three least sure, the radius (0.5), the listing (0.55) and the fill (0.9), each to its next
-    // likeliest; the radius and listing so come back to where they started.
-    expect(variants[1].values).toEqual([{ variable: 'Cell.fill', value: 'blue-100' }]);
   });
 
   it('never returns the starting variant unchanged', () => {

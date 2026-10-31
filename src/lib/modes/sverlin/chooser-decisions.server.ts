@@ -1,8 +1,9 @@
 /**
  * The Sverlin chooser on OpenAI's Decisions API: every open variable asked as one choice question,
- * each answered with the probability of every option. The first variant takes each variable's
- * likeliest option; each further variant changes the variables the answers were least sure of to
- * their next likeliest, so a pair differs in the few choices still open and stays alike elsewhere.
+ * each answered with the probability of every option. The first variant keeps each variable's
+ * starting value unless another option is clearly likelier; each further variant changes the
+ * variables the answers were least sure of to their next likeliest, so a pair differs in the few
+ * choices still open and stays alike elsewhere.
  */
 
 import {
@@ -22,6 +23,12 @@ type DesignValue = string | number | boolean;
 
 /** How many variables each further variant changes from the first. */
 const changedPerVariant = 3;
+
+/**
+ * How much likelier than its starting value an option must be for the first variant to take it:
+ * answered alone, each question drifts from its starting value even where nothing asks it to.
+ */
+const changeMargin = 0.3;
 
 /** What is shown, views, forms and pacing are asked first where a design has more variables than a request can ask. */
 function priority(key: string): number {
@@ -53,7 +60,7 @@ export function chooserQuestions(asked: readonly Asked[]): ChoiceQuestion[] {
   return asked.map(({ variable, value, options }) => ({
     type: 'choice',
     name: variable,
-    instructions: `The value of ${variable} in the next variant; it starts as ${JSON.stringify(value)}.`,
+    instructions: `The value of ${variable} in the next variant. It starts as ${JSON.stringify(value)}: keep it unless the conversation asks for another, or another is a choice still open and worth showing.`,
     choices: options.map((option) => ({ value: encoded(option) }))
   }));
 }
@@ -80,7 +87,11 @@ export function chosenVariants(
     const options = [...variable.options].sort(
       (a, b) => (probabilities.get(encoded(b)) ?? 0) - (probabilities.get(encoded(a)) ?? 0)
     );
-    const best = probabilities.size ? options[0] : variable.value;
+    const likeliest = probabilities.size ? options[0] : variable.value;
+    const likelier =
+      (probabilities.get(encoded(likeliest)) ?? 0) -
+      (probabilities.get(encoded(variable.value)) ?? 0);
+    const best = likelier >= changeMargin ? likeliest : variable.value;
     return { ...variable, options, best, sureness: probabilities.get(encoded(best)) ?? 1 };
   });
   const first = new Map(ranked.map(({ variable, best }) => [variable, best]));
