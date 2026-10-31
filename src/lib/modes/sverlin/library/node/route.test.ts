@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { headTrim } from './heads';
-import { curvePath, wirePath, type Box } from './route';
+import { curvePath, labelPoint, wirePath, type Box } from './route';
 import { routeWires } from './wires';
 
 const point = (x: number, y: number) => ({ x, y });
@@ -151,5 +151,33 @@ describe('wires', () => {
       corners.slice(1).flatMap((b, k) => (Math.abs(b.x - corners[k].x) < 0.5 ? [b.x] : []));
     for (const x of vertical(crossing))
       for (const other of vertical(back)) expect(Math.abs(x - other)).toBeGreaterThan(1);
+  });
+});
+
+describe('where a label goes', () => {
+  const label = { width: 20, height: 10 };
+  const line = 'M0,0 L100,0';
+  const box = (left: number, top: number, right: number, bottom: number): Box => ({
+    left,
+    top,
+    right,
+    bottom
+  });
+
+  it('sits on its middle where that is clear', () => {
+    expect(labelPoint(line, point(50, 0), label, [box(-30, -10, 0, 10)])).toEqual(point(50, 0));
+  });
+
+  it('moves along its link, nearest the middle, clear of what it would overlap', () => {
+    const placed = labelPoint(line, point(50, 0), label, [box(40, -10, 60, 10)]);
+    expect(placed.y).toBe(0);
+    expect(Math.abs(placed.x - 50)).toBeGreaterThanOrEqual(22);
+    expect(Math.abs(placed.x - 50)).toBeLessThan(30);
+  });
+
+  it('moves beside its link where nowhere along it is clear', () => {
+    const placed = labelPoint(line, point(50, 0), label, [box(-10, 0, 110, 0)]);
+    expect(Math.abs(placed.y)).toBeGreaterThanOrEqual(5);
+    expect(placed.x).toBe(50);
   });
 });

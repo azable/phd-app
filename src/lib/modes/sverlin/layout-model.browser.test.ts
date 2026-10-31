@@ -29,12 +29,6 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-/**
- * Pictures already unsound, and how often: weights placed on Dijkstra's links overlap the vertex
- * cards beside them, as a free layout leaves its labels room only along their links.
- */
-const knownUnsound: Record<string, number> = { 'dijkstra-fields': 386 };
-
 async function sceneOf(source: string) {
   const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
   const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
@@ -79,8 +73,7 @@ for (const [path, source] of Object.entries(fixtures)) {
       expect(checks.flatMap((check) => check.problems)).toEqual([]);
       expect(exact / elements).toBeGreaterThan(0.99);
       expect(Math.max(...checks.map((check) => check.largest))).toBeLessThan(0.5);
-      const problems = steps.flatMap((step) => unsound(frame, step));
-      expect(problems.length).toBeLessThanOrEqual(knownUnsound[name] ?? 0);
+      expect(steps.flatMap((step) => unsound(frame, step))).toEqual([]);
     }
   );
 }

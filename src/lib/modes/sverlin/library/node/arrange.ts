@@ -16,7 +16,15 @@ import {
   type Form
 } from './forms';
 import { headDrawing, headTrim, type HeadEnds } from './heads';
-import { curvePath, pathBounds, routeCurve, shiftPath, wirePath, type Box } from './route';
+import {
+  curvePath,
+  labelPoint,
+  pathBounds,
+  routeCurve,
+  shiftPath,
+  wirePath,
+  type Box
+} from './route';
 import { routeWires } from './wires';
 
 /** One child to place: its key and its size in pixels. */
@@ -43,7 +51,7 @@ export type ArrangeEdge = {
   link: string;
   /** The id of the link component it draws, if it came from one. */
   id?: string;
-  /** The middle of the curve, or of a wire's longest run, where a label goes. */
+  /** Where its label goes: the curve's middle, or a wire's longest run's, where that is clear. */
   middle: { x: number; y: number };
 };
 
@@ -535,9 +543,19 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   };
   const first = routeAll([]);
   const labelled = links.some(({ label }) => label);
-  const edges = labelled
+  const routed = labelled
     ? routeAll(first.map((edge, i) => links[i].label && labelAt(edge.middle, links[i].label)))
     : first;
+  // Each label then goes where it is clear of every child and the labels placed before it: its
+  // link's middle, else the nearest point along or beside the link.
+  const taken: Box[] = boxes.map((_, box) => boxAt(whole(box)));
+  const edges = routed.map((edge, i) => {
+    const label = links[i].label;
+    if (!label) return edge;
+    const middle = labelPoint(edge.path, edge.middle, label, taken);
+    taken.push(labelAt(middle, label));
+    return { ...edge, middle };
+  });
 
   // The arrangement's box holds everything it draws: the children, curves that bow out past them,
   // the heads at their ends, and labels, so what is placed beside it stays clear of all of them.

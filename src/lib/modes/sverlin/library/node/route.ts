@@ -120,6 +120,83 @@ function pathPoints(path: string): Point[] {
   return points;
 }
 
+// How far a label keeps from the boxes it avoids.
+const labelClearance = 2;
+
+/**
+ * Where a label's middle goes on a path drawn by curvePath or wirePath: the middle given, or else
+ * the point along the path nearest its middle, then beside it, where the label is clear of every
+ * box to avoid; where there is none, the one overlapping them least.
+ */
+export function labelPoint(
+  path: string,
+  middle: Point,
+  label: { width: number; height: number },
+  avoid: readonly Box[]
+): Point {
+  const points = pathPoints(path);
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++)
+    lengths.push(
+      lengths[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+    );
+  const total = lengths[lengths.length - 1];
+  // The point a fraction of the way along, and the unit normal to the path there.
+  const along = (fraction: number) => {
+    const length = fraction * total;
+    const i = Math.min(
+      points.length - 1,
+      Math.max(
+        1,
+        lengths.findIndex((each) => each >= length)
+      )
+    );
+    const [a, b] = [points[i - 1] ?? points[0], points[i] ?? points[0]];
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const t = (length - lengths[i - 1]) / span;
+    const run = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return {
+      point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t },
+      normal: { x: -(b.y - a.y) / run, y: (b.x - a.x) / run }
+    };
+  };
+  const covered = ({ x, y }: Point) =>
+    avoid.reduce((sum, box) => {
+      const width =
+        Math.min(x + label.width / 2, box.right + labelClearance) -
+        Math.max(x - label.width / 2, box.left - labelClearance);
+      const height =
+        Math.min(y + label.height / 2, box.bottom + labelClearance) -
+        Math.max(y - label.height / 2, box.top - labelClearance);
+      return width > 0 && height > 0 ? sum + width * height : sum;
+    }, 0);
+  const fractions = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8].map(
+    (step) => 0.5 + step * 0.05
+  );
+  // Beside the path, far enough that the label's near edge clears the line.
+  const besides = fractions.flatMap((fraction) => {
+    const { point, normal } = along(fraction);
+    const reach =
+      (Math.abs(normal.x) * label.width + Math.abs(normal.y) * label.height) / 2 + labelClearance;
+    return [1, -1].map((side) => ({
+      x: point.x + normal.x * reach * side,
+      y: point.y + normal.y * reach * side
+    }));
+  });
+  let best = middle;
+  let least = Infinity;
+  for (const candidate of [
+    middle,
+    ...fractions.map((fraction) => along(fraction).point),
+    ...besides
+  ]) {
+    const overlap = covered(candidate);
+    if (overlap < least) [best, least] = [candidate, overlap];
+    if (overlap === 0) break;
+  }
+  return best;
+}
+
 /** The box a path drawn by curvePath or wirePath covers, a curve where it bows out included. */
 export function pathBounds(path: string): Box {
   const points = pathPoints(path);

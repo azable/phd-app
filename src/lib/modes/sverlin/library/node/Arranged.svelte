@@ -2,7 +2,7 @@
   Places a free layout's children by constraint layout (see arrange.ts): it measures each child as
   laid out inside, solves for their positions, places them, and takes the size that holds everything
   it draws, drawing any links over them (see LinkLines.svelte) and placing their labels on their
-  middles. Its layout follows from its children, its links and its kind's values alone, never from
+  middles, or nearby where a middle is not clear. Its layout follows from its children, its links and its kind's values alone, never from
   the space around it. A nested arrangement that settles later asks its parent to lay out again, so
   sizes flow up and the final layout uses every child's final size.
 -->
@@ -123,7 +123,7 @@
         !child.hasAttribute('data-sv-link') &&
         !child.hasAttribute('data-sv-link-label')
     );
-    // Each link's label, measured so the link leaves room for it, then placed on its middle.
+    // Each link's label, measured so the link leaves room for it, then placed on its middle or near it.
     const labels = labelsIn(host);
     // A link with no from starts at the node it sits in, as a node's next field, not its whole box.
     const origin = (marker: HTMLElement) =>
