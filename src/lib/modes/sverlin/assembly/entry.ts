@@ -6,6 +6,7 @@
 
 import { mount, unmount, type Component } from 'svelte';
 import {
+  checkLayout,
   describeFrame,
   describeStep,
   animateStep,
@@ -20,6 +21,7 @@ import {
   unpackStates,
   type FrameSettings,
   type DesignValues,
+  type LayoutCheck,
   type LayoutMemory,
   type SceneFrame,
   type SceneStep
@@ -712,24 +714,30 @@ async function recordSteps() {
 
 /**
  * Describe every step as scene data (see library/scene.ts), each laid out as it is shown, in a
- * hidden layer of its own, so the step on screen stays as it is.
+ * hidden layer of its own, so the step on screen stays as it is; and, asked to check, how far the
+ * layout model is from the page's layout of each (see library/model/check.ts).
  */
-async function describeSteps(): Promise<{ frame?: SceneFrame; steps: SceneStep[] }> {
+async function describeSteps(
+  check: boolean
+): Promise<{ frame?: SceneFrame; steps: SceneStep[]; checks?: LayoutCheck[] }> {
   let frame: SceneFrame | undefined;
   const steps: SceneStep[] = [];
+  const checks: LayoutCheck[] = [];
   for (let step = 0; step < stepCount; step++) {
     await whenShown();
     steps.push(
       await new Promise<SceneStep>((done) => {
         mountStep(afterOf(step), 'showing', (shown) => {
           frame ??= describeFrame(shown.layer);
+          const flow = shown.layer.querySelector<HTMLElement>('.sv-flow');
+          if (check && flow) checks.push(checkLayout(flow));
           done(describeStep(shown.layer));
           remove(shown);
         });
       })
     );
   }
-  return { frame, steps };
+  return { frame, steps, ...(check ? { checks } : {}) };
 }
 
 let ready = false;
@@ -746,11 +754,12 @@ addEventListener('message', (event: MessageEvent) => {
     step?: unknown;
     selection?: unknown;
     request?: unknown;
+    check?: unknown;
   };
   if (data?.type === 'sverlin:describe' && typeof data.request === 'string') {
     const request = data.request;
     void recording
-      .then(describeSteps)
+      .then(() => describeSteps(data.check === true))
       .then((scene) => window.parent.postMessage({ type: 'sverlin:scene', request, ...scene }, '*'))
       .catch((cause: unknown) =>
         window.parent.postMessage(
