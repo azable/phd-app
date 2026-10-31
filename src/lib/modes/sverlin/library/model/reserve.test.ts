@@ -40,7 +40,6 @@ const row = (id: string, ...children: string[]) =>
 
 const memoryOf = (): LayoutMemory => ({
   step: 0,
-  recording: true,
   scopes: new Map(),
   fits: new Map(),
   reserved: new Map(),

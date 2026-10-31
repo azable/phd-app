@@ -15,15 +15,10 @@
  */
 
 import { flowExtent, neededFit } from '../fit';
-import {
-  arrangeChildren,
-  arrangementInput,
-  recordArrangement,
-  type ArrangementProps
-} from '../node/arrangement';
+import { arrangeChildren, arrangementInput, type ArrangementProps } from '../node/arrangement';
 import { overlayRoom, routeOverlay, type Sides } from '../node/overlay';
 import type { Reader } from '../node/reader';
-import { solveSpan, type SpanInput } from '../node/span';
+import { solveRecorded } from '../node/span';
 import type { LayoutMemory } from '../type-context';
 import type { Rule } from './css';
 import { layOut, type ModelLayout, type TextMeasure } from './layout';
@@ -457,6 +452,8 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
     // Free layouts first, each solved over every step it is recorded at.
     for (const key of keys.filter((each) => each.startsWith('a:'))) {
       const scope = key.slice(2);
+      const entry = memory.scopes.get(scope) ?? { inputs: new Map() };
+      memory.scopes.set(scope, entry);
       for (const { at, element } of instances.get(key) ?? []) {
         const host = elementsOf(element).find((child) => classesOf(child).includes('placed'));
         const kind = at.kinds.get(element);
@@ -464,21 +461,13 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
         const read = model.hostReader(at, host);
         const { step } = at.drawing;
         if (step !== undefined)
-          recordArrangement(
-            { ...memory, step },
-            scope,
-            arrangementInput(read, host, kind.props).input
-          );
-        else if (!memory.scopes.get(scope)?.inputs.size) {
+          entry.inputs.set(step, arrangementInput(read, host, kind.props).input);
+        else if (!entry.inputs.size) {
           const solved = arrangeChildren(read, host, kind.props, undefined);
           model.alone.set(element, { width: solved.width, height: solved.height });
         }
       }
-      const entry = memory.scopes.get(scope);
-      if (entry?.inputs.size) {
-        const steps = [...entry.inputs.keys()].sort((a, b) => a - b);
-        entry.span = solveSpan(steps.map((step) => entry.inputs.get(step) as SpanInput));
-      }
+      if (entry.inputs.size) solveRecorded(entry);
     }
     // Then the nodes, each keeping the largest size it reaches.
     for (const key of keys.filter((each) => each.startsWith('n:'))) {

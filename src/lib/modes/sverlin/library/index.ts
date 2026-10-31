@@ -17,7 +17,6 @@ export { kindKey, type DesignValues } from './node/design';
 export type { LayoutMemory } from './type-context';
 export { provideEnds, providePointers } from './type-context';
 export { linePairs } from './node/lines';
-export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';
 export { arrangementLayout, describeFrame, describeStep } from './scene';

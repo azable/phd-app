@@ -67,8 +67,7 @@
       );
       const needed = neededFit(inside, content);
       // Every step shows at the smallest fit any step needs, so the view never zooms between them.
-      if (memory?.recording) memory.fits.set(memory.step, needed);
-      fit = memory && !memory.recording ? Math.min(needed, ...memory.fits.values()) : needed;
+      fit = memory ? Math.min(needed, ...memory.fits.values()) : needed;
       flowLeast = { width: inside.width / fit, height: inside.height / fit };
       rootSize = {
         width: Math.max(content.width, inside.width / fit),

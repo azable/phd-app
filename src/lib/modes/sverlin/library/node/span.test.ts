@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { settleSpans, solveSpan, type SpanInput, type SpanLayout } from './span';
+import { solveRecorded, solveSpan, type SpanInput, type SpanLayout } from './span';
 
 const input = (
   boxes: { key: string; width: number; height: number }[],
@@ -57,14 +57,11 @@ describe('layouts over a whole animation', () => {
       [1, steps[1]],
       [0, steps[0]]
     ]);
-    const scopes = new Map<string, { inputs: Map<number, SpanInput>; span?: SpanLayout }>([
-      ['x', { inputs: forward }],
-      ['y', { inputs: backward }]
-    ]);
-    expect(settleSpans(scopes)).toBe(true);
-    expect(scopes.get('x')?.span?.positions).toEqual(scopes.get('y')?.span?.positions);
-    // Solving again from the same records changes nothing, so recording can stop.
-    expect(settleSpans(scopes)).toBe(false);
+    const x: { inputs: Map<number, SpanInput>; span?: SpanLayout } = { inputs: forward };
+    const y: { inputs: Map<number, SpanInput>; span?: SpanLayout } = { inputs: backward };
+    solveRecorded(x);
+    solveRecorded(y);
+    expect(x.span?.positions).toEqual(y.span?.positions);
   });
 });
 

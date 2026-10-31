@@ -260,7 +260,6 @@ function drawingOf(
 
   const memory: LayoutMemory = {
     step,
-    recording: phase === 'recording',
     measuring: phase === 'measuring',
     probing: extra.__probe !== undefined,
     scopes,
@@ -598,7 +597,6 @@ async function recordSteps() {
   started = performance.now();
   const memory: LayoutMemory = {
     step: 0,
-    recording: true,
     scopes,
     fits,
     reserved,

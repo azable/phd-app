@@ -234,18 +234,10 @@ export function arrangementInput<E>(
   };
 }
 
-/** Note what a free layout contains at the step being recorded, to solve it over every step. */
-export function recordArrangement(memory: LayoutMemory, scope: string, input: SpanInput): void {
-  let entry = memory.scopes.get(scope);
-  if (!entry) memory.scopes.set(scope, (entry = { inputs: new Map() }));
-  entry.inputs.set(memory.step, input);
-}
-
 /**
  * Lay out a free layout's children, read from its host: place them where the solution over every
- * step put them, or, for a step it does not know, by solving this step alone. While recording, what
- * it contains at the step is noted in the memory, so it can be solved once over every step (see
- * node/span.ts).
+ * step put them (see model/reserve.ts), or, for a step it does not know, by solving this step
+ * alone.
  */
 export function arrangeChildren<E>(
   read: Reader<E>,
@@ -255,12 +247,11 @@ export function arrangeChildren<E>(
 ): Arrangement<E> {
   const { input, elements, labels, styles, anchors, parts } = arrangementInput(read, host, props);
   const { boxes, options, seed } = input;
-  if (memory?.recording) recordArrangement(memory, props.scope, input);
-  // Children go where the solution over every step put them, and only this step's links are
-  // drawn. A child the solution does not know, such as before it is made, is laid out here alone.
   // Links this step draws, by their components' ids.
   const present = new Set(options.links?.map((link) => linkSpecOf(link)?.id));
   const drawn = (edge: ArrangeEdge) => edge.id !== undefined && present.has(edge.id);
+  // Children go where the solution over every step put them, and only this step's links are
+  // drawn. A child the solution does not know, such as before it is made, is laid out here alone.
   const span = memory?.scopes.get(props.scope)?.span;
   if (span && boxes.every(({ key }) => span.positions[key]))
     return {

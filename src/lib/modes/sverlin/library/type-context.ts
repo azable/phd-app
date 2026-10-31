@@ -164,18 +164,19 @@ export function arrangementParentContext(): ArrangementParent | undefined {
 }
 
 /**
- * Layouts for a whole presentation, made when the page loads: every node is measured at every step
- * and keeps the largest size it reaches; then every step is laid out hidden, recording what each
- * arrangement contains, and each arrangement is solved once over all of them (see node/span.ts).
- * Showing a step places children where that solution put them, so a seed always gives the same
- * layout for a step, whichever step is shown first, and only what changes moves.
+ * Layouts for a whole presentation, made when the page loads, before any step is mounted: each
+ * step's markup is laid out on the layout model, every node keeping the largest size it reaches,
+ * and each arrangement solved once over every step (see model/reserve.ts). Showing a step places
+ * children where that solution put them, so a seed always gives the same layout for a step,
+ * whichever step is shown first, and only what changes moves.
  */
 export type LayoutMemory = {
   /** The step being laid out or shown. */
   step: number;
-  /** True while recording what arrangements contain; false when showing a step. */
-  recording: boolean;
-  /** True while only measuring each node's natural size, before anything is recorded. */
+  /**
+   * True while drawing a step's markup to lay out on the layout model, which gives each node its
+   * size: no node keeps one as drawn.
+   */
   measuring?: boolean;
   /**
    * True while drawing components for every value of their parameters: the components measured

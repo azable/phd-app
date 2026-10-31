@@ -125,23 +125,8 @@ function unionLinks(lists: readonly (readonly (string | LinkSpec)[] | undefined)
   return [...seen.values()];
 }
 
-/**
- * Solve every arrangement from what the steps recorded, returning whether any solution changed: a
- * nested arrangement's new size changes what its parent contains, so recording repeats until
- * nothing does.
- */
-export function settleSpans(
-  scopes: Map<string, { inputs: Map<number, SpanInput>; span?: SpanLayout }>
-): boolean {
-  let changed = false;
-  for (const entry of scopes.values()) {
-    if (!entry.inputs.size) continue;
-    const steps = [...entry.inputs.keys()].sort((a, b) => a - b);
-    const span = solveSpan(steps.map((step) => entry.inputs.get(step) as SpanInput));
-    const shape = (layout?: SpanLayout) =>
-      layout && JSON.stringify([layout.positions, layout.width, layout.height]);
-    if (shape(span) !== shape(entry.span)) changed = true;
-    entry.span = span;
-  }
-  return changed;
+/** Solve an arrangement once from what every step recorded, taken in the order of the steps. */
+export function solveRecorded(entry: { inputs: Map<number, SpanInput>; span?: SpanLayout }): void {
+  const steps = [...entry.inputs.keys()].sort((a, b) => a - b);
+  entry.span = solveSpan(steps.map((step) => entry.inputs.get(step) as SpanInput));
 }

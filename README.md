@@ -110,25 +110,29 @@ kind's `layoutSeed` and its place, so the presentation seed decides no layout
 and a layout changes only with those variant values; selections report each
 element's surrounding free layouts (arranging node, kind, layout seed, form,
 curve) in its `element-ref`, so the assistant can keep a layout the participant
-liked by varying those values. On load the page first measures every node at
-every step and keeps the largest size each reaches as its least size, so
-changing content never resizes a box, and gives every item of a collection the
-largest size any of them reaches, so items line up even when only some change
-([`assembly/entry.ts`](src/lib/modes/sverlin/assembly/entry.ts)); it then lays
-out every step hidden, recording what each arrangement contains, and solves each
-arrangement once over the union of every step, with every child and link that
-ever appears
-([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts), repeated
-until nested sizes settle); showing a step places children where that solution
-put them, drawing only that step's links, at a root fit shared by all steps, so
-positions are valid across the whole animation, so a seed gives the same layout
-for each step whichever step is shown first, and only what changes moves. The
-page frame is the root arrangement, scaled down when it would not fit and up, to
-1.6 times, when it would leave the frame mostly empty. Participants' selections
-inside the frame reference nodes in feedback: the compiler stamps every `<Node>`
-with its tag's `line:column` as the reserved `__ref` prop, each rendered node
-gets an id from it, and a keyed node from its tag and key too, so it keeps its
-id as other nodes come and go
+liked by varying those values. On load the page lays out every step before it
+shows any, mounting none of them: it draws each step's markup with Svelte's
+string renderer and lays it out on a layout model of its own, from the library's
+style sheets and text measured on a canvas
+([`library/model/reserve.ts`](src/lib/modes/sverlin/library/model/reserve.ts)).
+Sizes compose bottom up: a typed component's root keeps its component's box, any
+other node keeps the largest size it reaches at any step, laid out with the
+sizes the nodes inside it keep, so changing content never resizes a box, every
+item of a collection keeps the largest size any of them reaches, so items line
+up even when only some change, and each arrangement is solved once over the
+union of every step, with every child and link that ever appears
+([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)), the node
+holding it sized with it; nodes alike are laid out once. Showing a step mounts
+it and places children where that solution put them, drawing only that step's
+links, at a root fit shared by all steps, so positions are valid across the
+whole animation, so a seed gives the same layout for each step whichever step is
+shown first, and only what changes moves. The page frame is the root
+arrangement, scaled down when it would not fit and up, to 1.6 times, when it
+would leave the frame mostly empty. Participants' selections inside the frame
+reference nodes in feedback: the compiler stamps every `<Node>` with its tag's
+`line:column` as the reserved `__ref` prop, each rendered node gets an id from
+it, and a keyed node from its tag and key too, so it keeps its id as other nodes
+come and go
 ([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)),
 and the frame reports selections as `sverlin:selection` messages, which the app
 validates and keeps per presentation and step. Feedback records them as
