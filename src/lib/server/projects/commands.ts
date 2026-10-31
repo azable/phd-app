@@ -100,6 +100,7 @@ import {
   type VariantChooser
 } from './choosers';
 import { projectChooserId } from './chooser-config';
+import { settledValues } from './variant-guard';
 
 /** Replaceable AI and persistence boundaries used by command unit tests. */
 export type ProjectCommandDependencies = {
@@ -167,6 +168,7 @@ function botChooser(
           count: request.count,
           design,
           ...(request.seen.length ? { seen: request.seen } : {}),
+          ...(Object.keys(request.settled).length ? { settled: request.settled } : {}),
           ...(request.design.runs ? { runs: request.design.runs } : {}),
           ...(request.design.structures && Object.keys(request.design.structures).length
             ? { structures: request.design.structures }
@@ -251,6 +253,7 @@ export function chosenVariantRequests(
           .flatMap(({ variant }) => (variant ? [variant] : [])),
         from.variant
       ),
+      settled: settledValues(options.document.events),
       operationId: options.operationId,
       attempt: 1
     });
@@ -1492,6 +1495,7 @@ async function chosenBuild(
     count: options.seeds.length,
     design: bundle,
     seen: [],
+    settled: settledValues(options.document.events),
     operationId: options.operationId,
     attempt: options.attempt
   });

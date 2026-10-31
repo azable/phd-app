@@ -21,6 +21,7 @@ import {
 import { readRequestTimeoutMs } from '$lib/server/chat-adapters/openai';
 import type { ChatAdapter, ChatAdapterRequest } from '$lib/server/chat-adapters/types';
 import type { ChatBotConfig } from '$lib/server/chat-bots/types';
+import { allowedChange, hides, pictureTree } from '$lib/server/projects/variant-guard';
 
 import sverlinChooser, { type ChooserOutput, type ChooserProject } from './chooser.server';
 
@@ -101,7 +102,9 @@ export function resampledVariants(
   asked: readonly Asked[],
   count: number,
   response: Pick<DecisionsResponse, 'answers'>,
-  seen: readonly Record<string, DesignValue>[] = []
+  seen: readonly Record<string, DesignValue>[] = [],
+  /** Whether a change may be made at all (variant-guard.ts); every change by default. */
+  allowed: (variable: string, value: DesignValue) => boolean = () => true
 ): ChooserOutput {
   const questions = resampleQuestions(asked);
   const ranked = asked
@@ -124,7 +127,9 @@ export function resampledVariants(
         order: priority(variable.variable)
       };
     })
-    .filter(({ alternative }) => alternative !== undefined)
+    .filter(
+      ({ variable, alternative }) => alternative !== undefined && allowed(variable, alternative)
+    )
     .sort((a, b) => b.wanted - a.wanted || a.order - b.order);
   const isSeen = (values: readonly { variable: string; value: DesignValue }[]) =>
     seen.some(
@@ -132,20 +137,31 @@ export function resampledVariants(
         Object.keys(variant).length === values.length &&
         values.every(({ variable, value }) => variant[variable] === value)
     );
+  // The next changes from a place in the ranking, at most one of them hiding something; and where
+  // the walk ended.
+  const changesFrom = (start: number) => {
+    const values: { variable: string; value: DesignValue }[] = [];
+    let at = start;
+    for (; at < start + ranked.length && values.length < changedPerResample; at += 1) {
+      const { variable, alternative } = ranked[at % ranked.length];
+      const hiding = hides(variable, alternative);
+      if (hiding && values.some(({ variable, value }) => hides(variable, value))) continue;
+      values.push({ variable, value: alternative });
+    }
+    return { values, next: at };
+  };
   const variants: ChooserOutput['variants'] = [];
   let start = 0;
-  while (variants.length < count && ranked.length) {
-    const values = Array.from(
-      { length: Math.min(changedPerResample, ranked.length) },
-      (_, offset) => {
-        const { variable, alternative } = ranked[(start + offset) % ranked.length];
-        return { variable, value: alternative };
-      }
-    );
-    start += 1;
-    if (isSeen(values) && start < ranked.length * 2) continue;
+  let tries = 0;
+  while (variants.length < count && ranked.length && tries < ranked.length * 3) {
+    tries += 1;
+    const { values, next } = changesFrom(start);
+    if (isSeen(values) && tries < ranked.length * 2) {
+      start += 1;
+      continue;
+    }
     variants.push({ values, randomise: [] });
-    start += changedPerResample - 1;
+    start = next;
   }
   return { variants };
 }
@@ -206,6 +222,13 @@ export const decisionsChooserAdapter: ChatAdapter = {
   async generateReply(request) {
     const project = (request.context as { project: ChooserProject }).project;
     const resample = project.purpose === 'resample';
+    const guard = {
+      tree: pictureTree(project.source),
+      base: Object.fromEntries(
+        project.design.variables.map(({ variable, value }) => [variable, value])
+      ),
+      settled: project.settled ?? {}
+    };
     const asked = askedVariables(project).filter(({ variable }) => !resample || visible(variable));
     const response = await createDecisions(
       {
@@ -217,7 +240,9 @@ export const decisionsChooserAdapter: ChatAdapter = {
     );
     return {
       output: resample
-        ? resampledVariants(asked, project.count, response, project.seen)
+        ? resampledVariants(asked, project.count, response, project.seen, (variable, value) =>
+            allowedChange(guard, variable, value)
+          )
         : chosenVariants(asked, project.count, response),
       providerResponse: response,
       generation: {

@@ -28,6 +28,11 @@ values it differs in from the starting variant. On a resample, the participant
 has seen these and wants something else: change the open choices those variants
 did not try, and do not return one of them or the starting variant again.
 
+project.settled holds the values earlier preferences and the assistant settled:
+keep them. Hide at most one thing per variant (a kind not shown, a view or
+pointer of none, no listing), never a part the view's root draws or one holding
+most of the picture; any other hide is dropped before the variant is built.
+
 Return project.count variants. Each lists only the values it changes, every one
 an option of its variable, and the variables to draw afresh at random;
 everything else keeps its starting value. Choose values that go together, such

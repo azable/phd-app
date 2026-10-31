@@ -11,6 +11,8 @@ import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import type { ChooserId } from '$lib/shared/choosers';
 
+import { guardedChoice, pictureTree } from './variant-guard';
+
 export type { ChooserId };
 
 /**
@@ -35,6 +37,8 @@ export type ChooserRequest = {
   design: DesignSource;
   /** Variants of this source already shown, newest first, each as the values it differs in. */
   seen: DesignValues[];
+  /** Values earlier preferences or the assistant's vary decisions settled, which no chooser changes. */
+  settled: DesignValues;
   operationId: string;
   attempt: number;
 };
@@ -71,14 +75,26 @@ export const randomChooser: VariantChooser = {
   }
 };
 
-/** Ask a chooser, falling back to the random draw when it fails. */
+/**
+ * Ask a chooser, falling back to the random draw when it fails, and hold every choice to the
+ * limits on what may be hidden (variant-guard.ts), whichever chooser made it.
+ */
 export async function chooseVariants(
   chooser: VariantChooser,
   request: ChooserRequest
 ): Promise<{ document: ProjectDocument; choices: VariantChoice[]; chooser: ChooserId }> {
   const result = await chooser.choose(request);
+  const context = {
+    tree: pictureTree(request.source),
+    base: request.design.variant ?? {},
+    settled: request.settled
+  };
   if (result.choices)
-    return { document: result.document, choices: result.choices, chooser: chooser.id };
+    return {
+      document: result.document,
+      choices: result.choices.map((choice) => guardedChoice(context, choice)),
+      chooser: chooser.id
+    };
   const fallback = await randomChooser.choose({ ...request, document: result.document });
   return { document: fallback.document, choices: fallback.choices ?? [], chooser: 'random' };
 }

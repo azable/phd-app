@@ -1,0 +1,215 @@
+/**
+ * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
+ * top-level part (what the view's root renders) or a node holding most of the picture, never what
+ * earlier preferences or the assistant's vary decisions settled, at most one hide per variant, and
+ * most of the picture still showing afterwards.
+ */
+
+import type { DesignValues } from '$lib/shared/presentations';
+import type { ProjectEvent } from '$lib/shared/projects/events';
+
+type DesignValue = string | number | boolean;
+
+/** A change that hides something: a kind not shown, a type or pointer view of none, no listing. */
+export function hides(variable: string, value: unknown): boolean {
+  if (variable.endsWith('.shown')) return value === false;
+  if (variable.startsWith('views.') || variable.startsWith('pointers.')) return value === 'none';
+  return variable === 'listing.language' && value === 'none';
+}
+
+/** The most of the picture one press may hide, and the least that must stay. */
+const hiddenAtMost = 0.5;
+
+/** The snippets a source defines, what each renders, and what its root renders. */
+export type PictureTree = { snippets: Map<string, string[]>; root: string[]; listings: number };
+
+export function pictureTree(source: string): PictureTree {
+  const markup = source.replace(/<script[\s\S]*?<\/script>/gu, '');
+  const snippets = new Map<string, string[]>();
+  const root: string[] = [];
+  const open: string[] = [];
+  let listings = 0;
+  const tokens =
+    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b/gu;
+  for (const match of markup.matchAll(tokens)) {
+    if (match[1]) {
+      open.push(match[1]);
+      if (!snippets.has(match[1])) snippets.set(match[1], []);
+    } else if (match[0] === '{/snippet}') open.pop();
+    else if (match[2]) {
+      const parent = open.at(-1);
+      if (parent) snippets.get(parent)!.push(match[2]);
+      else root.push(match[2]);
+    } else if (open.length === 0) listings += 1;
+    else snippets.get(open.at(-1)!)!.push('<Listing>');
+  }
+  return { snippets, root, listings };
+}
+
+type Hidden = { snippets: Set<string>; types: Set<string>; listing: boolean };
+
+/** How much of the picture shows: every node the root reaches, counted once per place it is drawn. */
+function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): number {
+  const sizes = new Map<string, number>();
+  const size = (name: string, path: readonly string[]): number => {
+    if (name === '<Listing>') return hidden.listing ? 0 : 1;
+    const body = tree.snippets.get(name);
+    if (!body) {
+      // A type rendered by name draws its view, or nothing when its view is none.
+      if (hidden.types.has(name)) return 0;
+      const view = variant[`views.${name}`] ?? variant[`pointers.${name}`];
+      if (view === 'none') return 0;
+      return typeof view === 'string' && tree.snippets.has(view) && !path.includes(view)
+        ? size(view, path)
+        : 1;
+    }
+    if (hidden.snippets.has(name) || path.includes(name)) return 0;
+    if (sizes.has(name)) return sizes.get(name)!;
+    const total = 1 + body.reduce((sum, child) => sum + size(child, [...path, name]), 0);
+    sizes.set(name, total);
+    return total;
+  };
+  return (
+    tree.root.reduce((sum, name) => sum + size(name, []), 0) + (hidden.listing ? 0 : tree.listings)
+  );
+}
+
+/** The snippet a kind's shown variable hides: the last kind in its path, before any place. */
+function shownSnippet(variable: string): string {
+  return variable.slice(0, -'.shown'.length).split('@')[0].split('.').at(-1) ?? variable;
+}
+
+function hiddenBy(changes: readonly [string, unknown][]): Hidden {
+  const hidden: Hidden = { snippets: new Set(), types: new Set(), listing: false };
+  for (const [variable, value] of changes) {
+    if (!hides(variable, value)) continue;
+    if (variable === 'listing.language') hidden.listing = true;
+    else if (variable.endsWith('.shown')) hidden.snippets.add(shownSnippet(variable));
+    // A place's own view (views.Int@value) hides one render; the type's, all of them.
+    else if (!variable.includes('@'))
+      hidden.types.add(
+        variable
+          .slice(variable.indexOf('.') + 1)
+          .split('.')
+          .at(-1)!
+      );
+  }
+  return hidden;
+}
+
+/** The share of the picture these changes hide, from 0 to 1. */
+export function hiddenShare(
+  tree: PictureTree,
+  variant: DesignValues,
+  changes: readonly [string, unknown][]
+): number {
+  const empty: Hidden = { snippets: new Set(), types: new Set(), listing: false };
+  const whole = pictureSize(tree, variant, empty);
+  if (whole === 0) return 0;
+  return 1 - pictureSize(tree, variant, hiddenBy(changes)) / whole;
+}
+
+export type GuardContext = {
+  tree: PictureTree;
+  /** The variant the choices start from. */
+  base: DesignValues;
+  /** Values earlier preferences or the assistant's vary decisions settled. */
+  settled: DesignValues;
+};
+
+/** Whether one change may be made on its own: not a settled value, not hiding too much. */
+export function allowedChange(context: GuardContext, variable: string, value: unknown): boolean {
+  if (variable in context.settled && context.settled[variable] !== value) return false;
+  if (!hides(variable, value)) return true;
+  if (variable.endsWith('.shown') && context.tree.root.includes(shownSnippet(variable)))
+    return false;
+  return hiddenShare(context.tree, context.base, [[variable, value]]) < hiddenAtMost;
+}
+
+/**
+ * A choice held to the limits: changes to settled values and hides that are not allowed are
+ * dropped, then all but its first hide, and every hide when together they leave too little showing.
+ */
+export function guardedChoice<Choice extends { chosen: DesignValues }>(
+  context: GuardContext,
+  choice: Choice
+): Choice {
+  let hidden = false;
+  const kept = Object.entries(choice.chosen).filter(([variable, value]) => {
+    if (!allowedChange(context, variable, value)) return false;
+    if (!hides(variable, value)) return true;
+    if (hidden) return false;
+    hidden = true;
+    return true;
+  });
+  const safe =
+    hiddenShare(context.tree, context.base, kept) < hiddenAtMost
+      ? kept
+      : kept.filter(([variable, value]) => !hides(variable, value));
+  return { ...choice, chosen: Object.fromEntries(safe) };
+}
+
+/**
+ * The values a project has settled: in each recorded preference, the preferred presentation's
+ * values where its pair differed, and the values of each vary decision the assistant made, the
+ * newest winning.
+ */
+export function settledValues(events: readonly ProjectEvent[]): DesignValues {
+  const variants = new Map<string, DesignValues>();
+  const settled: Record<string, DesignValue> = {};
+  for (const event of events) {
+    if (
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1' &&
+      event.payload.presentation.variant
+    )
+      variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
+    if (event.type === 'visualization.preference-recorded') {
+      const preferred = variants.get(event.payload.preferred);
+      const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
+      const alternative = other ? variants.get(other) : undefined;
+      if (!preferred || !alternative) continue;
+      for (const [variable, value] of Object.entries(preferred))
+        if (alternative[variable] !== value) settled[variable] = value as DesignValue;
+    }
+    if (event.type === 'ai.generation-succeeded') {
+      for (const { variable, value } of varyValues(event.payload.response.text))
+        settled[variable] = value;
+    }
+  }
+  return settled;
+}
+
+/** The values a recorded assistant response's vary decision sets, if it made one. */
+function varyValues(response: string): { variable: string; value: DesignValue }[] {
+  try {
+    const parsed = JSON.parse(response) as {
+      output_text?: string;
+      output?: { content?: { text?: string }[] }[];
+      decision?: unknown;
+    };
+    const texts = [
+      parsed.output_text,
+      ...(parsed.output ?? []).flatMap(({ content }) => (content ?? []).map(({ text }) => text))
+    ].filter((text): text is string => typeof text === 'string');
+    const decisions = [
+      parsed.decision,
+      ...texts.map((text) => {
+        try {
+          return (JSON.parse(text) as { decision?: unknown }).decision;
+        } catch {
+          return undefined;
+        }
+      })
+    ];
+    for (const decision of decisions) {
+      const vary = decision as
+        | { action?: unknown; values?: { variable: string; value: DesignValue }[] }
+        | undefined;
+      if (vary?.action === 'vary' && Array.isArray(vary.values)) return vary.values;
+    }
+  } catch {
+    // Not a recorded response with a decision.
+  }
+  return [];
+}

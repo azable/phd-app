@@ -1,0 +1,815 @@
+{
+  "source": "<script lang=\"sverlin\" domain>\n  const Int = type('integer', { min: 0, max: 9 });\n  const Flag = type('boolean');\n  const NotFound = type(['not found']);\n  const Values = collection(Int);\n  const Index = index(Values);\n  const Result = union(Index, NotFound);\n\n  const Length = unop((list: Values) => Index(list.length));\n  const Before = binop((a: Index, b: Index) => Flag(a < b));\n  const Next = unop((p: Index) => Index(p + 1));\n  const Equal = binop((a: Int, b: Int) => Flag(a === b));\n</script>\n\n<script lang=\"sverlin\" input>\n  const values = Values([4, 7, 2, 9, 5]);\n  const target = Int(9);\n</script>\n\n<script lang=\"sverlin\">\n  function linearSearch(list, sought) {\n    for (let i = Index(list, 0); Before(i, Length(list)); i = Next(i)) {\n      if (@check[Equal(list[i], sought)]) @found{\n        return i;\n      }\n    }\n    @missing[return NotFound('not found');]\n  }\n\n  const answer = linearSearch(values, target);\n</script>\n\n<script lang=\"sverlin\" listing=\"textbook\">\nLINEAR-SEARCH(A, target)\nfor i = 0 to length(A) - 1\n    @check[if A[i] = target]\n        @found[return i]\n@missing[return not found]\n</script>\n\n{#snippet IntCell(value: Int)}\n  <Node value={value} />\n{/snippet}\n\n{#snippet IntTally(value: Int)}\n  {#snippet Tally()}<Node>{'•'.repeat(value)}</Node>{/snippet}\n  <Node layout=\"column\"><Node value={value} />{@render Tally()}</Node>\n{/snippet}\n\n{#snippet FlagWord(value: Flag)}\n  <Node>{value ? 'yes' : 'no'}</Node>\n{/snippet}\n\n{#snippet CheckMark(p: Index)}\n  {#snippet PointerCaption()}<Node>checking</Node>{/snippet}\n  <Node layout=\"column\"><Pointed />{@render PointerCaption()}</Node>\n{/snippet}\n\n{#snippet ResultCard(value: Result)}\n  <Node>\n    {#if value === 'not found'}\n      The target is not in the list\n    {:else}\n      Found at index {value}\n    {/if}\n  </Node>\n{/snippet}\n\n{#snippet EqualityQuestion(e: Equal)}\n  <Node>Does {@render Int(e.a)} match {@render Int(e.b)}? {@render Flag(e.value)}</Node>\n{/snippet}\n\n{#snippet Title()}\n  <Node>Linear search for {@render Int(target)}</Node>\n{/snippet}\n\n{#snippet Cells()}\n  <Node>{#each values as value}{@render Int(value)}{/each}</Node>\n{/snippet}\n\n{#snippet FoundCaption()}\n  <Node>Match found — return this index.</Node>\n{/snippet}\n\n{#snippet MissingCaption()}\n  <Node>Every value was checked, so the target is not present.</Node>\n{/snippet}\n\n{#snippet Answer()}\n  {#if when(end)}\n    <Node layout=\"column\"><Node>Result</Node>{@render Result(answer)}</Node>\n  {/if}\n{/snippet}\n\n{#snippet SearchView()}\n  <Node layout=\"column\">\n    {@render Title()}\n    {@render Cells()}\n    {#if when(@check)}\n      {@render Equal(@check)}\n    {:else if when(@found)}\n      {@render FoundCaption()}\n    {:else if when(@missing)}\n      {@render MissingCaption()}\n    {/if}\n    {@render Answer()}\n  </Node>\n{/snippet}\n\n{#snippet Board()}\n  <Node layout=\"row\"><Listing />{@render SearchView()}</Node>\n{/snippet}\n\n{@render Board()}\n{@render Index(i)}\n",
+  "variant": {
+    "views.Int": "IntCell",
+    "views.Flag": "FlagWord",
+    "Board.shown": true,
+    "Cells.shown": true,
+    "Title.shown": true,
+    "pause@check": "on",
+    "pause@found": "on",
+    "views.Equal": "EqualityQuestion",
+    "Answer.shown": true,
+    "views.Result": "ResultCard",
+    "IntCell.shown": true,
+    "pause@missing": "on",
+    "FlagWord.shown": true,
+    "IntTally.shown": true,
+    "pointers.Index": "CheckMark",
+    "CheckMark.shown": true,
+    "views.Int@value": "IntCell",
+    "ResultCard.shown": true,
+    "SearchView.shown": true,
+    "listing.language": "textbook",
+    "views.Int@target": "IntCell",
+    "CheckMark@i.shown": true,
+    "FoundCaption.shown": true,
+    "IntCell@value.shown": true,
+    "IntCell@target.shown": true,
+    "IntTally.Tally.shown": true,
+    "IntTally@value.shown": true,
+    "MissingCaption.shown": true,
+    "IntTally@target.shown": true,
+    "EqualityQuestion.shown": true,
+    "ResultCard@answer.shown": true,
+    "IntTally.Tally@value.shown": true,
+    "IntTally.Tally@target.shown": true,
+    "EqualityQuestion@check.shown": true,
+    "CheckMark.PointerCaption.shown": true,
+    "views.EqualityQuestion.Int@e.a": "IntCell",
+    "views.EqualityQuestion.Int@e.b": "IntCell",
+    "CheckMark.PointerCaption@i.shown": true,
+    "EqualityQuestion.IntCell@e.a.shown": true,
+    "EqualityQuestion.IntCell@e.b.shown": true,
+    "EqualityQuestion.IntTally@e.a.shown": true,
+    "EqualityQuestion.IntTally@e.b.shown": true,
+    "EqualityQuestion.FlagWord@e.value.shown": true,
+    "EqualityQuestion.IntTally.Tally@e.a.shown": true,
+    "EqualityQuestion.IntTally.Tally@e.b.shown": true
+  },
+  "options": {
+    "views.Int": ["IntCell", "IntTally", "none"],
+    "views.Flag": ["FlagWord", "none"],
+    "Board.shown": [true, false],
+    "Cells.shown": [true, false],
+    "Title.shown": [true, false],
+    "pause@check": ["accumulate", "on", "off"],
+    "pause@found": ["accumulate", "on", "off"],
+    "views.Equal": ["EqualityQuestion", "none"],
+    "Answer.shown": [true, false],
+    "views.Result": ["ResultCard", "none"],
+    "IntCell.shown": [true, false],
+    "pause@missing": ["accumulate", "on", "off"],
+    "FlagWord.shown": [true, false],
+    "IntTally.shown": [true, false],
+    "pointers.Index": ["CheckMark", "none"],
+    "CheckMark.shown": [true, false],
+    "views.Int@value": ["IntCell", "IntTally", "none"],
+    "ResultCard.shown": [true, false],
+    "SearchView.shown": [true, false],
+    "listing.language": ["textbook", "none"],
+    "views.Int@target": ["IntCell", "IntTally", "none"],
+    "CheckMark@i.shown": [true, false],
+    "FoundCaption.shown": [true, false],
+    "IntCell@value.shown": [true, false],
+    "IntCell@target.shown": [true, false],
+    "IntTally.Tally.shown": [true, false],
+    "IntTally@value.shown": [true, false],
+    "MissingCaption.shown": [true, false],
+    "IntTally@target.shown": [true, false],
+    "EqualityQuestion.shown": [true, false],
+    "ResultCard@answer.shown": [true, false],
+    "IntTally.Tally@value.shown": [true, false],
+    "IntTally.Tally@target.shown": [true, false],
+    "EqualityQuestion@check.shown": [true, false],
+    "CheckMark.PointerCaption.shown": [true, false],
+    "views.EqualityQuestion.Int@e.a": ["IntCell", "IntTally", "none"],
+    "views.EqualityQuestion.Int@e.b": ["IntCell", "IntTally", "none"],
+    "CheckMark.PointerCaption@i.shown": [true, false],
+    "EqualityQuestion.IntCell@e.a.shown": [true, false],
+    "EqualityQuestion.IntCell@e.b.shown": [true, false],
+    "EqualityQuestion.IntTally@e.a.shown": [true, false],
+    "EqualityQuestion.IntTally@e.b.shown": [true, false],
+    "EqualityQuestion.FlagWord@e.value.shown": [true, false],
+    "EqualityQuestion.IntTally.Tally@e.a.shown": [true, false],
+    "EqualityQuestion.IntTally.Tally@e.b.shown": [true, false]
+  },
+  "seen": [
+    {
+      "views.Int": "IntTally",
+      "views.Int@value": "IntTally",
+      "views.Int@target": "IntTally",
+      "views.EqualityQuestion.Int@e.a": "IntTally",
+      "views.EqualityQuestion.Int@e.b": "IntTally"
+    }
+  ],
+  "answers": [
+    {
+      "type": "choice",
+      "name": "Board.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.67
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.33
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "Cells.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.57
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.43
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "Title.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.47
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.53
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "Answer.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.7
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.3
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntCell.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.33
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.67
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "FlagWord.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.67
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.33
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.43
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.57
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "CheckMark.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.26
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.74
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "ResultCard.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.58
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.42
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "SearchView.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.53
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.47
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "listing.language",
+      "choice": "none",
+      "probabilities": [
+        {
+          "value": "none",
+          "probability": 0.93
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.07
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "CheckMark@i.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.51
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.49
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "FoundCaption.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.44
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.56
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntCell@value.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.48
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.52
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntCell@target.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.57
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.43
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally.Tally.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.57
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.43
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally@value.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.47
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.53
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "MissingCaption.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.52
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.48
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally@target.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.56
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.44
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.68
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.32
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "ResultCard@answer.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.55
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.45
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally.Tally@value.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.43
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.57
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "IntTally.Tally@target.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.42
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.58
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion@check.shown",
+      "choice": "false",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.52
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.48
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "CheckMark.PointerCaption.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.47
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.53
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "CheckMark.PointerCaption@i.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.39
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.61
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntCell@e.a.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.17
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.83
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntCell@e.b.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.3
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.7
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntTally@e.a.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.45
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.55
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntTally@e.b.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.4
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.6
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.FlagWord@e.value.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.33
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.67
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntTally.Tally@e.a.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.36
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.64
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "EqualityQuestion.IntTally.Tally@e.b.shown",
+      "choice": "(keep)",
+      "probabilities": [
+        {
+          "value": "false",
+          "probability": 0.37
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.63
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Int",
+      "choice": "IntTally",
+      "probabilities": [
+        {
+          "value": "IntTally",
+          "probability": 0.86
+        },
+        {
+          "value": "none",
+          "probability": 0.08
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.06
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Flag",
+      "choice": "none",
+      "probabilities": [
+        {
+          "value": "none",
+          "probability": 0.75
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.25
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Equal",
+      "choice": "none",
+      "probabilities": [
+        {
+          "value": "none",
+          "probability": 0.78
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.22
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Result",
+      "choice": "none",
+      "probabilities": [
+        {
+          "value": "none",
+          "probability": 0.75
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.25
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "pointers.Index",
+      "choice": "none",
+      "probabilities": [
+        {
+          "value": "none",
+          "probability": 0.94
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.06
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Int@value",
+      "choice": "IntTally",
+      "probabilities": [
+        {
+          "value": "IntTally",
+          "probability": 0.85
+        },
+        {
+          "value": "none",
+          "probability": 0.09
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.06
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.Int@target",
+      "choice": "IntTally",
+      "probabilities": [
+        {
+          "value": "IntTally",
+          "probability": 0.8
+        },
+        {
+          "value": "none",
+          "probability": 0.12
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.08
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.EqualityQuestion.Int@e.a",
+      "choice": "IntTally",
+      "probabilities": [
+        {
+          "value": "IntTally",
+          "probability": 0.7
+        },
+        {
+          "value": "none",
+          "probability": 0.18
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.12
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "views.EqualityQuestion.Int@e.b",
+      "choice": "IntTally",
+      "probabilities": [
+        {
+          "value": "IntTally",
+          "probability": 0.68
+        },
+        {
+          "value": "none",
+          "probability": 0.18
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.14
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "pause@check",
+      "choice": "accumulate",
+      "probabilities": [
+        {
+          "value": "accumulate",
+          "probability": 0.63
+        },
+        {
+          "value": "off",
+          "probability": 0.29
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.08
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "pause@found",
+      "choice": "off",
+      "probabilities": [
+        {
+          "value": "accumulate",
+          "probability": 0.4
+        },
+        {
+          "value": "off",
+          "probability": 0.41
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.19
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "pause@missing",
+      "choice": "off",
+      "probabilities": [
+        {
+          "value": "accumulate",
+          "probability": 0.39
+        },
+        {
+          "value": "off",
+          "probability": 0.5
+        },
+        {
+          "value": "(keep)",
+          "probability": 0.11
+        }
+      ]
+    }
+  ]
+}

@@ -22,6 +22,7 @@ const request = (purpose: ChooserRequest['purpose']): ChooserRequest => ({
     origins: { 'Cell.fill': 'kept', 'Mark.fill': 'starter' }
   },
   seen: [],
+  settled: {},
   operationId: 'o',
   attempt: 1
 });

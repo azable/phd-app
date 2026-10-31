@@ -25,6 +25,7 @@ export type ChooserProject = {
   count: number;
   design: AiDesign;
   seen?: Record<string, string | number | boolean>[];
+  settled?: Record<string, string | number | boolean>;
   runs?: Record<string, { runs: number; drawn: number }>;
   structures?: Record<string, string>;
 };
