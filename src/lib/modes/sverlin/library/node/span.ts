@@ -96,10 +96,16 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
     permanent,
     random: keyedRandom(first.seed, 'layout')
   });
-  return {
+  const layout = {
     ...solved,
     positions: Object.fromEntries(solved.placements.map(({ key, x, y }) => [key, { x, y }]))
   };
+  // Spike: every span solved in the page, to solve again in Node and compare.
+  (((globalThis as { __svSpans?: unknown[] }).__svSpans ??= []) as unknown[]).push({
+    inputs,
+    layout
+  });
+  return layout;
 }
 
 /**

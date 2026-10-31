@@ -7,8 +7,13 @@ export function canvasMeasure(): TextMeasure {
   if (!context) throw new Error('Layout model: no canvas to measure text with');
   // Without it, kerning next to spaces is skipped, unlike the page's text.
   context.fontKerning = 'normal';
-  const widths = new Map<string, number>();
-  const metrics = new Map<string, ReturnType<TextMeasure['metrics']>>();
+  // Spike: every width and metric measured, kept on the page for the server-layout comparison.
+  const kept = globalThis as typeof globalThis & {
+    __svWidths?: Map<string, number>;
+    __svMetrics?: Map<string, ReturnType<TextMeasure['metrics']>>;
+  };
+  const widths = (kept.__svWidths ??= new Map<string, number>());
+  const metrics = (kept.__svMetrics ??= new Map<string, ReturnType<TextMeasure['metrics']>>());
   const use = (font: string) => {
     if (context.font !== font) context.font = font;
   };

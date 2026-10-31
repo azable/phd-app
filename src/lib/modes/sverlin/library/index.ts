@@ -21,7 +21,7 @@ export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';
 export { arrangementLayout, describeFrame, describeStep } from './scene';
-export { checkLayout, type LayoutCheck } from './model/check';
+export { checkLayout, dumpLayout, pageSheets, type LayoutCheck, type LayoutDump } from './model/check';
 export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,

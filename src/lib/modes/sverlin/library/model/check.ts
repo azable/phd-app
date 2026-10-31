@@ -91,3 +91,28 @@ export function checkLayout(flow: HTMLElement, rules: readonly Rule[] = pageRule
     problems: model.problems
   };
 }
+
+/** Spike: a mounted step as markup, with every element's box as the page laid it out, post-order. */
+export type LayoutDump = {
+  tree: ModelElement;
+  ancestors: ModelElement[];
+  boxes: Box[];
+  devicePixelRatio: number;
+};
+
+export function dumpLayout(flow: HTMLElement): LayoutDump {
+  const elements = new Map<ModelElement, Element>();
+  const tree = treeOf(flow, true, elements);
+  const scale = screenScale(flow);
+  const origin = flow.getBoundingClientRect();
+  return {
+    tree,
+    ancestors: ancestorsOf(flow),
+    boxes: [...elements.values()].map((element) => unscaledBox(element, origin, scale)),
+    devicePixelRatio: window.devicePixelRatio
+  };
+}
+
+/** Spike: the page's style sheets as text, in order. */
+export const pageSheets = () =>
+  [...document.querySelectorAll('style')].map((sheet) => sheet.textContent ?? '');
