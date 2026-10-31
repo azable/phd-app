@@ -12,6 +12,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { embeddedFontsHead } from './fonts';
 import bfs from './fixtures/bfs-dequeue.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
 
@@ -27,11 +28,21 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-type Timing = { phase: string; step?: number; ms: number; waiting?: boolean };
+type Timing = { phase: string; step?: number; ms: number; waiting?: boolean; layout?: string };
 
-/** Load a presentation in a frame, as the app does, and collect the times it reports. */
-async function timingsOf(source: string) {
-  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
+/**
+ * Load a presentation in a frame, as the app does, in the embedded fonts, and collect the times it
+ * reports; with `serverLayout`, given every step's layout by the server (see layout.server.ts).
+ */
+async function timingsOf(source: string, serverLayout = false) {
+  const { javascript } = await bundlePresentation(
+    prepareSvelteComponent(source),
+    1,
+    {},
+    {
+      serverLayout
+    }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
 <script>
@@ -44,7 +55,7 @@ async function timingsOf(source: string) {
     (document) => {
       window.document.querySelector('iframe')!.srcdoc = document;
     },
-    sandboxDocument('', javascript, 0, 1)
+    sandboxDocument('', javascript, 0, 1, undefined, undefined, embeddedFontsHead)
   );
   await page.waitForFunction(
     () => (window as unknown as { timings: Timing[] }).timings.some((t) => t.phase === 'ready'),
@@ -65,6 +76,19 @@ it.skipIf(!enabled)(
     expect(timings[ready].ms).toBeLessThan(1000);
     // Every step is laid out on the layout model; the page mounts one step, the one it shows.
     expect(timings.slice(0, ready).filter((timing) => timing.phase === 'showing')).toHaveLength(1);
+  }
+);
+
+it.skipIf(!enabled)(
+  'shows Dijkstra of 97 steps laid out on the server within a third of a second',
+  { timeout: 120_000 },
+  async () => {
+    const { timings } = await timingsOf(dijkstra, true);
+    const ready = timings.find((timing) => timing.phase === 'ready')!;
+    expect(ready.ms).toBeLessThan(300);
+    // The page lays nothing out itself: it takes the server's layout and mounts the step shown.
+    expect(timings.filter(({ phase }) => phase === 'measuring')).toEqual([]);
+    expect(timings.find(({ phase }) => phase === 'recording')?.layout).toBe('server');
   }
 );
 

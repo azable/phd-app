@@ -1,2 +1,5 @@
 onlyBuiltDependencies:
   - esbuild
+# Ships prebuilt binaries for Linux, macOS and Windows; its install script would compile from source.
+ignoredBuiltDependencies:
+  - isolated-vm

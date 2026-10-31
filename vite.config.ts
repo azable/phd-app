@@ -44,6 +44,8 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
+          // isolated-vm, which lays presentations out on the server, needs Node's snapshot off.
+          execArgv: ['--no-node-snapshot'],
           include: ['src/**/*.{test,spec}.{js,ts}'],
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }

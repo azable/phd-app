@@ -1,6 +1,8 @@
 /**
  * Every step's layout worked out before any is shown, without mounting any (see LayoutMemory), from
- * the steps' markup as Svelte's string renderer writes it (see ../assembly/entry.ts).
+ * the steps' markup as Svelte's string renderer writes it. The page does it (see
+ * ../assembly/entry.ts) where the server gave it none, and the server does it (see
+ * ../assembly/layout.ts), with the same steps, markup, style sheets and font files.
  */
 
 import { linePairs } from './node/lines';
@@ -40,6 +42,8 @@ export type RecordOptions = {
   /** The page's own style sheet: its theme and the layers steps are drawn in. */
   sheet: string;
   devicePixelRatio: number;
+  /** Collects every border width as written, before it snaps to device pixels (see geometry.ts). */
+  borders?: Set<number>;
   /** The page's elements around the layer a step is drawn in, outermost first. */
   ancestors: readonly ModelElement[];
   /** A step the view failed to draw, with why. */
@@ -74,7 +78,7 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     if (!model) {
       const rules = parseSheet(options.sheet);
       for (const sheet of componentSheets.values()) rules.push(...parseSheet(sheet, rules.length));
-      model = { rules, styler: styler(rules, options.devicePixelRatio) };
+      model = { rules, styler: styler(rules, options.devicePixelRatio, options.borders) };
     }
     return model;
   };

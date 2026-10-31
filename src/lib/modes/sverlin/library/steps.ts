@@ -1,6 +1,7 @@
 /**
  * A presentation's recorded states as the view draws them: what each step's frame is drawn with,
- * its props and the contexts it reads, worked out from the states alone (see ../assembly/entry.ts).
+ * its props and the contexts it reads, worked out from the states alone, so the page and the server
+ * (see ../assembly/entry.ts and ../assembly/layout.ts) draw a step alike.
  */
 
 import type { DesignValues } from './node/design';

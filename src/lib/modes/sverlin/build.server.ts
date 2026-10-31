@@ -4,7 +4,8 @@ import {
   bundlePresentation,
   InvalidSvelteSourceError,
   prepareSvelteComponent,
-  type PreparedComponent
+  type PreparedComponent,
+  type SvelteBundle
 } from './compile.server';
 import type { BuildRequest, ModeBuildResult } from '../server';
 
@@ -27,7 +28,9 @@ export async function buildBatch(
   for (const { seed, variant } of requests) {
     throwIfAborted(signal);
     try {
-      const bundle = await bundlePresentation(prepared, seed, variant);
+      // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts).
+      const bundle = await bundlePresentation(prepared, seed, variant, { serverLayout: true });
+      logLayout(seed, bundle.layout);
       results.push({
         ok: true,
         seed,
@@ -57,6 +60,18 @@ export async function buildBatch(
     }
   }
   return results;
+}
+
+/** Where the server could not lay a presentation out, and why, as the page then lays it out. */
+function logLayout(seed: number, layout: SvelteBundle['layout']): void {
+  if (!layout) return;
+  const errors = layout.errors.length ? `; the view failed at ${layout.errors.join('; ')}` : '';
+  if (layout.server)
+    console.info(
+      `[sverlin] seed ${seed} laid out on the server in ${layout.ms} ms${layout.cached ? ' (kept)' : ''}${errors}`
+    );
+  else
+    console.warn(`[sverlin] seed ${seed} left to the page to lay out: ${layout.failure}${errors}`);
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

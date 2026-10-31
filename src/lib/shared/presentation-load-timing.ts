@@ -21,7 +21,9 @@ export const layoutPassSchema = v.strictObject({
   changes: v.optional(count),
   waiting: v.optional(v.boolean()),
   /** For a wait to be shown: whether the page was hidden or had no size yet. */
-  waitedFor: v.optional(v.picklist(['size', 'visibility']))
+  waitedFor: v.optional(v.picklist(['size', 'visibility'])),
+  /** For recording: whether every step's layout came from the server or was worked out in the page. */
+  layout: v.optional(v.picklist(['server', 'page']))
 });
 
 const pixels = v.pipe(v.number(), v.integer(), v.minValue(-100_000), v.maxValue(100_000));
@@ -37,6 +39,8 @@ export const presentationLoadTimingSchema = v.strictObject({
   pageMs: v.optional(milliseconds),
   /** When the page said it had loaded, from the viewer starting to load it. */
   loadedMs: v.optional(milliseconds),
+  /** Where every step's layout came from: the server, or the page itself. */
+  layout: v.optional(v.picklist(['server', 'page'])),
   measuringMs: milliseconds,
   recordingMs: milliseconds,
   showingMs: milliseconds,

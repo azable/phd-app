@@ -12,7 +12,7 @@ export { default as SverlinBranch } from './node/Branch.svelte';
 export { default as SverlinChain } from './node/Chain.svelte';
 export { default as SverlinSlot } from './node/Slot.svelte';
 export { themeCss } from './theme';
-export { pageCss } from './page';
+export { pageAncestors, pageCss } from './page';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
 export { kindKey, type DesignValues } from './node/design';
 export type { LayoutMemory } from './type-context';
@@ -59,3 +59,4 @@ export {
   type StepState
 } from './steps';
 export { recordLayouts, type Sizing } from './record';
+export { applyGeometry, geometryFor, geometryOf, geometryVersion, type Geometry } from './geometry';

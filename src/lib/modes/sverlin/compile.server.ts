@@ -4,10 +4,11 @@ import { posix } from 'node:path';
 import { createRequire } from 'node:module';
 
 import type { AnyNode } from 'acorn';
-import { build, type BuildFailure, type Plugin } from 'esbuild';
+import { build, type BuildFailure, type OutputFile, type Plugin } from 'esbuild';
 import { compile, parse } from 'svelte/compiler';
 
 import entrySource from './assembly/entry.ts?raw';
+import layoutSource from './assembly/layout.ts?raw';
 import preludeSource from './assembly/prelude.ts?raw';
 import {
   AlgorithmError,
@@ -114,6 +115,7 @@ import { packStates } from './library/trace-pack';
 import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
+import { layOutOnServer } from './layout.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
 const maximumSourceBytes = 256 * 1024;
@@ -180,6 +182,17 @@ export type SvelteBundle = {
   origins: Record<string, DesignOrigin>;
   /** The <Node> tags it leaves out, by their line:column. */
   leftOut: string[];
+  /**
+   * With layout on the server asked for: whether the page is given every step's layout, how long
+   * working it out took, and, where it is not, why (see layout.server.ts).
+   */
+  layout?: { server: boolean; ms: number; cached: boolean; failure?: string; errors: string[] };
+};
+
+/** How a presentation is bundled. */
+export type BundleOptions = {
+  /** Lay every step out on the server and give the page the layout with its bundle. */
+  serverLayout?: boolean;
 };
 
 type Block = { body: string; offset: number };
@@ -1555,7 +1568,8 @@ function standInsFor(
 export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
-  request: VariantRequest = {}
+  request: VariantRequest = {},
+  options: BundleOptions = {}
 ): Promise<SvelteBundle> {
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
@@ -1731,17 +1745,35 @@ export async function bundlePresentation(
       components: prepared.components,
       placements: paced.placements,
       listing
-    })
+    }),
+    options.serverLayout === true
   );
-  const output = result.outputFiles[0];
+  const output = result.outputFiles.find(({ path }) => path.endsWith('entry.js')) as OutputFile;
   if (output.contents.byteLength > maximumBundleBytes) {
     const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     throw new InvalidSvelteSourceError(
       `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; the variant pausing at fewer labels gives fewer steps.`
     );
   }
+  let javascript = output.text;
+  let layout: SvelteBundle['layout'];
+  const layoutBundle = result.outputFiles.find(({ path }) => path.endsWith('layout.js'));
+  if (layoutBundle) {
+    const { geometries, ...laid } = await layOutOnServer(layoutBundle.text);
+    // The page reads the layout before its own code runs; one too large to give leaves it to the page.
+    const given =
+      geometries && `window.__sverlinGeometry=${JSON.stringify(geometries)};\n${javascript}`;
+    const fits = given !== undefined && Buffer.byteLength(given) <= maximumBundleBytes;
+    if (fits) javascript = given;
+    layout = {
+      ...laid,
+      server: fits,
+      ...(given && !fits ? { failure: 'its layout would take the bundle over the limit' } : {})
+    };
+  }
   return {
-    javascript: output.text,
+    javascript,
+    ...(layout ? { layout } : {}),
     labels: master.map(({ name }, index) => name ?? `Step ${index + 1}`),
     masterSignature: prepared.signature,
     masterSteps: moments,
@@ -2512,10 +2544,11 @@ async function bundle(
   serverComponent: string,
   states: string,
   atoms: string,
-  components: string
+  components: string,
+  layout: boolean
 ) {
   try {
-    return await bundleComponent(component, serverComponent, states, atoms, components);
+    return await bundleComponent(component, serverComponent, states, atoms, components, layout);
   } catch (cause) {
     // Failures located in the authored component, such as a blocked require(), are source errors.
     const authored = (cause as Partial<BuildFailure>).errors?.find((error) =>
@@ -2537,6 +2570,16 @@ const allowedImports: Record<string, (path: string) => boolean> = {
       'virtual:component',
       'virtual:component-server',
       'virtual:library-server',
+      'virtual:trace',
+      'virtual:atoms',
+      'virtual:components',
+      'sverlin'
+    ].includes(path),
+  // The server's entry, laying every step out in an isolate (see layout.server.ts).
+  layout: (path) =>
+    runtime(path) ||
+    [
+      'virtual:component-server',
       'virtual:trace',
       'virtual:atoms',
       'virtual:components',
@@ -2584,7 +2627,7 @@ function sandboxModules(
           return { path: 'Main.svelte', namespace: 'component-server' };
         if (args.path === 'virtual:library-server')
           return { path: 'index.ts', namespace: 'library-server' };
-        const server = args.namespace.endsWith('-server');
+        const server = args.namespace.endsWith('-server') || args.namespace === 'layout';
         if (server && args.path === 'svelte') return { path: svelteServerIndex };
         if (server && args.path === 'sverlin')
           return { path: 'index.ts', namespace: 'library-server' };
@@ -2614,6 +2657,15 @@ function sandboxModules(
       plugin.onResolve({ filter: /^virtual:entry$/ }, () => ({
         path: 'entry.ts',
         namespace: 'entry'
+      }));
+      plugin.onResolve({ filter: /^virtual:layout$/ }, () => ({
+        path: 'layout.ts',
+        namespace: 'layout'
+      }));
+      plugin.onLoad({ filter: /.*/, namespace: 'layout' }, () => ({
+        contents: layoutSource,
+        loader: 'ts',
+        resolveDir: process.cwd()
       }));
       plugin.onLoad({ filter: /.*/, namespace: 'entry' }, () => ({
         contents: entrySource,
@@ -2654,15 +2706,22 @@ function sandboxModules(
   };
 }
 
+/**
+ * The page's bundle, and with `layout` the server's too, which lays every step out (see
+ * layout.server.ts): the same steps, view and library, compiled to render strings.
+ */
 function bundleComponent(
   component: string,
   serverComponent: string,
   states: string,
   atoms: string,
-  components: string
+  components: string,
+  layout: boolean
 ) {
   return build({
-    entryPoints: ['virtual:entry'],
+    entryPoints: layout ? ['virtual:entry', 'virtual:layout'] : ['virtual:entry'],
+    outdir: 'out',
+    entryNames: '[name]',
     plugins: [sandboxModules(component, serverComponent, states, atoms, components)],
     bundle: true,
     write: false,

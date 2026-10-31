@@ -272,7 +272,7 @@ const borderKeywords: Record<string, number> = { thin: 1, medium: 3, thick: 5 };
  * Border widths are snapped to device pixels, as the browser does: a width under one device pixel
  * draws one, and others round down to whole ones.
  */
-function snappedBorder(width: number, devicePixelRatio: number): number {
+export function snappedBorder(width: number, devicePixelRatio: number): number {
   const device = width * devicePixelRatio;
   if (device > 0 && device < 1) return 1 / devicePixelRatio;
   return Math.floor(device) / devicePixelRatio;
@@ -301,7 +301,9 @@ export function lookOf(
   ancestors: readonly ModelElement[],
   parent: Styled | undefined,
   rules: readonly Rule[],
-  devicePixelRatio: number
+  devicePixelRatio: number,
+  /** Every border width as written, before snapping, for laying out at another ratio. */
+  borders?: Set<number>
 ): Styled {
   const from = parent?.inherited ?? initial;
   const applying = cascade(rules, element, ancestors);
@@ -363,10 +365,9 @@ export function lookOf(
     const style = get(`border-${side}-style`) ?? 'none';
     if (style === 'none' || style === 'hidden') return 0;
     const width = get(`border-${side}-width`) ?? 'medium';
-    return snappedBorder(
-      width in borderKeywords ? borderKeywords[width] : px(width, fontSize),
-      devicePixelRatio
-    );
+    const written = width in borderKeywords ? borderKeywords[width] : px(width, fontSize);
+    borders?.add(written);
+    return snappedBorder(written, devicePixelRatio);
   }) as Sides;
   const widthText = get('width');
   const look: Look = {
@@ -437,7 +438,11 @@ export type Styler = (
  * the rules read, its inline style and its parent's look, so elements alike under parents alike,
  * in one step's markup or in many, share one.
  */
-export function styler(rules: readonly Rule[], devicePixelRatio: number): Styler {
+export function styler(
+  rules: readonly Rule[],
+  devicePixelRatio: number,
+  borders?: Set<number>
+): Styler {
   const read = [...attributesRead(rules), 'class', 'hidden'];
   const alike = new Map<string, Styled>();
   const keys = new WeakMap<Styled, number>();
@@ -447,7 +452,7 @@ export function styler(rules: readonly Rule[], devicePixelRatio: number): Styler
     for (const property in element.style) key += `\u0001${property}:${element.style[property]}`;
     let styled = alike.get(key);
     if (!styled) {
-      styled = lookOf(element, ancestors, parent, rules, devicePixelRatio);
+      styled = lookOf(element, ancestors, parent, rules, devicePixelRatio, borders);
       alike.set(key, styled);
       keys.set(styled, alike.size);
     }

@@ -13,7 +13,8 @@ services:
     # --prod=false: the build needs devDependencies although NODE_ENV is production.
     buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm run build
     preDeployCommand: corepack pnpm run db:migrate
-    startCommand: node build
+    # isolated-vm, which lays presentations out (see README "Deployment"), needs Node's snapshot off.
+    startCommand: node --no-node-snapshot build
     healthCheckPath: /api/health/ready
     # The most Render allows; runtime-state.ts drains active operations for 270 seconds.
     maxShutdownDelaySeconds: 300

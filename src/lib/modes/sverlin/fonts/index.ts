@@ -1,6 +1,7 @@
 /**
  * The fonts every presentation's page draws in (see README.md), declared for its sandbox document:
- * each face as a data URL, as the sandbox loads fonts from nowhere else, and their version.
+ * each face as a data URL, as the sandbox loads fonts from nowhere else, and the version the server
+ * measured them as, which the page checks the server's layout against (see ../assembly/entry.ts).
  */
 
 import manifest from './faces.json';

@@ -196,12 +196,14 @@
     const last = passes.at(-1);
     const pageMs = settled.find(({ phase }) => phase === 'ready')?.ms;
     const shown = settled.find(({ phase }) => phase === 'shown');
+    const layout = settled.find((pass) => pass.layout)?.layout;
     return {
       presentationId: presentation.presentationId,
       outcome,
       sinceLoadMs: sinceLoad(),
       ...(pageMs === undefined ? {} : { pageMs }),
       ...(loadedAt === undefined ? {} : { loadedMs: loadedAt }),
+      ...(layout ? { layout } : {}),
       measuringMs: total('measuring'),
       recordingMs: total('recording'),
       showingMs: total('showing'),
