@@ -4,6 +4,7 @@
  * measured them as, which the page checks the server's layout against (see ../assembly/entry.ts).
  */
 
+import { pageFont } from '../library/fonts';
 import manifest from './faces.json';
 
 const files = import.meta.glob<string>('./*.woff2', {
@@ -11,9 +12,6 @@ const files = import.meta.glob<string>('./*.woff2', {
   import: 'default',
   eager: true
 });
-
-/** The font list every text not given another is drawn in, the embedded fallback face second. */
-export const pageFont = "'Sverlin Sans', 'Sverlin Symbols', system-ui, sans-serif";
 
 /** What the sandbox document's head declares: the faces, the version, and the page's font. */
 export const embeddedFontsHead =

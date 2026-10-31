@@ -121,15 +121,15 @@ import { layOutOnServer } from './layout.server';
 const maximumSourceBytes = 256 * 1024;
 const maximumBundleBytes = 2 * 1024 * 1024;
 
-// Library sources are embedded at build time so production needs no source tree.
+// Library sources are embedded at build time so production needs no source tree, with the embedded
+// fonts' manifest, which lists the design's fonts (see library/fonts.ts), by its path from there.
 const librarySources = Object.fromEntries(
   Object.entries(
-    import.meta.glob<string>(['./library/**/*.{svelte,ts}', '!./library/**/*.test.ts'], {
-      query: '?raw',
-      import: 'default',
-      eager: true
-    })
-  ).map(([path, text]) => [path.slice('./library/'.length), text])
+    import.meta.glob<string>(
+      ['./library/**/*.{svelte,ts}', '!./library/**/*.test.ts', './fonts/faces.json'],
+      { query: '?raw', import: 'default', eager: true }
+    )
+  ).map(([path, text]) => [posix.relative('./library', path), text])
 );
 const compiledLibrary = new Map<string, string>();
 
@@ -156,8 +156,9 @@ function libraryPath(path: string): string | undefined {
 function loadLibraryModule(
   path: string,
   generate: Generate
-): { contents: string; loader: 'js' | 'ts' } {
+): { contents: string; loader: 'js' | 'ts' | 'json' } {
   const source = librarySources[path];
+  if (path.endsWith('.json')) return { contents: source, loader: 'json' };
   if (!path.endsWith('.svelte')) return { contents: source, loader: 'ts' };
   let contents = compiledLibrary.get(`${generate}:${path}`);
   if (contents === undefined) {

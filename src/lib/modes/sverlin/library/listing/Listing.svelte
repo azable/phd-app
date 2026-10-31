@@ -10,6 +10,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
 
+  import { fontClass } from '../fonts';
   import { colourCss, strokeStyleCss } from '../node/design';
   import { designContext, keyedRef, listingContext, nodeIdsContext } from '../type-context';
 
@@ -117,7 +118,7 @@
       >{/if}{/each}{/snippet}
 
 {#if listing}
-  <div class="sv-listing" data-sv-node={id} data-sv-kind="listing">
+  <div class="sv-listing {fontClass('mono')}" data-sv-node={id} data-sv-kind="listing">
     {#each lines as line, index (index)}
       <div class="sv-listing-line" data-sv-node={line.id} data-sv-kind="listing-line">
         {@render drawn(line.pieces)}{#if !line.pieces.length}&nbsp;{/if}
@@ -128,7 +129,6 @@
 
 <style>
   .sv-listing {
-    font-family: 'Sverlin Mono', 'Sverlin Symbols', ui-monospace, Menlo, Consolas, monospace;
     font-size: 0.85rem;
     line-height: 1.5;
     color: var(--sv-ink);

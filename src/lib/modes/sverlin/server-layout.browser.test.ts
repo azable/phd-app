@@ -11,8 +11,10 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { embeddedFontsHead } from './fonts';
+import manifest from './fonts/faces.json';
 import type { SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
+import type { VariantRequest } from './design.server';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 const fixtures = import.meta.glob<string>('./fixtures/*.sverlin', {
@@ -101,22 +103,58 @@ function furthest(a: SceneStep[], b: SceneStep[]): number {
   return most;
 }
 
+/** A presentation drawn with the server's layout as with the page's own, step by step. */
+async function drawsAlike(source: string, request: VariantRequest = {}): Promise<Drawn> {
+  const prepared = prepareSvelteComponent(source);
+  const own = await drawn((await bundlePresentation(prepared, 1, request)).javascript);
+  const server = await bundlePresentation(prepared, 1, request, { serverLayout: true });
+  expect(server.layout).toMatchObject({ server: true, errors: [] });
+  const given = await drawn(server.javascript);
+  expect([own.layout, given.layout]).toEqual(['page', 'server']);
+  expect(given.steps).toHaveLength(own.steps.length);
+  // The same sizes and places: a scene's numbers come from the page's own layout of each.
+  expect(furthest(given.steps, own.steps)).toBeLessThan(0.01);
+  expect(given.steps.flatMap((step) => unsound(given.frame, step))).toEqual([]);
+  return given;
+}
+
 for (const [path, source] of Object.entries(fixtures)) {
   const name = path.replace(/^.*\/(.*)\.sverlin$/u, '$1');
   it.skipIf(!enabled)(
     `draws ${name} with the server's layout as with its own`,
     { timeout: 300_000 },
+    () => drawsAlike(source)
+  );
+}
+
+// Every text of a fixture in each embedded face, every other kind bold, its ∞ in the fallback where
+// the face lacks it.
+for (const { value: font, family } of manifest.fonts) {
+  it.skipIf(!enabled)(
+    `draws every text in the ${font} font with the server's layout as with its own`,
+    { timeout: 300_000 },
     async () => {
-      const prepared = prepareSvelteComponent(source);
-      const own = await drawn((await bundlePresentation(prepared, 1)).javascript);
-      const server = await bundlePresentation(prepared, 1, {}, { serverLayout: true });
-      expect(server.layout).toMatchObject({ server: true, errors: [] });
-      const given = await drawn(server.javascript);
-      expect([own.layout, given.layout]).toEqual(['page', 'server']);
-      expect(given.steps).toHaveLength(own.steps.length);
-      // The same sizes and places: a scene's numbers come from the page's own layout of each.
-      expect(furthest(given.steps, own.steps)).toBeLessThan(0.01);
-      expect(given.steps.flatMap((step) => unsound(given.frame, step))).toEqual([]);
+      const source = fixtures['./fixtures/dijkstra-fields.sverlin'];
+      const keys = Object.keys(prepareSvelteComponent(source).design.space);
+      const fonts = keys.filter((key) => key.endsWith('.font'));
+      const weights = keys.filter((key) => key.endsWith('.weight'));
+      expect(fonts.length).toBeGreaterThan(0);
+      const chosen = Object.fromEntries([
+        ...fonts.map((key) => [key, font]),
+        ...weights.map((key, k) => [key, k % 2 ? 'normal' : 'bold'])
+      ]);
+      const given = await drawsAlike(source, { chosen });
+      const faces = new Set(
+        given.steps.flatMap((step) =>
+          step.nodes.flatMap((node) =>
+            (node.runs ?? []).map(
+              (run) => `${run.font.split(',')[0].replace(/['"]/gu, '')} ${run.fontWeight}`
+            )
+          )
+        )
+      );
+      expect(faces).toContain(`${family} 400`);
+      expect(faces).toContain(`${family} 700`);
     }
   );
 }

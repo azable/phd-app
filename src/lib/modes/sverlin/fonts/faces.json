@@ -1,5 +1,44 @@
 {
-  "version": "f22583e9f39071dd",
+  "version": "e7191ff674b8a8f8",
+  "fonts": [
+    {
+      "value": "sans",
+      "family": "Sverlin Sans",
+      "fallbacks": "system-ui, sans-serif",
+      "pdf": "sans"
+    },
+    {
+      "value": "serif",
+      "family": "Sverlin Serif",
+      "fallbacks": "ui-serif, Georgia, 'Times New Roman', serif",
+      "pdf": "serif"
+    },
+    {
+      "value": "mono",
+      "family": "Sverlin Mono",
+      "fallbacks": "ui-monospace, Menlo, Consolas, monospace",
+      "pdf": "mono"
+    },
+    {
+      "value": "legible",
+      "family": "Sverlin Legible",
+      "fallbacks": "system-ui, sans-serif",
+      "pdf": "sans"
+    },
+    {
+      "value": "casual",
+      "family": "Sverlin Casual",
+      "fallbacks": "'Comic Sans MS', system-ui, sans-serif",
+      "pdf": "sans"
+    },
+    {
+      "value": "slab",
+      "family": "Sverlin Slab",
+      "fallbacks": "Rockwell, ui-serif, Georgia, serif",
+      "pdf": "serif"
+    }
+  ],
+  "fallback": "Sverlin Symbols",
   "faces": [
     {
       "file": "sans-400",
@@ -29,6 +68,36 @@
     {
       "file": "mono-700",
       "family": "Sverlin Mono",
+      "weight": 700
+    },
+    {
+      "file": "legible-400",
+      "family": "Sverlin Legible",
+      "weight": 400
+    },
+    {
+      "file": "legible-700",
+      "family": "Sverlin Legible",
+      "weight": 700
+    },
+    {
+      "file": "casual-400",
+      "family": "Sverlin Casual",
+      "weight": 400
+    },
+    {
+      "file": "casual-700",
+      "family": "Sverlin Casual",
+      "weight": 700
+    },
+    {
+      "file": "slab-400",
+      "family": "Sverlin Slab",
+      "weight": 400
+    },
+    {
+      "file": "slab-700",
+      "family": "Sverlin Slab",
       "weight": 700
     },
     {

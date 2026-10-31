@@ -749,8 +749,9 @@ Every kind of node has these props, each with a fixed set of options:
 - `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels; `strokeStyle`: solid, dashed
   (suiting a place rather than a value), or dotted; `opacity`: 0.25, 0.5, 0.75,
   or 1.
-- `font`: sans, serif, or mono; `size`: 0.75, 0.875, 1, 1.125, 1.25, 1.5, or 2
-  rem; `weight`: normal or bold.
+- `font`: sans, serif, mono, legible (a sans made to tell like letters apart),
+  casual (rounded, handwritten), or slab (a serif with square, heavy serifs);
+  `size`: 0.75, 0.875, 1, 1.125, 1.25, 1.5, or 2 rem; `weight`: normal or bold.
 - `padding`: 0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em; `radius`: 0, 2,
   4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`, the least width
   and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.

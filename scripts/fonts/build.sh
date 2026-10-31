@@ -9,4 +9,7 @@ nix-shell -p 'python3.withPackages (p: [ p.fonttools p.brotli ])' --run "python3
   inter=$(source_of inter) \
   source-serif=$(source_of source-serif) \
   jetbrains-mono=$(source_of jetbrains-mono) \
+  atkinson=$(source_of atkinson-hyperlegible-next) \
+  comic-neue=$(source_of comic-neue) \
+  zilla-slab=$(source_of zilla-slab) \
   dejavu=$(dirname "$(readlink -f node_modules/dejavu-fonts-ttf/package.json)")"

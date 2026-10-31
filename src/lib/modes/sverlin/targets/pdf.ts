@@ -7,6 +7,7 @@
 
 import { GState, jsPDF } from 'jspdf';
 
+import manifest from '../fonts/faces.json';
 import type { SceneHead, SceneLink, SceneNode, SceneText } from '../library';
 import { linkDashes } from '../library/node/design';
 import { headDrawing } from '../library/node/heads';
@@ -37,6 +38,11 @@ const descent = 483 / 2048;
 // The size of the notice on a page whose step could not be drawn.
 const errorSize = 12;
 
+/** The family each embedded face is drawn in, by its name in lower case (see ../fonts). */
+const embeddedFamilies = new Map(
+  manifest.fonts.map(({ family, pdf }) => [family.toLowerCase(), pdf as FontFamily])
+);
+
 /** The family a CSS font list asks for first. */
 export function fontFamily(css: string): FontFamily {
   const first = css
@@ -44,8 +50,10 @@ export function fontFamily(css: string): FontFamily {
     .trim()
     .replace(/^['"]|['"]$/gu, '')
     .toLowerCase();
+  const embedded = embeddedFamilies.get(first);
+  if (embedded) return embedded;
   if (/mono|menlo|consolas|courier/u.test(first)) return 'mono';
-  if (/^(sverlin |ui-)?serif$|georgia|times/u.test(first)) return 'serif';
+  if (/^(ui-)?serif$|georgia|times/u.test(first)) return 'serif';
   return 'sans';
 }
 

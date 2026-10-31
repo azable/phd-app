@@ -53,6 +53,7 @@
     type Pointer
   } from '../type-context';
   import { colourCss, lookUp, paintProps, placedKind, strokeStyleCss } from './design';
+  import { fontClass } from '../fonts';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
@@ -366,7 +367,7 @@
     {/if}
   {:else}
     <div
-      class="sv-node {typeof font === 'string' ? font : ''}"
+      class="sv-node {typeof font === 'string' ? fontClass(font) : ''}"
       data-sv-node={id}
       data-sv-kind={__over?.active ? __over.kind : __view}
       data-sv-component={__component}
@@ -478,16 +479,6 @@
     display: inline-grid;
     place-items: center;
     vertical-align: middle;
-  }
-  /* The embedded faces first (see ../../fonts), each list falling back to the embedded symbols. */
-  .sans {
-    font-family: 'Sverlin Sans', 'Sverlin Symbols', system-ui, sans-serif;
-  }
-  .serif {
-    font-family: 'Sverlin Serif', 'Sverlin Symbols', ui-serif, Georgia, 'Times New Roman', serif;
-  }
-  .mono {
-    font-family: 'Sverlin Mono', 'Sverlin Symbols', ui-monospace, Menlo, Consolas, monospace;
   }
   .value {
     white-space: nowrap;

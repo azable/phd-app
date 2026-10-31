@@ -11,6 +11,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 from fontTools import subset
 from fontTools.ttLib import TTFont
@@ -30,13 +31,56 @@ RANGES = [
 ]
 CHARACTERS = {code for start, end in RANGES for code in range(start, end + 1)}
 
-# role: (family name, source, what it is a subset of)
+class Face(NamedTuple):
+    family: str
+    source: str  # build.sh's name for the font package
+    origin: str  # what it is a subset of
+    fallbacks: str = ""  # the CSS fonts the page goes on to for a character no embedded face has
+    pdf: str = ""  # the DejaVu family the PDF export draws it in (see targets/pdf.ts)
+
+
+# The design's font values, each a text face, in the order the design offers them, the first the
+# starter's and the page's own.
 FACES = {
-    "sans": ("Sverlin Sans", "inter", "Inter 4.1"),
-    "serif": ("Sverlin Serif", "source-serif", "Source Serif 4.005"),
-    "mono": ("Sverlin Mono", "jetbrains-mono", "JetBrains Mono NL 2.304"),
+    "sans": Face("Sverlin Sans", "inter", "Inter 4.1", "system-ui, sans-serif", "sans"),
+    "serif": Face(
+        "Sverlin Serif",
+        "source-serif",
+        "Source Serif 4.005",
+        "ui-serif, Georgia, 'Times New Roman', serif",
+        "serif",
+    ),
+    "mono": Face(
+        "Sverlin Mono",
+        "jetbrains-mono",
+        "JetBrains Mono NL 2.304",
+        "ui-monospace, Menlo, Consolas, monospace",
+        "mono",
+    ),
+    "legible": Face(
+        "Sverlin Legible",
+        "atkinson",
+        "Atkinson Hyperlegible Next 2.001",
+        "system-ui, sans-serif",
+        "sans",
+    ),
+    "casual": Face(
+        "Sverlin Casual",
+        "comic-neue",
+        "Comic Neue 2.51",
+        "'Comic Sans MS', system-ui, sans-serif",
+        "sans",
+    ),
+    "slab": Face(
+        "Sverlin Slab",
+        "zilla-slab",
+        "Zilla Slab 1.002",
+        "Rockwell, ui-serif, Georgia, serif",
+        "serif",
+    ),
 }
-FALLBACK = ("Sverlin Symbols", "dejavu", "DejaVu Sans 2.37")
+# Second in every font list, for the characters some text face lacks.
+FALLBACK = Face("Sverlin Symbols", "dejavu", "DejaVu Sans 2.37")
 WEIGHTS = {400: "Regular", 700: "Bold"}
 
 
@@ -47,6 +91,9 @@ def source(sources: dict, role: str, weight: int) -> TTFont:
     names = {
         "source-serif": f"share/fonts/truetype/SourceSerif4-{WEIGHTS[weight]}.ttf",
         "jetbrains-mono": f"share/fonts/truetype/JetBrainsMonoNL-{WEIGHTS[weight]}.ttf",
+        "atkinson": f"share/fonts/truetype/AtkinsonHyperlegibleNext-{WEIGHTS[weight]}.ttf",
+        "comic-neue": f"share/fonts/truetype/ComicNeue-{WEIGHTS[weight]}.ttf",
+        "zilla-slab": f"share/fonts/truetype/ZillaSlab-{WEIGHTS[weight]}.ttf",
         "dejavu": "ttf/DejaVuSans.ttf" if weight == 400 else "ttf/DejaVuSans-Bold.ttf",
     }
     return TTFont(sources[role] / names[role])
@@ -121,21 +168,26 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     for weight in WEIGHTS:
         text_coverage = None
-        for role, (family, origin_key, origin) in FACES.items():
-            font = source(sources, origin_key, weight)
+        for role, face in FACES.items():
+            font = source(sources, face.source, weight)
             have = covered(font) & CHARACTERS
             text_coverage = have if text_coverage is None else text_coverage & have
-            save(finish(font, family, weight, origin, have), out / f"{role}-{weight}")
-        family, origin_key, origin = FALLBACK
-        font = source(sources, origin_key, weight)
+            save(finish(font, face.family, weight, face.origin, have), out / f"{role}-{weight}")
+        font = source(sources, FALLBACK.source, weight)
         missing = (covered(font) & CHARACTERS) - text_coverage
-        save(finish(font, family, weight, origin, missing), out / f"symbols-{weight}")
+        fallback = finish(font, FALLBACK.family, weight, FALLBACK.origin, missing)
+        save(fallback, out / f"symbols-{weight}")
     write_manifest(out)
 
 
 def write_manifest(out: Path) -> None:
-    """The faces, in the order a family list tries them, and a version naming these very files."""
-    families = {role: family for role, (family, _, _) in FACES.items()} | {"symbols": FALLBACK[0]}
+    """The design's fonts, as the page, the design and the PDF export take them; the faces, in the
+    order a family list tries them; and a version naming these very files."""
+    fonts = [
+        {"value": role, "family": face.family, "fallbacks": face.fallbacks, "pdf": face.pdf}
+        for role, face in FACES.items()
+    ]
+    families = {role: face.family for role, face in FACES.items()} | {"symbols": FALLBACK.family}
     faces = [
         {"file": f"{role}-{weight}", "family": family, "weight": weight}
         for role, family in families.items()
@@ -145,7 +197,12 @@ def write_manifest(out: Path) -> None:
     for face in faces:
         digest.update((out / f"{face['file']}.ttf").read_bytes())
         digest.update((out / f"{face['file']}.woff2").read_bytes())
-    manifest = {"version": digest.hexdigest()[:16], "faces": faces}
+    manifest = {
+        "version": digest.hexdigest()[:16],
+        "fonts": fonts,
+        "fallback": FALLBACK.family,
+        "faces": faces,
+    }
     (out / "faces.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 

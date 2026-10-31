@@ -4,6 +4,7 @@
  * ../../design.server.ts); the page reads a variant's values through them.
  */
 
+import { fontValues } from '../fonts';
 import { forms } from './forms';
 import { headShapes, headSizes } from './heads';
 
@@ -102,7 +103,7 @@ export const propOptions = {
   strokeWidth: [0, 0.5, 1, 1.5, 2, 3, 4],
   opacity: [0.25, 0.5, 0.75, 1],
   color: colours,
-  font: ['sans', 'serif', 'mono'],
+  font: fontValues,
   size: [0.75, 0.875, 1, 1.125, 1.25, 1.5, 2],
   weight: ['normal', 'bold'],
   padding: spacing,
@@ -303,7 +304,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
-    font: 'sans',
+    font: fontValues[0],
     size: 1,
     weight: 'normal',
     padding: 0,
@@ -322,7 +323,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
-    font: 'sans',
+    font: fontValues[0],
     size: 1.25,
     weight: 'bold',
     padding: 0.375,
@@ -337,7 +338,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-600',
-    font: 'sans',
+    font: fontValues[0],
     size: 1,
     weight: 'normal',
     padding: 0,
@@ -351,7 +352,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeStyle: 'solid',
     opacity: 1,
     color: 'neutral-900',
-    font: 'sans',
+    font: fontValues[0],
     size: 1.25,
     weight: 'bold',
     padding: 0.375,

@@ -1,6 +1,8 @@
 /** Page theme for every presentation: colour tokens and the page background. The page frame, which
  * lays out the view, is library/Frame.svelte. */
 
+import { pageFont } from './fonts';
+
 export const themeCss = `
 :root {
   --sv-ink: #172033;
@@ -20,7 +22,7 @@ export const themeCss = `
   --sv-purple-line: #8b5cf6;
   --sv-radius: 10px;
   --sv-select: #2563eb;
-  font-family: 'Sverlin Sans', 'Sverlin Symbols', system-ui, sans-serif;
+  font-family: ${pageFont};
 }
 body {
   margin: 0;
