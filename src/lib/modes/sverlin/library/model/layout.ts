@@ -8,7 +8,7 @@
  */
 
 import type { Rule } from './css';
-import { lookOf, type Length, type Look, type Styled } from './look';
+import { lookOf, type Length, type Look, type Styled, type Styler } from './look';
 import { isElement, type ModelElement } from './tree';
 
 /** Text widths and font metrics, as the page's canvas gives them (see text.ts). */
@@ -36,6 +36,17 @@ export type ModelOptions = {
   ancestors?: readonly ModelElement[];
   /** Border widths snap to device pixels. */
   devicePixelRatio?: number;
+  /** Works out looks, sharing them between elements alike (see look.ts); unset, each its own. */
+  styler?: Styler;
+  /** Looks already worked out for the tree's elements, as by styleTree, used as they are. */
+  styled?: ReadonlyMap<ModelElement, Styled>;
+  /**
+   * Looks changed from what the cascade gives, as a script setting inline styles would, for what
+   * never changes what descendants inherit: sizes, least sizes and insets.
+   */
+  adjust?: (element: ModelElement) => Partial<Look> | undefined;
+  /** Least sizes in pixels over those the cascade gives, as min-width: max(…, 40px) would. */
+  least?: (element: ModelElement) => { width: number; height: number } | undefined;
 };
 
 type Fragment = { element: ModelElement; width: number; height: number; children: Placed[] };
@@ -58,7 +69,11 @@ const inlineLevel = (display: string) => display.startsWith('inline');
 const lengthPx = (length: Length) => length.px;
 
 export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
-  const { rules, measure, ancestors = [], devicePixelRatio = 1 } = options;
+  const { rules, measure, ancestors = [], devicePixelRatio = 1, adjust, least } = options;
+  const known = options.styled;
+  const lookUp: Styler =
+    options.styler ??
+    ((element, chain, parent) => lookOf(element, chain, parent, rules, devicePixelRatio));
   const problems = new Set<string>();
   const styled = new Map<ModelElement, Styled>();
   const looks = new Map<ModelElement, Look>();
@@ -66,16 +81,17 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
   const outOfFlow = new Map<ModelElement, ModelElement[]>();
 
   let above: Styled | undefined;
-  ancestors.forEach((element, depth) => {
-    above = lookOf(element, ancestors.slice(0, depth), above, rules, devicePixelRatio);
-  });
+  if (!known?.has(root))
+    ancestors.forEach((element, depth) => {
+      above = lookUp(element, ancestors.slice(0, depth), above);
+    });
   const style = (
     element: ModelElement,
     chain: ModelElement[],
     parent: Styled | undefined,
     positioned: ModelElement
   ) => {
-    const own = lookOf(element, chain, parent, rules, devicePixelRatio);
+    const own = known?.get(element) ?? lookUp(element, chain, parent);
     styled.set(element, own);
     looks.set(element, own.look);
     const { position, display } = own.look;
@@ -90,7 +106,16 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       if (isElement(child)) style(child, [...chain, element], own, holds);
   };
   style(root, [...ancestors], above, root);
-  const lookAt = (element: ModelElement) => styled.get(element)?.look as Look;
+  const adjusted = new Map<ModelElement, Look>();
+  const lookAt = (element: ModelElement): Look => {
+    let look = adjusted.get(element);
+    if (!look) {
+      const own = styled.get(element)?.look as Look;
+      const change = adjust?.(element);
+      adjusted.set(element, (look = change ? { ...own, ...change } : own));
+    }
+    return look;
+  };
 
   // A box's in-flow items: text, and elements laid out in flow, with display: contents unwrapped.
   const itemsOf = (element: ModelElement): Item[] =>
@@ -122,8 +147,15 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     const look = lookAt(element);
     const { left, top, horizontal, vertical } = edges(look);
     const toBorder = (size: number, edge: number) => (look.borderBox ? size : size + edge);
-    const leastWidth = toBorder(laid(lengthPx(look.minWidth)), horizontal);
-    const leastHeight = toBorder(laid(lengthPx(look.minHeight)), vertical);
+    const kept = least?.(element);
+    const leastWidth = toBorder(
+      laid(Math.max(lengthPx(look.minWidth), kept?.width ?? 0)),
+      horizontal
+    );
+    const leastHeight = toBorder(
+      laid(Math.max(lengthPx(look.minHeight), kept?.height ?? 0)),
+      vertical
+    );
     if (look.minWidth.percent || look.minHeight.percent) problems.add('percentage least sizes');
     let outer: number;
     if (typeof look.width === 'object') {

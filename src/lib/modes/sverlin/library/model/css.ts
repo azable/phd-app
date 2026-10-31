@@ -284,3 +284,16 @@ export function cascade(
   for (const [property, value] of important) normal.set(property, value);
   return normal;
 }
+
+/** The attributes the rules' selectors read, by name. */
+export function attributesRead(rules: readonly Rule[]): Set<string> {
+  const names = new Set<string>();
+  const visit = (selector: Selector): void => {
+    for (const { compound } of selector.compounds)
+      for (const simple of compound)
+        if (simple.kind === 'attribute') names.add(simple.name);
+        else if (simple.kind === 'not' || simple.kind === 'where') simple.of.forEach(visit);
+  };
+  for (const rule of rules) visit(rule.selector);
+  return names;
+}

@@ -52,7 +52,8 @@
     through?: boolean;
     site?: string;
     place?: Place;
-    children: Snippet;
+    /** None where the render it wraps draws nothing here, as one the compiler leaves empty. */
+    children?: Snippet;
   } = $props();
   const leftOut = untrack(() => site !== undefined && (leftOutContext()?.has(site) ?? false));
   untrack(() => providePlace(place));
@@ -81,5 +82,5 @@
 </script>
 
 {#if !leftOut && !missing}
-  {@render children()}
+  {@render children?.()}
 {/if}

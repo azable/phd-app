@@ -2,9 +2,10 @@
   Places a free layout's children by constraint layout (see arrange.ts): it measures each child as
   laid out inside, solves for their positions, places them, and takes the size that holds everything
   it draws, drawing any links over them (see LinkLines.svelte) and placing their labels on their
-  middles, or nearby where a middle is not clear. Its layout follows from its children, its links and its kind's values alone, never from
-  the space around it. A nested arrangement that settles later asks its parent to lay out again, so
-  sizes flow up and the final layout uses every child's final size.
+  middles, or nearby where a middle is not clear (see arrangement.ts). Its layout follows from its
+  children, its links and its kind's values alone, never from the space around it. A nested
+  arrangement that settles later asks its parent to lay out again, so sizes flow up and the final
+  layout uses every child's final size.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -14,19 +15,13 @@
     layoutMemoryContext,
     provideArrangementParent
   } from '../type-context';
-  import {
-    arrangeOnce,
-    layoutSeedFor,
-    type Anchor,
-    type ArrangeEdge,
-    type LinkSpec
-  } from './arrange';
+  import type { ArrangeEdge } from './arrange';
+  import { arrangeChildren } from './arrangement';
   import type { Form } from './forms';
   import LinkLines, { type LineStyle } from './LinkLines.svelte';
-  import { labelsIn, markerLook, placeLabels } from './markers';
+  import { placeLabels } from './markers';
   import type { Spacing } from './props';
-  import { screenScale, unscaledBox } from './unscaled';
-  import { seenParts, unionOf } from './visible';
+  import { mountedReader } from './reader';
 
   let {
     flow,
@@ -53,9 +48,6 @@
   } = $props();
 
   const memory = layoutMemoryContext();
-  // The seed this arrangement draws every choice from: its kind's, mixed with its place, so two
-  // arrangements of one kind differ, and each stays the same while the variant keeps that seed.
-  const drawSeed = $derived(layoutSeedFor(layoutSeed ?? 1, scope));
 
   // Node ids hold : and #, which an SVG fragment reference cannot. A fragment reference finds the
   // first element with its id in the page, and two steps' layers are in the page while one replaces
@@ -106,203 +98,38 @@
   $effect(() => {
     void revision;
     if (!host) return;
-    // Link components sit among the children as hidden markers: they are links, not boxes. One a
-    // view of an element draws from that element, with no from, is laid out here, from inside it.
-    const markers = [
-      ...[...host.children].filter(
-        (child): child is HTMLElement =>
-          child instanceof HTMLElement && child.hasAttribute('data-sv-link')
-      ),
-      ...[...host.querySelectorAll<HTMLElement>('[data-sv-link][data-sv-hoist]')].filter(
-        (marker) => marker.parentElement !== host && marker.closest('.placed') === host
-      )
-    ];
-    const elements = [...host.children].filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement &&
-        !child.hasAttribute('data-sv-link') &&
-        !child.hasAttribute('data-sv-link-label')
-    );
-    // Each link's label, measured so the link leaves room for it, then placed on its middle or near it.
-    const labels = labelsIn(host);
-    // A link with no from starts at the node it sits in, as a node's next field, not its whole box.
-    const origin = (marker: HTMLElement) =>
-      marker.hasAttribute('data-sv-hoist') && marker.dataset.svLink
-        ? `${marker.dataset.from ?? ''}↦${marker.dataset.svLink}`
-        : undefined;
-    const looks = markers.map(markerLook);
-    const specs: LinkSpec[] = markers.map((marker, index) => {
-      const label = labels.get(marker.dataset.svLink ?? '');
-      const { route, head } = looks[index];
-      return {
-        from: marker.dataset.from ?? '',
-        to: marker.dataset.to ?? '',
-        ...(origin(marker) ? { start: origin(marker) } : {}),
-        directed: marker.dataset.directed !== 'false',
-        ...(marker.dataset.svLink ? { id: marker.dataset.svLink } : {}),
-        ...(route ? { route } : {}),
-        ...(head ? { head } : {}),
-        ...(label ? { label: { width: label.offsetWidth, height: label.offsetHeight } } : {})
-      };
-    });
-    const styles: Record<string, LineStyle> = Object.fromEntries(
-      markers.flatMap(({ dataset }, index) =>
-        dataset.svLink ? [[dataset.svLink, looks[index].style]] : []
-      )
-    );
-    // Links this step draws, by their components' ids.
-    const present = new Set(specs.map(({ id }) => id));
-    const drawn = (edge: ArrangeEdge) => edge.id !== undefined && present.has(edge.id);
-    const fontSize = parseFloat(getComputedStyle(host).fontSize) || 16;
-    const space = gap * fontSize;
-    // Pointers' views are drawn around a child (data-sv-around), the one at it taking the pointer's
-    // identity so it slides with the pointer in a row; here the child is still the element it is
-    // drawn around, known by that element's identity.
-    const identityOf = (element: HTMLElement) => {
-      const around = element.dataset.svAround;
-      if (around === undefined) return element.dataset.svIdentity;
-      const inner = element.querySelector<HTMLElement>(`[data-sv-slot="${CSS.escape(around)}"]`);
-      return inner?.dataset.svIdentity ?? element.dataset.svIdentity;
-    };
-    const boxes = elements.map((element, index) => ({
-      // A child is known by the value it draws, as a node of a heap, which keeps its place as others
-      // come and go, or else by its node id, the same at every step.
-      key: identityOf(element) ?? element.dataset.svNode ?? `#${index}`,
-      // Layout sizes, unaffected by the frame's scale; offsetWidth rounds, so a pixel more keeps
-      // a fractional width from wrapping once placed.
-      width: element.offsetWidth + 1,
-      height: element.offsetHeight + 1
-    }));
-    // Links attach to the node drawing the element they name.
-    const anchors: Record<string, Anchor> = {};
-    const parts: Anchor[] = [];
-    // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
-    // item stands for it, so a link given its position still meets it.
-    const items: Record<string, Anchor> = {};
-    // Rects are scaled with the frame; read back in layout pixels, they are the same at any scale.
-    const scale = screenScale(host);
-    elements.forEach((element, box) => {
-      const frame = element.getBoundingClientRect();
-      const anchor = (inner: Element): Anchor => ({ box, ...unscaledBox(inner, frame, scale) });
-      // What is seen of a node (see visible.ts). Where that is boxes inside it, an arrow crossing the
-      // node's other content to reach them stops at the nearest box around them it draws, if any.
-      const seen = (node: HTMLElement): Anchor => {
-        const shown = seenParts(node);
-        if (shown[0] === node) return anchor(node);
-        const edges = shown.map((inner) => {
-          const { x, y, width, height } = anchor(inner);
-          return { left: x, top: y, right: x + width, bottom: y + height };
-        });
-        const { left, top, right, bottom } = unionOf(edges);
-        const around = shown[0].parentElement?.closest<HTMLElement>('[data-sv-framed]');
-        const outer =
-          around && element.contains(around) && shown.every((inner) => around.contains(inner))
-            ? anchor(around)
-            : undefined;
-        return {
-          box,
-          x: left,
-          y: top,
-          width: right - left,
-          height: bottom - top,
-          frame: outer ? { x: outer.x, y: outer.y, width: outer.width, height: outer.height } : null
-        };
-      };
-      // A node drawing an element of the state is also found by it, as vertices[2], the outermost
-      // such node first, so a link given a position meets the element's whole view, as it is seen.
-      for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-slot]')])
-        if (inner.dataset.svSlot && !(inner.dataset.svSlot in anchors))
-          anchors[inner.dataset.svSlot] = seen(inner);
-      for (const inner of [element, ...element.querySelectorAll<HTMLElement>('[data-sv-item]')])
-        if (inner.dataset.svItem && !(inner.dataset.svItem in items))
-          items[inner.dataset.svItem] = seen(inner);
-      // A child drawing a node whose fields link onward, as [ A | next ], is met at its one value
-      // cell, never the field an arrow leaves.
-      const fields = element.querySelector('[data-sv-link][data-sv-hoist]');
-      const cells = [...element.querySelectorAll('[data-sv-node]')].filter((inner) =>
-        inner.querySelector(':scope > .value')
-      );
-      if (element.dataset.svSlot && fields && cells.length === 1)
-        anchors[element.dataset.svSlot] = anchor(cells[0]);
-      // The content inside a child, which arrows bend round: its innermost nodes.
-      for (const inner of element.querySelectorAll('[data-sv-node]'))
-        if (!inner.querySelector('[data-sv-node]')) parts.push(anchor(inner));
-      // A link from inside the child starts at the node holding it.
-      for (const marker of markers) {
-        const key = origin(marker);
-        const field = marker.parentElement?.closest<HTMLElement>('[data-sv-node]');
-        if (key && field && element.contains(field)) anchors[key] = anchor(field);
-      }
-    });
-    for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
-    const options = {
-      links: specs,
-      flow,
-      form,
-      curve,
-      gap: space
-    };
-    // While recording, note what this arrangement contains at this step, by key, so it can be
-    // solved once over every step (see node/span.ts).
-    if (memory?.recording) {
-      let entry = memory.scopes.get(scope);
-      if (!entry) memory.scopes.set(scope, (entry = { inputs: new Map() }));
-      const keyed = (anchor: Anchor) => ({ ...anchor, box: boxes[anchor.box].key });
-      entry.inputs.set(memory.step, {
-        seed: drawSeed,
-        boxes,
-        anchors: Object.fromEntries(Object.entries(anchors).map(([key, a]) => [key, keyed(a)])),
-        parts: parts.map(keyed),
-        options
-      });
-    }
-    // Children go where the solution over every step put them, and only this step's links are
-    // drawn. A child the solution does not know, such as before it is made, is laid out here alone.
-    const span = memory?.scopes.get(scope)?.span;
-    let shown: NonNullable<typeof result>;
-    let placements: { x: number; y: number }[];
-    if (span && boxes.every(({ key }) => span.positions[key])) {
-      placements = boxes.map(({ key }) => span.positions[key]);
-      shown = {
-        width: span.width,
-        height: span.height,
-        edges: span.edges.filter(drawn),
-        choices: span.choices,
-        styles
-      };
-    } else {
-      const solved = untrack(() => arrangeOnce(drawSeed, boxes, { ...options, anchors, parts }));
-      for (const problem of solved.problems) console.warn(`Node layout: ${problem}`);
-      placements = solved.placements;
-      shown = {
-        width: solved.width,
-        height: solved.height,
-        edges: solved.edges.filter(drawn),
-        choices: solved.choices,
-        styles
-      };
-    }
-    elements.forEach((element, index) => {
-      element.style.left = `${placements[index].x}px`;
-      element.style.top = `${placements[index].y}px`;
+    const placed = host;
+    const props = { flow, form, curve, layoutSeed, gap, scope };
+    const laid = untrack(() => arrangeChildren(mountedReader(placed), placed, props, memory));
+    for (const problem of laid.problems) console.warn(`Node layout: ${problem}`);
+    laid.elements.forEach((element, index) => {
+      element.style.left = `${laid.placements[index].x}px`;
+      element.style.top = `${laid.placements[index].y}px`;
     });
     placeLabels(
-      host,
-      shown.edges.flatMap((edge) => {
-        const label = edge.id === undefined ? undefined : labels.get(edge.id);
+      placed,
+      laid.edges.flatMap((edge) => {
+        const label = edge.id === undefined ? undefined : laid.labels.get(edge.id);
         return label ? [{ label, middle: edge.middle }] : [];
       })
     );
     const resized =
-      untrack(() => result?.width) !== shown.width ||
-      untrack(() => result?.height) !== shown.height;
-    result = shown;
+      untrack(() => result?.width) !== laid.width || untrack(() => result?.height) !== laid.height;
+    result = {
+      width: laid.width,
+      height: laid.height,
+      edges: laid.edges,
+      choices: laid.choices,
+      styles: laid.styles
+    };
     if (resized) parent?.changed();
   });
 </script>
 
+<!-- data-sv-arrange carries its props, for a step laid out on the layout model (model/drawn.ts). -->
 <div
   class="sv-arranged"
+  data-sv-arrange={JSON.stringify({ flow, form, curve, layoutSeed, gap, scope })}
   data-sv-layout-seed={layoutSeed}
   data-sv-layout-kind={layoutSeed === undefined ? undefined : kind}
   data-sv-form={result?.choices.form}

@@ -52,3 +52,16 @@ declare module 'virtual:components' {
     lit: [number, number][][];
   } | null;
 }
+
+/** Main.svelte compiled to render strings, so steps are laid out without mounting them. */
+declare module 'virtual:component-server' {
+  import type { Component } from 'svelte';
+
+  const Main: Component<Record<string, unknown>>;
+  export default Main;
+}
+
+/** The library compiled to render strings. */
+declare module 'virtual:library-server' {
+  export * from 'sverlin';
+}

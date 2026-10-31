@@ -1,16 +1,22 @@
+import type { Reader } from './reader';
+
 /**
  * What is seen of the node drawing an element, which an arrow to it meets: the node itself where it
  * draws a box of its own, a stroke or a fill (data-sv-framed, from its own look, so a pointer
  * painting it at some steps does not move the arrow); else the outermost such boxes inside it, as a
  * vertex's name cell rather than the column holding it and its caption; else the node itself.
  */
-export function seenParts(node: HTMLElement): HTMLElement[] {
-  if (node.dataset.svFramed) return [node];
-  const found: HTMLElement[] = [];
-  const walk = (parent: Element) => {
-    for (const child of parent.children) {
-      if (!(child instanceof HTMLElement) || child.dataset.svHidden === 'true') continue;
-      if (child.dataset.svNode !== undefined && child.dataset.svFramed) found.push(child);
+export function seenParts<E>(read: Reader<E>, node: E): E[] {
+  if (read.attribute(node, 'data-sv-framed')) return [node];
+  const found: E[] = [];
+  const walk = (parent: E) => {
+    for (const child of read.children(parent)) {
+      if (read.attribute(child, 'data-sv-hidden') === 'true') continue;
+      if (
+        read.attribute(child, 'data-sv-node') !== undefined &&
+        read.attribute(child, 'data-sv-framed')
+      )
+        found.push(child);
       else walk(child);
     }
   };

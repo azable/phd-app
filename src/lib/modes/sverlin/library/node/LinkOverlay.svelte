@@ -11,6 +11,7 @@
   import { headDrawing, headTrim } from './heads';
   import LinkLines, { type Line } from './LinkLines.svelte';
   import { labelsIn, markerLook, placeLabels, type PlacedLabel } from './markers';
+  import { mountedReader } from './reader';
   import { curvePath, pathBounds, routeCurve, wirePath, type Box } from './route';
   import { seenParts, unionOf } from './visible';
   import { routeWires } from './wires';
@@ -60,14 +61,15 @@
         child.hasAttribute('data-sv-link') &&
         !child.hasAttribute('data-sv-hoist')
     );
-    const labels = labelsIn(host);
+    const read = mountedReader(host);
+    const labels = labelsIn(read, host);
     // An end names the node drawing an element of the state, the outermost first, met where it is
     // seen (see visible.ts).
     const anchors: Record<string, Box> = {};
     for (const child of children)
       for (const inner of [child, ...child.querySelectorAll<HTMLElement>('[data-sv-slot]')]) {
         const name = inner.dataset.svSlot;
-        if (name && !(name in anchors)) anchors[name] = unionOf(seenParts(inner).map(boxOf));
+        if (name && !(name in anchors)) anchors[name] = unionOf(seenParts(read, inner).map(boxOf));
       }
     const boxes = children.map(boxOf);
     const centre = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 });
@@ -77,7 +79,9 @@
     const linked = markers.flatMap((marker) => {
       const from = anchors[marker.dataset.from ?? ''];
       const to = anchors[marker.dataset.to ?? ''];
-      return from && to && from !== to ? [{ marker, from, to, ...markerLook(marker) }] : [];
+      return from && to && from !== to
+        ? [{ marker, from, to, ...markerLook((name) => marker.getAttribute(name) ?? undefined) }]
+        : [];
     });
     // Wires are routed together round the cells, so their runs keep apart: each between the cells
     // holding its ends, or the boxes inside them it meets.

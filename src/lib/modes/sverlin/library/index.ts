@@ -21,7 +21,20 @@ export { settleSpans } from './node/span';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';
 export { arrangementLayout, describeFrame, describeStep } from './scene';
-export { checkLayout, type LayoutCheck } from './model/check';
+export { ancestorsOf, checkLayout, type LayoutCheck } from './model/check';
+export { parseSheet, type Rule } from './model/css';
+export { styler } from './model/look';
+export { readMarkup } from './model/markup';
+export {
+  elementsUnder,
+  probeComponent,
+  reserveSizes,
+  withLines,
+  type Drawing,
+  type Reservation
+} from './model/reserve';
+export { canvasMeasure } from './model/text';
+export { treeOf, type ModelElement } from './model/tree';
 export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,

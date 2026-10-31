@@ -9,8 +9,10 @@ export function canvasMeasure(): TextMeasure {
   context.fontKerning = 'normal';
   const widths = new Map<string, number>();
   const metrics = new Map<string, ReturnType<TextMeasure['metrics']>>();
+  // The font last set, as the canvas reads its font back in another form.
+  let current: string | undefined;
   const use = (font: string) => {
-    if (context.font !== font) context.font = font;
+    if (current !== font) context.font = current = font;
   };
   return {
     width(text, font) {

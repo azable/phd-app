@@ -5,8 +5,19 @@
 // 'sverlin:types' context.
 
 import { mount, unmount, type Component } from 'svelte';
+import { render } from 'svelte/server';
 import {
+  ancestorsOf,
+  canvasMeasure,
+  treeOf,
   checkLayout,
+  elementsUnder,
+  parseSheet,
+  probeComponent,
+  readMarkup,
+  reserveSizes,
+  styler,
+  withLines,
   describeFrame,
   describeStep,
   animateStep,
@@ -15,18 +26,22 @@ import {
   motionCss,
   Frame,
   linePairs,
-  settleSpans,
   themeCss,
   widestInteger,
   unpackStates,
   type FrameSettings,
   type DesignValues,
   type LayoutCheck,
+  type Drawing,
   type LayoutMemory,
+  type ModelElement,
+  type Reservation,
   type SceneFrame,
   type SceneStep
 } from 'sverlin';
 import Main from 'virtual:component';
+import MainServer from 'virtual:component-server';
+import { Frame as FrameServer } from 'virtual:library-server';
 import atoms from 'virtual:atoms';
 import { components, listing, placements } from 'virtual:components';
 import packed from 'virtual:trace';
@@ -63,6 +78,8 @@ type StepState = Record<string, unknown> & {
 const playback = window as typeof window & {
   __sverlinStep?: number;
   __sverlinSelection?: unknown;
+  /** How recording sized the nodes, for whoever looks on, as the timing harness does. */
+  __sverlinReservation?: Reservation;
 };
 // Each step is two states, the one before its code runs and the one after (see phasesOf in
 // compile.server.ts): step k is states 2k and 2k + 1. The page rests on a step's after.
@@ -198,24 +215,23 @@ const reserved: LayoutMemory['reserved'] = new Map();
 const componentSizes: LayoutMemory['components'] = new Map();
 const lines: LayoutMemory['lines'] = new Set();
 
-/** Measuring finds each node's natural sizes, recording makes the layouts, showing replays them. */
+/**
+ * Measuring draws each step's markup, recording makes the layouts from it on the layout model, and
+ * showing mounts a step with them.
+ */
 type Phase = 'measuring' | 'recording' | 'showing';
 
-/** How long a batch of passes run together goes on mounting before it waits for them to settle. */
-const batchMounting = 100;
-
 /**
- * Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. `extra`
- * props are passed to the view, such as __probe, which has it render a component for given values;
- * `substituted` measures the step with other values in place of the trace's.
+ * What a step's frame is drawn with: the view's props and the contexts it reads. `extra` props are
+ * passed to the view, such as __probe, which has it render a component for given values;
+ * `substituted` draws the step with other values in place of the trace's.
  */
-function mountStep(
+function drawingOf(
   step: number,
   phase: Phase,
-  settled: (shown: Shown) => void,
   extra: Record<string, unknown> = {},
   substituted?: StepState
-): Shown {
+) {
   const {
     __types: types = {},
     __targets: targets = {},
@@ -242,12 +258,6 @@ function mountStep(
   };
   for (const [name, value] of Object.entries(state)) record(value, name);
 
-  const layer = document.createElement('div');
-  layer.className = 'sv-layer pending';
-  // Which of its step's two states the layer shows, for whoever looks on, as the tests do.
-  layer.dataset.svPhase = step % 2 ? 'after' : 'before';
-  root.append(layer);
-  const shown: Shown = { step, layer, changes: 0, copies };
   const memory: LayoutMemory = {
     step,
     recording: phase === 'recording',
@@ -259,80 +269,133 @@ function mountStep(
     components: componentSizes,
     lines
   };
+  return {
+    copies,
+    props: { ...state, ...extra },
+    settings: frame,
+    context: new Map<string, unknown>([
+      ['sverlin:design', design],
+      ['sverlin:left-out', new Set(leftOut)],
+      ['sverlin:hidden-sites', new Set(hiddenSites)],
+      ['sverlin:layout-memory', memory],
+      [
+        'sverlin:listing',
+        listing
+          ? { text: listing.text, regions: listing.regions, lit: listing.lit[stepOf(step)] ?? [] }
+          : undefined
+      ],
+      [
+        'sverlin:types',
+        {
+          itemType: (container: unknown, index: number) => {
+            const path =
+              container !== null && typeof container === 'object'
+                ? paths.get(container)
+                : undefined;
+            return path === undefined ? undefined : types[`${path}[${index}]`];
+          },
+          pathOf: (container: unknown) =>
+            container !== null && typeof container === 'object' ? paths.get(container) : undefined,
+          targetOf: (path: string) => targets[path],
+          identityOf: (path: string) => identities[path],
+          absent: (name: string) => absent.includes(name),
+          refOf: (path: string) => refs[path],
+          elementWith: (identity: number) =>
+            Object.keys(identities).find(
+              (path) => identities[path] === identity && /\[\d+\]$/u.test(path)
+            ),
+          variablesOf: (typeName: string) =>
+            Object.keys(state).filter((name) => types[name] === typeName),
+          typeAt: (path: string) => types[path],
+          heldBy: (name: string) => held.get(name),
+          reachedFrom: (path: string) => reached.get(anyIndex(path)),
+          pastEnds: (collection: string, path?: string) =>
+            pastEnds.get(endsKey(collection, path)) ?? { before: 0, after: 0 },
+          lengthOf: (path: string) => {
+            const collection = containers.get(path);
+            return Array.isArray(collection) ? collection.length : undefined;
+          },
+          parent: (typeName: string) => atoms[typeName]?.parent,
+          unit: unitOf
+        }
+      ]
+    ])
+  };
+}
+
+/** Mount a step's frame in a hidden layer; `settled` runs once its layout stops changing. */
+function mountStep(step: number, settled: (shown: Shown) => void): Shown {
+  const layer = document.createElement('div');
+  layer.className = 'sv-layer pending';
+  // Which of its step's two states the layer shows, for whoever looks on, as the tests do.
+  layer.dataset.svPhase = step % 2 ? 'after' : 'before';
+  root.append(layer);
+  const { copies, props, settings, context } = drawingOf(step, 'showing');
+  const shown: Shown = { step, layer, changes: 0, copies };
   try {
     shown.app = mount(Frame, {
       target: layer,
       props: {
         view: Main as Component<Record<string, unknown>>,
-        props: { ...state, ...extra },
-        settings: frame,
+        props,
+        settings,
         onsettled: () => settled(shown),
         onchanged: () => shown.changes++
       },
-      context: new Map<string, unknown>([
-        ['sverlin:design', design],
-        ['sverlin:left-out', new Set(leftOut)],
-        ['sverlin:hidden-sites', new Set(hiddenSites)],
-        ['sverlin:layout-memory', memory],
-        [
-          'sverlin:listing',
-          listing
-            ? { text: listing.text, regions: listing.regions, lit: listing.lit[stepOf(step)] ?? [] }
-            : undefined
-        ],
-        [
-          'sverlin:types',
-          {
-            itemType: (container: unknown, index: number) => {
-              const path =
-                container !== null && typeof container === 'object'
-                  ? paths.get(container)
-                  : undefined;
-              return path === undefined ? undefined : types[`${path}[${index}]`];
-            },
-            pathOf: (container: unknown) =>
-              container !== null && typeof container === 'object'
-                ? paths.get(container)
-                : undefined,
-            targetOf: (path: string) => targets[path],
-            identityOf: (path: string) => identities[path],
-            absent: (name: string) => absent.includes(name),
-            refOf: (path: string) => refs[path],
-            elementWith: (identity: number) =>
-              Object.keys(identities).find(
-                (path) => identities[path] === identity && /\[\d+\]$/u.test(path)
-              ),
-            variablesOf: (typeName: string) =>
-              Object.keys(state).filter((name) => types[name] === typeName),
-            typeAt: (path: string) => types[path],
-            heldBy: (name: string) => held.get(name),
-            reachedFrom: (path: string) => reached.get(anyIndex(path)),
-            pastEnds: (collection: string, path?: string) =>
-              pastEnds.get(endsKey(collection, path)) ?? { before: 0, after: 0 },
-            lengthOf: (path: string) => {
-              const collection = containers.get(path);
-              return Array.isArray(collection) ? collection.length : undefined;
-            },
-            parent: (typeName: string) => atoms[typeName]?.parent,
-            unit: unitOf
-          }
-        ]
-      ])
+      context
     });
   } catch (cause) {
-    // A view that fails at a step shows why there, and the other steps still load. A substituted
-    // state can combine values no run produces, so one that fails is no visual state to size for,
-    // and is left out.
-    if (!substituted) {
-      reportError(cause, step);
-      const notice = document.createElement('p');
-      notice.className = 'sv-error';
-      notice.textContent = `Step ${step + 1} could not be drawn: ${errorText(cause)}`;
-      layer.append(notice);
-    }
+    // A view that fails at a step shows why there, and the other steps still load.
+    reportError(cause, step);
+    const notice = document.createElement('p');
+    notice.className = 'sv-error';
+    notice.textContent = `Step ${step + 1} could not be drawn: ${errorText(cause)}`;
+    layer.append(notice);
     queueMicrotask(() => settled(shown));
   }
   return shown;
+}
+
+/** The style sheets of the library's components, by id, as their markup brings them. */
+const componentSheets = new Map<string, string>();
+/** The rules the layout model reads, the theme's and the components', worked out again for new ones. */
+let model: { rules: ReturnType<typeof parseSheet>; styler: ReturnType<typeof styler> } | undefined;
+function modelRules() {
+  if (!model) {
+    const rules = parseSheet(theme.textContent ?? '');
+    for (const sheet of componentSheets.values()) rules.push(...parseSheet(sheet, rules.length));
+    model = { rules, styler: styler(rules, window.devicePixelRatio) };
+  }
+  return model;
+}
+
+/**
+ * Draw a step's markup, as Svelte's string renderer writes it, without mounting it, for laying out
+ * on the layout model (see library/model/reserve.ts). `extra` and `substituted` are as for
+ * drawingOf; a view that fails at a step reports why, and one failing with substituted values,
+ * which no run produces, is left out.
+ */
+function drawMarkup(
+  step: number,
+  extra?: Record<string, unknown>,
+  substituted?: StepState
+): ModelElement | undefined {
+  try {
+    const { props, settings, context } = drawingOf(step, 'measuring', extra, substituted);
+    const { head, body } = render(FrameServer, {
+      props: { view: MainServer, props, settings },
+      context
+    });
+    for (const [, id, sheet] of head.matchAll(/<style id="([^"]*)">([\s\S]*?)<\/style>/gu))
+      if (!componentSheets.has(id)) {
+        componentSheets.set(id, sheet);
+        model = undefined;
+      }
+    return readMarkup(body, { tag: 'div', attributes: { class: 'sv-layer pending' } });
+  } catch (cause) {
+    if (!substituted) reportError(cause, step);
+    return undefined;
+  }
 }
 
 function errorText(cause: unknown): string {
@@ -403,7 +466,7 @@ function show(step: number, shownBefore?: () => void) {
   pendingTiming?.cancel();
   let mounted: Shown | undefined;
   const timed = (pendingTiming = timePass('showing', step, () => mounted));
-  pending = mounted = mountStep(step, 'showing', (shown) => {
+  pending = mounted = mountStep(step, (shown) => {
     if (pending !== shown) return;
     timed.done();
     if (leaving) remove(leaving);
@@ -487,229 +550,95 @@ async function whenShown() {
 }
 
 /**
- * Measure every node at every step, keeping the largest size each reaches, then record what every
- * arrangement contains at every step and solve each once over all of them. The items of a
- * collection all keep the largest size any of them reaches: an item's own largest size depends on
- * the steps it took part in (the last cell of a search never holds the pointer), and items of
- * different sizes would not line up in a centred row. Each pass over the steps draws them together,
- * a few at a time, and only the first of the states drawn alike (see drawnLike); a pass reads only
- * what the passes before it wrote, so the order steps settle in changes nothing.
+ * Work out every step's layout before any is shown, without mounting any (see LayoutMemory): draw
+ * the markup of the first of each of the states drawn alike (see drawnLike), find the pairs of
+ * links drawn as one line, size each typed component over the values of its parameters, then lay
+ * every node out on the layout model, bottom up, each keeping the largest size it reaches and each
+ * free layout solved once over every step (see library/model/reserve.ts). Laying out gives the page
+ * back for a moment between these, so a long presentation never holds its page up for long.
  */
 async function recordSteps() {
-  // The ids of each collection's items, by the collection's id, gathered over every step.
-  const collections = new Map<string, Set<string>>();
-  const pass = (
-    step: number,
-    phase: Phase,
-    finish: (shown: Shown) => void,
-    extra?: Record<string, unknown>,
-    substituted?: StepState
-  ) =>
-    new Promise<void>((done) => {
-      const timed = timePass(phase, step, () => mounted);
-      const mounted = mountStep(
-        step,
-        phase,
-        (shown) => {
-          timed.done();
-          finish(shown);
-          remove(shown);
-          done();
-        },
-        extra,
-        substituted
-      );
-    });
-  // Passes that read nothing another of them writes run together: each batch is mounted for at
-  // most a moment, then all of it settles over the same frames.
-  const together = async (passes: (() => Promise<void>)[]) => {
-    for (let next = 0; next < passes.length; ) {
-      await whenShown();
-      const started = performance.now();
-      const batch: Promise<void>[] = [];
-      do batch.push(passes[next++]());
-      while (next < passes.length && performance.now() - started < batchMounting);
-      await Promise.all(batch);
-    }
+  const pause = () => new Promise<void>((resume) => setTimeout(resume));
+  let started = performance.now();
+  const timed = (phase: Phase) => {
+    reportTiming({ phase, ms: Math.round(performance.now() - started) });
+    started = performance.now();
   };
-  // Keep the largest size each node reaches, in reserved or other sizes; whether any grew.
-  const keepLargest = (nodes: Iterable<HTMLElement>, sizes = reserved) => {
-    let grew = false;
-    for (const node of nodes) {
-      const id = node.dataset.svNode as string;
-      const largest = sizes.get(id);
-      // Layout sizes, unaffected by the frame's scale or the root's fit.
-      const width = Math.max(largest?.width ?? 0, node.offsetWidth);
-      const height = Math.max(largest?.height ?? 0, node.offsetHeight);
-      grew ||= width !== largest?.width || height !== largest?.height;
-      sizes.set(id, { width, height });
-    }
-    return grew;
-  };
-  // Keep sizes a round reached, where larger than those kept; whether any grew.
-  const keepReached = (sizes: Map<string, { width: number; height: number }>) => {
-    let grew = false;
-    for (const [id, { width, height }] of sizes) {
-      const kept = reserved.get(id);
-      const largest = {
-        width: Math.max(kept?.width ?? 0, width),
-        height: Math.max(kept?.height ?? 0, height)
-      };
-      grew ||= largest.width !== kept?.width || largest.height !== kept?.height;
-      reserved.set(id, largest);
-    }
-    return grew;
-  };
-  // The nodes holding a free layout, by id: a free layout takes its size from its solution over
-  // every step (see node/span.ts), so these keep the sizes they reach drawn that way, never the
-  // sizes of a step laid out alone.
-  const holding = new Set<string>();
-  const measure = ({ layer }: Shown) => {
-    keepLargest(layer.querySelectorAll<HTMLElement>('[data-sv-node]'));
-    for (const arranged of layer.querySelectorAll('.sv-arranged'))
-      for (
-        let node = arranged.parentElement?.closest<HTMLElement>('[data-sv-node]');
-        node;
-        node = node.parentElement?.closest<HTMLElement>('[data-sv-node]')
-      )
-        holding.add(node.dataset.svNode as string);
-    for (const box of layer.querySelectorAll<HTMLElement>('[data-sv-collection]')) {
-      const collection = box.dataset.svCollection;
-      if (!collection) continue;
-      const items = collections.get(collection) ?? new Set<string>();
-      for (const child of box.children)
-        if (child instanceof HTMLElement && child.dataset.svNode) items.add(child.dataset.svNode);
-      collections.set(collection, items);
-    }
-  };
+  const drawn = new Map<number, ModelElement>();
+  for (const step of distinct) {
+    const markup = drawMarkup(step);
+    if (markup) drawn.set(step, markup);
+  }
   // The links each step shows, by pair and way, for the pairs drawn as one line (see linePairs).
   const shownLinks: Set<string>[] = [];
-  await together(
-    distinct.map(
-      (step) => () =>
-        pass(step, 'measuring', (shown) => {
-          measure(shown);
-          shownLinks[step] = new Set(
-            [
-              ...shown.layer.querySelectorAll<HTMLElement>(
-                '[data-sv-pair]:not([data-shown="false"])'
-              )
-            ].map(({ dataset }) => `${dataset.svPair}|${dataset.svWay}`)
-          );
-        })
-    )
-  );
-  states.forEach((_, step) => (shownLinks[step] = shownLinks[drawnLike[step]]));
+  for (const [step, markup] of drawn)
+    shownLinks[step] = new Set(
+      [...elementsUnder(markup)]
+        .filter(
+          ({ attributes }) =>
+            attributes['data-sv-pair'] !== undefined && attributes['data-shown'] !== 'false'
+        )
+        .map(({ attributes }) => `${attributes['data-sv-pair']}|${attributes['data-sv-way']}`)
+    );
+  states.forEach((_, step) => (shownLinks[step] = shownLinks[drawnLike[step]] ?? new Set()));
   for (const pair of linePairs(shownLinks)) lines.add(pair);
-  // Values the root reads for placement are measured with every value of their types, in a step
-  // where they are recorded, so it has room for values the trace never reaches.
-  await together(
-    placements.flatMap(({ path, step, values }) =>
-      values.map(
-        (value) => () =>
-          pass(
-            step,
-            'measuring',
-            measure,
-            undefined,
-            withValue(states[step] as StepState, path, value)
-          )
-      )
-    )
-  );
-  // A collection's items all keep the largest size any of them reaches.
-  const lineUp = () => {
-    for (const items of collections.values()) {
-      const sizes = [...items].flatMap((id) => reserved.get(id) ?? []);
-      const largest = {
-        width: Math.max(0, ...sizes.map((size) => size.width)),
-        height: Math.max(0, ...sizes.map((size) => size.height))
-      };
-      for (const id of items) reserved.set(id, largest);
+  const drawings: Drawing[] = [...drawn].map(([step, markup]) => ({
+    step,
+    markup: withLines(markup, lines)
+  }));
+  // Values the root reads for placement are drawn with every value of their types, in a step where
+  // they are recorded, so it has room for values the trace never reaches.
+  for (const { path, step, values } of placements)
+    for (const value of values) {
+      const markup = drawMarkup(step, undefined, withValue(states[step] as StepState, path, value));
+      if (markup) drawings.push({ markup: withLines(markup, lines) });
     }
+  timed('measuring');
+  await pause();
+  started = performance.now();
+  const memory: LayoutMemory = {
+    step: 0,
+    recording: true,
+    scopes,
+    fits,
+    reserved,
+    components: componentSizes,
+    lines
   };
-  lineUp();
+  const measure = canvasMeasure();
+  const ancestors = [...ancestorsOf(root), { ...treeOf(root, false), children: [] }];
+  const options = () => ({
+    ...modelRules(),
+    measure,
+    devicePixelRatio: window.devicePixelRatio,
+    ancestors,
+    memory
+  });
   // A typed component is drawn once with each value of its type it is sized by, and its root keeps
   // the largest box it reaches: every value has room, whether or not this trace ever shows it.
   // Components come after those they render, whose boxes they are drawn with.
-  // offsetWidth and offsetHeight round to whole pixels, so a pixel more keeps the box from coming
-  // out a fraction smaller than what it holds.
   for (const { name, cases, range } of components) {
-    let font: string | undefined;
-    const probe = (values: unknown[]) =>
-      together([
-        () =>
-          pass(
-            0,
-            'measuring',
-            ({ layer }) => {
-              const nodes = layer.querySelectorAll<HTMLElement>(
-                `[data-sv-component="${CSS.escape(name)}"]`
-              );
-              let { width, height } = componentSizes.get(name) ?? { width: 0, height: 0 };
-              for (const node of nodes) {
-                // One holding a free layout is sized by its solution, which a probe does not draw.
-                if (node.querySelector('.sv-arranged')) continue;
-                width = Math.max(width, node.offsetWidth + 1);
-                height = Math.max(height, node.offsetHeight + 1);
-              }
-              if (width || height) componentSizes.set(name, { width, height });
-              const value = layer.querySelector<HTMLElement>(
-                `[data-sv-component="${CSS.escape(name)}"] .value`
-              );
-              if (value) font ??= fontOf(value);
-            },
-            { __probe: { component: name, cases: values } }
-          )
-      ]);
-    await probe(cases);
+    const probe = (values: unknown[]) => {
+      const markup = drawMarkup(0, { __probe: { component: name, cases: values } });
+      if (!markup) return undefined;
+      const { box, font } = probeComponent(withLines(markup, lines), name, options());
+      if (box) componentSizes.set(name, box);
+      return font;
+    };
+    const font = probe(cases);
     // Digits differ in width in most fonts, and the font is drawn per presentation, so a range too
     // large to draw whole is drawn again with the integer that prints widest in the value's font.
     if (range && font) {
       const widest = widestInteger(range.min, range.max, characterWidths(font));
-      if (!cases.includes(widest)) await probe([widest]);
+      if (!cases.includes(widest)) probe([widest]);
     }
   }
-  // Record what every arrangement contains at every step, then solve each over all of them; a
-  // nested arrangement's solution changes its size and so what its parent contains, so recording
-  // repeats until no solution changes. An {#if when(…)} chain draws other branches at other steps,
-  // each grown by the sizes the nodes inside it keep, so it keeps the largest size it reaches as
-  // shown. The nodes holding a free layout keep the largest size they reach in the last round, the
-  // first with every layout drawn as solved, at the size it is shown at. Every step of a round is
-  // drawn with the sizes kept before it, and what the round reaches is kept once it ends.
-  for (let round = 0; round < 3; round++) {
-    for (const id of holding) reserved.delete(id);
-    const chains = new Map<string, { width: number; height: number }>();
-    const holders = new Map<string, { width: number; height: number }>();
-    await together(
-      distinct.map(
-        (step) => () =>
-          pass(step, 'recording', ({ layer }) => {
-            const nodes = [...layer.querySelectorAll<HTMLElement>('[data-sv-node]')];
-            const held = (node: HTMLElement) => holding.has(node.dataset.svNode as string);
-            keepLargest(
-              nodes.filter((node) => node.dataset.svKind === 'chain' && !held(node)),
-              chains
-            );
-            keepLargest(nodes.filter(held), holders);
-          })
-      )
-    );
-    const chainsGrew = keepReached(chains);
-    keepReached(holders);
-    states.forEach((_, step) => {
-      const like = drawnLike[step];
-      if (like === step) return;
-      const fit = fits.get(like);
-      if (fit !== undefined) fits.set(step, fit);
-      for (const { inputs } of scopes.values()) {
-        const input = inputs.get(like);
-        if (input) inputs.set(step, input);
-      }
-    });
-    if (!settleSpans(scopes) && !chainsGrew) break;
-  }
-  lineUp();
+  playback.__sverlinReservation = reserveSizes(drawings, options());
+  states.forEach((_, step) => {
+    const fit = fits.get(drawnLike[step]);
+    if (fit !== undefined) fits.set(step, fit);
+  });
+  timed('recording');
 }
 
 /**
@@ -727,7 +656,7 @@ async function describeSteps(
     await whenShown();
     steps.push(
       await new Promise<SceneStep>((done) => {
-        mountStep(afterOf(step), 'showing', (shown) => {
+        mountStep(afterOf(step), (shown) => {
           frame ??= describeFrame(shown.layer);
           const flow = shown.layer.querySelector<HTMLElement>('.sv-flow');
           if (check && flow) checks.push(checkLayout(flow));
@@ -793,12 +722,6 @@ function withValue(state: StepState, path: string, value: unknown): StepState {
   for (const key of keys.slice(0, -1)) target = target[key] as Record<string, unknown>;
   target[keys.at(-1) as string] = value;
   return copy;
-}
-
-/** The font an element's text is drawn in, as a canvas takes it. */
-function fontOf(element: HTMLElement): string {
-  const style = getComputedStyle(element);
-  return `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 }
 
 /** Each character's width in a font. */

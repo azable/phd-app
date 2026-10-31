@@ -5,7 +5,7 @@
  * computed; layout rounds them as the browser lays out (see layout.ts).
  */
 
-import { cascade, type Rule } from './css';
+import { attributesRead, cascade, type Rule } from './css';
 import { classesOf, type ModelElement } from './tree';
 
 /** A length, or a share of the containing block's size, as 100%. */
@@ -401,4 +401,34 @@ export function lookOf(
         `Layout model: ${property} is not modelled (${classesOf(element).join('.')})`
       );
   return { look, inherited };
+}
+
+/** An element's look given its ancestors, the nearest last, and its parent's look. */
+export type Styler = (
+  element: ModelElement,
+  ancestors: readonly ModelElement[],
+  parent: Styled | undefined
+) => Styled;
+
+/**
+ * Looks worked out once for elements alike. An element's look follows from its tag, the attributes
+ * the rules read, its inline style and its parent's look, so elements alike under parents alike,
+ * in one step's markup or in many, share one.
+ */
+export function styler(rules: readonly Rule[], devicePixelRatio: number): Styler {
+  const read = [...attributesRead(rules), 'class', 'hidden'];
+  const alike = new Map<string, Styled>();
+  const keys = new WeakMap<Styled, number>();
+  return (element, ancestors, parent) => {
+    let key = `${parent ? keys.get(parent) : -1}\u0001${element.tag}`;
+    for (const name of read) key += `\u0001${element.attributes[name] ?? '\u0002'}`;
+    for (const property in element.style) key += `\u0001${property}:${element.style[property]}`;
+    let styled = alike.get(key);
+    if (!styled) {
+      styled = lookOf(element, ancestors, parent, rules, devicePixelRatio);
+      alike.set(key, styled);
+      keys.set(styled, alike.size);
+    }
+    return styled;
+  };
 }

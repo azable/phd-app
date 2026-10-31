@@ -37,7 +37,7 @@ export function pageRules(): Rule[] {
 }
 
 /** An element's ancestors as markup alone, outermost first, for what they pass down. */
-function ancestorsOf(element: Element): ModelElement[] {
+export function ancestorsOf(element: Element): ModelElement[] {
   const chain: ModelElement[] = [];
   for (let at = element.parentElement; at; at = at.parentElement)
     chain.unshift({ ...treeOf(at, false), children: [] });

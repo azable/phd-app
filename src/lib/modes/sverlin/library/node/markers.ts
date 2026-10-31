@@ -7,49 +7,54 @@
 import { strokeStyleCss } from './design';
 import { headSizes } from './heads';
 import type { LineStyle } from './LinkLines.svelte';
+import { closest, descendants, hasClass, type Reader } from './reader';
 import { screenScale, unscaled } from './unscaled';
 
 const routes = ['straight', 'curved', 'wire'] as const;
 
 /** How a marker's link runs, its head, and its look. */
-export function markerLook(marker: HTMLElement): {
+export function markerLook(attribute: (name: string) => string | undefined): {
   route?: (typeof routes)[number];
   head?: { shape: string; size: number };
   style: LineStyle;
 } {
-  const { dataset } = marker;
-  const route = routes.find((each) => each === dataset.route);
-  const size = Number(dataset.headSize);
+  const route = routes.find((each) => each === attribute('data-route'));
+  const size = Number(attribute('data-head-size'));
+  const head = attribute('data-head');
   return {
     ...(route ? { route } : {}),
-    ...(dataset.head
+    ...(head
       ? {
           head: {
-            shape: dataset.head,
+            shape: head,
             size: Number.isFinite(size) && size > 0 ? size : headSizes[1]
           }
         }
       : {}),
     style: {
-      strokeStyle: strokeStyleCss(dataset.strokeStyle),
-      stroke: dataset.stroke,
-      strokeWidth: dataset.strokeWidth,
-      opacity: dataset.opacity,
-      shown: dataset.shown !== 'false'
+      strokeStyle: strokeStyleCss(attribute('data-stroke-style')),
+      stroke: attribute('data-stroke'),
+      strokeWidth: attribute('data-stroke-width'),
+      opacity: attribute('data-opacity'),
+      shown: attribute('data-shown') !== 'false'
     }
   };
 }
 
 /** What places labels: a free layout's host, and a row or column with links (see LinkOverlay). */
-const placers = '.placed, [data-sv-overlaid]';
+const placesLabels = <E>(read: Reader<E>, element: E) =>
+  hasClass(read, element, 'placed') || read.attribute(element, 'data-sv-overlaid') !== undefined;
 
 /** The labels drawn inside a host for its links, by link id: those it places, not a nested node's. */
-export function labelsIn(host: HTMLElement): Map<string, HTMLElement> {
-  return new Map(
-    [...host.querySelectorAll<HTMLElement>('[data-sv-link-label]')]
-      .filter((label) => label.parentElement?.closest(placers) === host)
-      .map((label) => [label.dataset.svLinkLabel ?? '', label])
-  );
+export function labelsIn<E>(read: Reader<E>, host: E): Map<string, E> {
+  const labels = new Map<string, E>();
+  for (const label of descendants(read, host)) {
+    const link = read.attribute(label, 'data-sv-link-label');
+    if (link === undefined) continue;
+    if (closest(read, read.parent(label), (at) => placesLabels(read, at)) === host)
+      labels.set(link, label);
+  }
+  return labels;
 }
 
 /** A label and the point its middle goes to. */

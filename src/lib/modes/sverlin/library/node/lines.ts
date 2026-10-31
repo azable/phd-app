@@ -6,8 +6,9 @@
  */
 
 /** Ends in the order their places come, as vertices[2] before vertices[10]. */
-export const byPlace = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { numeric: true });
+export const byPlace: (a: string, b: string) => number = new Intl.Collator(undefined, {
+  numeric: true
+}).compare;
 
 /** What a link's two ways share: its tag and its ends in order; none for a link to itself. */
 export const pairOf = (ref: string, from: string, to: string): string | undefined =>

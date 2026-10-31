@@ -9,6 +9,7 @@
 <script lang="ts">
   import { flushSync, untrack, type Component } from 'svelte';
 
+  import { flowExtent, neededFit } from './fit';
   import { layoutMemoryContext, provideArrangementParent, provideNodeIds } from './type-context';
   import { alignments, frameRatios, frameWidth, justifications } from './node/scales';
   import type { FrameSettings } from './node/props';
@@ -42,9 +43,6 @@
   let fit = $state(1);
   // Bumped whenever an arrangement settles, so selection outlines are measured again.
   let layoutRevision = $state(0);
-  // The root scales to fill the frame: down when its content is too big, and up, to a limit, when it
-  // would leave the frame mostly empty, so every design uses the space it has.
-  const largestFit = 1.6;
   // The least size of a CSS root, so once scaled it spans the frame's inside and justify can spread.
   let flowLeast = $state<{ width: number; height: number }>();
   function measureFit() {
@@ -61,13 +59,13 @@
         width: frameElement.clientWidth - parseFloat(style.paddingLeft) * 2,
         height: frameElement.clientHeight - parseFloat(style.paddingTop) * 2
       };
-      // The root is stretched to the frame, so its content's own extent is measured instead.
-      const content = flowExtent(block);
-      const needed = Math.min(
-        largestFit,
-        inside.width / Math.max(1, content.width),
-        inside.height / Math.max(1, content.height)
+      const children = [...block.children] as HTMLElement[];
+      const content = flowExtent(
+        children.map((child) => ({ width: child.offsetWidth, height: child.offsetHeight })),
+        parseFloat(getComputedStyle(block).rowGap) || 0,
+        block.style.flexDirection === 'row'
       );
+      const needed = neededFit(inside, content);
       // Every step shows at the smallest fit any step needs, so the view never zooms between them.
       if (memory?.recording) memory.fits.set(memory.step, needed);
       fit = memory && !memory.recording ? Math.min(needed, ...memory.fits.values()) : needed;
@@ -80,18 +78,6 @@
     layoutRevision++;
     if (!settled) onchanged?.();
     scheduleSettle();
-  }
-
-  /** The extent of a CSS root's children, laid out in its direction with its gap. */
-  function flowExtent(flow: HTMLElement): { width: number; height: number } {
-    const children = [...flow.children] as HTMLElement[];
-    const gap = (parseFloat(getComputedStyle(flow).rowGap) || 0) * Math.max(0, children.length - 1);
-    const widths = children.map((child) => child.offsetWidth);
-    const heights = children.map((child) => child.offsetHeight);
-    const total = (sizes: number[]) => sizes.reduce((sum, size) => sum + size, 0) + gap;
-    return flow.style.flexDirection === 'row'
-      ? { width: total(widths), height: Math.max(0, ...heights) }
-      : { width: Math.max(0, ...widths), height: total(heights) };
   }
   provideArrangementParent({ changed: measureFit });
 

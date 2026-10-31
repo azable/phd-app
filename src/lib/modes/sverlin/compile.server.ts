@@ -1,6 +1,7 @@
 /** Compile one untrusted Svelte component without executing its code on the server. */
 
 import { posix } from 'node:path';
+import { createRequire } from 'node:module';
 
 import type { AnyNode } from 'acorn';
 import { build, type BuildFailure, type Plugin } from 'esbuild';
@@ -130,6 +131,9 @@ const librarySources = Object.fromEntries(
 );
 const compiledLibrary = new Map<string, string>();
 
+/** How a module is compiled: for the page's DOM, or as strings, to lay out steps without mounting. */
+type Generate = 'client' | 'server';
+
 /** The prelude's import statements on one line, so injection keeps authored line numbers. */
 const prelude = (preludeSource.match(/^import[\s\S]*?;/gmu) ?? [])
   .map((statement) => statement.replace(/\s+/gu, ' '))
@@ -147,18 +151,16 @@ function libraryPath(path: string): string | undefined {
   return [path, `${path}.ts`, `${path}/index.ts`].find((candidate) => candidate in librarySources);
 }
 
-function loadLibraryModule(path: string): { contents: string; loader: 'js' | 'ts' } {
+function loadLibraryModule(
+  path: string,
+  generate: Generate
+): { contents: string; loader: 'js' | 'ts' } {
   const source = librarySources[path];
   if (!path.endsWith('.svelte')) return { contents: source, loader: 'ts' };
-  let contents = compiledLibrary.get(path);
+  let contents = compiledLibrary.get(`${generate}:${path}`);
   if (contents === undefined) {
-    contents = compile(source, {
-      filename: path,
-      generate: 'client',
-      css: 'injected',
-      dev: false
-    }).js.code;
-    compiledLibrary.set(path, contents);
+    contents = compile(source, { filename: path, generate, css: 'injected', dev: false }).js.code;
+    compiledLibrary.set(`${generate}:${path}`, contents);
   }
   return { contents, loader: 'js' };
 }
@@ -186,6 +188,8 @@ type Block = { body: string; offset: number };
 export type PreparedComponent = {
   source: string;
   component: string;
+  /** The component compiled to render strings, so steps are laid out without mounting them. */
+  serverComponent: string;
   /** The steps pausing at every label, the starter's (see Pacing). */
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
@@ -1369,26 +1373,28 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         pointer ? [[alias, options]] : []
       )
     );
-    const component = compile(
-      withGeneratedScripts(
-        `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
-        [
-          ...stateNames,
-          ...appliedNames.map(appliedKey),
-          ...Object.keys(labelled),
-          ...Object.keys(histories),
-          ...Object.keys(during),
-          ...Object.keys(chosen),
-          ...Object.keys(viewAliases)
-        ],
-        { ...chosen, ...viewAliases },
-        { ...pointerChosen, ...pointerAliases },
-        pointers.calls,
-        paints,
-        linked.length ? endTypes : []
-      ),
-      { filename: 'Main.svelte', generate: 'client', css: 'injected', dev: false }
-    ).js.code;
+    const generated = withGeneratedScripts(
+      `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
+      [
+        ...stateNames,
+        ...appliedNames.map(appliedKey),
+        ...Object.keys(labelled),
+        ...Object.keys(histories),
+        ...Object.keys(during),
+        ...Object.keys(chosen),
+        ...Object.keys(viewAliases)
+      ],
+      { ...chosen, ...viewAliases },
+      { ...pointerChosen, ...pointerAliases },
+      pointers.calls,
+      paints,
+      linked.length ? endTypes : []
+    );
+    const compiled = (generate: Generate) =>
+      compile(generated, { filename: 'Main.svelte', generate, css: 'injected', dev: false }).js
+        .code;
+    const component = compiled('client');
+    const serverComponent = compiled('server');
     const { probes, problems: probeProblems } = componentProbes(
       found.components,
       components,
@@ -1441,6 +1447,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     return {
       source,
       component,
+      serverComponent,
       master,
       ownListings,
       pauses: { labels: labelNames, leaves: [...leaves], runs },
@@ -1717,6 +1724,7 @@ export async function bundlePresentation(
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
     prepared.component,
+    prepared.serverComponent,
     trace,
     JSON.stringify(prepared.atoms),
     JSON.stringify({
@@ -2499,13 +2507,19 @@ function checkComponents(
   return signatures;
 }
 
-async function bundle(component: string, states: string, atoms: string, components: string) {
+async function bundle(
+  component: string,
+  serverComponent: string,
+  states: string,
+  atoms: string,
+  components: string
+) {
   try {
-    return await bundleComponent(component, states, atoms, components);
+    return await bundleComponent(component, serverComponent, states, atoms, components);
   } catch (cause) {
     // Failures located in the authored component, such as a blocked require(), are source errors.
-    const authored = (cause as Partial<BuildFailure>).errors?.find(
-      (error) => error.location?.file === 'component:Main.svelte'
+    const authored = (cause as Partial<BuildFailure>).errors?.find((error) =>
+      /^component(?:-server)?:Main\.svelte$/u.test(error.location?.file ?? '')
     );
     if (authored) throw new InvalidSvelteSourceError(authored.text);
     throw cause;
@@ -2521,6 +2535,8 @@ const allowedImports: Record<string, (path: string) => boolean> = {
     runtime(path) ||
     [
       'virtual:component',
+      'virtual:component-server',
+      'virtual:library-server',
       'virtual:trace',
       'virtual:atoms',
       'virtual:components',
@@ -2531,6 +2547,15 @@ const allowedImports: Record<string, (path: string) => boolean> = {
   // their own modules, which need none of WebCola's d3 adaptor.
   library: (path) => runtime(path) || /^\.\.?\//u.test(path) || webcolaModules.includes(path)
 };
+// The same, compiled to render strings.
+allowedImports['component-server'] = allowedImports.component;
+allowedImports['library-server'] = allowedImports.library;
+
+// Svelte's own entry for rendering strings, which a browser bundle would otherwise not resolve to.
+const svelteServerIndex = posix.join(
+  posix.dirname(createRequire(import.meta.url).resolve('svelte/package.json')),
+  'src/index-server.js'
+);
 
 const webcolaModules = [
   'webcola/dist/src/layout',
@@ -2540,6 +2565,7 @@ const webcolaModules = [
 
 function sandboxModules(
   component: string,
+  serverComponent: string,
   states: string,
   atoms: string,
   components: string
@@ -2554,19 +2580,37 @@ function sandboxModules(
           return { errors: [{ text: `Presentations cannot load module "${args.path}".` }] };
         if (args.path === 'virtual:component')
           return { path: 'Main.svelte', namespace: 'component' };
+        if (args.path === 'virtual:component-server')
+          return { path: 'Main.svelte', namespace: 'component-server' };
+        if (args.path === 'virtual:library-server')
+          return { path: 'index.ts', namespace: 'library-server' };
+        const server = args.namespace.endsWith('-server');
+        if (server && args.path === 'svelte') return { path: svelteServerIndex };
+        if (server && args.path === 'sverlin')
+          return { path: 'index.ts', namespace: 'library-server' };
         if (args.path === 'virtual:trace') return { path: 'states.json', namespace: 'trace' };
         if (args.path === 'virtual:atoms') return { path: 'atoms.json', namespace: 'atoms' };
         if (args.path === 'virtual:components')
           return { path: 'components.json', namespace: 'components' };
         if (args.path === 'sverlin') return { path: 'index.ts', namespace: 'library' };
-        if (args.namespace === 'library' && !runtime(args.path) && /^\.\.?\//u.test(args.path)) {
+        if (
+          (args.namespace === 'library' || args.namespace === 'library-server') &&
+          !runtime(args.path) &&
+          /^\.\.?\//u.test(args.path)
+        ) {
           const path = libraryPath(posix.join(posix.dirname(args.importer), args.path));
           return path
-            ? { path, namespace: 'library' }
+            ? { path, namespace: args.namespace }
             : { errors: [{ text: `Unknown library module ${args.path}.` }] };
         }
         return undefined;
       });
+      // Svelte's string renderer falls back to Node's crypto only where the page has none; a page
+      // always has it, so the import stays as written and never runs.
+      plugin.onResolve({ filter: /^node:crypto$/ }, () => ({
+        path: 'node:crypto',
+        external: true
+      }));
       plugin.onResolve({ filter: /^virtual:entry$/ }, () => ({
         path: 'entry.ts',
         namespace: 'entry'
@@ -2578,6 +2622,11 @@ function sandboxModules(
       }));
       plugin.onLoad({ filter: /.*/, namespace: 'component' }, () => ({
         contents: component,
+        loader: 'js',
+        resolveDir: process.cwd()
+      }));
+      plugin.onLoad({ filter: /.*/, namespace: 'component-server' }, () => ({
+        contents: serverComponent,
         loader: 'js',
         resolveDir: process.cwd()
       }));
@@ -2594,17 +2643,27 @@ function sandboxModules(
         loader: 'json'
       }));
       plugin.onLoad({ filter: /.*/, namespace: 'library' }, (args) => ({
-        ...loadLibraryModule(args.path),
+        ...loadLibraryModule(args.path, 'client'),
+        resolveDir: process.cwd()
+      }));
+      plugin.onLoad({ filter: /.*/, namespace: 'library-server' }, (args) => ({
+        ...loadLibraryModule(args.path, 'server'),
         resolveDir: process.cwd()
       }));
     }
   };
 }
 
-function bundleComponent(component: string, states: string, atoms: string, components: string) {
+function bundleComponent(
+  component: string,
+  serverComponent: string,
+  states: string,
+  atoms: string,
+  components: string
+) {
   return build({
     entryPoints: ['virtual:entry'],
-    plugins: [sandboxModules(component, states, atoms, components)],
+    plugins: [sandboxModules(component, serverComponent, states, atoms, components)],
     bundle: true,
     write: false,
     platform: 'browser',
