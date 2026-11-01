@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
-import { prepareSvelteComponent } from './compile.server';
+import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
 import { markLabels } from './label-values';
 
 const domain = `<script lang="sverlin" domain>
@@ -56,6 +56,18 @@ describe('labels read in the view', () => {
       ['runs', 'ϟcheckˑat'],
       ['applied', 'ǂEqualˑˑin']
     ]);
+  });
+
+  it('are an attribute’s value only inside a tag, so text before {@render …} may end in =', async () => {
+    const text = '<Node>current key = {@render Int(v)}</Node>';
+    expect(markLabels(text)).toEqual({ source: text, references: [], heaps: [] });
+    const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
+    expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
+    await expect(
+      compileSvelteComponent(
+        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@render Int(@insert.key)}</Node>{/snippet}\n{#layout Main}<Node>{@render Inserting()}</Node>{/layout}`
+      )
+    ).resolves.toBeDefined();
   });
 
   it('give the value the labelled expression gave in a step’s own code, in a part of the page', () => {
