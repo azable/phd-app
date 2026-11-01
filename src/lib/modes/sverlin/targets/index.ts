@@ -15,14 +15,21 @@ export type SverlinTarget = RenderTarget & {
   render: (scene: SverlinScene) => Promise<RenderedFile>;
 };
 
-// Served as assets of the app and fetched only when a PDF uses them.
+// Served as assets of the app and fetched only when a PDF uses them, by name without `.ttf`: the
+// embedded faces' TrueType files, the very glyphs of the page's WOFF2 files, which jsPDF cannot
+// read, and DejaVu for characters none of them has.
 const fontUrls: Record<string, string> = {
-  'DejaVuSans.ttf': sans,
-  'DejaVuSans-Bold.ttf': sansBold,
-  'DejaVuSerif.ttf': serif,
-  'DejaVuSerif-Bold.ttf': serifBold,
-  'DejaVuSansMono.ttf': mono,
-  'DejaVuSansMono-Bold.ttf': monoBold
+  ...Object.fromEntries(
+    Object.entries(
+      import.meta.glob<string>('../fonts/*.ttf', { query: '?url', import: 'default', eager: true })
+    ).map(([path, url]) => [path.slice('../fonts/'.length, -'.ttf'.length), url])
+  ),
+  DejaVuSans: sans,
+  'DejaVuSans-Bold': sansBold,
+  DejaVuSerif: serif,
+  'DejaVuSerif-Bold': serifBold,
+  DejaVuSansMono: mono,
+  'DejaVuSansMono-Bold': monoBold
 };
 
 function browserResources(): PdfResources {

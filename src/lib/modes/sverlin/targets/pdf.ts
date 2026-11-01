@@ -1,63 +1,106 @@
 /**
  * A PDF with a page per step, drawn from scene data: each page is the frame at its logical size,
- * and the document outline names each step by its number and label. Text is set in the
- * DejaVu fonts, embedded so every character the page showed can be drawn, and each line is
- * centred on where the page put it, narrowed when the font sets it wider than the page did.
+ * and the document outline names each step by its number and label. Text is set in the faces the
+ * page drew it in (see ../fonts), embedded in the PDF, each character in the first face of its font
+ * list that has it, as the page falls back, and in DejaVu when none of them has it, where the page
+ * went on to a font of its machine. Each line is centred on where the page put it, and narrowed if
+ * it is set wider, as jsPDF does not kern.
  */
 
 import { GState, jsPDF } from 'jspdf';
 
 import manifest from '../fonts/faces.json';
 import type { SceneHead, SceneLink, SceneNode, SceneText } from '../library';
+import { pageFont } from '../library/fonts';
 import { linkDashes } from '../library/node/design';
 import { headDrawing } from '../library/node/heads';
 import type { SverlinScene } from '../scene';
 
-export type FontFamily = 'sans' | 'serif' | 'mono';
+type DejaVuFamily = 'sans' | 'serif' | 'mono';
 type Rgba = [number, number, number, number];
 
-/** What drawing needs from where it runs: font files, and CSS colours as RGBA. */
+/** What drawing needs from where it runs: font files by name, without `.ttf`, and CSS colours. */
 export type PdfResources = {
   font: (file: string) => Promise<ArrayBuffer>;
   colour: (css: string) => Rgba;
 };
 
-/** The DejaVu font files for each family, regular and bold, from the dejavu-fonts-ttf package. */
-export const fontFiles: Record<FontFamily, { normal: string; bold: string }> = {
-  sans: { normal: 'DejaVuSans.ttf', bold: 'DejaVuSans-Bold.ttf' },
-  serif: { normal: 'DejaVuSerif.ttf', bold: 'DejaVuSerif-Bold.ttf' },
-  mono: { normal: 'DejaVuSansMono.ttf', bold: 'DejaVuSansMono-Bold.ttf' }
+/** The DejaVu files for each family, regular and bold, from the dejavu-fonts-ttf package. */
+const dejaVuFiles: Record<DejaVuFamily, { normal: string; bold: string }> = {
+  sans: { normal: 'DejaVuSans', bold: 'DejaVuSans-Bold' },
+  serif: { normal: 'DejaVuSerif', bold: 'DejaVuSerif-Bold' },
+  mono: { normal: 'DejaVuSansMono', bold: 'DejaVuSansMono-Bold' }
 };
 
 // CSS pixels are 1/96 inch and PDF points 1/72, so a pixel is three quarters of a point.
 const pointsPerPixel = 0.75;
-// DejaVu's ascent and descent as fractions of its size (hhea: 1901 and 483 of 2048 units), which
-// place a baseline so the font's height is centred on the line the page measured.
-const ascent = 1901 / 2048;
-const descent = 483 / 2048;
 // The size of the notice on a page whose step could not be drawn.
 const errorSize = 12;
 
-/** The family each embedded face is drawn in, by its name in lower case (see ../fonts). */
-const embeddedFamilies = new Map(
-  manifest.fonts.map(({ family, pdf }) => [family.toLowerCase(), pdf as FontFamily])
+const embeddedFonts = new Map(manifest.fonts.map((font) => [font.family.toLowerCase(), font]));
+/** Each embedded face's file, by its family in lower case and weight. */
+const embeddedFaces = new Map(
+  manifest.faces.map(({ file, family, weight }) => [`${family.toLowerCase()} ${weight}`, file])
 );
+/** Each face's name in the PDF, as its /BaseFont: its family and weight, or DejaVu's file. */
+const fontNames = new Map(
+  manifest.faces.map(({ file, family, weight }) => [
+    file,
+    `${family.replaceAll(' ', '')}-${weight >= 600 ? 'Bold' : 'Regular'}`
+  ])
+);
+const fontName = (file: string) => fontNames.get(file) ?? file;
 
-/** The family a CSS font list asks for first. */
-export function fontFamily(css: string): FontFamily {
-  const first = css
-    .split(',')[0]
-    .trim()
-    .replace(/^['"]|['"]$/gu, '')
-    .toLowerCase();
-  const embedded = embeddedFamilies.get(first);
-  if (embedded) return embedded;
-  if (/mono|menlo|consolas|courier/u.test(first)) return 'mono';
-  if (/^(ui-)?serif$|georgia|times/u.test(first)) return 'serif';
+/** The DejaVu family nearest a font the page took from its machine. */
+function dejaVuFamily(family: string): DejaVuFamily {
+  if (/mono|menlo|consolas|courier/u.test(family)) return 'mono';
+  if (/^(ui-)?serif$|georgia|times/u.test(family)) return 'serif';
   return 'sans';
 }
 
-const fontStyle = (weight: number) => (weight >= 600 ? 'bold' : 'normal');
+/**
+ * The faces a text is drawn in, in the order its characters try them: the embedded faces its CSS
+ * font list starts with, at the weight the page took (600 and over the bold face), then the DejaVu
+ * face nearest its family, for what none of them has.
+ */
+export function faceFiles(css: string, weight: number): string[] {
+  const bold = weight >= 600;
+  const names = css.split(',').map((name) =>
+    name
+      .trim()
+      .replace(/^['"]|['"]$/gu, '')
+      .toLowerCase()
+  );
+  const files: string[] = [];
+  for (const name of names) {
+    const file = embeddedFaces.get(`${name} ${bold ? 700 : 400}`);
+    // The first family that is not embedded ends the list: the page goes on to its machine's.
+    if (!file) break;
+    files.push(file);
+  }
+  const family = (embeddedFonts.get(names[0])?.pdf as DejaVuFamily) ?? dejaVuFamily(names[0]);
+  files.push(dejaVuFiles[family][bold ? 'bold' : 'normal']);
+  return files;
+}
+
+/**
+ * A text split into runs of characters each drawn in one face: the first face that has the
+ * character, or, when none has it (whitespace among them), the face of the run it is in.
+ */
+export function fallbackRuns<Face>(
+  text: string,
+  faces: readonly Face[],
+  has: (face: Face, character: string) => boolean
+): { face: Face; text: string }[] {
+  const runs: { face: Face; text: string }[] = [];
+  for (const character of text) {
+    const last = runs.at(-1);
+    const face = faces.find((candidate) => has(candidate, character)) ?? last?.face ?? faces[0];
+    if (last?.face === face) last.text += character;
+    else runs.push({ face, text: character });
+  }
+  return runs;
+}
 
 function base64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -67,6 +110,21 @@ function base64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   return btoa(binary);
 }
+
+/** The parts of jsPDF's reading of a TrueType file that drawing takes. */
+type FaceData = {
+  characterToGlyph: (code: number) => number;
+  head: { unitsPerEm: number };
+  hhea: { ascender: number; decender: number };
+};
+
+/** The notice on a page whose step could not be drawn, in the page's font. */
+const errorText = (text: string) => ({
+  text,
+  font: pageFont,
+  fontSize: errorSize,
+  fontWeight: 400
+});
 
 export async function renderPdf(scene: SverlinScene, resources: PdfResources): Promise<Blob> {
   const { frame } = scene;
@@ -83,22 +141,46 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     creator: 'Sverlin'
   });
 
-  // Only the fonts the scene uses are embedded.
-  const used = new Set<string>();
-  for (const step of scene.steps) {
-    if (step.error) used.add('sans normal');
-    for (const node of step.nodes)
-      for (const run of node.runs ?? [])
-        used.add(`${fontFamily(run.font)} ${fontStyle(run.fontWeight)}`);
+  // Each face is embedded once, and only if some character is drawn in it: a text's first face,
+  // and each further one only if the faces before it lack one of the text's characters.
+  const faces = new Map<string, FaceData>();
+  const has = (file: string, character: string) => {
+    const code = character.codePointAt(0) as number;
+    // jsPDF encodes text by UTF-16 unit, so it draws no character beyond them.
+    return code <= 0xffff && (faces.get(file)?.characterToGlyph(code) ?? 0) !== 0;
+  };
+  const texts = scene.steps.flatMap((step) => [
+    ...step.nodes.flatMap((node) => node.runs ?? []),
+    ...(step.error ? [errorText(step.error)] : [])
+  ]);
+  const chains = texts.map(({ text, font, fontWeight }) => ({
+    text,
+    files: faceFiles(font, fontWeight)
+  }));
+  for (let depth = 0; chains.some(({ files }) => depth < files.length); depth++) {
+    const needed = chains
+      .filter(
+        ({ text, files }) =>
+          depth < files.length &&
+          (depth === 0 ||
+            [...text].some(
+              (character) =>
+                !/\s/u.test(character) &&
+                !files.slice(0, depth).some((file) => has(file, character))
+            ))
+      )
+      .map(({ files }) => files[depth])
+      .filter((file) => !faces.has(file));
+    const loaded = await Promise.all(
+      [...new Set(needed)].map(async (file) => [file, base64(await resources.font(file))] as const)
+    );
+    for (const [file, data] of loaded) {
+      doc.addFileToVFS(`${file}.ttf`, data);
+      doc.addFont(`${file}.ttf`, fontName(file), 'normal', 'Identity-H');
+      doc.setFont(fontName(file), 'normal');
+      faces.set(file, doc.getFont().metadata as FaceData);
+    }
   }
-  await Promise.all(
-    [...used].map(async (font) => {
-      const [family, style] = font.split(' ') as [FontFamily, 'normal' | 'bold'];
-      const file = fontFiles[family][style];
-      doc.addFileToVFS(file, base64(await resources.font(file)));
-      doc.addFont(file, family, style);
-    })
-  );
 
   const states = new Map<number, GState>();
   /** Draw what follows at an opacity, such as a faded node's and its colour's alpha together. */
@@ -110,21 +192,34 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
   }
   const px = (value: number) => value * pointsPerPixel;
 
-  /** Text centred on a point, narrowed to fit a width if it is wider, or only its outline. */
+  /**
+   * Text centred on a point, its line's height centred there by its first face's ascent and
+   * descent, as the page measured them, and narrowed to fit a width if it is wider.
+   */
   function drawText(
     run: Pick<SceneText, 'text' | 'font' | 'fontSize' | 'fontWeight'>,
     centre: { x: number; y: number },
-    { fit, outline = false }: { fit?: number; outline?: boolean } = {}
+    { fit }: { fit?: number } = {}
   ) {
-    doc.setFont(fontFamily(run.font), fontStyle(run.fontWeight));
+    const files = faceFiles(run.font, run.fontWeight).filter((file) => faces.has(file));
     doc.setFontSize(px(run.fontSize));
-    const measured = doc.getTextWidth(run.text);
-    const scale = fit && measured > px(fit) ? px(fit) / measured : 1;
-    const baseline = centre.y + ((ascent - descent) / 2) * run.fontSize;
-    doc.text(run.text, px(centre.x) - (measured * scale) / 2, px(baseline), {
-      ...(scale < 1 ? { horizontalScale: scale } : {}),
-      ...(outline ? { renderingMode: 'stroke' as const } : {})
+    const pieces = fallbackRuns(run.text, files, has).map((piece) => {
+      doc.setFont(fontName(piece.face), 'normal');
+      return { ...piece, width: doc.getTextWidth(piece.text) };
     });
+    const measured = pieces.reduce((sum, { width }) => sum + width, 0);
+    const scale = fit && measured > px(fit) ? px(fit) / measured : 1;
+    const { head, hhea } = faces.get(files[0]) as FaceData;
+    // Rounded to whole pixels, as the page takes them (see ../fonts/measure.server.ts).
+    const ascent = Math.round((hhea.ascender * run.fontSize) / head.unitsPerEm);
+    const descent = Math.round((-hhea.decender * run.fontSize) / head.unitsPerEm);
+    const baseline = px(centre.y + (ascent - descent) / 2);
+    let x = px(centre.x) - (measured * scale) / 2;
+    for (const piece of pieces) {
+      doc.setFont(fontName(piece.face), 'normal');
+      doc.text(piece.text, x, baseline, scale < 1 ? { horizontalScale: scale } : {});
+      x += piece.width * scale;
+    }
   }
 
   function drawNode(node: SceneNode, opacity: number) {
@@ -261,7 +356,7 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       setOpacity(1);
       doc.setTextColor(185, 28, 28);
       drawText(
-        { text: step.error, font: 'sans-serif', fontSize: errorSize, fontWeight: 400 },
+        errorText(step.error),
         { x: frame.width / 2, y: frame.height / 2 },
         { fit: frame.width - 48 }
       );

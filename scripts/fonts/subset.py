@@ -38,7 +38,7 @@ class Face(NamedTuple):
     source: str  # build.sh's name for the font package
     origin: str  # what it is a subset of
     fallbacks: str = ""  # the CSS fonts the page goes on to for a character no embedded face has
-    pdf: str = ""  # the DejaVu family the PDF export draws it in (see targets/pdf.ts)
+    pdf: str = ""  # the DejaVu family the PDF export draws what no embedded face has in
 
 
 # The design's font values, each a text face, in the order the design offers them, the first the

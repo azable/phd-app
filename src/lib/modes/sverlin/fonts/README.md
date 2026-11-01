@@ -40,14 +40,16 @@ and metrics.
 
 `faces.json`, written by `subset.py`, is the one list of the design's fonts:
 each `font` value with its family, the machine's fonts the page goes on to, and
-the family the PDF export draws it in; the faces; and a version naming the
-files, which pages check the server's layout against. The design's `font`
-options, the page's font lists and the rules drawing a node in each
-([`../library/fonts.ts`](../library/fonts.ts)), and the PDF export's families
-([`../targets/pdf.ts`](../targets/pdf.ts)) all come from it. To add a font, add
-its package to `build.sh` and its value to `FACES` in `subset.py`, run
-`build.sh`, put its licence here and in the table above, and describe the value
-where the [language guide](../README.md) lists `font`'s values.
+the DejaVu family the PDF export draws in what no embedded face has, as the page
+would go on to its machine's; the faces; and a version naming the files, which
+pages check the server's layout against. The design's `font` options, the page's
+font lists and the rules drawing a node in each
+([`../library/fonts.ts`](../library/fonts.ts)), and the PDF export's faces
+([`../targets/pdf.ts`](../targets/pdf.ts)), which embeds the `.ttf` files, all
+come from it. To add a font, add its package to `build.sh` and its value to
+`FACES` in `subset.py`, run `build.sh`, put its licence here and in the table
+above, and describe the value where the [language guide](../README.md) lists
+`font`'s values.
 
 A character no face has is drawn by the page in a font of its machine, which the
 server cannot measure, so the server leaves that presentation to the page.

@@ -207,9 +207,10 @@ layers and describes it
 ([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)); the app checks
 what it sends ([`scene.ts`](src/lib/modes/sverlin/scene.ts)), then renders a
 target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with
-a page per step, its text set in embedded DejaVu fonts so every character can be
-drawn, or the scene data itself as JSON. Presentations built before scene export
-cannot describe their steps; build them again.
+a page per step, its text set in the embedded fonts the page drew it in, with
+DejaVu for characters none of them has, or the scene data itself as JSON.
+Presentations built before scene export cannot describe their steps; build them
+again.
 
 Generated JavaScript is compiled but **never executed by the server** or in the
 application origin; Sverlin algorithm blocks are interpreted by trusted server
