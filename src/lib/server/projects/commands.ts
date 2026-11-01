@@ -2380,14 +2380,25 @@ function firstPresentedSet(document: ProjectDocument, after: EventId): Renderabl
  * CSS rules at the start of a reply's text, as `.panel{display:none}`, which a model sometimes
  * leaks from the code it wrote: never meant for the participant.
  */
-const leadingStyleRules =
-  /^(?:\s*[.#]?[a-z][\w-]*(?:\s*[,>+~]?\s*[.#]?[a-z][\w-]*)*\s*\{[^{}]*:[^{}]*\})+\s*/iu;
+// One rule at a time: its selector before the brace, bounded and without nested repetition, so a
+// sentence never makes the match backtrack.
+const styleRule = /^\s*([^{}\n]{1,200})\{([^{}]*)\}/u;
+const selector = /^[.#]?[a-z][\w-]*(?:\s*[,>+~ ]\s*[.#]?[a-z][\w-]*)*\s*$/iu;
+
+function withoutLeadingStyleRules(text: string): string {
+  let rest = text;
+  for (let rule = styleRule.exec(rest); rule; rule = styleRule.exec(rest)) {
+    if (!selector.test(rule[1]) || !rule[2].includes(':')) break;
+    rest = rest.slice(rule[0].length);
+  }
+  return rest === text ? text : rest.trimStart();
+}
 
 /** A reply with any CSS leaked at the start of its text segments taken out. */
 export function withoutLeakedStyles(reply: GeneratedMessageContent): GeneratedMessageContent {
   return reply.flatMap((segment): GeneratedMessageContent => {
     if (segment.type !== 'markdown') return [segment];
-    const text = segment.text.replace(leadingStyleRules, '');
+    const text = withoutLeadingStyleRules(segment.text);
     return text === segment.text ? [segment] : text.trim() ? [{ ...segment, text }] : [];
   });
 }

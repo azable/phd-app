@@ -3562,6 +3562,12 @@ describe('several variants from chat', () => {
 });
 
 describe('a reply’s text', () => {
+  it('leaves long ordinary text as it is, at once', async () => {
+    const { withoutLeakedStyles } = await import('./commands');
+    const text = 'The preference suggests clearer spacing between the cells. '.repeat(40);
+    expect(withoutLeakedStyles([{ type: 'markdown', text }])).toEqual([{ type: 'markdown', text }]);
+  });
+
   it('loses CSS a model leaked at its start, and nothing else', async () => {
     const { withoutLeakedStyles } = await import('./commands');
     expect(
