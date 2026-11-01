@@ -214,6 +214,7 @@
   // The canvas view each visible presentation was last left at, for study observations.
   let canvasViews = $state.raw<Record<string, { zoom: number; panX: number; panY: number }>>({});
   let timelineObservation = $state<StudyWorkspaceObservation['timeline']>();
+  let tourObservation = $state.raw<StudyWorkspaceObservation['tour']>();
   let draftObservation = $state<StudyWorkspaceObservation['draft']>({
     hasContent: false,
     characterCount: 0,
@@ -391,6 +392,7 @@
               }))
             }
           : {}),
+        ...(tourObservation ? { tour: tourObservation } : {}),
         draft: draftObservation,
         document: {
           visibility: document.visibilityState === 'hidden' ? 'hidden' : 'visible',
@@ -584,6 +586,7 @@
                 viewer={study?.context === 'participant' ? study.participantId : 'local'}
                 auto={!session.readOnly && !expired && !developerView && (!!study || !isAdmin)}
                 canReset={isAdmin}
+                onShown={(shown) => (tourObservation = shown)}
               />
               {#if showAdminControls}
                 <select

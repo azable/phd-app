@@ -20,9 +20,11 @@
     auto: boolean;
     /** Offer resetting what has been seen, to try the tour again. */
     canReset?: boolean;
+    /** Told the tour step on screen, or none, for the interaction recording. */
+    onShown?: (shown: { id: string; step: number; count: number } | undefined) => void;
   };
 
-  let { mode, viewer, auto, canReset = false }: Props = $props();
+  let { mode, viewer, auto, canReset = false, onShown }: Props = $props();
 
   // The workspace is keyed by project, so the system and viewer are fixed for this instance.
   // svelte-ignore state_referenced_locally
@@ -38,6 +40,12 @@
 
   const step = $derived(active?.tour.steps[active.index]);
 
+  function reportShown() {
+    onShown?.(
+      active && { id: active.tour.id, step: active.index, count: active.tour.steps.length }
+    );
+  }
+
   function typing() {
     const element = document.activeElement;
     return (
@@ -52,6 +60,7 @@
     returnFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     active = { tour, index: 0, ...options };
+    reportShown();
   }
 
   function startIntro() {
@@ -61,6 +70,7 @@
   function close() {
     const focusInTour = document.activeElement?.closest('[data-interface-tour]');
     active = undefined;
+    reportShown();
     clearHighlight();
     if (focusInTour && returnFocus?.isConnected) returnFocus.focus();
     returnFocus = undefined;
@@ -68,8 +78,10 @@
   }
 
   function next() {
-    if (active && active.index < active.tour.steps.length - 1) active.index += 1;
-    else close();
+    if (active && active.index < active.tour.steps.length - 1) {
+      active.index += 1;
+      reportShown();
+    } else close();
   }
 
   // A hint shows the first time its first part is on screen, keeping the steps found then.
@@ -126,7 +138,8 @@
           class="ml-auto"
           aria-label="Interface help"
           title="Interface help"
-          data-interface-part="help"><CircleQuestionMarkIcon /></Button
+          data-interface-part="help"
+          data-interaction="tour-help"><CircleQuestionMarkIcon /></Button
         >
       {/snippet}
     </DropdownMenu.Trigger>
@@ -145,6 +158,7 @@
     aria-label="Interface help"
     title="Interface help"
     data-interface-part="help"
+    data-interaction="tour-help"
     onclick={startIntro}><CircleQuestionMarkIcon /></Button
   >
 {/if}

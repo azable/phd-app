@@ -110,6 +110,10 @@ export const studyWorkspaceObservationSchema = v.strictObject({
       v.maxLength(2)
     )
   ),
+  /** The introduction or hint step on screen, by tour id ("sverlin:intro") and step index. */
+  tour: v.optional(
+    v.strictObject({ id: boundedText(64), step: naturalSchema, count: positiveSchema })
+  ),
   draft: v.strictObject({
     hasContent: v.boolean(),
     characterCount: boundedNatural(100_000),

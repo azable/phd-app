@@ -3,7 +3,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mainStudy } from '$lib/studies/main';
 
 import { ResilientInteractionOutbox, type InteractionOutbox } from './interaction-outbox';
-import { ProjectInteractionRecorder } from './interaction-recorder';
+import { interactionName, ProjectInteractionRecorder } from './interaction-recorder';
+
+describe('interaction names', () => {
+  const element = (attributes: Record<string, string>, dataset: Record<string, string> = {}) =>
+    ({
+      dataset,
+      tagName: 'BUTTON',
+      textContent: 'participant text',
+      getAttribute: (name: string) => attributes[name] ?? null
+    }) as unknown as HTMLElement;
+
+  it('names an element by its title before its role or tag, never its text', () => {
+    expect(interactionName(element({ title: 'Interface help', role: 'button' }))).toBe(
+      'Interface help'
+    );
+    expect(interactionName(element({ role: 'button' }))).toBe('button');
+    expect(interactionName(element({ title: 'Help' }, { interaction: 'tour-help' }))).toBe(
+      'tour-help'
+    );
+    expect(interactionName(element({}))).toBe('button');
+  });
+});
 
 describe('project interaction recorder isolation', () => {
   afterEach(() => {

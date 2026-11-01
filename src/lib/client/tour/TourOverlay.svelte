@@ -142,10 +142,16 @@
       <p id="interface-tour-body" class="text-sm text-muted-foreground">{popover.body}</p>
       <div class="mt-1 flex justify-end gap-2">
         {#if popover.index < popover.count - 1}
-          <Button size="sm" variant="ghost" onclick={onClose}>Skip</Button>
-          <Button size="sm" onclick={onNext}>Next</Button>
+          <Button size="sm" variant="ghost" data-interaction="tour-skip" onclick={onClose}
+            >Skip</Button
+          >
+          <Button size="sm" data-interaction="tour-next" onclick={onNext}>Next</Button>
         {:else}
-          <Button size="sm" onclick={onClose}>{popover.finish}</Button>
+          <Button
+            size="sm"
+            data-interaction={dim ? 'tour-done' : 'tour-hint-dismiss'}
+            onclick={onClose}>{popover.finish}</Button
+          >
         {/if}
       </div>
     </div>

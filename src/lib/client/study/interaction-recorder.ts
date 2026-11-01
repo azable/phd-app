@@ -472,11 +472,13 @@ function interactionTarget(target: EventTarget | null): HTMLElement | undefined 
   );
 }
 
-function interactionName(target: HTMLElement): string {
+/** What an activated element is called in the recording: never its text, which may be the participant's. */
+export function interactionName(target: HTMLElement): string {
   return (
     target.dataset.interaction ||
     target.getAttribute('aria-label') ||
     target.getAttribute('name') ||
+    target.getAttribute('title') ||
     target.getAttribute('role') ||
     target.tagName.toLowerCase()
   ).slice(0, 128);
