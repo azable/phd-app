@@ -437,6 +437,8 @@ export function reportRuntimeFailure(
     presentationId: string;
     step?: number;
     message: string;
+    /** The study phase's deadline, which the repair it queues must finish by. */
+    deadlineAt?: string;
   },
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
@@ -485,7 +487,11 @@ export function reportRuntimeFailure(
               type: 'assistant.turn-requested',
               actor: { kind: 'system' },
               operationId: options.operationId,
-              payload: { interactionEventId: projectHead(failed).id, presentationCount: 1 }
+              payload: {
+                interactionEventId: projectHead(failed).id,
+                presentationCount: 1,
+                ...(options.deadlineAt ? { deadlineAt: options.deadlineAt } : {})
+              }
             })
           ],
           dependencies

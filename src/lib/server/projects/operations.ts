@@ -733,7 +733,10 @@ async function executeProjectCommand(options: {
         ...common,
         presentationId: options.command.presentationId,
         message: options.command.message,
-        ...(options.command.step === undefined ? {} : { step: options.command.step })
+        ...(options.command.step === undefined ? {} : { step: options.command.step }),
+        ...(options.deadlineAt === undefined
+          ? {}
+          : { deadlineAt: new Date(options.deadlineAt).toISOString() })
       });
     case 'rebuild':
       return buildProjectPresentations({

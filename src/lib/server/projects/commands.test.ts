@@ -209,8 +209,15 @@ describe('createProject', () => {
       step: 2,
       message: "Cannot read properties of null (reading 'missing')"
     };
+    // Reported during a study phase, whose deadline the repair must keep.
+    const deadlineAt = '2026-08-30T12:15:00.000Z';
     const first = await reportRuntimeFailure(
-      { ...failure, expectedHead: projectHead(created).id, operationId: crypto.randomUUID() },
+      {
+        ...failure,
+        expectedHead: projectHead(created).id,
+        operationId: crypto.randomUUID(),
+        deadlineAt
+      },
       serviceDependencies
     );
     const recorded = first.document.events.filter(
@@ -233,7 +240,7 @@ describe('createProject', () => {
     const requests = (document: ProjectDocument) =>
       document.events.filter((event) => event.type === 'assistant.turn-requested');
     expect(requests(first.document)).toMatchObject([
-      { payload: { interactionEventId: recorded[0].id, presentationCount: 1 } }
+      { payload: { interactionEventId: recorded[0].id, presentationCount: 1, deadlineAt } }
     ]);
     const other = await reportRuntimeFailure(
       {
