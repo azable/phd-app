@@ -1,7 +1,9 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 
-@custom-variant dark (&:is(.dark *));
+/* Pages drawn dark mark a wrapper `.dark`; the page itself follows, so `<body>` and what portals
+   to it (menus, dialogs) are dark from the first paint. */
+@custom-variant dark (&:is(.dark *, :root:has(.dark) *));
 
 @theme inline {
   --color-background: var(--background);
@@ -95,7 +97,8 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
 }
 
-.dark {
+.dark,
+:root:has(.dark) {
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
   --card: oklch(0.208 0.042 265.755);
