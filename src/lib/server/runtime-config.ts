@@ -13,3 +13,14 @@ export function runtimeStateDir(): string {
     process.env.SVERLIN_STATE_DIR?.trim() || path.join(runtimeRoot(), '.local', 'state', 'sverlin')
   );
 }
+
+/**
+ * The commit this server was built from: `SVERLIN_BUILD_SHA` where the deployment sets it, else
+ * the commit Render gives every build and running service as `RENDER_GIT_COMMIT`
+ * (https://render.com/docs/environment-variables#all-runtimes), else none.
+ */
+export function buildSha(): string | undefined {
+  return (
+    process.env.SVERLIN_BUILD_SHA?.trim() || process.env.RENDER_GIT_COMMIT?.trim() || undefined
+  );
+}

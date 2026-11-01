@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
 import { projectInspectionContext, requireAdmin } from '$lib/server/authorization';
+import { buildSha } from '$lib/server/runtime-config';
 import { listProjectTemplates } from '$lib/server/projects/starter-catalog';
 import { projectChooserId } from '$lib/server/projects/chooser-config';
 import { forceStudyPreview, projectTrialCondition, studyRunState } from '$lib/server/study';
@@ -43,7 +44,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
                 ? {
                     interactionCapture: inspection.study.interactionCapture,
                     applicationVersion: process.env.npm_package_version ?? '0.0.1',
-                    buildSha: process.env.SVERLIN_BUILD_SHA?.trim() || undefined
+                    buildSha: buildSha()
                   }
                 : {})
             };

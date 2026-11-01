@@ -14,6 +14,7 @@ import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { ProjectNotFoundError } from '$lib/server/projects/repository';
+import { buildSha } from '$lib/server/runtime-config';
 import { projectSchemaVersion, type ProjectDocument } from '$lib/shared/projects/model';
 import {
   activeProjectOperation,
@@ -621,7 +622,7 @@ export async function writeDataExport(
     exportedAt,
     application: {
       version: process.env.npm_package_version ?? '0.0.1',
-      buildSha: process.env.SVERLIN_BUILD_SHA?.trim() || null
+      buildSha: buildSha() ?? null
     },
     ownerCount: snapshot.owners.length,
     participantCount: snapshot.participants.length,
