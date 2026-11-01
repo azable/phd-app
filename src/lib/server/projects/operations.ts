@@ -2,10 +2,11 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type {
-  NewProjectEvent,
-  ProjectEvent,
-  ProjectOperationKind
+import {
+  InvalidProjectDocumentError,
+  type NewProjectEvent,
+  type ProjectEvent,
+  type ProjectOperationKind
 } from '$lib/shared/projects/events';
 import type {
   ProjectCommand,
@@ -99,6 +100,8 @@ export class ProjectOperationExecutor {
   >();
   #accepting = true;
   #recoveryTimer?: ReturnType<typeof setInterval>;
+  /** Projects the scans skip, warned about once each. */
+  readonly #unreadable = new Set<string>();
   readonly #assistantProjects = new Set<string>();
   #assistantDrain?: Promise<void>;
 
@@ -204,7 +207,8 @@ export class ProjectOperationExecutor {
   async recoverInterrupted(): Promise<number> {
     let recovered = 0;
     for (const summary of await this.repository.list()) {
-      const document = await this.repository.load(summary.projectId);
+      const document = await this.readableProject(summary.projectId);
+      if (!document) continue;
       const active = activeProjectOperation(document);
       if (!active || this.#active.has(active.operationId)) continue;
       const lease = await this.lock.acquire(active.operationId);
@@ -403,9 +407,29 @@ export class ProjectOperationExecutor {
 
   private async discoverQueuedAssistantTurns(): Promise<void> {
     for (const summary of await this.repository.list()) {
-      if (pendingAssistantTurnRequests(await this.repository.load(summary.projectId)).length > 0) {
+      const document = await this.readableProject(summary.projectId);
+      if (document && pendingAssistantTurnRequests(document).length > 0)
         this.queueAssistantProject(summary.projectId);
+    }
+  }
+
+  /**
+   * A project for the scans across every project, none where its Timeline no longer reads as the
+   * events are now defined (made before a change to them), so one such project stops no other.
+   */
+  private async readableProject(projectId: string): Promise<ProjectDocument | undefined> {
+    try {
+      return await this.repository.load(projectId);
+    } catch (cause) {
+      if (!(cause instanceof InvalidProjectDocumentError)) throw cause;
+      if (!this.#unreadable.has(projectId)) {
+        this.#unreadable.add(projectId);
+        console.warn(
+          `Skipping project ${projectId}, whose Timeline no longer reads.`,
+          cause.message
+        );
       }
+      return undefined;
     }
   }
 

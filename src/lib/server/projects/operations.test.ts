@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
+import { InvalidProjectDocumentError } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 import { pendingAssistantTurnRequests, projectOperation } from '$lib/shared/projects/operations';
 
@@ -43,6 +44,27 @@ describe('ProjectOperationExecutor', () => {
 
     const operation = projectOperation(await repository.load(projectId), operationId);
     expect(operation).toMatchObject({ kind: 'initial-build', status: 'completed' });
+  });
+
+  it('recovers past a project whose Timeline no longer reads', async () => {
+    const unreadable = randomUUID();
+    const repository = new (class extends MemoryProjectRepository {
+      override async load(projectId: string) {
+        if (projectId === unreadable) throw new InvalidProjectDocumentError('Invalid type');
+        return super.load(projectId);
+      }
+    })();
+    await repository.create(rootDocument(unreadable, randomUUID()), 'owner');
+    await repository.create(rootDocument(randomUUID(), randomUUID()), 'owner');
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => ({ release: async () => undefined }) },
+      async () => {
+        throw new Error('No command runs.');
+      }
+    );
+
+    await expect(executor.recoverInterrupted()).resolves.toBe(0);
   });
 
   it('accepts a command on a head that only a load report has moved since', async () => {
