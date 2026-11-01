@@ -1313,22 +1313,41 @@ describe('submitProjectFeedback', () => {
         '<script lang="sverlin"></script>\n{#layout Main}\n<Node>{@render Gone()}</Node>\n{/layout}',
       working: lines('{/layout}')
     };
+    // Each explains a difficulty, as the simpler fallback must; the others' are dropped.
     const attempts = (...names: (keyof typeof sources)[]) => {
       mocks.generatePrepared.mockReset();
       for (const name of names)
         mocks.generatePrepared.mockResolvedValueOnce({
-          ...generation('unused', `Source ${name}`),
+          ...generation('unused', `Source ${name}`, { struggledWith: 'it', simplified: 'it' }),
           decision: { action: 'revise', source: sources[name], summary: `Source ${name}` }
         });
     };
-    const submit = async () => {
+    // The ladder's sources go after a working first version, unless the project is still blank.
+    const submit = async (...names: (keyof typeof sources)[]) => submitTo(true, names);
+    const submitBlank = async (...names: (keyof typeof sources)[]) => submitTo(false, names);
+    const submitTo = async (withVersion: boolean, names: (keyof typeof sources)[]) => {
       const { createProject } = await import('./service');
       const { submitProjectFeedback } = await import('./commands');
-      const created = await createProject({ title: 'Repair ladder' }, serviceDependencies);
+      let document: ProjectDocument = await createProject(
+        { title: 'Repair ladder' },
+        serviceDependencies
+      );
+      if (withVersion) {
+        mocks.generatePrepared.mockReset().mockResolvedValueOnce(generation('first', 'First'));
+        const first = await submitProjectFeedback(
+          {
+            ...feedbackOptions(document, 'Draw it', '12345678-1234-4123-8123-123456789abb'),
+            presentationCount: 1
+          },
+          commandDependencies
+        );
+        document = first.document;
+      }
+      attempts(...names);
       return submitProjectFeedback(
         {
-          projectId: created.projectId,
-          expectedHead: projectHead(created).id,
+          projectId: document.projectId,
+          expectedHead: projectHead(document).id,
           content: markdownMessage('Do the edge case too'),
           focus: [],
           presentationCount: 1,
@@ -1352,8 +1371,7 @@ describe('submitProjectFeedback', () => {
     };
 
     it('stops once two repairs fail with problems unrelated to those they repaired', async () => {
-      attempts('unclosed', 'twice', 'unknown', 'working');
-      const result = await submit();
+      const result = await submit('unclosed', 'twice', 'unknown', 'working');
       const failed = failures(result.appendedEvents);
       expect(failed).toHaveLength(3);
       expect(new Set(failed.flat()).size).toBe(failed.flat().length);
@@ -1362,16 +1380,51 @@ describe('submitProjectFeedback', () => {
     });
 
     it('stops at once after a repair that rewrote the source and failed differently', async () => {
-      attempts('unclosed', 'rewritten', 'working');
-      const result = await submit();
+      const result = await submit('unclosed', 'rewritten', 'working');
       expect(failures(result.appendedEvents)).toHaveLength(2);
       expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
       stopped(result.appendedEvents);
+      expect(result.appendedEvents.at(-1)).toMatchObject({
+        payload: { message: expect.stringContaining('kept the last working visualization') }
+      });
+    });
+
+    it('goes to the simpler fallback, not stopping, when there is no first version to keep', async () => {
+      const result = await submitBlank('unclosed', 'rewritten', 'working');
+      expect(failures(result.appendedEvents)).toHaveLength(2);
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(3);
+      expect(mocks.preparePrompt.mock.calls.map(([options]) => options.attempt)).toEqual([1, 2, 5]);
+      expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
+        true
+      );
+    });
+
+    it('never says a version was kept when the fallback fails on a blank project', async () => {
+      const result = await submitBlank('unclosed', 'rewritten', 'unknown');
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(3);
+      const last = result.appendedEvents.at(-1);
+      expect(last?.type).toBe('system.notified');
+      expect(JSON.stringify(last?.payload)).not.toContain('kept');
+    });
+
+    it('takes a problem whose message lists what exists, as the list changes, as the same', async () => {
+      const { repairWandered } = await import('./commands');
+      const missing = (kinds: string) => ({
+        source: '',
+        diagnostics: [
+          {
+            code: 'design_value',
+            message: `The design has no variable Found.size; its kinds of node are ${kinds}.`
+          }
+        ]
+      });
+      expect(repairWandered(missing('Cell, Label'), missing('Cell, Marker, Label'))).toBe(false);
+      const other = { source: '', diagnostics: [{ code: 'view_layout', message: 'Unclosed.' }] };
+      expect(repairWandered(missing('Cell'), other)).toBe(true);
     });
 
     it('keeps repairing one stuck on a problem, or revealing one new one, to success', async () => {
-      attempts('unclosed', 'unclosed', 'twice', 'working');
-      const result = await submit();
+      const result = await submit('unclosed', 'unclosed', 'twice', 'working');
       expect(failures(result.appendedEvents)).toHaveLength(3);
       expect(mocks.generatePrepared).toHaveBeenCalledTimes(4);
       expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(

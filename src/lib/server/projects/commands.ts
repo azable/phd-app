@@ -2443,7 +2443,7 @@ function appendAttemptDeadlineFailure(
 ) {
   return appendSystemFailure(
     document,
-    'This visualization needed another attempt, but there was not enough time left in the study phase to complete it safely. I kept the last working visualization.',
+    `This visualization needed another attempt, but there was not enough time left in the study phase to complete it safely${keptVersion(document)}.`,
     operationId,
     dependencies
   );
@@ -2457,7 +2457,7 @@ function appendExhaustedSverlinFailure(
 ) {
   return appendSystemFailure(
     document,
-    `I could not build the requested visualization after several repairs and a simpler fallback, so I kept the last working visualization.${finalDifficulty ? ` The remaining difficulty was: ${plainFailureSummary(finalDifficulty)}` : ''}`,
+    `I could not build the requested visualization after several repairs and a simpler fallback${keptVersion(document)}.${finalDifficulty ? ` The remaining difficulty was: ${plainFailureSummary(finalDifficulty)}` : ''}`,
     operationId,
     dependencies
   );
@@ -2471,7 +2471,7 @@ function appendExhaustedCandidateFailure(
 ) {
   return appendSystemFailure(
     document,
-    `I could not make the requested visualization pass the safety checks after several repairs and a simpler fallback, so I kept the last working visualization. The remaining difficulty was: ${plainFailureSummary(finalDifficulty)}`,
+    `I could not make the requested visualization pass the safety checks after several repairs and a simpler fallback${keptVersion(document)}. The remaining difficulty was: ${plainFailureSummary(finalDifficulty)}`,
     operationId,
     dependencies
   );
@@ -2484,7 +2484,7 @@ function appendWanderingRepairFailure(
 ) {
   return appendSystemFailure(
     document,
-    'I could not build the requested change: each repair ran into a new problem instead of fixing the last, so I stopped and kept the last working visualization. A smaller change, or one part at a time, may work better.',
+    `I could not build the requested change: each repair ran into a new problem instead of fixing the last, so I stopped${keptVersion(document, ' and')}. A smaller change, or one part at a time, may work better.`,
     operationId,
     dependencies
   );
@@ -2499,10 +2499,28 @@ type Problem = { code?: string; message: string };
  * that attempt's problems recur, and new ones appear. A repair that still has a problem it was
  * asked to fix is stuck on it, which a higher effort may solve, and is not wandering.
  */
-function repairWandered(previous: AttemptFailure, repair: AttemptFailure): boolean {
-  const key = ({ code, message }: Problem) => `${code ?? ''}\n${message}`;
+export function repairWandered(previous: AttemptFailure, repair: AttemptFailure): boolean {
+  const key = ({ code, message }: Problem) => `${code ?? ''}\n${stableMessage(message)}`;
   const before = new Set(previous.diagnostics.map(key));
   return repair.diagnostics.length > 0 && !repair.diagnostics.some((d) => before.has(key(d)));
+}
+
+/**
+ * A problem's message without the list of what exists that some end with ("…; its kinds of node
+ * are A, B."), which changes whenever the source does, so the same problem is recognised again.
+ */
+function stableMessage(message: string): string {
+  return message.replace(/;\s+its\b[^;]*?\bare\b[\s\S]*$/, '');
+}
+
+/** Whether the project has a version of its own, rather than its mode's starter. */
+function hasWorkingVersion(document: ProjectDocument): boolean {
+  return entrySource(document) !== modeCatalog[projectSnapshotAt(document).mode].starter.source;
+}
+
+/** Says the last working version was kept, only when there is one. */
+function keptVersion(document: ProjectDocument, joiner = ', so I'): string {
+  return hasWorkingVersion(document) ? `${joiner} kept the last working visualization` : '';
 }
 
 /** The share of a source's lines, trimmed, that the one it was made from does not have. */
@@ -2527,7 +2545,8 @@ function sourceRewritten(previous: string, source: string): number {
  * the current version and saying why, once two repairs have wandered, or one that also rewrote
  * most of the source (more than half its lines new), starting over rather than repairing. One
  * wander is allowed, as fixing a problem often reveals the next; a repair stuck on the same
- * problem keeps the higher efforts and the fallback.
+ * problem keeps the higher efforts and the fallback. A project with no version of its own yet has
+ * nothing to keep, so a doomed ladder there skips to the simpler fallback instead of stopping.
  */
 async function runAttemptLadder(
   document: ProjectDocument,
@@ -2553,8 +2572,12 @@ async function runAttemptLadder(
     if (result.done) return document;
     if (previous && result.failure && repairWandered(previous, result.failure)) {
       wandered += 1;
-      if (wandered >= 2 || sourceRewritten(previous.source, result.failure.source) > 0.5)
-        return appendWanderingRepairFailure(document, operationId, dependencies);
+      if (wandered >= 2 || sourceRewritten(previous.source, result.failure.source) > 0.5) {
+        const fallback = chatbot.config.attemptProfiles.length;
+        if (hasWorkingVersion(document) || attempt >= fallback)
+          return appendWanderingRepairFailure(document, operationId, dependencies);
+        attempt = fallback - 1;
+      }
     }
     previous = result.failure;
   }
