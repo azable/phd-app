@@ -68,7 +68,7 @@ describe('Sverlin language guide and assistant instructions', () => {
 
   it('gives the assistant its instructions and the guide without maintainer comments', () => {
     expect(guide).toContain('<!--');
-    expect(aiAssistant.initialPrompt).toMatch(/^You are Sverlin’s visualization designer\./u);
+    expect(aiAssistant.initialPrompt).toMatch(/^You are this tool’s visualization designer\./u);
     expect(aiAssistant.initialPrompt).toContain(languageGuide);
     expect(aiAssistant.initialPrompt).not.toContain('<!--');
     expect(aiAssistant.initialPrompt).not.toContain('-->');
@@ -77,7 +77,7 @@ describe('Sverlin language guide and assistant instructions', () => {
   });
 
   it('gives the chooser its instructions and the guide’s Design section', () => {
-    expect(chooser.initialPrompt).toMatch(/^You choose how Sverlin presentations look./u);
+    expect(chooser.initialPrompt).toMatch(/^You choose how presentations look./u);
     expect(chooser.initialPrompt).toContain('## Design');
     expect(chooser.initialPrompt).toContain('### Declare what varies');
     expect(chooser.initialPrompt).not.toContain('## The subset');

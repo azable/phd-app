@@ -20,7 +20,7 @@ describe('study definition', () => {
     expect(studyDefinition('main-study', 1)).toBe(mainStudy);
     expect(registeredStudies()).toEqual([{ definition: mainStudy, enrollment: 'open' }]);
     expect(mainStudy.conditions.sverlin.workspace.layout).toBe('comparison');
-    expect(mainStudy.conditions.sverlin.presentationBufferTarget).toBe(4);
+    expect('presentationBufferTarget' in mainStudy.conditions.sverlin).toBe(false);
     expect(mainStudy.conditions.html.workspace.layout).toBe('single');
     expect(mainStudy.interactionCapture).toMatchObject({
       schemaVersion: 1,

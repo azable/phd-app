@@ -1096,13 +1096,16 @@ async function recordBuildResult(
   };
 }
 
+/** The question an assistant's comparison asks, and what the participant would call each side. */
+export type PairQuestion = { question: string; labels: readonly [string, string] };
+
 /** Promote a complete successful batch to one synchronized active display set. */
 export async function activateBuiltPresentations(
   recorded: RecordedBuildBatch,
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies,
   actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' },
-  /** The question the set's pair asks, for an assistant's comparison. */
-  question?: string
+  /** What the set's pair asks, for an assistant's comparison. */
+  pair?: PairQuestion
 ): Promise<ProjectDocument> {
   if (recorded.builds.length === 0 || recorded.builds.some((item) => !item.result.ok)) {
     throw new Error('Only a complete successful build batch can be presented.');
@@ -1155,7 +1158,7 @@ export async function activateBuiltPresentations(
           displaySetId,
           slot: slot as 0 | 1,
           presentation,
-          ...(question ? { question } : {})
+          ...(pair ? { question: pair.question, label: pair.labels[slot] } : {})
         }
       })
     ),
@@ -1173,8 +1176,8 @@ export async function queueBuiltPresentations(
   setSize: 1 | 2,
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies,
   actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' },
-  /** The question each set asks, in order, for an assistant's comparisons. */
-  questions: readonly string[] = []
+  /** What each set asks, in order, for an assistant's comparisons. */
+  pairs: readonly PairQuestion[] = []
 ): Promise<ProjectDocument> {
   const operationId = recorded.builds[0]?.operationId;
   if (!operationId) throw new Error('Only a complete successful build batch can be presented.');
@@ -1201,7 +1204,7 @@ export async function queueBuiltPresentations(
       { document, builds: recorded.builds.slice(start, start + setSize) },
       dependencies,
       actor,
-      questions[start / setSize]
+      pairs[start / setSize]
     );
   return document;
 }

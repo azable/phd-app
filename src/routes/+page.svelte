@@ -47,12 +47,11 @@
   }
 </script>
 
-<svelte:head><title>Sverlin</title></svelte:head>
+<svelte:head><title>Projects</title></svelte:head>
 
 <main class="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-10 p-8">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="text-sm text-muted-foreground">Sverlin</p>
       <h1 class="text-3xl font-semibold">Projects</h1>
       <p class="mt-2 text-muted-foreground">
         Open an administrator-owned project or create a new one. Participant research remains in the

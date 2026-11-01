@@ -101,7 +101,7 @@ describe('Svelte-backed project lifecycle', () => {
       result.document,
       {
         presentations: [left.presentationId, right.presentationId],
-        preferred: left.presentationId,
+        answer: { preferred: left.presentationId },
         step: frames.length - 2,
         operationId: crypto.randomUUID()
       },

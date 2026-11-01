@@ -158,34 +158,6 @@ describe('presentation history', () => {
     ).toEqual(presentationIds.slice(1, 3));
   });
 
-  it('pins the evaluated pair while a preference operation is running', () => {
-    const events = comparisonEvents();
-    const entries = timelinePresentations(events);
-    const selection = new PresentationSelection(true);
-
-    selection.pin(entries.slice(0, 2));
-    events.push({
-      id: 5,
-      type: 'visualization.preference-recorded',
-      actor: { kind: 'user' },
-      operationId,
-      createdAt: '2026-08-30T00:00:05.000Z',
-      payload: {
-        displaySetId: setOne,
-        presentations: [presentationIds[0], presentationIds[1]],
-        preferred: presentationIds[0],
-        step: 0
-      }
-    });
-
-    expect(selection.followingLatest).toBe(false);
-    expect(
-      selection
-        .selected(events, 'comparison')
-        .map(({ presentation }) => presentation.presentationId)
-    ).toEqual(presentationIds.slice(0, 2));
-  });
-
   it('keeps non-buffered workspaces on the latest generated display set', () => {
     expect(
       new PresentationSelection()
@@ -204,6 +176,21 @@ describe('presentation history', () => {
     expect(pairQuestion(pairs.slice(2))).toBe('Cells or tallies?');
     expect(pairQuestion(pairs.slice(0, 2))).toBeUndefined();
     expect(pairQuestion(pairs.slice(1, 3))).toBeUndefined();
+  });
+
+  it('shows one version, and a pair only while one of the assistant’s comparisons is current', () => {
+    const shown = (events: ProjectEvent[]) =>
+      new PresentationSelection(true, undefined, true)
+        .selected(events, 'comparison')
+        .map(({ presentation }) => presentation.presentationId);
+    // Pairs no comparison asked about: the first of the newest set alone.
+    expect(shown(comparisonEvents())).toEqual([presentationIds[2]]);
+    const asked = comparisonEvents().map((event) =>
+      event.type === 'visualization.presented' && event.payload.displaySetId === setOne
+        ? { ...event, payload: { ...event.payload, question: 'Cells or tallies?' } }
+        : event
+    );
+    expect(shown(asked)).toEqual(presentationIds.slice(0, 2));
   });
 
   it('shows the first of the sets one operation queued until New pair consumes it', () => {
@@ -340,5 +327,65 @@ describe('candidate identifiers', () => {
   it('names candidates by their values alone, whatever their seeds, a free layout included', () => {
     const free = '<Node layout="free"><Node>a</Node></Node>';
     expect(candidate(1, {}, free).values).toBe(candidate(2, {}, free).values);
+  });
+});
+
+describe('answering a comparison', () => {
+  const asked = () =>
+    comparisonEvents().map((event) =>
+      event.type === 'visualization.presented'
+        ? { ...event, payload: { ...event.payload, question: 'Cells or tallies?' } }
+        : event
+    );
+  const ids = (shown: readonly { presentation: { presentationId: string } }[]) =>
+    shown.map(({ presentation }) => presentation.presentationId);
+
+  it('shows the next queued pair while the answer is saved, and keeps it once saved', async () => {
+    const events = asked();
+    const selection = new PresentationSelection(true, undefined, true);
+    const answered = selection.selected(events, 'comparison');
+    expect(ids(answered)).toEqual(presentationIds.slice(0, 2));
+
+    let finish = (_saved: boolean) => {};
+    const saving = selection.answer(
+      answered,
+      () => new Promise<boolean>((resolve) => (finish = resolve))
+    );
+    expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(2));
+
+    events.push({
+      id: 5,
+      type: 'visualization.preference-recorded',
+      actor: { kind: 'user' },
+      operationId: laterOperationId,
+      createdAt: '2026-08-30T00:00:05.000Z',
+      payload: {
+        displaySetId: setOne,
+        presentations: [presentationIds[0], presentationIds[1]],
+        outcome: 'tie',
+        step: 0
+      }
+    });
+    finish(true);
+    expect(await saving).toBe(true);
+    expect(selection.followingLatest).toBe(true);
+    expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(2));
+  });
+
+  it('returns to the answered pair when saving fails', async () => {
+    const events = asked();
+    const selection = new PresentationSelection(true, undefined, true);
+    const answered = selection.selected(events, 'comparison');
+
+    expect(await selection.answer(answered, async () => false)).toBe(false);
+    expect(selection.followingLatest).toBe(false);
+    expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(0, 2));
+
+    await expect(
+      selection.answer(answered, async () => {
+        throw new Error('offline');
+      })
+    ).rejects.toThrow('offline');
+    expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(0, 2));
   });
 });

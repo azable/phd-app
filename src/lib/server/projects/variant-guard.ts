@@ -1,14 +1,15 @@
 /**
  * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
  * top-level part (what the view's root renders, in any layout) or a node holding most of the picture, never what
- * earlier preferences or the assistant's vary decisions settled, at most one hide per variant, and
+ * the preference model settled (settledValues), at most one hide per variant, and
  * most of the picture still showing afterwards.
  */
 
 import type { DesignValues } from '$lib/shared/presentations';
 import type { ProjectEvent } from '$lib/shared/projects/events';
+import { comparisonOutcome } from '$lib/shared/projects/events/visualization-presented';
 
-type DesignValue = string | number | boolean;
+import { settledFromEvidence } from './preference-model';
 
 /** A change that hides something: a kind not shown, a type or pointer view of none, no listing. */
 export function hides(variable: string, value: unknown): boolean {
@@ -165,84 +166,21 @@ export function guardedChoice<Choice extends { chosen: DesignValues }>(
 }
 
 /**
- * The values a project has settled: in each recorded preference, the preferred presentation's
- * values where its pair differed, and the values of each vary decision the assistant made, the
- * newest winning.
+ * The values a project has settled, by the preference model (preference-model.ts): a choice one
+ * option of which is very likely best over at least two answers, a vary decision's value no answer
+ * has since gone against, or, where either is fine was the latest answer, the value showing.
  */
 export function settledValues(events: readonly ProjectEvent[]): DesignValues {
-  const variants = new Map<string, DesignValues>();
-  const settled: Record<string, DesignValue> = {};
-  for (const event of events) {
-    if (
-      event.type === 'visualization.presented' &&
-      event.payload.presentation.format === 'browser-bundle-v1' &&
-      event.payload.presentation.variant
-    )
-      variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
-    if (event.type === 'visualization.preference-recorded')
-      Object.assign(settled, answerOf(event, variants)?.settled);
-    if (event.type === 'ai.generation-succeeded') {
-      for (const { variable, value } of varyValues(event.payload.response.text))
-        settled[variable] = value;
-    }
-  }
-  return settled;
+  return settledFromEvidence(events);
 }
 
-/** The values a recorded assistant response's vary decision sets, if it made one. */
-function varyValues(response: string): { variable: string; value: DesignValue }[] {
-  try {
-    const parsed = JSON.parse(response) as {
-      output_text?: string;
-      output?: { content?: { text?: string }[] }[];
-      decision?: unknown;
-    };
-    const texts = [
-      parsed.output_text,
-      ...(parsed.output ?? []).flatMap(({ content }) => (content ?? []).map(({ text }) => text))
-    ].filter((text): text is string => typeof text === 'string');
-    const decisions = [
-      parsed.decision,
-      ...texts.map((text) => {
-        try {
-          return (JSON.parse(text) as { decision?: unknown }).decision;
-        } catch {
-          return undefined;
-        }
-      })
-    ];
-    for (const decision of decisions) {
-      const vary = decision as
-        | { action?: unknown; values?: { variable: string; value: DesignValue }[] }
-        | undefined;
-      if (vary?.action === 'vary' && Array.isArray(vary.values)) return vary.values;
-    }
-  } catch {
-    // Not a recorded response with a decision.
-  }
-  return [];
-}
+/**
+ * What one answer to a comparison did: the values it newly settled, and the pair it answered, as
+ * the two sides' values where they differed.
+ */
+export type Answer = { eventId: number; settled: DesignValues; pair: [DesignValues, DesignValues] };
 
-/** What one preference answered: the preferred side's values where its pair differed. */
-export type Answer = { eventId: number; settled: DesignValues };
-
-function answerOf(
-  event: Extract<ProjectEvent, { type: 'visualization.preference-recorded' }>,
-  variants: ReadonlyMap<string, DesignValues>
-): Answer | undefined {
-  const preferred = variants.get(event.payload.preferred);
-  const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
-  const alternative = other ? variants.get(other) : undefined;
-  if (!preferred || !alternative) return undefined;
-  return {
-    eventId: event.id,
-    settled: Object.fromEntries(
-      Object.entries(preferred).filter(([variable, value]) => alternative[variable] !== value)
-    )
-  };
-}
-
-/** The answers of the preferences recorded after an event. */
+/** The answers recorded after an event, each but decide later, which answers nothing. */
 export function answersAfter(events: readonly ProjectEvent[], after: number): Answer[] {
   const variants = new Map<string, DesignValues>();
   const answers: Answer[] = [];
@@ -253,10 +191,22 @@ export function answersAfter(events: readonly ProjectEvent[], after: number): An
       event.payload.presentation.variant
     )
       variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
-    if (event.type === 'visualization.preference-recorded' && event.id > after) {
-      const answer = answerOf(event, variants);
-      if (answer) answers.push(answer);
-    }
+    if (
+      event.type !== 'visualization.preference-recorded' ||
+      event.id <= after ||
+      comparisonOutcome(event.payload) === 'skip'
+    )
+      continue;
+    const [left, right] = event.payload.presentations.map((id) => variants.get(id) ?? {});
+    const before = settledValues(events.filter(({ id }) => id < event.id));
+    const now = settledValues(events.filter(({ id }) => id <= event.id));
+    answers.push({
+      eventId: event.id,
+      settled: Object.fromEntries(
+        Object.entries(now).filter(([variable, value]) => before[variable] !== value)
+      ),
+      pair: askedPair(left, right)
+    });
   }
   return answers;
 }
@@ -268,16 +218,36 @@ export function differing(left: DesignValues, right: DesignValues): string[] {
   );
 }
 
+/** What a pair asks: its two sides' values where they differ. */
+export function askedPair(left: DesignValues, right: DesignValues): [DesignValues, DesignValues] {
+  const variables = differing(left, right);
+  const side = (values: DesignValues) =>
+    Object.fromEntries(variables.map((variable) => [variable, values[variable]])) as DesignValues;
+  return [side(left), side(right)];
+}
+
+/** A pair's two sides as one key, whichever side is first. */
+function pairKey([left, right]: readonly [DesignValues, DesignValues]): string {
+  const side = (values: DesignValues) =>
+    JSON.stringify(Object.entries(values).sort(([a], [b]) => a.localeCompare(b)));
+  return [side(left), side(right)].sort().join('|');
+}
+
 /**
- * Whether an answer makes a waiting comparison, asking about these variables, moot: one of them is
- * a variable the answer settled, or names in its path something a value it settled hides (a kind
- * not shown, a type's view of none, no listing).
+ * Whether an answer makes a waiting comparison, asking these values of its two sides where they
+ * differ, moot: it asks the pair just answered, or about a variable the answer settled, or names in
+ * its path something a value it settled hides (a kind not shown, a type's view of none, no listing).
  */
-export function mootComparison(answer: Answer, asked: readonly string[]): boolean {
-  if (asked.some((variable) => Object.hasOwn(answer.settled, variable))) return true;
+export function mootComparison(
+  answer: Answer,
+  asked: readonly [DesignValues, DesignValues]
+): boolean {
+  if (pairKey(asked) === pairKey(answer.pair)) return true;
+  const variables = differing(...asked);
+  if (variables.some((variable) => Object.hasOwn(answer.settled, variable))) return true;
   const hidden = hiddenBy(Object.entries(answer.settled));
   const names = new Set([...hidden.snippets, ...hidden.types]);
-  return asked.some(
+  return variables.some(
     (variable) =>
       (hidden.listing && variable.startsWith('listing.')) ||
       variable

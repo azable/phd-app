@@ -55,6 +55,29 @@ const designValue = v.strictObject({
   )
 });
 
+/** The most characters of a side's label: a word or two, shown after its question as the answer. */
+export const maximumSideLabel = 40;
+
+/** One side of a pair: what the participant would call it, and the values it sets. */
+function comparisonSide(side: string) {
+  return v.strictObject({
+    label: v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(maximumSideLabel),
+      v.description(
+        `${side}, named in a word or two in the participant’s terms, different from the other side’s, as “cells” and “tallies” or “with the listing” and “without”; shown as their answer when they prefer it.`
+      )
+    ),
+    values: v.pipe(
+      v.array(designValue),
+      v.minLength(1),
+      v.description(`The values ${side.toLowerCase()} sets.`)
+    )
+  });
+}
+
 /** The most comparisons one decision asks, each a pair. */
 export const maximumComparisons = 8;
 
@@ -68,27 +91,25 @@ const comparisons = v.optional(
   v.nullable(
     v.pipe(
       v.array(
-        v.strictObject({
-          question: v.pipe(
-            v.string(),
-            v.trim(),
-            v.minLength(1),
-            v.maxLength(120),
-            v.description(
-              'What the pair asks, in the participant’s terms, shown above it, as “Cells or tallies for the numbers?”.'
-            )
-          ),
-          left: v.pipe(
-            v.array(designValue),
-            v.minLength(1),
-            v.description('The values the first of the pair sets.')
-          ),
-          right: v.pipe(
-            v.array(designValue),
-            v.minLength(1),
-            v.description('The values the second of the pair sets.')
+        v.pipe(
+          v.strictObject({
+            question: v.pipe(
+              v.string(),
+              v.trim(),
+              v.minLength(1),
+              v.maxLength(120),
+              v.description(
+                'What the pair asks, in the participant’s terms, shown above it, as “Cells or tallies for the numbers?”.'
+              )
+            ),
+            left: comparisonSide('The first of the pair'),
+            right: comparisonSide('The second of the pair')
+          }),
+          v.check(
+            ({ left, right }) => left.label.toLowerCase() !== right.label.toLowerCase(),
+            'A comparison’s two sides need different labels.'
           )
-        })
+        )
       ),
       v.minLength(1),
       v.maxLength(maximumComparisons),
@@ -99,10 +120,47 @@ const comparisons = v.optional(
   )
 );
 
+/** The most elements a question about a presentation names. */
+export const maximumQuestionElements = 8;
+
+/**
+ * A question for the participant to answer in the chat, in words or about a presentation: one
+ * already shown, or the first this decision makes, as an example illustrating the question, with
+ * elements in it to highlight. Optional (null in the strict response); a pair is asked with
+ * comparisons instead.
+ */
+const question = v.optional(
+  v.nullable(
+    v.strictObject({
+      text: v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(1),
+        v.maxLength(200),
+        v.description(
+          'The question, in the participant’s terms, shown in the chat until they answer it in a message, as “Should the swapped pair stand out more?”.'
+        )
+      ),
+      presentation: v.pipe(
+        v.nullable(v.string()),
+        v.description(
+          'null for a question in words; "new" for the first presentation this decision makes, as an example illustrating the question; or the id of a presentation already shown.'
+        )
+      ),
+      elements: v.pipe(
+        v.nullable(v.pipe(v.array(v.string()), v.maxLength(maximumQuestionElements))),
+        v.description(
+          'Element ids in that presentation the question is about, highlighted when the participant opens it: each the line:column of its <Node> or <Link> tag in that presentation’s source, as 12:5, as selected.elements name them; or null.'
+        )
+      )
+    })
+  )
+);
+
 /** Every decision, by its action. */
 export const sourceDecisions = {
   /** A reply alone: the source and its presentations stay as they are. */
-  respond: v.strictObject({ action: v.literal('respond') }),
+  respond: v.strictObject({ action: v.literal('respond'), question }),
 
   /**
    * New presentations of the source as it is: the next pair, every value randomised, or with a
@@ -126,6 +184,7 @@ export const sourceDecisions = {
       ),
       count,
       comparisons,
+      question,
       summary
     }),
     v.check(
@@ -154,6 +213,7 @@ export const sourceDecisions = {
       v.minLength(1)
     ),
     comparisons,
+    question,
     summary
   }),
 
@@ -162,6 +222,7 @@ export const sourceDecisions = {
     action: v.literal('revise'),
     source: v.pipe(v.string(), v.regex(/\S/u, 'The source is empty.')),
     comparisons,
+    question,
     summary
   })
 };
@@ -172,6 +233,8 @@ export const sourceDecisionSchema = v.variant('action', Object.values(sourceDeci
 export type SourceDecision = v.InferOutput<typeof sourceDecisionSchema>;
 /** The pairs a decision asks to compare, each with its question. */
 export type Comparisons = NonNullable<SourceDecisionOf<'vary'>['comparisons']>;
+/** A question a decision asks the participant to answer in the chat. */
+export type DecisionQuestion = NonNullable<SourceDecisionOf<'respond'>['question']>;
 export type SourceDecisionOf<Action extends SourceDecision['action']> = Extract<
   SourceDecision,
   { action: Action }

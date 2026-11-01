@@ -137,9 +137,12 @@
     study?.expired || readOnly ? undefined : condition?.presentationBufferTarget,
     readOnly
   );
+  // Participants in the comparison condition see one version, and a pair only while one of the
+  // assistant's comparisons is current; dev mode shows every pair.
+  const questionPairs = condition?.layout === 'comparison' && !initialDeveloperView;
   const presentationSelection = new PresentationSelection(
     // Dev mode shows the newest variants, so those its controls make show at once.
-    !!condition?.presentationBufferTarget && !initialDeveloperView,
+    (!!condition?.presentationBufferTarget || questionPairs) && !initialDeveloperView,
     // Without a condition the selection implies the layout: two variants compare, one is shown alone.
     condition
       ? undefined
@@ -147,7 +150,8 @@
           if (!showAdminControls || busy) return false;
           layout = next;
           return true;
-        }
+        },
+    questionPairs
   );
   const presentationPlayback = new PresentationPlayback();
   // Elements selected in the visible presentations, to reference in feedback.
@@ -174,6 +178,19 @@
     if (!variant) return;
     chosenOf = undefined;
     presentationSelection.activate(variant, session.events, layout, extend);
+  }
+
+  /** Highlight what a question about a presentation names, at the step showing. */
+  function showQuestionElements(presentationId: string, elements: readonly string[]) {
+    const context = presentationPlaybackContext(
+      presentationSelection.selected(session.events, layout)
+    );
+    const step = presentationPlayback.stepFor(context);
+    visualSelections.set(
+      presentationId,
+      step,
+      elements.map((id) => ({ id, label: 'Asked about' }))
+    );
   }
 
   function showElementReference(reference: ElementReference) {
@@ -209,7 +226,12 @@
   const busy = $derived(!!session.pending || session.creating);
   const mutationsDisabled = $derived(busy || expired || session.readOnly || editMode === 'editing');
   const presentationCount = $derived<1 | 2>(
-    session.loaded && session.snapshot.mode === 'sverlin' && layout === 'comparison' ? 2 : 1
+    session.loaded &&
+      session.snapshot.mode === 'sverlin' &&
+      layout === 'comparison' &&
+      !questionPairs
+      ? 2
+      : 1
   );
   const visiblePresentations = $derived(presentationSelection.selected(session.events, layout));
 
@@ -230,7 +252,7 @@
   // Links from messages and problems to the source panel.
   const sourceLinks = provideSourceLinks(new SourceLinks());
 
-  // A source chosen on its own, by a card's code button: no visualization shows, and the source
+  // A source chosen on its own, by a pill's code button: no visualization shows, and the source
   // panel fills the stage with its source and what it changes from its parent, until a variant is
   // chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
@@ -614,6 +636,7 @@
                 onReferenceRequest={(presentation) =>
                   feedbackComposer?.referencePresentation(presentation)}
                 onElementReference={showElementReference}
+                onQuestionElements={showQuestionElements}
                 chosenSource={chosenOf?.sourceHash}
                 onChooseSource={(source) => {
                   chosenOf = source;

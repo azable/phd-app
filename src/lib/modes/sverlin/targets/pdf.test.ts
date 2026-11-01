@@ -131,13 +131,13 @@ describe('renderPdf', () => {
     const embedded = new Set(
       [...(await blob.text()).matchAll(/\/BaseFont\s*\/([\w-]+)/gu)]
         .map(([, name]) => name)
-        .filter((name) => /^(Sverlin|DejaVu)/u.test(name))
+        .filter((name) => !/^(Helvetica|Courier|Times|Symbol$|ZapfDingbats)/u.test(name))
     );
     expect([...embedded].sort()).toEqual([
       'DejaVuSans-Bold',
-      'SverlinMono-Regular',
-      'SverlinSans-Bold',
-      'SverlinSymbols-Bold'
+      'Mono-Regular',
+      'Sans-Bold',
+      'Symbols-Bold'
     ]);
   });
 });

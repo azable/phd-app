@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 import { recordText } from './fingerprints';
 import { MemoryProjectRepository } from './memory-repository.test-support';
-import { recordProjectPreference } from './presentations';
+import { preferenceAnswer, recordProjectPreference } from './presentations';
 
 describe('presentation preferences', () => {
   it('records compatible presentation UUIDs and a common display set', async () => {
@@ -18,7 +18,7 @@ describe('presentation preferences', () => {
         projectId: document.projectId,
         expectedHead: document.events.length,
         presentations: ids,
-        preferred: ids[1],
+        answer: { preferred: ids[1] },
         step: 1,
         operationId: randomUUID()
       },
@@ -40,7 +40,7 @@ describe('presentation preferences', () => {
         projectId: document.projectId,
         expectedHead: document.events.length,
         presentations: ids,
-        preferred: ids[0],
+        answer: { preferred: ids[0] },
         step: 0,
         operationId: randomUUID()
       },
@@ -62,13 +62,47 @@ describe('presentation preferences', () => {
       projectId: document.projectId,
       expectedHead: document.events.length,
       presentations: ids,
-      preferred: ids[0],
+      answer: { preferred: ids[0] },
       operationId: randomUUID()
     };
     const dependencies = { repository, projectService: { repository } };
     await expect(recordProjectPreference({ ...base, step: 4 }, dependencies)).rejects.toThrow(
       'unknown presentation step'
     );
+  });
+
+  it('records either is fine and decide later as the comparison’s outcome, naming no side', async () => {
+    const repository = new MemoryProjectRepository();
+    const ids = [randomUUID(), randomUUID()] as [string, string];
+    const displaySetId = randomUUID();
+    const projectId = randomUUID();
+    await repository.create(comparisonDocument(projectId, displaySetId, ids));
+    const dependencies = { repository, projectService: { repository } };
+    for (const outcome of ['tie', 'skip'] as const) {
+      const document = await repository.load(projectId);
+      const result = await recordProjectPreference(
+        {
+          projectId: document.projectId,
+          expectedHead: document.events.length,
+          presentations: ids,
+          answer: preferenceAnswer({ outcome }),
+          step: 0,
+          operationId: randomUUID()
+        },
+        dependencies
+      );
+      expect(result.appendedEvents[0]).toMatchObject({
+        type: 'visualization.preference-recorded',
+        payload: { displaySetId, presentations: ids, outcome, step: 0 }
+      });
+      expect(result.appendedEvents[0].payload).not.toHaveProperty('preferred');
+    }
+  });
+
+  it('takes from a command one preferred presentation or one outcome, not both or neither', () => {
+    expect(preferenceAnswer({ preferred: 'a' })).toEqual({ preferred: 'a' });
+    expect(() => preferenceAnswer({})).toThrow('one preferred presentation or one outcome');
+    expect(() => preferenceAnswer({ preferred: 'a', outcome: 'tie' })).toThrow();
   });
 });
 

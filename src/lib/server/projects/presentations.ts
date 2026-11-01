@@ -29,13 +29,31 @@ const defaultDependencies: PresentationCommandDependencies = {
   projectService: defaultProjectServiceDependencies
 };
 
+/**
+ * How a participant answered a comparison: the presentation preferred, or either is fine (tie) or
+ * decide later (skip).
+ */
+export type PreferenceAnswer = { preferred: string } | { outcome: 'tie' | 'skip' };
+
+/** The answer a command gives, which names one preferred presentation or one outcome. */
+export function preferenceAnswer(options: {
+  preferred?: string;
+  outcome?: 'tie' | 'skip';
+}): PreferenceAnswer {
+  if ((options.preferred === undefined) === (options.outcome === undefined))
+    throw new Error('A preference names one preferred presentation or one outcome.');
+  return options.preferred !== undefined
+    ? { preferred: options.preferred }
+    : { outcome: options.outcome! };
+}
+
 /** Record a preference between any two compatible retained Sverlin presentations. */
 export function recordProjectPreference(
   options: {
     projectId: string;
     expectedHead: EventId;
     presentations: [string, string];
-    preferred: string;
+    answer: PreferenceAnswer;
     step: number;
     operationId: string;
   },
@@ -53,14 +71,17 @@ export async function appendProjectPreference(
   document: ProjectDocument,
   options: {
     presentations: [string, string];
-    preferred: string;
+    answer: PreferenceAnswer;
     step: number;
     operationId: string;
   },
   dependencies: ProjectServiceDependencies
 ): Promise<ProjectDocument> {
   const supplied = [...new Set(options.presentations)];
-  if (supplied.length !== 2 || !supplied.includes(options.preferred)) {
+  if (
+    supplied.length !== 2 ||
+    ('preferred' in options.answer && !supplied.includes(options.answer.preferred))
+  ) {
     throw new Error('The preference must identify two distinct presentations and one winner.');
   }
   const presented = supplied.map((id) =>
@@ -105,7 +126,7 @@ export async function appendProjectPreference(
         payload: {
           ...(displaySetId ? { displaySetId } : {}),
           presentations: options.presentations,
-          preferred: options.preferred,
+          ...options.answer,
           step: options.step
         }
       })

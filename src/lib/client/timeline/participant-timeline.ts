@@ -12,41 +12,70 @@ import {
   type TimelinePresentation
 } from '$lib/client/visualization/presentation-history';
 
+import {
+  answerLabel,
+  projectQuestions,
+  type ProjectQuestion
+} from '$lib/shared/projects/questions';
+
 import { agentRequests, type AgentRequest } from './agent-requests';
 
+/** A question with its answer as its caption shows it, once given. */
+export type CaptionedQuestion = { question: ProjectQuestion; answer?: string };
+
+/** A presentation as a pill in an assistant's message: what it shows, and its source. */
+export type VersionPill = {
+  value: TimelinePresentation;
+  /** What its source shows or changes, or how it was made where nobody said: the pill's tooltip. */
+  summary?: string;
+  /** The hash of its source, for a Sverlin presentation, which its code button shows. */
+  sourceHash?: string;
+  /** The source it was made from, where that was presented. */
+  parentHash?: string;
+};
+
+/** What a source first presented in a turn without a reply shows, said in the reply's place. */
+export type VersionSummary = {
+  sourceHash: string;
+  text: string;
+  described: boolean;
+  /** Its source, which code its summary names is found in. */
+  source: string;
+  parentHash?: string;
+};
+
 export type ParticipantTimelineItem =
+  | { id: string; kind: 'message'; actor: 'user'; content: MessageContent; eventId: number }
+  /**
+   * One assistant turn as one message: its reply, naming the versions it presents inline; those it
+   * does not name as pills at its end; the comparisons it asks; and its question, last.
+   */
   | {
       id: string;
-      kind: 'message';
-      actor: 'user' | 'assistant';
-      content: MessageContent;
-      eventId: number;
+      kind: 'turn';
+      /** The reply; absent where the turn presented without one, as a save or a demo example. */
+      content?: MessageContent;
+      eventId?: number;
+      /** What each source first presented here shows, where the turn has no reply to say it. */
+      summaries: VersionSummary[];
+      /** The presentations it made that its words do not name, by id, as pills at its end. */
+      appended: string[];
+      /** Its comparisons: each pair's question, with its answer once given. */
+      comparisons: CaptionedQuestion[];
+      /** Its question, with a pill only where the message does not already show what it is about. */
+      question?: CaptionedQuestion & { pill: boolean };
+      /** Every presentation it shows as a pill, by id. */
+      pills: Record<string, VersionPill>;
+      /** The sources first presented here, which a link to a version's parent finds. */
+      firsts: string[];
     }
-  | { id: string; kind: 'presentation'; value: TimelinePresentation }
-  | {
-      id: string;
-      kind: 'version';
-      /** The hash of the source, which names it. */
-      sourceHash: string;
-      /** What it shows or changes, or how it was made where nobody said. */
-      summary: string;
-      described: boolean;
-      /** Its source, which code its summary names is found in. */
-      source: string;
-      /** The source it was made from, where that has a card of its own. */
-      parentHash?: string;
-      /** The presentations this turn made of it, each a variant of its values, oldest first. */
-      variants: TimelinePresentation[];
-      /** Whether the source was first presented here, so this item says what it shows. */
-      first: boolean;
-    }
-  /** A note from the developer, as the demo project's examples carry, about the card before it. */
+  /** A note from the developer, as the demo project's examples carry, about the version before it. */
   | {
       id: string;
       kind: 'note';
       text: string;
       eventId: number;
-      /** The card it follows, whose source code it names is found in. */
+      /** The version it follows, whose source code it names is found in. */
       of?: { sourceHash: string; source: string; parentHash?: string };
     }
   | {
@@ -62,49 +91,176 @@ export type ParticipantTimelineItem =
   /** How a presentation loaded in a viewer's browser, shown for audit in developer view. */
   | { id: string; kind: 'load'; event: ProjectEventOf<'visualization.loaded'> };
 
+type Turn = Extract<ParticipantTimelineItem, { kind: 'turn' }>;
+
 /** Keep research data lossless while deriving a concise participant conversation locally. */
 export function participantTimeline(
   events: readonly ProjectEvent[],
   options: { audit?: boolean } = {}
 ): ParticipantTimelineItem[] {
   const presentations = new Map(
-    timelinePresentations(events).map((entry) => [entry.eventId, entry] as const)
+    timelinePresentations(events).map((entry) => [entry.presentation.presentationId, entry])
   );
-  const presentationIds = [...presentations.values()].map(
-    ({ presentation }) => presentation.presentationId
-  );
+  const presentationIds = [...presentations.keys()];
+  // Each presented source, by hash, as its first presentation has it.
+  const sources = new Map<string, string>();
+  for (const { presentation } of presentations.values())
+    if (isSverlinPresentation(presentation) && !sources.has(presentation.source.sha256))
+      sources.set(presentation.source.sha256, presentation.source.text);
   const versions = sourceVersions(events);
-  const variants = Map.groupBy(
-    [...presentations.values()].filter(({ presentation }) => isSverlinPresentation(presentation)),
-    ({ presentation }) => (presentation as { source: { sha256: string } }).source.sha256
+  const versionOf = (sourceHash: string) => {
+    const version = versions.first.get(sourceHash);
+    const parentHash = version?.payload.parent
+      ? versions.hashes.get(version.payload.parent)
+      : undefined;
+    return {
+      summary: version?.payload.summary ?? madeBy[version?.payload.origin.kind ?? 'none'],
+      described: version?.payload.summary !== undefined,
+      ...(parentHash && parentHash !== sourceHash && sources.has(parentHash) ? { parentHash } : {})
+    };
+  };
+  const pillOf = (value: TimelinePresentation): VersionPill => {
+    if (!isSverlinPresentation(value.presentation)) return { value };
+    const sourceHash = value.presentation.source.sha256;
+    const { summary, parentHash } = versionOf(sourceHash);
+    return { value, summary, sourceHash, ...(parentHash ? { parentHash } : {}) };
+  };
+  const captioned = (question: ProjectQuestion): CaptionedQuestion => {
+    const answer = answerLabel(question);
+    return { question, ...(answer ? { answer } : {}) };
+  };
+  const questions = projectQuestions(events);
+  const asked = new Map(questions.map((question) => [question.eventId, question]));
+  const pairQuestions = new Map(
+    questions.flatMap((question) =>
+      question.displaySetId ? [[question.displaySetId, question] as const] : []
+    )
   );
-  // Each turn shows the variants it made, a card each; a source's first says what it shows.
+  // Answers to pairs that asked a question show under it, not as messages of their own.
+  const answeredPairs = new Set(
+    questions.flatMap(({ kind, answer }) => (kind === 'pair' && answer ? [answer.eventId] : []))
+  );
   const placed = new Set<string>();
-  const groups = Map.groupBy(events, ({ operationId }) => operationId);
   // The source presented last, by hash, which a note that follows is about.
   let presented: string | undefined;
-  const about = new Map<string, string>();
-  const items = [...groups.values()]
+
+  /**
+   * An operation's assistant messages, a turn each; the last holds what the operation presented,
+   * or, where it replied nothing, a turn of its own does.
+   */
+  function turnItems(related: readonly ProjectEvent[]): Turn[] {
+    const turns = related.flatMap((event): Turn[] => {
+      if (event.type !== 'assistant.responded') return [];
+      const question = asked.get(event.id);
+      return [
+        {
+          ...emptyTurn(`assistant-${event.id}`),
+          content: structureKnownPresentationReferences(event.payload.content, presentationIds),
+          eventId: event.id,
+          ...(question ? { question: { ...captioned(question), pill: false } } : {})
+        }
+      ];
+    });
+    const made = related.flatMap((event) => {
+      const value =
+        event.type === 'visualization.presented'
+          ? presentations.get(event.payload.presentation.presentationId)
+          : undefined;
+      return value ? [value] : [];
+    });
+    if (made.length && !turns.length) turns.push(emptyTurn(`presented-${made[0].eventId}`));
+    const holder = turns.at(-1);
+    if (!holder) return [];
+    const named = new Set(turns.flatMap(({ content }) => referencedIn(content)));
+    for (const value of made) {
+      const { presentation } = value;
+      if (isSverlinPresentation(presentation)) {
+        const sourceHash = presentation.source.sha256;
+        presented = sourceHash;
+        if (!placed.has(sourceHash)) {
+          placed.add(sourceHash);
+          holder.firsts.push(sourceHash);
+          const { summary, described, parentHash } = versionOf(sourceHash);
+          if (!holder.content)
+            holder.summaries.push({
+              sourceHash,
+              text: summary,
+              described,
+              source: presentation.source.text,
+              ...(parentHash ? { parentHash } : {})
+            });
+        }
+      }
+      const pair = value.displaySetId ? pairQuestions.get(value.displaySetId) : undefined;
+      if (pair) {
+        if (!holder.comparisons.some(({ question }) => question === pair))
+          holder.comparisons.push(captioned(pair));
+      } else if (!named.has(presentation.presentationId))
+        holder.appended.push(presentation.presentationId);
+    }
+    // A question about what the message shows needs no pill; one about a presentation the turn
+    // made but did not name, as its example, shows it in place of the pill at the message's end.
+    const compared = new Set(
+      holder.comparisons.flatMap(({ question }) => question.presentationIds)
+    );
+    for (const { question } of turns) {
+      const about = question?.question.presentationIds[0];
+      if (!question || !about) continue;
+      question.pill = !named.has(about) && !compared.has(about);
+      holder.appended = holder.appended.filter((id) => id !== about);
+    }
+    for (const turn of turns)
+      for (const id of [
+        ...referencedIn(turn.content),
+        ...turn.appended,
+        ...turn.comparisons.flatMap(({ question }) => question.presentationIds),
+        ...(turn.question?.pill ? turn.question.question.presentationIds : [])
+      ]) {
+        const value = presentations.get(id);
+        if (value) turn.pills[id] = pillOf(value);
+      }
+    return turns;
+  }
+
+  return [...Map.groupBy(events, ({ operationId }) => operationId).values()]
     .toSorted((left, right) => left[0].id - right[0].id)
     .flatMap((related) => {
       const items: ParticipantTimelineItem[] = [];
       for (const event of related) {
         if (event.type === 'feedback.submitted') {
-          items.push(messageItem(`user-${event.id}`, 'user', event.payload.content, event.id));
-        } else if (event.type === 'visualization.preference-recorded') {
-          const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
+          items.push(userMessage(`user-${event.id}`, event.payload.content, event.id));
+        } else if (
+          event.type === 'visualization.preference-recorded' &&
+          !answeredPairs.has(event.id)
+        ) {
+          const [first, second] = event.payload.presentations;
+          const preferred = 'preferred' in event.payload ? event.payload.preferred : undefined;
+          const other = event.payload.presentations.find((id) => id !== preferred);
           if (!other) continue;
+          const said =
+            'outcome' in event.payload
+              ? event.payload.outcome === 'tie'
+                ? 'Either is fine:'
+                : 'Decide later:'
+              : undefined;
           items.push(
-            messageItem(
+            userMessage(
               `preference-${event.id}`,
-              'user',
-              [
-                { type: 'markdown', text: 'Preferred' },
-                { type: 'presentation-ref', presentationId: event.payload.preferred },
-                { type: 'markdown', text: 'over' },
-                { type: 'presentation-ref', presentationId: other },
-                { type: 'markdown', text: `at step ${event.payload.step + 1}.` }
-              ],
+              preferred
+                ? [
+                    { type: 'markdown', text: 'Preferred' },
+                    { type: 'presentation-ref', presentationId: preferred },
+                    { type: 'markdown', text: 'over' },
+                    { type: 'presentation-ref', presentationId: other },
+                    { type: 'markdown', text: `at step ${event.payload.step + 1}.` }
+                  ]
+                : [
+                    { type: 'markdown', text: said ?? '' },
+                    { type: 'presentation-ref', presentationId: first },
+                    { type: 'markdown', text: 'or' },
+                    { type: 'presentation-ref', presentationId: second },
+                    { type: 'markdown', text: `at step ${event.payload.step + 1}.` }
+                  ],
               event.id
             )
           );
@@ -117,60 +273,20 @@ export function participantTimeline(
         for (const event of related)
           if (event.type === 'visualization.loaded')
             items.push({ id: `load-${event.id}`, kind: 'load', event });
-      for (const event of related) {
-        if (event.type === 'assistant.responded') {
-          items.push(
-            messageItem(
-              `assistant-${event.id}`,
-              'assistant',
-              structureKnownPresentationReferences(event.payload.content, presentationIds),
-              event.id
-            )
-          );
-        }
-      }
+      items.push(...turnItems(related));
+      // A note is about the source presented before it.
       for (const event of related) {
         if (event.type !== 'system.notified' || event.payload.severity !== 'info') continue;
-        const id = `note-${event.id}`;
-        items.push({ id, kind: 'note', text: event.payload.message, eventId: event.id });
-        if (presented) about.set(id, presented);
-      }
-      const made = new Map<string, TimelinePresentation[]>();
-      for (const event of related) {
-        if (event.type !== 'visualization.presented') continue;
-        const value = presentations.get(event.id);
-        if (!value) continue;
-        if (!isSverlinPresentation(value.presentation)) {
-          items.push({ id: `presentation-${event.id}`, kind: 'presentation', value });
-          continue;
-        }
-        const sourceHash = value.presentation.source.sha256;
-        presented = sourceHash;
-        const turn = made.get(sourceHash);
-        if (turn) {
-          turn.push(value);
-          continue;
-        }
-        const turnVariants = [value];
-        made.set(sourceHash, turnVariants);
-        const first = !placed.has(sourceHash);
-        placed.add(sourceHash);
-        const version = versions.first.get(sourceHash);
-        const parentHash = version?.payload.parent
-          ? versions.hashes.get(version.payload.parent)
-          : undefined;
+        const source = presented ? sources.get(presented) : undefined;
+        const parentHash = presented ? versionOf(presented).parentHash : undefined;
         items.push({
-          id: first ? `version-${sourceHash}` : `version-${sourceHash}-${event.id}`,
-          kind: 'version',
-          sourceHash,
-          summary: version?.payload.summary ?? madeBy[version?.payload.origin.kind ?? 'none'],
-          described: version?.payload.summary !== undefined,
-          source: value.presentation.source.text,
-          ...(parentHash && parentHash !== sourceHash && variants.has(parentHash)
-            ? { parentHash }
-            : {}),
-          variants: turnVariants,
-          first
+          id: `note-${event.id}`,
+          kind: 'note',
+          text: event.payload.message,
+          eventId: event.id,
+          ...(presented && source !== undefined
+            ? { of: { sourceHash: presented, source, ...(parentHash ? { parentHash } : {}) } }
+            : {})
         });
       }
       const failure = related.findLast(({ type }) => type === 'operation.failed');
@@ -186,22 +302,17 @@ export function participantTimeline(
       }
       return items;
     });
-  // A note is about the source presented before it, on that source's card.
-  const cards = new Map(
-    items.flatMap((item) =>
-      item.kind === 'version' && item.first ? [[item.sourceHash, item] as const] : []
-    )
+}
+
+function emptyTurn(id: string): Turn {
+  return { id, kind: 'turn', summaries: [], appended: [], comparisons: [], pills: {}, firsts: [] };
+}
+
+/** The presentations a message names, by id. */
+function referencedIn(content: MessageContent = []): string[] {
+  return content.flatMap((segment) =>
+    segment.type === 'presentation-ref' ? [segment.presentationId] : []
   );
-  for (const item of items) {
-    const card = item.kind === 'note' ? cards.get(about.get(item.id) ?? '') : undefined;
-    if (item.kind === 'note' && card)
-      item.of = {
-        sourceHash: card.sourceHash,
-        source: card.source,
-        ...(card.parentHash ? { parentHash: card.parentHash } : {})
-      };
-  }
-  return items;
 }
 
 /** The source of an operation's last build that failed on its code, and who wrote it. */
@@ -228,7 +339,7 @@ function failedSource(
     : undefined;
 }
 
-// What a card says of a source whose version has no summary: how it was made.
+// What a version says of a source that has no summary: how it was made.
 const madeBy: Record<string, string> = {
   initial: 'The starting source',
   'manual-edit': 'Edited by hand',
@@ -260,11 +371,10 @@ function sourceVersions(events: readonly ProjectEvent[]) {
   return { hashes, first };
 }
 
-function messageItem(
+function userMessage(
   id: string,
-  actor: 'user' | 'assistant',
   content: MessageContent,
   eventId: number
 ): Extract<ParticipantTimelineItem, { kind: 'message' }> {
-  return { id, kind: 'message', actor, content, eventId };
+  return { id, kind: 'message', actor: 'user', content, eventId };
 }

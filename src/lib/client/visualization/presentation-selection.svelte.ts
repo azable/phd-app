@@ -6,7 +6,9 @@ import { isSverlinPresentation, type PresentationLayout } from '$lib/shared/pres
 import {
   availablePresentations,
   compatibleSverlinPair,
+  discussedPresentation,
   newestPresentations,
+  pairQuestion,
   presentationsById,
   timelinePresentations,
   type TimelinePresentation
@@ -17,15 +19,21 @@ export class PresentationSelection {
   selectedIds = $state.raw<string[]>([]);
   followingLatest = $state(true);
   notice = $state<string | null>(null);
+  /** A pair answered while its answer is saved, left out as if recorded. */
+  #answered = $state.raw<readonly string[]>([]);
 
   /**
    * @param requestLayout Lets the selection imply the layout: Shift-selecting a second variant asks
    *   for comparison and selecting a single variant asks for single view. It returns false where
    *   the layout is fixed, such as study conditions.
+   * @param questionPairs In the comparison layout, show a pair only while one of the assistant's
+   *   comparisons is current, and otherwise the one presentation under discussion, as participants
+   *   in the comparison condition see it.
    */
   constructor(
     readonly buffered = false,
-    private readonly requestLayout?: (layout: PresentationLayout) => boolean
+    private readonly requestLayout?: (layout: PresentationLayout) => boolean,
+    readonly questionPairs = false
   ) {}
 
   /** Presentations currently shown on the stage. */
@@ -78,11 +86,28 @@ export class PresentationSelection {
     this.notice = null;
   }
 
-  /** Keep one visible set stable while an operation evaluates it. */
-  pin(presentations: readonly TimelinePresentation[]): void {
-    this.setIds(presentations.map(({ presentation }) => presentation.presentationId));
-    this.followingLatest = false;
-    this.notice = null;
+  /**
+   * Answer a pair: show what follows it at once, as if the answer were recorded, while `save`
+   * records it; if saving fails, show the answered pair again.
+   */
+  async answer(
+    presentations: readonly TimelinePresentation[],
+    save: () => Promise<boolean>
+  ): Promise<boolean> {
+    const ids = presentations.map(({ presentation }) => presentation.presentationId);
+    this.#answered = ids;
+    this.returnToLatest();
+    let saved = false;
+    try {
+      saved = await save();
+    } finally {
+      this.#answered = [];
+      if (!saved) {
+        this.setIds(ids);
+        this.followingLatest = false;
+      }
+    }
+    return saved;
   }
 
   private automatic(
@@ -90,9 +115,14 @@ export class PresentationSelection {
     all: readonly TimelinePresentation[],
     layout: PresentationLayout
   ): TimelinePresentation[] {
+    const answered = this.#answered;
+    if (this.questionPairs && layout === 'comparison') {
+      const pair = availablePresentations(events, layout, answered);
+      return pairQuestion(pair) ? pair : discussedPresentation(all);
+    }
     return this.buffered
-      ? availablePresentations(events, layout)
-      : newestPresentations(events, layout);
+      ? availablePresentations(events, layout, answered)
+      : newestPresentations(events, layout, answered);
   }
 
   /** In single view, Shift adds a compatible second variant and switches to comparison. */

@@ -1330,7 +1330,7 @@ describe('submitProjectFeedback', () => {
         presentations: comparison.presentations.map(
           ({ payload }) => payload.presentation.presentationId
         ) as [string, string],
-        preferred: comparison.presentations[0].payload.presentation.presentationId,
+        answer: { preferred: comparison.presentations[0].payload.presentation.presentationId },
         step: 0,
         operationId: '12345678-1234-4123-8123-123456789abd'
       },
@@ -1381,7 +1381,7 @@ describe('submitProjectFeedback', () => {
         presentations: comparison.presentations.map(
           ({ payload }) => payload.presentation.presentationId
         ) as [string, string],
-        preferred: comparison.presentations[1].payload.presentation.presentationId,
+        answer: { preferred: comparison.presentations[1].payload.presentation.presentationId },
         step: 0,
         operationId: '12345678-1234-4123-8123-123456789abe'
       },
@@ -2668,7 +2668,8 @@ describe('several variants from chat', () => {
               payload: {
                 displaySetId: event.payload.displaySetId,
                 presentation: event.payload.presentation,
-                question: event.payload.question
+                question: event.payload.question,
+                label: event.payload.label
               }
             }
           ]
@@ -2802,16 +2803,16 @@ describe('several variants from chat', () => {
   });
   const views = (left: string, right: string) => ({
     question: 'Cells or tallies for the numbers?',
-    left: [{ variable: 'views.Int', value: left }],
-    right: [{ variable: 'views.Int', value: right }]
+    left: { label: left, values: [{ variable: 'views.Int', value: left }] },
+    right: { label: right, values: [{ variable: 'views.Int', value: right }] }
   });
   const marks = {
     question: 'Amber or blue marks?',
-    left: [{ variable: 'Highlight.Pointed.fill', value: 'amber-100' }],
-    right: [{ variable: 'Highlight.Pointed.fill', value: 'blue-100' }]
+    left: { label: 'amber', values: [{ variable: 'Highlight.Pointed.fill', value: 'amber-100' }] },
+    right: { label: 'blue', values: [{ variable: 'Highlight.Pointed.fill', value: 'blue-100' }] }
   };
 
-  it('builds each comparison as a pair differing only as given, with its question, the first shown and the rest queued', async () => {
+  it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
     const choose = vi.fn();
     const { before, result } = await decide(
       {
@@ -2837,6 +2838,9 @@ describe('several variants from chat', () => {
       expect(left.displaySetId).toBe(right.displaySetId);
       expect(left.question).toBe(
         index ? 'Amber or blue marks?' : 'Cells or tallies for the numbers?'
+      );
+      expect([left.label, right.label]).toEqual(
+        index ? ['amber', 'blue'] : ['IntCell', 'IntTally']
       );
       const differing = Object.keys({
         ...left.presentation.variant,
@@ -3023,7 +3027,7 @@ describe('several variants from chat', () => {
         }
       ]);
       const answered = await queueProjectPreference(
-        { projectId, operationId, presentations: [left, right], preferred, step: 0 },
+        { projectId, operationId, presentations: [left, right], answer: { preferred }, step: 0 },
         commandDependencies
       );
       return answered.appendedEvents;
@@ -3031,7 +3035,7 @@ describe('several variants from chat', () => {
     const turnRequested = (events: readonly ProjectEvent[]) =>
       events.some(({ type }) => type === 'assistant.turn-requested');
 
-    // Tallies settle the numbers' view, so the third question, about it too, is set aside, and the
+    // The third question repeats the first, just answered, so it is set aside, and the
     // assistant waits for the marks to be answered.
     const first = await answer(ids[0], ids[1], ids[1]);
     expect(first).toContainEqual(

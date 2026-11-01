@@ -10,9 +10,11 @@
     values?: string;
     /** Which side of a pair, when two are shown. */
     label?: string;
+    /** Its tooltip, where not its identifier. */
+    title?: string;
   };
 
-  let { source, hue, values, label }: Props = $props();
+  let { source, hue, values, label, title }: Props = $props();
 </script>
 
 <span class="inline-flex items-center gap-1.5 align-middle text-xs">
@@ -20,9 +22,10 @@
   <span
     class="inline-flex overflow-hidden rounded-md font-mono leading-5 ring-1 ring-border transition-shadow group-hover:ring-foreground/60 group-focus-visible:ring-2 group-focus-visible:ring-ring"
     style:--pill-hue={hue}
-    title={values
-      ? `Source ${source}, values ${values}. Candidates of one source can be compared.`
-      : `Source ${source}`}
+    title={title ??
+      (values
+        ? `Source ${source}, values ${values}. Candidates of one source can be compared.`
+        : `Source ${source}`)}
   >
     <span
       class="bg-[hsl(var(--pill-hue)_70%_55%/0.32)] px-1.5 font-semibold transition-colors group-hover:bg-[hsl(var(--pill-hue)_70%_55%/0.55)]"

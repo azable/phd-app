@@ -47,11 +47,14 @@ const embeddedFonts = new Map(manifest.fonts.map((font) => [font.family.toLowerC
 const embeddedFaces = new Map(
   manifest.faces.map(({ file, family, weight }) => [`${family.toLowerCase()} ${weight}`, file])
 );
-/** Each face's name in the PDF, as its /BaseFont: its family and weight, or DejaVu's file. */
+/**
+ * Each face's name in the PDF, as its /BaseFont: its family's last word (Sans for Sverlin Sans), so
+ * the name shows no product, and its weight; or DejaVu's file.
+ */
 const fontNames = new Map(
   manifest.faces.map(({ file, family, weight }) => [
     file,
-    `${family.replaceAll(' ', '')}-${weight >= 600 ? 'Bold' : 'Regular'}`
+    `${family.split(' ').at(-1)}-${weight >= 600 ? 'Bold' : 'Regular'}`
   ])
 );
 const fontName = (file: string) => fontNames.get(file) ?? file;
@@ -142,8 +145,7 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     compress: true
   });
   doc.setProperties({
-    title: `Sverlin presentation ${scene.presentationId.slice(0, 8)}, seed ${scene.seed}`,
-    creator: 'Sverlin'
+    title: `Presentation ${scene.presentationId.slice(0, 8)}, seed ${scene.seed}`
   });
 
   // Each face is embedded once, and only if some character is drawn in it: a text's first face,

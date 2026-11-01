@@ -10,15 +10,15 @@ here or in the prompt that owns it, and keep examples small and varied, so they
 show a mechanism without prescribing a look or structure to copy.
 -->
 
-# The Sverlin language
+# The language
 
-A Sverlin component is one Svelte file that records the steps of an algorithm or
-program and draws a view of each step. The markup says what is drawn; how it
-looks is the design: every look of every kind of node is a variable the compiler
-finds in the markup (see Design). A presentation is one variant of the
-component: every presentation shows the same input and algorithm, with its own
-value for every variable. Participants compare presentations in pairs, so the
-two presentations of a pair should differ in how they show the algorithm.
+A component is one Svelte file that records the steps of an algorithm or program
+and draws a view of each step. The markup says what is drawn; how it looks is
+the design: every look of every kind of node is a variable the compiler finds in
+the markup (see Design). A presentation is one variant of the component: every
+presentation shows the same input and algorithm, with its own value for every
+variable. Participants compare presentations in pairs, so the two presentations
+of a pair should differ in how they show the algorithm.
 
 ## Blocks
 

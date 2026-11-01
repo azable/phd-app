@@ -18,18 +18,43 @@ export const visualizationPresentedEventSchema = v.object({
      * The question the assistant's comparison asks of this display set's pair, which a preference
      * between them answers (it names the display set).
      */
-    question: v.optional(v.string())
+    question: v.optional(v.string()),
+    /** With a question, what the participant would call this side of the pair, as “tallies”. */
+    label: v.optional(v.string())
   })
 });
 
-/** Runtime schema for a preference between two compatible presentations. */
+const comparisonAnswer = {
+  displaySetId: v.optional(v.pipe(v.string(), v.uuid())),
+  presentations: v.tuple([presentationIdSchema, presentationIdSchema]),
+  step: naturalSchema
+};
+
+/**
+ * Runtime schema for an answer to a comparison of two compatible presentations: one preferred, or,
+ * as its outcome, either is fine (a tie, evidence the two are close) or decide later (a skip, no
+ * evidence, the question open to be asked again).
+ */
 export const visualizationPreferenceRecordedEventSchema = v.object({
   ...eventEnvelope,
   type: v.literal('visualization.preference-recorded'),
-  payload: v.object({
-    displaySetId: v.optional(v.pipe(v.string(), v.uuid())),
-    presentations: v.tuple([presentationIdSchema, presentationIdSchema]),
-    preferred: presentationIdSchema,
-    step: naturalSchema
-  })
+  payload: v.union([
+    v.object({ ...comparisonAnswer, preferred: presentationIdSchema }),
+    v.object({ ...comparisonAnswer, outcome: v.picklist(['tie', 'skip']) })
+  ])
 });
+
+type ComparisonAnswer = v.InferOutput<typeof visualizationPreferenceRecordedEventSchema>['payload'];
+
+/** An answer to a comparison: one of the pair preferred, either is fine, or decide later. */
+export type ComparisonOutcome = 'preferred' | 'tie' | 'skip';
+
+/** The presentation an answer preferred, or none for either is fine and decide later. */
+export function preferredPresentation(answer: ComparisonAnswer): string | undefined {
+  return 'preferred' in answer ? answer.preferred : undefined;
+}
+
+/** How an answer to a comparison came out. */
+export function comparisonOutcome(answer: ComparisonAnswer): ComparisonOutcome {
+  return 'preferred' in answer ? 'preferred' : answer.outcome;
+}

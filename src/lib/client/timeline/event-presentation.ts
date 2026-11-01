@@ -180,7 +180,9 @@ const presenters = {
   'visualization.preference-recorded': (event) =>
     details(
       'Visualization preference recorded',
-      `Preferred presentation ${event.payload.preferred} at step ${event.payload.step + 1}`,
+      'preferred' in event.payload
+        ? `Preferred presentation ${event.payload.preferred} at step ${event.payload.step + 1}`
+        : `${event.payload.outcome === 'tie' ? 'Either is fine' : 'Decide later'} at step ${event.payload.step + 1}`,
       'visualization',
       'Recording the preference…'
     ),

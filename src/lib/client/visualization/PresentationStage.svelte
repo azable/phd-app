@@ -10,6 +10,7 @@
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
+  import type { ProjectCommandInput } from '$lib/shared/projects/model';
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
   import { elidedName } from '$lib/client/artifacts/source-references';
@@ -23,6 +24,7 @@
   } from './presentation-playback.svelte';
   import { pairQuestion } from './presentation-history';
   import PresentationViewport from './PresentationViewport.svelte';
+  import { stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
 
@@ -51,7 +53,8 @@
     disabled = false,
     hidden = false
   }: Props = $props();
-  let preferencePending = $state<string>();
+  // Whether an answer to the shown pair is being saved.
+  let answering = $state(false);
 
   // Each visible presentation's viewport, by presentation ID, to ask for exports.
   const viewports: Record<string, PresentationViewport | undefined> = $state({});
@@ -98,6 +101,12 @@
     session.refillPending ||
       (!!session.pending && visualizationOperationKinds.includes(session.pending.type))
   );
+  // What the project's running operations are doing, shown over the visualization.
+  const activity = $derived.by(() => {
+    const shown = visible[0]?.presentation;
+    const source = shown?.format === 'browser-bundle-v1' ? shown.source : shown?.authored;
+    return stageActivity(session.events, source?.sha256, session.pending ?? undefined);
+  });
   const playbackContext = $derived(presentationPlaybackContext(visible));
   $effect.pre(() => {
     const context = playbackContext;
@@ -131,7 +140,8 @@
         event.payload.step === step &&
         event.payload.presentations.every((id) => selectedIds.includes(id))
     );
-    return preference?.type === 'visualization.preference-recorded'
+    return preference?.type === 'visualization.preference-recorded' &&
+      'preferred' in preference.payload
       ? preference.payload.preferred
       : undefined;
   });
@@ -140,22 +150,26 @@
     playback.seek(playbackContext, next);
   }
 
-  async function prefer(preferred: string) {
-    if (visible.length !== 2) return;
-    preferencePending = preferred;
-    selection.pin(visible);
+  /**
+   * Answer the pair: prefer one side, or say either is fine (tie) or decide later (skip). What
+   * follows shows at once; if the answer cannot be saved, the pair shows again at its step.
+   */
+  async function prefer(answer: string | 'tie' | 'skip') {
+    if (visible.length !== 2 || answering) return;
+    const answered = visible;
+    const at = step;
+    const command: ProjectCommandInput = {
+      type: 'prefer',
+      presentations: [selectedIds[0], selectedIds[1]],
+      ...(answer === 'tie' || answer === 'skip' ? { outcome: answer } : { preferred: answer }),
+      step: at
+    };
+    answering = true;
     try {
-      const succeeded = await session.runCommand({
-        type: 'prefer',
-        presentations: [selectedIds[0], selectedIds[1]],
-        preferred,
-        step
-      });
-      if (succeeded) {
-        selection.returnToLatest();
-      }
+      const saved = await selection.answer(answered, () => session.runCommand(command));
+      if (!saved) playback.seek(presentationPlaybackContext(answered), at);
     } finally {
-      preferencePending = undefined;
+      answering = false;
     }
   }
 
@@ -190,13 +204,9 @@
         variant={preferred === selectedIds[0] ? 'default' : 'outline'}
         aria-label="Prefer top candidate"
         onclick={() => prefer(selectedIds[0])}
-        disabled={disabled || preferencePending !== undefined}
+        disabled={disabled || answering}
       >
-        {#if preferencePending === selectedIds[0]}
-          <Spinner data-icon="inline-start" /> Recording…
-        {:else}
-          Prefer top candidate
-        {/if}
+        Prefer top candidate
       </Button>
     {/if}
     <Button
@@ -204,7 +214,7 @@
       variant="outline"
       aria-label="Previous visualization step"
       onclick={() => seek(step - 1)}
-      disabled={disabled || step === 0}
+      disabled={step === 0}
     >
       <ChevronLeftIcon data-icon="inline-start" />
       Previous
@@ -223,7 +233,7 @@
       variant="outline"
       aria-label="Next visualization step"
       onclick={() => seek(step + 1)}
-      disabled={disabled || step >= stepCount - 1}
+      disabled={step >= stepCount - 1}
     >
       Next
       <ChevronRightIcon data-icon="inline-end" />
@@ -234,16 +244,35 @@
         variant={preferred === selectedIds[1] ? 'default' : 'outline'}
         aria-label="Prefer bottom candidate"
         onclick={() => prefer(selectedIds[1])}
-        disabled={disabled || preferencePending !== undefined}
+        disabled={disabled || answering}
       >
-        {#if preferencePending === selectedIds[1]}
-          <Spinner data-icon="inline-start" /> Recording…
-        {:else}
-          Prefer bottom candidate
-        {/if}
+        Prefer bottom candidate
       </Button>
     {/if}
-    {#if selection.buffered && selection.followingLatest && visible.length}
+    {#if layout === 'comparison' && visible.length === 2}
+      <!-- Beside preferring a side: the two are equally good, or the question can wait. -->
+      <div class="flex flex-col gap-0.5">
+        <Button
+          size="xs"
+          variant="ghost"
+          aria-label="Either is fine"
+          onclick={() => prefer('tie')}
+          disabled={disabled || answering}
+        >
+          Either is fine
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          aria-label="Decide later"
+          onclick={() => prefer('skip')}
+          disabled={disabled || answering}
+        >
+          Decide later
+        </Button>
+      </div>
+    {/if}
+    {#if selection.buffered && !selection.questionPairs && selection.followingLatest && visible.length}
       <Button
         size="sm"
         variant="outline"
@@ -288,14 +317,25 @@
         <div
           class="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border bg-white shadow-sm"
         >
-          {#if held(entry)}
-            <p
-              class="absolute top-2 right-2 z-10 rounded-md border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
-              role="status"
-            >
-              This version skips this step; showing its previous step.
-            </p>
-          {/if}
+          <div class="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+            {#if index === 0 && activity}
+              <p
+                class="flex items-center gap-1.5 rounded-md border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner class="size-3" aria-hidden="true" />{activity.label}
+              </p>
+            {/if}
+            {#if held(entry)}
+              <p
+                class="rounded-md border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
+                role="status"
+              >
+                This version skips this step; showing its previous step.
+              </p>
+            {/if}
+          </div>
           {#if selected && !session.readOnly}
             <Button
               size="xs"
@@ -346,18 +386,26 @@
               {/if}
             </div>
           {/if}
-          <PresentationViewport
-            bind:this={viewports[presentationId]}
-            presentation={entry.presentation}
-            step={localStep(entry)}
-            label={`Visualization ${index + 1}`}
-            selection={selected?.elements.map(({ id }) => id) ?? []}
-            onSelectionChange={(elements) => visualSelections.set(presentationId, step, elements)}
-            onViewChange={(view) => onViewChange(presentationId, view)}
-            onRuntimeError={(failure) =>
-              session.reportRuntimeFailure({ presentationId, ...failure })}
-            onLoadTiming={(timing) => session.reportLoadTiming(timing)}
-          />
+          <!-- Dimmed while an operation replaces it, so it reads as the old version. -->
+          <div
+            class={[
+              'flex min-h-0 min-w-0 flex-1 transition-opacity',
+              activity?.replacing && 'opacity-60'
+            ]}
+          >
+            <PresentationViewport
+              bind:this={viewports[presentationId]}
+              presentation={entry.presentation}
+              step={localStep(entry)}
+              label={`Visualization ${index + 1}`}
+              selection={selected?.elements.map(({ id }) => id) ?? []}
+              onSelectionChange={(elements) => visualSelections.set(presentationId, step, elements)}
+              onViewChange={(view) => onViewChange(presentationId, view)}
+              onRuntimeError={(failure) =>
+                session.reportRuntimeFailure({ presentationId, ...failure })}
+              onLoadTiming={(timing) => session.reportLoadTiming(timing)}
+            />
+          </div>
         </div>
       </div>
       {#if index === 0}{@render controls()}{/if}

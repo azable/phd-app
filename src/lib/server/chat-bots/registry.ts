@@ -111,7 +111,7 @@ export function getChatbot(
 ): Chatbot<AiProjectContext, SourceArtifactChatOutput> {
   const mode = assistantMode(assistantId);
   if (modeCatalog[mode].authoring !== 'source')
-    throw new Error(`Unknown Sverlin assistant: ${assistantId}`);
+    throw new Error(`Unknown source-authoring assistant: ${assistantId}`);
   return modeChatbots[mode] as Chatbot<AiProjectContext, SourceArtifactChatOutput>;
 }
 

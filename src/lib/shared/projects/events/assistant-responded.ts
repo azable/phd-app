@@ -2,7 +2,9 @@
 
 import * as v from 'valibot';
 
-import { messageContentSchema } from './message-content';
+import { presentationIdSchema } from '$lib/shared/presentations';
+
+import { elementIdSchema, messageContentSchema } from './message-content';
 import { participantIntakeStepSchema } from './assistant-intake';
 import { eventEnvelope, positiveSchema } from './values';
 
@@ -13,6 +15,19 @@ export const assistantRespondedEventSchema = v.object({
   payload: v.object({
     content: messageContentSchema,
     inReplyTo: v.optional(v.array(positiveSchema)),
-    intakeStep: v.optional(participantIntakeStepSchema)
+    intakeStep: v.optional(participantIntakeStepSchema),
+    /**
+     * A question for the participant to answer in the chat (see shared/projects/questions.ts): in
+     * words, or about a presentation, one shown before or, as example, the first this operation
+     * presents next, with elements in it to highlight.
+     */
+    question: v.optional(
+      v.object({
+        text: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+        presentationId: v.optional(presentationIdSchema),
+        example: v.optional(v.literal(true)),
+        elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
+      })
+    )
   })
 });

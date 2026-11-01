@@ -321,7 +321,7 @@ describe('design variables in the AI context', () => {
 });
 
 describe('comparisons in the conversation', () => {
-  it('reads each preference with its comparison’s question and answer', () => {
+  it('reads each preference with its comparison’s question and the preferred side’s label', () => {
     const value = document();
     const at = value.events.length;
     const ids = ['12345678-1234-4123-8123-123456789ac1', '12345678-1234-4123-8123-123456789ac2'];
@@ -337,6 +337,7 @@ describe('comparisons in the conversation', () => {
           displaySetId,
           slot: slot as 0 | 1,
           question: 'Cells or tallies for the numbers?',
+          label: slot ? 'tallies' : 'cells',
           presentation: {
             presentationId: id,
             format: 'browser-bundle-v1',
@@ -363,13 +364,115 @@ describe('comparisons in the conversation', () => {
     expect(projectConversationMessages(value.events)).toEqual([
       {
         role: 'user',
-        content: expect.stringMatching(
-          /^Cells or tallies for the numbers\? → views\.Int IntTally\. /u
-        )
+        content: expect.stringMatching(/^Cells or tallies for the numbers\? → tallies\. /u)
       }
     ]);
     expect(
       projectAiContext(value, { eventIds: [], interactionEventIds: [at + 3] }).interaction
-    ).toMatchObject({ kind: 'preference', question: 'Cells or tallies for the numbers?' });
+    ).toMatchObject({
+      kind: 'preference',
+      question: 'Cells or tallies for the numbers?',
+      answer: 'tallies'
+    });
+  });
+
+  /** A designed pair of the starter-free test source, its sides setting views.Int. */
+  function pair(value: ProjectDocument, ids: [string, string], displaySetId: string) {
+    const at = value.events.length;
+    for (const [slot, id] of ids.entries())
+      value.events.push({
+        id: at + slot + 1,
+        type: 'visualization.presented',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: `2026-01-01T00:00:0${slot + 4}.000Z`,
+        payload: {
+          displaySetId,
+          slot: slot as 0 | 1,
+          question: 'Cells or tallies for the numbers?',
+          presentation: {
+            presentationId: id,
+            format: 'browser-bundle-v1',
+            mode: 'sverlin',
+            stepSignature: 'shared',
+            labels: ['Start'],
+            seed: slot + 1,
+            source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
+            html: recorded('', 'text/html'),
+            javascript: recorded('', 'text/javascript'),
+            variant: { 'views.Int': slot ? 'IntTally' : 'IntCell', 'Cell.fill': 'white' },
+            views: { Int: ['IntCell', 'IntTally', 'IntDots'] }
+          }
+        }
+      });
+  }
+
+  it('reads either is fine as the two being equally good, with the model’s summary', () => {
+    const value = document();
+    const ids: [string, string] = [
+      '12345678-1234-4123-8123-123456789ac1',
+      '12345678-1234-4123-8123-123456789ac2'
+    ];
+    const displaySetId = '12345678-1234-4123-8123-123456789abd';
+    pair(value, ids, displaySetId);
+    const at = value.events.length;
+    value.events.push({
+      id: at + 1,
+      type: 'visualization.preference-recorded',
+      operationId,
+      actor: { kind: 'user' },
+      createdAt: '2026-01-01T00:00:06.000Z',
+      payload: { displaySetId, presentations: ids, outcome: 'tie', step: 0 }
+    });
+    const [message] = projectConversationMessages(value.events);
+    expect(message.content).toMatch(/^Cells or tallies for the numbers\? → either is fine\. /u);
+    expect(message.content).toContain('does not matter');
+    const context = projectAiContext(value, { eventIds: [], interactionEventIds: [at + 1] });
+    expect(context.interaction).toMatchObject({ kind: 'preference', outcome: 'tie' });
+    // The model's summary: the tie leaves the numbers' view as either, the fill never compared.
+    expect(context.preferences).toMatchObject({
+      answered: 1,
+      later: 0,
+      // Its view has four options (none among them), two compared.
+      choices: [{ variable: 'views.Int', state: 'either', compared: 2, unexplored: 2 }],
+      unexplored: [{ family: 'colour', count: 1, examples: ['Cell.fill'] }]
+    });
+  });
+
+  it('reads a question with its reply, and the message answering it with the question', () => {
+    const value = document();
+    const at = value.events.length;
+    value.events.push(
+      {
+        id: at + 1,
+        type: 'assistant.responded',
+        operationId,
+        actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+        createdAt: '2026-01-01T00:00:06.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Here it is.' }],
+          question: { text: 'Should the swap stand out more?' }
+        }
+      },
+      {
+        id: at + 2,
+        type: 'feedback.submitted',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:07.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Yes, much more.' }],
+          focus: [],
+          answers: at + 1
+        }
+      }
+    );
+    expect(projectConversationMessages(value.events)).toEqual([
+      { role: 'assistant', content: 'Here it is.\n[Asked: “Should the swap stand out more?”]' },
+      {
+        role: 'user',
+        content: '[Answering your question “Should the swap stand out more?”] Yes, much more.'
+      }
+    ]);
   });
 });

@@ -25,7 +25,7 @@
   });
 </script>
 
-<svelte:head><title>{title} · Sverlin study</title></svelte:head>
+<svelte:head><title>{title}</title></svelte:head>
 
 <main class="dark grid min-h-screen place-items-center bg-background p-6 text-foreground">
   <Card.Root class="w-full max-w-xl">

@@ -2,7 +2,7 @@
   import LinearSearchVisualisation from './LinearSearchVisualisation.svelte';
 </script>
 
-<svelte:head><title>Prototyping · Sverlin</title></svelte:head>
+<svelte:head><title>Prototyping</title></svelte:head>
 
 <main class="min-h-screen bg-background p-6 text-foreground">
   <LinearSearchVisualisation />

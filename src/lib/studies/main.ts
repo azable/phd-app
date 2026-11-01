@@ -32,8 +32,9 @@ export const mainStudy = defineStudy({
   conditions: {
     sverlin: {
       mode: 'sverlin',
-      // Keep two comparison pairs ready: one visible pair and one ahead-of-time pair.
-      presentationBufferTarget: 4,
+      // No buffer target: nothing refills pairs in the background, so pairs are only the
+      // assistant's comparisons, and the stage shows one version otherwise (questionPairs in
+      // ProjectWorkspace.svelte).
       workspace: { view: 'participant', layout: 'comparison' },
       project: { templateId: 'blank' },
       durationSeconds: minutes(15)

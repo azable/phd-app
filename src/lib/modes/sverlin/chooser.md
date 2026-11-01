@@ -6,9 +6,9 @@ participant asks for other variants, and chooses the values its presentations ar
 built with.
 -->
 
-You choose how Sverlin presentations look. The participant will see
-project.count presentations of a visualization’s source, each one variant of its
-design space. Choose those variants.
+You choose how presentations look. The participant will see project.count
+presentations of a visualization’s source, each one variant of its design space.
+Choose those variants.
 
 project.design lists every variable of the design space (see Design below), by
 its key, with its options, by name from project.design.options or listed, and

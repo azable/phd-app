@@ -18,6 +18,9 @@ its starter artifact, assistant, validation/build code, and playback component:
 | `html`    | A JSON manifest of script-free, complete HTML frames   | Sanitized HTML, one frame per step                                                                        |
 | `html-js` | JSON containing separate HTML and JavaScript           | Sanitized HTML plus JavaScript in an isolated browser frame                                               |
 
+For study blinding, the app shows each mode only by its catalogue title (System
+A, B, C), and its pages, passkey dialog, exports and assistants name no product.
+
 Administrator projects offer a blank starter in every mode and one populated
 Svelte example, [linear search](src/lib/modes/sverlin/contract.ts). No other
 example programs are bundled.
@@ -92,21 +95,43 @@ Next pair, or New pair in dev mode, consumes the shown pair to show the next
 (`queueBuiltPresentations`, `waitingBehind` in
 [`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
 `vary`, `edit` or `revise` may instead give `comparisons` the assistant designs,
-each a question and the values its two sides set: each is built as one pair,
-both from the viewed variant (with the `vary`'s values), differing only as its
-sides do, with no chooser or random draw. The first pair is built alone and
-shown at once, in place of the chooser's pair for a changed source, and the rest
-are built after it, one pair at a time, each queued as soon as it is built
-(`presentRemainingComparisons` in
+each a question and its two sides, each a short label in the participant's words
+and the values it sets: each is built as one pair, both from the viewed variant
+(with the `vary`'s values), differing only as its sides do, with no chooser or
+random draw. The first pair is built alone and shown at once, in place of the
+chooser's pair for a changed source, and the rest are built after it, one pair
+at a time, each queued as soon as it is built (`presentRemainingComparisons` in
 [`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
-the pair's `visualization.presented` events and shown above it on the stage, and
-a preference naming that display set is read with it in the assistant's context.
-A preference on one of them asks the assistant for no turn while others wait
-(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
-`moot`, those the answer makes moot, asking about a variable it settled or
-something its preferred side hides (`mootComparison` in
+the pair's `visualization.presented` events, each with its side's `label`, and
+shown above it on the stage; the chat caption and the assistant's context give a
+preferred side as its label (“Cells or tallies? → tallies”), and a preference
+naming that display set is read with it in the assistant's context. A pair is
+answered by preferring a side, Either is fine (a tie) or Decide later (a skip),
+all recorded as `visualization.preference-recorded`, a tie or skip as its
+`outcome` with no `preferred`. An answer on one of them asks the assistant for
+no turn while others wait (`waitingComparisons`); it sets aside, as
+`candidates-advanced` with reason `moot`, those the answer makes moot, asking
+the pair just answered, about a variable it settled, or something a value it
+settled hides (`mootComparison` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
-that leaves none waiting starts the assistant's turn. A comparison with an
+that leaves none waiting starts the assistant's turn. A preference model
+([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
+Bayesian Bradley–Terry model with Davidson ties over every choice's options,
+fitted from the events on each call, decides what is settled for every chooser:
+a choice one option of which is at least 0.9 likely best over two answers, a
+`vary` decision's value until an answer goes against it, or, where Either is
+fine was its latest answer, the value showing; skips are no evidence. Its
+summary
+([`preference-summary.ts`](src/lib/server/chat-bots/preference-summary.ts)),
+each touched choice's likeliest option, what is most worth asking and what was
+never compared, goes in the assistant's context as `preferences`, and so into
+each request's recorded prompt. The assistant may also ask one `question` at a
+time, in words or about a presentation (one shown, or the first its decision
+makes, with elements to highlight), answered by the participant's next message,
+which records the question it answers (`feedback.submitted` `answers`); the chat
+shows each question with its answer underneath, and each comparison pair its
+question and answer as a caption
+([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side the variant guard would change is recorded as rejected
 (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired as edits
@@ -360,13 +385,17 @@ study condition. A project outside a study, as an administrator trying one,
 works under the condition for its mode in the first study open to enrollment
 (`trialCondition` in the registry, applied by `projectTrialCondition` in
 [`study.ts`](src/lib/server/study.ts)): its layout, presentation buffer and
-chooser, so a `sverlin` project shows pairs side by side, with the assistant's
-questions, as in the study. Dev mode shows the newest variants rather than the
-buffer's next pair, so those New pair and Another variant make show at once. A
-mode no open study has keeps one presentation and no buffer, comparing two when
-an administrator selects them. The protocol defines the counterbalanced order,
-15-minute task duration, and interaction-capture policy; the comments beside its
-limits explain their sampling and delivery tradeoffs.
+chooser. The `sverlin` condition keeps no buffer, so nothing builds pairs in the
+background: its stage shows the one version under discussion, and a pair, with
+its question, only while one of the assistant's comparisons is current
+(`questionPairs` in
+[`ProjectWorkspace.svelte`](src/lib/client/projects/ProjectWorkspace.svelte)).
+Dev mode shows the newest variants and every pair, so those New pair and Another
+variant make show at once. A mode no open study has keeps one presentation and
+no buffer, comparing two when an administrator selects them. The protocol
+defines the counterbalanced order, 15-minute task duration, and
+interaction-capture policy; the comments beside its limits explain their
+sampling and delivery tradeoffs.
 
 New blank projects start by asking which algorithm to visualise before
 authoring. The assistants use a bounded five-call ladder: one initial call, up

@@ -208,7 +208,8 @@ export function latestPresentations(
  */
 export function newestPresentations(
   events: readonly ProjectEvent[],
-  layout: PresentationLayout
+  layout: PresentationLayout,
+  answered: readonly string[] = []
 ): TimelinePresentation[] {
   const all = timelinePresentations(events);
   const latest = all.at(-1);
@@ -222,8 +223,26 @@ export function newestPresentations(
       ({ presentationId }) => presentationId
     )
   );
-  const next = made.find(({ presentation }) => available.has(presentation.presentationId));
+  const next = made.find(
+    ({ presentation }) =>
+      available.has(presentation.presentationId) && !answered.includes(presentation.presentationId)
+  );
   return next ? presentationGroup(all, next, layout) : latestPresentations(all, layout);
+}
+
+/**
+ * The one presentation under discussion: the first of the newest set that no comparison asked
+ * about, as the assistant's change shows first, or else the newest.
+ */
+export function discussedPresentation(
+  presentations: readonly TimelinePresentation[]
+): TimelinePresentation[] {
+  const latest = presentations.findLast(({ question }) => !question) ?? presentations.at(-1);
+  if (!latest) return [];
+  const set = presentations
+    .filter(({ displaySetId }) => displaySetId === latest.displaySetId)
+    .toSorted((left, right) => left.slot - right.slot);
+  return [latest.displaySetId ? (set[0] ?? latest) : latest];
 }
 
 /** The question a shown pair asks, where both are of one assistant's comparison. */
@@ -234,10 +253,14 @@ export function pairQuestion(visible: readonly TimelinePresentation[]): string |
     : undefined;
 }
 
-/** Return the FIFO current-source candidates not consumed by committed participant actions. */
+/**
+ * Return the FIFO current-source candidates not consumed by committed participant actions, nor
+ * answered while the answer is being saved.
+ */
 export function availablePresentations(
   events: readonly ProjectEvent[],
-  layout: PresentationLayout
+  layout: PresentationLayout,
+  answered: readonly string[] = []
 ): TimelinePresentation[] {
   const all = timelinePresentations(events);
   const latest = all.findLast(({ presentation }) => isSverlinPresentation(presentation));
@@ -249,7 +272,11 @@ export function availablePresentations(
       ({ presentationId }) => presentationId
     )
   );
-  const available = all.filter(({ presentation }) => availableIds.has(presentation.presentationId));
+  const available = all.filter(
+    ({ presentation }) =>
+      availableIds.has(presentation.presentationId) &&
+      !answered.includes(presentation.presentationId)
+  );
   if (layout !== 'comparison') return available.slice(0, 1);
   const groups = new Map<string, TimelinePresentation[]>();
   for (const entry of available) {

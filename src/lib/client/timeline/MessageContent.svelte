@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import { renderSafeMarkdown } from './markdown';
@@ -25,12 +27,16 @@
     interactive?: boolean;
     inverted?: boolean;
     onReferenceActivate?: (reference: ReferenceSegment, extend: boolean) => void;
-    /** The source code it names is found in, where not the one the panel shows, as a card's own. */
+    /** The source code it names is found in, where not the one the panel shows, as a version's own. */
     source?: string;
-    /** Before revealing in a source of its own: show that source, as a card's code button does. */
+    /** Before revealing in a source of its own: show that source, as a pill's code button does. */
     onRevealSource?: () => void;
     /** What a build of that source records, which view choices it names are matched by. */
     design?: ReferenceDesign;
+    /** Draws a presentation's reference itself, as a version pill with its actions, where given. */
+    pill?: Snippet<[presentationId: string]>;
+    /** The presentations pill draws, by id. */
+    pilled?: (presentationId: string) => boolean;
   };
 
   let {
@@ -40,7 +46,9 @@
     onReferenceActivate = () => {},
     source,
     onRevealSource = () => {},
-    design
+    design,
+    pill,
+    pilled = () => false
   }: Props = $props();
 
   // A linked pill naming a long label shows it elided at the start (@…compare.left); the parts it
@@ -139,7 +147,9 @@
       <span class="message-markdown" {@attach linkReferences}>{@html html}</span>
     {:else}
       {#each singletonReferenceSegments(segment) as reference, position (position)}
-        {#if interactive}
+        {#if pill && reference.type === 'presentation-ref' && reference.step === undefined && pilled(reference.presentationId)}
+          {@render pill(reference.presentationId)}
+        {:else if interactive}
           <button
             type="button"
             class="group mx-0.5 inline-flex items-center gap-1 rounded-md align-middle leading-none focus-visible:outline-none"

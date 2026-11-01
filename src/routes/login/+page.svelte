@@ -54,12 +54,12 @@
   }
 </script>
 
-<svelte:head><title>Sign in · Sverlin</title></svelte:head>
+<svelte:head><title>Sign in</title></svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-background p-6">
   <Card.Root class="w-full max-w-sm">
     <Card.Header>
-      <Card.Title>Sign in to Sverlin</Card.Title>
+      <Card.Title>Sign in</Card.Title>
       <Card.Description>
         Participants use the ID and password supplied by the researcher.
       </Card.Description>

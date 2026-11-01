@@ -13,6 +13,8 @@ import * as authSchema from '$lib/server/db/schema';
 
 const sessionSeconds = 30 * 24 * 60 * 60;
 const bootstrapAdminId = 'sverlin-admin';
+const bootstrapAdminName = 'Administrator';
+const bootstrapAdminEmail = 'admin@study.invalid';
 
 function configuredBaseUrl(): string {
   return (
@@ -49,8 +51,8 @@ async function ensureBootstrapAdmin(): Promise<string> {
     .insert(authSchema.user)
     .values({
       id: bootstrapAdminId,
-      name: 'Sverlin administrator',
-      email: 'admin@sverlin.invalid',
+      name: bootstrapAdminName,
+      email: bootstrapAdminEmail,
       emailVerified: true,
       role: 'admin'
     })
@@ -61,7 +63,8 @@ async function ensureBootstrapAdmin(): Promise<string> {
 }
 
 export const auth = betterAuth({
-  appName: 'Sverlin',
+  // The passkey plugin's relying-party name, which the passkey dialog shows.
+  appName: 'Visualization study',
   baseURL: configuredBaseUrl(),
   secret: process.env.BETTER_AUTH_SECRET || 'development-only-better-auth-secret-change-me',
   trustedOrigins: trustedOrigins(),
@@ -113,8 +116,8 @@ export const auth = betterAuth({
           if (await adminExists()) throw new Error('Admin setup is unavailable.');
           return {
             id: bootstrapAdminId,
-            name: 'admin@sverlin.invalid',
-            displayName: 'Sverlin administrator'
+            name: bootstrapAdminEmail,
+            displayName: bootstrapAdminName
           };
         },
         afterVerification: async () => ({

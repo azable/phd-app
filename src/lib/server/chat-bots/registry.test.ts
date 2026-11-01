@@ -8,7 +8,7 @@ describe('chatbot registry', () => {
     expect(getChatbot('sverlin-assistant').id).toBe('sverlin-assistant');
     expect(getCandidateChatbot('html-assistant').id).toBe('html-assistant');
     expect(getCandidateChatbot('html-js-assistant').id).toBe('html-js-assistant');
-    expect(() => getChatbot('html-assistant')).toThrow('Unknown Sverlin assistant');
+    expect(() => getChatbot('html-assistant')).toThrow('Unknown source-authoring assistant');
     expect(() => getCandidateChatbot('sverlin-assistant')).toThrow('Unknown candidate assistant');
   });
 

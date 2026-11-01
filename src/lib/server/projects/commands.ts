@@ -66,13 +66,20 @@ import type {
   RecoveryExplanation,
   SourceArtifactChatOutput
 } from '$lib/server/chat-bots/types';
-import type { Comparisons, SourceDecisionOf } from '$lib/server/chat-bots/source-decisions';
+import type {
+  Comparisons,
+  DecisionQuestion,
+  SourceDecisionOf
+} from '$lib/server/chat-bots/source-decisions';
+import { openQuestion } from '$lib/shared/projects/questions';
+import { elementIdSchema } from '$lib/shared/projects/events/message-content';
+import * as v from 'valibot';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 
 import { runProjectCommand } from './command-lock';
 import { formatDiagnosticSummary } from './diagnostics';
 import { recordText, sourceSha256 } from './fingerprints';
-import { appendProjectPreference } from './presentations';
+import { appendProjectPreference, type PreferenceAnswer } from './presentations';
 import {
   assertCurrentProjectOperationActive,
   currentProjectOperationDeadline,
@@ -90,6 +97,7 @@ import {
   freshPresentationSeeds,
   queueBuiltPresentations,
   randomVariantRequests,
+  type PairQuestion,
   type ProjectServiceDependencies,
   type RecordedBuild,
   type RecordedBuildBatch,
@@ -109,7 +117,7 @@ import {
 import { projectChooserId } from './chooser-config';
 import {
   answersAfter,
-  differing,
+  askedPair,
   guardedChoice,
   mootComparison,
   pictureTree,
@@ -358,7 +366,8 @@ export function queueProjectFeedback(
             content,
             focus,
             presentationCount: options.presentationCount,
-            ...(options.from ? { viewing: options.from } : {})
+            ...(options.from ? { viewing: options.from } : {}),
+            ...answering(based)
           }
         }),
         draftEvent({
@@ -384,7 +393,7 @@ export function queueProjectPreference(
     projectId: string;
     operationId: string;
     presentations: [string, string];
-    preferred: string;
+    answer: PreferenceAnswer;
     step: number;
     deadlineAt?: string;
   },
@@ -394,13 +403,7 @@ export function queueProjectPreference(
     assertCurrentProjectOperationActive();
     const before = await dependencies.repository.load(options.projectId);
     assertAcceptedInteraction(before, options.operationId, 'prefer');
-    // The assistant builds on the candidate the participant preferred.
-    const based = await baseOnPresentation(
-      before,
-      options.preferred,
-      options.operationId,
-      dependencies.projectService
-    );
+    const based = await basedOnAnswer(before, options.answer, options.operationId, dependencies);
     let document = await appendProjectPreference(based, options, dependencies.projectService);
     const preference = document.events.findLast(
       (event) =>
@@ -589,7 +592,7 @@ async function submitProjectFeedbackUnlocked(
         type: 'feedback.submitted',
         actor: { kind: 'user' },
         operationId: options.operationId,
-        payload: { content, focus }
+        payload: { content, focus, ...answering(before) }
       })
     ],
     dependencies.projectService
@@ -642,7 +645,7 @@ export function submitProjectPreference(
     projectId: string;
     expectedHead: EventId;
     presentations: [string, string];
-    preferred: string;
+    answer: PreferenceAnswer;
     step: number;
     operationId: string;
   },
@@ -651,13 +654,7 @@ export function submitProjectPreference(
   return runProjectCommand(options.projectId, async () => {
     const before = await dependencies.repository.load(options.projectId);
     assertHead(before, options.expectedHead);
-    // The assistant builds on the candidate the participant preferred.
-    const based = await baseOnPresentation(
-      before,
-      options.preferred,
-      options.operationId,
-      dependencies.projectService
-    );
+    const based = await basedOnAnswer(before, options.answer, options.operationId, dependencies);
     let document = await appendProjectPreference(based, options, dependencies.projectService);
     const preference = document.events.findLast(
       (event) =>
@@ -688,6 +685,21 @@ export function submitProjectPreference(
     );
     return finishMutation(before, document);
   });
+}
+
+/**
+ * The assistant builds on the candidate the participant preferred; either is fine and decide later
+ * leave the source as it is.
+ */
+function basedOnAnswer(
+  document: ProjectDocument,
+  answer: PreferenceAnswer,
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  return 'preferred' in answer
+    ? baseOnPresentation(document, answer.preferred, operationId, dependencies.projectService)
+    : Promise.resolve(document);
 }
 
 type ParticipantIntakeResult = { document: ProjectDocument; author: boolean };
@@ -870,6 +882,11 @@ async function runSverlinAssistantTurn(
         // A blank reply to a change says what the change does instead.
         const { reply, decision } = generation.result;
         const summary = 'summary' in decision ? decision.summary : undefined;
+        const question = recordedQuestion(
+          current,
+          'question' in decision ? decision.question : undefined,
+          decision.action !== 'respond'
+        );
         current = await appendAssistantResponse(
           current,
           resolveAssistantContent(
@@ -880,7 +897,8 @@ async function runSverlinAssistantTurn(
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
-          inReplyTo
+          inReplyTo,
+          question ? { question } : {}
         );
       }
 
@@ -1119,7 +1137,7 @@ async function runSverlinAssistantTurn(
             recoveryReply: generation.result.reply,
             inReplyTo,
             ...(pairs
-              ? { setSize: 2 as const, questions: [pairs[0].question] }
+              ? { setSize: 2 as const, pairs: [pairQuestion(pairs[0])] }
               : queued
                 ? { setSize: presentationCount }
                 : {})
@@ -1719,10 +1737,14 @@ function comparisonRequests(
       seed: seeds[index * 2 + slot],
       variant: {
         ...(viewed ? { base: viewed } : {}),
-        chosen: { ...values, ...designValues(side) }
+        chosen: { ...values, ...designValues(side.values) }
       }
     }))
   );
+}
+
+function pairQuestion({ question, left, right }: Comparisons[number]): PairQuestion {
+  return { question, labels: [left.label, right.label] };
 }
 
 function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
@@ -1736,12 +1758,12 @@ function designValues(values: readonly { variable: string; value: string | numbe
 function comparisonProblems(pairs: Comparisons, design: AiDesign, guard: GuardContext): string[] {
   return pairs.flatMap(({ question, left, right }, index) => {
     const name = `Comparison ${index + 1} (“${question}”)`;
-    const problems = [...left, ...right].flatMap(({ variable, value }) =>
+    const problems = [...left.values, ...right.values].flatMap(({ variable, value }) =>
       offeredOptions(design, variable)?.includes(value)
         ? []
         : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
     );
-    const sides = [designValues(left), designValues(right)];
+    const sides = [designValues(left.values), designValues(right.values)];
     const differ = Object.keys({ ...sides[0], ...sides[1] }).some(
       (variable) =>
         (sides[0][variable] ?? guard.base[variable]) !==
@@ -1799,7 +1821,7 @@ async function presentRemainingComparisons(
   for (const [index, pair] of options.pairs.entries()) {
     if (index === 0) continue;
     assertCurrentProjectOperationActive();
-    const asked = differing(designValues(pair.left), designValues(pair.right));
+    const asked = askedPair(designValues(pair.left.values), designValues(pair.right.values));
     if (answersAfter(document.events, shownAt).some((answer) => mootComparison(answer, asked)))
       continue;
     const built = await buildCandidateBatch(
@@ -1823,7 +1845,7 @@ async function presentRemainingComparisons(
         built.recorded,
         dependencies.projectService,
         options.actor,
-        pair.question
+        pairQuestion(pair)
       );
   }
   return document;
@@ -1842,7 +1864,7 @@ async function dropMootComparisons(
 ): Promise<{ document: ProjectDocument; waiting: boolean }> {
   const waiting = waitingComparisons(document);
   const moot = waiting.filter(({ variants: [left = {}, right = {}] }) =>
-    answers.some((answer) => mootComparison(answer, differing(left, right)))
+    answers.some((answer) => mootComparison(answer, askedPair(left, right)))
   );
   if (moot.length)
     document = await appendProjectEvents(
@@ -1917,8 +1939,8 @@ async function acceptSverlinCandidate(
     inReplyTo: readonly EventId[];
     /** Presentations shown at once, when the batch is queued (queueBuiltPresentations). */
     setSize?: 1 | 2;
-    /** The question each queued set asks, for a vary's comparisons. */
-    questions?: readonly string[];
+    /** What each queued set asks, for a vary's comparisons. */
+    pairs?: readonly PairQuestion[];
   },
   dependencies: ProjectCommandDependencies
 ) {
@@ -1955,7 +1977,7 @@ async function acceptSverlinCandidate(
         options.setSize,
         dependencies.projectService,
         options.generationEvent.actor,
-        options.questions
+        options.pairs
       )
     : await activateBuiltPresentations(
         { ...options.recorded, document },
@@ -1990,7 +2012,7 @@ async function advanceCandidatesForAgent(
     const snapshot = projectSnapshotAt(document);
     const artifact = snapshot.artifacts[snapshot.entryArtifactId];
     if (!artifact || snapshot.mode !== 'sverlin') {
-      throw new Error('Only Sverlin projects can generate buffered candidates from source.');
+      throw new Error('Only source-authored projects can generate buffered candidates.');
     }
     const recorded = await buildProjectSourceBatch(
       {
@@ -2163,6 +2185,43 @@ function firstFailure(
     | undefined;
 }
 
+/** The question a message sent now answers, if one is open (see openQuestion). */
+function answering(document: ProjectDocument): { answers?: EventId } {
+  const open = openQuestion(document.events);
+  return open ? { answers: open.eventId } : {};
+}
+
+/**
+ * A decision's question as recorded with the reply: about the first presentation the decision
+ * makes, where it names "new" and makes one; about a presentation shown before, where it names one;
+ * otherwise in words. Elements count only with a presentation, and only well-formed ids.
+ */
+function recordedQuestion(
+  document: ProjectDocument,
+  question: DecisionQuestion | null | undefined,
+  makesPresentations: boolean
+): AssistantQuestion | undefined {
+  if (!question) return undefined;
+  const shown =
+    question.presentation !== null &&
+    question.presentation !== 'new' &&
+    document.events.some(
+      (event) =>
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.presentationId === question.presentation
+    );
+  const example = question.presentation === 'new' && makesPresentations;
+  const elements = (question.elements ?? []).filter((id) => v.is(elementIdSchema, id));
+  return {
+    text: question.text,
+    ...(shown ? { presentationId: question.presentation! } : {}),
+    ...(example ? { example: true as const } : {}),
+    ...((shown || example) && elements.length ? { elements } : {})
+  };
+}
+
+type AssistantQuestion = NonNullable<NewProjectEvent<'assistant.responded'>['payload']['question']>;
+
 function appendAssistantResponse(
   document: ProjectDocument,
   content: string | MessageContent,
@@ -2170,7 +2229,10 @@ function appendAssistantResponse(
   operationId: string,
   dependencies: ProjectCommandDependencies,
   inReplyTo: readonly EventId[] = [],
-  { intakeStep }: { intakeStep?: ParticipantIntakeStepId } = {}
+  {
+    intakeStep,
+    question
+  }: { intakeStep?: ParticipantIntakeStepId; question?: AssistantQuestion } = {}
 ) {
   return appendProjectEvents(
     document,
@@ -2182,7 +2244,8 @@ function appendAssistantResponse(
         payload: {
           content: typeof content === 'string' ? markdownMessage(content) : content,
           ...(inReplyTo.length > 0 ? { inReplyTo: [...inReplyTo] } : {}),
-          ...(intakeStep ? { intakeStep } : {})
+          ...(intakeStep ? { intakeStep } : {}),
+          ...(question ? { question } : {})
         }
       })
     ],
@@ -2400,7 +2463,7 @@ function validateElementReference(document: ProjectDocument, reference: ElementR
   if (presentation?.type !== 'visualization.presented') return;
   const value = presentation.payload.presentation;
   if (!isSverlinPresentation(value))
-    throw new Error('Only Sverlin presentations support element references.');
+    throw new Error('Only presentations built from source support element references.');
   if (reference.step >= presentationStepLabels(value).length)
     throw new Error(`Presentation ${reference.presentationId} has no step ${reference.step + 1}.`);
   if (!locateElement(value.source.text, reference.element.id))

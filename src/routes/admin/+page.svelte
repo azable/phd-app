@@ -109,7 +109,7 @@
 </script>
 
 <svelte:document onvisibilitychange={visibilityChanged} />
-<svelte:head><title>Sverlin administration</title></svelte:head>
+<svelte:head><title>Administration</title></svelte:head>
 
 <main class="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 p-8 text-foreground">
   <header class="flex flex-wrap items-center justify-between gap-3">

@@ -110,7 +110,7 @@ attempt navigation.
   build it with chosen values, `<!-- variant: {"Here.shown": false} -->`, and to
   post a note to the chat after it, `<!-- note: … -->` (markdown on one line;
   code in backticks links to the source): while the page is open, each is saved,
-  in name order, as a version card in its chat, and removed from the inbox. When
+  in name order, as a version in its chat, and removed from the inbox. When
   done, `touch .demo/flush` to replace the project with a fresh one
   ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
 

@@ -104,38 +104,47 @@ describe('the Decisions chooser on the recorded answers', () => {
 });
 
 describe('settledValues', () => {
+  let id = 0;
   const presented = (presentationId: string, variant: Record<string, string>) =>
     ({
+      id: ++id,
       type: 'visualization.presented',
       payload: { presentation: { format: 'browser-bundle-v1', presentationId, variant } }
     }) as unknown as ProjectEvent;
-
-  it('settles where a preferred presentation differed, and what a vary decision set', () => {
-    const events = [
-      presented('a', { 'listing.language': 'textbook', 'Cell.fill': 'white' }),
-      presented('b', { 'listing.language': 'none', 'Cell.fill': 'white' }),
-      {
-        type: 'visualization.preference-recorded',
-        payload: { presentations: ['a', 'b'], preferred: 'a' }
-      } as unknown as ProjectEvent,
-      {
-        type: 'ai.generation-succeeded',
-        payload: {
-          response: {
-            text: JSON.stringify({
-              output_text: JSON.stringify({
-                decision: {
-                  action: 'vary',
-                  values: [{ variable: 'Graph.form', value: 'snake' }],
-                  randomise: []
-                }
-              })
+  const preferred = (presentations: [string, string], winner: string) =>
+    ({
+      id: ++id,
+      type: 'visualization.preference-recorded',
+      payload: { presentations, preferred: winner }
+    }) as unknown as ProjectEvent;
+  const vary = (variable: string, value: string) =>
+    ({
+      id: ++id,
+      type: 'ai.generation-succeeded',
+      payload: {
+        response: {
+          text: JSON.stringify({
+            output_text: JSON.stringify({
+              decision: { action: 'vary', values: [{ variable, value }], randomise: [] }
             })
-          }
+          })
         }
-      } as unknown as ProjectEvent
+      }
+    }) as unknown as ProjectEvent;
+
+  it('settles a choice once one option is very likely best over two answers, and what a vary decision set', () => {
+    const textbook = { 'listing.language': 'textbook', 'Cell.fill': 'white' };
+    const none = { 'listing.language': 'none', 'Cell.fill': 'white' };
+    const once = [presented('a', textbook), presented('b', none), preferred(['a', 'b'], 'a')];
+    // One answer is not enough.
+    expect(settledValues(once)).toEqual({});
+    const twice = [
+      ...once,
+      presented('c', textbook),
+      presented('d', none),
+      preferred(['c', 'd'], 'c')
     ];
-    expect(settledValues(events)).toEqual({
+    expect(settledValues([...twice, vary('Graph.form', 'snake')])).toEqual({
       'listing.language': 'textbook',
       'Graph.form': 'snake'
     });
@@ -143,14 +152,36 @@ describe('settledValues', () => {
 });
 
 describe('moot comparisons', () => {
+  const answer = (settled: Record<string, string | boolean>) => ({
+    eventId: 9,
+    settled,
+    pair: [{ 'views.Int': 'IntCell' }, { 'views.Int': 'IntTally' }] as [
+      Record<string, string>,
+      Record<string, string>
+    ]
+  });
+
   it('sets aside a question about what an answer settled or hid, and keeps any other', () => {
-    const answer = { eventId: 9, settled: { 'Answer.shown': false, 'views.Int': 'IntTally' } };
-    expect(mootComparison(answer, ['views.Int'])).toBe(true);
+    const settled = answer({ 'Answer.shown': false, 'views.Int': 'IntTally' });
+    const about = (variable: string): [Record<string, string>, Record<string, string>] => [
+      { [variable]: 'a' },
+      { [variable]: 'b' }
+    ];
+    expect(mootComparison(settled, about('views.Int'))).toBe(true);
     // The answer hid the Answer part, so how it looks is no longer open.
-    expect(mootComparison(answer, ['Board.Answer.fill'])).toBe(true);
-    expect(mootComparison(answer, ['Highlight.Pointed.fill'])).toBe(false);
+    expect(mootComparison(settled, about('Board.Answer.fill'))).toBe(true);
+    expect(mootComparison(settled, about('Highlight.Pointed.fill'))).toBe(false);
+    expect(mootComparison(answer({ 'listing.language': 'none' }), about('listing.color'))).toBe(
+      true
+    );
+  });
+
+  it('sets aside the pair just answered, whichever way round, though it settled nothing', () => {
     expect(
-      mootComparison({ eventId: 9, settled: { 'listing.language': 'none' } }, ['listing.color'])
+      mootComparison(answer({}), [{ 'views.Int': 'IntTally' }, { 'views.Int': 'IntCell' }])
     ).toBe(true);
+    expect(
+      mootComparison(answer({}), [{ 'views.Int': 'IntDots' }, { 'views.Int': 'IntCell' }])
+    ).toBe(false);
   });
 });

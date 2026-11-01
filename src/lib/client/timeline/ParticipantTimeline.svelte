@@ -2,7 +2,7 @@
   import { fly } from 'svelte/transition';
 
   import BotIcon from '@lucide/svelte/icons/bot';
-  import CodeIcon from '@lucide/svelte/icons/code';
+  import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import CopyIcon from '@lucide/svelte/icons/copy';
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
@@ -29,17 +29,20 @@
     type TimelinePresentation
   } from '$lib/client/visualization/presentation-history';
   import type { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
-  import type { PresentationLayout } from '$lib/shared/presentations';
+  import { isSverlinPresentation, type PresentationLayout } from '$lib/shared/presentations';
   import type {
     ElementReference,
+    MessageContent as Content,
     MessageContentSegment
   } from '$lib/shared/projects/events/message-content';
+  import type { ProjectQuestion } from '$lib/shared/projects/questions';
 
   import MessageContent from './MessageContent.svelte';
+  import PresentationPill from './PresentationPill.svelte';
   import { presentProjectEvent } from './event-presentation';
-  import { agentOutcome, agentTokens } from './agent-requests';
+  import { agentOutcome, agentReasoning, agentTokens } from './agent-requests';
   import { loadReportLine } from './load-reports';
-  import { participantTimeline } from './participant-timeline';
+  import { participantTimeline, type VersionPill } from './participant-timeline';
 
   type Props = {
     session: ProjectSession;
@@ -49,7 +52,9 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
-    /** The source chosen on its own, by a card's code button, if any. */
+    /** Highlight the elements a question about a presentation names, once it is shown. */
+    onQuestionElements?: (presentationId: string, elements: readonly string[]) => void;
+    /** The source chosen on its own, by a pill's code button, if any. */
     chosenSource?: string;
     /** Choose a source on its own, or none, as when one of its variants is chosen. */
     onChooseSource?: (source: { sourceHash: string; parentHash?: string } | undefined) => void;
@@ -73,6 +78,7 @@
     onPresentationChange = () => {},
     onReferenceRequest = () => {},
     onElementReference = () => {},
+    onQuestionElements = () => {},
     chosenSource,
     onChooseSource = () => {},
     audit = false,
@@ -102,13 +108,10 @@
     selection.activate(presentation, session.events, layout, event.shiftKey);
   }
 
-  // A card's code button chooses its source on its own, showing no visualization; choosing the
-  // card shows its variant.
-  function chooseSource(item: Extract<(typeof items)[number], { kind: 'version' }>) {
-    onChooseSource({
-      sourceHash: item.sourceHash,
-      ...(item.parentHash ? { parentHash: item.parentHash } : {})
-    });
+  // A pill's code button chooses its source on its own, showing no visualization; choosing the
+  // pill shows its variant.
+  function chooseSource(sourceHash: string, parentHash?: string) {
+    onChooseSource({ sourceHash, ...(parentHash ? { parentHash } : {}) });
   }
 
   function chooseVariant(variant: TimelinePresentation, event: MouseEvent) {
@@ -120,10 +123,12 @@
   const links = sourceLinksContext();
   const errorMarkdown = (text: string, source: string, design?: ReferenceDesign) =>
     codeMarkdown(source ? codeIn(source, text, design) : [{ text, code: false }]);
-  // What a card's first presentation's build records, which view choices its links are matched by.
+  // What a source's first presentation's build records, which view choices its links are matched by.
   const designOf = (sourceHash: string | undefined): ReferenceDesign | undefined => {
-    const card = items.find((item) => item.kind === 'version' && item.sourceHash === sourceHash);
-    const presentation = card?.kind === 'version' ? card.variants[0]?.presentation : undefined;
+    const presentation = timelinePresentations(session.events).find(
+      ({ presentation }) =>
+        isSverlinPresentation(presentation) && presentation.source.sha256 === sourceHash
+    )?.presentation;
     return presentation?.format === 'browser-bundle-v1'
       ? { renders: presentation.renders, variant: presentation.variant }
       : undefined;
@@ -139,6 +144,19 @@
     setTimeout(() => (shown = shown === sourceHash ? undefined : shown), 1500);
   }
 
+  /** Show the presentation a question is about, its elements highlighted. */
+  function showQuestion(question: ProjectQuestion) {
+    const [presentationId] = question.presentationIds;
+    const presentation = timelinePresentations(session.events).find(
+      ({ presentation: value }) => value.presentationId === presentationId
+    );
+    if (!presentation) return;
+    onPresentationChange();
+    onChooseSource(undefined);
+    selection.activate(presentation, session.events, layout);
+    onQuestionElements(presentationId, question.elements ?? []);
+  }
+
   function activateReference(
     reference: Exclude<MessageContentSegment, { type: 'markdown' }>,
     extend: boolean
@@ -151,40 +169,155 @@
     selection.activate(presentation, session.events, layout, extend);
     if (reference.type === 'element-ref') onElementReference(reference);
   }
+
+  /** A reply with the pills of what it presented but did not name at its end. */
+  const withAppended = (content: Content, appended: readonly string[]): Content => [
+    ...content,
+    ...appended.map((presentationId) => ({ type: 'presentation-ref' as const, presentationId }))
+  ];
 </script>
 
+<!-- A presentation in an assistant's message: view, compare, its source, add to feedback. -->
+{#snippet versionPill(pill: VersionPill, label?: string, onView?: (event: MouseEvent) => void)}
+  {@const id = pill.value.presentation.presentationId}
+  {@const sourceHash = pill.sourceHash}
+  <PresentationPill
+    candidate={candidateId(pill.value.presentation)}
+    name={presentationDisplayId(id)}
+    summary={pill.summary}
+    {label}
+    selected={selectedIds.includes(id) && !chosenSource}
+    onView={onView ?? ((event) => chooseVariant(pill.value, event))}
+    onSource={sourceHash ? () => chooseSource(sourceHash, pill.parentHash) : undefined}
+    sourceShown={sourceHash !== undefined && chosenSource === sourceHash}
+    onAdd={session.readOnly ? undefined : () => onReferenceRequest(pill.value)}
+  />
+{/snippet}
+
 {#each items as item (item.id)}
-  <li
-    class="flex"
-    class:justify-end={item.kind === 'message' && item.actor === 'user'}
-    in:fly={{ y: 12, duration: 180 }}
-  >
+  <li class="flex" class:justify-end={item.kind === 'message'} in:fly={{ y: 12, duration: 180 }}>
     {#if item.kind === 'message'}
       <article
-        class="max-w-[88%] rounded-2xl border px-4 py-3 shadow-md"
-        class:bg-primary={item.actor === 'user'}
-        class:text-primary-foreground={item.actor === 'user'}
-        class:bg-card={item.actor === 'assistant'}
+        class="max-w-[88%] rounded-2xl border bg-primary px-4 py-3 text-primary-foreground shadow-md"
       >
         <div class="mb-2 flex flex-wrap items-center gap-2.5">
           <Avatar.Root size="lg" class="shadow-sm" aria-hidden="true">
-            <Avatar.Fallback class="[&>svg]:size-5">
-              {#if item.actor === 'user'}
-                <UserRoundIcon />
-              {:else}
-                <SparklesIcon />
-              {/if}
-            </Avatar.Fallback>
+            <Avatar.Fallback class="[&>svg]:size-5"><UserRoundIcon /></Avatar.Fallback>
           </Avatar.Root>
-          <p class="text-base font-medium">
-            {item.actor === 'user' ? session.userAuthorLabel : 'Assistant'}
-          </p>
+          <p class="text-base font-medium">{session.userAuthorLabel}</p>
         </div>
-        <MessageContent
-          content={item.content}
-          inverted={item.actor === 'user'}
-          onReferenceActivate={activateReference}
-        />
+        <MessageContent content={item.content} inverted onReferenceActivate={activateReference} />
+      </article>
+    {:else if item.kind === 'turn'}
+      {@const pills = item.pills}
+      {#snippet inline(presentationId: string)}
+        {@render versionPill(pills[presentationId])}
+      {/snippet}
+      <!-- One assistant turn: its reply naming its versions, the pills of those it did not name,
+        its comparisons, and its question; a turn without a reply says what its versions show. -->
+      <article
+        class={[
+          'max-w-[88%] rounded-2xl border bg-card px-4 py-3 shadow-md',
+          shown && item.firsts.includes(shown) && 'ring-2 ring-ring'
+        ]}
+      >
+        {#each item.firsts as sourceHash (sourceHash)}
+          <span id={`version-${sourceHash}`}></span>
+        {/each}
+        {#if item.content}
+          <div class="mb-2 flex flex-wrap items-center gap-2.5">
+            <Avatar.Root size="lg" class="shadow-sm" aria-hidden="true">
+              <Avatar.Fallback class="[&>svg]:size-5"><SparklesIcon /></Avatar.Fallback>
+            </Avatar.Root>
+            <p class="text-base font-medium">Assistant</p>
+          </div>
+          <MessageContent
+            content={withAppended(item.content, item.appended)}
+            onReferenceActivate={activateReference}
+            pill={inline}
+            pilled={(id) => id in pills}
+          />
+        {:else}
+          {#each item.summaries as summary (summary.sourceHash)}
+            <div class="mb-1 flex flex-wrap items-baseline gap-x-1.5 text-sm text-muted-foreground">
+              {#if summary.described}
+                <div class="min-w-0 flex-1">
+                  <MessageContent
+                    content={[{ type: 'markdown', text: summary.text }]}
+                    source={summary.source}
+                    design={designOf(summary.sourceHash)}
+                    onRevealSource={() => chooseSource(summary.sourceHash, summary.parentHash)}
+                  />
+                </div>
+              {:else}
+                <p class="min-w-0 flex-1">{summary.text}</p>
+              {/if}
+              {#if summary.parentHash}
+                {@const parent = summary.parentHash}
+                <span class="flex items-center gap-1.5 text-xs">
+                  <span>from</span>
+                  <button
+                    type="button"
+                    class="group flex leading-none focus-visible:outline-none"
+                    title="Show the source it was made from"
+                    onclick={() => showVersion(parent)}
+                  >
+                    <CandidateIdPill {...sourceId(parent)} />
+                  </button>
+                </span>
+              {/if}
+            </div>
+          {/each}
+          {#if item.appended.length}
+            <p class="flex flex-wrap gap-1">
+              {#each item.appended as id (id)}{@render inline(id)}{/each}
+            </p>
+          {/if}
+        {/if}
+        {#each item.comparisons as { question, answer } (question.eventId)}
+          <!-- A comparison: its question, its pair, each side by its label, and the answer. -->
+          <div class="mt-3 border-t pt-2 text-sm">
+            <p class="font-medium">{question.text}</p>
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {#each question.presentationIds as id, slot (id)}
+                {@const label = question.labels?.[slot]}
+                {#if pills[id]}{@render versionPill(pills[id], label && `${label}:`)}{/if}
+              {/each}
+              {#if answer}<span class="text-muted-foreground">→ {answer}</span>{/if}
+            </p>
+          </div>
+        {/each}
+        {#if item.question}
+          {@const { question, answer, pill } = item.question}
+          {@const about = pill ? pills[question.presentationIds[0]] : undefined}
+          <!-- Its question, answered in the chat; one about a presentation shows it, its elements
+            highlighted, with its own pill where the message does not already show it. -->
+          <div class="mt-3 border-t pt-2 text-sm">
+            <p class="flex items-start gap-1.5 font-medium">
+              <CircleHelpIcon class="mt-0.5 size-4 shrink-0 text-primary" />
+              <span>
+                {#if question.presentationIds.length}
+                  <button
+                    type="button"
+                    class="rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    title="Show what this question is about"
+                    onclick={() => showQuestion(question)}>{question.text}</button
+                  >
+                {:else}
+                  {question.text}
+                {/if}
+                {#if about}{@render versionPill(about, undefined, () =>
+                    showQuestion(question)
+                  )}{/if}
+              </span>
+            </p>
+            {#if answer}
+              <p class="ml-5.5 text-muted-foreground">→ {answer}</p>
+            {:else if !session.readOnly}
+              <p class="ml-5.5 text-xs text-muted-foreground">Answer in the chat</p>
+            {/if}
+          </div>
+        {/if}
       </article>
     {:else if item.kind === 'note'}
       {@const of = item.of}
@@ -207,72 +340,44 @@
             })}
         />
       </article>
-    {:else if item.kind === 'presentation'}
-      {@const id = item.value.presentation.presentationId}
-      {@const selected = selectedIds.includes(id)}
-      <article
-        class="relative w-full rounded-2xl border bg-card px-4 py-3 shadow-md transition-[border-color,background-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg"
-        class:border-primary={selected}
-        class:bg-muted={selected}
-      >
-        <button
-          type="button"
-          class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          aria-label={`Candidate ${presentationDisplayId(id)}`}
-          aria-pressed={selected}
-          onclick={(event) => activatePresentation(item.value, event)}
-        ></button>
-        <div class="pointer-events-none relative">
-          <span class="flex items-baseline gap-2 text-base font-medium">
-            <span>Candidate</span>
-            {#if !session.readOnly}
-              <button
-                type="button"
-                class="group pointer-events-auto relative z-10 ml-auto flex leading-none focus-visible:outline-none"
-                aria-label={`Add ${presentationDisplayId(id)} to feedback`}
-                title="Add to feedback"
-                onclick={(event) => {
-                  event.stopPropagation();
-                  onReferenceRequest(item.value);
-                }}
-              >
-                <CandidateIdPill {...candidateId(item.value.presentation)} />
-              </button>
-            {:else}
-              <span class="ml-auto"
-                ><CandidateIdPill {...candidateId(item.value.presentation)} /></span
-              >
-            {/if}
-          </span>
-          <span class="mt-1 block text-sm text-muted-foreground"> Click to view </span>
-        </div>
-      </article>
     {:else if item.kind === 'request'}
       {@const request = item.value.request}
       {@const tokens = agentTokens(item.value)}
       {@const outcome = item.value.outcome}
       {@const chosen = chosenRequest === request.id}
-      <!-- A request to a model, for audit: one compact line; choosing it shows its details. -->
-      <button
-        type="button"
-        class={[
-          'ml-6 flex w-[calc(100%-1.5rem)] min-w-0 items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-          chosen && 'border-solid border-primary bg-muted text-foreground'
-        ]}
-        aria-label={`Agent request ${request.id}: ${agentOutcome(item.value)}`}
-        aria-pressed={chosen}
-        onclick={() => onChooseRequest(chosen ? undefined : request.id)}
-      >
-        <BotIcon class="size-3.5 shrink-0" />
-        <span class="shrink-0">{request.payload.attempt} · {request.payload.purpose}</span>
-        <span class="truncate text-foreground">{agentOutcome(item.value)}</span>
-        <span class="ml-auto shrink-0 font-mono">
-          {outcome ? `${(outcome.payload.durationMs / 1000).toFixed(1)} s` : '…'}{tokens.read !==
-          undefined
-            ? ` · ${tokens.read.toLocaleString()}→${tokens.written?.toLocaleString() ?? '?'}`
-            : ''}
-        </span>
-      </button>
+      {@const reasoning = agentReasoning(item.value).summary}
+      <!-- A request to a model, for audit: one compact line; choosing it shows its details, and
+        its reasoning summary, where recorded, opens beneath it. -->
+      <div class="ml-6 flex w-[calc(100%-1.5rem)] min-w-0 flex-col gap-0.5">
+        <button
+          type="button"
+          class={[
+            'flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            chosen && 'border-solid border-primary bg-muted text-foreground'
+          ]}
+          aria-label={`Agent request ${request.id}: ${agentOutcome(item.value)}`}
+          aria-pressed={chosen}
+          onclick={() => onChooseRequest(chosen ? undefined : request.id)}
+        >
+          <BotIcon class="size-3.5 shrink-0" />
+          <span class="shrink-0">{request.payload.attempt} · {request.payload.purpose}</span>
+          <span class="truncate text-foreground">{agentOutcome(item.value)}</span>
+          <span class="ml-auto shrink-0 font-mono">
+            {outcome ? `${(outcome.payload.durationMs / 1000).toFixed(1)} s` : '…'}{tokens.read !==
+            undefined
+              ? ` · ${tokens.read.toLocaleString()}→${tokens.written?.toLocaleString() ?? '?'}`
+              : ''}
+          </span>
+        </button>
+        {#if reasoning.length}
+          <details class="px-2 text-xs text-muted-foreground open:text-foreground">
+            <summary class="cursor-pointer hover:text-foreground">Reasoning</summary>
+            <div class="mt-1 flex flex-col gap-1 whitespace-pre-wrap">
+              {#each reasoning as paragraph, index (index)}<p>{paragraph}</p>{/each}
+            </div>
+          </details>
+        {/if}
+      </div>
     {:else if item.kind === 'load'}
       {@const report = item.event.payload}
       {@const json = JSON.stringify(report, null, 2)}
@@ -304,100 +409,6 @@
           <pre class="max-h-80 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{json}</pre>
         </div>
       </details>
-    {:else if item.kind === 'version'}
-      {@const chosen = chosenSource === item.sourceHash}
-      {@const source = sourceId(item.sourceHash)}
-      {@const sourceLabel = `Source ${source.source}: ${item.summary.replaceAll('`', '')}`}
-      <!-- Where a source is first presented, what it shows or changes; then a card per variant this
-        turn made: choosing a card shows it, its code button the source on its own. -->
-      <div
-        id={item.first ? `version-${item.sourceHash}` : undefined}
-        class={[
-          'w-full rounded-2xl',
-          item.first && shown === item.sourceHash && 'ring-2 ring-ring'
-        ]}
-      >
-        {#if item.first}
-          <div
-            class="mb-2 flex flex-wrap items-baseline gap-x-1.5 px-1 text-sm text-muted-foreground"
-          >
-            {#if item.described}
-              <div class="min-w-0 flex-1">
-                <MessageContent
-                  content={[{ type: 'markdown', text: item.summary }]}
-                  source={item.source}
-                  design={designOf(item.sourceHash)}
-                  onRevealSource={() => chooseSource(item)}
-                />
-              </div>
-            {:else}
-              <p class="min-w-0 flex-1">{item.summary}</p>
-            {/if}
-            {#if item.parentHash}
-              {@const parent = item.parentHash}
-              <span class="flex items-center gap-1.5 text-xs">
-                <span>from</span>
-                <button
-                  type="button"
-                  class="group flex leading-none focus-visible:outline-none"
-                  title="Show the source it was made from"
-                  onclick={() => showVersion(parent)}
-                >
-                  <CandidateIdPill {...sourceId(parent)} />
-                </button>
-              </span>
-            {/if}
-          </div>
-        {/if}
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">
-          {#each item.variants as variant (variant.presentation.presentationId)}
-            {@const id = variant.presentation.presentationId}
-            {@const selected = selectedIds.includes(id) && !chosenSource}
-            {@const values = candidateId(variant.presentation).values}
-            <article
-              class={[
-                'relative rounded-2xl border bg-card px-3 py-2 shadow-md transition-[border-color,background-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg',
-                selected && 'border-primary bg-muted',
-                chosen && 'border-primary'
-              ]}
-            >
-              <button
-                type="button"
-                class="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                aria-label={`View variant ${values}`}
-                aria-pressed={selected}
-                title="View; Shift-click to compare"
-                onclick={(event) => chooseVariant(variant, event)}
-              ></button>
-              <div class="pointer-events-none relative flex items-center gap-1">
-                <span class="min-w-0 overflow-hidden whitespace-nowrap"
-                  ><CandidateIdPill {...source} {values} /></span
-                >
-                <button
-                  type="button"
-                  class={[
-                    'pointer-events-auto relative z-10 ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none',
-                    chosen && 'bg-accent text-foreground'
-                  ]}
-                  aria-label={sourceLabel}
-                  aria-pressed={chosen}
-                  title="Show the source"
-                  onclick={() => chooseSource(item)}><CodeIcon class="size-3.5" /></button
-                >
-                {#if !session.readOnly}
-                  <button
-                    type="button"
-                    class="pointer-events-auto relative z-10 rounded-md px-1.5 font-mono text-xs leading-5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
-                    aria-label={`Add ${presentationDisplayId(id)} to feedback`}
-                    title="Add to feedback"
-                    onclick={() => onReferenceRequest(variant)}>+</button
-                  >
-                {/if}
-              </div>
-            </article>
-          {/each}
-        </div>
-      </div>
     {:else if item.failed}
       {@const failed = item.failed}
       {@const chosen = chosenFailure === item.eventId}

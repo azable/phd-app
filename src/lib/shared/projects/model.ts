@@ -103,7 +103,9 @@ export const projectCommandSchema = v.variant('type', [
     ...commandBase,
     type: v.literal('prefer'),
     presentations: v.tuple([presentationIdSchema, presentationIdSchema]),
-    preferred: presentationIdSchema,
+    /** The presentation preferred; without one, the outcome: either is fine or decide later. */
+    preferred: v.optional(presentationIdSchema),
+    outcome: v.optional(v.picklist(['tie', 'skip'])),
     step: naturalSchema
   }),
   v.strictObject({

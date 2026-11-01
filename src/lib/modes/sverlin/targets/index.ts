@@ -60,7 +60,7 @@ function browserResources(): PdfResources {
 }
 
 const fileName = (scene: SverlinScene, extension: string) =>
-  `sverlin-${scene.presentationId.slice(0, 8)}-seed-${scene.seed}.${extension}`;
+  `presentation-${scene.presentationId.slice(0, 8)}-seed-${scene.seed}.${extension}`;
 
 export const sverlinTargets: SverlinTarget[] = [
   {

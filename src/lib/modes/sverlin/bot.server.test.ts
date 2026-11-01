@@ -25,7 +25,7 @@ describe('single-component Svelte assistant', () => {
   it('specifies the complete source and isolated step contract', () => {
     // Markdown is wrapped, so phrases are matched whatever whitespace runs between their words.
     const prompt = aiAssistant.initialPrompt.replace(/\s+/g, ' ');
-    expect(prompt).toContain('exactly one complete Sverlin component');
+    expect(prompt).toContain('exactly one complete component');
     expect(prompt).toContain('step and the library components are already in scope');
     expect(prompt).toContain('never write `import`');
     expect(prompt).toContain('already in scope');
@@ -127,7 +127,7 @@ describe('single-component Svelte assistant', () => {
     expect(decision.oneOf.find(({ properties }) => 'count' in properties)).toBeDefined();
   });
 
-  it('parses a vary’s comparisons, or a count, never both', () => {
+  it('parses a vary’s comparisons, each side labelled, or a count, never both', () => {
     const parse = (extra: object) =>
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'Done.' }],
@@ -136,17 +136,26 @@ describe('single-component Svelte assistant', () => {
       });
     const comparison = {
       question: ' Cells or tallies? ',
-      left: [{ variable: 'views.Int', value: 'IntCell' }],
-      right: [{ variable: 'views.Int', value: 'IntTally' }]
+      left: { label: ' cells ', values: [{ variable: 'views.Int', value: 'IntCell' }] },
+      right: { label: 'tallies', values: [{ variable: 'views.Int', value: 'IntTally' }] }
     };
     expect(parse({ count: null, comparisons: [comparison] })).toMatchObject({
-      decision: { comparisons: [{ question: 'Cells or tallies?' }] }
+      decision: {
+        comparisons: [
+          { question: 'Cells or tallies?', left: { label: 'cells' }, right: { label: 'tallies' } }
+        ]
+      }
     });
+    const right = (side: object) => ({ comparisons: [{ ...comparison, right: side }] });
     for (const invalid of [
       { count: 4, comparisons: [comparison] },
       { comparisons: [] },
       { comparisons: Array(9).fill(comparison) },
-      { comparisons: [{ ...comparison, right: [] }] }
+      right({ ...comparison.right, values: [] }),
+      right({ values: comparison.right.values }),
+      right({ ...comparison.right, label: '  ' }),
+      right({ ...comparison.right, label: 'tallies '.repeat(6) }),
+      right({ ...comparison.right, label: 'Cells' })
     ])
       expect(() => parse(invalid)).toThrow(/invalid structured response/i);
   });

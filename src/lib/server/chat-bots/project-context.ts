@@ -20,6 +20,10 @@ import {
   plainMessageText,
   type ElementReference
 } from '$lib/shared/projects/events/message-content';
+import {
+  comparisonOutcome,
+  preferredPresentation
+} from '$lib/shared/projects/events/visualization-presented';
 import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-ref';
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
 import type {
@@ -40,6 +44,9 @@ type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
+import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
+
+import { preferenceSummary, type AiPreferences } from './preference-summary';
 
 /** Compact, body-free entry that lets the AI identify one retained event. */
 export type AiTimelineEntry = {
@@ -140,6 +147,13 @@ export type AiInteraction =
       differences: VariantDifference[];
       /** The question the pair asked, where it was one of the assistant's comparisons. */
       question?: string;
+      /** The preferred side as the participant would call it, as “tallies”, for a comparison. */
+      answer?: string;
+      /**
+       * Either is fine (tie) or decide later (skip), where no side was preferred: the preferred and
+       * alternative are then the pair's first and second.
+       */
+      outcome?: 'tie' | 'skip';
     }
   | {
       kind: 'batch';
@@ -151,6 +165,8 @@ export type AiInteraction =
         step: number;
         differences: VariantDifference[];
         question?: string;
+        answer?: string;
+        outcome?: 'tie' | 'skip';
       }>;
     };
 
@@ -213,6 +229,13 @@ export type AiProjectContext = {
   interaction: AiInteraction;
   /** The questions of the assistant's comparisons still to answer, the one showing first. */
   waitingComparisons?: string[];
+  /**
+   * What the preference model believes from every answer so far (preference-summary.ts): each
+   * touched choice's likeliest option and whether it is settled, what is most worth asking next,
+   * and what was never compared. Recorded with each request's prompt, so the export shows what the
+   * system believed when the assistant asked.
+   */
+  preferences?: AiPreferences;
   timelineWindow: {
     totalEventCount: number;
     omittedEventCount: number;
@@ -268,8 +291,13 @@ const timelineCases = {
   },
   'visualization.presented': (event) =>
     `Presented ${event.payload.presentation.format} visualization ${event.payload.presentation.presentationId} in display set ${event.payload.displaySetId}.`,
-  'visualization.preference-recorded': (event) =>
-    `Preferred presentation ${event.payload.preferred} over ${event.payload.presentations.find((id) => id !== event.payload.preferred) ?? 'the alternative'} at step ${event.payload.step}.`,
+  'visualization.preference-recorded': (event) => {
+    const preferred = preferredPresentation(event.payload);
+    const [first, second] = event.payload.presentations;
+    if (!preferred)
+      return `${comparisonOutcome(event.payload) === 'tie' ? 'Either is fine' : 'Decide later'} between presentations ${first} and ${second} at step ${event.payload.step}.`;
+    return `Preferred presentation ${preferred} over ${event.payload.presentations.find((id) => id !== preferred) ?? 'the alternative'} at step ${event.payload.step}.`;
+  },
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
   'visualization.variant-reverted': (event) =>
     `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(event.payload.values)}, though its source draws without them; shown instead with ${JSON.stringify(event.payload.shown)} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
@@ -344,13 +372,37 @@ export function projectConversationMessages(
       event.type === 'visualization.variant-reverted' ? [event.payload.presentationId] : []
     )
   );
-  return events.flatMap((event) =>
-    event.type === 'visualization.preference-recorded'
-      ? [{ role: 'user', content: preferenceMessage(event, variants, questions) } as const]
-      : event.type === 'visualization.runtime-failed' && reverted.has(event.payload.presentationId)
-        ? []
-        : matchProjectEvent<ConversationMessage[]>(event, conversationCases)
-  );
+  const asked = new Map(projectQuestions(events).map((question) => [question.eventId, question]));
+  return events.flatMap((event): ConversationMessage[] => {
+    if (event.type === 'visualization.preference-recorded')
+      return [{ role: 'user', content: preferenceMessage(event, variants, questions) }];
+    if (event.type === 'visualization.runtime-failed' && reverted.has(event.payload.presentationId))
+      return [];
+    const messages = matchProjectEvent<ConversationMessage[]>(event, conversationCases);
+    // A question is read with its reply, and an answer with its question.
+    const question =
+      event.type === 'assistant.responded'
+        ? asked.get(event.id)
+        : event.type === 'feedback.submitted' && event.payload.answers
+          ? asked.get(event.payload.answers)
+          : undefined;
+    if (!question) return messages;
+    return messages.map((message) => ({
+      ...message,
+      content:
+        event.type === 'assistant.responded'
+          ? `${message.content}\n[Asked: ${questionText(question)}]`
+          : `[Answering your question “${question.text}”] ${message.content}`
+    }));
+  });
+}
+
+/** A question as the assistant asked it, with what it is about. */
+function questionText(question: ProjectQuestion): string {
+  const about = question.presentationIds[0]
+    ? ` (about presentation ${question.presentationIds[0]}${question.elements?.length ? `, elements ${question.elements.join(', ')}` : ''})`
+    : '';
+  return `“${question.text}”${about}`;
 }
 
 /** Each presented presentation's variant, by its id. */
@@ -385,44 +437,65 @@ export function variantDifferences(
 // A preference names at most this many differences in the conversation, the rest counted.
 const namedDifferences = 12;
 
-/** A preference as the participant's message, with what its pair differed in. */
+/** The question a presentation's pair asked, and what the participant would call its side. */
+type PresentedQuestion = { question: string; label?: string };
+
 /** The question each presentation's pair asked, by its id, for an assistant's comparisons. */
-function presentedQuestions(events: readonly ProjectEvent[]): Map<string, string> {
+function presentedQuestions(events: readonly ProjectEvent[]): Map<string, PresentedQuestion> {
   return new Map(
     events.flatMap((event) =>
       event.type === 'visualization.presented' && event.payload.question
-        ? [[event.payload.presentation.presentationId, event.payload.question] as const]
+        ? [
+            [
+              event.payload.presentation.presentationId,
+              {
+                question: event.payload.question,
+                ...(event.payload.label ? { label: event.payload.label } : {})
+              }
+            ] as const
+          ]
         : []
     )
   );
 }
 
+/** A preference as the participant's message, with what its pair differed in. */
 function preferenceMessage(
   event: Extract<ProjectEvent, { type: 'visualization.preference-recorded' }>,
   variants: ReadonlyMap<string, DesignValues>,
-  questions: ReadonlyMap<string, string>
+  questions: ReadonlyMap<string, PresentedQuestion>
 ): string {
-  const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
+  const outcome = comparisonOutcome(event.payload);
+  const preferred = preferredPresentation(event.payload) ?? event.payload.presentations[0];
+  const other = event.payload.presentations.find((id) => id !== preferred);
   const differences = variantDifferences(
-    variants.get(event.payload.preferred),
+    variants.get(preferred),
     other ? variants.get(other) : undefined
   );
   const named = differences
     .slice(0, namedDifferences)
-    .map(
-      ({ variable, preferred, other }) =>
-        `${variable} ${String(preferred ?? 'unset')} (the other: ${String(other ?? 'unset')})`
+    .map(({ variable, preferred, other }) =>
+      outcome === 'preferred'
+        ? `${variable} ${String(preferred ?? 'unset')} (the other: ${String(other ?? 'unset')})`
+        : `${variable} ${String(preferred ?? 'unset')} or ${String(other ?? 'unset')}`
     );
   const more = differences.length - named.length;
   const differed = named.length
     ? ` They differed in ${named.join('; ')}${more > 0 ? `; and ${more} more` : ''}.`
     : '';
-  // A comparison's answer, as the values the preferred side set: “Cells or tallies?” → views.Int IntTally.
-  const question = questions.get(event.payload.preferred);
-  const answer = question
-    ? `${question} → ${differences.map(({ variable, preferred }) => `${variable} ${String(preferred ?? 'unset')}`).join(', ') || 'either'}. `
-    : '';
-  return `${answer}I preferred presentation ${event.payload.preferred} over the alternative${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}.${differed}`;
+  // A comparison's answer, as the preferred side's label: “Cells or tallies?” → tallies.
+  const { question, label } = questions.get(preferred) ?? {};
+  const where = `${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}`;
+  if (outcome !== 'preferred') {
+    const said = outcome === 'tie' ? 'either is fine' : 'decide later';
+    const meaning =
+      outcome === 'tie'
+        ? 'I find the two equally good, so this choice does not matter to me.'
+        : 'I would rather decide this later; ask it again another time.';
+    return `${question ? `${question} → ${said}. ` : ''}${meaning} (Presentations ${preferred} and ${other ?? 'the alternative'}${where}.)${differed}`;
+  }
+  const answer = question ? `${question} → ${label ?? 'the presentation preferred'}. ` : '';
+  return `${answer}I preferred presentation ${preferred} over the alternative${where}.${differed}`;
 }
 
 /** Build the pure, explicitly bounded project context supplied to the AI assistant. */
@@ -436,6 +509,8 @@ export function projectAiContext(
   const events = document.events.filter(({ type }) => type !== 'visualization.loaded');
   const timelineEvents = events.slice(-recentTimelineEventLimit);
   const waiting = waitingComparisons(document).map(({ question }) => question);
+  const design = designVariables(viewedPresentation(document, selection.interactionEventIds ?? []));
+  const preferences = preferenceSummary(document.events, design);
 
   return {
     projectId: document.projectId,
@@ -443,21 +518,22 @@ export function projectAiContext(
     headEventId: events.at(-1)?.id ?? projectHead(document).id,
     base: projectWorkspace(snapshot),
     versions: sourceVersions(document),
-    design: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
+    design,
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),
+    ...(preferences ? { preferences } : {}),
     timelineWindow: {
       totalEventCount: events.length,
       omittedEventCount: events.length - timelineEvents.length
     },
     interfaceCapabilities: [
       'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',
-      'The participant can select compatible retained Sverlin presentations to compare a pair.',
-      'A visible pair has preference controls; participants can reference retained presentations inline in messages.',
+      'The participant can select compatible retained presentations to compare a pair.',
+      'A visible pair has answer controls (prefer either side, either is fine, decide later); participants can reference retained presentations inline in messages.',
       'A message viewing a presentation names the step the participant was on, as [Presentation id at @insert.swap#1 (step 3)]: its name, as recordedSteps name it, and the number the participant saw in that presentation.',
-      'Participants can select elements of a Sverlin presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
-      'Sverlin projects may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
+      'Participants can select elements of a presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
+      'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
     ],
     timeline: timelineEvents.map(projectAiTimelineEntry),
     selected: {
@@ -491,22 +567,24 @@ function assistantInteraction(
   const questions = presentedQuestions(document.events);
   const preferences = interactions.flatMap((event) => {
     if (event.type !== 'visualization.preference-recorded') return [];
-    const alternativePresentationId = event.payload.presentations.find(
-      (id) => id !== event.payload.preferred
-    );
+    const outcome = comparisonOutcome(event.payload);
+    const preferred = preferredPresentation(event.payload) ?? event.payload.presentations[0];
+    const alternativePresentationId = event.payload.presentations.find((id) => id !== preferred);
     if (!alternativePresentationId) {
       throw new Error('The preference interaction has no alternative presentation.');
     }
-    const question = questions.get(event.payload.preferred);
+    const { question, label } = questions.get(preferred) ?? {};
     return [
       {
         ...(question ? { question } : {}),
+        ...(label && outcome === 'preferred' ? { answer: label } : {}),
+        ...(outcome === 'preferred' ? {} : { outcome }),
         eventId: event.id,
-        preferredPresentationId: event.payload.preferred,
+        preferredPresentationId: preferred,
         alternativePresentationId,
         step: event.payload.step,
         differences: variantDifferences(
-          variants.get(event.payload.preferred),
+          variants.get(preferred),
           variants.get(alternativePresentationId)
         )
       }
@@ -676,7 +754,8 @@ export function viewedPresentation(
     .flatMap((id) => {
       const event = document.events.find((candidate) => candidate.id === id);
       if (event?.type === 'feedback.submitted') return event.payload.viewing ?? [];
-      if (event?.type === 'visualization.preference-recorded') return [event.payload.preferred];
+      if (event?.type === 'visualization.preference-recorded')
+        return [preferredPresentation(event.payload) ?? event.payload.presentations[0]];
       if (event?.type === 'visualization.runtime-failed') return [event.payload.presentationId];
       return [];
     })

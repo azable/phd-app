@@ -27,6 +27,7 @@ import {
   runQueuedAssistantTurn,
   submitProjectFeedback
 } from './commands';
+import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
 import { projectOperationDeadlineError, runWithProjectOperationSignal } from './operation-context';
 import { recoveryEventsForInterruptedOperations } from './recovery';
@@ -681,7 +682,7 @@ async function executeProjectCommand(options: {
       return queueProjectPreference({
         ...common,
         presentations: options.command.presentations,
-        preferred: options.command.preferred,
+        answer: preferenceAnswer(options.command),
         step: options.command.step,
         ...(options.deadlineAt === undefined
           ? {}

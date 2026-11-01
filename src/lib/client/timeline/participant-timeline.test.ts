@@ -3,38 +3,35 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
 import { loadReportLine } from './load-reports';
-import { participantTimeline } from './participant-timeline';
+import { participantTimeline, type ParticipantTimelineItem } from './participant-timeline';
 
 const presentationIds = [
   '12345678-1234-4123-8123-123456789ac1',
   '12345678-1234-4123-8123-123456789ac2'
 ] as const;
 
+type Turn = Extract<ParticipantTimelineItem, { kind: 'turn' }>;
+const turns = (items: ParticipantTimelineItem[]) =>
+  items.filter((item): item is Turn => item.kind === 'turn');
+
 describe('participant Timeline projection', () => {
-  it('keeps structured messages, preference actions, and the variants each turn made', () => {
+  it('groups a turn into one message that names its versions, and keeps preference actions', () => {
     const items = participantTimeline(events());
-    expect(items.map(({ kind }) => kind)).toEqual(['message', 'message', 'version', 'message']);
-    // Both presentations were built from one source in one turn, so they are its two variants.
-    // The card carries its source, which code its summary names is found in.
-    expect(items[2]).toMatchObject({
-      kind: 'version',
-      sourceHash: 'a'.repeat(64),
-      source: 'source'
-    });
-    expect(
-      items[2].kind === 'version' &&
-        items[2].variants.map(({ presentation }) => presentation.presentationId)
-    ).toEqual(presentationIds.slice(0, 2));
+    expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn', 'message']);
     expect(items[0]).toMatchObject({
       kind: 'message',
       actor: 'user',
       content: [{ type: 'markdown', text: 'Show addition' }]
     });
-    expect(items[1]).toMatchObject({
-      kind: 'message',
-      actor: 'assistant'
+    // The reply names both presentations, so none is appended; each pill carries its source.
+    const [turn] = turns(items);
+    expect(turn).toMatchObject({ appended: [], comparisons: [], firsts: ['a'.repeat(64)] });
+    expect(Object.keys(turn.pills)).toEqual([...presentationIds]);
+    expect(turn.pills[presentationIds[0]]).toMatchObject({
+      sourceHash: 'a'.repeat(64),
+      summary: 'A source'
     });
-    expect(items[3]).toMatchObject({
+    expect(items[2]).toMatchObject({
       kind: 'message',
       actor: 'user',
       content: expect.arrayContaining([
@@ -45,7 +42,99 @@ describe('participant Timeline projection', () => {
     });
   });
 
-  it('shows a variant where it was made, after the turn that first showed its source', () => {
+  it('appends the versions a reply does not name as pills at its end', () => {
+    const values = events();
+    const responded = values[1];
+    if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+    responded.payload.content = [
+      { type: 'markdown', text: 'Adds the digits:' },
+      { type: 'presentation-ref', presentationId: presentationIds[1] }
+    ];
+    const [turn] = turns(participantTimeline(values));
+    expect(turn.appended).toEqual([presentationIds[0]]);
+    expect(Object.keys(turn.pills).toSorted()).toEqual([...presentationIds].toSorted());
+  });
+
+  it('shows a pair in its turn with its question and the preferred side’s label, which replaces the preference message', () => {
+    const items = participantTimeline(askedPair());
+    expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn']);
+    expect(turns(items)[0]).toMatchObject({
+      appended: [],
+      comparisons: [
+        {
+          question: {
+            text: 'Cells or tallies?',
+            presentationIds: [...presentationIds],
+            labels: ['cells', 'tallies']
+          },
+          answer: 'cells'
+        }
+      ]
+    });
+  });
+
+  it('shows either is fine on an undesigned pair, and a question in words in its turn with its answer', () => {
+    const values = events();
+    values[4] = {
+      ...values[4],
+      payload: { presentations: [...presentationIds], outcome: 'tie', step: 0 }
+    } as ProjectEvent;
+    const responded = values[1];
+    if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+    responded.payload.question = { text: 'Who is it for?' };
+    values.push(answer(6, 'Students'));
+    const items = participantTimeline(values);
+    expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn', 'message', 'message']);
+    expect(items[1]).toMatchObject({
+      question: { question: { text: 'Who is it for?' }, answer: 'Students', pill: false }
+    });
+    expect(items[2]).toMatchObject({
+      content: expect.arrayContaining([{ type: 'markdown', text: 'Either is fine:' }])
+    });
+  });
+
+  it('gives a question a pill only where the message does not show what it is about', () => {
+    const asking = (question: { text: string; presentationId?: string; example?: true }) => {
+      const values = events();
+      const responded = values[1];
+      if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+      responded.payload.content = [
+        { type: 'markdown', text: 'Adds the digits:' },
+        { type: 'presentation-ref', presentationId: presentationIds[1] }
+      ];
+      responded.payload.question = question;
+      return turns(participantTimeline(values))[0];
+    };
+    // About a presentation the reply names: no pill of its own.
+    expect(
+      asking({ text: 'Too dense?', presentationId: presentationIds[1] }).question
+    ).toMatchObject({ pill: false });
+    // About the example the turn made but did not name: its pill, in place of the appended one.
+    const example = asking({ text: 'Like this?', example: true });
+    expect(example.question).toMatchObject({ pill: true });
+    expect(example.appended).toEqual([]);
+    expect(Object.keys(example.pills)).toContain(presentationIds[0]);
+  });
+
+  it('shows a question about an earlier presentation with its pill', () => {
+    const values = events();
+    values.push({
+      id: 6,
+      type: 'assistant.responded',
+      actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+      operationId: '82345678-1234-4234-8234-123456789abc',
+      createdAt: '2026-08-30T00:00:06.000Z',
+      payload: {
+        content: [{ type: 'markdown', text: 'One thing first.' }],
+        question: { text: 'Is the carry clear?', presentationId: presentationIds[0] }
+      }
+    });
+    const [, later] = turns(participantTimeline(values));
+    expect(later).toMatchObject({ appended: [], question: { pill: true } });
+    expect(Object.keys(later.pills)).toEqual([presentationIds[0]]);
+  });
+
+  it('shows a variant where it was made, in a turn of its own, after the turn that first showed its source', () => {
     const later = '12345678-1234-4123-8123-123456789ac3';
     const values = events();
     const [, , first] = values;
@@ -64,14 +153,20 @@ describe('participant Timeline projection', () => {
         presentation: { ...first.payload.presentation, presentationId: later, seed: 9 }
       }
     });
-    const versions = participantTimeline(values).filter((item) => item.kind === 'version');
-    expect(versions).toMatchObject([
-      { id: `version-${'a'.repeat(64)}`, first: true },
-      { id: `version-${'a'.repeat(64)}-6`, first: false }
+    expect(turns(participantTimeline(values))).toMatchObject([
+      { id: 'assistant-2', firsts: ['a'.repeat(64)], summaries: [] },
+      { id: 'presented-6', firsts: [], summaries: [], appended: [later] }
     ]);
-    expect(
-      versions.map((item) => item.variants.map(({ presentation }) => presentation.presentationId))
-    ).toEqual([presentationIds.slice(0, 2), [later]]);
+  });
+
+  it('says what a source shows where its turn has no reply', () => {
+    const values = events().filter(({ type }) => type !== 'assistant.responded');
+    const [turn] = turns(participantTimeline(values));
+    expect(turn).not.toHaveProperty('content');
+    expect(turn).toMatchObject({
+      summaries: [{ sourceHash: 'a'.repeat(64), text: 'A source', source: 'source' }],
+      appended: [...presentationIds]
+    });
   });
 
   it('retains exact comparison references inline', () => {
@@ -113,8 +208,8 @@ describe('participant Timeline projection', () => {
     ];
 
     expect(participantTimeline(values)[1]).toMatchObject({
-      kind: 'message',
-      actor: 'assistant',
+      kind: 'turn',
+      appended: [presentationIds[1]],
       content: [
         { type: 'markdown', text: 'Prefer presentation ' },
         { type: 'presentation-ref', presentationId: presentationIds[0] },
@@ -270,6 +365,39 @@ function failedOperation(
       payload: { kind, failureKind: 'domain', message: 'The source did not build.' }
     }
   ];
+}
+
+/** The base events, their pair asking a question with a label on each side. */
+function askedPair(): ProjectEvent[] {
+  return events().map(
+    (event): ProjectEvent =>
+      event.type === 'visualization.presented'
+        ? {
+            ...event,
+            payload: {
+              ...event.payload,
+              question: 'Cells or tallies?',
+              label: event.payload.slot ? 'tallies' : 'cells',
+              presentation: {
+                ...event.payload.presentation,
+                variant: { 'views.Int': event.payload.slot ? 'IntTally' : 'IntCell' }
+              } as typeof event.payload.presentation
+            }
+          }
+        : event
+  );
+}
+
+/** The participant's message answering the base reply's question. */
+function answer(id: number, text: string): ProjectEvent {
+  return {
+    id,
+    type: 'feedback.submitted',
+    actor: { kind: 'user' },
+    operationId: '32345678-1234-4234-8234-123456789abc',
+    createdAt: `2026-08-30T00:00:0${id}.000Z`,
+    payload: { content: [{ type: 'markdown', text }], focus: [], answers: 2 }
+  };
 }
 
 function events(): ProjectEvent[] {
