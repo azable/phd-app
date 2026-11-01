@@ -18,10 +18,10 @@ describe('presentation stage while the project is busy', () => {
   it('freezes answers but keeps stepping', () => {
     const body = stage(askedPair(), true);
     for (const label of [
-      'Prefer top candidate',
-      'Prefer bottom candidate',
+      'Prefer the top version',
+      'Prefer the bottom version',
       'Either is fine',
-      'Decide later'
+      'Unsure — no preference recorded'
     ])
       expect(disabled(body, label)).toBe(true);
     expect(disabled(body, 'Next visualization step')).toBe(false);
@@ -52,17 +52,28 @@ describe('presentation stage showing a comparison from the timeline', () => {
     expect(badges(body)).toEqual(['Your choice']);
     expect(body.indexOf('Your choice')).toBeGreaterThan(body.indexOf('candidate-2'));
     // The controls stay, to change the answer.
-    expect(disabled(body, 'Prefer top candidate')).toBe(false);
+    expect(disabled(body, 'Prefer the top version')).toBe(false);
   });
 
-  it('marks both sides where either is fine, and says a pair was left for later', () => {
+  it('marks both sides where either is fine, and says when the participant was unsure', () => {
     const tie = stage([...askedPair(), answered(3, { outcome: 'tie' })], false, true);
     expect(badges(tie)).toEqual(['Either is fine', 'Either is fine']);
-    const later = stage([...askedPair(), answered(3, { outcome: 'skip' })], false, true);
-    expect(badges(later)).toEqual([]);
-    expect(later).toContain('You left this for later');
+    const unsure = stage([...askedPair(), answered(3, { outcome: 'skip' })], false, true);
+    expect(badges(unsure)).toEqual([]);
+    expect(unsure).toContain('You were unsure');
   });
 
+  it('fills the button of the answer given, each answer one of a set of buttons', () => {
+    const filled = (body: string) =>
+      [...body.matchAll(/<button[^>]*aria-label="([^"]*)"[^>]*>/g)]
+        .filter(([tag]) => tag.includes('bg-primary'))
+        .map(([, label]) => label);
+    const unsure = stage([...askedPair(), answered(3, { outcome: 'skip' })], false, true);
+    expect(filled(unsure)).toEqual(['Unsure — no preference recorded']);
+    const top = stage([...askedPair(), answered(3, { preferred: ids[0] })], false, true);
+    expect(filled(top)).toEqual(['Prefer the top version']);
+    expect(top).toMatch(/title="Prefer the top version"[^>]*>.*Top/su);
+  });
   it('marks the latest answer where the pair was answered again', () => {
     const events = [
       ...askedPair(),
@@ -79,7 +90,7 @@ describe('presentation stage showing a comparison from the timeline', () => {
     expect(body.match(/data-replay-region="candidate-/g)).toHaveLength(2);
     expect(badges(body)).toEqual([]);
     expect(body).not.toContain('You answered this');
-    expect(disabled(body, 'Prefer bottom candidate')).toBe(false);
+    expect(disabled(body, 'Prefer the bottom version')).toBe(false);
   });
 });
 

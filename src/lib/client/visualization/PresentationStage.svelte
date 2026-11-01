@@ -1,11 +1,17 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
+  import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+  import CheckIcon from '@lucide/svelte/icons/check';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+  import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import DownloadIcon from '@lucide/svelte/icons/download';
+  import EqualIcon from '@lucide/svelte/icons/equal';
   import { fly } from 'svelte/transition';
 
   import { Button } from '$lib/client/components/ui/button';
+  import MessageContent from '$lib/client/timeline/MessageContent.svelte';
   import * as Empty from '$lib/client/components/ui/empty';
   import { Spinner } from '$lib/client/components/ui/spinner';
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
@@ -141,28 +147,51 @@
     const current = step;
     untrack(() => visualSelections.retain(ids, current));
   });
-  // The side preferred: the comparison's latest answer, or for another pair its answer at this step.
-  const preferred = $derived.by(() => {
+  // The answer given, its button filled: the side preferred, either (tie) or unsure (skip); the
+  // comparison's latest answer, or for another pair its answer at this step.
+  const chosen = $derived.by((): string | undefined => {
     if (visible.length !== 2) return undefined;
-    if (question) return recorded?.kind === 'preferred' ? recorded.presentationId : undefined;
+    if (question) return recorded?.kind === 'preferred' ? recorded.presentationId : recorded?.kind;
     const preference = session.events.findLast(
       (event) =>
         event.type === 'visualization.preference-recorded' &&
         event.payload.step === step &&
         event.payload.presentations.every((id) => selectedIds.includes(id))
     );
-    return preference?.type === 'visualization.preference-recorded' &&
-      'preferred' in preference.payload
+    if (preference?.type !== 'visualization.preference-recorded') return undefined;
+    return 'preferred' in preference.payload
       ? preference.payload.preferred
-      : undefined;
+      : preference.payload.outcome;
   });
+  // The four answers, one set of buttons; the pair is stacked, so its sides are top and bottom.
+  const answers = $derived([
+    {
+      answer: selectedIds[0],
+      label: 'Prefer the top version',
+      text: 'Top',
+      icons: [CheckIcon, ArrowUpIcon]
+    },
+    {
+      answer: selectedIds[1],
+      label: 'Prefer the bottom version',
+      text: 'Bottom',
+      icons: [CheckIcon, ArrowDownIcon]
+    },
+    { answer: 'tie', label: 'Either is fine', text: 'Either', icons: [EqualIcon] },
+    {
+      answer: 'skip',
+      label: 'Unsure — no preference recorded',
+      text: 'Unsure',
+      icons: [CircleQuestionMarkIcon]
+    }
+  ]);
 
   function seek(next: number) {
     playback.seek(playbackContext, next);
   }
 
   /**
-   * Answer the pair: prefer one side, or say either is fine (tie) or decide later (skip). What
+   * Answer the pair: prefer one side, or say either is fine (tie) or unsure (skip). What
    * follows shows at once; if the answer cannot be saved, the pair shows again at its step.
    */
   async function prefer(answer: string | 'tie' | 'skip') {
@@ -206,81 +235,64 @@
 
 {#snippet controls()}
   <div
-    class="flex min-h-14 shrink-0 items-center justify-center gap-2 border-y bg-background px-3 py-2"
+    class="flex min-h-14 shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-2 border-y bg-background px-3 py-2"
     data-replay-region="presentation-controls"
   >
-    {#if layout === 'comparison' && visible.length === 2}
+    <!-- Stepping, apart from the answers so neither is taken for the other. -->
+    <div class="flex max-w-full min-w-0 items-center gap-2">
       <Button
         size="lg"
-        variant={preferred === selectedIds[0] ? 'default' : 'outline'}
-        aria-label="Prefer top candidate"
-        onclick={() => prefer(selectedIds[0])}
-        disabled={disabled || answering}
+        variant="outline"
+        aria-label="Previous visualization step"
+        onclick={() => seek(step - 1)}
+        disabled={step === 0}
       >
-        Prefer top candidate
+        <ChevronLeftIcon data-icon="inline-start" />
+        Previous
       </Button>
-    {/if}
-    <Button
-      size="lg"
-      variant="outline"
-      aria-label="Previous visualization step"
-      onclick={() => seek(step - 1)}
-      disabled={step === 0}
-    >
-      <ChevronLeftIcon data-icon="inline-start" />
-      Previous
-    </Button>
-    <!-- A fixed width, so the buttons stay put as the step's name changes. -->
-    <span
-      class="w-72 shrink-0 truncate text-center text-sm whitespace-nowrap text-muted-foreground"
-      title={stepName}
-    >
-      {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
-          class="mx-1">·</span
-        ><code class="font-mono text-xs">{shownStepName}</code>{/if}
-    </span>
-    <Button
-      size="lg"
-      variant="outline"
-      aria-label="Next visualization step"
-      onclick={() => seek(step + 1)}
-      disabled={step >= stepCount - 1}
-    >
-      Next
-      <ChevronRightIcon data-icon="inline-end" />
-    </Button>
-    {#if layout === 'comparison' && visible.length === 2}
+      <!-- A fixed width, so the buttons stay put as the step's name changes. -->
+      <span
+        class="w-72 min-w-0 truncate text-center text-sm whitespace-nowrap text-muted-foreground"
+        title={stepName}
+      >
+        {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
+            class="mx-1">·</span
+          ><code class="font-mono text-xs">{shownStepName}</code>{/if}
+      </span>
       <Button
         size="lg"
-        variant={preferred === selectedIds[1] ? 'default' : 'outline'}
-        aria-label="Prefer bottom candidate"
-        onclick={() => prefer(selectedIds[1])}
-        disabled={disabled || answering}
+        variant="outline"
+        aria-label="Next visualization step"
+        onclick={() => seek(step + 1)}
+        disabled={step >= stepCount - 1}
       >
-        Prefer bottom candidate
+        Next
+        <ChevronRightIcon data-icon="inline-end" />
       </Button>
-    {/if}
+    </div>
     {#if layout === 'comparison' && visible.length === 2}
-      <!-- Beside preferring a side: the two are equally good, or the question can wait. -->
-      <div class="flex flex-col gap-0.5">
-        <Button
-          size="xs"
-          variant="ghost"
-          aria-label="Either is fine"
-          onclick={() => prefer('tie')}
-          disabled={disabled || answering}
-        >
-          Either is fine
-        </Button>
-        <Button
-          size="xs"
-          variant="ghost"
-          aria-label="Decide later"
-          onclick={() => prefer('skip')}
-          disabled={disabled || answering}
-        >
-          Decide later
-        </Button>
+      <!-- The answers, on a tinted strip of their own. -->
+      <div
+        class="flex flex-wrap items-center justify-center gap-1.5 rounded-lg bg-muted p-1"
+        role="group"
+        aria-label="Your answer"
+      >
+        {#each answers as { answer, label, text, icons } (answer)}
+          <Button
+            size="lg"
+            variant={chosen === answer ? 'default' : 'outline'}
+            aria-label={label}
+            title={label}
+            onclick={() => prefer(answer)}
+            disabled={disabled || answering}
+          >
+            {#each icons as Icon, index (index)}<Icon
+                data-icon={index === 0 ? 'inline-start' : undefined}
+                class={index > 0 ? '-ml-1' : undefined}
+              />{/each}
+            {text}
+          </Button>
+        {/each}
       </div>
     {/if}
     {#if selection.buffered && !selection.questionPairs && selection.followingLatest && visible.length}
@@ -312,12 +324,12 @@
         class="shrink-0 border-b bg-background px-3 py-2 text-center text-base font-medium"
         data-replay-region="comparison-question"
       >
-        {question}
+        <MessageContent content={[{ type: 'markdown', text: question }]} inline />
         {#if recorded}
           <!-- What was answered, which the controls below change. -->
           <span class="block text-sm font-normal text-muted-foreground">
             {recorded.kind === 'skip'
-              ? 'You left this for later; answer it now if you like.'
+              ? 'You were unsure; answer it now if you like.'
               : 'You answered this; choose again to change your answer.'}
           </span>
         {/if}

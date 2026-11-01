@@ -8,13 +8,15 @@
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import type { CandidateId } from '$lib/client/visualization/presentation-history';
 
+  import MessageContent from './MessageContent.svelte';
+
   type Props = {
     candidate: CandidateId;
     /** Its name, for assistive technology. */
     name: string;
     /** What it shows, as its tooltip. */
     summary?: string;
-    /** Which side of a pair, where it is one, before the pill at the text's size. */
+    /** Which side of a pair, where it is one, in Markdown, before the pill at the text's size. */
     label?: string;
     /** Whether it is shown on the stage. */
     selected: boolean;
@@ -45,7 +47,9 @@
     'rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground focus-visible:outline-none';
 </script>
 
-{#if label}<span class="mr-1.5 font-medium text-muted-foreground">{label}</span>{/if}
+{#if label}<span class="mr-1.5 font-medium text-muted-foreground"
+    ><MessageContent content={[{ type: 'markdown', text: label }]} inline /></span
+  >{/if}
 <span class={['group/pill relative inline-flex align-middle', !label && 'mx-1']}>
   <button
     type="button"

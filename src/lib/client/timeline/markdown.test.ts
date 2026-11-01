@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderSafeMarkdown } from './markdown';
+import { renderSafeInlineMarkdown, renderSafeMarkdown } from './markdown';
 
 describe('retained message Markdown', () => {
   it('renders ordinary Markdown without enabling raw HTML', () => {
@@ -22,5 +22,15 @@ describe('retained message Markdown', () => {
     expect(rendered).toContain('href="https://example.com"');
     expect(rendered).toContain('rel="nofollow noreferrer"');
     expect(rendered).not.toContain('href="javascript:');
+  });
+});
+
+describe('inline Markdown', () => {
+  it('renders emphasis and code without blocks, links or raw HTML', () => {
+    const rendered = renderSafeInlineMarkdown(
+      'Should it carry **the** `i` [label](https://example.com)? <img src=x onerror=alert(1)>'
+    );
+
+    expect(rendered).toBe('Should it carry <strong>the</strong> <code>i</code> label? ');
   });
 });

@@ -12,16 +12,15 @@ import {
   type TimelinePresentation
 } from '$lib/client/visualization/presentation-history';
 
-import {
-  answerLabel,
-  projectQuestions,
-  type ProjectQuestion
-} from '$lib/shared/projects/questions';
+import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
 import { agentRequests, type AgentRequest } from './agent-requests';
 
-/** A comparison's question with its answer as its caption shows it, once given. */
-export type CaptionedQuestion = { question: ProjectQuestion; answer?: MessageContent };
+/** A side of an answered comparison: the participant's choice (both when either is fine) or not. */
+export type SideMark = 'chosen' | 'not-chosen';
+
+/** A comparison's question with its latest answer, once given: each side's mark by slot, or unsure. */
+export type MarkedComparison = { question: ProjectQuestion; answer?: SideMark[] | 'unsure' };
 
 /** A presentation as a pill in an assistant's message: what it shows, and its source. */
 export type VersionPill = {
@@ -62,7 +61,7 @@ export type ParticipantTimelineItem =
       /** The presentations it made that its words do not name, by id, as pills at its end. */
       appended: string[];
       /** Its comparisons: each pair's question, with its answer once given. */
-      comparisons: CaptionedQuestion[];
+      comparisons: MarkedComparison[];
       /** Its question, answered in words, with a pill only where the message does not already show
        * what it is about. */
       question?: { question: ProjectQuestion; pill: boolean };
@@ -127,8 +126,8 @@ export function participantTimeline(
     const { summary, parentHash } = versionOf(sourceHash);
     return { value, summary, sourceHash, ...(parentHash ? { parentHash } : {}) };
   };
-  const captioned = (question: ProjectQuestion): CaptionedQuestion => {
-    const answer = answerLabel(question);
+  const marked = (question: ProjectQuestion): MarkedComparison => {
+    const answer = sideMarks(question);
     return { question, ...(answer ? { answer } : {}) };
   };
   const questions = projectQuestions(events);
@@ -138,7 +137,7 @@ export function participantTimeline(
       question.displaySetId ? [[question.displaySetId, question] as const] : []
     )
   );
-  // Answers to pairs that asked a question show under it, the latest, not as messages of their own.
+  // Answers to pairs that asked a question mark its sides, the latest, not as messages of their own.
   const answeredPairs = new Set(questions.flatMap(({ answerEventIds = [] }) => answerEventIds));
   const placed = new Set<string>();
   // The source presented last, by hash, which a note that follows is about.
@@ -197,7 +196,7 @@ export function participantTimeline(
       const pair = value.displaySetId ? pairQuestions.get(value.displaySetId) : undefined;
       if (pair) {
         if (!holder.comparisons.some(({ question }) => question === pair))
-          holder.comparisons.push(captioned(pair));
+          holder.comparisons.push(marked(pair));
       } else if (!named.has(presentation.presentationId))
         holder.appended.push(presentation.presentationId);
     }
@@ -244,7 +243,7 @@ export function participantTimeline(
             'outcome' in event.payload
               ? event.payload.outcome === 'tie'
                 ? 'Either is fine:'
-                : 'Decide later:'
+                : 'Unsure:'
               : undefined;
           items.push(
             userMessage(
@@ -441,4 +440,11 @@ function userMessage(
   eventId: number
 ): Extract<ParticipantTimelineItem, { kind: 'message' }> {
   return { id, kind: 'message', actor: 'user', content, eventId };
+}
+
+function sideMarks({ answer, presentationIds }: ProjectQuestion): MarkedComparison['answer'] {
+  if (!answer || answer.kind === 'text') return undefined;
+  if (answer.kind === 'skip') return 'unsure';
+  const chosen = answer.kind === 'preferred' ? answer.presentationId : undefined;
+  return presentationIds.map((id) => (!chosen || id === chosen ? 'chosen' : 'not-chosen'));
 }

@@ -18,6 +18,9 @@ const allowedTags = [
   'a'
 ];
 
+/** Phrasing that a button or heading may hold: no blocks, links or line breaks. */
+const inlineTags = ['strong', 'em', 'del', 'code'];
+
 /** Render GitHub-flavoured Markdown while stripping raw HTML and unsafe URLs. */
 export function renderSafeMarkdown(source: string): string {
   const rendered = marked.parse(source, { async: false, breaks: true, gfm: true });
@@ -33,5 +36,15 @@ export function renderSafeMarkdown(source: string): string {
         attribs: { ...attributes, rel: 'nofollow noreferrer' }
       })
     }
+  });
+}
+
+/** Render one line of Markdown as emphasis and code only, a link keeping just its text. */
+export function renderSafeInlineMarkdown(source: string): string {
+  const rendered = marked.parseInline(source, { async: false, gfm: true });
+  return sanitizeHtml(rendered, {
+    allowedTags: inlineTags,
+    allowedAttributes: {},
+    disallowedTagsMode: 'discard'
   });
 }

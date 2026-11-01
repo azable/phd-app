@@ -59,7 +59,7 @@ describe('participant Timeline projection', () => {
     expect(Object.keys(turn.pills).toSorted()).toEqual([...presentationIds].toSorted());
   });
 
-  it('shows answers to a turn’s two comparisons, each in its own operation, only as captions', () => {
+  it('shows answers to a turn’s two comparisons, each in its own operation, only as marks', () => {
     // Shaped like a recorded project: one turn asks two comparisons; each is answered at a later
     // step in an operation of its own, a message between; a New pair without a question follows.
     const values = twoComparisons();
@@ -71,12 +71,12 @@ describe('participant Timeline projection', () => {
       'preference-17'
     ]);
     expect(turns(items)[0].comparisons.map(({ answer }) => answer)).toEqual([
-      [{ type: 'markdown', text: 'with `i`' }],
-      [{ type: 'markdown', text: 'plain message' }]
+      ['chosen', 'not-chosen'],
+      ['chosen', 'not-chosen']
     ]);
   });
 
-  it('shows a pair in its turn with its question and the preferred side’s label, which replaces the preference message', () => {
+  it('shows a pair in its turn with its question and the preferred side marked, which replaces the preference message', () => {
     const items = participantTimeline(askedPair());
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn']);
     expect(turns(items)[0]).toMatchObject({
@@ -88,20 +88,36 @@ describe('participant Timeline projection', () => {
             presentationIds: [...presentationIds],
             labels: ['cells', 'tallies']
           },
-          answer: [{ type: 'markdown', text: 'cells' }]
+          answer: ['chosen', 'not-chosen']
         }
       ]
     });
   });
 
-  it('captions a changed answer with the latest, showing neither answer as a message', () => {
+  it('marks a changed answer by the latest, showing neither answer as a message', () => {
     const values = askedPair();
     const first = values.at(-1)!;
     if (first.type !== 'visualization.preference-recorded') throw new Error('Expected an answer.');
     values.push({ ...first, id: 6, payload: { ...first.payload, preferred: presentationIds[1] } });
     const items = participantTimeline(values);
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn']);
-    expect(turns(items)[0].comparisons[0].answer).toEqual([{ type: 'markdown', text: 'tallies' }]);
+    expect(turns(items)[0].comparisons[0].answer).toEqual(['not-chosen', 'chosen']);
+  });
+
+  it('marks both sides of a pair either is fine, and neither of one left for later', () => {
+    const answered = (outcome: 'tie' | 'skip') => {
+      const values = askedPair();
+      const last = values.at(-1)!;
+      if (last.type !== 'visualization.preference-recorded') throw new Error('Expected an answer.');
+      const { displaySetId, presentations, step } = last.payload;
+      values[values.length - 1] = {
+        ...last,
+        payload: { displaySetId, presentations, step, outcome }
+      } as ProjectEvent;
+      return turns(participantTimeline(values))[0].comparisons[0].answer;
+    };
+    expect(answered('tie')).toEqual(['chosen', 'chosen']);
+    expect(answered('skip')).toBe('unsure');
   });
 
   it('shows either is fine on an undesigned pair, and a question in words in its turn, its answer the next message', () => {

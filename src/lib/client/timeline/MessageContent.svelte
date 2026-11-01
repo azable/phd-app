@@ -3,7 +3,7 @@
 
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
-  import { renderSafeMarkdown } from './markdown';
+  import { renderSafeInlineMarkdown, renderSafeMarkdown } from './markdown';
   import { joinTrailingPunctuation } from './message-punctuation';
   import {
     elidedName,
@@ -38,6 +38,8 @@
     pill?: Snippet<[presentationId: string]>;
     /** The presentations pill draws, by id. */
     pilled?: (presentationId: string) => boolean;
+    /** Phrasing only, for a button, heading or label: one line, no buttons or links of its own. */
+    inline?: boolean;
   };
 
   let {
@@ -49,7 +51,8 @@
     onRevealSource = () => {},
     design,
     pill,
-    pilled = () => false
+    pilled = () => false,
+    inline = false
   }: Props = $props();
 
   // A linked pill naming a long label shows it elided at the start (@…compare.left); the parts it
@@ -139,21 +142,27 @@
   {/if}
 {/snippet}
 
-<!-- Lines tall enough for a pill (20px) in the text's middle without pushing lines apart. -->
-<div class="message-content text-base leading-7">
+<!-- Lines tall enough for a pill (20px) in the text's middle without pushing lines apart; inline,
+  the surrounding text's. -->
+<svelte:element
+  this={inline ? 'span' : 'div'}
+  class={['message-content', !inline && 'text-base leading-7']}
+>
   {#each joinTrailingPunctuation(content) as { segment, punctuation, after }, index (`${segment.type}-${index}`)}
     {#if segment.type === 'markdown'}
-      {@const html = renderSafeMarkdown(segment.text)}
-      <!-- renderSafeMarkdown applies the allowlist and URL policy before this HTML boundary. -->
+      {@const html = inline
+        ? renderSafeInlineMarkdown(segment.text)
+        : renderSafeMarkdown(segment.text)}
+      <!-- The renderers apply the allowlist and URL policy before this HTML boundary. -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <span class="message-markdown" {@attach linkReferences}>{@html html}</span>
+      <span class="message-markdown" {@attach !inline && linkReferences}>{@html html}</span>
     {:else}
       <!-- A pill keeps the punctuation after it on its line, without a gap before it. -->
       <span class={punctuation && 'ref-joined whitespace-nowrap'}>
         {#each singletonReferenceSegments(segment) as reference, position (position)}
-          {#if pill && reference.type === 'presentation-ref' && reference.step === undefined && pilled(reference.presentationId)}
+          {#if !inline && pill && reference.type === 'presentation-ref' && reference.step === undefined && pilled(reference.presentationId)}
             {@render pill(reference.presentationId)}
-          {:else if interactive}
+          {:else if interactive && !inline}
             <button
               type="button"
               class="group mx-1 inline-flex items-center gap-1.5 rounded-md align-middle leading-none focus-visible:outline-none"
@@ -175,11 +184,11 @@
             </span>
           {/if}
         {/each}{#if punctuation}<span class="ref-punctuation ml-0.5">{punctuation}</span>{/if}</span
-      >{after === 'space' ? ' ' : ''}{#if after === 'paragraph'}<span class="mt-2 block"
+      >{after === 'space' ? ' ' : ''}{#if after === 'paragraph' && !inline}<span class="mt-2 block"
         ></span>{/if}
     {/if}
   {/each}
-</div>
+</svelte:element>
 
 <style>
   .message-content :global(.ref-joined > :nth-last-child(2)) {

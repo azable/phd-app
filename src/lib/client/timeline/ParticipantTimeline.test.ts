@@ -24,7 +24,7 @@ describe('participant timeline', () => {
     expect(body.match(/<article/g)).toHaveLength(1);
     expect(body).toContain('Adds the digits.');
     // The question is the reply's last paragraph, emphasised, with no hint how to answer it.
-    expect(body).toMatch(/<p class="[^"]*font-medium[^"]*">(?:<!--[^>]*-->|\s)*Who is it for\?/u);
+    expect(body).toMatch(/<p class="[^"]*font-medium[^"]*">(?:<[^>]*>|\s)*Who is it for\?/u);
     expect(body.lastIndexOf('aria-label="View ')).toBeLessThan(body.indexOf('Who is it for?'));
     expect(body).not.toContain('Answer in the chat');
     // Neither version is named in the reply, so both are appended, each with its actions.
@@ -49,7 +49,7 @@ describe('participant timeline', () => {
     expect(body.indexOf('Counting:')).toBeLessThan(body.indexOf('aria-label="View '));
   });
 
-  it('shows a comparison in its message: the question, each side by its label, and the answer', () => {
+  it('shows a comparison in its message: the question, each side by its label, marked by the answer', () => {
     const body = timeline(
       turn([{ type: 'markdown', text: 'Two looks to compare.' }], {
         pair: { question: 'Cells or tallies?', labels: ['cells', 'tallies'] },
@@ -58,33 +58,39 @@ describe('participant timeline', () => {
     );
     expect(body.match(/<article/g)).toHaveLength(1);
     expect(body).toContain('Cells or tallies?');
-    expect(body).toContain('cells:');
-    expect(body).toContain('tallies:');
-    expect(body).toMatch(/→<\/span>.*<p>cells<\/p>/su);
+    expect(body).toMatch(/Your choice:.*cells:.*Not chosen:.*tallies:/su);
+    expect(body).not.toContain('→');
   });
 
-  const comparison = (answers: string[] = []) => [
+  const comparison = (answers: (string | 'tie' | 'skip')[] = []) => [
     ...turn([{ type: 'markdown', text: 'Two looks to compare.' }], {
       pair: { question: 'Cells or tallies?', labels: ['cells', 'tallies'] }
     }),
     ...answers.map(
-      (preferred, index) =>
+      (answer, index) =>
         ({
           id: 6 + index,
           operationId: '22345678-1234-4234-8234-123456789abc',
           createdAt: `2026-08-30T00:00:0${6 + index}.000Z`,
           type: 'visualization.preference-recorded',
           actor: { kind: 'user' },
-          payload: { displaySetId, presentations: [...ids], preferred, step: 0 }
+          payload: {
+            displaySetId,
+            presentations: [...ids],
+            step: 0,
+            ...(answer === 'tie' || answer === 'skip' ? { outcome: answer } : { preferred: answer })
+          }
         }) as ProjectEvent
     )
   ];
   const heading = (body: string) =>
-    body.match(/<button[^>]*title="Show this comparison"[^>]*>Cells or tallies\?<\/button>/)?.[0];
+    body.match(
+      /<button[^>]*title="Show this comparison"[^>]*>(?:<[^>]*>|\s)*Cells or tallies\?.*?<\/button>/su
+    )?.[0];
 
-  it('makes a comparison’s question a button that shows its pair, selected while it shows', () => {
+  it('makes a comparison’s question a button over its card that shows its pair, selected while it shows', () => {
     const events = comparison([ids[0]]);
-    expect(heading(timeline(events))).toBeDefined();
+    expect(heading(timeline(events))).toContain('after:absolute after:inset-0');
     expect(heading(timeline(events))).not.toContain('aria-current');
     expect(heading(timeline(events, { open: true }))).toContain('aria-current="true"');
     // A source chosen on its own hides the stage, so the comparison is no longer open.
@@ -96,13 +102,41 @@ describe('participant timeline', () => {
     expect(heading(timeline(comparison()))).toContain('aria-current="true"');
   });
 
-  it('captions a changed answer with the latest', () => {
+  it('marks a changed answer by the latest', () => {
     const body = timeline(comparison([ids[0], ids[1]]));
-    expect(body).toMatch(/→<\/span>.*<p>tallies<\/p>/su);
-    expect(body).not.toMatch(/→<\/span>.*<p>cells<\/p>/su);
+    expect(body).toMatch(/Not chosen:.*cells:.*Your choice:.*tallies:/su);
+    expect(body.match(/Your choice:/g)).toHaveLength(1);
     expect(body.match(/<article/g)).toHaveLength(1);
   });
 
+  it('ticks both sides when either is fine, and neither when unsure', () => {
+    const tie = timeline(comparison(['tie']));
+    expect(tie.match(/Your choice:/g)).toHaveLength(2);
+    expect(tie).not.toContain('Not chosen:');
+    const unsure = timeline(comparison(['skip']));
+    expect(unsure).not.toMatch(/Your choice:|Not chosen:/);
+    expect(unsure).toMatch(/title="You were unsure"[^>]*>.*unsure<\/span>/su);
+  });
+
+  it('renders questions and side labels as inline Markdown, with no blocks in a button', () => {
+    const pair = timeline(
+      turn([{ type: 'markdown', text: 'Two looks to compare.' }], {
+        pair: { question: 'Should the marker carry `i`?', labels: ['with `i`', 'without'] }
+      })
+    );
+    expect(pair).not.toContain('`');
+    const button = pair.match(/<button[^>]*title="Show this comparison"[^>]*>.*?<\/button>/su)?.[0];
+    expect(button).toMatch(/Should the marker carry .*<code>i<\/code>\?/su);
+    expect(button).not.toMatch(/<(p|div)[\s>]/);
+    expect(pair).toMatch(/with .*<code>i<\/code>:/su);
+    const words = timeline(
+      turn([{ type: 'markdown', text: 'Adds the digits.' }], {
+        question: { text: 'Keep the **carry** in `sum`?' }
+      })
+    );
+    expect(words).toMatch(/Keep the .*<strong>carry<\/strong> in .*<code>sum<\/code>\?/su);
+    expect(words).not.toContain('`');
+  });
   it('captions no answer in words, the next message being the answer', () => {
     const body = timeline([
       ...turn([{ type: 'markdown', text: 'Adds the digits.' }], {

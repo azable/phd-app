@@ -2,11 +2,14 @@
   import { fly } from 'svelte/transition';
 
   import BotIcon from '@lucide/svelte/icons/bot';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import CopyIcon from '@lucide/svelte/icons/copy';
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
   import StickyNoteIcon from '@lucide/svelte/icons/sticky-note';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
+  import XIcon from '@lucide/svelte/icons/x';
 
   import {
     codeIn,
@@ -195,6 +198,10 @@
 </script>
 
 <!-- A presentation in an assistant's message: view, compare, its source, add to feedback. -->
+{#snippet line(text: string)}
+  <MessageContent content={[{ type: 'markdown', text }]} inline />
+{/snippet}
+
 {#snippet versionPill(pill: VersionPill, label?: string, onView?: (event: MouseEvent) => void)}
   {@const id = pill.value.presentation.presentationId}
   {@const sourceHash = pill.sourceHash}
@@ -229,20 +236,6 @@
       {@const pills = item.pills}
       {#snippet inline(presentationId: string)}
         {@render versionPill(pills[presentationId])}
-      {/snippet}
-      {#snippet caption(answer: Content)}
-        <!-- An answer under its question, its references as pills. -->
-        <div
-          class="flex items-baseline gap-1.5 text-muted-foreground [&_.message-content]:min-w-0 [&_.message-content]:text-sm"
-        >
-          <span class="shrink-0">→</span>
-          <MessageContent
-            content={answer}
-            onReferenceActivate={activateReference}
-            pill={inline}
-            pilled={(id) => id in pills}
-          />
-        </div>
       {/snippet}
       <!-- One assistant turn: its reply naming its versions, the pills of those it did not name,
         its question, and its comparisons; a turn without a reply says what its versions show. -->
@@ -279,9 +272,11 @@
                   type="button"
                   class="max-w-full rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   title="Show what this question is about"
-                  onclick={() => showQuestion(question)}>{question.text}</button
-                >{:else}{question.text}{/if}{#if about}{@render versionPill(about, undefined, () =>
-                  showQuestion(question)
+                  onclick={() => showQuestion(question)}>{@render line(question.text)}</button
+                >{:else}{@render line(question.text)}{/if}{#if about}{@render versionPill(
+                  about,
+                  undefined,
+                  () => showQuestion(question)
                 )}{/if}
             </p>
           {/if}
@@ -324,32 +319,54 @@
         {/if}
         {#each item.comparisons as { question, answer } (question.eventId)}
           {@const open = openPair !== undefined && openPair === question.displaySetId}
-          <!-- A comparison: its question, which shows its pair, each side by its label, and the
-            latest answer; outlined while the stage shows its pair. -->
-          <div
-            class={[
-              'mt-3 border-t pt-2 text-sm',
-              open && '-mx-2 rounded-lg border-transparent bg-muted px-2 pb-2 ring-2 ring-ring'
-            ]}
-          >
-            <p class="font-medium wrap-break-word">
-              <button
-                type="button"
-                class="max-w-full rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                title="Show this comparison"
-                aria-current={open ? 'true' : undefined}
-                onclick={() => showComparison(question)}>{question.text}</button
-              >
-            </p>
-            <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 leading-7">
-              {#each question.presentationIds as id, slot (id)}
-                {@const label = question.labels?.[slot]}
-                {#if pills[id]}<span class="inline-flex items-center"
-                    >{@render versionPill(pills[id], label && `${label}:`)}</span
+          <!-- A comparison: a card whose question shows its pair, each side by its label, marked
+            by the latest answer; outlined while the stage shows its pair. The question's button
+            stretches over the card, the side pills above it. -->
+          <div class="mt-3 border-t pt-1.5 text-sm">
+            <div
+              class={[
+                'relative -mx-2 rounded-lg px-2 py-1.5 transition-colors has-[.comparison-target:focus-visible]:ring-2 has-[.comparison-target:focus-visible]:ring-ring',
+                open ? 'bg-muted ring-2 ring-ring' : 'has-[.comparison-target:hover]:bg-muted/60'
+              ]}
+            >
+              <p class="font-medium wrap-break-word">
+                <button
+                  type="button"
+                  class="comparison-target max-w-full text-left after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none"
+                  title="Show this comparison"
+                  aria-current={open ? 'true' : undefined}
+                  onclick={() => showComparison(question)}>{@render line(question.text)}</button
+                >
+              </p>
+              <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 leading-7">
+                {#each question.presentationIds as id, slot (id)}
+                  {@const label = question.labels?.[slot]}
+                  {@const mark = Array.isArray(answer) ? answer[slot] : undefined}
+                  {#if pills[id]}<span class="inline-flex min-w-0 items-center gap-1"
+                      >{#if mark === 'chosen'}<span
+                          class="inline-flex shrink-0 text-primary"
+                          title="Your choice"
+                          ><CheckIcon class="size-4" aria-hidden="true" /><span class="sr-only"
+                            >Your choice:</span
+                          ></span
+                        >{:else if mark === 'not-chosen'}<span
+                          class="inline-flex shrink-0 text-muted-foreground"
+                          title="Not chosen"
+                          ><XIcon class="size-4" aria-hidden="true" /><span class="sr-only"
+                            >Not chosen:</span
+                          ></span
+                        >{/if}<span class="relative z-10 min-w-0"
+                        >{@render versionPill(pills[id], label && `${label}:`)}</span
+                      ></span
+                    >{/if}
+                {/each}
+                {#if answer === 'unsure'}<span
+                    class="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                    title="You were unsure"
+                    ><CircleQuestionMarkIcon class="size-3.5" aria-hidden="true" />unsure</span
                   >{/if}
-              {/each}
+              </div>
             </div>
-            {#if answer}<div class="mt-1.5">{@render caption(answer)}</div>{/if}
           </div>
         {/each}
       </article>
