@@ -1291,6 +1291,96 @@ describe('submitProjectFeedback', () => {
     );
   });
 
+  describe('a repair ladder', () => {
+    // Sources sharing most lines, each failing with a problem of its own, or building.
+    const lines = (close: string, snippet = '', node = '') =>
+      [
+        '<script lang="sverlin"></script>',
+        '{#snippet Shown()}<Node>one</Node>{/snippet}',
+        snippet,
+        '{#layout Main}<Node>',
+        '<Node>{@render Shown()}</Node>',
+        '<Node>two</Node>',
+        '<Node>three</Node>',
+        node,
+        `</Node>${close}`
+      ].join('\n');
+    const sources = {
+      unclosed: lines('{/layout>'),
+      twice: lines('{/layout}', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
+      unknown: lines('{/layout}', '', '<Node>{@render Missing()}</Node>'),
+      rewritten:
+        '<script lang="sverlin"></script>\n{#layout Main}\n<Node>{@render Gone()}</Node>\n{/layout}',
+      working: lines('{/layout}')
+    };
+    const attempts = (...names: (keyof typeof sources)[]) => {
+      mocks.generatePrepared.mockReset();
+      for (const name of names)
+        mocks.generatePrepared.mockResolvedValueOnce({
+          ...generation('unused', `Source ${name}`),
+          decision: { action: 'revise', source: sources[name], summary: `Source ${name}` }
+        });
+    };
+    const submit = async () => {
+      const { createProject } = await import('./service');
+      const { submitProjectFeedback } = await import('./commands');
+      const created = await createProject({ title: 'Repair ladder' }, serviceDependencies);
+      return submitProjectFeedback(
+        {
+          projectId: created.projectId,
+          expectedHead: projectHead(created).id,
+          content: markdownMessage('Do the edge case too'),
+          focus: [],
+          presentationCount: 1,
+          operationId: '12345678-1234-4123-8123-123456789abc'
+        },
+        commandDependencies
+      );
+    };
+    const failures = (events: ProjectEvent[]) =>
+      events.flatMap((event) =>
+        event.type === 'build.failed'
+          ? [(event.payload.diagnostics ?? []).map(({ code, message }) => `${code}: ${message}`)]
+          : []
+      );
+    const stopped = (events: ProjectEvent[]) => {
+      expect(events.at(-1)).toMatchObject({
+        type: 'system.notified',
+        payload: { severity: 'error', message: expect.stringContaining('each repair ran into') }
+      });
+      expect(events.some(({ type }) => type === 'artifact.version-created')).toBe(false);
+    };
+
+    it('stops once two repairs fail with problems unrelated to those they repaired', async () => {
+      attempts('unclosed', 'twice', 'unknown', 'working');
+      const result = await submit();
+      const failed = failures(result.appendedEvents);
+      expect(failed).toHaveLength(3);
+      expect(new Set(failed.flat()).size).toBe(failed.flat().length);
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(3);
+      stopped(result.appendedEvents);
+    });
+
+    it('stops at once after a repair that rewrote the source and failed differently', async () => {
+      attempts('unclosed', 'rewritten', 'working');
+      const result = await submit();
+      expect(failures(result.appendedEvents)).toHaveLength(2);
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
+      stopped(result.appendedEvents);
+    });
+
+    it('keeps repairing one stuck on a problem, or revealing one new one, to success', async () => {
+      attempts('unclosed', 'unclosed', 'twice', 'working');
+      const result = await submit();
+      expect(failures(result.appendedEvents)).toHaveLength(3);
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(4);
+      expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
+        true
+      );
+      expect(result.appendedEvents.some(({ type }) => type === 'system.notified')).toBe(false);
+    });
+  });
+
   it('records a focused preference and defers source revision with a brief observation', async () => {
     const { submitProjectPreference } = await import('./commands');
     const comparison = await createComparisonProject('Preference observation');

@@ -1267,7 +1267,11 @@ async function runSverlinAssistantTurn(
         diagnostics: failed.result.diagnostics,
         priorFailureSummaries: [...failureSummaries]
       };
-      return { document: current, done: false };
+      return {
+        document: current,
+        done: false,
+        failure: { source: candidate, diagnostics: failed.result.diagnostics }
+      };
     }
   );
 }
@@ -2417,6 +2421,58 @@ function appendExhaustedCandidateFailure(
   );
 }
 
+function appendWanderingRepairFailure(
+  document: ProjectDocument,
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+) {
+  return appendSystemFailure(
+    document,
+    'I could not build the requested change: each repair ran into a new problem instead of fixing the last, so I stopped and kept the last working visualization. A smaller change, or one part at a time, may work better.',
+    operationId,
+    dependencies
+  );
+}
+
+/** A failed build an attempt reports to the ladder: its problems and the source that had them. */
+type AttemptFailure = { source: string; diagnostics: readonly Problem[] };
+type Problem = { code?: string; message: string };
+
+/**
+ * Whether a failed repair wandered from the attempt it repaired rather than converging: none of
+ * that attempt's problems recur, and new ones appear. A repair that still has a problem it was
+ * asked to fix is stuck on it, which a higher effort may solve, and is not wandering.
+ */
+function repairWandered(previous: AttemptFailure, repair: AttemptFailure): boolean {
+  const key = ({ code, message }: Problem) => `${code ?? ''}\n${message}`;
+  const before = new Set(previous.diagnostics.map(key));
+  return repair.diagnostics.length > 0 && !repair.diagnostics.some((d) => before.has(key(d)));
+}
+
+/** The share of a source's lines, trimmed, that the one it was made from does not have. */
+function sourceRewritten(previous: string, source: string): number {
+  const remaining = new Map<string, number>();
+  for (const line of previous.split('\n'))
+    remaining.set(line.trim(), (remaining.get(line.trim()) ?? 0) + 1);
+  const lines = source.split('\n');
+  const fresh = lines.filter((line) => {
+    const left = remaining.get(line.trim()) ?? 0;
+    if (left) remaining.set(line.trim(), left - 1);
+    return !left;
+  });
+  return fresh.length / lines.length;
+}
+
+/**
+ * Runs attempts until one is done. A ladder whose repairs wander (see repairWandered) is doomed:
+ * each fixes what it was told, but the source, too broken to repair one problem at a time, shows
+ * a new one, and each higher effort takes longer (a linear search on 2026-11-01 failed four builds
+ * so, each with a different problem, the fourth after 97 s). The ladder stops escalating, keeping
+ * the current version and saying why, once two repairs have wandered, or one that also rewrote
+ * most of the source (more than half its lines new), starting over rather than repairing. One
+ * wander is allowed, as fixing a problem often reveals the next; a repair stuck on the same
+ * problem keeps the higher efforts and the fallback.
+ */
 async function runAttemptLadder(
   document: ProjectDocument,
   operationId: string,
@@ -2428,8 +2484,10 @@ async function runAttemptLadder(
   runAttempt: (
     document: ProjectDocument,
     attempt: number
-  ) => Promise<{ document: ProjectDocument; done: boolean }>
+  ) => Promise<{ document: ProjectDocument; done: boolean; failure?: AttemptFailure }>
 ): Promise<ProjectDocument> {
+  let previous: AttemptFailure | undefined;
+  let wandered = 0;
   for (let attempt = 1; attempt <= chatbot.config.attemptProfiles.length; attempt += 1) {
     if (attempt > 1 && !hasTimeForAnotherAttempt(chatbot)) {
       return appendAttemptDeadlineFailure(document, operationId, dependencies);
@@ -2437,6 +2495,12 @@ async function runAttemptLadder(
     const result = await runAttempt(document, attempt);
     document = result.document;
     if (result.done) return document;
+    if (previous && result.failure && repairWandered(previous, result.failure)) {
+      wandered += 1;
+      if (wandered >= 2 || sourceRewritten(previous.source, result.failure.source) > 0.5)
+        return appendWanderingRepairFailure(document, operationId, dependencies);
+    }
+    previous = result.failure;
   }
   throw new Error('The configured attempt ladder ended without a terminal result.');
 }
