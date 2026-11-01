@@ -2663,7 +2663,8 @@ describe('several variants from chat', () => {
                 displaySetId: event.payload.displaySetId,
                 presentation: event.payload.presentation,
                 question: event.payload.question,
-                label: event.payload.label
+                label: event.payload.label,
+                brief: event.payload.brief
               }
             }
           ]
@@ -2808,13 +2809,14 @@ describe('several variants from chat', () => {
 
   it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
     const choose = vi.fn();
+    const tone = { attribute: 'tone', left: 'restrained', right: 'bold' };
     const { before, result } = await decide(
       {
         action: 'vary',
         values: [],
         randomise: [],
         count: null,
-        comparisons: [views('IntCell', 'IntTally'), marks],
+        comparisons: [views('IntCell', 'IntTally'), { ...marks, brief: tone }],
         summary: 'Asks two questions'
       },
       { getChooser: () => chooser(choose), chooserFor: async () => 'model' }
@@ -2835,6 +2837,15 @@ describe('several variants from chat', () => {
       );
       expect([left.label, right.label]).toEqual(
         index ? ['amber', 'blue'] : ['IntCell', 'IntTally']
+      );
+      // A pair asking a brief attribute by showing records the tag each side stands for.
+      expect([left.brief, right.brief]).toEqual(
+        index
+          ? [
+              { key: 'tone', tag: 'restrained' },
+              { key: 'tone', tag: 'bold' }
+            ]
+          : [undefined, undefined]
       );
       const differing = Object.keys({
         ...left.presentation.variant,
@@ -2872,8 +2883,15 @@ describe('several variants from chat', () => {
           values: [],
           randomise: [],
           count: null,
-          comparisons: [views('IntCell', 'IntBogus'), views('IntCell', 'IntCell')],
-          summary: 'Asks two questions'
+          comparisons: [
+            views('IntCell', 'IntBogus'),
+            views('IntCell', 'IntCell'),
+            {
+              ...views('IntCell', 'IntTally'),
+              brief: { attribute: 'tone', left: 'restrained', right: 'novice' }
+            }
+          ],
+          summary: 'Asks three questions'
         }
       })
       .mockResolvedValueOnce(generation(undefined, 'Sorry.'));
@@ -2886,9 +2904,14 @@ describe('several variants from chat', () => {
     const rejected = result.appendedEvents.find(({ type }) => type === 'revision.edits-rejected');
     expect(rejected?.payload).toMatchObject({
       rejected: 'comparisons',
-      problems: [expect.stringContaining('IntBogus'), expect.stringContaining('the same values')]
+      problems: [
+        expect.stringContaining('IntBogus'),
+        expect.stringContaining('the same values'),
+        expect.stringContaining('tone has no tag "novice"')
+      ]
     });
     expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
+      expect.objectContaining({ code: 'comparison_not_built' }),
       expect.objectContaining({ code: 'comparison_not_built' }),
       expect.objectContaining({ code: 'comparison_not_built' })
     ]);

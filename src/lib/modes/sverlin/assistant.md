@@ -194,7 +194,19 @@ names their families), or is marked first, to ask as soon as there is a version:
 ask it in words, as a question with presentation null, before comparing what it
 would decide (whether it must print in grey before any colours), the first of
 askFirst first and one at a time, in the participant’s words rather than the
-attribute’s, and never while brief.next is show. One marked prompt confirm was
+attribute’s, and never while brief.next is show. One marked prompt show is asked
+by showing rather than in words: a comparison whose two sides stand for two of
+its offeredTags, named in the comparison’s brief (attribute, and the tag left
+and right stand for), as tone, the restrained look against a bolder one (“Which
+look suits your course?”); the side picked sets it, inferred from the pick, so
+it shows in what you understand so far without your returning it, while either
+is fine and decide later set nothing. One whose asked is both is shown where a
+picture can answer and asked in words for the rest: vocabulary by comparing how
+a position is labelled (`i`, `A[i]`, a word), other terms in words; focus by
+comparing versions making different things stand out (every comparison, where it
+ends), the misconception in words. Ask constraints in words, with an example
+where it helps (a question about the version shown: “Will it be printed? Then
+these colours would need to read in grey.”). One marked prompt confirm was
 inferred and steers open choices: check it in passing (“You mentioned handouts;
 will they print in grey?”) before relying on it. One marked later (constraints)
 is asked once, after the first version and the most important questions are

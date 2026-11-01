@@ -88,6 +88,34 @@ function comparisonSide(side: string) {
   });
 }
 
+/**
+ * A brief attribute a comparison asks by showing, and the tag each side stands for: the side
+ * preferred sets it, inferred from the pick. Optional (null in the strict response).
+ */
+const comparisonBrief = v.optional(
+  v.nullable(
+    v.pipe(
+      v.strictObject({
+        attribute: v.pipe(
+          v.picklist(briefKeys),
+          v.description('The attribute, from project.brief.')
+        ),
+        left: v.pipe(
+          v.picklist(briefTags),
+          v.description('The tag of the attribute’s offeredTags the first side stands for.')
+        ),
+        right: v.pipe(
+          v.picklist(briefTags),
+          v.description('The tag of the attribute’s offeredTags the second side stands for.')
+        )
+      }),
+      v.description(
+        'The brief attribute this pair asks by showing (one marked prompt show in project.brief), as tone, left restrained and right bold, the side picked setting it; or null for a pair about the design alone.'
+      )
+    )
+  )
+);
+
 /** The most comparisons one decision asks, each a pair. */
 export const maximumComparisons = 8;
 
@@ -112,7 +140,8 @@ const comparisons = v.optional(
               )
             ),
             left: comparisonSide('The first of the pair'),
-            right: comparisonSide('The second of the pair')
+            right: comparisonSide('The second of the pair'),
+            brief: comparisonBrief
           }),
           v.check(
             ({ left, right }) => left.label.toLowerCase() !== right.label.toLowerCase(),

@@ -74,7 +74,7 @@ import type {
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
 import { openQuestion } from '$lib/shared/projects/questions';
-import { projectBrief, type BriefEntry } from '$lib/shared/projects/brief';
+import { briefAttribute, projectBrief, type BriefEntry } from '$lib/shared/projects/brief';
 import { briefSteering, type BriefSteering } from '$lib/server/chat-bots/brief-context';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
@@ -1822,8 +1822,23 @@ function comparisonRequests(
   );
 }
 
-function pairQuestion({ question, left, right }: Comparisons[number]): PairQuestion {
-  return { question, labels: [left.label, right.label] };
+function pairQuestion({ question, left, right, brief }: Comparisons[number]): PairQuestion {
+  return {
+    question,
+    labels: [left.label, right.label],
+    ...(brief ? { brief: { key: brief.attribute, tags: [brief.left, brief.right] } } : {})
+  };
+}
+
+/** Why a comparison cannot ask the brief attribute it names by showing, if it cannot. */
+function comparisonBriefProblem({ brief }: Comparisons[number]): string | undefined {
+  if (!brief) return undefined;
+  const tags = Object.keys(briefAttribute(brief.attribute).tags ?? {});
+  const unnamed = [brief.left, brief.right].filter((tag) => !tags.includes(tag));
+  if (unnamed.length)
+    return `${brief.attribute} has no tag ${unnamed.map((tag) => JSON.stringify(tag)).join(' or ')}; its tags are ${tags.join(', ')}.`;
+  if (brief.left === brief.right) return `its two sides stand for the same ${brief.attribute}.`;
+  return undefined;
 }
 
 function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
@@ -1832,8 +1847,9 @@ function designValues(values: readonly { variable: string; value: string | numbe
 
 /**
  * What keeps each of a decision's comparisons from being built as given: a value its variable does
- * not offer, two sides alike, a side hiding the layout itself or most of the picture, or a choice
- * the brief keeps out of comparisons (a colour where it must print in grey).
+ * not offer, two sides alike, a side hiding the layout itself or most of the picture, a choice the
+ * brief keeps out of comparisons (a colour where it must print in grey), or a brief attribute asked
+ * by showing with tags it does not name.
  */
 function comparisonProblems(
   pairs: Comparisons,
@@ -1841,13 +1857,16 @@ function comparisonProblems(
   guard: GuardContext,
   brief: BriefSteering
 ): string[][] {
-  return pairs.map(({ question, left, right }, index) => {
+  return pairs.map((pair, index) => {
+    const { question, left, right } = pair;
     const name = `Comparison ${index + 1} (“${question}”)`;
     const problems = [...left.values, ...right.values].flatMap(({ variable, value }) =>
       offeredOptions(design, variable)?.includes(value)
         ? []
         : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
     );
+    const asked = comparisonBriefProblem(pair);
+    if (asked) problems.push(`${name}: ${asked}`);
     const sides = [designValues(left.values), designValues(right.values)];
     for (const variable of Object.keys({ ...sides[0], ...sides[1] })) {
       const excluded = brief.excluded(variable);

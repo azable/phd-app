@@ -91,6 +91,23 @@ describe('the brief in the assistant’s context', () => {
     ).not.toHaveProperty('assumed');
   });
 
+  it('offers to show what a picture answers, and to ask in words the rest', () => {
+    const byKey = Object.fromEntries(
+      briefContext(brief({}), open).attributes.map((item) => [item.key, item])
+    );
+    // The look is asked by a comparison, the side picked setting it.
+    expect(byKey.tone).toMatchObject({
+      prompt: 'show',
+      asked: 'showing',
+      decides: ['lettering', 'colour']
+    });
+    // A label’s wording shown, other terms in words; what stands out shown, the misconception in words.
+    expect(byKey.vocabulary).toMatchObject({ prompt: 'ask', asked: 'both', decides: ['views'] });
+    expect(byKey.focus).toMatchObject({ prompt: 'ask', asked: 'both', first: true });
+    expect(byKey.audience).toMatchObject({ prompt: 'ask' });
+    expect(byKey.audience).not.toHaveProperty('asked');
+  });
+
   it('asks about low vision and printing once, late, after the other questions', () => {
     const algorithm = { status: 'confirmed', value: 'insertion sort' } as const;
     const audience = { status: 'confirmed' as const, value: 'first-years', tags: ['novice'] };

@@ -37,9 +37,16 @@ export type AiBriefItem = {
   /**
    * ask: unknown, and asked first or bearing on choices still open, to ask in words before
    * comparing them;
+   * show: the same, but asked by showing, a comparison whose sides stand for its tags (decides
+   * names the families such a pair would vary);
    * confirm: inferred, and it steers choices still open.
    */
-  prompt?: 'ask' | 'confirm';
+  prompt?: 'ask' | 'show' | 'confirm';
+  /**
+   * How an unknown one is best asked when not only in words (brief.ts asked): showing, by a
+   * comparison; both, what a picture shows by a comparison and the rest in words.
+   */
+  asked?: 'showing' | 'both';
   /** Unknown and asked first (brief.ts askFirst): as soon as there is a version, before comparing. */
   first?: true;
   /** Unknown and asked once, late (brief.ts later). */
@@ -130,7 +137,8 @@ export function briefSteering(brief: readonly BriefItem[]): BriefSteering {
  * The brief for the assistant, given the choices still open (preference-summary.ts openChoices):
  * the subject while unknown, then unknown attributes asked first (brief.ts askFirst) whatever they
  * bear on, in order, then other unknowns bearing on open choices, the one bearing on the most worth
- * first, are worth asking; an inferred one whose values steer or exclude open choices, worth
+ * first, are worth asking, in words or, for those asked by showing (brief.ts asked), by a
+ * comparison; an inferred one whose values steer or exclude open choices, worth
  * confirming; and last, unknowns asked late (brief.ts later).
  * At most one question in words comes between things shown: once one has been asked since (see
  * questionsSinceShown), the next turn shows.
@@ -166,7 +174,11 @@ export function briefContext(
         ranked.push({ key: item.key, rank: 'subject', worth: Infinity });
         return { ...base, prompt: 'ask' };
       }
-      const unknown = { ...base, ...(attribute.assumed ? { assumed: attribute.assumed } : {}) };
+      const unknown = {
+        ...base,
+        ...(attribute.asked !== 'words' ? { asked: attribute.asked } : {}),
+        ...(attribute.assumed ? { assumed: attribute.assumed } : {})
+      };
       if (attribute.bearsOn === 'inputs') return unknown;
       const families = attribute.bearsOn;
       const bearing = kept.filter(({ family }) => families.includes(family));
@@ -182,7 +194,7 @@ export function briefContext(
       const decides = families.filter((f) => bearing.some(({ family }) => family === f));
       return {
         ...unknown,
-        prompt: 'ask',
+        prompt: attribute.asked === 'showing' ? 'show' : 'ask',
         ...(attribute.askFirst ? { first: true } : {}),
         ...(attribute.later ? { later: true } : {}),
         ...(decides.length ? { decides } : {})

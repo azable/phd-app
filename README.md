@@ -106,16 +106,20 @@ each queued as soon as it is built (`presentRemainingComparisons` in
 the pair's `visualization.presented` events, each with its side's `label`, and
 shown above it on the stage; the chat caption and the assistant's context give a
 preferred side as its label (“Cells or tallies? → tallies”), and a preference
-naming that display set is read with it in the assistant's context. A pair is
-answered by preferring a side, Either is fine (a tie) or Decide later (a skip),
-all recorded as `visualization.preference-recorded`, a tie or skip as its
-`outcome` with no `preferred`. An answer on one of them asks the assistant for
-no turn while others wait (`waitingComparisons`); it sets aside, as
-`candidates-advanced` with reason `moot`, those the answer makes moot, asking
-the pair just answered, about a variable it settled, or something a value it
-settled hides (`mootComparison` in
-[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
-that leaves none waiting starts the assistant's turn. A preference model
+naming that display set is read with it in the assistant's context. A comparison
+may also ask a brief attribute by showing, naming it and the tag each side
+stands for (tone: restrained or bold), stored as each side's `brief`: preferring
+a side sets the attribute, inferred, its source the question and the side's
+label (`projectBrief` in [`brief.ts`](src/lib/shared/projects/brief.ts)); a tie
+or skip sets nothing. A pair is answered by preferring a side, Either is fine (a
+tie) or Decide later (a skip), all recorded as
+`visualization.preference-recorded`, a tie or skip as its `outcome` with no
+`preferred`. An answer on one of them asks the assistant for no turn while
+others wait (`waitingComparisons`); it sets aside, as `candidates-advanced` with
+reason `moot`, those the answer makes moot, asking the pair just answered, about
+a variable it settled, or something a value it settled hides (`mootComparison`
+in [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the
+answer that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
 Bayesian Bradley–Terry model with Davidson ties over every choice's options,
 fitted from the events on each call, decides what is settled for every chooser:
@@ -136,20 +140,22 @@ before any comparison; those marked `later`, as low vision or printing in grey,
 asked once, late; and an `assumed` default, as tone's restrained look, steering
 while unknown), each unknown, inferred or confirmed, from intake's answers and
 the `brief` each assistant decision returns, recorded on its
-`assistant.responded`; which are worth asking or confirming now, and, once a
-question in words has been asked since anything new was last shown,
-`next: "show"`, so the next turn shows a change or a comparison rather than
-asking again ([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts));
-and what the brief keeps out of comparisons, as colour where it must print in
-grey, which a comparison varying it is sent back to the assistant for. The
-brief's values weight the summary's ranking of what is worth asking. The
-assistant may also ask one `question` at a time, in words or about a
-presentation (one shown, or the first its decision makes, with elements to
-highlight), answered by the participant's next message, which records the
-question it answers (`feedback.submitted` `answers`); the chat shows each
-question as the last paragraph of its reply, which is left without a last
-sentence or paragraph that repeats it, the next message being its answer, and
-each comparison pair its question and answer as a caption
+`assistant.responded`; which are worth asking or confirming now, in words or,
+for those `brief.ts` marks `asked: "showing"`, by a comparison
+(`prompt: "show"`), and, once a question in words has been asked since anything
+new was last shown, `next: "show"`, so the next turn shows a change or a
+comparison rather than asking again
+([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
+brief keeps out of comparisons, as colour where it must print in grey, which a
+comparison varying it is sent back to the assistant for. The brief's values
+weight the summary's ranking of what is worth asking. The assistant may also ask
+one `question` at a time, in words or about a presentation (one shown, or the
+first its decision makes, with elements to highlight), answered by the
+participant's next message, which records the question it answers
+(`feedback.submitted` `answers`); the chat shows each question as the last
+paragraph of its reply, which is left without a last sentence or paragraph that
+repeats it, the next message being its answer, and each comparison pair its
+question and answer as a caption
 ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side hiding the layout itself or most of the picture

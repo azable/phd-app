@@ -44,6 +44,7 @@ import {
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { presentationBufferState, waitingBehind } from '$lib/shared/projects/presentation-buffer';
 import { activeProjectOperation } from '$lib/shared/projects/operations';
+import type { BriefKey } from '$lib/shared/projects/brief';
 import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
 
@@ -1096,8 +1097,15 @@ async function recordBuildResult(
   };
 }
 
-/** The question an assistant's comparison asks, and what the participant would call each side. */
-export type PairQuestion = { question: string; labels: readonly [string, string] };
+/**
+ * The question an assistant's comparison asks, what the participant would call each side, and the
+ * brief attribute it asks by showing, with the tag each side stands for.
+ */
+export type PairQuestion = {
+  question: string;
+  labels: readonly [string, string];
+  brief?: { key: BriefKey; tags: readonly [string, string] };
+};
 
 /** Promote a complete successful batch to one synchronized active display set. */
 export async function activateBuiltPresentations(
@@ -1158,7 +1166,8 @@ export async function activateBuiltPresentations(
           displaySetId,
           slot: slot as 0 | 1,
           presentation,
-          ...(pair ? { question: pair.question, label: pair.labels[slot] } : {})
+          ...(pair ? { question: pair.question, label: pair.labels[slot] } : {}),
+          ...(pair?.brief ? { brief: { key: pair.brief.key, tag: pair.brief.tags[slot] } } : {})
         }
       })
     ),

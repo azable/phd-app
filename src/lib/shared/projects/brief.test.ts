@@ -136,3 +136,44 @@ describe('the brief from the events', () => {
     ).not.toHaveProperty('tags');
   });
 });
+
+describe('an attribute asked by showing', () => {
+  const side = (id: number, presentationId: string, label: string, tag: string) =>
+    ({
+      id,
+      type: 'visualization.presented',
+      payload: {
+        presentation: { presentationId },
+        question: 'Which look suits your course?',
+        label,
+        brief: { key: 'tone', tag }
+      }
+    }) as unknown as ProjectEvent;
+  const pair = [side(3, 'a', 'academic', 'restrained'), side(4, 'b', 'bolder', 'bold')];
+  const answer = (payload: object) =>
+    ({
+      id: 5,
+      type: 'visualization.preference-recorded',
+      payload: { presentations: ['a', 'b'], step: 0, ...payload }
+    }) as unknown as ProjectEvent;
+  const tone = (events: ProjectEvent[]) => projectBrief(events).find(({ key }) => key === 'tone');
+
+  it('is set by the side picked, as inferred from the pick', () => {
+    expect(tone([...pair, answer({ preferred: 'b' })])).toEqual({
+      key: 'tone',
+      status: 'inferred',
+      value: 'bolder',
+      source: 'Which look suits your course? → bolder',
+      tags: ['bold'],
+      eventId: 5
+    });
+  });
+
+  it('is left as it was by either is fine and decide later', () => {
+    expect(tone([...pair, answer({ outcome: 'tie' })])).toEqual({ key: 'tone', status: 'unknown' });
+    expect(tone([...pair, answer({ outcome: 'skip' })])).toEqual({
+      key: 'tone',
+      status: 'unknown'
+    });
+  });
+});

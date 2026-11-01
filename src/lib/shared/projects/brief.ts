@@ -4,8 +4,10 @@
  * confirmed by them. The attributes are defined here, in one place, each with the question asked
  * in the participant's words, why it matters, and the design choices it bears on; each value it
  * names (a tag) says how it steers which choices are worth asking and which are kept out of
- * comparisons (see brief-context.ts). Read from the events: intake's answers, and the brief each
- * assistant decision sets (assistant.responded `brief`).
+ * comparisons (see brief-context.ts), and each says how it is best asked, in words or by showing.
+ * Read from the events: intake's answers, the brief each assistant decision sets
+ * (assistant.responded `brief`), and the side picked of a comparison asking one by showing
+ * (visualization.presented `brief`).
  */
 
 import * as v from 'valibot';
@@ -45,6 +47,12 @@ export type BriefAttribute = {
   why: string;
   /** The design choices it bears on, or the inputs a source is run on (Stage 4). */
   bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject';
+  /**
+   * How it is best asked: in words; by showing, a comparison whose sides stand for its tags, the
+   * pick setting it (see projectBrief); or both, what a picture shows by a comparison (a label's
+   * wording) and the rest in words (terms the picture does not show yet).
+   */
+  asked: 'words' | 'showing' | 'both';
   /** Asked by intake, before the first version. */
   intake?: true;
   /**
@@ -75,6 +83,7 @@ export const briefAttributes = [
     question: 'What algorithm would you like to visualise?',
     why: 'Everything drawn follows from the algorithm and its steps.',
     bearsOn: 'subject',
+    asked: 'words',
     intake: true
   },
   {
@@ -82,6 +91,7 @@ export const briefAttributes = [
     question: 'Who is it for, and what do they already know?',
     why: 'Newcomers need more shown and slower steps; those who know the basics, less.',
     bearsOn: ['shown', 'pacing', 'views'],
+    asked: 'words',
     askFirst: true,
     tags: {
       novice: { families: { shown: 1.3, pacing: 1.2 } },
@@ -94,6 +104,7 @@ export const briefAttributes = [
       'What should a learner take away, even if they only half follow it, and is there a misconception it should tackle?',
     why: 'What is marked, and where it pauses, follows the key takeaway and what learners get wrong.',
     bearsOn: ['views', 'shown', 'arrangement', 'colour'],
+    asked: 'both',
     askFirst: true,
     tags: {
       comparisons: {
@@ -112,6 +123,7 @@ export const briefAttributes = [
       'Are there words or notation your course uses for this, or avoids, such as `i` or `A[i]` for a position?',
     why: 'Labels, captions and the listing should speak as the course does.',
     bearsOn: ['views'],
+    asked: 'both',
     tags: {
       notation: { matching: [{ pattern: positionLabels, weight: 1.3 }] },
       words: { matching: [{ pattern: positionLabels, weight: 1.3 }] }
@@ -123,6 +135,7 @@ export const briefAttributes = [
       'Will it be explained in a lecture, stepped through by students alone, revised from, or explored by students with inputs of their own?',
     why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan; exploring, it must take other inputs.',
     bearsOn: ['lettering', 'shown', 'pacing'],
+    asked: 'words',
     tags: {
       lecture: { families: { lettering: 1.4, shape: 1.1 } },
       alone: { families: { shown: 1.3, pacing: 1.3 } },
@@ -136,6 +149,7 @@ export const briefAttributes = [
       'Where will it be shown: live on slides, in lecture notes, as TikZ in your notes, or as a page students open?',
     why: 'Where it is shown decides the export it needs and how large it must read.',
     bearsOn: ['lettering'],
+    asked: 'words',
     tags: {
       slides: { families: { lettering: 1.3 } },
       notes: {},
@@ -148,6 +162,7 @@ export const briefAttributes = [
     question: 'Should it show every step, or only the steps that matter?',
     why: 'It decides where the steps pause.',
     bearsOn: ['pacing'],
+    asked: 'words',
     tags: {
       'every-step': { families: { pacing: 1.2 } },
       'key-steps': { families: { pacing: 1.6 } }
@@ -159,6 +174,7 @@ export const briefAttributes = [
       'Will anyone need to read it with low vision, or will it be printed in grey? Anything else to keep or avoid, such as the code listing?',
     why: 'A constraint rules options out before any are compared. Colours are colour-blind safe whatever it says.',
     bearsOn: ['colour', 'views'],
+    asked: 'words',
     later: true,
     tags: {
       greyscale: {
@@ -175,6 +191,7 @@ export const briefAttributes = [
     question: 'Should it look academic and restrained, or bolder?',
     why: 'Tone shows in fonts, colours and shapes; a generic, flashy look reads as made by AI.',
     bearsOn: ['lettering', 'colour', 'shape'],
+    asked: 'showing',
     assumed: 'restrained',
     tags: {
       restrained: { families: { lettering: 0.8, shape: 0.8 } },
@@ -187,6 +204,7 @@ export const briefAttributes = [
       'Only the usual case, or edge cases too, such as a target that is absent or duplicates?',
     why: 'Edge cases are inputs of their own, worth seeing only where the algorithm has them.',
     bearsOn: 'inputs',
+    asked: 'words',
     tags: { usual: {}, edge: {} }
   }
 ] as const satisfies readonly BriefAttribute[];
@@ -254,8 +272,9 @@ const clipped = (text: string) =>
 
 /**
  * The brief, every attribute in order: intake's answers confirmed in the participant's words, then
- * each entry an assistant decision set, the latest for each attribute standing, then `pending`:
- * entries of the turn not yet recorded, as the decision being checked sets them.
+ * each entry an assistant decision set or a comparison's pick inferred (a side of a pair asking an
+ * attribute by showing), the latest for each attribute standing, then `pending`: entries of the
+ * turn not yet recorded, as the decision being checked sets them.
  */
 export function projectBrief(
   events: readonly ProjectEvent[],
@@ -285,8 +304,31 @@ export function projectBrief(
   // Intake's answer is the participant's next message after its question, unless they left intake.
   let asking: BriefKey | undefined;
   const intakeAnswers = new Map<number, BriefKey>();
+  // The sides of comparisons asking an attribute by showing, by presentation.
+  const sides = new Map<string, { question: string; label: string; key: BriefKey; tag: string }>();
   for (const event of events) {
-    if (event.type === 'assistant.responded') {
+    if (event.type === 'visualization.presented') {
+      const { presentation, question, label, brief } = event.payload;
+      if (question && label && brief)
+        sides.set(presentation.presentationId, { question, label, ...brief });
+    } else if (event.type === 'visualization.preference-recorded') {
+      // A side preferred sets what it stands for, as inferred from the pick; either is fine and
+      // decide later set nothing.
+      const side = 'preferred' in event.payload ? sides.get(event.payload.preferred) : undefined;
+      if (side)
+        set(
+          [
+            {
+              key: side.key,
+              value: clipped(side.label),
+              status: 'inferred',
+              source: clipped(`${side.question} → ${side.label}`),
+              tags: [side.tag]
+            }
+          ],
+          event.id
+        );
+    } else if (event.type === 'assistant.responded') {
       asking = event.payload.intakeStep;
       set(event.payload.brief ?? [], event.id);
     } else if (event.type === 'feedback.submitted' && asking) {

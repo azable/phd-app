@@ -4,6 +4,7 @@ import * as v from 'valibot';
 
 import { presentationIdSchema, renderablePresentationSchema } from '$lib/shared/presentations';
 
+import { briefKeys } from '../brief';
 import { eventEnvelope, naturalSchema } from './values';
 
 /** Runtime schema for one visualization becoming visible in a display set. */
@@ -20,7 +21,12 @@ export const visualizationPresentedEventSchema = v.object({
      */
     question: v.optional(v.string()),
     /** With a question, what the participant would call this side of the pair, as “tallies”. */
-    label: v.optional(v.string())
+    label: v.optional(v.string()),
+    /**
+     * With a question, the brief attribute the pair asks by showing and the tag this side stands
+     * for, as tone restrained: preferring this side sets it (see shared/projects/brief.ts).
+     */
+    brief: v.optional(v.object({ key: v.picklist(briefKeys), tag: v.string() }))
   })
 });
 
