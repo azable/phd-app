@@ -21,7 +21,7 @@ import {
   pendingAssistantTurnRequests,
   projectOperation
 } from '$lib/shared/projects/operations';
-import { headStillCurrent, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { headStillCurrent } from '$lib/shared/projects/projection';
 import { cutText } from '$lib/shared/text';
 import { sqlClient } from '$lib/server/db';
 
@@ -29,8 +29,7 @@ import {
   chosenVariantRequests,
   queueProjectFeedback,
   queueProjectPreference,
-  runQueuedAssistantTurn,
-  submitProjectFeedback
+  runQueuedAssistantTurn
 } from './commands';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
@@ -704,25 +703,18 @@ async function executeProjectCommand(options: {
     case 'rename':
       return renameProject({ ...common, title: options.command.title });
     case 'feedback':
-      return projectSnapshotAt(await projectRepository.load(options.projectId)).mode === 'sverlin'
-        ? queueProjectFeedback({
-            ...common,
-            content: options.command.content,
-            focus: options.command.focus,
-            presentationCount: options.command.presentationCount,
-            ...(options.command.from ? { from: options.command.from } : {}),
-            ...(options.command.viewing ? { viewing: options.command.viewing } : {}),
-            ...(options.deadlineAt === undefined
-              ? {}
-              : { deadlineAt: new Date(options.deadlineAt).toISOString() })
-          })
-        : submitProjectFeedback({
-            ...common,
-            content: options.command.content,
-            focus: options.command.focus,
-            presentationCount: options.command.presentationCount,
-            ...(options.command.viewing ? { viewing: options.command.viewing } : {})
-          });
+      // Every mode's turn waits for the executor, which runs it under capacity, deadline and abort.
+      return queueProjectFeedback({
+        ...common,
+        content: options.command.content,
+        focus: options.command.focus,
+        presentationCount: options.command.presentationCount,
+        ...(options.command.from ? { from: options.command.from } : {}),
+        ...(options.command.viewing ? { viewing: options.command.viewing } : {}),
+        ...(options.deadlineAt === undefined
+          ? {}
+          : { deadlineAt: new Date(options.deadlineAt).toISOString() })
+      });
     case 'advance-presentations':
       return advanceProjectPresentations({
         ...common,
