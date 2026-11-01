@@ -751,7 +751,7 @@ The design space is every variable of a component's look, found in its markup:
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
   `listing.lit@insert.compare.left.fill`, which follows its label's mark until
-  set (see Listing).
+  set, and where it has tokens, `listing.places` (see Listing).
 - Each kind of node's props. A kind is the snippet a node is in: a view's or a
   part's name, as `Items` or `Title`, and for a snippet inside another, both, as
   `IntTally.Tally`; every node of a snippet is of its kind. A pointer view's
@@ -1022,6 +1022,25 @@ there: the assistant for a new or edited source, a chooser for more variants.
   statement its label marks, each line lights for its own statement; otherwise
   it lights as one. A line lights from its first character to its last, never
   its indentation.
+- A token, `$name[text]`, marks text as a reference to the place the root or a
+  part renders at `@name` (see Places), as `$mid[A[mid]]` for
+  `{@render Index(mid)}` or `$key[key]` for `{@render Int(key)}` in a part.
+  Tokens are written by hand, never matched by name, so `$j[A[j + 1]]` names
+  `@j` where the pseudocode's `j` is the algorithm's `j - 1`. Tokens and regions
+  nest either way, as `$x[A[@left[j - 1]]]`, a region inside a token keeping its
+  prefix; a token inside another, an unclosed one, or one naming a place nothing
+  renders is an error. When a step's own code, not code kept lit from earlier,
+  overlaps a token, the step touches its place: every token naming it and its
+  references in the picture light together, in the colour of the place's mark,
+  its pointer view's `<Pointed>` fill (`Mark.Pointed@i.fill`) or its value's
+  view's (`IntCell@key.fill`), or its stroke where the fill is none or white. In
+  the picture, a place is the element a pointer at it points at, or the
+  outermost node of a value rendered there or of a pointer view with nodes
+  around its `<Pointed>`, a caption's number included. Hovering any reference
+  outlines the others, dashed in its colour. `listing.places`, there only where
+  a listing has tokens, says how places light: `fill` (the start: the token
+  filled, a 3px band round the node), `underline`, `outline` (a ring), or
+  `none`, which lights nothing and links nothing on hover; none takes room.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes
@@ -1032,7 +1051,8 @@ there: the assistant for a new or edited source, a chooser for more variants.
   mark stands for looks as its cell does, otherwise to `listing.lit`. A region
   in another paint than the region around it is drawn inside it.
 
-Insertion sort, beside a textbook's pseudocode:
+Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
+`key`:
 
 ```svelte
 <script lang="sverlin" domain>
@@ -1067,13 +1087,13 @@ Insertion sort, beside a textbook's pseudocode:
 <script lang="sverlin" listing="textbook">
   INSERTION-SORT(A, n)
   1  for i = 2 to n
-  2      @insert[@key[key = A[i]]
+  2      @insert[@key[$key[key] = $i[A[i]]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
   4      @init[j = i - 1]
-  5      while @test[@bound[j > 0] and @cmp[A[j] > key]]
-  6          @shift[@copy[A[j + 1] = A[j]]
+  5      while @test[@bound[j > 0] and @cmp[A[j] > $key[key]]]
+  6          @shift[@copy[$j[A[j + 1]] = A[j]]
   7          @down[j = j - 1]]
-  8      @place[A[j + 1] = key]]
+  8      @place[$j[A[j + 1]] = $key[key]]]
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}

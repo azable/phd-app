@@ -36,6 +36,7 @@ import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
   listingOptions,
+  listingPlacesOptions,
   listingPropOptions,
   overflowOptions,
   propOptions
@@ -925,7 +926,7 @@ export function designVariables(
     const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
     const prop = key.startsWith('pause@')
       ? 'pause'
-      : key === 'listing.language'
+      : key === 'listing.language' || key === 'listing.places'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
     // A pointer's overflow and a collection's have options of their own, as does a listing's text
@@ -942,6 +943,7 @@ export function designVariables(
       ...propOptions,
       ...frameOptions,
       'listing.language': listingOptions['listing.language'],
+      'listing.places': listingPlacesOptions,
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
       'overflow.collection': overflowOptions.collection,
