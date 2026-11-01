@@ -15,16 +15,22 @@ export type Justify = 'start' | 'center' | 'end' | 'between' | 'around' | 'evenl
 /** The page frame's aspect ratio; it lays out at a fixed logical size and scales to fit the page. */
 export type FrameRatio = '16:9' | '4:3' | '3:2' | '1:1' | '3:4' | '9:16';
 
-/** How the page frame is shaped and arranges the view's top-level nodes (the variant's frame.* values). */
+/**
+ * How the page frame is shaped and arranges what the layout shown holds: the layout's kind's values,
+ * as Stacked.ratio, its root's row or column, and its root's tag, which selecting the page selects.
+ */
 export type FrameSettings = {
   ratio: FrameRatio;
   justify: Justify;
   align: Align;
-  /** Space inside the frame, and between its top-level nodes, in em. */
+  /** Space inside the frame, and between what it holds, in em. */
   padding: number;
   gap: number;
-  /** How the view's top-level nodes are arranged. */
+  /** How what the layout holds is arranged. */
   layout: FrameLayout;
+  /** The layout shown, and its root <Node>'s line:column; none for a source without layouts. */
+  name?: string;
+  ref?: string;
 };
 
 /** The arrangements the page frame offers its top-level nodes. */

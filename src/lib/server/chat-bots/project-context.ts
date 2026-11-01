@@ -30,6 +30,7 @@ import type {
 import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
+  implicitLayoutOptions,
   listingOptions,
   listingPropOptions,
   overflowOptions,
@@ -673,6 +674,10 @@ export function designVariables(
     | undefined
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
+  // The layouts, by their frames, as Stacked.ratio: the options of the layout shown.
+  const layouts = Object.keys(presentation?.variant ?? {})
+    .filter((key) => key.endsWith('.ratio'))
+    .map((key) => key.slice(0, -'.ratio'.length));
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
     // A place's own choice, as views.Int@swap.held or views.Ask.Int@g.a, has its type's options.
@@ -681,7 +686,7 @@ export function designVariables(
     const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
     const prop = key.startsWith('pause@')
       ? 'pause'
-      : key.startsWith('frame.') || key === 'listing.language'
+      : key === 'listing.language'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
     // A pointer's overflow and a collection's have options of their own, as does a listing's text
@@ -697,6 +702,7 @@ export function designVariables(
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
+      ...implicitLayoutOptions,
       'listing.language': listingOptions['listing.language'],
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
@@ -704,16 +710,19 @@ export function designVariables(
       // A label with no labels inside it reads accumulating as on.
       pause: ['accumulate', 'on', 'off']
     };
-    if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
+    const layout = key === 'layout';
+    if (!view && !pointer && !layout && Object.hasOwn(known, set)) options[set] = known[set];
     return {
       variable: key,
       options: view
         ? [...(presentation?.views?.[view] ?? []), 'none']
         : pointer
           ? [...(presentation?.pointers?.[pointer] ?? []), 'none']
-          : key === 'listing.language' && presentation?.listings?.length
-            ? [...presentation.listings, ...listingOptions['listing.language']]
-            : set,
+          : layout
+            ? layouts
+            : key === 'listing.language' && presentation?.listings?.length
+              ? [...presentation.listings, ...listingOptions['listing.language']]
+              : set,
       value,
       ...(origin ? { origin } : {})
     };

@@ -124,15 +124,25 @@ export const propOptions = {
 
 export type DesignProp = keyof typeof propOptions;
 
-/** The page frame's settings, each one variable of the whole presentation. */
+/**
+ * A layout's frame, the page around its root: each a variable of the layout's kind, as
+ * Stacked.ratio, so each layout keeps its own frame (see design.server.ts).
+ */
 export const frameOptions = {
-  'frame.ratio': ['16:9', '4:3', '3:2', '1:1', '3:4', '9:16'],
-  'frame.justify': propOptions.justify,
-  'frame.align': propOptions.align,
-  'frame.padding': spacing,
-  'frame.gap': spacing,
-  'frame.layout': ['column', 'row']
+  ratio: ['16:9', '4:3', '3:2', '1:1', '3:4', '9:16'],
+  justify: propOptions.justify,
+  align: propOptions.align,
+  padding: spacing,
+  gap: spacing
 } satisfies Record<string, readonly (string | number)[]>;
+
+/**
+ * The layout a source without layout blocks reads as, holding its top level. With no root to say
+ * how that is arranged, its kind also has `layout`, as Page.layout; variants saved before layouts
+ * gave its frame as frame.*, read as Page.*.
+ */
+export const implicitLayout = 'Page';
+export const implicitLayoutOptions = { layout: ['column', 'row'] };
 
 /**
  * The props of a listing's lit text, as a kind's: its fill, a stroke drawn inside it, its corners,
@@ -373,10 +383,9 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
 };
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {
-  'frame.ratio': '16:9',
-  'frame.justify': 'center',
-  'frame.align': 'center',
-  'frame.padding': 1.5,
-  'frame.gap': 1,
-  'frame.layout': 'column'
+  ratio: '16:9',
+  justify: 'center',
+  align: 'center',
+  padding: 1.5,
+  gap: 1
 };

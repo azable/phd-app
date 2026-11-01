@@ -1,8 +1,9 @@
 <!--
   The page around every view: a canvas at a fixed logical size, centred in the page and scaled to
-  fit it, that arranges the view's top-level nodes in a column. Its edges are a dashed outline.
-  Participants select nodes to reference in feedback: a click selects the node under the pointer,
-  Shift, Ctrl, or Cmd adds or removes one, and dragging draws a box. The wheel zooms, dragging with
+  fit it, that arranges what the layout shown holds in its root's row or column. Its edges are a
+  dashed outline. Participants select nodes to reference in feedback: a click selects the node under
+  the pointer, or, on the frame's empty space, the page, the layout's root, Shift, Ctrl, or Cmd adds
+  or removes one, and dragging draws a box. The wheel zooms, dragging with
   the middle button or with Space held pans, and a double click on empty space resets. The view and
   the selection are reported to the app, which restores them when the next step reloads the page.
 -->
@@ -371,7 +372,8 @@
   }
 
   function onDoubleClick(event: MouseEvent) {
-    if (nodeAt(event.target)) return;
+    // The frame is a layout's root, selectable as the whole page, but empty space all the same.
+    if (nodeAt(event.target) && nodeAt(event.target) !== settings.ref) return;
     zoom = 1;
     panX = 0;
     panY = 0;
@@ -470,6 +472,8 @@
   <div
     bind:this={frameElement}
     class="sv-frame"
+    data-sv-node={settings.ref}
+    data-sv-label={settings.ref ? `the page, as ${settings.name ?? 'laid out'}` : undefined}
     style:width="{width}px"
     style:height="{height}px"
     style:transform="translate(-50%, -50%) translate({panX}px, {panY}px) scale({shown})"

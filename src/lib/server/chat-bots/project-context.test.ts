@@ -273,4 +273,21 @@ describe('design variables in the AI context', () => {
       expect(design.variables.find(({ variable }) => variable === key)?.options).toBe('pause');
     expect(design.options.pause).toEqual(['accumulate', 'on', 'off']);
   });
+
+  it('offers the layouts as the layout shown, and each frame its options', () => {
+    const design = designVariables({
+      variant: {
+        layout: 'Side',
+        'Side.ratio': '16:9',
+        'Stacked.ratio': '4:3',
+        'Page.layout': 'row'
+      }
+    });
+    const options = (key: string) =>
+      design.variables.find(({ variable }) => variable === key)?.options;
+    expect(options('layout')).toEqual(['Side', 'Stacked']);
+    expect(options('Side.ratio')).toBe('ratio');
+    expect(design.options.ratio).toContain('4:3');
+    expect(design.options.layout).toEqual(['column', 'row']);
+  });
 });

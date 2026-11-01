@@ -17,17 +17,18 @@ const prepared = prepareSvelteComponent(linearSearchSource);
 const { space, starter } = prepared.design;
 
 describe('design space', () => {
-  it('has every view of each type rendered by name, the frame, and every prop of every kind', () => {
+  it('has every view of each type rendered by name, the layout’s frame, and every prop of every kind', () => {
     expect(space['views.Int']).toEqual(['IntCell', 'IntTally', 'none']);
     expect(space['views.Index']).toEqual(['IndexText', 'none']);
-    expect(space['frame.ratio']).toContain('4:3');
+    expect(space['Page.ratio']).toContain('4:3');
     const kinds = new Set(
       Object.keys(space)
         .filter(
           (key) =>
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
-            !key.startsWith('frame.') &&
+            key !== 'layout' &&
+            !key.startsWith('Page.') &&
             !key.includes('@')
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))

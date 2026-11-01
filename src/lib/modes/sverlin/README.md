@@ -51,13 +51,33 @@ each kind its look. Every input and algorithm variable in scope at the selected
 step and the library components are already in scope; never write `import`, and
 never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
-- The top level holds only renders, with `{#if}` and `{#each}` around them, and
-  a `<Listing />`, so every node is in a snippet. A snippet without parameters
-  is a part of the page, as
-  `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where the top
-  level renders it, `{@render Title()}`; a part reads what the top level reads
-  and renders parts, views, and operators. Render the parts at the top level
-  rather than one part holding the whole view.
+- The top level holds parts, views, and at least one layout. A snippet without
+  parameters is a part of the page, as
+  `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
+  renders it, `{@render Title()}`; a part reads what a layout reads and renders
+  parts, views, and operators. A layout, `{#layout Side}…{/layout}`, arranges
+  the whole page: its body is one root `<Node>`, the frame (see Page frame),
+  which holds renders, with `{#if}` and `{#each}` around them, a `<Listing />`,
+  and nodes arranging them, and is selectable as the whole page. Its only prop
+  is `layout`, `row` or `column` (the start), how it arranges what it holds.
+  Render the parts in the root rather than one part holding the whole page.
+
+```svelte
+{#layout Side}
+  <Node layout="row">{@render Board()}<Node>{@render Table()}<Listing /></Node></Node>
+{/layout}
+{#layout Stacked}
+  <Node>{@render Title()}{@render Board()}{@render Table()}</Node>
+{/layout}
+```
+
+- The variant shows one layout, its `layout` variable (see Design), the first
+  where nothing chooses another. Declare another layout where the request leaves
+  open how the page is arranged or what it holds, as the parts side by side or
+  stacked, or the page with a listing against one without; layouts, as views,
+  differ in how they arrange the parts or which they hold, never only in look,
+  which is the variant's. A part looks alike in every layout. A layout block
+  arranges the page, a node's `layout` prop its children.
 - Draw every value of a domain type through a view of its type, as
   `{@render Int(target)}`, and every position through a pointer; the markup
   around them arranges, labels, and explains. A node of text and renders with no
@@ -123,13 +143,14 @@ written in the view so the label is a kind of its own.
   kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke, opacity,
   text colour) shows only there, the rest of its look in every slot, so every
   slot keeps one size.
-- Render a pointer at the top level, outside snippets and blocks other than
-  `{#if}`, with a position from the state: a variable (`{@render Index(i)}`), an
-  element, a field (`{@render Index(edges[e].to)}`), or a label (see Views of
-  what a step computed). Outside any node a position type draws as a mark,
-  through its pointer views (`pointers.Index`), so every mark of it looks the
-  same; inside a node, as `<Node>at {@render Index(i)}</Node>`, as its number,
-  through its other views (`views.Index`).
+- Render a pointer in a layout's root itself, outside other nodes, snippets, and
+  blocks other than `{#if}`, with a position from the state: a variable
+  (`{@render Index(i)}`), an element, a field (`{@render Index(edges[e].to)}`),
+  or a label (see Views of what a step computed). There a position type draws as
+  a mark, through its pointer views (`pointers.Index`), so every mark of it
+  looks the same; inside another node, as `<Node>at {@render Index(i)}</Node>`,
+  as its number, through its other views (`views.Index`). A pointer only another
+  layout renders draws nothing and keeps no room.
 - The page draws the pointer around the element wherever that is drawn. Every
   element keeps room for every pointer that can point into its collection, and a
   position shown past an end gets a slot there, so nothing moves as pointers
@@ -285,16 +306,20 @@ Binary search, stopping where it finds the target:
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Range()}<Node>between {@render Index(lo)} and {@render Index(hi)}</Node>{/snippet}
 
-{@render Title()}
-{@render Cells()}
-{@render Range()}
-{@render Index(lo)}
-{@render Index(mid)}
-{@render Index(hi)}
+{#layout Stacked}
+  <Node>
+    {@render Title()}
+    {@render Cells()}
+    {@render Range()}
+    {@render Index(lo)}
+    {@render Index(mid)}
+    {@render Index(hi)}
+  </Node>
+{/layout}
 ```
 
-Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; at the top
-level they and `mid` are marks, drawn by `Mark` unless a variant draws one apart
+Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; in the root
+they and `mid` are marks, drawn by `Mark` unless a variant draws one apart
 through its place. The loop ends at `break` with `mid` on the target; a search
 for a value not there ends with `lo` past `hi`.
 
@@ -446,9 +471,13 @@ nodes `prev` and `cur` refer to both marked:
   <Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>
 {/snippet}
 
-{@render Heap()}
-{@render NodeRef(prev)}
-{@render NodeRef(cur)}
+{#layout Stacked}
+  <Node>
+    {@render Heap()}
+    {@render NodeRef(prev)}
+    {@render NodeRef(cur)}
+  </Node>
+{/layout}
 ```
 
 - `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
@@ -623,7 +652,11 @@ place:
   </Node>
 {/snippet}
 
-{@render Board()}
+{#layout Stacked}
+  <Node>
+    {@render Board()}
+  </Node>
+{/layout}
 ```
 
 Paused at both, a comparison reads "is 5 > 1? yes", its operands lifting out of
@@ -709,8 +742,14 @@ The design space is every variable of a component's look, found in its markup:
   `"on"`, or `"off"`, one with no labels inside it only `"on"` or `"off"` (see
   Steps). A variant saved with `true` reads as its first option, `false` as
   `"off"`.
-- The page frame's: `frame.ratio`, `frame.justify`, `frame.align`,
-  `frame.padding`, `frame.gap`, and `frame.layout` (see Page frame).
+- `layout`, the layout shown: every layout the source declares, never `none`
+  (see View).
+- Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
+  `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
+  node a layout writes beside its parts, as a row in its root, is of its kind
+  too. A source without layouts reads as one layout, `Page`, holding its top
+  level, arranged by `Page.layout` (`column` or `row`); a variant saved with
+  `frame.ratio` reads it as `Page.ratio`.
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
   `listing.lit@insert.compare.left.fill`, which follows its label's mark until
@@ -853,8 +892,8 @@ variables:
 - Draw everything that means something of its own in a snippet of its own, so
   its look is a variable of its own and a variant can leave it out: a title, a
   caption, an index, a pointer's label. A snippet without parameters draws it:
-  at the top level, a part of the page; inside a view, a part of it that sees
-  the view's value, as `Under` and `Tally` below.
+  rendered in a layout, a part of the page; inside a view, a part of it that
+  sees the view's value, as `Under` and `Tally` below.
 - Draw what the state means with views of its own: an answer, as the position a
   search finds, by a pointer of its own, and a mark meaning something else at
   some steps by another pointer, rendered in `{#if}` or at a label, so a found
@@ -912,18 +951,19 @@ offer views that draw each reading.
 
 Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
 pixels wide) and scaled to fit, so every presentation renders identically
-whatever the pane size. Its ratio is `frame.ratio` (16:9, 4:3, 3:2, 1:1, 3:4, or
-9:16), 16:9 in the starter; keep 16:9 unless the participant asks for another
-shape. The frame stacks what the top level renders in a column or a row
-(`frame.layout`), `frame.gap` apart, spread and aligned by `frame.justify` and
-`frame.align`, as between to put a title at the top and a note at the bottom,
-with `frame.padding` inside its edge. Use its width: lay sequences out across it
-rather than down it. Participants select nodes by clicking or dragging a box, to
-point at them in feedback; they scroll to zoom, drag with the middle button or
-with Space held to pan, and double-click empty space to reset, and the view is
-kept as they step through. Every node is selectable, so draw each thing a
-participant might want to point at, such as a cell, a pointer name, or a
-caption, as a node of its own.
+whatever the pane size. The frame is the root `<Node>` of the layout shown, and
+its values are that layout's: its ratio is `Stacked.ratio` (16:9, 4:3, 3:2, 1:1,
+3:4, or 9:16), 16:9 in the starter; keep 16:9 unless the participant asks for
+another shape. It lays out what its root holds in the root's `layout`, a column
+or a row, `Stacked.gap` apart, spread and aligned by `Stacked.justify` and
+`Stacked.align`, as between to put a title at the top and a note at the bottom,
+with `Stacked.padding` inside its edge. Use its width: lay sequences out across
+it rather than down it. Participants select nodes by clicking or dragging a box,
+to point at them in feedback, and the whole page by clicking the frame's empty
+space; they scroll to zoom, drag with the middle button or with Space held to
+pan, and double-click empty space to reset, and the view is kept as they step
+through. Every node is selectable, so draw each thing a participant might want
+to point at, such as a cell, a pointer name, or a caption, as a node of its own.
 
 ### Listing
 
@@ -933,7 +973,7 @@ exactly as written, lighting the code each step ran. The algorithm block is what
 runs and the listing what is read, and they meet through labels, so the
 algorithm is written as the language needs (typed values, operators, labels)
 while the listing reads as the lesson; when the algorithm changes, its listing
-follows. Place it outside views, at the top level or in a part, as
+follows. Place it outside views, in a layout or a part, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
 The text is a `<script lang="sverlin" listing="textbook">` block; with several,
@@ -1031,9 +1071,13 @@ Insertion sort, beside a textbook's pseudocode:
   </Node>
 {/snippet}
 
-{@render Board()}
-{@render Position(i)}
-{@render Position(j)}
+{#layout Stacked}
+  <Node>
+    {@render Board()}
+    {@render Position(i)}
+    {@render Position(j)}
+  </Node>
+{/layout}
 ```
 
 ## Node
@@ -1188,10 +1232,23 @@ at marked and the queue drawn by number:
 {/snippet}
 {#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
 
-{@render Graph()}
-{@render QueueLine()}
-{@render VertexRef(current)}
-{@render VertexRef(@visit.look.next)}
+{#layout Stacked}
+  <Node>
+    {@render Graph()}
+    {@render QueueLine()}
+    {@render VertexRef(current)}
+    {@render VertexRef(@visit.look.next)}
+  </Node>
+{/layout}
+
+{#layout Side}
+  <Node layout="row">
+    {@render Graph()}
+    {@render QueueLine()}
+    {@render VertexRef(current)}
+    {@render VertexRef(@visit.look.next)}
+  </Node>
+{/layout}
 ```
 
 ```

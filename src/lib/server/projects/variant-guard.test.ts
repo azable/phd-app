@@ -30,6 +30,21 @@ describe('pictureTree', () => {
     expect(tree.snippets.get('Board')).toEqual(['<Listing>', 'SearchView']);
     expect(tree.snippets.get('SearchView')).toContain('Answer');
   });
+
+  it('measures the picture by the layout a variant shows, never hiding a layout’s own nodes', () => {
+    const laid = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
+{#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
+{#layout Stacked}<Node>{@render Title()}{@render Board()}</Node>{/layout}
+{#layout Bare}<Node layout="row"><Node>{@render Board()}</Node></Node>{/layout}`);
+    expect(laid.layouts.get('Stacked')).toEqual(['Title', 'Board']);
+    expect(laid.layouts.get('Bare')).toEqual(['Board']);
+    // Hiding the title hides a quarter of the stacked page, and nothing of the bare one.
+    expect(hiddenShare(laid, { layout: 'Stacked' }, [['Title.shown', false]])).toBeCloseTo(1 / 4);
+    expect(hiddenShare(laid, { layout: 'Bare' }, [['Title.shown', false]])).toBe(0);
+    const guard = { tree: laid, base: { layout: 'Bare' }, settled: {} };
+    expect(allowedChange(guard, 'Bare.shown', false)).toBe(false);
+    expect(allowedChange(guard, 'layout', 'Stacked')).toBe(true);
+  });
 });
 
 describe('allowedChange', () => {

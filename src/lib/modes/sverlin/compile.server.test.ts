@@ -23,7 +23,8 @@ const kindsOf = (space: Record<string, unknown>) =>
           (key) =>
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
-            !key.startsWith('frame.') &&
+            key !== 'layout' &&
+            !key.startsWith('Page.') &&
             !key.includes('@')
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
@@ -590,16 +591,16 @@ describe('single-component Svelte compilation', () => {
     );
   });
 
-  it('takes the page frame from the variant', async () => {
+  it('takes the page frame from the layout’s values in the variant', async () => {
     const prepared = prepareSvelteComponent(
       '<script lang="sverlin"></script>{#snippet A()}<Node>a</Node>{/snippet}{@render A()}'
     );
-    expect(prepared.design.starter['frame.ratio']).toBe('16:9');
-    const built = await bundlePresentation(prepared, 1, { chosen: { 'frame.ratio': '4:3' } });
+    expect(prepared.design.starter['Page.ratio']).toBe('16:9');
+    const built = await bundlePresentation(prepared, 1, { chosen: { 'Page.ratio': '4:3' } });
     expect(built.javascript).toMatch(/"?ratio"?:"4:3"/u);
     await expect(
-      bundlePresentation(prepared, 1, { chosen: { 'frame.ratio': '5:4' } })
-    ).rejects.toThrow('frame.ratio cannot be "5:4"');
+      bundlePresentation(prepared, 1, { chosen: { 'Page.ratio': '5:4' } })
+    ).rejects.toThrow('Page.ratio cannot be "5:4"');
   });
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {

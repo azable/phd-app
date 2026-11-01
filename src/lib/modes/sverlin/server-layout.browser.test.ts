@@ -180,3 +180,21 @@ it.skipIf(!enabled)(
     expect((await drawn(javascript, { deviceScaleFactor: 2 })).layout).toBe('server');
   }
 );
+
+it.skipIf(!enabled)(
+  'draws only the layout a variant shows, in its own frame',
+  { timeout: 300_000 },
+  async () => {
+    const source = fixtures['./fixtures/bubble-layouts.sverlin'];
+    // The node the Side layout writes beside its parts, by its tag's line.
+    const line = source.split('\n').findIndex((text) => text.includes('<Node>{@render Title()}'));
+    const holds = (steps: SceneStep[]) =>
+      steps.some((step) => step.nodes.some((node) => node.id.startsWith(`${line + 1}:`)));
+    const side = await drawsAlike(source, { chosen: { layout: 'Side', 'Side.ratio': '4:3' } });
+    expect(side.frame.width / side.frame.height).toBeCloseTo(4 / 3, 2);
+    expect(holds(side.steps)).toBe(true);
+    const stacked = await drawsAlike(source, { chosen: { 'Side.ratio': '4:3' } });
+    expect(stacked.frame.width / stacked.frame.height).toBeCloseTo(16 / 9, 2);
+    expect(holds(stacked.steps)).toBe(false);
+  }
+);

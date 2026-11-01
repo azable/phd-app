@@ -6,7 +6,7 @@ import type { DesignDraw } from '$lib/shared/presentations';
 
 import {
   drawnMarkers,
-  frameProps,
+  pauseGhosts,
   drawnValues,
   ghostRowAt,
   ghostSummary,
@@ -14,7 +14,9 @@ import {
   placeGhosts,
   setDrawnValues,
   tagGhosts,
+  unchosenLayouts,
   unchosenViews,
+  untaggedFrame,
   valueText,
   viewMarkers
 } from './drawn-values';
@@ -264,25 +266,54 @@ describe('variant markers', () => {
     expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
   });
 
-  it('leaves the page frame to no tag', () => {
+  it('leaves a frame no tag holds above the source: one saved before layouts, or Page’s', () => {
     const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
     expect(ghosts.flatMap(({ props }) => props.map(({ name }) => name))).not.toContain('ratio');
-    expect(frameProps(presentations).map(({ name }) => name)).toEqual(['ratio']);
+    expect(untaggedFrame(presentations).map(({ name }) => name)).toEqual(['ratio']);
+    const legacy = presentations.map((presentation) => ({
+      ...presentation,
+      variant: { 'Page.layout': 'row', 'Page.ratio': '4:3', layout: 'Page' }
+    }));
+    expect(untaggedFrame(legacy).map(({ key }) => key)).toEqual(['Page.ratio', 'Page.layout']);
   });
 
-  it('names each pause by its label’s full name', () => {
-    const paused = presentations.map((presentation) => ({
-      ...presentation,
-      variant: {
-        ...presentation.variant,
-        'pause@insert.swap.to': 'on',
-        'pause@insert.compare.left': 'off'
+  it('puts a layout’s frame in its root’s chip, and greys the layouts no variant shows', () => {
+    const laid =
+      '{#layout Side}\n  <Node layout="row">{@render Title()}</Node>\n{/layout}\n{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}';
+    const shown = [
+      {
+        seed: 1,
+        draws: [],
+        variant: { layout: 'Side', 'Side.ratio': '16:9', 'Side.gap': 1, 'Stacked.ratio': '4:3' },
+        kinds: { '2:3': ['Side'], '5:3': ['Stacked'] }
       }
+    ];
+    const state = EditorState.create({ doc: laid });
+    const [side, stacked] = tagGhosts(state, shown);
+    expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
+    expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
+    expect(untaggedFrame(shown)).toEqual([]);
+    expect(unchosenLayouts(state, shown).map(({ from, to }) => laid.slice(from, to))).toEqual([
+      '{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}'
+    ]);
+  });
+
+  it('shows each label’s pauses after its mark, by its full name', () => {
+    const algorithm = '<script lang="sverlin">\n  @insert{ @swap[x = 1;] }\n</script>';
+    const paused = presentations.map((presentation, index) => ({
+      ...presentation,
+      variant: { 'pause@insert': 'accumulate', 'pause@insert.swap': index ? 'off' : 'on' }
     }));
-    expect(frameProps(paused).map(({ name }) => name)).toEqual([
-      'ratio',
-      'pause@insert.compare.left',
-      'pause@insert.swap.to'
+    const ghosts = pauseGhosts(EditorState.create({ doc: algorithm }), paused);
+    expect(
+      ghosts.map(({ at, props: [{ key, differs }] }) => [
+        algorithm.slice(0, at).slice(-7),
+        key,
+        differs
+      ])
+    ).toEqual([
+      ['@insert', 'pause@insert', false],
+      ['{ @swap', 'pause@insert.swap', true]
     ]);
   });
 

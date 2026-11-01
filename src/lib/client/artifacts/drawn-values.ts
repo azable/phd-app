@@ -4,10 +4,11 @@
  * variant (and inside a <Listing />, its language and fills), and the layout it arranged from the seed as ghost props, written as the view would write
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
  * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
- * a place, as {@render Index(@left)}, a chip opening that place's own values; the first top-level
- * node's chip also holds the page frame, which shows above the source where there is no such node.
- * Views of a type that no shown presentation's variant chose are greyed out, and so are nodes every
- * shown presentation left out (see left-out.ts). A presentation built
+ * a place, as {@render Index(@left)}, a chip opening that place's own values. A layout's root's chip
+ * holds its frame; a source without layouts, whose frame no tag holds, shows it above the source.
+ * After each label's mark in the algorithm, where its steps pause. Views of a type and layouts that
+ * no shown presentation's variant chose are greyed out, and so are nodes every shown presentation
+ * left out (see left-out.ts). A presentation built
  * while sources had design blocks also marks each draw call with the value each shown presentation
  * drew there.
  *
@@ -20,6 +21,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import {
   colourCss,
   frameOptions,
+  implicitLayoutOptions,
   listingOptions,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
@@ -34,6 +36,7 @@ export type GhostProp = {
   key?: string;
 };
 
+import { labelOpenings } from './label-marks';
 import { tagEnd } from './selection-highlights';
 import {
   revealedField,
@@ -81,9 +84,15 @@ export type DrawnMarker = {
 
 /**
  * The ghost props of one tag, at the offset of its closing > (or />), and its kind; or of a place, at
- * the end of the render drawn there, named by it (`@left`).
+ * the end of the render drawn there, named by it (`@left`); or a label's pauses, after its mark.
  */
-export type TagGhosts = { at: number; props: GhostProp[]; kinds: string[]; place?: string };
+export type TagGhosts = {
+  at: number;
+  props: GhostProp[];
+  kinds: string[];
+  place?: string;
+  pause?: true;
+};
 
 /** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
 export type UnchosenView = { from: number; to: number; title: string };
@@ -147,6 +156,34 @@ export function unchosenViews(
     }
   }
   return [...unchosen.values()].sort((a, b) => a.from - b.from);
+}
+
+/**
+ * The layouts no shown presentation drew, each from its {#layout to the end of its {/layout}. A
+ * presentation that recorded no layout, as one of a source without layouts, leaves them be.
+ */
+export function unchosenLayouts(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): UnchosenView[] {
+  const chosen = presentations.map(({ variant }) => variant?.layout);
+  if (!chosen.length || !chosen.every((name) => typeof name === 'string')) return [];
+  const doc = state.doc.toString();
+  const picked = [...new Set(chosen)].join(' and ');
+  return [...doc.matchAll(/\{#layout[ \t]+([A-Za-z_$][\w$]*)[^}]*\}/gu)].flatMap((match) => {
+    const close = /\{\/layout\s*\}/gu;
+    close.lastIndex = match.index;
+    const end = close.exec(doc);
+    return chosen.includes(match[1]) || !end
+      ? []
+      : [
+          {
+            from: match.index,
+            to: end.index + end[0].length,
+            title: `Not drawn: layout is ${picked}`
+          }
+        ];
+  });
 }
 
 /**
@@ -258,8 +295,8 @@ const originText: Record<string, string> = {
 };
 
 // Variables in a fixed order, as stored variants may come back with their keys reordered.
-const propOrder = Object.keys(propOptions);
-const frameOrder = Object.keys(frameOptions);
+const frameOrder = [...Object.keys(frameOptions), ...Object.keys(implicitLayoutOptions)];
+const propOrder = [...frameOrder, ...Object.keys(propOptions)];
 const listingOrder = Object.keys(listingOptions);
 const byOrder = (order: readonly string[], of: (key: string) => string) => (a: string, b: string) =>
   order.indexOf(of(a)) - order.indexOf(of(b)) || a.localeCompare(b);
@@ -481,29 +518,60 @@ export function placeGhosts(
 const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
 
 /**
- * The page frame's settings in each shown presentation's variant, each named by its setting, then
- * where the steps pause, each named by its variable, the label's full name, as
- * pause@insert.swap.to.
+ * The page frame's values no tag holds, in each shown presentation's variant, each named by its
+ * setting: those of the layout a source without layouts reads as, which has no root, as Page.ratio,
+ * and a presentation's built before layouts, as frame.ratio. A layout's root's chip holds its own.
  */
-export function frameProps(presentations: readonly DrawnPresentation[]): GhostProp[] {
-  const keys = new Set(
-    presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('frame.'))
+export function untaggedFrame(presentations: readonly DrawnPresentation[]): GhostProp[] {
+  const tagged = new Set(
+    presentations.flatMap(({ kinds = {} }) => Object.values(kinds).flatMap((keys) => keys))
+  );
+  const variants = presentations.map(({ variant = {} }) => variant);
+  const layouts = new Set(
+    variants.flatMap((variant) =>
+      Object.keys(variant)
+        .filter((key) => key.endsWith('.ratio'))
+        .map((key) => key.slice(0, -'.ratio'.length))
     )
   );
-  const pauses = [
-    ...new Set(
-      presentations.flatMap(({ variant = {} }) =>
-        Object.keys(variant).filter((key) => key.startsWith('pause@'))
-      )
+  const settingOf = (key: string) => key.slice(key.lastIndexOf('.') + 1);
+  const keys = new Set(
+    variants.flatMap((variant) =>
+      Object.keys(variant).filter((key) => {
+        const kind = key.slice(0, key.lastIndexOf('.'));
+        return (
+          frameOrder.includes(settingOf(key)) &&
+          (kind === 'frame' || (layouts.has(kind) && !tagged.has(kind)))
+        );
+      })
     )
-  ].sort();
-  return [
-    ...[...keys]
-      .sort(byOrder(frameOrder, (key) => key))
-      .map((key) => variable(presentations, key, key.slice('frame.'.length))),
-    ...pauses.map((key) => variable(presentations, key, key))
-  ];
+  );
+  return [...keys]
+    .sort(byOrder(frameOrder, settingOf))
+    .map((key) => variable(presentations, key, settingOf(key)));
+}
+
+/**
+ * Where each label of the algorithm pauses in each shown presentation's variant, after its mark, as
+ * pause@insert.swap.to by its full name.
+ */
+export function pauseGhosts(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): TagGhosts[] {
+  return labelOpenings(state.doc.toString()).flatMap(({ to, full }) => {
+    const key = `pause@${full}`;
+    return presentations.some(({ variant = {} }) => key in variant)
+      ? [
+          {
+            at: to,
+            props: [variable(presentations, key, 'pause')],
+            kinds: [],
+            pause: true as const
+          }
+        ]
+      : [];
+  });
 }
 
 /**
@@ -760,8 +828,53 @@ class GhostTableWidget extends WidgetType {
   }
 }
 
+/** A variable as a pill: its name and value, or each shown presentation's where they differ. */
+function pill({ name, values, differs, key }: GhostProp, revealed: readonly string[]): HTMLElement {
+  const element = document.createElement('span');
+  element.className = [
+    'cm-ghost-value',
+    differs && 'cm-drawn-differs',
+    key !== undefined && revealed.includes(key) && 'cm-revealed-row'
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (key) element.dataset.key = key;
+  element.title = values
+    .map(({ label, title }) => `${label ? `${label}: ` : ''}${title}`)
+    .join('\n');
+  const shown = differs ? values.map(({ text }) => text).join(' / ') : values[0]?.text;
+  element.textContent = `${name} ${shown ?? ''}`;
+  return element;
+}
+
+/** After a label's mark: where its steps pause in each shown variant. */
+class PauseWidget extends WidgetType {
+  constructor(
+    private readonly prop: GhostProp,
+    private readonly revealed: readonly string[] = []
+  ) {
+    super();
+  }
+
+  eq(other: PauseWidget): boolean {
+    return (
+      JSON.stringify([other.prop, other.revealed]) === JSON.stringify([this.prop, this.revealed])
+    );
+  }
+
+  toDOM(): HTMLElement {
+    const element = pill(this.prop, this.revealed);
+    element.classList.add('cm-pause-value');
+    return element;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 /**
- * Above the source: the view each type draws and the page frame, as pills that wrap, each with
+ * Above a source without layouts: its page frame, which no tag holds, as pills that wrap, each with
  * every shown presentation's value where they differ.
  */
 class StripWidget extends WidgetType {
@@ -781,23 +894,7 @@ class StripWidget extends WidgetType {
   toDOM(): HTMLElement {
     const strip = document.createElement('div');
     strip.className = 'cm-design-strip';
-    for (const { name, values, differs, key } of this.props) {
-      const pill = document.createElement('span');
-      pill.className = [
-        'cm-ghost-value',
-        differs && 'cm-drawn-differs',
-        key !== undefined && this.revealed.includes(key) && 'cm-revealed-row'
-      ]
-        .filter(Boolean)
-        .join(' ');
-      if (key) pill.dataset.key = key;
-      pill.title = values
-        .map(({ label, title }) => `${label ? `${label}: ` : ''}${title}`)
-        .join('\n');
-      const shown = differs ? values.map(({ text }) => text).join(' / ') : values[0]?.text;
-      pill.textContent = `${name} ${shown ?? ''}`;
-      strip.append(pill);
-    }
+    for (const prop of this.props) strip.append(pill(prop, this.revealed));
     return strip;
   }
 
@@ -812,7 +909,7 @@ const toggleGhosts = StateEffect.define<number>();
 type DrawnState = {
   markers: DrawnMarker[];
   ghosts: TagGhosts[];
-  /** The view each type draws and the page frame, in each shown variant. */
+  /** The page frame no tag holds, in each shown variant. */
   strip: GhostProp[];
   /** Where the chips of the tags whose ghost props are open are. */
   open: number[];
@@ -845,8 +942,12 @@ function decorations(
       )
     );
   }
-  for (const { at, props, kinds, place } of ghosts) {
+  for (const { at, props, kinds, place, pause } of ghosts) {
     if (!props.length || at > state.doc.length) continue;
+    if (pause) {
+      marks.push(Decoration.widget({ widget: new PauseWidget(props[0], keys), side: 1 }).range(at));
+      continue;
+    }
     const shown = open.includes(at);
     // A place's chip follows the view marker after its render.
     marks.push(
@@ -900,7 +1001,8 @@ const drawnField = StateField.define<DrawnState>({
       if (effect.is(setDrawnValues)) {
         const ghosts = [
           ...tagGhosts(transaction.state, effect.value.presentations),
-          ...placeGhosts(transaction.state, effect.value.presentations)
+          ...placeGhosts(transaction.state, effect.value.presentations),
+          ...pauseGhosts(transaction.state, effect.value.presentations)
         ].sort((a, b) => a.at - b.at);
         next = {
           markers: [
@@ -908,12 +1010,13 @@ const drawnField = StateField.define<DrawnState>({
             ...viewMarkers(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from),
           ghosts,
-          // The frame belongs to no tag, so it shows above the source.
-          strip: frameProps(effect.value.presentations),
+          // A frame no tag holds shows above the source.
+          strip: untaggedFrame(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: [
             ...unchosenViews(transaction.state, effect.value.presentations),
+            ...unchosenLayouts(transaction.state, effect.value.presentations),
             ...leftOutNodes(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from)
         };
@@ -944,8 +1047,9 @@ const drawnField = StateField.define<DrawnState>({
 });
 
 /**
- * Where the first row of these design variables is: the line its ghost props open under, or the top
- * of the source for a page-frame pill; undefined where none has a row.
+ * Where the first row of these design variables is: the line its ghost props open under, or a
+ * label's pause sits on, or the top of the source for a page-frame pill; undefined where none has a
+ * row.
  */
 export function ghostRowAt(state: EditorState, keys: readonly string[]): number | undefined {
   const drawn = state.field(drawnField, false);
@@ -1037,6 +1141,7 @@ const drawnTheme = EditorView.baseTheme({
     backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 14%, transparent)',
     cursor: 'default'
   },
+  '.cm-pause-value': { marginLeft: '0.25rem', fontStyle: 'normal' },
   '.cm-ghost-value.cm-drawn-differs': {
     backgroundColor: 'color-mix(in oklab, #d97706 20%, transparent)'
   },

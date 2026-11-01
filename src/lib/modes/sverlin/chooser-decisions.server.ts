@@ -42,10 +42,10 @@ const changedPerResample = 2;
 /** The answer keeping a variable as it is, among a resample question's alternatives. */
 const keep = '(keep)';
 
-/** What is shown, views, forms and pacing are asked first where a design has more variables than a request can ask. */
+/** What is shown, views and layouts, forms and pacing are asked first where a design has more variables than a request can ask. */
 function priority(key: string): number {
   if (key.endsWith('.shown') || key === 'listing.language') return 0;
-  if (key.startsWith('views.') || key.startsWith('pointers.')) return 1;
+  if (key.startsWith('views.') || key.startsWith('pointers.') || key === 'layout') return 1;
   if (key.endsWith('.form')) return 2;
   if (key.startsWith('pause@')) return 3;
   return 4;
@@ -77,7 +77,7 @@ export function chooserQuestions(asked: readonly Asked[]): ChoiceQuestion[] {
   }));
 }
 
-/** The choices a participant sees change at once: what is shown, the listing, views, forms, pacing. */
+/** The choices a participant sees change at once: what is shown, the listing, views, layouts, forms, pacing. */
 const visible = (variable: string) => priority(variable) < 4;
 
 /** Resample questions: for each visible choice, which other option is most worth showing, or keep. */

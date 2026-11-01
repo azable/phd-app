@@ -1,6 +1,7 @@
 /**
  * The algorithm's label marks, `@name[`, `@name{`, and the `]` closing a span, dimmed in the
- * editor so the code around them reads as before (see the Sverlin guide's Steps).
+ * editor so the code around them reads as before (see the Sverlin guide's Steps), and each label's
+ * full name, as a label inside another takes that one's as a prefix, for its pauses.
  */
 
 import { RangeSetBuilder, type Extension } from '@codemirror/state';
@@ -15,17 +16,23 @@ import {
 const sverlinBlock = /<script\b([^>]*\blang="sverlin"[^>]*)>([\s\S]*?)<\/script>/gu;
 const marker = /^@[A-Za-z_$][\w$]*(?:[ \t]*\{|\[)/u;
 
+/** A label where the algorithm opens it: its mark, from `@` to its name's end, and its full name. */
+export type LabelOpening = { from: number; to: number; full: string };
+
 /**
- * Where the label marks are in a source, as [from, to) ranges in order. In code, strings and
- * comments are skipped; in a listing, any text is.
+ * Where the label marks are in a source, as [from, to) ranges in order, and where each label of the
+ * algorithm opens. In code, strings and comments are skipped; in a listing, any text is.
  */
-export function labelMarks(source: string): [number, number][] {
+function scan(source: string): { marks: [number, number][]; openings: LabelOpening[] } {
   const marks: [number, number][] = [];
+  const openings: LabelOpening[] = [];
   for (const block of source.matchAll(sverlinBlock)) {
     const listing = /\blisting=/u.test(block[1]);
     const start = (block.index ?? 0) + block[0].length - block[2].length - '</script>'.length;
     const text = block[2];
     const open: (number | null)[] = [];
+    // The algorithm's open brackets, each with the label it opens, for full names.
+    const around: { bracket: string; label?: string }[] = [];
     for (let at = 0; at < text.length; at++) {
       const character = text[at];
       if (!listing && character === '/' && (text[at + 1] === '/' || text[at + 1] === '*')) {
@@ -46,16 +53,33 @@ export function labelMarks(source: string): [number, number][] {
         const end = bracket === '{' ? written.slice(0, -1).trimEnd().length : written.length;
         marks.push([start + at, start + at + end]);
         if (bracket === '[') open.push(start + at);
+        if (!listing) {
+          const name = written.slice(1, bracket === '{' ? end : -1);
+          const full = [...around.flatMap(({ label }) => label ?? []), name].join('.');
+          openings.push({ from: start + at, to: start + at + 1 + name.length, full });
+          around.push({ bracket: bracket === '{' ? '{' : '[', label: name });
+        }
         at += written.length - 1;
         continue;
       }
+      if (character === '[' || character === '{') around.push({ bracket: character });
+      if (
+        (character === ']' || character === '}') &&
+        around.at(-1)?.bracket === (character === ']' ? '[' : '{')
+      )
+        around.pop();
       if (character === '[') open.push(null);
       if (character === ']' && open.length && open.pop() !== null)
         marks.push([start + at, start + at + 1]);
     }
   }
-  return marks.sort(([a], [b]) => a - b);
+  return { marks: marks.sort(([a], [b]) => a - b), openings };
 }
+
+export const labelMarks = (source: string): [number, number][] => scan(source).marks;
+
+/** Each label of the algorithm where it opens, in order, with its full name. */
+export const labelOpenings = (source: string): LabelOpening[] => scan(source).openings;
 
 const dimmed = Decoration.mark({ class: 'cm-sverlin-label' });
 

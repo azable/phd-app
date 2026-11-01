@@ -116,6 +116,7 @@ import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 import { layOutOnServer } from './layout.server';
+import { layoutNameOf, layoutProp, pageLayouts } from './layouts.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
 const maximumSourceBytes = 256 * 1024;
@@ -248,6 +249,13 @@ export type PreparedComponent = {
     starter: Record<string, DesignValue>;
     /** Each free layout kind's structure, as its data makes it, for the chooser. */
     structures: Record<string, LayoutStructure>;
+    /**
+     * The page's layouts, the first shown where a variant names none: each its root's row or column
+     * and tag's line:column, which a source without layout blocks has neither of (see
+     * layouts.server.ts), and whether the source declares them.
+     */
+    layouts: { name: string; direction?: FrameSettings['layout']; ref?: string }[];
+    declared: boolean;
   };
   /** Where the view places a <Listing />, the algorithm's text in each language. */
   listings?: Record<
@@ -551,14 +559,30 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const extracted = extractBlocks(source);
     const { blocks, listings: listingBlocks } = extracted;
     // Labels the markup reads become identifiers of the same length (see label-values.ts).
-    const { source: svelteSource, references, heaps } = markLabels(extracted.svelteSource);
+    const { source: marked, references, heaps } = markLabels(extracted.svelteSource);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
-    const scripted = /<script\b/iu.test(svelteSource);
-    const ast = parse(scripted ? svelteSource : `${svelteSource}<script lang="ts"></script>`, {
-      filename: 'Main.svelte'
-    });
+    const scripted = /<script\b/iu.test(marked);
+    const parseView = (text: string) =>
+      parse(scripted ? text : `${text}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    // Layout blocks become {#if} blocks of the same length, their roots the frame (see layouts.server.ts).
+    const page = pageLayouts(
+      marked,
+      (text) => (parseView(text).html as { children?: [] } | undefined)?.children ?? []
+    );
+    if (page.problems.length)
+      throw InvalidSvelteSourceError.combine(
+        page.problems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_layout',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
+    const svelteSource = page.text;
+    const ast = parseView(svelteSource);
     const found = findComponents(ast.html as Parameters<typeof findComponents>[0]);
     visit(ast, (node) => {
       if (
@@ -614,8 +638,24 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       listing,
       listingAt
     } = withNodeRefs(svelteSource, ast, source, found.roots, found.valueTypes, paths, linkedTypes);
+    // Each layout is a kind, its frame's values the variables of its root's tag.
+    const kindNames = new Set([...paths.keys(), ...paths.values()]);
+    const layoutProblems = page.layouts.flatMap(({ name, root }) => {
+      if (root === undefined) return [];
+      const { line, column } = sourcePosition(source, root);
+      tagKinds[`${line}:${column + 1}`] = [name];
+      return kindNames.has(name)
+        ? [
+            new InvalidSvelteSourceError(
+              `The layout ${name} has a snippet's name, but a layout's name is its kind, as is a snippet's: rename one.`,
+              { code: 'view_layout', start: sourcePosition(source, root) }
+            )
+          ]
+        : [];
+    });
     viewProblems = [
       ...problems,
+      ...layoutProblems,
       ...linkProblems,
       ...found.problems.map(
         ({ message, start }) =>
@@ -1099,6 +1139,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         operators.has(name) ||
         name === 'Math' ||
         name === 'at' ||
+        (page.declared && name === layoutProp) ||
         isLabelKey(name) ||
         isRunsKey(name) ||
         isHistoryKey(name) ||
@@ -1396,13 +1437,15 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         ...Object.keys(histories),
         ...Object.keys(during),
         ...Object.keys(chosen),
-        ...Object.keys(viewAliases)
+        ...Object.keys(viewAliases),
+        ...(page.declared ? [layoutProp] : [])
       ],
       { ...chosen, ...viewAliases },
       { ...pointerChosen, ...pointerAliases },
       pointers.calls,
       paints,
-      linked.length ? endTypes : []
+      linked.length ? endTypes : [],
+      page.declared
     );
     const compiled = (generate: Generate) =>
       compile(generated, { filename: 'Main.svelte', generate, css: 'injected', dev: false }).js
@@ -1448,6 +1491,10 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       pacedBy.set(key, result);
       return result;
     };
+    const layoutDesign = {
+      names: page.layouts.map(({ name }) => name),
+      implicit: !page.declared
+    };
     if (probeProblems.length)
       throw InvalidSvelteSourceError.combine(
         probeProblems.map(
@@ -1479,6 +1526,15 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         pointers: pointerChosen,
         structures,
         tags: tagKinds,
+        layouts: page.layouts.map(({ name, direction, root }) => {
+          const at = root === undefined ? undefined : sourcePosition(source, root);
+          return {
+            name,
+            ...(direction ? { direction } : {}),
+            ...(at ? { ref: `${at.line}:${at.column + 1}` } : {})
+          };
+        }),
+        declared: page.declared,
         renders: renderVariables,
         places: placeChoices,
         fallbacks: Object.fromEntries([
@@ -1492,18 +1548,34 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ...Object.entries(listingRegionFallbacks(regionLabels, labelMarks))
         ]),
         space: {
-          ...designSpace(kinds, chosen, listing, ownListings, pointerChosen, {
-            kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-            choices: Object.values(placeChoices)
-          }),
+          ...designSpace(
+            kinds,
+            chosen,
+            listing,
+            ownListings,
+            pointerChosen,
+            {
+              kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+              choices: Object.values(placeChoices)
+            },
+            layoutDesign
+          ),
           ...listingRegionSpace(regionLabels),
           ...pauseSpace(labelNames, leaves)
         },
         starter: {
-          ...starterVariant(kinds, chosen, listing, ownListings, pointerChosen, {
-            kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-            choices: Object.values(placeChoices)
-          }),
+          ...starterVariant(
+            kinds,
+            chosen,
+            listing,
+            ownListings,
+            pointerChosen,
+            {
+              kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+              choices: Object.values(placeChoices)
+            },
+            layoutDesign
+          ),
           ...regionStarter,
           ...starterPauses(labelNames)
         }
@@ -1581,14 +1653,8 @@ export async function bundlePresentation(
     throw new InvalidSvelteSourceError(cause.message, { code: 'design_value' });
   }
   const { values } = variant;
-  const frame: FrameSettings = {
-    ratio: values['frame.ratio'] as FrameSettings['ratio'],
-    justify: values['frame.justify'] as FrameSettings['justify'],
-    align: values['frame.align'] as FrameSettings['align'],
-    padding: values['frame.padding'] as number,
-    gap: values['frame.gap'] as number,
-    layout: values['frame.layout'] as FrameSettings['layout']
-  };
+  const frame = frameSettings(design, values);
+  const layoutShown = frame.name ? { [layoutProp]: { [frame.name]: true } } : {};
   // Each type rendered by name draws the view the variant chose for it.
   const views = Object.fromEntries([
     ...Object.keys(design.views).map((type) => [type, values[`views.${type}`]]),
@@ -1702,6 +1768,7 @@ export async function bundlePresentation(
       ...ownApplied,
       ...views,
       ...pointerViews,
+      ...layoutShown,
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
@@ -1781,6 +1848,29 @@ export async function bundlePresentation(
     variant: values,
     origins: variant.origins,
     leftOut: leftOut.nodes
+  };
+}
+
+/**
+ * The frame of the layout a variant shows, the first where it names none: its kind's values, as
+ * Stacked.ratio, its root's row or column, and its name and root's tag, where the source declares
+ * layouts; only that layout is drawn.
+ */
+export function frameSettings(
+  design: Pick<PreparedComponent['design'], 'layouts' | 'declared'>,
+  values: Readonly<Record<string, DesignValue>>
+): FrameSettings {
+  const shown = design.layouts.find(({ name }) => name === values.layout) ?? design.layouts[0];
+  const own = (prop: string) => values[`${shown.name}.${prop}`];
+  return {
+    ratio: own('ratio') as FrameSettings['ratio'],
+    justify: own('justify') as FrameSettings['justify'],
+    align: own('align') as FrameSettings['align'],
+    padding: own('padding') as number,
+    gap: own('gap') as number,
+    layout: shown.direction ?? (own('layout') as FrameSettings['layout'] | undefined) ?? 'column',
+    ...(design.declared ? { name: shown.name } : {}),
+    ...(shown.ref ? { ref: shown.ref } : {})
   };
 }
 
@@ -1907,7 +1997,8 @@ function withGeneratedScripts(
   pointerChoices: Record<string, string[]>,
   pointers: readonly string[],
   paints: readonly string[],
-  ends: readonly string[] = []
+  ends: readonly string[] = [],
+  layouts = false
 ): string {
   // A type rendered by name arrives as the name of the view the variant chose, and the view uses
   // that view under the type's name; none draws nothing. A position type rendered as a pointer
@@ -1928,9 +2019,13 @@ function withGeneratedScripts(
         `const __pointerOf_${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__pointer_${name}]);`
     )
   ].join(' ');
-  // The root's pointers are drawn around what they point at, from the start (see pointerCalls).
+  // The root's pointers are drawn around what they point at, from the start (see pointerCalls),
+  // those of a layout only where it is shown, the layout prop holding which (see layouts.server.ts).
+  const shownLayout = layouts
+    ? `.filter((pointer: any) => !pointer.layout || ${layoutProp}?.[pointer.layout])`
+    : '';
   const pointing = pointers.length
-    ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]);`
+    ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]${shownLayout});`
     : '';
   // A link to an end draws it with the view its type chose (see Link.svelte).
   const ending = ends.length
@@ -2348,6 +2443,12 @@ function withNodeRefs(
           );
       }
       walk(tag.children, tag.name === 'Node' ? entry : around, true, view, page);
+      return;
+    }
+    // What a layout holds is the page's top level, and a node written there is of the layout's kind.
+    const layout = view === 'root' ? layoutNameOf(tag) : undefined;
+    if (layout !== undefined) {
+      walk(tag.children, around, inNode, layout, page);
       return;
     }
     const snippet = tag.type === 'SnippetBlock' ? tag.expression?.name : undefined;

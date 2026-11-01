@@ -12,6 +12,8 @@ import {
   colourParts,
   frameOptions,
   freeLayoutProps,
+  implicitLayout,
+  implicitLayoutOptions,
   listingOptions,
   listingPropOptions,
   listingRegionProps,
@@ -82,6 +84,55 @@ export type DesignPlaces = {
 
 const placePropsOf = ({ role }: DesignKind) =>
   roleProps[role].filter((prop) => placeProps.has(prop));
+
+/**
+ * The page's layouts, by name, the first shown where a variant names none, and whether they are the
+ * one a source without layout blocks reads as (see implicitLayout).
+ */
+export type DesignLayouts = { names: readonly string[]; implicit?: boolean };
+
+const legacyLayouts: DesignLayouts = { names: [implicitLayout], implicit: true };
+
+/** A layout's variables: its frame's, and, for the one a source without layouts reads as, how it arranges. */
+function layoutProps(implicit = false): Record<string, readonly DesignValue[]> {
+  return implicit ? { ...frameOptions, ...implicitLayoutOptions } : frameOptions;
+}
+
+/** The layout shown, never none, and each layout's frame, as Stacked.ratio. */
+function layoutSpace({ names, implicit }: DesignLayouts): DesignSpace {
+  return {
+    layout: [...names],
+    ...Object.fromEntries(
+      names.flatMap((name) =>
+        Object.entries(layoutProps(implicit)).map(([prop, options]) => [`${name}.${prop}`, options])
+      )
+    )
+  };
+}
+
+function layoutStarter({ names, implicit }: DesignLayouts): Record<string, DesignValue> {
+  return {
+    layout: names[0],
+    ...Object.fromEntries(
+      names.flatMap((name) =>
+        Object.entries(layoutProps(implicit)).map(([prop, options]) => [
+          `${name}.${prop}`,
+          (starterFrame as Record<string, DesignValue>)[prop] ?? options[0]
+        ])
+      )
+    )
+  };
+}
+
+const kindOf = (key: string) => key.slice(0, Math.max(0, key.lastIndexOf('.')));
+
+/** The layouts of a space: the kinds with a frame. */
+const framedKinds = (space: DesignSpace) =>
+  new Set(
+    Object.keys(space)
+      .filter((key) => key.endsWith('.ratio'))
+      .map((key) => key.slice(0, -'.ratio'.length))
+  );
 
 /** Each variable's options, by key. */
 export type DesignSpace = Readonly<Record<string, readonly DesignValue[]>>;
@@ -215,8 +266,9 @@ function asPause(space: DesignSpace, key: string, value: unknown): unknown {
 
 /**
  * Every variable of a source: each type's views, each position type's pointer views where it is
- * rendered as a pointer, the frame's settings, a listing's if the view places one (its languages
- * the source's own listings first, then the library's), each kind's props, and each place's.
+ * rendered as a pointer, a listing's if the view places one (its languages the source's own listings
+ * first, then the library's), each kind's props, each place's, and the layout shown and each
+ * layout's frame, after the kinds, as a layout's kind holds the nodes its body writes too.
  */
 export function designSpace(
   kinds: readonly DesignKind[],
@@ -224,7 +276,8 @@ export function designSpace(
   listing = false,
   ownListings: readonly string[] = [],
   pointers: Readonly<Record<string, readonly string[]>> = {},
-  places: DesignPlaces = { kinds: [], choices: [] }
+  places: DesignPlaces = { kinds: [], choices: [] },
+  layouts: DesignLayouts = legacyLayouts
 ): DesignSpace {
   return {
     ...Object.fromEntries(
@@ -233,7 +286,6 @@ export function designSpace(
     ...Object.fromEntries(
       Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, [...options, 'none']])
     ),
-    ...frameOptions,
     ...(listing
       ? {
           ...listingOptions,
@@ -250,7 +302,8 @@ export function designSpace(
       places.kinds.flatMap((kind) =>
         placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
       )
-    )
+    ),
+    ...layoutSpace(layouts)
   };
 }
 
@@ -261,7 +314,8 @@ export function starterVariant(
   listing = false,
   ownListings: readonly string[] = [],
   pointers: Readonly<Record<string, readonly string[]>> = {},
-  places: DesignPlaces = { kinds: [], choices: [] }
+  places: DesignPlaces = { kinds: [], choices: [] },
+  layouts: DesignLayouts = legacyLayouts
 ): Record<string, DesignValue> {
   return {
     ...Object.fromEntries(
@@ -270,7 +324,6 @@ export function starterVariant(
     ...Object.fromEntries(
       Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, options[0]])
     ),
-    ...starterFrame,
     // The source's first listing is the one it starts with.
     ...(listing
       ? {
@@ -289,7 +342,8 @@ export function starterVariant(
       places.kinds.flatMap((kind) =>
         placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
       )
-    )
+    ),
+    ...layoutStarter(layouts)
   };
 }
 
@@ -321,7 +375,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
                 (other) =>
                   !other.startsWith('views.') &&
                   !other.startsWith('pointers.') &&
-                  !other.startsWith('frame.') &&
+                  other !== 'layout' &&
                   !other.startsWith('pause@') &&
                   !other.startsWith('listing.')
               )
@@ -355,7 +409,7 @@ export function buildVariant(
   fallbacks: Readonly<Record<string, Fallback>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
   const chosen = Object.entries(request.chosen ?? {}).map(
-    ([key, value]) => [key, asPause(space, key, value)] as const
+    ([key, value]) => [frameKey(space, key), asPause(space, key, value)] as const
   );
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
@@ -372,7 +426,7 @@ export function buildVariant(
   const base = Object.fromEntries(
     Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
       const lit = litListingKey(key);
-      return lit === undefined ? [] : [[fullPlaceKey(space, lit), saved]];
+      return lit === undefined ? [] : [[frameKey(space, fullPlaceKey(space, lit)), saved]];
     })
   );
   for (const [key, saved] of Object.entries(base)) {
@@ -426,12 +480,22 @@ function fullPlaceKey(space: DesignSpace, key: string): string {
 }
 
 /**
+ * A key of the page frame saved before layouts, as frame.ratio, as the layout a source without
+ * layouts reads as has it, Page.ratio, where the space has that; any other key as it is.
+ */
+function frameKey(space: DesignSpace, key: string): string {
+  if (!key.startsWith('frame.')) return key;
+  const own = `${implicitLayout}.${key.slice('frame.'.length)}`;
+  return Object.hasOwn(space, own) ? own : key;
+}
+
+/**
  * The prop a variable sets, as fill for Compared.Pointed.fill, views for a choice of views
- * (views.Int, pointers.Index), and the variable itself for the frame's and the pauses.
+ * (views.Int, pointers.Index) or of layouts, and the variable itself for the pauses.
  */
 function propOf(key: string): string {
-  if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
-  if (key.startsWith('frame.') || key.startsWith('pause@')) return key;
+  if (key.startsWith('views.') || key.startsWith('pointers.') || key === 'layout') return 'views';
+  if (key.startsWith('pause@')) return key;
   return key.slice(key.lastIndexOf('.') + 1);
 }
 
@@ -464,7 +528,9 @@ function randomised(
   seed: number
 ): Record<string, DesignValue> {
   const groups = new Map<string, string[]>();
+  const frames = framedKinds(space);
   for (const [key, value] of Object.entries(values)) {
+    if (frames.has(kindOf(key))) continue;
     const group = `${propOf(key)}=${JSON.stringify(value)}`;
     groups.set(group, [...(groups.get(group) ?? []), key]);
   }
@@ -491,7 +557,8 @@ function drawOne(
       ? candidates[Math.floor(keyedRandom(seed, stream) * candidates.length)]
       : value;
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
-  if (prop.startsWith('frame.') || prop.startsWith('pause@') || kept.has(prop)) return value;
+  if (prop.startsWith('pause@') || kept.has(prop) || framedKinds(space).has(kindOf(key)))
+    return value;
   if (colourProps.has(prop)) {
     const parts = typeof value === 'string' ? colourParts(value) : undefined;
     if (!parts) return value;

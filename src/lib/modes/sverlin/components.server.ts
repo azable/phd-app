@@ -13,6 +13,7 @@ import type { TraceState, TypeMap } from './algorithm/interpret.server';
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 import { isDuringKey } from './label-values';
+import { layoutNameOf } from './layouts.server';
 import { siteOf } from './left-out';
 
 /** Each component's type, by name. */
@@ -668,6 +669,9 @@ export function pointerCalls(
   const calls: string[] = [];
   const problems: ComponentProblem[] = [];
   const text = (node: Part) => source.slice(node.start, node.end);
+  // The layout a pointer is rendered in, so a presentation showing another neither draws it nor
+  // keeps room for it.
+  let layout: string | undefined;
   const visit = (
     node: unknown,
     where: 'top' | 'block' | 'component',
@@ -721,7 +725,7 @@ export function pointerCalls(
         const pointer = found && { ...found, paint: own(found.paint)!, kinds: own(found.kinds) };
         const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
         calls.push(
-          `{ view: () => ${place?.view ?? pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}${place ? `place: ${place.place}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+          `{ ${layout ? `layout: ${JSON.stringify(layout)}, ` : ''}view: () => ${place?.view ?? pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}${place ? `place: ${place.place}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
       }
@@ -733,10 +737,17 @@ export function pointerCalls(
     if (listed) {
       const pointer = pointers.get(listed.view);
       calls.push(
-        `{ view: () => ${pointer?.view ?? listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
+        `{ ${layout ? `layout: ${JSON.stringify(layout)}, ` : ''}view: () => ${pointer?.view ?? listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
       );
       const start = part.start ?? 0;
       removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
+      return;
+    }
+    const named = where === 'top' ? layoutNameOf(part) : undefined;
+    if (named !== undefined) {
+      layout = named;
+      visit(part.children, where, conditions, inNode);
+      layout = undefined;
       return;
     }
     if (part.type === 'IfBlock' && where === 'top') {

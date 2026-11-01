@@ -1,6 +1,6 @@
 /**
  * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
- * top-level part (what the view's root renders) or a node holding most of the picture, never what
+ * top-level part (what the view's root renders, in any layout) or a node holding most of the picture, never what
  * earlier preferences or the assistant's vary decisions settled, at most one hide per variant, and
  * most of the picture still showing afterwards.
  */
@@ -20,30 +20,47 @@ export function hides(variable: string, value: unknown): boolean {
 /** The most of the picture one press may hide, and the least that must stay. */
 const hiddenAtMost = 0.5;
 
-/** The snippets a source defines, what each renders, and what its root renders. */
-export type PictureTree = { snippets: Map<string, string[]>; root: string[]; listings: number };
+/**
+ * The snippets a source defines, what each renders, what its root renders (in every layout), and
+ * what each layout's root renders, the picture being the layout's a variant shows.
+ */
+export type PictureTree = {
+  snippets: Map<string, string[]>;
+  root: string[];
+  listings: number;
+  layouts: Map<string, string[]>;
+};
 
 export function pictureTree(source: string): PictureTree {
   const markup = source.replace(/<script[\s\S]*?<\/script>/gu, '');
   const snippets = new Map<string, string[]>();
   const root: string[] = [];
   const open: string[] = [];
+  const layouts = new Map<string, string[]>();
+  let layout: string[] | undefined;
   let listings = 0;
   const tokens =
-    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b/gu;
+    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|\{#layout\s+([A-Za-z_]\w*)|\{\/layout\s*\}/gu;
   for (const match of markup.matchAll(tokens)) {
-    if (match[1]) {
+    if (match[3]) layouts.set(match[3], (layout = []));
+    else if (match[0].startsWith('{/layout')) layout = undefined;
+    else if (match[1]) {
       open.push(match[1]);
       if (!snippets.has(match[1])) snippets.set(match[1], []);
     } else if (match[0] === '{/snippet}') open.pop();
     else if (match[2]) {
       const parent = open.at(-1);
       if (parent) snippets.get(parent)!.push(match[2]);
-      else root.push(match[2]);
-    } else if (open.length === 0) listings += 1;
-    else snippets.get(open.at(-1)!)!.push('<Listing>');
+      else {
+        root.push(match[2]);
+        layout?.push(match[2]);
+      }
+    } else if (open.length === 0) {
+      listings += 1;
+      layout?.push('<Listing>');
+    } else snippets.get(open.at(-1)!)!.push('<Listing>');
   }
-  return { snippets, root, listings };
+  return { snippets, root, listings, layouts };
 }
 
 type Hidden = { snippets: Set<string>; types: Set<string>; listing: boolean };
@@ -69,6 +86,11 @@ function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): 
     sizes.set(name, total);
     return total;
   };
+  // With layouts, the one shown, the first where the variant names none.
+  if (tree.layouts.size) {
+    const shown = tree.layouts.get(String(variant.layout)) ?? [...tree.layouts.values()][0] ?? [];
+    return shown.reduce((sum, name) => sum + size(name, []), 0);
+  }
   return (
     tree.root.reduce((sum, name) => sum + size(name, []), 0) + (hidden.listing ? 0 : tree.listings)
   );
@@ -121,7 +143,9 @@ export type GuardContext = {
 export function allowedChange(context: GuardContext, variable: string, value: unknown): boolean {
   if (variable in context.settled && context.settled[variable] !== value) return false;
   if (!hides(variable, value)) return true;
-  if (variable.endsWith('.shown') && context.tree.root.includes(shownSnippet(variable)))
+  // Nor the nodes a layout writes beside its parts, which are its root's.
+  const snippet = variable.endsWith('.shown') ? shownSnippet(variable) : undefined;
+  if (snippet && (context.tree.root.includes(snippet) || context.tree.layouts.has(snippet)))
     return false;
   return hiddenShare(context.tree, context.base, [[variable, value]]) < hiddenAtMost;
 }
