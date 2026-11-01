@@ -253,7 +253,13 @@
       const typed =
         element.dataset.svLabel ??
         ([element.dataset.svType, text].filter(Boolean).join(' ') || 'node');
-      const label = typed.length > maxLabel ? `${typed.slice(0, maxLabel - 1)}…` : typed;
+      // Cut whole code points, so an emoji is never split into a lone surrogate the server refuses.
+      const label =
+        typed.length > maxLabel
+          ? `${Array.from(typed)
+              .slice(0, maxLabel - 1)
+              .join('')}…`
+          : typed;
       return [
         {
           id,

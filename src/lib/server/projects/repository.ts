@@ -20,6 +20,7 @@ import {
   type ProjectId,
   type ProjectSummary
 } from '$lib/shared/projects/model';
+import { storableJson } from '$lib/shared/text';
 import { database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
@@ -94,7 +95,7 @@ export class PostgresProjectRepository implements ProjectRepository {
 
   async create(document: ProjectDocument, ownerUserId?: string): Promise<ProjectDocument> {
     assertProjectId(document.projectId);
-    const normalized = normalizeProject(document);
+    const normalized = normalizeProject(storableJson(document));
     if (!ownerUserId) throw new Error('A project owner is required for PostgreSQL storage.');
     const summary = summarizeProject(normalized);
     await database().transaction(async (transaction) => {
@@ -171,7 +172,8 @@ export class PostgresProjectRepository implements ProjectRepository {
         throw new ProjectConflictError();
 
       const events = pendingEvents.map(
-        (pending, index): ProjectEvent => ({ ...pending, id: head + index + 1 }) as ProjectEvent
+        (pending, index): ProjectEvent =>
+          storableJson({ ...pending, id: head + index + 1 }) as ProjectEvent
       );
       const document = normalizeProject({
         schemaVersion: projectSchemaVersion,

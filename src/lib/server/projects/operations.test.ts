@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { describe, expect, it } from 'vitest';
+import { DrizzleQueryError } from 'drizzle-orm';
+import { describe, expect, it, vi } from 'vitest';
 
 import { InvalidProjectDocumentError } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
@@ -45,6 +46,37 @@ describe('ProjectOperationExecutor', () => {
 
     const operation = projectOperation(await repository.load(projectId), operationId);
     expect(operation).toMatchObject({ kind: 'initial-build', status: 'completed' });
+  });
+
+  it('shows a plain message, not the query, when the database refuses a change', async () => {
+    const repository = new MemoryProjectRepository();
+    const projectId = randomUUID();
+    const operationId = randomUUID();
+    await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => ({ release: async () => undefined }) },
+      async () => {
+        throw new DrizzleQueryError('insert into "project_events" ...', ['make this bigger']);
+      }
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await executor.accept({
+      projectId,
+      operationId,
+      expectedHead: 1,
+      command: { type: 'initial-build', seed: 1 }
+    });
+    await terminal(repository, projectId, operationId);
+
+    const failed = projectOperation(await repository.load(projectId), operationId)?.terminalEvent;
+    expect(JSON.stringify(failed)).not.toContain('make this bigger');
+    expect(failed).toMatchObject({
+      payload: { message: expect.stringContaining('could not be saved') }
+    });
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it('recovers past a project whose Timeline no longer reads', async () => {

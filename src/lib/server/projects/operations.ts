@@ -2,6 +2,9 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { DrizzleQueryError } from 'drizzle-orm';
+import postgres from 'postgres';
+
 import {
   InvalidProjectDocumentError,
   type NewProjectEvent,
@@ -19,6 +22,7 @@ import {
   projectOperation
 } from '$lib/shared/projects/operations';
 import { headStillCurrent, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { cutText } from '$lib/shared/text';
 import { sqlClient } from '$lib/server/db';
 
 import {
@@ -809,7 +813,7 @@ function lifecycleFailure(
     actor: { kind: 'system' },
     operationId,
     createdAt: new Date().toISOString(),
-    payload: { kind, failureKind, message: message.slice(0, 4_000) || 'Project operation failed.' }
+    payload: { kind, failureKind, message: cutText(message, 4_000) || 'Project operation failed.' }
   };
 }
 
@@ -869,8 +873,16 @@ function terminalFailureFor(
   return undefined;
 }
 
+/**
+ * The failure as participants see it. A database error's message quotes the query and its values,
+ * the participant's own text among them, so it stays in the server log and they see a plain one.
+ */
 function messageFor(cause: unknown): string {
-  return (cause instanceof Error ? cause.message : String(cause)).slice(0, 4_000);
+  if (cause instanceof DrizzleQueryError || cause instanceof postgres.PostgresError) {
+    console.error('A project operation failed in the database.', cause);
+    return 'The project could not be saved. Try again in a moment.';
+  }
+  return cutText(cause instanceof Error ? cause.message : String(cause), 4_000);
 }
 
 function cancellationMessage(signal: AbortSignal): string {

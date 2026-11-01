@@ -33,6 +33,7 @@ import {
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { differingSteps } from '$lib/shared/differing-steps';
+import { cutText } from '$lib/shared/text';
 import { interfaceReferenceFor } from '$lib/shared/interface-parts';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
 import {
@@ -2610,7 +2611,7 @@ function participantDiagnostic(diagnostics: readonly { message: string }[]): str
 }
 
 function plainFailureSummary(value: string): string {
-  const text = value.replace(/\s+/g, ' ').trim().slice(0, 500);
+  const text = cutText(value.replace(/\s+/g, ' ').trim(), 500);
   if (!text) return 'an unspecified validation problem.';
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }

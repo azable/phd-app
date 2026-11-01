@@ -53,6 +53,41 @@ it.skipIf(!postgresTestsEnabled)(
   30_000
 );
 
+it.skipIf(!postgresTestsEnabled)(
+  'stores text with half an emoji or a NUL, which jsonb refuses, made well-formed',
+  async () => {
+    const suffix = randomUUID();
+    const ownerUserId = `resource-owner-${suffix}`;
+    const projectId = `resource-project-${suffix}`;
+    const operationId = randomUUID();
+    const repository = new PostgresProjectRepository();
+    await database()
+      .insert(schema.user)
+      .values({
+        id: ownerUserId,
+        name: 'Resource owner',
+        email: `${ownerUserId}@sverlin.invalid`,
+        emailVerified: true,
+        role: 'user'
+      });
+
+    try {
+      await repository.create(rootDocument(projectId, operationId), ownerUserId);
+      // An element label cut after the first half of an emoji, as Frame.svelte once did.
+      const title = `Legend ${'🍎'.slice(0, 1)}…\u0000`;
+      await repository.append(projectId, 1, [renameEvent(randomUUID(), title)]);
+
+      expect((await repository.load(projectId)).events[1]).toMatchObject({
+        payload: { title: 'Legend \ufffd…' }
+      });
+    } finally {
+      await database().delete(schema.projects).where(eq(schema.projects.id, projectId));
+      await database().delete(schema.user).where(eq(schema.user.id, ownerUserId));
+    }
+  },
+  30_000
+);
+
 function rootDocument(projectId: string, operationId: string): ProjectDocument {
   return {
     schemaVersion: 1,
