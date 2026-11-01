@@ -2511,6 +2511,37 @@ describe('assistant edits', () => {
     expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(captioned);
   });
 
+  it('builds an edited source with the values the edit gives, as where it pauses', async () => {
+    const { document } = await created('Paced edit');
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      ...generation(undefined, 'Edited.'),
+      decision: {
+        action: 'edit' as const,
+        edits: [
+          {
+            find: '{#layout Main}',
+            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+          },
+          { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
+        ],
+        values: [{ variable: 'pause@missing', value: 'off' }],
+        summary: 'Adds a caption'
+      }
+    });
+
+    const result = await feedback(document);
+
+    const [presentation] = result.appendedEvents.flatMap((event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1'
+        ? [event.payload.presentation]
+        : []
+    );
+    expect(presentation?.variant?.['pause@missing']).toBe('off');
+    expect(presentation?.origins?.['pause@missing']).toBe('chosen');
+    expect(presentation?.variant?.['pause@check']).toBe('on');
+  });
+
   it('asks again with what kept the edits from applying, and accepts the correction', async () => {
     const { document } = await created('Misplaced edit');
     mocks.generatePrepared

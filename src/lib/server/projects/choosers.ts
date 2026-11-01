@@ -4,7 +4,7 @@
  * (commands.ts), the random draw, and the Decisions API chooser are interchangeable.
  */
 
-import type { AiDesign } from '$lib/server/chat-bots/project-context';
+import type { AiDesign, SourceBuildFacts } from '$lib/server/chat-bots/project-context';
 import type { BuildRequest } from '$lib/modes/server';
 import type { BrowserBundlePresentation, DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
@@ -22,10 +22,8 @@ export type { ChooserId };
 export type DesignSource = Pick<
   BrowserBundlePresentation,
   'variant' | 'origins' | 'views' | 'pointers' | 'listings'
-> & {
-  runs?: Record<string, { runs: number; drawn: number }>;
-  structures?: Record<string, string>;
-};
+> &
+  SourceBuildFacts;
 
 export type ChooserRequest = {
   document: ProjectDocument;

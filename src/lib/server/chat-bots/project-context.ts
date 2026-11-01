@@ -90,6 +90,15 @@ export type AiVariable = {
   origin?: string;
 };
 
+/** A label's runs, and how many of them change what the view draws (compile.server.ts LabelRuns). */
+export type AiLabelRuns = { runs: number; drawn: number };
+
+/** What a source's build found that every variant shares: each label's runs, each free layout kind's structure. */
+export type SourceBuildFacts = {
+  runs?: Record<string, AiLabelRuns>;
+  structures?: Record<string, string>;
+};
+
 /** The base's design space as the viewed variant has it: its variables, and their option sets. */
 export type AiDesign = {
   options: Record<string, readonly DesignValue[]>;
@@ -228,6 +237,11 @@ export type AiProjectContext = {
    * no presentation of the base recorded its variant.
    */
   design: AiDesign;
+  /**
+   * Each label of the base, by name: how many times it runs, and how many of those runs change what
+   * the view draws (drawn), from its newest successful build.
+   */
+  runs?: Record<string, AiLabelRuns>;
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
@@ -522,14 +536,18 @@ export function projectAiContext(
   const design = designVariables(viewedPresentation(document, selection.interactionEventIds ?? []));
   const brief = projectBrief(document.events);
   const preferences = preferenceSummary(document.events, design, briefSteering(brief));
+  const base = projectWorkspace(snapshot);
+  const entry = base.artifacts.find(({ artifactId }) => artifactId === base.entryArtifactId);
+  const { runs } = entry ? sourceBuildFacts(document, entry.sha256) : {};
 
   return {
     projectId: document.projectId,
     title: snapshot.title,
     headEventId: events.at(-1)?.id ?? projectHead(document).id,
-    base: projectWorkspace(snapshot),
+    base,
     versions: sourceVersions(document),
     design,
+    ...(runs ? { runs } : {}),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),
@@ -707,6 +725,26 @@ function sourceVersions(document: ProjectDocument): AiSourceVersion[] {
     });
   }
   return [...versions.values()];
+}
+
+/** A source's runs and structures, from its newest successful build, which every variant shares. */
+export function sourceBuildFacts(document: ProjectDocument, sha256: string): SourceBuildFacts {
+  const builds = new Set(
+    document.events.flatMap((event) =>
+      event.type === 'build.requested' && event.payload.source.sha256 === sha256
+        ? [event.payload.buildId]
+        : []
+    )
+  );
+  const built = document.events.findLast(
+    (event) => event.type === 'build.succeeded' && builds.has(event.payload.buildId)
+  );
+  if (built?.type !== 'build.succeeded') return {};
+  const bundle = JSON.parse(built.payload.bundle.text) as SourceBuildFacts;
+  return {
+    ...(bundle.runs ? { runs: bundle.runs } : {}),
+    ...(bundle.structures ? { structures: bundle.structures } : {})
+  };
 }
 
 function projectWorkspace(snapshot: ProjectSnapshot): AiWorkspace {

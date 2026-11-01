@@ -271,6 +271,39 @@ describe('source versions in the AI context', () => {
 });
 
 describe('design variables in the AI context', () => {
+  it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {
+    const value = document();
+    const buildId = '22345678-1234-4123-8123-123456789abc';
+    const runs = { check: { runs: 6, drawn: 6 }, missing: { runs: 1, drawn: 0 } };
+    value.events.push(
+      {
+        id: 4,
+        type: 'build.requested',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: '2026-01-01T00:00:04.000Z',
+        payload: {
+          purpose: 'initial',
+          input: 'committed-artifact',
+          source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
+          sourceLabel: 'Main.svelte',
+          seed: 1,
+          buildId
+        }
+      },
+      {
+        id: 5,
+        type: 'build.succeeded',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: '2026-01-01T00:00:05.000Z',
+        payload: { durationMs: 1, buildId, bundle: recorded(JSON.stringify({ runs })) }
+      }
+    );
+    expect(projectAiContext(value).runs).toEqual(runs);
+    expect(projectAiContext(document())).not.toHaveProperty('runs');
+  });
+
   it('gives every pause its options, so a chosen pause is one of them', () => {
     const design = designVariables({
       variant: { 'pause@insert.swap': 'on', 'pause@insert.swap.to': 'on', 'Cell.fill': 'none' }

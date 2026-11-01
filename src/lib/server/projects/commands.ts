@@ -51,6 +51,7 @@ import {
   projectAiContext,
   projectConversationMessages,
   designVariables,
+  sourceBuildFacts,
   viewedPresentation,
   type AiContextSelection,
   type AiDesign,
@@ -304,29 +305,6 @@ function sourcePresentations(document: ProjectDocument, sha256: string | undefin
       ? [event.payload.presentation]
       : []
   );
-}
-
-/** A source's runs and structures, from its newest successful build, which every variant shares. */
-function sourceBuildFacts(
-  document: ProjectDocument,
-  sha256: string
-): Pick<DesignSource, 'runs' | 'structures'> {
-  const builds = new Set(
-    document.events.flatMap((event) =>
-      event.type === 'build.requested' && event.payload.source.sha256 === sha256
-        ? [event.payload.buildId]
-        : []
-    )
-  );
-  const built = document.events.findLast(
-    (event) => event.type === 'build.succeeded' && builds.has(event.payload.buildId)
-  );
-  if (built?.type !== 'build.succeeded') return {};
-  const bundle = JSON.parse(built.payload.bundle.text) as Pick<DesignSource, 'runs' | 'structures'>;
-  return {
-    ...(bundle.runs ? { runs: bundle.runs } : {}),
-    ...(bundle.structures ? { structures: bundle.structures } : {})
-  };
 }
 
 /** Validate and durably queue participant feedback without waiting for the assistant. */
@@ -1075,6 +1053,7 @@ async function runSverlinAssistantTurn(
           break;
         case 'revise':
           candidate = decision.source;
+          variant = sourceValues(viewed, decision);
           pairs = decision.comparisons ?? undefined;
           break;
         case 'vary': {
@@ -1102,6 +1081,7 @@ async function runSverlinAssistantTurn(
           const edited = applySourceEdits(base, decision.edits);
           if ('problems' in edited) return reject('edits', edited.problems, base);
           candidate = edited.source;
+          variant = sourceValues(viewed, decision);
           pairs = decision.comparisons ?? undefined;
           break;
         }
@@ -2766,6 +2746,20 @@ function errorMessage(cause: unknown): string {
  * The variant a vary decision builds from: the viewed one, with the values it sets, and the
  * variables it asks to draw afresh.
  */
+/**
+ * A changed source's first build: the viewed variant's values, with the assistant's own values for
+ * it, as where its steps pause; unlike a vary's, they settle nothing, being no one's request.
+ */
+function sourceValues(
+  viewed: DesignValues | undefined,
+  decision: SourceDecisionOf<'revise' | 'edit'>
+): { base?: DesignValues; chosen?: DesignValues } {
+  return {
+    ...(viewed ? { base: viewed } : {}),
+    ...(decision.values?.length ? { chosen: designValues(decision.values) } : {})
+  };
+}
+
 function variedValues(
   viewed: DesignValues | undefined,
   decision: SourceDecisionOf<'vary'>

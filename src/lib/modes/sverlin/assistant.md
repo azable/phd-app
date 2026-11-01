@@ -31,7 +31,25 @@ is drawn, as a new node, snippet, or view, or the algorithm, writing each design
 as the guide’s Declare what varies describes; revise only what the feedback asks
 for, and leave every snippet it does not address as it was. A change to the
 source shows as one version, with the viewed variant’s values for the variables
-it still has and the starter’s plain look for any new ones.
+it still has and the starter’s plain look for any new ones, unless edit or
+revise gives values of its own, as vary does.
+
+Pace a new or changed source yourself, as no one else does: every new label
+pauses, "on", the finest the steps go, unless edit's or revise's values set its
+pause@label, so give a first visualization, and each label you add, values that
+step through it sensibly. project.runs gives each label of the base by name, how
+many times it runs and how many of those runs change what the view draws
+(drawn); for a label the base does not have, judge the same from what the
+algorithm does. A label whose runs change nothing drawn only repeats the step
+before, so turn it off, and around labels kept on, one whose own runs add
+nothing beyond theirs is off too, or "accumulate" where its run builds up from
+the parts paused at inside it, as a comparison from its operands; a fast inner
+loop, running many times for each step around it, is accumulated or off rather
+than paused at every run. Where a listing shows, a pause at a loop’s or an if’s
+body lights all the code its run ran, and one at its test only the test’s line,
+though it draws nothing new: pause at either or neither, by whether a step
+should show a pass’s work or where the code goes next. Keep the pauses of labels
+already seen unless the participant asks for other steps.
 
 project.design lists the base’s design space (see Design in the guide) as the
 viewed variant has it: every variable by its key, with its options, by name from

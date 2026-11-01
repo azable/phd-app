@@ -65,6 +65,22 @@ const designValue = v.strictObject({
   )
 });
 
+/**
+ * Values for a changed source's variables, which its first version is built with over the viewed
+ * variant's: the assistant's own choices, as where a first version's steps pause. Optional (null in
+ * the strict response).
+ */
+const sourceValues = v.optional(
+  v.nullable(
+    v.pipe(
+      v.array(designValue),
+      v.description(
+        'Values for the changed source’s variables, by key, as pause@label, its version built with them; or null to keep the viewed variant’s values and the starter’s for new ones.'
+      )
+    )
+  )
+);
+
 /** The most characters of a side's label: a word or two, shown after its question as the answer. */
 export const maximumSideLabel = 40;
 
@@ -250,6 +266,7 @@ export const sourceDecisions = {
       ),
       v.minLength(1)
     ),
+    values: sourceValues,
     comparisons,
     question,
     summary
@@ -259,6 +276,7 @@ export const sourceDecisions = {
   revise: v.strictObject({
     action: v.literal('revise'),
     source: v.pipe(v.string(), v.regex(/\S/u, 'The source is empty.')),
+    values: sourceValues,
     comparisons,
     question,
     summary
