@@ -179,14 +179,8 @@ export function settledValues(events: readonly ProjectEvent[]): DesignValues {
       event.payload.presentation.variant
     )
       variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
-    if (event.type === 'visualization.preference-recorded') {
-      const preferred = variants.get(event.payload.preferred);
-      const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
-      const alternative = other ? variants.get(other) : undefined;
-      if (!preferred || !alternative) continue;
-      for (const [variable, value] of Object.entries(preferred))
-        if (alternative[variable] !== value) settled[variable] = value as DesignValue;
-    }
+    if (event.type === 'visualization.preference-recorded')
+      Object.assign(settled, answerOf(event, variants)?.settled);
     if (event.type === 'ai.generation-succeeded') {
       for (const { variable, value } of varyValues(event.payload.response.text))
         settled[variable] = value;
@@ -227,4 +221,68 @@ function varyValues(response: string): { variable: string; value: DesignValue }[
     // Not a recorded response with a decision.
   }
   return [];
+}
+
+/** What one preference answered: the preferred side's values where its pair differed. */
+export type Answer = { eventId: number; settled: DesignValues };
+
+function answerOf(
+  event: Extract<ProjectEvent, { type: 'visualization.preference-recorded' }>,
+  variants: ReadonlyMap<string, DesignValues>
+): Answer | undefined {
+  const preferred = variants.get(event.payload.preferred);
+  const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
+  const alternative = other ? variants.get(other) : undefined;
+  if (!preferred || !alternative) return undefined;
+  return {
+    eventId: event.id,
+    settled: Object.fromEntries(
+      Object.entries(preferred).filter(([variable, value]) => alternative[variable] !== value)
+    )
+  };
+}
+
+/** The answers of the preferences recorded after an event. */
+export function answersAfter(events: readonly ProjectEvent[], after: number): Answer[] {
+  const variants = new Map<string, DesignValues>();
+  const answers: Answer[] = [];
+  for (const event of events) {
+    if (
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1' &&
+      event.payload.presentation.variant
+    )
+      variants.set(event.payload.presentation.presentationId, event.payload.presentation.variant);
+    if (event.type === 'visualization.preference-recorded' && event.id > after) {
+      const answer = answerOf(event, variants);
+      if (answer) answers.push(answer);
+    }
+  }
+  return answers;
+}
+
+/** The variables two variants give different values. */
+export function differing(left: DesignValues, right: DesignValues): string[] {
+  return Object.keys({ ...left, ...right }).filter(
+    (variable) => left[variable] !== right[variable]
+  );
+}
+
+/**
+ * Whether an answer makes a waiting comparison, asking about these variables, moot: one of them is
+ * a variable the answer settled, or names in its path something a value it settled hides (a kind
+ * not shown, a type's view of none, no listing).
+ */
+export function mootComparison(answer: Answer, asked: readonly string[]): boolean {
+  if (asked.some((variable) => Object.hasOwn(answer.settled, variable))) return true;
+  const hidden = hiddenBy(Object.entries(answer.settled));
+  const names = new Set([...hidden.snippets, ...hidden.types]);
+  return asked.some(
+    (variable) =>
+      (hidden.listing && variable.startsWith('listing.')) ||
+      variable
+        .split('@')[0]
+        .split('.')
+        .some((part) => names.has(part))
+  );
 }

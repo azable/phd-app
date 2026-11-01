@@ -69,4 +69,38 @@ describe('chatbot registry', () => {
     );
     expect(chatbot.requestTimeoutMs()).toBe(123);
   });
+
+  it('gives a feedback turn its profile’s feedback parameters, and every other turn the profile’s own', async () => {
+    const config = {
+      id: 'test-agent',
+      participantIntake: [{ id: 'algorithm', question: 'Test' }],
+      initialPrompt: 'Test prompt',
+      attemptProfiles: [
+        {
+          purpose: 'initial',
+          parameters: { model: 'sol', reasoningEffort: 'medium' },
+          feedbackParameters: { reasoningEffort: 'low' }
+        },
+        { purpose: 'repair', parameters: { model: 'sol', reasoningEffort: 'high' } }
+      ],
+      buildContext: () => ({}),
+      responseFormat: { name: 'test', schema: {} },
+      parseOutput: () => ({
+        reply: [{ type: 'markdown', text: 'Done' }],
+        decision: { action: 'respond' }
+      })
+    } satisfies ChatBotConfig<Record<string, never>>;
+    const chatbot = createChatbot(config, {
+      id: 'test-adapter',
+      generateReply: async () => ({ output: {} })
+    });
+    const effort = async (attempt: number, turn?: 'authoring' | 'feedback') =>
+      (await chatbot.preparePrompt({ messages: [], project: {}, attempt, turn })).parameters;
+
+    expect(await effort(1, 'feedback')).toEqual({ model: 'sol', reasoningEffort: 'low' });
+    expect(await effort(1, 'authoring')).toEqual({ model: 'sol', reasoningEffort: 'medium' });
+    expect(await effort(1)).toEqual({ model: 'sol', reasoningEffort: 'medium' });
+    // A repair keeps its effort whatever the turn.
+    expect(await effort(2, 'feedback')).toEqual({ model: 'sol', reasoningEffort: 'high' });
+  });
 });

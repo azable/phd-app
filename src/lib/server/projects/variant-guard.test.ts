@@ -11,6 +11,7 @@ import {
   guardedChoice,
   hiddenShare,
   hides,
+  mootComparison,
   pictureTree,
   settledValues
 } from './variant-guard';
@@ -138,5 +139,18 @@ describe('settledValues', () => {
       'listing.language': 'textbook',
       'Graph.form': 'snake'
     });
+  });
+});
+
+describe('moot comparisons', () => {
+  it('sets aside a question about what an answer settled or hid, and keeps any other', () => {
+    const answer = { eventId: 9, settled: { 'Answer.shown': false, 'views.Int': 'IntTally' } };
+    expect(mootComparison(answer, ['views.Int'])).toBe(true);
+    // The answer hid the Answer part, so how it looks is no longer open.
+    expect(mootComparison(answer, ['Board.Answer.fill'])).toBe(true);
+    expect(mootComparison(answer, ['Highlight.Pointed.fill'])).toBe(false);
+    expect(
+      mootComparison({ eventId: 9, settled: { 'listing.language': 'none' } }, ['listing.color'])
+    ).toBe(true);
   });
 });

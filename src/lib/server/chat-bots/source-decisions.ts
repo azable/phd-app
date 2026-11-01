@@ -55,13 +55,14 @@ const designValue = v.strictObject({
   )
 });
 
-/** The most comparisons one vary asks, each a pair. */
+/** The most comparisons one decision asks, each a pair. */
 export const maximumComparisons = 8;
 
 /**
- * Pairs the assistant designs, each asking one question: both sides take the viewed variant with
- * the vary's values, and differ only in the values each side sets. Optional (null in the strict
- * response); not with a count.
+ * Pairs the assistant designs, each asking one question: both sides take the viewed variant (with a
+ * vary's values) and differ only in the values each side sets. Optional (null in the strict
+ * response); not with a count. With a change to the source, its first pair shows in place of the
+ * chooser's.
  */
 const comparisons = v.optional(
   v.nullable(
@@ -92,7 +93,7 @@ const comparisons = v.optional(
       v.minLength(1),
       v.maxLength(maximumComparisons),
       v.description(
-        'Pairs to compare, one per question, or null. The first pair shows; the rest wait for New pair or a preference.'
+        'Pairs to compare, one per question, most useful first, or null. The first pair shows as soon as it is built; the rest wait, each shown once the one before is answered.'
       )
     )
   )
@@ -135,7 +136,7 @@ export const sourceDecisions = {
 
   /**
    * Edits to the source being revised, applied in order: each replaces text that occurs in it
-   * exactly once.
+   * exactly once; with comparisons, pairs of the edited source to compare.
    */
   edit: v.strictObject({
     action: v.literal('edit'),
@@ -152,13 +153,15 @@ export const sourceDecisions = {
       ),
       v.minLength(1)
     ),
+    comparisons,
     summary
   }),
 
-  /** The complete replacement source. */
+  /** The complete replacement source; with comparisons, pairs of it to compare. */
   revise: v.strictObject({
     action: v.literal('revise'),
     source: v.pipe(v.string(), v.regex(/\S/u, 'The source is empty.')),
+    comparisons,
     summary
   })
 };
@@ -167,6 +170,8 @@ export const sourceDecisions = {
 export const sourceDecisionSchema = v.variant('action', Object.values(sourceDecisions));
 
 export type SourceDecision = v.InferOutput<typeof sourceDecisionSchema>;
+/** The pairs a decision asks to compare, each with its question. */
+export type Comparisons = NonNullable<SourceDecisionOf<'vary'>['comparisons']>;
 export type SourceDecisionOf<Action extends SourceDecision['action']> = Extract<
   SourceDecision,
   { action: Action }

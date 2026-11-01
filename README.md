@@ -91,24 +91,34 @@ presentation buffer: what it held is consumed, the first pair shows, and each
 Next pair, or New pair in dev mode, consumes the shown pair to show the next
 (`queueBuiltPresentations`, `waitingBehind` in
 [`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
-`vary` may instead give `comparisons` the assistant designs, each a question and
-the values its two sides set: each is built as one pair, both from the viewed
-variant with the `vary`'s values, differing only as its sides do, with no
-chooser or random draw, and queued the same way. The question is stored on the
-pair's `visualization.presented` events and shown above it on the stage, and a
-preference naming that display set is read with it in the assistant's context; a
-comparison with an option its variable lacks, sides alike, or a side the variant
-guard would change is recorded as rejected (`revision.edits-rejected` with
-`rejected: "comparisons"`) and repaired as edits that did not apply are. The
-assistant's reply may carry suggestions, comparisons worth making, stored on its
-`assistant.responded` event and shown under the newest reply as buttons until a
-message or preference answers it (three, the rest behind More); a click sends
-one as the participant's message, its `feedback.submitted` naming the reply in
-`fromSuggestion`, and the assistant sees both in its conversation. Every
-presentation currently shows every master step. Every array and object is made
-by a collection or record type the domain block defines, and each step records
-the domain type of every value by path beside its plain values. Every view is
-mounted inside the page frame,
+`vary`, `edit` or `revise` may instead give `comparisons` the assistant designs,
+each a question and the values its two sides set: each is built as one pair,
+both from the viewed variant (with the `vary`'s values), differing only as its
+sides do, with no chooser or random draw. The first pair is built alone and
+shown at once, in place of the chooser's pair for a changed source, and the rest
+are built after it, one pair at a time, each queued as soon as it is built
+(`presentRemainingComparisons` in
+[`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
+the pair's `visualization.presented` events and shown above it on the stage, and
+a preference naming that display set is read with it in the assistant's context.
+A preference on one of them asks the assistant for no turn while others wait
+(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
+`moot`, those the answer makes moot, asking about a variable it settled or
+something its preferred side hides (`mootComparison` in
+[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
+that leaves none waiting starts the assistant's turn. A comparison with an
+option its variable lacks (in the changed source, for `edit` and `revise`),
+sides alike, or a side the variant guard would change is recorded as rejected
+(`revision.edits-rejected` with `rejected: "comparisons"`) and repaired as edits
+that did not apply are. The assistant's reply may carry suggestions, directions
+its comparisons cannot ask, stored on its `assistant.responded` event and shown
+under the newest reply as buttons until a message or preference answers it
+(three, the rest behind More); a click sends one as the participant's message,
+its `feedback.submitted` naming the reply in `fromSuggestion`, and the assistant
+sees both in its conversation. Every presentation currently shows every master
+step. Every array and object is made by a collection or record type the domain
+block defines, and each step records the domain type of every value by path
+beside its plain values. Every view is mounted inside the page frame,
 [`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
 it out at a fixed logical size and scales it to fit the page, as a zoomable,
 pannable canvas with a dashed outline; the sandboxed page loads once per

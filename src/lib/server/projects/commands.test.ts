@@ -2893,6 +2893,168 @@ describe('several variants from chat', () => {
     ]);
     expect(presented(result.appendedEvents)).toEqual([]);
   });
+
+  const caption = [
+    {
+      find: '{#layout Main}',
+      replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+    },
+    { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
+  ];
+
+  it('shows a changed source’s first comparison in place of the chooser’s pair, before building the rest', async () => {
+    const choose = vi.fn();
+    const { result } = await decide(
+      {
+        action: 'edit',
+        edits: caption,
+        comparisons: [views('IntCell', 'IntTally'), marks],
+        summary: 'Adds a caption and asks two questions'
+      },
+      { getChooser: () => chooser(choose), chooserFor: async () => 'model' }
+    );
+
+    expect(choose).not.toHaveBeenCalled();
+    expect(result.appendedEvents).toContainEqual(
+      expect.objectContaining({ type: 'artifact.version-created' })
+    );
+    const shown = presented(result.appendedEvents);
+    expect(shown.map(({ payload }) => payload.question)).toEqual([
+      'Cells or tallies for the numbers?',
+      'Cells or tallies for the numbers?',
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
+    // The first pair is built and shown alone; the second is built after it.
+    const types = result.appendedEvents.map(({ type }) => type);
+    const firstShown = types.indexOf('visualization.presented');
+    const builds = types.flatMap((type, index) => (type === 'build.requested' ? [index] : []));
+    expect(builds.filter((index) => index < firstShown)).toHaveLength(2);
+    expect(builds.filter((index) => index > firstShown)).toHaveLength(2);
+    const { presentationBufferState, waitingBehind } =
+      await import('$lib/shared/projects/presentation-buffer');
+    const buffer = presentationBufferState(result.document, 0);
+    expect(buffer.available[0].presentationId).toBe(shown[0].payload.presentation.presentationId);
+    expect(waitingBehind(buffer, buffer.available[0].presentationId)).toHaveLength(2);
+  });
+
+  it('sends a changed source’s comparison naming a value it does not offer back to the assistant', async () => {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const document = await createProject(
+      { title: 'Unoffered', creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    const decision = (action: object) => ({
+      ...generation(undefined, 'Asking.'),
+      decision: action
+    });
+    mocks.generatePrepared
+      .mockReset()
+      // The first pair names it, so it cannot be built.
+      .mockResolvedValueOnce(
+        decision({
+          action: 'edit',
+          edits: caption,
+          comparisons: [views('IntCell', 'IntDots')],
+          summary: 'Adds a caption and asks'
+        })
+      )
+      // A later pair names it, found once the changed source is built.
+      .mockResolvedValueOnce(
+        decision({
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: [views('IntCell', 'IntTally'), views('IntCell', 'IntDots')],
+          summary: 'Asks two questions'
+        })
+      )
+      .mockResolvedValue(generation(undefined, 'Sorry.'));
+
+    const result = await submitProjectFeedback(
+      feedbackOptions(document, 'Compare.', '94345678-1234-4123-8123-123456789abc'),
+      commandDependencies
+    );
+
+    const rejected = result.appendedEvents.filter(
+      (event): event is ProjectEventOf<'revision.edits-rejected'> =>
+        event.type === 'revision.edits-rejected'
+    );
+    expect(rejected.slice(0, 2).map(({ payload }) => payload)).toMatchObject([
+      { rejected: 'comparisons', problems: [expect.stringMatching(/^Comparison 1 .*IntDots/u)] },
+      { rejected: 'comparisons', problems: [expect.stringMatching(/^Comparison 2 .*IntDots/u)] }
+    ]);
+    expect(presented(result.appendedEvents)).toEqual([]);
+  });
+
+  it('sets aside the comparisons an answer makes moot, and asks the assistant once none waits', async () => {
+    const { queueProjectPreference } = await import('./commands');
+    const { result } = await decide(
+      {
+        action: 'vary',
+        values: [],
+        randomise: [],
+        count: null,
+        comparisons: [views('IntCell', 'IntTally'), marks, views('IntTally', 'IntCell')],
+        summary: 'Asks three questions'
+      },
+      {}
+    );
+    const ids = presented(result.appendedEvents).map(
+      ({ payload }) => payload.presentation.presentationId
+    );
+    expect(ids).toHaveLength(6);
+    const projectId = result.document.projectId;
+    const answer = async (left: string, right: string, preferred: string) => {
+      const operationId = crypto.randomUUID();
+      const head = projectHead(await serviceDependencies.repository.load(projectId)).id;
+      await serviceDependencies.repository.append(projectId, head, [
+        {
+          type: 'operation.accepted',
+          actor: { kind: 'user' },
+          operationId,
+          createdAt: new Date().toISOString(),
+          payload: { kind: 'prefer' }
+        }
+      ]);
+      const answered = await queueProjectPreference(
+        { projectId, operationId, presentations: [left, right], preferred, step: 0 },
+        commandDependencies
+      );
+      return answered.appendedEvents;
+    };
+    const turnRequested = (events: readonly ProjectEvent[]) =>
+      events.some(({ type }) => type === 'assistant.turn-requested');
+
+    // Tallies settle the numbers' view, so the third question, about it too, is set aside, and the
+    // assistant waits for the marks to be answered.
+    const first = await answer(ids[0], ids[1], ids[1]);
+    expect(first).toContainEqual(
+      expect.objectContaining({
+        type: 'visualization.candidates-advanced',
+        payload: { presentations: [ids[4], ids[5]], reason: 'moot' }
+      })
+    );
+    expect(turnRequested(first)).toBe(false);
+    const { waitingComparisons } = await import('$lib/shared/projects/presentation-buffer');
+    expect(
+      waitingComparisons(await serviceDependencies.repository.load(projectId)).map(
+        ({ question }) => question
+      )
+    ).toEqual(['Amber or blue marks?']);
+
+    expect(turnRequested(await answer(ids[2], ids[3], ids[2]))).toBe(true);
+  });
+
+  it('thinks less on feedback about a drawn source than on a first source', async () => {
+    await decide({ action: 'resample', count: null }, {});
+    expect(mocks.preparePrompt.mock.calls.at(-1)?.[0]).toMatchObject({ turn: 'feedback' });
+    mocks.preparePrompt.mockClear();
+    await createComparisonProject('First source');
+    expect(mocks.preparePrompt.mock.calls.at(-1)?.[0]).toMatchObject({ turn: 'authoring' });
+  });
 });
 
 describe('suggestions', () => {

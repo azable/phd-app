@@ -38,6 +38,7 @@ import {
 
 type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 
 /** Compact, body-free entry that lets the AI identify one retained event. */
@@ -210,6 +211,8 @@ export type AiProjectContext = {
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
+  /** The questions of the assistant's comparisons still to answer, the one showing first. */
+  waitingComparisons?: string[];
   timelineWindow: {
     totalEventCount: number;
     omittedEventCount: number;
@@ -432,6 +435,7 @@ export function projectAiContext(
   // Load reports are diagnostics for developers, not part of the project's story.
   const events = document.events.filter(({ type }) => type !== 'visualization.loaded');
   const timelineEvents = events.slice(-recentTimelineEventLimit);
+  const waiting = waitingComparisons(document).map(({ question }) => question);
 
   return {
     projectId: document.projectId,
@@ -442,6 +446,7 @@ export function projectAiContext(
     design: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
+    ...(waiting.length ? { waitingComparisons: waiting } : {}),
     timelineWindow: {
       totalEventCount: events.length,
       omittedEventCount: events.length - timelineEvents.length

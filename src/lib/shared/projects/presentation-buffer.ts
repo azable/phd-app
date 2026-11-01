@@ -3,7 +3,12 @@
 import type { ProjectEvent } from './events';
 import type { ProjectDocument } from './model';
 import { projectSnapshotAt } from './projection';
-import { isSverlinPresentation, presentationScenarioKey } from '$lib/shared/presentations';
+import {
+  isSverlinPresentation,
+  presentationScenarioKey,
+  presentationVariant,
+  type DesignValues
+} from '$lib/shared/presentations';
 
 /** One current-source presentation that has not been consumed by an explicit advance action. */
 export type AvailablePresentation = {
@@ -101,6 +106,34 @@ export function waitingBehind(
       entry.eventId > shown.eventId &&
       entry.displaySetId !== shown.displaySetId
   );
+}
+
+/** A pair the assistant asked a question with, shown or queued, and not yet answered. */
+export type WaitingComparison = {
+  displaySetId: string;
+  question: string;
+  presentationIds: string[];
+  variants: DesignValues[];
+};
+
+/** The assistant's comparisons of the current source still to answer, the one showing first. */
+export function waitingComparisons(document: ProjectDocument): WaitingComparison[] {
+  const sets = new Map<string, WaitingComparison>();
+  for (const { eventId, displaySetId } of presentationBufferState(document, 0).available) {
+    const event = document.events[eventId - 1];
+    if (event?.type !== 'visualization.presented' || !event.payload.question || !displaySetId)
+      continue;
+    const set = sets.get(displaySetId) ?? {
+      displaySetId,
+      question: event.payload.question,
+      presentationIds: [],
+      variants: []
+    };
+    set.presentationIds.push(event.payload.presentation.presentationId);
+    set.variants.push(presentationVariant(event.payload.presentation));
+    sets.set(displaySetId, set);
+  }
+  return [...sets.values()];
 }
 
 function activeSourceSha256(document: ProjectDocument): string | undefined {

@@ -152,7 +152,16 @@ export type ChatBotParameters = {
 export type ChatBotAttemptProfile = {
   purpose: ChatAttemptPurpose;
   parameters: ChatBotParameters;
+  /** What a feedback turn changes in the parameters (see ChatTurn). */
+  feedbackParameters?: Partial<ChatBotParameters>;
 };
+
+/**
+ * What a turn is known to ask before the model decides: a first source, or a fix of a view that
+ * failed to draw, is authoring; feedback on a source already drawn is feedback, which mostly edits,
+ * varies, compares, or replies, and so may take lighter parameters.
+ */
+export type ChatTurn = 'authoring' | 'feedback';
 
 /** JSON Schema response contract requested from a provider. */
 export type ChatResponseFormat = {
@@ -205,6 +214,7 @@ export type ChatbotRequest<Project> = {
   messages: ConversationMessage[];
   project: Project;
   attempt: number;
+  turn?: ChatTurn;
   buildFeedback?: BuildFeedback;
 };
 

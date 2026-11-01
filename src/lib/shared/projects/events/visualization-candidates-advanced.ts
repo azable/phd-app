@@ -11,6 +11,7 @@ export const visualizationCandidatesAdvancedEventSchema = v.object({
   type: v.literal('visualization.candidates-advanced'),
   payload: v.object({
     presentations: v.pipe(v.array(presentationIdSchema), v.minLength(1), v.maxLength(2)),
-    reason: v.picklist(['next', 'agent-request'])
+    /** next: the participant asked; agent-request: the assistant replaced them; moot: an answer settled what they asked. */
+    reason: v.picklist(['next', 'agent-request', 'moot'])
   })
 });

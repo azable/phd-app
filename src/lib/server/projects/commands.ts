@@ -18,7 +18,10 @@ import {
 } from '$lib/shared/projects/events/message-content';
 import type { ArtifactChange, RecordedText } from '$lib/shared/projects/events/values';
 import type { ProjectCommandResult, ProjectDocument } from '$lib/shared/projects/model';
-import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
+import {
+  presentationBufferState,
+  waitingComparisons
+} from '$lib/shared/projects/presentation-buffer';
 import type { DesignValues, RenderablePresentation } from '$lib/shared/presentations';
 import {
   isSverlinPresentation,
@@ -58,11 +61,12 @@ import type {
   ChatbotResult,
   CandidateAssistantOutput,
   BuildFeedback,
+  ChatTurn,
   GeneratedMessageContent,
   RecoveryExplanation,
   SourceArtifactChatOutput
 } from '$lib/server/chat-bots/types';
-import type { SourceDecisionOf } from '$lib/server/chat-bots/source-decisions';
+import type { Comparisons, SourceDecisionOf } from '$lib/server/chat-bots/source-decisions';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 
 import { runProjectCommand } from './command-lock';
@@ -103,7 +107,16 @@ import {
   type VariantChooser
 } from './choosers';
 import { projectChooserId } from './chooser-config';
-import { guardedChoice, pictureTree, settledValues, type GuardContext } from './variant-guard';
+import {
+  answersAfter,
+  differing,
+  guardedChoice,
+  mootComparison,
+  pictureTree,
+  settledValues,
+  type Answer,
+  type GuardContext
+} from './variant-guard';
 
 /** Replaceable AI and persistence boundaries used by command unit tests. */
 export type ProjectCommandDependencies = {
@@ -408,6 +421,14 @@ export function queueProjectPreference(
     if (preference?.type !== 'visualization.preference-recorded') {
       throw new Error('The recorded preference event could not be resolved.');
     }
+    const answered = await dropMootComparisons(
+      document,
+      answersAfter(document.events, preference.id - 1),
+      options.operationId,
+      dependencies
+    );
+    document = answered.document;
+    if (answered.waiting) return finishMutation(before, document);
     document = await appendProjectEvents(
       document,
       [
@@ -484,6 +505,22 @@ export async function runQueuedAssistantTurn(
     )
   ) as 1 | 2;
   const concurrentDependencies = rebasingDependencies(dependencies);
+  const appendedSince = (document: ProjectDocument) =>
+    document.events.filter(
+      (event) => event.id > projectHead(before).id && event.operationId === options.operationId
+    );
+  // Answers to the assistant's comparisons wait for the last to be answered: those that arrived
+  // while the rest were still being built are dropped here, as they would have been on arrival.
+  if (preferences.length && preferences.length === interactions.length) {
+    const answered = await dropMootComparisons(
+      before,
+      answersAfter(before.events, Math.min(...preferences.map(({ id }) => id)) - 1),
+      options.operationId,
+      concurrentDependencies
+    );
+    if (answered.waiting)
+      return { document: answered.document, appendedEvents: appendedSince(answered.document) };
+  }
   const intake = await handleParticipantIntake(
     before,
     options.operationId,
@@ -641,6 +678,14 @@ export function submitProjectPreference(
     if (preference?.type !== 'visualization.preference-recorded') {
       throw new Error('The recorded preference event could not be resolved.');
     }
+    const answered = await dropMootComparisons(
+      document,
+      answersAfter(document.events, preference.id - 1),
+      options.operationId,
+      dependencies
+    );
+    document = answered.document;
+    if (answered.waiting) return finishMutation(before, document);
     document = await runSverlinAssistantTurn(
       document,
       options.operationId,
@@ -800,6 +845,13 @@ async function runSverlinAssistantTurn(
     viewedPresentation(document, contextSelection.interactionEventIds ?? [])
   );
   const viewed = Object.keys(viewedVariant).length ? viewedVariant : undefined;
+  const turn: ChatTurn =
+    entrySource(document) === modeCatalog[projectSnapshotAt(document).mode].starter.source ||
+    (contextSelection.interactionEventIds ?? []).some(
+      (id) => document.events[id - 1]?.type === 'visualization.runtime-failed'
+    )
+      ? 'authoring'
+      : 'feedback';
   let seeds: number[] = [];
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
@@ -817,7 +869,7 @@ async function runSverlinAssistantTurn(
           attempt,
           operationId,
           contextSelection,
-          presentationCount,
+          turn,
           ...(buildFeedback ? { buildFeedback } : {})
         },
         dependencies
@@ -904,8 +956,10 @@ async function runSverlinAssistantTurn(
         };
         return { document: current, done: false };
       };
-      // The pairs a vary's comparisons ask, each built as given.
-      let pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']> | undefined;
+      // The pairs a decision's comparisons ask, each built as given, and whether they were checked
+      // against the design before building: a changed source's design is known only once built.
+      let pairs: Comparisons | undefined;
+      let checked = false;
       let candidate: string | undefined;
       let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
         base: viewed
@@ -921,20 +975,22 @@ async function runSverlinAssistantTurn(
           break;
         case 'revise':
           candidate = decision.source;
+          pairs = decision.comparisons ?? undefined;
           break;
         case 'vary': {
           candidate = buildFeedback?.failedSource ?? entrySource(current);
           variant = variedValues(viewed, decision);
-          if (!decision.comparisons) break;
+          pairs = decision.comparisons ?? undefined;
+          if (!pairs || candidate !== entrySource(current)) break;
           const problems = comparisonProblems(
-            decision.comparisons,
+            pairs,
             designVariables(
               viewedPresentation(current, contextSelection.interactionEventIds ?? [])
             ),
             { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} }
           );
           if (problems.length) return reject('comparisons', problems, candidate);
-          pairs = decision.comparisons;
+          checked = true;
           break;
         }
         case 'edit': {
@@ -942,6 +998,7 @@ async function runSverlinAssistantTurn(
           const edited = applySourceEdits(base, decision.edits);
           if ('problems' in edited) return reject('edits', edited.problems, base);
           candidate = edited.source;
+          pairs = decision.comparisons ?? undefined;
           break;
         }
         default:
@@ -990,8 +1047,9 @@ async function runSverlinAssistantTurn(
         seeds = [...seeds, ...freshPresentationSeeds(size - seeds.length, seeds)];
       const batchSeeds = seeds.slice(0, size);
       const randomised = variant.randomise;
+      // Comparisons build their first pair alone, so it shows before the rest are built.
       const requests = pairs
-        ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs)
+        ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs.slice(0, 1))
         : basedRequests(batchSeeds, variant.base, variant.chosen, randomised === true).map(
             (request, index) =>
               index === 0 && Array.isArray(randomised) && randomised.length
@@ -1003,11 +1061,32 @@ async function runSverlinAssistantTurn(
         dependencies
       );
       current = built.document;
+      if (pairs && !batchSucceeded(built.recorded)) {
+        // A value the first comparison sets that the source does not offer.
+        const unoffered = designValueProblems(built.recorded);
+        if (unoffered.length)
+          return reject(
+            'comparisons',
+            unoffered.map((problem) => `Comparison 1 (“${pairs[0].question}”): ${problem}`),
+            candidate
+          );
+      }
       if (batchSucceeded(built.recorded)) {
+        const [first] = built.recorded.builds;
+        if (pairs && !checked && first?.result.ok) {
+          const problems = comparisonProblems(pairs, designVariables(first.result.bundle), {
+            tree: pictureTree(candidate),
+            base: { ...viewed, ...variant.chosen },
+            settled: {}
+          });
+          if (problems.length) return reject('comparisons', problems, candidate);
+        }
         // A new source's presentations, and those a decision with a count queues, show the
         // variants the chooser picks from its design space; the first build stands if it fails.
-        const shown =
-          decision.action === 'revise' || decision.action === 'edit'
+        // The assistant's comparisons show in their place.
+        const shown = pairs
+          ? { document: current, recorded: built.recorded }
+          : decision.action === 'revise' || decision.action === 'edit'
             ? await chosenBuild(
                 {
                   document: current,
@@ -1020,7 +1099,7 @@ async function runSverlinAssistantTurn(
                 },
                 dependencies
               )
-            : queued && !pairs
+            : queued
               ? await chosenBuild(
                   {
                     document: current,
@@ -1040,28 +1119,41 @@ async function runSverlinAssistantTurn(
               : { document: current, recorded: built.recorded };
         current = shown.document;
         assertCurrentProjectOperationActive();
-        return {
-          document: await acceptSverlinCandidate(
+        current = await acceptSverlinCandidate(
+          {
+            document: current,
+            recorded: shown.recorded,
+            generationEvent: generation.generationEvent,
+            candidate,
+            ...('summary' in decision ? { summary: decision.summary } : {}),
+            operationId,
+            recovery: generation.result.recovery,
+            recoveryReply: generation.result.reply,
+            inReplyTo,
+            ...(pairs
+              ? { setSize: 2 as const, questions: [pairs[0].question] }
+              : queued
+                ? { setSize: presentationCount }
+                : {})
+          },
+          dependencies
+        );
+        if (pairs)
+          current = await presentRemainingComparisons(
             {
               document: current,
-              recorded: shown.recorded,
-              generationEvent: generation.generationEvent,
               candidate,
-              ...('summary' in decision ? { summary: decision.summary } : {}),
+              pairs,
+              seeds: batchSeeds,
+              viewed,
+              values: variant.chosen ?? {},
               operationId,
-              recovery: generation.result.recovery,
-              recoveryReply: generation.result.reply,
-              inReplyTo,
-              ...(pairs
-                ? { setSize: 2 as const, questions: pairs.map(({ question }) => question) }
-                : queued
-                  ? { setSize: presentationCount }
-                  : {})
+              attempt,
+              actor: generation.generationEvent.actor
             },
             dependencies
-          ),
-          done: true
-        };
+          );
+        return { document: current, done: true };
       }
 
       const failed = firstFailure(built.recorded);
@@ -1285,7 +1377,7 @@ async function runSverlinGeneration(
     attempt: number;
     operationId: string;
     contextSelection: AiContextSelection;
-    presentationCount: 1 | 2;
+    turn: ChatTurn;
     buildFeedback?: BuildFeedback;
   },
   dependencies: ProjectCommandDependencies
@@ -1296,6 +1388,7 @@ async function runSverlinGeneration(
       messages: projectConversationMessages(options.document.events),
       project: projectAiContext(options.document, options.contextSelection),
       attempt: options.attempt,
+      turn: options.turn,
       ...(options.buildFeedback ? { buildFeedback: options.buildFeedback } : {})
     });
   } catch (error) {
@@ -1632,7 +1725,7 @@ function comparisonRequests(
   seeds: readonly number[],
   viewed: DesignValues | undefined,
   values: DesignValues,
-  pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']>
+  pairs: Comparisons
 ): BuildRequest[] {
   return pairs.flatMap(({ left, right }, index) =>
     [left, right].map((side, slot) => ({
@@ -1653,11 +1746,7 @@ function designValues(values: readonly { variable: string; value: string | numbe
  * What keeps a vary's comparisons from being built as given: a value its variable does not offer,
  * two sides alike, or a side the variant guard would change (hiding too much, or a top-level part).
  */
-function comparisonProblems(
-  pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']>,
-  design: AiDesign,
-  guard: GuardContext
-): string[] {
+function comparisonProblems(pairs: Comparisons, design: AiDesign, guard: GuardContext): string[] {
   return pairs.flatMap(({ question, left, right }, index) => {
     const name = `Comparison ${index + 1} (“${question}”)`;
     const problems = [...left, ...right].flatMap(({ variable, value }) =>
@@ -1681,6 +1770,107 @@ function comparisonProblems(
         );
     return problems;
   });
+}
+
+/** The problems of a failed batch's builds, when every one is a value the design does not offer. */
+function designValueProblems(recorded: RecordedBuildBatch): string[] {
+  const diagnostics = recorded.builds.flatMap((build) =>
+    build.result.ok ? [] : build.result.diagnostics
+  );
+  return diagnostics.length && diagnostics.every(({ code }) => code === 'design_value')
+    ? [...new Set(diagnostics.map(({ message }) => message))]
+    : [];
+}
+
+/**
+ * Build the comparisons after the first, one pair at a time, each queued behind those before as
+ * soon as it is built, so the participant answers the first while the rest build. A pair an answer
+ * given meanwhile has made moot is not built, and one that fails to build is left out.
+ */
+async function presentRemainingComparisons(
+  options: {
+    document: ProjectDocument;
+    candidate: string;
+    pairs: Comparisons;
+    seeds: readonly number[];
+    viewed: DesignValues | undefined;
+    /** The values every side takes, a vary's. */
+    values: DesignValues;
+    operationId: string;
+    attempt: number;
+    actor: NewProjectEvent<'visualization.presented'>['actor'];
+  },
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  let document = options.document;
+  // Preferences after the first pair was shown answer this batch's questions.
+  const shownAt =
+    document.events.findLast(
+      (event) =>
+        event.type === 'visualization.presented' && event.operationId === options.operationId
+    )?.id ?? projectHead(document).id;
+  for (const [index, pair] of options.pairs.entries()) {
+    if (index === 0) continue;
+    assertCurrentProjectOperationActive();
+    const asked = differing(designValues(pair.left), designValues(pair.right));
+    if (answersAfter(document.events, shownAt).some((answer) => mootComparison(answer, asked)))
+      continue;
+    const built = await buildCandidateBatch(
+      {
+        document,
+        candidate: options.candidate,
+        requests: comparisonRequests(
+          options.seeds.slice(index * 2, index * 2 + 2),
+          options.viewed,
+          options.values,
+          [pair]
+        ),
+        operationId: options.operationId,
+        attempt: options.attempt
+      },
+      dependencies
+    );
+    document = built.document;
+    if (batchSucceeded(built.recorded))
+      document = await activateBuiltPresentations(
+        built.recorded,
+        dependencies.projectService,
+        options.actor,
+        pair.question
+      );
+  }
+  return document;
+}
+
+/**
+ * Set aside the waiting comparisons these answers make moot (mootComparison), and say whether any
+ * are still to answer: the assistant waits for the last of its questions to be answered before it
+ * takes a turn on them.
+ */
+async function dropMootComparisons(
+  document: ProjectDocument,
+  answers: readonly Answer[],
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+): Promise<{ document: ProjectDocument; waiting: boolean }> {
+  const waiting = waitingComparisons(document);
+  const moot = waiting.filter(({ variants: [left = {}, right = {}] }) =>
+    answers.some((answer) => mootComparison(answer, differing(left, right)))
+  );
+  if (moot.length)
+    document = await appendProjectEvents(
+      document,
+      moot.map(({ presentationIds }) =>
+        draftEvent({
+          type: 'visualization.candidates-advanced',
+          actor: { kind: 'system' },
+          operationId,
+          payload: { presentations: presentationIds, reason: 'moot' }
+        })
+      ),
+      dependencies.projectService
+    );
+  return { document, waiting: waiting.length > moot.length };
 }
 
 /** A choice with the values the assistant fixed, which it neither changes nor draws afresh. */

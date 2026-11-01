@@ -41,7 +41,10 @@ export function createChatbot<Project, Output extends object>(
       initialPrompt: config.initialPrompt,
       context: await config.buildContext({ ...request, attempt }),
       attempt,
-      parameters: profile.parameters,
+      parameters:
+        request.turn === 'feedback' && profile.feedbackParameters
+          ? { ...profile.parameters, ...profile.feedbackParameters }
+          : profile.parameters,
       responseFormat: config.responseFormat
     };
   };
