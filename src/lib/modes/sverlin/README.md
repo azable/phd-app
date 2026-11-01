@@ -764,8 +764,10 @@ The design space is every variable of a component's look, found in its markup:
 
 A snippet's name is its kind, so it names what its nodes are, never how they
 look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a
-name of its own, a part is not named as a type, and a render names a part, a
-type, or an operator, so every kind is known before the view runs.
+name of its own in the whole view, nested ones included, as `CurrentCaption` and
+`NeighbourCaption` inside two pointer views, never `Caption` in both; a part is
+not named as a type, and a render names a part, a type, or an operator, so every
+kind is known before the view runs.
 
 Every kind of node has these props, each with a fixed set of options:
 
@@ -840,14 +842,15 @@ graph each node after its parents, or breadth first where it has cycles),
 positions that keep each node near the next). `direction`, `down` or `right`, is
 the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
 would: it starts `right` for a path, a cycle or a layered graph, across the wide
-stage, and `down` for a tree, as trees are drawn, and a layout with a `flow` has none. A layout whose data makes no
-structure has no `form` or `direction` and is laid out freely, unless the page
-finds a structure in the links it draws, which it draws `natural`. `curve`,
-`straight` (the start) or `curved`, is how its arrows prefer to run.
-`layoutSeed`, 1 to 32, is what its spacing and nudges are drawn from. A free
-layout keeps its form's own proportions and takes the size of everything it
-draws, its links' curves, heads and labels included, so the same values draw the
-same layout wherever it is, whatever the frame or what is beside it.
+stage, and `down` for a tree, as trees are drawn, and a layout with a `flow` has
+none. A layout whose data makes no structure has no `form` or `direction` and is
+laid out freely, unless the page finds a structure in the links it draws, which
+it draws `natural`. `curve`, `straight` (the start) or `curved`, is how its
+arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are
+drawn from. A free layout keeps its form's own proportions and takes the size of
+everything it draws, its links' curves, heads and labels included, so the same
+values draw the same layout wherever it is, whatever the frame or what is beside
+it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,

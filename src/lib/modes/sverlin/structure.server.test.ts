@@ -158,7 +158,12 @@ describe('free layout structures', () => {
     );
     expect(starts.every(({ forms }) => forms.join() === propOptions.form.join())).toBe(true);
     // A path, a ring and a graph run right; the tree's flow="y" sets its way, so it has none.
-    expect(starts.map(({ direction }) => direction)).toEqual(['right', undefined, 'right', 'right']);
+    expect(starts.map(({ direction }) => direction)).toEqual([
+      'right',
+      undefined,
+      'right',
+      'right'
+    ]);
     expect(starts.map(({ directions }) => directions?.join())).toEqual([
       'down,right',
       undefined,
