@@ -4,7 +4,7 @@
  * (see ../assembly/entry.ts and ../assembly/layout.ts) draw a step alike.
  */
 
-import type { DesignValues } from './node/design';
+import type { DesignValues, ListingPlacesLook } from './node/design';
 import type { FrameSettings } from './node/props';
 import type { LayoutMemory } from './type-context';
 
@@ -33,7 +33,19 @@ export type StepListing = {
   text: string;
   regions: { label: string; start: number; end: number }[];
   lit: [number, number][][];
+  /** Where its tokens name places the variant lights: those places, and which each step touches. */
+  places?: ListingPlaces & { touched: string[][] };
 } | null;
+
+/**
+ * A listing's tokens, each naming a place (see listing/places.server.ts), how a place lights
+ * (listing.places), and the colour each place lights in, a design colour.
+ */
+export type ListingPlaces = {
+  look: Exclude<ListingPlacesLook, 'none'>;
+  tokens: { place: string; start: number; end: number }[];
+  paints: Record<string, string>;
+};
 
 /**
  * Measuring draws each step's markup, recording makes the layouts from it on the layout model, and
@@ -93,7 +105,7 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
   const firstDrawn = new Map<string, number>();
   states.forEach((state, phase) => {
     const lit = listing?.lit[stepOf(phase)] ?? [];
-    const key = JSON.stringify([state, lit]);
+    const key = JSON.stringify([state, lit, listing?.places?.touched[stepOf(phase)]]);
     if (!firstDrawn.has(key)) firstDrawn.set(key, phase);
     drawnLike.push(firstDrawn.get(key) as number);
   });
@@ -230,7 +242,21 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
         [
           'sverlin:listing',
           listing
-            ? { text: listing.text, regions: listing.regions, lit: listing.lit[stepOf(step)] ?? [] }
+            ? {
+                text: listing.text,
+                regions: listing.regions,
+                lit: listing.lit[stepOf(step)] ?? [],
+                ...(listing.places
+                  ? {
+                      places: {
+                        look: listing.places.look,
+                        tokens: listing.places.tokens,
+                        paints: listing.places.paints
+                      },
+                      touched: listing.places.touched[stepOf(step)] ?? []
+                    }
+                  : {})
+              }
             : undefined
         ],
         [

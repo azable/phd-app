@@ -41,8 +41,14 @@ import {
   resolveLabel,
   written as asWritten
 } from './label-values';
-import type { Listing } from './listing/listing';
+import type { Listing, PlaceToken } from './listing/listing';
 import { mappedListing, type RegionMap } from './listing/mapped.server';
+import {
+  placePaint,
+  tokenProblems,
+  touchedPlaces,
+  type RenderedPlace
+} from './listing/places.server';
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
@@ -106,11 +112,15 @@ import {
   freeLayoutProps,
   kindKey,
   placeProps,
+  listingPlacesOptions,
   roleProps,
   starterListing,
+  starterListingPlaces,
   type DesignProp,
+  type ListingPlacesLook,
   type KindRole
 } from './library/node/design';
+import type { StepListing } from './library/steps';
 import { packStates } from './library/trace-pack';
 import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
@@ -266,8 +276,14 @@ export type PreparedComponent = {
   /** Where the view places a <Listing />, the algorithm's text in each language. */
   listings?: Record<
     string,
-    { text: string; regions: { label: string; start: number; end: number }[] }
+    {
+      text: string;
+      regions: { label: string; start: number; end: number }[];
+      tokens?: readonly PlaceToken[];
+    }
   >;
+  /** What the root renders at each place a listing's token names (see listing/places.server.ts). */
+  tokenPlaces?: Record<string, RenderedPlace>;
   /**
    * The operators the root renders at labels, as {@render Greater(@inner)}, by key, each with an
    * application from some step, which stands in hidden where a step has none or several of them.
@@ -390,7 +406,8 @@ function listingsFrom(
   source: string,
   traced: ReturnType<typeof traceAlgorithm>,
   algorithm: Block,
-  own: readonly ListingBlock[]
+  own: readonly ListingBlock[],
+  places?: readonly string[]
 ): {
   listings: Record<string, Listing>;
   maps: Record<string, RegionMap[]>;
@@ -413,7 +430,8 @@ function listingsFrom(
     const mapped = mappedListing(block, traced);
     listings[block.name] = mapped.listing;
     maps[block.name] = mapped.maps;
-    for (const { message, block: where, at: offset } of mapped.problems)
+    const tokens = places ? tokenProblems(mapped.tokens, places) : [];
+    for (const { message, block: where, at: offset } of [...mapped.problems, ...tokens])
       problems.push(
         new InvalidSvelteSourceError(message, {
           code: 'listing_label',
@@ -891,11 +909,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const aliasOf = new Map<string, string>();
     const placeReaders = new Map<string, Set<boolean>>();
     const labelMarks = new Map<string, { kinds: Record<string, string>; by?: string }>();
+    // The places the root and its parts render at, which a listing's tokens can name.
+    const rootPlaces = new Map<string, RenderedPlace>();
     for (const site of sites) {
       const { name, start, inNode, at, label } = site;
       if (!at || !(chosen[name] || pointerChosen[name])) continue;
       const { plain, marks } = optionsOf(name);
       const asMark = marks.length > 0 && (!inNode || !plain.length);
+      // A place drawn both as a pointer and as a value, as a caption's number, takes its pointer's
+      // paint.
+      if (!site.within && (asMark || !rootPlaces.has(at)))
+        rootPlaces.set(at, { type: name, pointer: asMark });
       const options = asMark ? marks : plain;
       const prefix = asMark ? 'pointers' : 'views';
       const within = site.within ? `${site.within}.` : '';
@@ -1217,7 +1241,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // none or several.
     for (const entry of Object.values(labelled))
       entry.sample = seen.flatMap((step) => step.labelled?.[entry.label] ?? [])[0];
-    const written = listingsFrom(source, traced, algorithm, listingBlocks);
+    const written = listingsFrom(source, traced, algorithm, listingBlocks, [...rootPlaces.keys()]);
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
@@ -1229,12 +1253,26 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const ownListings = listingBlocks.map(({ name }) => name);
     const listings = listing
       ? Object.fromEntries(
-          Object.entries(written.listings).map(([name, { text, regions = [] }]) => [
+          Object.entries(written.listings).map(([name, { text, regions = [], tokens }]) => [
             name,
-            { text, regions: regions.map(({ label, start, end }) => ({ label, start, end })) }
+            {
+              text,
+              regions: regions.map(({ label, start, end }) => ({ label, start, end })),
+              ...(tokens?.length ? { tokens } : {})
+            }
           ])
         )
       : undefined;
+    // What the root renders at each place a shown listing's token names, which its paint is read
+    // from (see placePaint).
+    const tokenPlaces = Object.fromEntries(
+      Object.values(listings ?? {}).flatMap(({ tokens = [] }) =>
+        tokens.map(({ place }) => [place, rootPlaces.get(place) as RenderedPlace])
+      )
+    );
+    const placesSpace: DesignSpace = Object.keys(tokenPlaces).length
+      ? { 'listing.places': [...listingPlacesOptions] }
+      : {};
     // Each region a listing marks is a place, by its label's full name, its paint at each level
     // starting as the level's own.
     const regionLabels = [
@@ -1561,6 +1599,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             layoutDesign
           ),
           ...listingRegionSpace(regionLabels),
+          ...placesSpace,
           ...pauseSpace(labelNames, leaves)
         },
         starter: {
@@ -1577,10 +1616,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             layoutDesign
           ),
           ...regionStarter,
+          ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
           ...starterPauses(labelNames)
         }
       },
       ...(listings ? { listings } : {}),
+      ...(Object.keys(tokenPlaces).length ? { tokenPlaces } : {}),
       ...(appliedNames.length ? { applied } : {}),
       ...(Object.keys(appliedIn).length ? { appliedIn } : {}),
       ...(Object.keys(labelled).length ? { labelled } : {}),
@@ -1790,19 +1831,7 @@ export async function bundlePresentation(
         : []
     };
   });
-  const language = values['listing.language'];
-  const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
-  const listing = listed
-    ? {
-        text: listed.text,
-        regions: listed.regions,
-        // The code a step finished and the code it keeps as run light alike.
-        lit: (paced.lit[language as string] ?? []).map(({ current, earlier }) => [
-          ...current,
-          ...earlier
-        ])
-      }
-    : null;
+  const listing = shownListing(prepared, values, paced.lit);
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
     prepared.component,
@@ -1848,6 +1877,47 @@ export async function bundlePresentation(
     variant: values,
     origins: variant.origins,
     leftOut: leftOut.nodes
+  };
+}
+
+/**
+ * The listing a variant shows, in its language, and what each step lights in it: the code it
+ * finished and the code it keeps as run alike; and, where its tokens name places and the variant
+ * lights them (listing.places), the places each step touches and the colour each lights in.
+ */
+export function shownListing(
+  prepared: Pick<PreparedComponent, 'listings' | 'tokenPlaces'>,
+  values: Readonly<Record<string, DesignValue>>,
+  lit: Readonly<Record<string, readonly Lit[]>>
+): StepListing {
+  const language = values['listing.language'];
+  const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
+  if (!listed) return null;
+  const steps = lit[language as string] ?? [];
+  const look = values['listing.places'] as ListingPlacesLook | undefined;
+  const tokens = listed.tokens ?? [];
+  const placed = prepared.tokenPlaces ?? {};
+  return {
+    text: listed.text,
+    regions: listed.regions,
+    lit: steps.map(({ current, earlier }) =>
+      [...current, ...earlier].map(([start, end]): [number, number] => [start, end])
+    ),
+    ...(tokens.length && look && look !== 'none'
+      ? {
+          places: {
+            look,
+            tokens: tokens.map(({ place, start, end }) => ({ place, start, end })),
+            paints: Object.fromEntries(
+              [...new Set(tokens.map(({ place }) => place))].map((place) => [
+                place,
+                placePaint(place, placed[place], values)
+              ])
+            ),
+            touched: touchedPlaces(tokens, steps)
+          }
+        }
+      : {})
   };
 }
 

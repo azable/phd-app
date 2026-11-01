@@ -330,6 +330,12 @@ describe('design variables in the AI context', () => {
     expect(design.options.pause).toEqual(['accumulate', 'on', 'off']);
   });
 
+  it('offers how a listing’s places light its own options', () => {
+    const design = designVariables({ variant: { 'listing.places': 'fill' } });
+    expect(design.variables[0].options).toBe('listing.places');
+    expect(design.options['listing.places']).toEqual(['none', 'fill', 'underline', 'outline']);
+  });
+
   it('offers the layouts as the layout shown, and each frame its options', () => {
     const design = designVariables({
       variant: {

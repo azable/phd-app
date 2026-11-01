@@ -5,12 +5,14 @@
   inside another drawn inside it where its paint differs. A line lights from its first character to
   its last, never its indentation. The text is the same at every step, so the box keeps one size;
   only the lighting moves, its padding and stroke taking no room. Each line is a node of its own,
-  which participants can select.
+  which participants can select. A token naming a place (listing.places) is a region of its own,
+  lit in its place's colour at a step touching the place (see places.ts).
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
 
   import { fontClass } from '../fonts';
+  import { lightOf, tokenLightCss } from './places';
   import { colourCss, strokeStyleCss } from '../node/design';
   import { designContext, keyedRef, listingContext, nodeIdsContext } from '../type-context';
 
@@ -23,10 +25,29 @@
   const id = ref ? nodeIds?.claim(ref) : undefined;
 
   type Paint = { fill: unknown; stroke: unknown; color: unknown };
-  type Piece = string | { paint: Paint; outer: boolean; pieces: Piece[] };
-  type Character = { text: string; lit: boolean; chain: readonly string[] };
+  /** Text, as a token naming a place where it is one (see listing/places.ts). */
+  type Leaf = { text: string; place?: string };
+  type Piece = Leaf | { paint: Paint; outer: boolean; pieces: Piece[] };
+  type Character = { text: string; lit: boolean; chain: readonly string[]; place?: string };
 
   const regions = listing?.regions ?? [];
+  const tokens = listing?.places?.tokens ?? [];
+  const tokenAt = (at: number) => tokens.find(({ start, end }) => start <= at && at < end)?.place;
+  // Text split where tokens start and end, each token a leaf of its own.
+  const leavesOf = (characters: readonly Character[]): Leaf[] => {
+    const leaves: Leaf[] = [];
+    for (const { text, place } of characters) {
+      const last = leaves.at(-1);
+      if (last && last.place === place) last.text += text;
+      else leaves.push(place ? { text, place } : { text });
+    }
+    return leaves;
+  };
+  // A token lights in its place's colour at a step touching the place.
+  const tokenStyle = (place: string) => {
+    const colour = lightOf(listing, [place]);
+    return colour ? tokenLightCss(listing?.places?.look, colour) : undefined;
+  };
   const litAt = (at: number) =>
     listing?.lit.some(([start, end]) => start <= at && at < end) ?? false;
   // The labels of the regions holding an offset, outer first.
@@ -54,15 +75,14 @@
     }
     return runs.flatMap((run): Piece[] => {
       const { lit, chain } = run[0];
-      const text = run.map((character) => character.text).join('');
       const label = chain[depth];
       // Past its innermost region, text is drawn in the piece around it.
-      if (!lit || (around && !label)) return [text];
+      if (!lit || (around && !label)) return leavesOf(run);
       const paint = paintOf(label);
-      const pieces = label ? piecesOf(run, depth + 1, paint) : [text];
+      const pieces = label ? piecesOf(run, depth + 1, paint) : leavesOf(run);
       if (around && samePaint(paint, around)) return pieces;
       const [only] = pieces;
-      if (pieces.length === 1 && typeof only !== 'string') return [{ ...only, outer: !around }];
+      if (pieces.length === 1 && 'pieces' in only) return [{ ...only, outer: !around }];
       return [{ paint, outer: !around, pieces }];
     });
   };
@@ -78,7 +98,8 @@
       const characters = [...text].map((character, at) => ({
         text: character,
         lit: at >= first && at < last && litAt(offset + at),
-        chain: chainOf(offset + at)
+        chain: chainOf(offset + at),
+        place: tokenAt(offset + at)
       }));
       offset += text.length + 1;
       return {
@@ -110,12 +131,14 @@
   };
 </script>
 
-{#snippet drawn(
-  pieces: Piece[]
-)}{#each pieces as piece, at (at)}{#if typeof piece === 'string'}{piece}{:else}<span
+{#snippet drawn(pieces: Piece[])}{#each pieces as piece, at (at)}{#if 'pieces' in piece}<span
         data-sv-lit
         style={styleOf(piece.paint, piece.outer)}>{@render drawn(piece.pieces)}</span
-      >{/if}{/each}{/snippet}
+      >{:else if piece.place}<span
+        data-sv-place={piece.place}
+        data-sv-kind="listing-token"
+        style={tokenStyle(piece.place)}>{piece.text}</span
+      >{:else}{piece.text}{/if}{/each}{/snippet}
 
 {#if listing}
   <div class="sv-listing {fontClass('mono')}" data-sv-node={id} data-sv-kind="listing">

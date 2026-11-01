@@ -14,6 +14,7 @@
     leaveComponentBox,
     placeContext,
     pointedContext,
+    pointerAroundContext,
     provideCopy,
     provideHidden,
     providePointed,
@@ -37,9 +38,18 @@
     active: pointed?.active ?? false,
     placed: placedKind(placeContext(), kindKey(__view, 'Pointed'))
   }));
-  const outer = pointed?.outer as { __over?: { active?: boolean } } | undefined;
+  const outer = pointed?.outer as
+    | { __over?: { active?: boolean }; __places?: readonly string[] }
+    | undefined;
+  // Every root pointer at the element refers to it by its place, unless nodes of its view are
+  // around this <Pointed>, whose outermost then refers to the place (see Node).
+  const place = untrack(() => {
+    const at = placeContext();
+    return own.active && at && !at.within && pointerAroundContext() ? at.at : undefined;
+  });
   const merged = {
     ...pointed?.outer,
+    __places: [...(outer?.__places ?? []), ...(place ? [place] : [])],
     __over: outer?.__over && (outer.__over.active || !own.active) ? outer.__over : own,
     ...(pointed?.placeholder ? { __id: undefined, __ref: undefined, __slot: undefined } : {})
   };

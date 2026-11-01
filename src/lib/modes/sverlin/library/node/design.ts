@@ -276,6 +276,15 @@ export const starterListing: Record<string, string | number> & { 'listing.langua
   'listing.lit.padding': 0
 };
 
+/**
+ * How a listing's tokens and the places they name light together, where a listing has tokens: the
+ * token filled, underlined, or outlined, and in the picture a 3px band round the node, a line under
+ * it, or a ring; `none` lights neither, and hovering one highlights nothing. None takes room.
+ */
+export const listingPlacesOptions = ['none', 'fill', 'underline', 'outline'] as const;
+export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
+export const starterListingPlaces: ListingPlacesLook = 'fill';
+
 /** What a kind of node is, which says the props it has. */
 export type KindRole = 'container' | 'value' | 'text' | 'pointed' | 'link';
 

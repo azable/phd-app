@@ -20,6 +20,7 @@
     movingIdentity,
     provideCopy,
     providePlace,
+    provideRenderPlace,
     provideHidden,
     provideSlot,
     provideThrough,
@@ -57,6 +58,7 @@
   } = $props();
   const leftOut = untrack(() => site !== undefined && (leftOutContext()?.has(site) ?? false));
   untrack(() => providePlace(place));
+  untrack(() => provideRenderPlace(place && !place.within ? place.at : undefined));
 
   // Each step mounts afresh, so the props are read once. A hidden copy names no element.
   const types = typeContext();
