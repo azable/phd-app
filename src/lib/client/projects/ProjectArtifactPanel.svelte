@@ -7,6 +7,8 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
+  import VariantDiff from '$lib/client/artifacts/VariantDiff.svelte';
+  import { differingKeys, variantDocument } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
@@ -116,7 +118,7 @@
   let draftSummary = $state('');
   let discardRequested = $state(false);
   let expanded = $state(false);
-  // Which file the panel shows: the source, or the shown presentations' variants.
+  // Which file the panel shows: the source, or the shown presentations' variants, their choices.
   let tab = $state<'source' | 'variant'>('source');
   let editor = $state<{ focus: () => void } | null>(null);
 
@@ -169,25 +171,43 @@
           : 'This presentation was';
     return `${subject} built from another version of the source, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.`;
   });
-  // The shown presentations' variants as JSON, keys in order, one object per presentation of a pair.
-  const variantJson = $derived.by(() => {
-    const sorted = (variant: Record<string, unknown>) =>
-      Object.fromEntries(Object.entries(variant).sort(([a], [b]) => a.localeCompare(b)));
-    const shown = drawnSources.filter(({ variant }) => variant);
-    if (!shown.length) return undefined;
-    return JSON.stringify(
-      shown.length === 1
-        ? sorted(shown[0].variant ?? {})
-        : Object.fromEntries(
-            shown.map(({ label, variant }, index) => [
-              label ?? String(index),
-              sorted(variant ?? {})
-            ])
-          ),
-      null,
-      2
-    );
+  // The shown presentations' variants, by the label each has on the stage.
+  const shownVariants = $derived(
+    drawnSources.flatMap(({ label, variant, presentationId }, index) =>
+      variant ? [{ label: label ?? (index ? 'bottom' : 'top'), variant, presentationId }] : []
+    )
+  );
+  // A pair's choices are shown as their differences until one of the two is picked; a new pair
+  // starts again from the differences.
+  const pairKey = $derived(
+    shownVariants.length === 2
+      ? shownVariants.map(({ presentationId }) => presentationId).join()
+      : ''
+  );
+  let shownVariant = $derived.by<'differences' | number>(() => {
+    void pairKey;
+    return 'differences';
   });
+  const differences = $derived.by(() => {
+    if (shownVariants.length !== 2) return undefined;
+    const [a, b] = shownVariants;
+    return {
+      a,
+      b,
+      keys: differingKeys(a.variant, b.variant),
+      total: new Set([...Object.keys(a.variant), ...Object.keys(b.variant)]).size
+    };
+  });
+  const variantJson = $derived.by(() => {
+    if (!shownVariants.length) return undefined;
+    const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
+    return variantDocument(shownVariants[index]?.variant ?? {});
+  });
+  const shownVariantOptions = $derived([
+    { id: 'differences' as const, name: 'Differences' },
+    ...shownVariants.map(({ label }, index) => ({ id: index, name: label }))
+  ]);
+  const showingDifferences = $derived(differences !== undefined && shownVariant === 'differences');
   $effect(() => {
     if (editMode === 'editing' || !variantJson || failed) tab = 'source';
   });
@@ -256,19 +276,20 @@
         <div class="mr-auto min-w-0">
           {#if variantJson && editMode === 'readonly' && !failed}
             <div class="flex gap-1" role="tablist" aria-label="Shown file">
-              {#each [['source', sourceName], ['variant', 'variant.json']] as [id, name] (id)}
+              {#each [['source', sourceName], ['variant', 'Choices']] as [id, name] (id)}
                 <button
                   type="button"
                   role="tab"
                   aria-selected={tab === id}
                   class={[
-                    'truncate rounded-md px-1.5 font-mono text-sm transition-colors',
+                    'truncate rounded-md px-1.5 text-sm transition-colors',
+                    id === 'source' && 'font-mono',
                     tab === id
                       ? 'bg-muted text-foreground'
                       : 'text-muted-foreground hover:text-foreground'
                   ]}
                   title={id === 'variant'
-                    ? 'Every variable of the shown presentations’ variants, read-only'
+                    ? 'The values chosen for the shown presentations, read-only'
                     : undefined}
                   onclick={() => {
                     tab = id as 'source' | 'variant';
@@ -432,13 +453,50 @@
         </p>
       {/if}
 
-      {#if expanded && tab === 'variant' && variantJson}
+      {#if expanded && tab === 'variant' && differences}
+        <div
+          class="flex flex-wrap items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+        >
+          <span class="mr-auto"
+            >Choices: {differences.a.label} vs {differences.b.label} · {differences.keys.length
+              ? `${differences.keys.length} of ${differences.total} differ`
+              : 'the same'}</span
+          >
+          <span class="flex gap-1" role="group" aria-label="Choices shown">
+            {#each shownVariantOptions as { id, name } (id)}
+              <button
+                type="button"
+                aria-pressed={shownVariant === id}
+                class={[
+                  'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  shownVariant === id
+                    ? 'bg-background text-foreground ring-1 ring-border'
+                    : 'hover:text-foreground'
+                ]}
+                onclick={() => (shownVariant = id)}>{name}</button
+              >
+            {/each}
+          </span>
+        </div>
+      {/if}
+
+      {#if expanded && tab === 'variant' && differences && showingDifferences}
+        <div class="min-h-48 flex-1 overflow-hidden">
+          <VariantDiff
+            a={variantDocument(differences.a.variant)}
+            b={variantDocument(differences.b.variant)}
+            aLabel={differences.a.label}
+            bLabel={differences.b.label}
+            ariaLabel={`Choices: ${differences.a.label} vs ${differences.b.label}`}
+          />
+        </div>
+      {:else if expanded && tab === 'variant' && variantJson}
         <div class="min-h-48 flex-1 overflow-hidden">
           <CodeMirrorEditor
             value={variantJson}
             language="json"
             editable={false}
-            ariaLabel="Variants of the shown presentations"
+            ariaLabel="Choices of the shown presentations"
           />
         </div>
       {:else if expanded}
