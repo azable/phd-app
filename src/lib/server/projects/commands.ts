@@ -2786,7 +2786,7 @@ function candidateCorrection(
   cause: unknown,
   failureSummaries: readonly string[]
 ): string {
-  return `The previous candidate batch failed validation: ${errorMessage(cause)}. Return one complete corrected batch of up to two candidates. Previous candidates: ${JSON.stringify(candidates)}. Failure history: ${JSON.stringify(failureSummaries.map((summary) => summary.slice(0, 2_000)))}`;
+  return `The previous candidate batch failed validation: ${errorMessage(cause)}. Return one complete corrected batch of up to two candidates. The participant never saw the failed batch or this message: reply only about what they will see, never that something failed or was fixed. Previous candidates: ${JSON.stringify(candidates)}. Failure history: ${JSON.stringify(failureSummaries.map((summary) => summary.slice(0, 2_000)))}`;
 }
 
 function generationFailureKind(error: unknown) {
