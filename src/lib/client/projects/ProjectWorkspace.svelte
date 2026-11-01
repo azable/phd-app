@@ -799,6 +799,14 @@
     </main>
   {/if}
 
+  {#if session.connection === 'reconnecting'}
+    <div
+      role="status"
+      class="fixed top-3 left-1/2 z-50 -translate-x-1/2 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground shadow-sm"
+    >
+      Reconnecting…
+    </div>
+  {/if}
   {#if session.error}
     <div class="pointer-events-none fixed inset-x-6 bottom-6 z-50 mx-auto max-w-3xl">
       <Alert.Root variant="destructive" class="pointer-events-auto">

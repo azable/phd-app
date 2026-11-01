@@ -63,6 +63,10 @@ export class ProjectSession {
   #workspace = $state.raw<WorkspaceResource | null>(null);
   #selectedAt = $state<EventId | undefined>(undefined);
   #eventTimer?: ReturnType<typeof setInterval>;
+  #poll?: Promise<void>;
+  #reopenTimer?: ReturnType<typeof setTimeout>;
+  #reopenAttempts = 0;
+  #loadFailed = false;
   #request?: AbortController;
   #commandRequest?: AbortController;
   #refillRequest?: AbortController;
@@ -191,14 +195,18 @@ export class ProjectSession {
     this.#selectedAt = at;
   }
 
-  /** Load the complete project resource once and start live synchronization. */
+  /**
+   * Load the complete project resource once and start live synchronization, trying again with
+   * backoff until it loads, so a dropped network never leaves the page without updates.
+   */
   async open(): Promise<void> {
     const version = ++this.#loadVersion;
     this.disconnect();
+    clearTimeout(this.#reopenTimer);
     this.#request?.abort();
     const request = new AbortController();
     this.#request = request;
-    this.connection = 'connecting';
+    this.connection = this.loaded ? 'reconnecting' : 'connecting';
 
     try {
       const response = await fetch(this.resourceUrl(), {
@@ -208,12 +216,24 @@ export class ProjectSession {
       if (!response.ok) throw new Error(await responseError(response));
       if (version !== this.#loadVersion) return;
       this.installResource(await response.json());
+      this.#reopenAttempts = 0;
+      if (this.#loadFailed) this.error = null;
+      this.#loadFailed = false;
       this.select(this.#selectedAt);
       this.connect();
     } catch (cause) {
       if (request.signal.aborted || version !== this.#loadVersion) return;
-      this.error = cause instanceof Error ? cause.message : 'The project could not be loaded.';
+      // fetch rejects with a TypeError when the network fails, shown only as reconnecting.
+      if (!(cause instanceof TypeError)) {
+        this.error = cause instanceof Error ? cause.message : 'The project could not be loaded.';
+        this.#loadFailed = true;
+      }
       this.connection = 'reconnecting';
+      const pause = reopenDelaysMs[Math.min(this.#reopenAttempts, reopenDelaysMs.length - 1)];
+      this.#reopenAttempts += 1;
+      this.#reopenTimer = setTimeout(() => {
+        if (version === this.#loadVersion) void this.open();
+      }, pause);
     }
   }
 
@@ -224,6 +244,7 @@ export class ProjectSession {
     this.#commandRequest?.abort();
     this.#refillRequest?.abort();
     clearTimeout(this.#backgroundRetryTimer);
+    clearTimeout(this.#reopenTimer);
     this.#runtimeReportRequest?.abort();
     this.disconnect();
   }
@@ -299,7 +320,12 @@ export class ProjectSession {
       return true;
     } catch (cause) {
       if (request.signal.aborted) return false;
-      this.error = cause instanceof Error ? cause.message : 'The project operation failed.';
+      this.error =
+        cause instanceof TypeError
+          ? unreachableMessage
+          : cause instanceof Error
+            ? cause.message
+            : 'The project operation failed.';
       await this.open();
       return false;
     } finally {
@@ -435,7 +461,13 @@ export class ProjectSession {
     this.#eventTimer = undefined;
   }
 
-  private async pollEvents(): Promise<void> {
+  /** Fetch events after the head; a poll still in flight is shared rather than overlapped. */
+  private pollEvents(): Promise<void> {
+    this.#poll ??= this.fetchEvents().finally(() => (this.#poll = undefined));
+    return this.#poll;
+  }
+
+  private async fetchEvents(): Promise<void> {
     if (!this.loaded) return;
     try {
       const response = await fetch(
@@ -668,6 +700,16 @@ const backgroundRetryDelayMs = 5_000;
  * accepted within a few tries; past that the participant is told, rather than left waiting.
  */
 const busyRetryDelaysMs = [1_000, 2_000, 4_000, 8_000, 15_000];
+
+/**
+ * Pauses between attempts to load the project again after a load failed, as on a network drop.
+ * They grow so a restarting server is not flooded, and stop at 15 seconds so the page catches up
+ * within that of the network returning.
+ */
+const reopenDelaysMs = [1_000, 2_000, 4_000, 8_000, 15_000];
+
+/** Shown when a command could not reach the server at all. */
+export const unreachableMessage = 'The server could not be reached. Try again in a moment.';
 
 /** Shown when a command is still refused as busy after every retry. */
 export const serverBusyMessage = 'The server is busy. Try again in a moment.';

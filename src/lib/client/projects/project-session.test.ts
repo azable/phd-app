@@ -411,6 +411,72 @@ describe('ProjectSession', () => {
   });
 });
 
+describe('ProjectSession connection loss', () => {
+  /** Serve the resource and later events unless offline, counting event polls. */
+  function flakyFetch(resource: ProjectResource) {
+    const network = { online: true, later: [] as ProjectEvent[] };
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (!network.online) throw new TypeError('Failed to fetch');
+      if (url.includes('/events?after=')) {
+        const after = Number(new URL(url, 'http://localhost').searchParams.get('after'));
+        return eventResponse(network.later.filter((event) => event.id > after));
+      }
+      if (init?.method === 'POST') return errorResponse(500, 'Unexpected command.');
+      return response(resource);
+    });
+    return network;
+  }
+
+  it('resumes polling after a command fails while the network is down', async () => {
+    vi.useFakeTimers();
+    const network = flakyFetch(projectResource([createdEvent()], 'Initial'));
+    const session = createSession();
+    await session.open();
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    network.online = false;
+    await expect(session.runCommand({ type: 'rename', title: 'Next' })).resolves.toBe(false);
+    expect(session.connection).toBe('reconnecting');
+    network.online = true;
+    network.later.push(assistantEvent(2));
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(session.events).toHaveLength(2);
+    expect(session.connection).toBe('open');
+  });
+
+  it('retries a failed initial load until it succeeds', async () => {
+    vi.useFakeTimers();
+    const network = flakyFetch(projectResource([createdEvent()], 'Initial'));
+    network.online = false;
+    const session = createSession();
+    await session.open();
+    expect(session.connection).toBe('reconnecting');
+    expect(session.error).toBeNull();
+    await vi.advanceTimersByTimeAsync(20_000);
+    network.online = true;
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(session.loaded).toBe(true);
+    expect(session.connection).toBe('open');
+  });
+
+  it('never overlaps event polls while one is slow', async () => {
+    vi.useFakeTimers();
+    let polls = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (!url.includes('/events?after=')) return response(projectResource([createdEvent()], 'A'));
+      polls += 1;
+      return new Promise<Response>(() => {});
+    });
+    const session = createSession();
+    await session.open();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(polls).toBe(1);
+  });
+});
+
 function createSession(): ProjectSession {
   const session = new ProjectSession('project-test');
   sessions.push(session);
