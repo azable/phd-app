@@ -120,7 +120,7 @@ import { projectChooserId } from './chooser-config';
 import {
   answersAfter,
   askedPair,
-  guardedChoice,
+  allowedComparisonSide,
   mootComparison,
   pictureTree,
   settledValues,
@@ -858,6 +858,7 @@ async function runSverlinAssistantTurn(
   let seeds: number[] = [];
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
+  const turnBrief = new Map<BriefEntry['key'], BriefEntry>();
 
   return runAttemptLadder(
     document,
@@ -879,30 +880,42 @@ async function runSverlinAssistantTurn(
       );
       current = generation.document;
       if (!generation.ok) return { document: current, done: true };
+      // What the participant said holds whether or not the decision with it could be built: the
+      // brief entries of every attempt this turn, the latest for each attribute, steer this
+      // decision's comparisons and are recorded with the accepted reply.
+      for (const entry of generation.result.brief ?? []) turnBrief.set(entry.key, entry);
+      const brief = turnBrief.size ? [...turnBrief.values()] : undefined;
 
-      if (attempt === 1) {
-        // A blank reply to a change says what the change does instead.
-        const { reply, decision, brief } = generation.result;
+      // The reply is recorded with its decision once that is accepted, before what it presents, so
+      // the reply of an attempt set aside is never the turn's. A blank reply to a change says what
+      // the change does instead; the fallback's starts with what it simplified. A note follows
+      // what the reply says, as which comparisons were left out.
+      const recordReply = (document: ProjectDocument, note?: string) => {
+        const { reply, decision, recovery } = generation.result;
         const summary = 'summary' in decision ? decision.summary : undefined;
         const question = recordedQuestion(
-          current,
+          document,
           'question' in decision ? decision.question : undefined,
           decision.action !== 'respond'
         );
-        current = await appendAssistantResponse(
-          current,
-          resolveAssistantContent(
-            current,
-            blankReply(reply) && summary ? [{ type: 'markdown', text: summary }] : reply,
-            []
-          ),
+        const said: GeneratedMessageContent =
+          blankReply(reply) && summary ? [{ type: 'markdown', text: summary }] : reply;
+        const last = said.at(-1);
+        const noted: GeneratedMessageContent = !note
+          ? said
+          : last?.type === 'markdown'
+            ? [...said.slice(0, -1), { type: 'markdown', text: `${last.text.trimEnd()} ${note}` }]
+            : [...said, { type: 'markdown', text: note }];
+        return appendAssistantResponse(
+          document,
+          resolveAssistantContent(document, replyWithRecovery(noted, recovery), []),
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
           inReplyTo,
           { ...(question ? { question } : {}), ...(brief ? { brief } : {}) }
         );
-      }
+      };
 
       // The source each decision asks to build, if any. Edits apply to the source being revised:
       // the failed candidate when repairing it.
@@ -917,7 +930,8 @@ async function runSverlinAssistantTurn(
       const reject = async (
         kind: 'edits' | 'comparisons',
         problems: string[],
-        failedSource: string
+        failedSource: string,
+        advice: string[] = []
       ) => {
         const summary = `Attempt ${attempt}: the ${kind} could not be ${kind === 'edits' ? 'applied' : 'built'}. ${problems.join(' ')}`;
         failureSummaries.push(summary);
@@ -954,12 +968,20 @@ async function runSverlinAssistantTurn(
           buildEventId: projectHead(current).id,
           failedSource,
           assistantReply: generatedReplyText(generation.result.reply),
-          diagnostics: problems.map((message) => ({
-            severity: 'error' as const,
-            code: kind === 'edits' ? 'edit_not_applied' : 'comparison_not_built',
-            message,
-            raw: message
-          })),
+          diagnostics: [
+            ...problems.map((message) => ({
+              severity: 'error' as const,
+              code: kind === 'edits' ? 'edit_not_applied' : 'comparison_not_built',
+              message,
+              raw: message
+            })),
+            ...advice.map((message) => ({
+              severity: 'warning' as const,
+              code: 'comparison_kept',
+              message,
+              raw: message
+            }))
+          ],
           priorFailureSummaries: [...failureSummaries]
         };
         return { document: current, done: false };
@@ -971,6 +993,58 @@ async function runSverlinAssistantTurn(
       let candidate: string | undefined;
       let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
         base: viewed
+      };
+      // Of comparisons some of which cannot be built as given (problems, by comparison): with
+      // attempts left, a repair is told to keep the others unchanged, so its reply counts only
+      // what is built; on the last, the others are built without them and the reply says which
+      // were left out. None buildable, or a changed source's first pair, built already, among them,
+      // the comparisons are repaired as a whole.
+      let leftOut: string | undefined;
+      const screen = async (problems: string[][], firstBuilt: boolean) => {
+        if (!pairs || candidate === undefined || !problems.flat().length) return undefined;
+        const asked = pairs;
+        const kept = asked.flatMap((pair, index) => (problems[index]?.length ? [] : [index]));
+        const list = (items: string[]) =>
+          new Intl.ListFormat('en', { type: 'conjunction' }).format(items);
+        const named = (indexes: number[]) =>
+          list(indexes.map((index) => `${index + 1} (“${asked[index].question}”)`));
+        if (
+          attempt < chatbot.config.attemptProfiles.length ||
+          !kept.length ||
+          (firstBuilt && problems[0]?.length)
+        )
+          return reject(
+            'comparisons',
+            problems.flat(),
+            candidate,
+            kept.length
+              ? [
+                  `Comparison${kept.length > 1 ? 's' : ''} ${named(kept)} can be built as given: return ${kept.length > 1 ? 'them' : 'it'} unchanged, leaving out or correcting the others, and count in your reply only the comparisons you return.`
+                ]
+              : []
+          );
+        const dropped = asked.flatMap((pair, index) => (problems[index]?.length ? [pair] : []));
+        current = await appendProjectEvents(
+          current,
+          [
+            draftEvent({
+              type: 'revision.edits-rejected',
+              actor: { kind: 'system' },
+              operationId,
+              payload: {
+                attempt,
+                ...generationReference(current, operationId),
+                rejected: 'comparisons',
+                problems: problems.flat(),
+                kept: kept.map((index) => index + 1)
+              }
+            })
+          ],
+          dependencies.projectService
+        );
+        pairs = kept.map((index) => asked[index]);
+        leftOut = `I left out ${list(dropped.map(({ question }) => `“${question}”`))}, which could not be built as asked.`;
+        return undefined;
       };
       switch (decision.action) {
         case 'respond':
@@ -990,15 +1064,18 @@ async function runSverlinAssistantTurn(
           variant = variedValues(viewed, decision);
           pairs = decision.comparisons ?? undefined;
           if (!pairs || candidate !== entrySource(current)) break;
-          const problems = comparisonProblems(
-            pairs,
-            designVariables(
-              viewedPresentation(current, contextSelection.interactionEventIds ?? [])
+          const screened = await screen(
+            comparisonProblems(
+              pairs,
+              designVariables(
+                viewedPresentation(current, contextSelection.interactionEventIds ?? [])
+              ),
+              { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
+              briefSteering(projectBrief(current.events, brief))
             ),
-            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
-            briefSteering(projectBrief(current.events))
+            false
           );
-          if (problems.length) return reject('comparisons', problems, candidate);
+          if (screened) return screened;
           checked = true;
           break;
         }
@@ -1017,6 +1094,7 @@ async function runSverlinAssistantTurn(
       }
       if (candidate === undefined) {
         if (attempt === 1) {
+          current = await recordReply(current);
           const advanced =
             decision.action === 'resample'
               ? await advanceCandidatesForAgent(
@@ -1073,24 +1151,29 @@ async function runSverlinAssistantTurn(
       if (pairs && !batchSucceeded(built.recorded)) {
         // A value the first comparison sets that the source does not offer.
         const unoffered = designValueProblems(built.recorded);
+        const { question } = pairs[0];
         if (unoffered.length)
           return reject(
             'comparisons',
-            unoffered.map((problem) => `Comparison 1 (“${pairs[0].question}”): ${problem}`),
+            unoffered.map((problem) => `Comparison 1 (“${question}”): ${problem}`),
             candidate
           );
       }
       if (batchSucceeded(built.recorded)) {
         const [first] = built.recorded.builds;
         if (pairs && !checked && first?.result.ok) {
-          const problems = comparisonProblems(
-            pairs,
-            designVariables(first.result.bundle),
-            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
-            briefSteering(projectBrief(current.events))
+          const screened = await screen(
+            comparisonProblems(
+              pairs,
+              designVariables(first.result.bundle),
+              { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
+              briefSteering(projectBrief(current.events, brief))
+            ),
+            true
           );
-          if (problems.length) return reject('comparisons', problems, candidate);
+          if (screened) return screened;
         }
+        current = await recordReply(current, leftOut);
         // A new source's presentations, and those a decision with a count queues, show the
         // variants the chooser picks from its design space; the first build stands if it fails.
         // The assistant's comparisons show in their place.
@@ -1137,9 +1220,6 @@ async function runSverlinAssistantTurn(
             candidate,
             ...('summary' in decision ? { summary: decision.summary } : {}),
             operationId,
-            recovery: generation.result.recovery,
-            recoveryReply: generation.result.reply,
-            inReplyTo,
             ...(pairs
               ? { setSize: 2 as const, pairs: [pairQuestion(pairs[0])] }
               : queued
@@ -1757,17 +1837,17 @@ function designValues(values: readonly { variable: string; value: string | numbe
 }
 
 /**
- * What keeps a vary's comparisons from being built as given: a value its variable does not offer,
- * two sides alike, a side the variant guard would change (hiding too much, or a top-level part), or
- * a choice the brief keeps out of comparisons (a colour where it must print in grey).
+ * What keeps each of a decision's comparisons from being built as given: a value its variable does
+ * not offer, two sides alike, a side hiding the layout itself or most of the picture, or a choice
+ * the brief keeps out of comparisons (a colour where it must print in grey).
  */
 function comparisonProblems(
   pairs: Comparisons,
   design: AiDesign,
   guard: GuardContext,
   brief: BriefSteering
-): string[] {
-  return pairs.flatMap(({ question, left, right }, index) => {
+): string[][] {
+  return pairs.map(({ question, left, right }, index) => {
     const name = `Comparison ${index + 1} (“${question}”)`;
     const problems = [...left.values, ...right.values].flatMap(({ variable, value }) =>
       offeredOptions(design, variable)?.includes(value)
@@ -1786,13 +1866,8 @@ function comparisonProblems(
         (sides[1][variable] ?? guard.base[variable])
     );
     if (!differ) problems.push(`${name}: its two sides set the same values.`);
-    for (const side of sides)
-      if (
-        Object.keys(guardedChoice(guard, { chosen: side }).chosen).length < Object.keys(side).length
-      )
-        problems.push(
-          `${name}: a side hides a top-level part, too much of the picture, or more than one thing.`
-        );
+    if (sides.some((side) => !allowedComparisonSide(guard, side)))
+      problems.push(`${name}: a side hides the layout itself or most of the picture.`);
     return problems;
   });
 }
@@ -1950,9 +2025,6 @@ async function acceptSverlinCandidate(
     /** What the revision shows, for a first source, or what it changes. */
     summary?: string;
     operationId: string;
-    recovery?: RecoveryExplanation;
-    recoveryReply: GeneratedMessageContent;
-    inReplyTo: readonly EventId[];
     /** Presentations shown at once, when the batch is queued (queueBuiltPresentations). */
     setSize?: 1 | 2;
     /** What each queued set asks, for a vary's comparisons. */
@@ -1969,7 +2041,7 @@ async function acceptSverlinCandidate(
   };
   // New variants of an unchanged source join its version.
   const unchanged = options.candidate === current.content.text;
-  let document = await appendProjectEvents(
+  const document = await appendProjectEvents(
     options.document,
     unchanged
       ? []
@@ -1987,32 +2059,19 @@ async function acceptSverlinCandidate(
         ],
     dependencies.projectService
   );
-  document = options.setSize
-    ? await queueBuiltPresentations(
+  return options.setSize
+    ? queueBuiltPresentations(
         { ...options.recorded, document },
         options.setSize,
         dependencies.projectService,
         options.generationEvent.actor,
         options.pairs
       )
-    : await activateBuiltPresentations(
+    : activateBuiltPresentations(
         { ...options.recorded, document },
         dependencies.projectService,
         options.generationEvent.actor
       );
-  if (!options.recovery) return document;
-  return appendAssistantResponse(
-    document,
-    resolveAssistantContent(
-      document,
-      replyWithRecovery(options.recoveryReply, options.recovery),
-      []
-    ),
-    assistantBotId(options.generationEvent),
-    options.operationId,
-    dependencies,
-    options.inReplyTo
-  );
 }
 
 async function advanceCandidatesForAgent(

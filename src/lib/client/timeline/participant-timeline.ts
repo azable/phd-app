@@ -19,9 +19,10 @@ import {
 } from '$lib/shared/projects/questions';
 
 import { agentRequests, type AgentRequest } from './agent-requests';
+import { withoutFeedbackContext } from './feedback-context';
 
 /** A question with its answer as its caption shows it, once given. */
-export type CaptionedQuestion = { question: ProjectQuestion; answer?: string };
+export type CaptionedQuestion = { question: ProjectQuestion; answer?: MessageContent };
 
 /** A presentation as a pill in an assistant's message: what it shows, and its source. */
 export type VersionPill = {
@@ -126,7 +127,7 @@ export function participantTimeline(
     return { value, summary, sourceHash, ...(parentHash ? { parentHash } : {}) };
   };
   const captioned = (question: ProjectQuestion): CaptionedQuestion => {
-    const answer = answerLabel(question);
+    const answer = answerLabel(question, withoutFeedbackContext);
     return { question, ...(answer ? { answer } : {}) };
   };
   const questions = projectQuestions(events);

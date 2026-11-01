@@ -197,8 +197,8 @@ export type BriefItem =
       value: string;
       source?: string;
       tags?: string[];
-      /** The event that set it. */
-      eventId: number;
+      /** The event that set it; none for an entry of the turn not yet recorded. */
+      eventId?: number;
     };
 
 /** An entry's tags, keeping only those its attribute names. */
@@ -212,34 +212,41 @@ const clipped = (text: string) =>
 
 /**
  * The brief, every attribute in order: intake's answers confirmed in the participant's words, then
- * each entry an assistant decision set, the latest for each attribute standing.
+ * each entry an assistant decision set, the latest for each attribute standing, then `pending`:
+ * entries of the turn not yet recorded, as the decision being checked sets them.
  */
-export function projectBrief(events: readonly ProjectEvent[]): BriefItem[] {
+export function projectBrief(
+  events: readonly ProjectEvent[],
+  pending: readonly BriefEntry[] = []
+): BriefItem[] {
   const items = new Map<BriefKey, BriefItem>(
     briefKeys.map((key) => [key, { key, status: 'unknown' }])
   );
+  const set = (entries: readonly BriefEntry[], eventId?: number) => {
+    for (const { key, value, status, source, tags } of entries) {
+      const named = knownTags(key, tags);
+      items.set(
+        key,
+        status === 'unknown'
+          ? { key, status }
+          : {
+              key,
+              status,
+              value,
+              ...(source ? { source } : {}),
+              ...(named.length ? { tags: named } : {}),
+              ...(eventId === undefined ? {} : { eventId })
+            }
+      );
+    }
+  };
   // Intake's answer is the participant's next message after its question, unless they left intake.
   let asking: BriefKey | undefined;
   const intakeAnswers = new Map<number, BriefKey>();
   for (const event of events) {
     if (event.type === 'assistant.responded') {
       asking = event.payload.intakeStep;
-      for (const { key, value, status, source, tags } of event.payload.brief ?? []) {
-        const named = knownTags(key, tags);
-        items.set(
-          key,
-          status === 'unknown'
-            ? { key, status }
-            : {
-                key,
-                status,
-                value,
-                ...(source ? { source } : {}),
-                ...(named.length ? { tags: named } : {}),
-                eventId: event.id
-              }
-        );
-      }
+      set(event.payload.brief ?? [], event.id);
     } else if (event.type === 'feedback.submitted' && asking) {
       const text = plainMessageText(event.payload.content).trim();
       if (text) {
@@ -260,5 +267,6 @@ export function projectBrief(events: readonly ProjectEvent[]): BriefItem[] {
         items.set(key, { key, status: 'unknown' });
     }
   }
+  set(pending);
   return [...items.values()];
 }

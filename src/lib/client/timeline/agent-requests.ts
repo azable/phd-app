@@ -124,7 +124,7 @@ export function agentOutcome(request: AgentRequest): string {
   // Edits that could not be placed are recorded; before they were, they show only as an edit that
   // was not built and was followed by its repair.
   const rejected =
-    actions.some(({ type }) => type === 'revision.edits-rejected') ||
+    actions.some((event) => event.type === 'revision.edits-rejected' && !event.payload.kept) ||
     (action === 'edit' && !built && followed);
   const result = failed
     ? 'build failed'

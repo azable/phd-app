@@ -139,15 +139,24 @@ one `question` at a time, in words or about a presentation (one shown, or the
 first its decision makes, with elements to highlight), answered by the
 participant's next message, which records the question it answers
 (`feedback.submitted` `answers`); the chat shows each question with its answer
-underneath, and each comparison pair its question and answer as a caption
-([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
-option its variable lacks (in the changed source, for `edit` and `revise`),
-sides alike, or a side the variant guard would change is recorded as rejected
-(`revision.edits-rejected` with `rejected: "comparisons"`) and repaired as edits
-that did not apply are. Every presentation currently shows every master step.
-Every array and object is made by a collection or record type the domain block
-defines, and each step records the domain type of every value by path beside its
-plain values. Every view is mounted inside the page frame,
+underneath, and each comparison pair its question and answer as a caption, a
+message's answer without the presentation it was viewing and with its references
+as pills ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison
+with an option its variable lacks (in the changed source, for `edit` and
+`revise`), sides alike, or a side hiding the layout itself or most of the
+picture (`allowedComparisonSide` in
+[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a
+chooser, the assistant may hide a top-level part such as a title) is recorded as
+rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired
+as edits that did not apply are, the repair told to keep unchanged the
+comparisons that could be built; on the last attempt those are built without the
+others (`kept`), the reply saying which were left out. The assistant's reply,
+with its question, is recorded only with the decision accepted, before what it
+presents, so a reply whose decision was set aside is never shown. Every
+presentation currently shows every master step. Every array and object is made
+by a collection or record type the domain block defines, and each step records
+the domain type of every value by path beside its plain values. Every view is
+mounted inside the page frame,
 [`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
 it out at a fixed logical size and scales it to fit the page, as a zoomable,
 pannable canvas with a dashed outline; the sandboxed page loads once per

@@ -213,6 +213,18 @@
       {#snippet inline(presentationId: string)}
         {@render versionPill(pills[presentationId])}
       {/snippet}
+      {#snippet caption(answer: Content)}
+        <!-- An answer under its question, its references as pills. -->
+        <div class="flex items-baseline gap-1 text-muted-foreground [&_.message-content]:text-sm">
+          <span>→</span>
+          <MessageContent
+            content={answer}
+            onReferenceActivate={activateReference}
+            pill={inline}
+            pilled={(id) => id in pills}
+          />
+        </div>
+      {/snippet}
       <!-- One assistant turn: its reply naming its versions, the pills of those it did not name,
         its comparisons, and its question; a turn without a reply says what its versions show. -->
       <article
@@ -278,13 +290,13 @@
           <!-- A comparison: its question, its pair, each side by its label, and the answer. -->
           <div class="mt-3 border-t pt-2 text-sm">
             <p class="font-medium">{question.text}</p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               {#each question.presentationIds as id, slot (id)}
                 {@const label = question.labels?.[slot]}
                 {#if pills[id]}{@render versionPill(pills[id], label && `${label}:`)}{/if}
               {/each}
-              {#if answer}<span class="text-muted-foreground">→ {answer}</span>{/if}
-            </p>
+              {#if answer}{@render caption(answer)}{/if}
+            </div>
           </div>
         {/each}
         {#if item.question}
@@ -312,7 +324,7 @@
               </span>
             </p>
             {#if answer}
-              <p class="ml-5.5 text-muted-foreground">→ {answer}</p>
+              <div class="ml-5.5">{@render caption(answer)}</div>
             {:else if !session.readOnly}
               <p class="ml-5.5 text-xs text-muted-foreground">Answer in the chat</p>
             {/if}

@@ -67,7 +67,7 @@ describe('participant Timeline projection', () => {
             presentationIds: [...presentationIds],
             labels: ['cells', 'tallies']
           },
-          answer: 'cells'
+          answer: [{ type: 'markdown', text: 'cells' }]
         }
       ]
     });
@@ -86,11 +86,42 @@ describe('participant Timeline projection', () => {
     const items = participantTimeline(values);
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn', 'message', 'message']);
     expect(items[1]).toMatchObject({
-      question: { question: { text: 'Who is it for?' }, answer: 'Students', pill: false }
+      question: {
+        question: { text: 'Who is it for?' },
+        answer: [{ type: 'markdown', text: 'Students' }],
+        pill: false
+      }
     });
     expect(items[2]).toMatchObject({
       content: expect.arrayContaining([{ type: 'markdown', text: 'Either is fine:' }])
     });
+  });
+
+  it('captions an answer without the presentation the participant was viewing, its own references as pills', () => {
+    const captionOf = (content: object[]) => {
+      const values = events();
+      const responded = values[1];
+      if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+      responded.payload.question = { text: 'Warm or cool?' };
+      values.push({
+        ...answer(6, ''),
+        payload: { content, focus: [], answers: 2 }
+      } as ProjectEvent);
+      return turns(participantTimeline(values))[0].question?.answer;
+    };
+    const viewed = { type: 'presentation-ref', presentationId: presentationIds[0], step: 2 };
+    expect(
+      captionOf([
+        { type: 'markdown', text: 'Viewing ' },
+        viewed,
+        { type: 'markdown', text: '.\n\nWarm, please.' }
+      ])
+    ).toEqual([{ type: 'markdown', text: 'Warm, please.' }]);
+    const named = { type: 'presentation-ref', presentationId: presentationIds[1] };
+    expect(captionOf([{ type: 'markdown', text: 'Like ' }, named])).toEqual([
+      { type: 'markdown', text: 'Like ' },
+      named
+    ]);
   });
 
   it('gives a question a pill only where the message does not show what it is about', () => {

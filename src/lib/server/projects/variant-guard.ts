@@ -2,7 +2,8 @@
  * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
  * top-level part (what the view's root renders, in any layout) or a node holding most of the picture, never what
  * the preference model settled (settledValues), at most one hide per variant, and
- * most of the picture still showing afterwards.
+ * most of the picture still showing afterwards. A comparison the assistant designed is held only
+ * to the last, and never hides the layout itself (allowedComparisonSide).
  */
 
 import type { DesignValues } from '$lib/shared/presentations';
@@ -140,6 +141,22 @@ export function allowedChange(context: GuardContext, variable: string, value: un
   if (snippet && (context.tree.root.includes(snippet) || context.tree.layouts.has(snippet)))
     return false;
   return hiddenShare(context.tree, context.base, [[variable, value]]) < hiddenAtMost;
+}
+
+/**
+ * Whether a side the assistant designed for a comparison may be built as given: it may hide a
+ * top-level part, such as a title or caption, and more than one thing, but never the layout itself
+ * nor most of the picture.
+ */
+export function allowedComparisonSide(context: GuardContext, side: DesignValues): boolean {
+  const changes = Object.entries(side);
+  const hidesLayout = changes.some(
+    ([variable, value]) =>
+      variable.endsWith('.shown') &&
+      hides(variable, value) &&
+      context.tree.layouts.has(shownSnippet(variable))
+  );
+  return !hidesLayout && hiddenShare(context.tree, context.base, changes) < hiddenAtMost;
 }
 
 /**

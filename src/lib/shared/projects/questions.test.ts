@@ -55,7 +55,7 @@ describe('questions', () => {
         eventId: 1,
         text: 'Who is it for?',
         presentationIds: [],
-        answer: { kind: 'text', eventId: 2, text: 'Students.' }
+        answer: { kind: 'text', eventId: 2, content: [{ type: 'markdown', text: 'Students.' }] }
       }
     ]);
     expect(openQuestion(events)).toBeUndefined();
@@ -103,9 +103,10 @@ describe('questions', () => {
       labels: ['cells', 'tallies'],
       answer: { kind: 'preferred', presentationId: 'b' }
     });
-    expect(answerLabel(preferred)).toBe('tallies');
-    expect(answerLabel(answered({ outcome: 'tie' }))).toBe('either is fine');
-    expect(answerLabel(answered({ outcome: 'skip' }))).toBe('later');
+    const words = (text: string) => [{ type: 'markdown', text }];
+    expect(answerLabel(preferred)).toEqual(words('tallies'));
+    expect(answerLabel(answered({ outcome: 'tie' }))).toEqual(words('either is fine'));
+    expect(answerLabel(answered({ outcome: 'skip' }))).toEqual(words('later'));
   });
 
   it('keeps one question open at a time, a newer one replacing it', () => {
@@ -117,6 +118,30 @@ describe('questions', () => {
     const [question] = projectQuestions(
       timeline(responded({ text: 'Why?' }), message('Because '.repeat(20), 1))
     );
-    expect(answerLabel(question)).toMatch(/^Because Because .{40,}…$/u);
+    expect(answerLabel(question)).toEqual([
+      { type: 'markdown', text: expect.stringMatching(/^Because Because .{40,}…$/u) }
+    ]);
+  });
+
+  it('keeps an answer’s references and only what words keeps, on one line', () => {
+    const reference = { type: 'presentation-ref', presentationId: 'a' };
+    const [question] = projectQuestions(
+      timeline(responded({ text: 'Why?' }), {
+        type: 'feedback.submitted',
+        payload: {
+          content: [
+            { type: 'markdown', text: 'Viewing ' },
+            reference,
+            { type: 'markdown', text: '.\n\nLike\nthis' }
+          ],
+          focus: [],
+          answers: 1
+        }
+      })
+    );
+    expect(answerLabel(question, (content) => content.slice(1))).toEqual([
+      reference,
+      { type: 'markdown', text: '. Like this' }
+    ]);
   });
 });

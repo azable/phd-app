@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { TimelinePresentation } from '$lib/client/visualization/presentation-history';
 
-import { automaticFeedbackContext, feedbackSubmissionContent } from './feedback-context';
+import {
+  automaticFeedbackContext,
+  feedbackSubmissionContent,
+  withoutFeedbackContext
+} from './feedback-context';
 
 const presentationIds = [
   '12345678-1234-4123-8123-123456789ac1',
@@ -72,6 +76,23 @@ describe('automatic feedback context', () => {
       { type: 'presentation-ref', presentationId: presentationIds[1] },
       { type: 'markdown', text: '.' }
     ]);
+  });
+
+  it('takes the automatic context off a message, keeping what the participant wrote', () => {
+    const words = [{ type: 'markdown' as const, text: 'Warmer.' }];
+    const viewing = automaticFeedbackContext([presentation(4, presentationIds[0])]);
+    const comparing = automaticFeedbackContext([
+      presentation(4, presentationIds[0]),
+      presentation(5, presentationIds[1])
+    ]);
+    for (const context of [viewing, comparing, automaticFeedbackContext([], [], 'Main.Cell')])
+      expect(withoutFeedbackContext(feedbackSubmissionContent(words, context))).toEqual(words);
+    const inserted = [
+      { type: 'markdown' as const, text: 'Like ' },
+      { type: 'presentation-ref' as const, presentationId: presentationIds[0] },
+      { type: 'markdown' as const, text: ' but warmer.' }
+    ];
+    expect(withoutFeedbackContext(feedbackSubmissionContent(inserted, viewing))).toEqual(inserted);
   });
 
   it('preserves deliberately inserted chips exactly instead of duplicating context', () => {

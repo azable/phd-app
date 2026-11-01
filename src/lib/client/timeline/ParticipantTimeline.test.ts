@@ -57,7 +57,7 @@ describe('participant timeline', () => {
     expect(body).toContain('Cells or tallies?');
     expect(body).toContain('cells:');
     expect(body).toContain('tallies:');
-    expect(body).toContain('→ cells');
+    expect(body).toMatch(/→<\/span>.*<p>cells<\/p>/su);
   });
 });
 

@@ -293,7 +293,7 @@ const timelineCases = {
   'build.failed': (event) =>
     `Build failed (${event.payload.failureKind}) with ${event.payload.diagnostics.length} diagnostic(s).`,
   'revision.edits-rejected': (event) =>
-    `Rejected the ${event.payload.rejected ?? 'edits'} of generation attempt ${event.payload.attempt}: ${event.payload.problems.join(' ')}`,
+    `Rejected the ${event.payload.rejected ?? 'edits'} of generation attempt ${event.payload.attempt}: ${event.payload.problems.join(' ')}${event.payload.kept ? ` Built only comparison${event.payload.kept.length > 1 ? 's' : ''} ${event.payload.kept.join(', ')}.` : ''}`,
   'artifact.version-created': (event) => {
     const id = entryHash(event);
     return `Created ${event.payload.origin.kind} source version${id ? ` ${id.slice(0, 6)}` : ''}${event.payload.summary ? `: ${event.payload.summary}` : ''}.`;

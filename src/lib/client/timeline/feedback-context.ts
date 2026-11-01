@@ -55,6 +55,32 @@ export function presentationReference(
   return { type: 'presentation-ref', presentationId, step, ...(stepName ? { stepName } : {}) };
 }
 
+/**
+ * A message's own words and references, without the automatic context feedbackSubmissionContent
+ * put before them, where it did; the message as it is where nothing follows that context.
+ */
+export function withoutFeedbackContext(content: MessageContent): MessageContent {
+  const [first] = content;
+  if (first?.type !== 'markdown') return content;
+  const source = /^Viewing source `[^`]*`\.\s*/u.exec(first.text);
+  if (source)
+    return first.text.length > source[0].length
+      ? [{ type: 'markdown', text: first.text.slice(source[0].length) }, ...content.slice(1)]
+      : content;
+  if (first.text !== 'Viewing ' && first.text !== 'Comparing ') return content;
+  const end = content.findIndex(
+    (segment, index) => index > 0 && segment.type === 'markdown' && segment.text.startsWith('.')
+  );
+  const closing = content[end];
+  if (closing?.type !== 'markdown') return content;
+  const words = closing.text.slice(1).trim();
+  const rest: MessageContent = [
+    ...(words ? [{ type: 'markdown' as const, text: words }] : []),
+    ...content.slice(end + 1)
+  ];
+  return rest.length ? rest : content;
+}
+
 /** Prepend automatic context unless the participant deliberately inserted an inline reference. */
 export function feedbackSubmissionContent(
   editorContent: MessageContent,

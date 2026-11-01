@@ -8,11 +8,11 @@
  */
 
 import type { ProjectEvent } from './events';
-import { plainMessageText } from './events/message-content';
+import type { MessageContent } from './events/message-content';
 import { comparisonOutcome, preferredPresentation } from './events/visualization-presented';
 
 export type QuestionAnswer =
-  | { kind: 'text'; eventId: number; text: string }
+  | { kind: 'text'; eventId: number; content: MessageContent }
   | { kind: 'preferred'; eventId: number; presentationId: string }
   | { kind: 'tie' | 'skip'; eventId: number };
 
@@ -75,11 +75,7 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
     } else if (event.type === 'feedback.submitted' && event.payload.answers) {
       const question = asked.get(event.payload.answers);
       if (question && !question.answer)
-        question.answer = {
-          kind: 'text',
-          eventId: event.id,
-          text: plainMessageText(event.payload.content)
-        };
+        question.answer = { kind: 'text', eventId: event.id, content: event.payload.content };
     } else if (event.type === 'visualization.preference-recorded') {
       const question =
         (event.payload.displaySetId && pairs.get(event.payload.displaySetId)) ||
@@ -117,17 +113,40 @@ export function openQuestion(events: readonly ProjectEvent[]): ProjectQuestion |
 const answerLength = 60;
 
 /**
- * An answer as its question's caption shows it, abbreviated: the preferred side's label
- * (“tallies”), either is fine, later, or the start of the message.
+ * An answer as its question's caption shows it: the preferred side's label (“tallies”), either is
+ * fine, later, or the start of the message, on one line with its references, of what words keeps.
  */
-export function answerLabel(question: ProjectQuestion): string | undefined {
+export function answerLabel(
+  question: ProjectQuestion,
+  words: (content: MessageContent) => MessageContent = (content) => content
+): MessageContent | undefined {
   const answer = question.answer;
   if (!answer) return undefined;
-  if (answer.kind === 'text')
-    return answer.text.length > answerLength
-      ? `${answer.text.slice(0, answerLength - 1).trimEnd()}…`
-      : answer.text;
-  if (answer.kind !== 'preferred') return answer.kind === 'tie' ? 'either is fine' : 'later';
+  if (answer.kind === 'text') return abbreviated(words(answer.content));
+  if (answer.kind !== 'preferred')
+    return [{ type: 'markdown', text: answer.kind === 'tie' ? 'either is fine' : 'later' }];
   const slot = question.presentationIds.indexOf(answer.presentationId);
-  return question.labels?.[slot] ?? (slot === 0 ? 'top' : 'bottom');
+  return [{ type: 'markdown', text: question.labels?.[slot] ?? (slot === 0 ? 'top' : 'bottom') }];
+}
+
+/** A message on one line, its words cut to answerLength, the references among them kept. */
+function abbreviated(content: MessageContent): MessageContent {
+  let left = answerLength;
+  const shown: MessageContent = [];
+  for (const segment of content) {
+    if (segment.type !== 'markdown') {
+      if (left > 0) shown.push(segment);
+      continue;
+    }
+    const text = segment.text.replace(/\s+/gu, ' ');
+    const words = shown.length ? text : text.trimStart();
+    if (!words) continue;
+    if (left <= 0 || words.length > left) {
+      shown.push({ type: 'markdown', text: `${words.slice(0, Math.max(left - 1, 0)).trimEnd()}…` });
+      break;
+    }
+    shown.push({ type: 'markdown', text: words });
+    left -= words.length;
+  }
+  return shown;
 }

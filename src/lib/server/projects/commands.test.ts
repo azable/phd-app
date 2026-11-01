@@ -1299,7 +1299,13 @@ describe('submitProjectFeedback', () => {
     });
     const buildRequests = result.appendedEvents.filter((event) => event.type === 'build.requested');
     expect(new Set(buildRequests.map(({ payload }) => payload.seed)).size).toBe(1);
-    expect(result.appendedEvents.at(-1)).toMatchObject({
+    // Only the accepted attempt's reply is recorded, before what it presents.
+    const replies = result.appendedEvents.filter(({ type }) => type === 'assistant.responded');
+    expect(replies).toHaveLength(1);
+    expect(result.appendedEvents.indexOf(replies[0])).toBeLessThan(
+      result.appendedEvents.findIndex(({ type }) => type === 'visualization.presented')
+    );
+    expect(replies[0]).toMatchObject({
       type: 'assistant.responded',
       payload: {
         content: [
@@ -1397,9 +1403,11 @@ describe('submitProjectFeedback', () => {
     const observationIndex = result.appendedEvents.findIndex(
       ({ type }) => type === 'assistant.responded'
     );
-    const buildIndex = result.appendedEvents.findIndex(({ type }) => type === 'build.requested');
+    const shownIndex = result.appendedEvents.findIndex(
+      ({ type }) => type === 'visualization.presented'
+    );
     expect(observationIndex).toBeGreaterThanOrEqual(0);
-    expect(observationIndex).toBeLessThan(buildIndex);
+    expect(observationIndex).toBeLessThan(shownIndex);
     expect(result.appendedEvents[observationIndex]).toMatchObject({
       type: 'assistant.responded',
       payload: { content: markdownMessage('I adapted the spacing.') }
@@ -2931,7 +2939,18 @@ describe('several variants from chat', () => {
         },
         brief
       })
-      .mockResolvedValueOnce(generation(undefined, 'Sorry.'));
+      // The repair asks no colour question and does not restate the brief, which still holds.
+      .mockResolvedValueOnce({
+        ...generation(undefined, 'Here it is, in grey.'),
+        decision: {
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: null,
+          summary: 'Keeps the look'
+        }
+      });
 
     const result = await submitProjectFeedback(
       feedbackOptions(document, 'It gets printed in grey.', '94345678-1234-4123-8123-123456789abc'),
@@ -2945,7 +2964,117 @@ describe('several variants from chat', () => {
       rejected: 'comparisons',
       problems: [expect.stringContaining('it must print in grey')]
     });
-    expect(presented(result.appendedEvents)).toEqual([]);
+    expect(replies(result.appendedEvents)).toHaveLength(1);
+    expect(presented(result.appendedEvents).every(({ payload }) => !payload.question)).toBe(true);
+  });
+
+  /** An assistant turn on a new linear search, each attempt making the decision given for it. */
+  async function attempts(
+    decide: (prompt: { attempt: { number: number; purpose: string } }) => object,
+    title: string
+  ) {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const document = await createProject(
+      { title, creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    mocks.generatePrepared.mockReset().mockImplementation(async (prompt) => decide(prompt));
+    return submitProjectFeedback(
+      feedbackOptions(document, 'Compare.', '95345678-1234-4123-8123-123456789abc'),
+      commandDependencies
+    );
+  }
+  const vary = (reply: string, more: object) => ({
+    ...generation(undefined, reply),
+    decision: { action: 'vary', values: [], randomise: [], count: null, summary: 'Asks', ...more }
+  });
+  const replies = (events: readonly ProjectEvent[]) =>
+    events.flatMap((event) => (event.type === 'assistant.responded' ? [event.payload] : []));
+
+  it('records only the reply of the attempt whose decision is accepted, with its question', async () => {
+    const result = await attempts(
+      ({ attempt }) =>
+        attempt.number === 1
+          ? vary('Two wait for your answers.', {
+              comparisons: [views('IntCell', 'IntBogus'), views('IntCell', 'IntCell')]
+            })
+          : vary('Tallies, then a question.', {
+              values: [{ variable: 'views.Int', value: 'IntTally' }],
+              question: { text: 'Warm or cool highlighting next?', presentation: null }
+            }),
+      'Accepted reply'
+    );
+
+    expect(replies(result.appendedEvents)).toEqual([
+      {
+        content: markdownMessage('Tallies, then a question.'),
+        question: { text: 'Warm or cool highlighting next?' }
+      }
+    ]);
+    expect(presented(result.appendedEvents).length).toBeGreaterThan(0);
+  });
+
+  it('repairs comparisons some of which cannot be built, telling the assistant to keep the others', async () => {
+    const result = await attempts(
+      ({ attempt }) =>
+        attempt.number === 1
+          ? vary('Two wait.', { comparisons: [views('IntCell', 'IntBogus'), marks] })
+          : vary('One to answer.', { comparisons: [marks] }),
+      'Partly invalid'
+    );
+
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'comparison_not_built',
+        message: expect.stringMatching(/^Comparison 1 .*IntBogus/u)
+      }),
+      expect.objectContaining({
+        code: 'comparison_kept',
+        message: expect.stringContaining('Comparison 2 (“Amber or blue marks?”) can be built')
+      })
+    ]);
+    expect(replies(result.appendedEvents).map(({ content }) => content)).toEqual([
+      markdownMessage('One to answer.')
+    ]);
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
+  });
+
+  it('builds the comparisons that can be built on the last attempt, the reply saying which were left out', async () => {
+    const result = await attempts(
+      ({ attempt }) => ({
+        ...vary('Two wait.', { comparisons: [views('IntCell', 'IntBogus'), marks] }),
+        ...(attempt.purpose === 'fallback'
+          ? { recovery: { struggledWith: 'the views', simplified: 'the questions' } }
+          : {})
+      }),
+      'Last attempt'
+    );
+
+    const rejected = result.appendedEvents.filter(
+      (event): event is ProjectEventOf<'revision.edits-rejected'> =>
+        event.type === 'revision.edits-rejected'
+    );
+    expect(rejected.map(({ payload }) => payload.kept)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [2]
+    ]);
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
+    const [reply] = replies(result.appendedEvents);
+    expect(replies(result.appendedEvents)).toHaveLength(1);
+    expect(reply.content.at(-1)).toEqual({
+      type: 'markdown',
+      text: 'Two wait. I left out “Cells or tallies for the numbers?”, which could not be built as asked.'
+    });
   });
 
   const caption = [

@@ -8,6 +8,7 @@ import type { ProjectEvent } from '$lib/shared/projects/events';
 import recorded from './fixtures/decisions-hides-most.json';
 import {
   allowedChange,
+  allowedComparisonSide,
   guardedChoice,
   hiddenShare,
   hides,
@@ -67,6 +68,32 @@ describe('allowedChange', () => {
   it('measures how much of the picture a change hides', () => {
     expect(hiddenShare(tree, recorded.variant, [['Board.shown', false]])).toBeGreaterThan(0.85);
     expect(hiddenShare(tree, recorded.variant, [['FoundCaption.shown', false]])).toBeLessThan(0.1);
+  });
+});
+
+describe('allowedComparisonSide', () => {
+  const page = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
+{#snippet Note()}<Node>n</Node>{/snippet}
+{#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
+{#layout Stacked}<Node>{@render Title()}{@render Board()}</Node>{/layout}`);
+  const guard = { tree: page, base: { layout: 'Stacked' }, settled: {} };
+
+  it('lets the assistant compare a top-level title with and without, which a chooser may not hide', () => {
+    expect(allowedComparisonSide(guard, { 'Title.shown': false })).toBe(true);
+    expect(allowedChange(guard, 'Title.shown', false)).toBe(false);
+    expect(guardedChoice(guard, { chosen: { 'Title.shown': false } }).chosen).toEqual({});
+  });
+
+  it('never hides the layout itself or most of the picture, however many things', () => {
+    expect(allowedComparisonSide(guard, { 'Stacked.shown': false })).toBe(false);
+    expect(allowedComparisonSide(guard, { 'Board.shown': false })).toBe(false);
+    expect(allowedComparisonSide(guard, { 'Title.shown': false, 'Note.shown': false })).toBe(false);
+    expect(
+      allowedComparisonSide(context, {
+        'FoundCaption.shown': false,
+        'listing.language': 'textbook'
+      })
+    ).toBe(true);
   });
 });
 
