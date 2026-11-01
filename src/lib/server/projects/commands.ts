@@ -408,7 +408,9 @@ export function queueProjectPreference(
       dependencies
     );
     document = answered.document;
-    if (answered.waiting) return finishMutation(before, document);
+    // An answer that went back to an earlier source still asks for a turn, which shows that
+    // source's next comparison or version (presentAfterRebase).
+    if (answered.waiting && based === before) return finishMutation(before, document);
     document = await appendProjectEvents(
       document,
       [
@@ -492,18 +494,29 @@ export async function runQueuedAssistantTurn(
     );
   // Answers to the assistant's comparisons wait for the last to be answered: those that arrived
   // while the rest were still being built are dropped here, as they would have been on arrival.
+  let current = before;
+  let waiting = false;
   if (preferences.length && preferences.length === interactions.length) {
     const answered = await dropMootComparisons(
-      before,
-      answersAfter(before.events, Math.min(...preferences.map(({ id }) => id)) - 1),
+      current,
+      answersAfter(current.events, Math.min(...preferences.map(({ id }) => id)) - 1),
       options.operationId,
       concurrentDependencies
     );
-    if (answered.waiting)
-      return { document: answered.document, appendedEvents: appendedSince(answered.document) };
+    current = answered.document;
+    waiting = answered.waiting;
   }
+  const rebase = unshownRebase(current, preferences);
+  if (rebase)
+    current = await presentAfterRebase(
+      current,
+      rebase,
+      options.operationId,
+      concurrentDependencies
+    );
+  if (waiting) return { document: current, appendedEvents: appendedSince(current) };
   const intake = await handleParticipantIntake(
-    before,
+    current,
     options.operationId,
     feedback,
     concurrentDependencies
@@ -1993,9 +2006,10 @@ async function presentRemainingComparisons(
 }
 
 /**
- * Set aside the waiting comparisons these answers make moot (mootComparison), and say whether any
- * are still to answer: the assistant waits for the last of its questions to be answered before it
- * takes a turn on them.
+ * Set aside the waiting comparisons these answers make moot (mootComparison), of any source, as
+ * those asked before an answer went back to an earlier one, and say whether any of the current
+ * source are still to answer: the assistant waits for the last of its questions to be answered
+ * before it takes a turn on them.
  */
 async function dropMootComparisons(
   document: ProjectDocument,
@@ -2003,9 +2017,13 @@ async function dropMootComparisons(
   operationId: string,
   dependencies: ProjectCommandDependencies
 ): Promise<{ document: ProjectDocument; waiting: boolean }> {
-  const waiting = waitingComparisons(document);
-  const moot = waiting.filter(({ variants: [left = {}, right = {}] }) =>
-    answers.some((answer) => mootComparison(answer, askedPair(left, right)))
+  const moot = waitingComparisons(document, { everySource: true }).filter(
+    ({ variants: [left = {}, right = {}] }) =>
+      answers.some((answer) => mootComparison(answer, askedPair(left, right)))
+  );
+  const mootSets = new Set(moot.map(({ displaySetId }) => displaySetId));
+  const waiting = waitingComparisons(document).filter(
+    ({ displaySetId }) => !mootSets.has(displaySetId)
   );
   if (moot.length)
     document = await appendProjectEvents(
@@ -2020,7 +2038,112 @@ async function dropMootComparisons(
       ),
       dependencies.projectService
     );
-  return { document, waiting: waiting.length > moot.length };
+  return { document, waiting: waiting.length > 0 };
+}
+
+/**
+ * The version an answer went back to (basedOnAnswer: the source of the side it preferred, which a
+ * later version had replaced), while it is still the current version and nothing has shown since.
+ */
+function unshownRebase(
+  document: ProjectDocument,
+  answers: readonly ProjectEventOf<'visualization.preference-recorded'>[]
+): ProjectEventOf<'artifact.version-created'> | undefined {
+  const operations = new Set(answers.map(({ operationId }) => operationId));
+  const rebase = document.events.findLast(
+    (event): event is ProjectEventOf<'artifact.version-created'> =>
+      event.type === 'artifact.version-created' &&
+      event.payload.origin.kind === 'candidate' &&
+      operations.has(event.operationId)
+  );
+  if (!rebase) return undefined;
+  const since = document.events.slice(rebase.id);
+  return since.some(
+    ({ type }) => type === 'artifact.version-created' || type === 'visualization.presented'
+  )
+    ? undefined
+    : rebase;
+}
+
+/**
+ * Show the source an answer went back to, in place of what showed of the source it left: that
+ * source's next waiting comparison, built again so it shows as the newest, or else the side the
+ * answer preferred. Left as it was when a build fails.
+ */
+async function presentAfterRebase(
+  document: ProjectDocument,
+  rebase: ProjectEventOf<'artifact.version-created'>,
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  if (rebase.payload.origin.kind !== 'candidate') return document;
+  const [next] = waitingComparisons(document);
+  const shown = (next?.presentationIds ?? [rebase.payload.origin.presentationId]).map((id) =>
+    document.events.findLast(
+      (event): event is ProjectEventOf<'visualization.presented'> =>
+        event.type === 'visualization.presented' && event.payload.presentation.presentationId === id
+    )
+  );
+  const snapshot = projectSnapshotAt(document);
+  const entry = snapshot.artifacts[snapshot.entryArtifactId];
+  const requests = shown.flatMap((event): BuildRequest[] => {
+    const presentation = event?.payload.presentation;
+    if (presentation?.format !== 'browser-bundle-v1') return [];
+    const values = presentationVariant(presentation);
+    return [
+      {
+        seed: presentation.seed,
+        ...(Object.keys(values).length ? { variant: { base: values } } : {})
+      }
+    ];
+  });
+  if (!entry || requests.length !== shown.length) return document;
+  const recorded = await buildProjectSourceBatch(
+    {
+      document,
+      sourceContent: entry.content.text,
+      source: entry.content,
+      sourceLabel: entry.path,
+      requests,
+      purpose: 'restore',
+      input: 'committed-artifact',
+      operationId
+    },
+    dependencies.projectService
+  );
+  if (!batchSucceeded(recorded)) return recorded.document;
+  let current = recorded.document;
+  const [left, right] = shown.map((event) => event?.payload);
+  const pair: PairQuestion | undefined =
+    next && left?.question && right
+      ? {
+          question: left.question,
+          labels: [left.label ?? '', right.label ?? ''],
+          ...(left.brief && right.brief
+            ? { brief: { key: left.brief.key, tags: [left.brief.tag, right.brief.tag] } }
+            : {}),
+          ...(left.differsAt ? { differsAt: left.differsAt } : {})
+        }
+      : undefined;
+  if (next)
+    current = await appendProjectEvents(
+      current,
+      [
+        draftEvent({
+          type: 'visualization.candidates-advanced',
+          actor: { kind: 'system' },
+          operationId,
+          payload: { presentations: next.presentationIds, reason: 'agent-request' }
+        })
+      ],
+      dependencies.projectService
+    );
+  return activateBuiltPresentations(
+    { document: current, builds: recorded.builds },
+    dependencies.projectService,
+    { kind: 'system' },
+    pair
+  );
 }
 
 /** A choice with the values the assistant fixed, which it neither changes nor draws afresh. */

@@ -116,10 +116,30 @@ export type WaitingComparison = {
   variants: DesignValues[];
 };
 
-/** The assistant's comparisons of the current source still to answer, the one showing first. */
-export function waitingComparisons(document: ProjectDocument): WaitingComparison[] {
+/**
+ * The assistant's comparisons still to answer, the one showing first: of the current source, or
+ * with `everySource`, of any source, as those asked before the source changed.
+ */
+export function waitingComparisons(
+  document: ProjectDocument,
+  { everySource = false }: { everySource?: boolean } = {}
+): WaitingComparison[] {
+  const sources = everySource
+    ? new Set(
+        document.events.flatMap((event) =>
+          event.type === 'visualization.presented' &&
+          event.payload.question &&
+          event.payload.presentation.format === 'browser-bundle-v1'
+            ? [event.payload.presentation.source.sha256]
+            : []
+        )
+      )
+    : [activeSourceSha256(document)];
+  const available = [...sources]
+    .flatMap((sha256) => presentationBufferState(document, 0, sha256).available)
+    .toSorted((left, right) => left.eventId - right.eventId);
   const sets = new Map<string, WaitingComparison>();
-  for (const { eventId, displaySetId } of presentationBufferState(document, 0).available) {
+  for (const { eventId, displaySetId } of available) {
     const event = document.events[eventId - 1];
     if (event?.type !== 'visualization.presented' || !event.payload.question || !displaySetId)
       continue;
