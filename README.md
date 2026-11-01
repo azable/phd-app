@@ -276,6 +276,15 @@ draws it with, and in the first top-level node's chip the page frame
 no visible presentation chose are greyed out. Comparisons align by master step,
 showing the previous step on the side that omits one.
 
+Laying a presentation out, the server also describes what each step draws: each
+element's box, font, paint and text, and each free layout's places and links,
+its ids and anything under a pixel left out
+([`library/record.ts`](src/lib/modes/sverlin/library/record.ts)). The two sides
+of an assistant's comparison are compared step by step
+([`differing-steps.ts`](src/lib/shared/differing-steps.ts)): a pair drawing
+alike at every step goes back to the assistant as a comparison it cannot ask,
+and the steps where a pair differs are recorded with it.
+
 Choose the visualization mode before a starting template on the Projects page or
 in the workspace's **New project** dialog. HTML and HTML/JavaScript modes offer
 the blank starter; Sverlin also offers linear search.

@@ -32,6 +32,7 @@ import {
   presentationVariant
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { differingSteps } from '$lib/shared/differing-steps';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
 import {
   getChatbot,
@@ -992,8 +993,9 @@ async function runSverlinAssistantTurn(
       // attempts left, a repair is told to keep the others unchanged, so its reply counts only
       // what is built; on the last, the others are built without them and the reply says which
       // were left out. None buildable, or a changed source's first pair, built already, among them,
-      // the comparisons are repaired as a whole.
+      // the comparisons are repaired as a whole; a first pair drawing alike gives way to the next.
       let leftOut: string | undefined;
+      const droppedQuestions: string[] = [];
       const screen = async (problems: string[][], firstBuilt: boolean) => {
         if (!pairs || candidate === undefined || !problems.flat().length) return undefined;
         const asked = pairs;
@@ -1037,7 +1039,8 @@ async function runSverlinAssistantTurn(
           dependencies.projectService
         );
         pairs = kept.map((index) => asked[index]);
-        leftOut = `I left out ${list(dropped.map(({ question }) => `“${question}”`))}, which could not be built as asked.`;
+        droppedQuestions.push(...dropped.map(({ question }) => `“${question}”`));
+        leftOut = `I left out ${list(droppedQuestions)}, which could not be built as asked.`;
         return undefined;
       };
       switch (decision.action) {
@@ -1132,20 +1135,50 @@ async function runSverlinAssistantTurn(
         seeds = [...seeds, ...freshPresentationSeeds(size - seeds.length, seeds)];
       const batchSeeds = seeds.slice(0, size);
       const randomised = variant.randomise;
-      // Comparisons build their first pair alone, so it shows before the rest are built.
-      const requests = pairs
-        ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs.slice(0, 1))
-        : basedRequests(batchSeeds, variant.base, variant.chosen, randomised === true).map(
-            (request, index) =>
-              index === 0 && Array.isArray(randomised) && randomised.length
-                ? { ...request, variant: { ...request.variant, randomise: randomised } }
-                : request
-          );
-      const built = await buildCandidateBatch(
-        { document: current, candidate, requests, operationId, attempt },
-        dependencies
-      );
-      current = built.document;
+      // Comparisons build their first pair alone, so it shows before the rest are built; one whose
+      // sides draw alike, left out on the last attempt, gives way to the next.
+      let built: Awaited<ReturnType<typeof buildCandidateBatch>>;
+      // The steps at which the first pair's sides draw differently, where the server laid them out.
+      let differsAt: number[] | undefined;
+      for (;;) {
+        const requests = pairs
+          ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs.slice(0, 1))
+          : basedRequests(batchSeeds, variant.base, variant.chosen, randomised === true).map(
+              (request, index) =>
+                index === 0 && Array.isArray(randomised) && randomised.length
+                  ? { ...request, variant: { ...request.variant, randomise: randomised } }
+                  : request
+            );
+        built = await buildCandidateBatch(
+          { document: current, candidate, requests, operationId, attempt },
+          dependencies
+        );
+        current = built.document;
+        const [first] = built.recorded.builds;
+        if (!pairs || !batchSucceeded(built.recorded) || !first?.result.ok) break;
+        const guard = {
+          tree: pictureTree(candidate),
+          base: { ...viewed, ...variant.chosen },
+          settled: {}
+        };
+        // A changed source's design is known only once built; a vary's was checked before.
+        const problems = checked
+          ? pairs.map((): string[] => [])
+          : comparisonProblems(
+              pairs,
+              designVariables(first.result.bundle),
+              guard,
+              briefSteering(projectBrief(current.events, brief))
+            );
+        checked = true;
+        const designed = problems[0].length > 0;
+        differsAt = pairDifferences(built.recorded.builds);
+        if (differsAt?.length === 0) problems[0].push(drawnAlikeProblem(pairs[0], guard.base));
+        const asked = pairs[0];
+        const screened = await screen(problems, designed);
+        if (screened) return screened;
+        if (pairs[0] === asked) break;
+      }
       if (pairs && !batchSucceeded(built.recorded)) {
         // A value the first comparison sets that the source does not offer.
         const unoffered = designValueProblems(built.recorded);
@@ -1158,19 +1191,6 @@ async function runSverlinAssistantTurn(
           );
       }
       if (batchSucceeded(built.recorded)) {
-        const [first] = built.recorded.builds;
-        if (pairs && !checked && first?.result.ok) {
-          const screened = await screen(
-            comparisonProblems(
-              pairs,
-              designVariables(first.result.bundle),
-              { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
-              briefSteering(projectBrief(current.events, brief))
-            ),
-            true
-          );
-          if (screened) return screened;
-        }
         // The assistant is the one author of a new or edited source: its first build stands. Only
         // the presentations a vary or resample with a count queues, more variants of the source as
         // it is, show the variants the chooser picks; the first build stands if that fails.
@@ -1202,7 +1222,7 @@ async function runSverlinAssistantTurn(
             ...('summary' in decision ? { summary: decision.summary } : {}),
             operationId,
             ...(pairs
-              ? { setSize: 2 as const, pairs: [pairQuestion(pairs[0])] }
+              ? { setSize: 2 as const, pairs: [pairQuestion(pairs[0], differsAt)] }
               : queued
                 ? { setSize: presentationCount }
                 : {})
@@ -1803,12 +1823,41 @@ function comparisonRequests(
   );
 }
 
-function pairQuestion({ question, left, right, brief }: Comparisons[number]): PairQuestion {
+function pairQuestion(
+  { question, left, right, brief }: Comparisons[number],
+  differsAt?: readonly number[]
+): PairQuestion {
   return {
     question,
     labels: [left.label, right.label],
-    ...(brief ? { brief: { key: brief.attribute, tags: [brief.left, brief.right] } } : {})
+    ...(brief ? { brief: { key: brief.attribute, tags: [brief.left, brief.right] } } : {}),
+    ...(differsAt ? { differsAt } : {})
   };
+}
+
+/**
+ * The steps at which a pair's two builds draw differently, from what the server laid out (see
+ * ModeBuildResult's drawn); unknown where either was not laid out there, as with server layout
+ * off, or the two keep different steps.
+ */
+function pairDifferences(builds: readonly RecordedBuild[]): number[] | undefined {
+  const [left, right] = builds.map(({ result }) => (result.ok ? result.bundle : undefined));
+  if (!left || !right || JSON.stringify(left.masterSteps) !== JSON.stringify(right.masterSteps))
+    return undefined;
+  return differingSteps(left.drawn, right.drawn);
+}
+
+/** Why a comparison whose two sides draw the same picture at every step cannot be asked. */
+function drawnAlikeProblem(
+  { question, left, right }: Comparisons[number],
+  base: DesignValues
+): string {
+  const sides = [designValues(left.values), designValues(right.values)];
+  const changed = Object.keys({ ...sides[0], ...sides[1] }).filter(
+    (variable) => (sides[0][variable] ?? base[variable]) !== (sides[1][variable] ?? base[variable])
+  );
+  const named = new Intl.ListFormat('en', { type: 'conjunction' }).format(changed);
+  return `Comparison 1 (“${question}”): its two sides draw the same at every step: ${named} ${changed.length > 1 ? 'change' : 'changes'} nothing visible here. Compare a choice that shows, or leave it out.`;
 }
 
 /** Why a comparison cannot ask the brief attribute it names by showing, if it cannot. */
@@ -1925,13 +1974,16 @@ async function presentRemainingComparisons(
       dependencies
     );
     document = built.document;
-    if (batchSucceeded(built.recorded))
-      document = await activateBuiltPresentations(
-        built.recorded,
-        dependencies.projectService,
-        options.actor,
-        pairQuestion(pair)
-      );
+    if (!batchSucceeded(built.recorded)) continue;
+    // A pair whose sides draw alike at every step is left out, as one that fails to build.
+    const differsAt = pairDifferences(built.recorded.builds);
+    if (differsAt?.length === 0) continue;
+    document = await activateBuiltPresentations(
+      built.recorded,
+      dependencies.projectService,
+      options.actor,
+      pairQuestion(pair, differsAt)
+    );
   }
   return document;
 }

@@ -20,6 +20,11 @@ export type ServerLayout = {
    * most screens; none where the server could not lay the presentation out, and the page then does.
    */
   geometries?: Geometry[];
+  /**
+   * What each step draws, as a key alike for steps drawing the same picture (see recordLayouts);
+   * none where the server could not lay the presentation out.
+   */
+  drawn?: string[];
   /** Why it could not. */
   failure?: string;
   /** Steps the view failed to draw, with why. */
@@ -109,6 +114,8 @@ async function layOutIsolated(
         })) as string
       ) as Geometry;
     const geometries = [await at(1)];
+    const drawnJson = await global.get('__sverlinDrawn', { copy: true });
+    const drawn = typeof drawnJson === 'string' ? (JSON.parse(drawnJson) as string[]) : undefined;
     // Most screens draw at 1 or 2 device pixels a CSS pixel; at 2 a border of half a pixel, or one
     // and a half, keeps its width, where at 1 it snaps to a whole one.
     if (geometries[0].borders.some((width) => snappedBorder(width, 2) !== snappedBorder(width, 1)))
@@ -118,7 +125,7 @@ async function layOutIsolated(
         errors,
         failure: `no embedded font has ${[...measure.missing].slice(0, 10).join(' ')}`
       };
-    return { geometries, errors };
+    return { geometries, ...(drawn ? { drawn } : {}), errors };
   } catch (cause) {
     return { errors, failure: cause instanceof Error ? cause.message : String(cause) };
   } finally {

@@ -53,7 +53,8 @@ export async function buildBatch(
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
           runs: prepared.pauses.runs,
-          structures: prepared.design.structures
+          structures: prepared.design.structures,
+          ...(bundle.layout?.drawn ? { drawn: bundle.layout.drawn } : {})
         }
       });
     } catch (cause) {

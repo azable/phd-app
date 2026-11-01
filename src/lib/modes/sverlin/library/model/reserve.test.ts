@@ -5,7 +5,7 @@ import { parseSheet } from './css';
 import type { TextMeasure } from './layout';
 import { styler } from './look';
 import { readMarkup } from './markup';
-import { probeComponent, reserveSizes, withLines, type Drawing } from './reserve';
+import { describeDrawn, probeComponent, reserveSizes, withLines, type Drawing } from './reserve';
 import type { ModelElement } from './tree';
 
 /** Every character as wide as half its font's size; a font's ascent 0.8 of it, descent 0.2. */
@@ -138,5 +138,27 @@ describe('withLines', () => {
       { 'data-sv-link': '3', 'data-sv-pair': 'L|a|c', 'data-sv-way': 'forward' }
     ]);
     expect(withLines(markup, new Set())).toBe(markup);
+  });
+});
+
+describe('describeDrawn', () => {
+  const drawn = (content: string) => describeDrawn(frame(content), options(memoryOf()));
+
+  it('describes alike what draws alike, whatever its ids, and apart what is seen to differ', () => {
+    const picture = drawn(row('p', cell('a', '1'), cell('b', '22')));
+    expect(drawn(row('q', cell('x', '1'), cell('y', '22')))).toBe(picture);
+    expect(drawn(row('p', cell('a', '1'), cell('b', '23')))).not.toBe(picture);
+    expect(
+      drawn(row('p', cell('a', '1', ' style="background-color: red"'), cell('b', '22')))
+    ).not.toBe(picture);
+    expect(drawn(row('p', cell('a', '1', ' style="font-size: 20px"'), cell('b', '22')))).not.toBe(
+      picture
+    );
+  });
+
+  it('leaves out what moves or grows by less than a pixel', () => {
+    const sized = (width: string) => drawn(cell('a', '1', ` style="width: ${width}"`));
+    expect(sized('40.2px')).toBe(sized('40px'));
+    expect(sized('43px')).not.toBe(sized('40px'));
   });
 });

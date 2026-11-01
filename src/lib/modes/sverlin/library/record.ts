@@ -11,12 +11,14 @@ import type { TextMeasure } from './model/layout';
 import { styler } from './model/look';
 import { readMarkup } from './model/markup';
 import {
+  describeDrawn,
   elementsUnder,
   probeComponent,
   reserveSizes,
   withLines,
   type Drawing,
-  type Reservation
+  type Reservation,
+  type ReserveOptions
 } from './model/reserve';
 import type { ModelElement } from './model/tree';
 import { withValue, type Layouts, type StepDrawing, type Steps, type StepState } from './steps';
@@ -48,6 +50,11 @@ export type RecordOptions = {
   ancestors: readonly ModelElement[];
   /** A step the view failed to draw, with why. */
   report: (cause: unknown, step?: number) => void;
+  /**
+   * Collects what each step draws, once laid out, as a key (see describeDrawn): two steps, of one
+   * presentation or two, have the same key where they draw the same picture.
+   */
+  drawn?: string[];
   /** Gives the page back for a moment between the parts of the work. */
   pause?: () => Promise<void>;
   /** Called as each part ends. */
@@ -183,5 +190,47 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     if (fit !== undefined) layouts.fits.set(step, fit);
   });
   options.timed?.('recording');
+  if (options.drawn) options.drawn.push(...drawnKeys(options, reserveOptions()));
   return reservation;
+}
+
+/**
+ * Each step's key: its two states (see stepsOf), each drawn as it is shown, with the layout memory
+ * now complete, and the fit it is drawn at.
+ */
+function drawnKeys(options: RecordOptions, reserve: ReserveOptions): string[] {
+  const { steps, layouts } = options;
+  const described = new Map<number, string>();
+  for (const state of steps.distinct) {
+    try {
+      const { body } = options.render(steps.drawingOf(state, 'showing', layouts));
+      const markup = withLines(readMarkup(body, layer), layouts.lines);
+      described.set(state, describeDrawn(markup, reserve) ?? '');
+    } catch {
+      // A state the view fails to draw is reported as it is measured.
+      described.set(state, 'failed');
+    }
+  }
+  return Array.from({ length: steps.stepCount }, (_, step) =>
+    hashed(
+      [2 * step, 2 * step + 1]
+        .map((state) => described.get(steps.drawnLike[state]) ?? '')
+        .concat(String(layouts.fits.get(2 * step + 1) ?? ''))
+        .join('\n\n')
+    )
+  );
+}
+
+/** A 53-bit hash of text, in hexadecimal (cyrb53, public domain): keys compared, not secured. */
+function hashed(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 }

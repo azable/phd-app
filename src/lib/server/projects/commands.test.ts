@@ -2784,7 +2784,8 @@ describe('several variants from chat', () => {
                 presentation: event.payload.presentation,
                 question: event.payload.question,
                 label: event.payload.label,
-                brief: event.payload.brief
+                brief: event.payload.brief,
+                differsAt: event.payload.differsAt
               }
             }
           ]
@@ -3203,6 +3204,93 @@ describe('several variants from chat', () => {
       type: 'markdown',
       text: 'Two wait. I left out “Cells or tallies for the numbers?”, which could not be built as asked.'
     });
+  });
+
+  // A cell's least size is under what the highlight keeps, so the two sides draw alike.
+  const sizes = {
+    question: 'Smaller or larger cells?',
+    left: { label: 'smaller', values: [{ variable: 'IntCell.minSize', value: 1 }] },
+    right: { label: 'larger', values: [{ variable: 'IntCell.minSize', value: 2 }] }
+  };
+  /** Run with each build laid out on the server, which tells what each step draws. */
+  async function laidOut<T>(run: () => Promise<T>): Promise<T> {
+    process.env.SVERLIN_SERVER_LAYOUT = 'on';
+    try {
+      return await run();
+    } finally {
+      process.env.SVERLIN_SERVER_LAYOUT = 'off';
+    }
+  }
+
+  it('sends back a comparison whose sides draw alike at every step, and records where a pair differs', async () => {
+    const result = await laidOut(() =>
+      attempts(
+        ({ attempt }) =>
+          attempt.number === 1
+            ? vary('Two wait.', { comparisons: [sizes, marks] })
+            : vary('One to answer.', { comparisons: [marks] }),
+        'Drawn alike'
+      )
+    );
+
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'comparison_not_built',
+        message:
+          'Comparison 1 (“Smaller or larger cells?”): its two sides draw the same at every step: IntCell.minSize changes nothing visible here. Compare a choice that shows, or leave it out.'
+      })
+    );
+    // The highlight shows from the second step, where the search first checks a cell.
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
+      [1, 2, 3, 4, 5],
+      [1, 2, 3, 4, 5]
+    ]);
+  });
+
+  it('leaves out a comparison drawing alike on the last attempt, showing the next first', async () => {
+    const result = await laidOut(() =>
+      attempts(
+        ({ attempt }) => ({
+          ...vary('Two wait.', { comparisons: [sizes, marks] }),
+          ...(attempt.purpose === 'fallback'
+            ? { recovery: { struggledWith: 'the sizes', simplified: 'the questions' } }
+            : {})
+        }),
+        'Alike to the last'
+      )
+    );
+
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
+    expect(replies(result.appendedEvents)[0].content.at(-1)).toEqual({
+      type: 'markdown',
+      text: 'Two wait. I left out “Smaller or larger cells?”, which could not be built as asked.'
+    });
+  });
+
+  it('leaves out a later comparison drawing alike, as one that fails to build', async () => {
+    const result = await laidOut(() =>
+      attempts(() => vary('Two wait.', { comparisons: [marks, sizes] }), 'Later alike')
+    );
+
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
+  });
+
+  it('checks nothing drawn where builds are not laid out on the server', async () => {
+    const result = await attempts(
+      () => vary('Two wait.', { comparisons: [sizes] }),
+      'Not laid out'
+    );
+
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
+      undefined,
+      undefined
+    ]);
   });
 
   const caption = [

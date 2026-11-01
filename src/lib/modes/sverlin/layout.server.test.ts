@@ -10,6 +10,7 @@ import { layOut } from './library/model/layout';
 import type { ModelElement } from './library/model/tree';
 import { fontList } from './library/fonts';
 import { layOutOnServer } from './layout.server';
+import { differingSteps } from '$lib/shared/differing-steps';
 
 /** A server bundle whose layout answers with what it is given, as geometry would come back. */
 const answering = (body: string) =>
@@ -63,6 +64,22 @@ describe('laying out on the server', () => {
     const again = await bundlePresentation(prepared, 1, {}, { serverLayout: true });
     expect(again.layout?.cached).toBe(true);
     expect(again.javascript).toBe(first.javascript);
+  }, 60_000);
+
+  it('describes what each step draws, alike where a value changes nothing seen', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
+    const prepared = prepareSvelteComponent(source);
+    const drawnWith = async (seed: number, chosen: Record<string, string | number>) =>
+      (await bundlePresentation(prepared, seed, { chosen }, { serverLayout: true })).layout?.drawn;
+    const starter = await drawnWith(1, {});
+    expect(starter).toHaveLength(17);
+    // Another seed places nothing here; a cell's least size is under what the pointer keeps.
+    expect(await drawnWith(2, {})).toEqual(starter);
+    expect(await drawnWith(2, { 'IntCell.minSize': 1 })).toEqual(starter);
+    // The pointer's fill shows from the second step, where mid first points into the cells.
+    expect(
+      differingSteps(starter, await drawnWith(2, { 'Arrow.Pointed.fill': 'red-200' }))
+    ).toEqual(Array.from({ length: 16 }, (_, index) => index + 1));
   }, 60_000);
 
   it('lays a node out in its case, wider uppercase, alike at the starter', async () => {

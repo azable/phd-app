@@ -186,9 +186,17 @@ export type SvelteBundle = {
   leftOut: string[];
   /**
    * With layout on the server asked for: whether the page is given every step's layout, how long
-   * working it out took, and, where it is not, why (see layout.server.ts).
+   * working it out took, and, where it is not, why, and what each step draws (see
+   * layout.server.ts).
    */
-  layout?: { server: boolean; ms: number; cached: boolean; failure?: string; errors: string[] };
+  layout?: {
+    server: boolean;
+    ms: number;
+    cached: boolean;
+    failure?: string;
+    errors: string[];
+    drawn?: string[];
+  };
 };
 
 /** How a presentation is bundled. */

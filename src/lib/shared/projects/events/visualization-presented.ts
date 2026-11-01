@@ -26,7 +26,12 @@ export const visualizationPresentedEventSchema = v.object({
      * With a question, the brief attribute the pair asks by showing and the tag this side stands
      * for, as tone restrained: preferring this side sets it (see shared/projects/brief.ts).
      */
-    brief: v.optional(v.object({ key: v.picklist(briefKeys), tag: v.string() }))
+    brief: v.optional(v.object({ key: v.picklist(briefKeys), tag: v.string() })),
+    /**
+     * With a question, the steps, counted from 0, at which the pair's two sides draw differently,
+     * as the server laid them out (see shared/differing-steps.ts); unset where it did not.
+     */
+    differsAt: v.optional(v.array(naturalSchema))
   })
 });
 

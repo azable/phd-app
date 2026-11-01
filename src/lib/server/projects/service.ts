@@ -1098,13 +1098,15 @@ async function recordBuildResult(
 }
 
 /**
- * The question an assistant's comparison asks, what the participant would call each side, and the
- * brief attribute it asks by showing, with the tag each side stands for.
+ * The question an assistant's comparison asks, what the participant would call each side, the
+ * brief attribute it asks by showing, with the tag each side stands for, and the steps at which
+ * the two sides draw differently, where the server laid them out.
  */
 export type PairQuestion = {
   question: string;
   labels: readonly [string, string];
   brief?: { key: BriefKey; tags: readonly [string, string] };
+  differsAt?: readonly number[];
 };
 
 /** Promote a complete successful batch to one synchronized active display set. */
@@ -1167,7 +1169,8 @@ export async function activateBuiltPresentations(
           slot: slot as 0 | 1,
           presentation,
           ...(pair ? { question: pair.question, label: pair.labels[slot] } : {}),
-          ...(pair?.brief ? { brief: { key: pair.brief.key, tag: pair.brief.tags[slot] } } : {})
+          ...(pair?.brief ? { brief: { key: pair.brief.key, tag: pair.brief.tags[slot] } } : {}),
+          ...(pair?.differsAt ? { differsAt: [...pair.differsAt] } : {})
         }
       })
     ),

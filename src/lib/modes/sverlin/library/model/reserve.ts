@@ -21,7 +21,7 @@ import type { Reader } from '../node/reader';
 import { solveRecorded } from '../node/span';
 import type { LayoutMemory } from '../type-context';
 import type { Rule } from './css';
-import { layOut, type ModelLayout, type TextMeasure } from './layout';
+import { layOut, type Box, type ModelLayout, type TextMeasure } from './layout';
 import type { Look, Styled, Styler } from './look';
 import { classesOf, isElement, type ModelElement } from './tree';
 
@@ -358,6 +358,7 @@ function sizer(options: ReserveOptions) {
     arrangedSize,
     alone,
     layOutAlone,
+    layoutReader,
     hostReader,
     extentAlone,
     sizeAlone,
@@ -580,4 +581,145 @@ export function withLines(element: ModelElement, lines: ReadonlySet<string>): Mo
 export function* elementsUnder(element: ModelElement): Generator<ModelElement> {
   yield element;
   for (const child of elementsOf(element)) yield* elementsUnder(child);
+}
+
+/**
+ * What a step draws, laid out as it is shown, as text: every element's box, font, paint and text,
+ * each free layout's children where its solution places them with the links it draws, and the
+ * links a row or column routes over its children. Ids, which tell nothing about the picture, are
+ * left out, so two presentations drawing the same picture describe it alike (see drawnText).
+ */
+export function describeDrawn(markup: ModelElement, options: ReserveOptions): string | undefined {
+  const model = sizer(options);
+  const at = model.read({ markup });
+  if (!at) return undefined;
+  const laid = model.layOutAlone(at, at.frame, true);
+  const parts: string[] = [];
+  const walk = (
+    element: ModelElement,
+    boxIn: (inner: ModelElement) => Box,
+    x: number,
+    y: number
+  ) => {
+    const { attributes } = element;
+    if (attributes['data-sv-link'] !== undefined || attributes['data-sv-link-label'] !== undefined)
+      return;
+    const look = at.styled.get(element)?.look;
+    if (look?.display === 'none') return;
+    const box = boxIn(element);
+    const left = box.x + x;
+    const top = box.y + y;
+    parts.push(
+      drawnText([
+        element.tag,
+        [left, top, box.width, box.height],
+        look && [look.fontSize, look.fontWeight, look.fontStyle, look.fontFamily, look.border],
+        look && [look.textTransform, look.fontVariantCaps],
+        Object.entries(element.style).filter(([name]) => paintProperties.has(name)),
+        Object.entries(attributes).filter(([name]) => !unseenAttributes.has(name)),
+        element.children.filter((child) => !isElement(child)).join('')
+      ])
+    );
+    if (attributes['data-sv-overlaid'] !== undefined) {
+      const axis = classesOf(element).includes('row') ? 'row' : 'column';
+      const route = routeOverlay(model.layoutReader(at, laid), element, axis);
+      parts.push(drawnText(['links', [left, top], route.lines]));
+      for (const { label, middle } of route.labels)
+        walk(
+          label,
+          (inner) => model.layoutReader(at, laid).boxIn(inner, label),
+          left + middle.x,
+          top + middle.y
+        );
+    }
+    const host = classesOf(element).includes('sv-arranged')
+      ? elementsOf(element).find((child) => classesOf(child).includes('placed'))
+      : undefined;
+    if (!host) {
+      for (const child of elementsOf(element)) walk(child, boxIn, x, y);
+      return;
+    }
+    // Placed as the page places them (see Arranged.svelte), each child laid out on its own.
+    const props = JSON.parse(attributes['data-sv-arrange'] ?? '{}') as ArrangementProps;
+    const read = model.hostReader(at, host);
+    const arranged = arrangeChildren(read, host, props, options.memory);
+    const hostBox = boxIn(host);
+    const hostLeft = hostBox.x + x;
+    const hostTop = hostBox.y + y;
+    parts.push(
+      drawnText(['arranged', [arranged.width, arranged.height], arranged.edges, arranged.styles])
+    );
+    arranged.elements.forEach((child, index) => {
+      const { x: placedX, y: placedY } = arranged.placements[index];
+      walk(child, (inner) => read.boxIn(inner, child), hostLeft + placedX, hostTop + placedY);
+    });
+    for (const edge of arranged.edges) {
+      const label = edge.id === undefined ? undefined : arranged.labels.get(edge.id);
+      if (label)
+        walk(
+          label,
+          (inner) => read.boxIn(inner, label),
+          hostLeft + edge.middle.x,
+          hostTop + edge.middle.y
+        );
+    }
+  };
+  walk(at.frame, (element) => laid.boxes.get(element) ?? { x: 0, y: 0, width: 0, height: 0 }, 0, 0);
+  return parts.join('\n');
+}
+
+/** Inline declarations that paint, rather than size or place, what an element draws. */
+const paintProperties = new Set([
+  'color',
+  'background-color',
+  'background-image',
+  'box-shadow',
+  'border-color',
+  'border-style',
+  'border-radius',
+  'opacity',
+  'visibility',
+  'text-decoration-line',
+  'fill',
+  'stroke',
+  'stroke-width',
+  'stroke-dasharray'
+]);
+
+/**
+ * Attributes that tell nothing drawn: the inline style, read for its paint; ids, which differ
+ * between builds drawing alike; and a free layout's props, drawn as its children's places.
+ */
+const unseenAttributes = new Set([
+  'style',
+  'id',
+  'data-sv-node',
+  'data-sv-identity',
+  'data-sv-slot',
+  'data-sv-item',
+  'data-sv-around',
+  'data-sv-pair',
+  'data-sv-way',
+  'data-sv-ref',
+  'data-sv-component',
+  'data-sv-collection',
+  'data-sv-arrange',
+  'data-from',
+  'data-to'
+]);
+
+/**
+ * A value as text, ids and links' ends as written left out: numbers in whole pixels, so what moves
+ * by less than one is not seen, and numbers within text, as a path's or an opacity, to hundredths.
+ */
+export function drawnText(value: unknown): string {
+  return JSON.stringify(value, (key, inner: unknown) => {
+    if (key === 'id' || key === 'link' || key === 'key') return undefined;
+    if (typeof inner === 'number') return Math.round(inner);
+    if (typeof inner === 'string')
+      return inner.replace(/-?\d*\.\d+/gu, (number) =>
+        String(Math.round(Number(number) * 100) / 100)
+      );
+    return inner;
+  });
 }
