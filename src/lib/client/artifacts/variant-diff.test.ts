@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Chunk } from '@codemirror/merge';
 import { Text } from '@codemirror/state';
 
-import { differingKeys, variantDocument } from './variant-diff';
+import { choiceName, choiceRows, differingKeys, variantDocument } from './variant-diff';
 
 /** The rows of each document the merge view marks as changed, by the key each row sets. */
 function changedKeys(a: string, b: string) {
@@ -67,5 +67,27 @@ describe('variant diff', () => {
       b: ['Here.shown', 'Label.size']
     });
     expect(differingKeys(top, withoutGap)).toEqual(['Box.gap', 'Here.shown', 'Label.size']);
+  });
+});
+
+describe('choices in words', () => {
+  it('names a variable by its kind, prop and place', () => {
+    expect(choiceName('Highlight.Pointed@pair.left.fill')).toBe(
+      'Highlight pointed fill for pair.left'
+    );
+    expect(choiceName('IntCell@i.stroke')).toBe('Int cell stroke for i');
+    expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');
+    expect(choiceName('views.Int@swap.held')).toBe('Int view for swap.held');
+    expect(choiceName('pointers.Index')).toBe('Index pointer');
+    expect(choiceName('pause@insert.swap')).toBe('Pause at insert.swap');
+    expect(choiceName('listing.language')).toBe('Listing language');
+  });
+
+  it('gives each variant’s value as written, shown or hidden for whether something shows', () => {
+    expect(choiceRows([top, bottom], differingKeys(top, bottom))).toEqual([
+      { key: 'Here.shown', name: 'Here', values: ['shown', 'hidden'] },
+      { key: 'Label.size', name: 'Label size', values: ['small', 'large'] }
+    ]);
+    expect(choiceRows([top, {}], ['Box.gap'])[0].values).toEqual(['8', 'not set']);
   });
 });

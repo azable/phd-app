@@ -21,3 +21,70 @@ export function differingKeys(a: DesignValues, b: DesignValues): string[] {
     .filter((key) => !(key in a && key in b && a[key] === b[key]))
     .sort((x, y) => x.localeCompare(y));
 }
+
+/** A variable of a variant in words, with the value each variant shown gives it. */
+export type ChoiceRow = { key: string; name: string; values: string[] };
+
+/** The variables named, each with its value in each variant, in plain words for participants. */
+export function choiceRows(
+  variants: readonly DesignValues[],
+  keys: readonly string[]
+): ChoiceRow[] {
+  return keys.map((key) => ({
+    key,
+    name: choiceName(key),
+    values: variants.map((variant) => choiceValue(key, variant[key]))
+  }));
+}
+
+// The variables of a type's views, by their key's first part, as `views.Int`.
+const viewCategories: Record<string, string> = { views: 'view', pointers: 'pointer' };
+
+/**
+ * A variable's key in words: its kind's and prop's names split into words, and its place, after
+ * `@`, as “for …”: `Highlight.Pointed@pair.left.fill` is “Highlight pointed fill for pair.left”,
+ * `views.Int@swap.held` “Int view for swap.held”, and `pause@insert.swap` “Pause at insert.swap”.
+ * Whether something is shown is said by its value (`choiceValue`), not its name.
+ */
+export function choiceName(key: string): string {
+  const at = key.indexOf('@');
+  const head = at < 0 ? key : key.slice(0, at);
+  const tail = at < 0 ? undefined : key.slice(at + 1);
+  if (head === 'pause') return tail ? `Pause at ${tail}` : 'Pause';
+  const [category, type, ...rest] = head.split('.');
+  if (category in viewCategories && type && !rest.length) {
+    const name = `${words(type)} ${viewCategories[category]}`;
+    return sentence(tail ? `${name} for ${tail}` : name);
+  }
+  // A kind's prop: the key's last part, after the place where there is one.
+  const parts = tail === undefined ? head.split('.') : [...head.split('.'), tail];
+  let place: string | undefined;
+  if (tail !== undefined) {
+    const dot = tail.lastIndexOf('.');
+    place = dot < 0 ? undefined : tail.slice(0, dot);
+    parts[parts.length - 1] = dot < 0 ? tail : tail.slice(dot + 1);
+  }
+  const named = parts.filter((part, index) => !(index === parts.length - 1 && part === 'shown'));
+  const name = named.map(words).join(' ') || key;
+  return sentence(place ? `${name} for ${place}` : name);
+}
+
+/** A variable's value as written, whether something is shown as shown or hidden. */
+export function choiceValue(key: string, value: DesignValues[string] | undefined): string {
+  if (value === undefined) return 'not set';
+  if (typeof value !== 'boolean') return String(value);
+  if (key === 'shown' || key.endsWith('.shown')) return value ? 'shown' : 'hidden';
+  return value ? 'yes' : 'no';
+}
+
+/** A name in lower-case words: `IntCell` is “int cell”, `fill-color` “fill color”. */
+function words(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase();
+}
+
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

@@ -8,7 +8,7 @@
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
   import VariantDiff from '$lib/client/artifacts/VariantDiff.svelte';
-  import { differingKeys, variantDocument } from '$lib/client/artifacts/variant-diff';
+  import { choiceRows, differingKeys, variantDocument } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
@@ -208,6 +208,28 @@
     ...shownVariants.map(({ label }, index) => ({ id: index, name: label }))
   ]);
   const showingDifferences = $derived(differences !== undefined && shownVariant === 'differences');
+  // The choices in words: those that differ, with each side's value, or every choice of the one.
+  const choiceTable = $derived.by(() => {
+    if (!shownVariants.length) return undefined;
+    if (differences && showingDifferences) {
+      const { a, b, keys } = differences;
+      return {
+        caption: `Choices that differ: ${a.label} and ${b.label}`,
+        columns: [a.label, b.label],
+        rows: choiceRows([a.variant, b.variant], keys)
+      };
+    }
+    const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
+    const variant = shownVariants[index]?.variant ?? {};
+    const keys = Object.keys(variant).sort((x, y) => x.localeCompare(y));
+    return { caption: 'Choices of the version', columns: [], rows: choiceRows([variant], keys) };
+  });
+  // In developer view, the choices' document instead, as a diff for a pair.
+  let rawShown = $state(false);
+  const showingRaw = $derived(developerView && rawShown);
+  const optionButton =
+    'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+  const optionOn = 'bg-background text-foreground ring-1 ring-border';
   $effect(() => {
     if (editMode === 'editing' || !variantJson || failed) tab = 'source';
   });
@@ -453,51 +475,109 @@
         </p>
       {/if}
 
-      {#if expanded && tab === 'variant' && differences}
+      {#if expanded && tab === 'variant' && variantJson && choiceTable}
+        <!-- A strip saying whose choices they are, over them in words, or in developer view their
+          document behind Details. One grid holds both, so the strip's group is within the whole. -->
         <div
-          class="flex flex-wrap items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+          class={[
+            'grid min-h-0 grid-cols-[minmax(0,1fr)_auto] text-sm',
+            showingRaw && 'flex-1 grid-rows-[auto_minmax(0,1fr)]'
+          ]}
         >
-          <span class="mr-auto"
-            >Choices: {differences.a.label} vs {differences.b.label} · {differences.keys.length
-              ? `${differences.keys.length} of ${differences.total} differ`
-              : 'the same'}</span
+          <span class="truncate border-b bg-muted px-4 py-2 text-muted-foreground">
+            {#if differences && showingDifferences}
+              Choices: {differences.a.label} vs {differences.b.label} · {differences.keys.length
+                ? `${differences.keys.length} of ${differences.total} differ`
+                : 'the same'}
+            {:else if differences && typeof shownVariant === 'number'}
+              Choices of the {shownVariants[shownVariant]?.label} version
+            {:else}
+              Choices of the version shown
+            {/if}
+          </span>
+          <span
+            class="flex items-center gap-1 border-b bg-muted px-4 py-2 text-muted-foreground"
+            role="group"
+            aria-label="Choices shown"
           >
-          <span class="flex gap-1" role="group" aria-label="Choices shown">
-            {#each shownVariantOptions as { id, name } (id)}
+            {#if differences}
+              {#each shownVariantOptions as { id, name } (id)}
+                <button
+                  type="button"
+                  aria-pressed={shownVariant === id}
+                  class={[optionButton, shownVariant === id ? optionOn : 'hover:text-foreground']}
+                  onclick={() => (shownVariant = id)}>{name}</button
+                >
+              {/each}
+            {/if}
+            {#if developerView}
               <button
                 type="button"
-                aria-pressed={shownVariant === id}
-                class={[
-                  'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                  shownVariant === id
-                    ? 'bg-background text-foreground ring-1 ring-border'
-                    : 'hover:text-foreground'
-                ]}
-                onclick={() => (shownVariant = id)}>{name}</button
+                aria-pressed={showingRaw}
+                class={[optionButton, showingRaw ? optionOn : 'hover:text-foreground']}
+                title="The choices as their document"
+                onclick={() => (rawShown = !rawShown)}>Details</button
               >
-            {/each}
+            {/if}
           </span>
-        </div>
-      {/if}
-
-      {#if expanded && tab === 'variant' && differences && showingDifferences}
-        <div class="min-h-48 flex-1 overflow-hidden">
-          <VariantDiff
-            a={variantDocument(differences.a.variant)}
-            b={variantDocument(differences.b.variant)}
-            aLabel={differences.a.label}
-            bLabel={differences.b.label}
-            ariaLabel={`Choices: ${differences.a.label} vs ${differences.b.label}`}
-          />
-        </div>
-      {:else if expanded && tab === 'variant' && variantJson}
-        <div class="min-h-48 flex-1 overflow-hidden">
-          <CodeMirrorEditor
-            value={variantJson}
-            language="json"
-            editable={false}
-            ariaLabel="Choices of the shown presentations"
-          />
+          {#if showingRaw && differences && showingDifferences}
+            <div class="col-span-2 min-h-48 overflow-hidden">
+              <VariantDiff
+                a={variantDocument(differences.a.variant)}
+                b={variantDocument(differences.b.variant)}
+                aLabel={differences.a.label}
+                bLabel={differences.b.label}
+                ariaLabel={`Choices: ${differences.a.label} vs ${differences.b.label}`}
+              />
+            </div>
+          {:else if showingRaw}
+            <div class="col-span-2 min-h-48 overflow-hidden">
+              <CodeMirrorEditor
+                value={variantJson}
+                language="json"
+                editable={false}
+                ariaLabel="Choices of the shown presentations"
+              />
+            </div>
+          {:else}
+            <div class="col-span-2 max-h-56 overflow-auto">
+              {#if choiceTable.rows.length}
+                <table class="w-full text-left">
+                  <caption class="sr-only">{choiceTable.caption}</caption>
+                  {#if choiceTable.columns.length}
+                    <thead class="text-xs text-muted-foreground">
+                      <tr>
+                        <th scope="col" class="px-4 py-1 font-normal">Choice</th>
+                        {#each choiceTable.columns as column (column)}
+                          <th scope="col" class="px-4 py-1 font-normal capitalize">{column}</th>
+                        {/each}
+                      </tr>
+                    </thead>
+                  {/if}
+                  <tbody>
+                    {#each choiceTable.rows as { key, name, values } (key)}
+                      <tr class="border-t first:border-t-0">
+                        <th
+                          scope="row"
+                          class="px-4 py-1 font-normal"
+                          title={developerView ? key : undefined}>{name}</th
+                        >
+                        {#each values as value, index (index)}
+                          <td class="px-4 py-1 font-mono text-xs wrap-anywhere">{value}</td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {:else}
+                <p class="px-4 py-2 text-muted-foreground">
+                  {differences && showingDifferences
+                    ? 'Both versions make the same choices.'
+                    : 'This version makes no choices.'}
+                </p>
+              {/if}
+            </div>
+          {/if}
         </div>
       {:else if expanded}
         <div class="min-h-48 flex-1 overflow-hidden">
