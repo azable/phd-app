@@ -286,57 +286,79 @@ function exitPoint(box: Box, toward: Point): Point {
 }
 
 /**
- * A curve drawn by curvePath carried on from one end, along the way it leaves there, to the nearest
- * of the boxes drawn at its node, stopping `trim` short for a head; undefined where it already
- * meets one or the way back meets none. A layout solved over every step leaves an arrow at the edge
- * of the room its node keeps for content shown only at some steps, such as a pointer's label under
- * a vertex; where that content is hidden, the arrow then reaches what is drawn.
+ * A curve drawn by curvePath with each end carried in to what its node draws at this step: from the
+ * end towards the middle of the first box drawn there (the element as seen), to the nearest of the
+ * boxes drawn, stopping short by the end's trim for a head; the control points keep their offsets
+ * from the line between the ends, so the curve keeps its bend. Undefined where both ends already
+ * meet what is drawn. A layout solved over every step leaves an arrow at the edge of the room its
+ * node keeps for content shown only at some steps, such as a pointer's label under a vertex, along
+ * the line from the element's middle it was routed on; where that content is hidden, the arrow
+ * reaches what is drawn along that same line, whichever way the curve bends; `drift` is how far
+ * the curve's middle moved.
  */
 export function reachDrawn(
   path: string,
-  end: 'start' | 'end',
-  drawn: readonly Box[],
-  trim: number
-): { path: string; point: Point } | undefined {
+  drawn: { start: readonly Box[]; end: readonly Box[] },
+  trim: { start: number; end: number }
+): { path: string; start: Point; end: Point; drift: Point } | undefined {
   const numbers = path.match(
     /^M(-?[\d.]+),(-?[\d.]+) C(-?[\d.]+),(-?[\d.]+) (-?[\d.]+),(-?[\d.]+) (-?[\d.]+),(-?[\d.]+)$/u
   );
   if (!numbers) return undefined;
   const values = numbers.slice(1).map(Number);
-  const curve = [0, 2, 4, 6].map((i) => ({ x: values[i], y: values[i + 1] }));
-  if (end === 'end') curve.reverse();
-  const [at, ahead] = [
-    curve[0],
-    curve.slice(1).find(({ x, y }) => x !== curve[0].x || y !== curve[0].y)
-  ];
-  if (!ahead) return undefined;
-  const length = Math.hypot(ahead.x - at.x, ahead.y - at.y);
-  const back = { x: (at.x - ahead.x) / length, y: (at.y - ahead.y) / length };
-  // How far back the way it leaves first enters a box drawn there.
-  const entries = drawn.flatMap((box) => {
-    let [near, far] = [0, Infinity];
-    for (const [origin, step, low, high] of [
-      [at.x, back.x, box.left, box.right],
-      [at.y, back.y, box.top, box.bottom]
-    ]) {
-      if (step === 0) {
-        if (origin < low || origin > high) return [];
-        continue;
+  const [a, b, c, d] = [0, 2, 4, 6].map((i) => ({ x: values[i], y: values[i + 1] }));
+  const reached = (at: Point, boxes: readonly Box[], short: number): Point | undefined => {
+    if (!boxes.length) return undefined;
+    const middle = {
+      x: (boxes[0].left + boxes[0].right) / 2,
+      y: (boxes[0].top + boxes[0].bottom) / 2
+    };
+    const length = Math.hypot(middle.x - at.x, middle.y - at.y);
+    if (!length) return undefined;
+    const toward = { x: (middle.x - at.x) / length, y: (middle.y - at.y) / length };
+    // How far towards the middle it first enters a box drawn there.
+    const entries = boxes.flatMap((box) => {
+      let [near, far] = [0, Infinity];
+      for (const [origin, step, low, high] of [
+        [at.x, toward.x, box.left, box.right],
+        [at.y, toward.y, box.top, box.bottom]
+      ]) {
+        if (step === 0) {
+          if (origin < low || origin > high) return [];
+          continue;
+        }
+        const [t1, t2] = [(low - origin) / step, (high - origin) / step].sort((p, q) => p - q);
+        [near, far] = [Math.max(near, t1), Math.min(far, t2)];
       }
-      const [t1, t2] = [(low - origin) / step, (high - origin) / step].sort((a, b) => a - b);
-      [near, far] = [Math.max(near, t1), Math.min(far, t2)];
-    }
-    return near <= far ? [near] : [];
+      return near <= far ? [near] : [];
+    });
+    if (!entries.length) return undefined;
+    const reach = Math.min(...entries) - short;
+    // Within a pixel, it meets it already.
+    return reach < 1 ? undefined : { x: at.x + toward.x * reach, y: at.y + toward.y * reach };
+  };
+  const start = reached(a, drawn.start, trim.start);
+  const end = reached(d, drawn.end, trim.end);
+  if (!start && !end) return undefined;
+  const [from, to] = [start ?? a, end ?? d];
+  const along = (p: Point, q: Point, t: number) => ({
+    x: p.x + (q.x - p.x) * t,
+    y: p.y + (q.y - p.y) * t
   });
-  if (!entries.length) return undefined;
-  const reach = Math.min(...entries) - trim;
-  // Within a pixel, it meets it already.
-  if (reach < 1) return undefined;
-  const point = { x: at.x + back.x * reach, y: at.y + back.y * reach };
-  const reached = [point, ...curve.slice(1)];
-  if (end === 'end') reached.reverse();
-  const [p0, p1, p2, p3] = reached.map(({ x, y }) => `${round(x)},${round(y)}`);
-  return { path: `M${p0} C${p1} ${p2} ${p3}`, point };
+  const kept = (control: Point, t: number) => {
+    const [was, now] = [along(a, d, t), along(from, to, t)];
+    return { x: now.x + control.x - was.x, y: now.y + control.y - was.y };
+  };
+  const curve = [from, kept(b, 1 / 3), kept(c, 2 / 3), to] as const;
+  const [p0, p1, p2, p3] = curve.map(({ x, y }) => `${round(x)},${round(y)}`);
+  // How far its middle moved, which a label on it moves by.
+  const [was, now] = [cubicAt(a, b, c, d, 0.5), cubicAt(...curve, 0.5)];
+  return {
+    path: `M${p0} C${p1} ${p2} ${p3}`,
+    start: from,
+    end: to,
+    drift: { x: now.x - was.x, y: now.y - was.y }
+  };
 }
 
 /** The node around an arrow's end, when the end is a box inside it, and the node's other content. */

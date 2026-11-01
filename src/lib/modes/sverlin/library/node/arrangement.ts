@@ -301,17 +301,22 @@ export function arrangeChildren<E>(
         }));
       };
       const trim = headTrim(edge.head?.shape, edge.head?.size ?? 0);
-      let reached = edge;
-      const start = reachDrawn(
-        reached.path,
-        'start',
-        drawnAt(spec.start ?? spec.from),
-        edge.heads.start ? trim : 0
+      const reached = reachDrawn(
+        edge.path,
+        { start: drawnAt(spec.start ?? spec.from), end: drawnAt(spec.to) },
+        { start: edge.heads.start ? trim : 0, end: edge.heads.end ? trim : 0 }
       );
-      if (start) reached = { ...reached, path: start.path, x1: start.point.x, y1: start.point.y };
-      const end = reachDrawn(reached.path, 'end', drawnAt(spec.to), edge.heads.end ? trim : 0);
-      if (end) reached = { ...reached, path: end.path, x2: end.point.x, y2: end.point.y };
-      return reached;
+      return reached
+        ? {
+            ...edge,
+            path: reached.path,
+            x1: reached.start.x,
+            y1: reached.start.y,
+            x2: reached.end.x,
+            y2: reached.end.y,
+            middle: { x: edge.middle.x + reached.drift.x, y: edge.middle.y + reached.drift.y }
+          }
+        : edge;
     });
   // Children go where the solution over every step put them, and only this step's links are
   // drawn. A child the solution does not know, such as before it is made, is laid out here alone.

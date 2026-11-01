@@ -189,25 +189,62 @@ describe('an arrow reaching what its node draws', () => {
   const caption: Box = { left: 10, top: 50, right: 80, bottom: 74 };
   const label: Box = { left: 15, top: 90, right: 75, bottom: 114 };
   const down = 'M45,180 C45,220 45,260 45,300';
+  const none = { start: 0, end: 0 };
 
-  it('carries on back along the way it leaves to the nearest box drawn', () => {
-    expect(reachDrawn(down, 'start', [name, caption], 0)).toEqual({
-      path: 'M45,74 C45,220 45,260 45,300',
-      point: point(45, 74)
+  it('carries an end towards the middle of what is drawn there, to the nearest box', () => {
+    expect(reachDrawn(down, { start: [name, caption], end: [] }, none)).toMatchObject({
+      path: 'M45,74 C45,149.3 45,224.7 45,300',
+      start: point(45, 74),
+      end: point(45, 300)
     });
-    expect(reachDrawn(down, 'start', [name, caption, label], 0)?.point).toEqual(point(45, 114));
-    // A slanting arrow keeps its slant.
-    const slant = reachDrawn('M60,180 C70,220 80,260 90,300', 'start', [name, caption], 0);
-    expect(slant?.point.y).toBeCloseTo(74, 5);
-    expect(slant?.point.x).toBeCloseTo(60 - (180 - 74) / 4, 5);
+    expect(reachDrawn(down, { start: [name, caption, label], end: [] }, none)?.start).toEqual(
+      point(45, 114)
+    );
+    // A slanting arrow comes in along the line to the name's middle.
+    const slant = reachDrawn(
+      'M60,180 C70,220 80,260 90,300',
+      { start: [name, caption], end: [] },
+      none
+    );
+    expect(slant?.start.y).toBeCloseTo(74, 5);
+    expect(slant?.start.x).toBeCloseTo(60 - (15 * (180 - 74)) / (180 - 25), 5);
   });
 
-  it('stops short for a head, and is left as it is where it meets a box or none lies back', () => {
+  it('reaches what is drawn from a curve leaving sideways, keeping its bend', () => {
+    // Leaving to the right, as an arc between vertices side by side: carried on the way it
+    // leaves, it would never meet the vertex.
+    const bowed = reachDrawn(
+      'M100,180 C160,180 200,250 200,300',
+      { start: [name, caption], end: [] },
+      none
+    );
+    expect(bowed?.start.y).toBeCloseTo(74, 5);
+    expect(bowed?.start.x).toBeCloseTo(100 - (55 * (180 - 74)) / (180 - 25), 5);
+    // The first control point keeps its offset from a third of the way along the line between
+    // the ends, so the curve still leaves bending the same way.
+    const [, k1x, k1y] = /C(-?[\d.]+),(-?[\d.]+)/u.exec(bowed?.path ?? '') ?? [];
+    const third = { x: (bowed!.start.x * 2 + 200) / 3, y: (74 * 2 + 300) / 3 };
+    expect(Number(k1x) - third.x).toBeCloseTo(160 - (100 * 2 + 200) / 3, 0);
+    expect(Number(k1y) - third.y).toBeCloseTo(180 - (180 * 2 + 300) / 3, 0);
+  });
+
+  it('carries both ends, stopping short for a head, and moves the middle with them', () => {
     const up = 'M45,300 C45,260 45,220 45,180';
-    expect(reachDrawn(up, 'end', [name, caption], 9)?.point).toEqual(point(45, 83));
-    expect(reachDrawn('M45,50 C45,100 45,200 45,300', 'start', [name, caption], 0)).toBeUndefined();
-    expect(reachDrawn('M45,83 C45,100 45,200 45,300', 'start', [name, caption], 9)).toBeUndefined();
-    expect(reachDrawn('M150,180 C150,220 150,260 150,300', 'start', [name], 0)).toBeUndefined();
-    expect(reachDrawn('M45,180 L45,300', 'start', [name], 0)).toBeUndefined();
+    expect(reachDrawn(up, { start: [], end: [name, caption] }, { start: 0, end: 9 })?.end).toEqual(
+      point(45, 83)
+    );
+    const below: Box = { left: 20, top: 400, right: 70, bottom: 450 };
+    const both = reachDrawn(down, { start: [name, caption], end: [below] }, none);
+    expect([both?.start, both?.end]).toEqual([point(45, 74), point(45, 400)]);
+    expect(both?.drift.x).toBeCloseTo(0, 5);
+    expect(both?.drift.y).toBeCloseTo((74 + 400) / 2 - 240, 5);
+  });
+
+  it('is left as it is where both ends meet a box, or it is no curve', () => {
+    const drawn = { start: [name, caption], end: [] };
+    expect(reachDrawn('M45,50 C45,100 45,200 45,300', drawn, none)).toBeUndefined();
+    expect(reachDrawn('M45,83 C45,100 45,200 45,300', drawn, { start: 9, end: 0 })).toBeUndefined();
+    expect(reachDrawn(down, { start: [], end: [] }, none)).toBeUndefined();
+    expect(reachDrawn('M45,180 L45,300', drawn, none)).toBeUndefined();
   });
 });
