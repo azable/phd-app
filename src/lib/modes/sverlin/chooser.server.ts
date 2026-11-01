@@ -13,13 +13,11 @@ import chooser from './chooser.md?raw';
 import guide from './README.md?raw';
 
 /**
- * What the chooser is given: whether the source is new or more variants of it are wanted, the
- * source, what it changes, how many variants, its design, the variants of it already seen (each
+ * What the chooser is given when more variants of a source as it is are wanted: the source, what it changes, how many variants, its design, the variants of it already seen (each
  * as the values it differs in), each label's runs, with how many change what the view draws, and
  * each free layout kind's structure.
  */
 export type ChooserProject = {
-  purpose?: 'new-source' | 'resample';
   source: string;
   summary?: string;
   count: number;

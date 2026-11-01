@@ -191,7 +191,6 @@ function botChooser(
       const prompt = await bot.preparePrompt({
         messages: projectConversationMessages(request.document.events),
         project: {
-          purpose: request.purpose,
           source: request.source,
           ...(request.summary ? { summary: request.summary } : {}),
           count: request.count,
@@ -271,7 +270,6 @@ export function chosenVariantRequests(
     };
     const chosen = await chooseVariants(chooser, {
       document: options.document,
-      purpose: 'resample',
       source: artifact.content.text,
       count: options.seeds.length,
       design,
@@ -1749,7 +1747,6 @@ async function chosenBuild(
   );
   const chosen = await chooseVariants(chooser, {
     document: options.document,
-    purpose: 'resample',
     source: options.candidate,
     ...(options.summary ? { summary: options.summary } : {}),
     count: options.seeds.length,

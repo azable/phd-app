@@ -85,11 +85,11 @@ over 20 seconds, gives way to the random draw. The assistant is the one author
 of a turn: its change to the source, or a `vary` without a `count` (which sets
 values without changing the source), shows as one version, its first build, with
 the viewed variant's values where they still fit and the starter's for anything
-new, and no chooser call, except where an `edit` or `revise` gives `values` of
-its own, as the pauses that pace a first version (every label paused `on`
-otherwise), from each label's `runs` in the assistant's context; unlike a
-`vary`'s, these settle nothing; after a manual change the first presentation
-keeps the viewed variant's values and the second is randomised; refills of the
+new, and no chooser call; an `edit` or `revise` may give `values` of its own
+over those, as the pauses that pace a first version (every label paused `on`
+otherwise), from each label's `runs` in the assistant's context, which unlike a
+`vary`'s settle nothing; after a manual change the first presentation keeps the
+viewed variant's values and the second is randomised; refills of the
 presentation buffer stay random, as most are never shown
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
 `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many, the

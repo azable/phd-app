@@ -27,8 +27,6 @@ export type DesignSource = Pick<
 
 export type ChooserRequest = {
   document: ProjectDocument;
-  /** A new source after the assistant's change, or more variants of the source as it is. */
-  purpose: 'new-source' | 'resample';
   source: string;
   summary?: string;
   count: number;
@@ -54,18 +52,12 @@ export type VariantChooser = {
 
 /**
  * The random draw: more variants of a source draw every variable afresh, keeping what
- * randomised() keeps; a new source draws only what is new to it, keeping what was viewed.
+ * randomised() keeps.
  */
 export const randomChooser: VariantChooser = {
   id: 'random',
   async choose(request) {
-    const fresh = Object.keys(request.design.variant ?? {}).filter(
-      (key) => request.design.origins?.[key] === 'starter'
-    );
-    const choice: VariantChoice =
-      request.purpose === 'resample'
-        ? { chosen: {}, randomise: true }
-        : { chosen: {}, ...(fresh.length ? { randomise: fresh } : {}) };
+    const choice: VariantChoice = { chosen: {}, randomise: true };
     return {
       document: request.document,
       choices: Array.from({ length: request.count }, () => choice)

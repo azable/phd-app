@@ -21,13 +21,11 @@ as its own shape, so a pair contrasting forms can show the structure in shapes
 that really differ (its direction turns only a natural or line form); the
 conversation says what the participant asked for.
 
-project.purpose says why you are choosing: "new-source" after the assistant's
-change, or "resample" when the participant asks for other variants of the source
-as it is, with no change from the assistant. project.seen lists the variants of
-this source the participant has already been shown, newest first, each as the
-values it differs in from the starting variant. On a resample, the participant
-has seen these and wants something else: change the open choices those variants
-did not try, and do not return one of them or the starting variant again.
+project.seen lists the variants of this source the participant has already been
+shown, newest first, each as the values it differs in from the starting variant.
+The participant has seen these and wants something else: change the open choices
+those variants did not try, and do not return one of them or the starting
+variant again.
 
 project.settled holds the values earlier preferences and the assistant settled:
 keep them. Hide at most one thing per variant (a kind not shown, a view or
@@ -55,8 +53,8 @@ builds up from the parts paused at inside it, as a comparison from its operands.
 Where a listing shows, a pause at a loop’s or an if’s body lights all the code
 its run ran, and one at its test only the test’s line, though it draws nothing
 new: pause at either or neither, by whether a step should show a pass’s work or
-where the code goes next. Pace each new label of a new source so; keep the
-pauses of labels already seen unless the participant asks for other steps.
+where the code goes next. The assistant paced the source as it wrote it: vary
+its pauses as any other open choice, by these rules.
 
 What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.

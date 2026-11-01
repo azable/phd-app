@@ -1,14 +1,10 @@
 /**
- * The Sverlin chooser on OpenAI's Decisions API: every open variable asked as one choice question,
- * each answered with the probability of every option. The first variant keeps each variable's
- * starting value unless another option is clearly likelier; each further variant changes the
- * variables the answers were least sure of to their next likeliest, so a pair differs in the few
- * choices still open and stays alike elsewhere.
- *
- * Asked so, every answer keeps its starting value with probability 0.99 to 1, so more variants of
- * a source as it is (a resample) are asked differently: each visible choice (what is shown, the
- * listing, views, forms, pacing) is asked which other option is most worth showing next, or to keep
- * it, and every variant changes the few the answers most want changed, never one already seen.
+ * The Sverlin chooser on OpenAI's Decisions API, making more variants of a source as it is: each
+ * visible choice (what is shown, the listing, views, forms, pacing) is asked as one choice question,
+ * which other option is most worth showing next, or to keep it, each answered with the probability
+ * of every option, and every variant changes the few the answers most want changed, never one
+ * already seen. Asked instead for each variable's value, every answer keeps its starting value with
+ * probability 0.99 to 1.
  */
 
 import {
@@ -27,15 +23,6 @@ import sverlinChooser, { type ChooserOutput, type ChooserProject } from './choos
 
 type DesignValue = string | number | boolean;
 
-/** How many variables each further variant changes from the first. */
-const changedPerVariant = 3;
-
-/**
- * How much likelier than its starting value an option must be for the first variant to take it:
- * answered alone, each question drifts from its starting value even where nothing asks it to.
- */
-const changeMargin = 0.3;
-
 /** How many visible choices each variant of a resample changes. */
 const changedPerResample = 2;
 
@@ -51,8 +38,6 @@ function priority(key: string): number {
   return 4;
 }
 
-const encoded = (value: DesignValue) => (typeof value === 'boolean' ? value : String(value));
-
 type Asked = { variable: string; value: DesignValue; options: readonly DesignValue[] };
 
 /** The variables asked: every one with a choice to make, the most telling first, within the limit. */
@@ -66,15 +51,6 @@ function askedVariables(project: ChooserProject): Asked[] {
     .filter(({ options }) => options.length > 1)
     .sort((a, b) => priority(a.variable) - priority(b.variable))
     .slice(0, maximumDecisionQuestions);
-}
-
-export function chooserQuestions(asked: readonly Asked[]): ChoiceQuestion[] {
-  return asked.map(({ variable, value, options }) => ({
-    type: 'choice',
-    name: variable,
-    instructions: `The value of ${variable} in the next variant. It starts as ${JSON.stringify(value)}: keep it unless the conversation asks for another, or another is a choice still open and worth showing.`,
-    choices: options.map((option) => ({ value: encoded(option) }))
-  }));
 }
 
 /** The choices a participant sees change at once: what is shown, the listing, views, layouts, forms, pacing. */
@@ -174,54 +150,10 @@ function decisionsInput(request: ChatAdapterRequest): string {
   ].join('\n\n');
 }
 
-/** The variants the answers give, as chooser.md's output: each the values it changes. */
-export function chosenVariants(
-  asked: readonly Asked[],
-  count: number,
-  response: Pick<DecisionsResponse, 'answers'>
-): ChooserOutput {
-  const ranked = asked.map((variable, index) => {
-    const question = chooserQuestions([variable])[0];
-    const answer =
-      response.answers.find(({ name }) => name === variable.variable) ?? response.answers[index];
-    const probabilities = answer ? optionProbabilities(answer, question.choices) : new Map();
-    const options = [...variable.options].sort(
-      (a, b) => (probabilities.get(encoded(b)) ?? 0) - (probabilities.get(encoded(a)) ?? 0)
-    );
-    const likeliest = probabilities.size ? options[0] : variable.value;
-    const likelier =
-      (probabilities.get(encoded(likeliest)) ?? 0) -
-      (probabilities.get(encoded(variable.value)) ?? 0);
-    const best = likelier >= changeMargin ? likeliest : variable.value;
-    return { ...variable, options, best, sureness: probabilities.get(encoded(best)) ?? 1 };
-  });
-  const first = new Map(ranked.map(({ variable, best }) => [variable, best]));
-  // Least sure first: the choices a participant's answer would say most about.
-  const open = ranked
-    .filter(({ options, best }) => options.some((option) => option !== best))
-    .sort((a, b) => a.sureness - b.sureness);
-  const variants = Array.from({ length: count }, (_, index) => {
-    const values = new Map(first);
-    for (const variable of open.slice((index - 1) * changedPerVariant, index * changedPerVariant))
-      values.set(variable.variable, variable.options.find((option) => option !== variable.best)!);
-    // A variant identical to where it started changes the least sure choice instead.
-    if (ranked.every(({ variable, value }) => values.get(variable) === value) && open[0])
-      values.set(open[0].variable, open[0].options.find((option) => option !== open[0].value)!);
-    return {
-      values: ranked
-        .filter(({ variable, value }) => values.get(variable) !== value)
-        .map(({ variable }) => ({ variable, value: values.get(variable)! })),
-      randomise: []
-    };
-  });
-  return { variants };
-}
-
 export const decisionsChooserAdapter: ChatAdapter = {
   id: 'openai-decisions',
   async generateReply(request) {
     const project = (request.context as { project: ChooserProject }).project;
-    const resample = project.purpose === 'resample';
     const guard = {
       tree: pictureTree(project.source),
       base: Object.fromEntries(
@@ -229,21 +161,19 @@ export const decisionsChooserAdapter: ChatAdapter = {
       ),
       settled: project.settled ?? {}
     };
-    const asked = askedVariables(project).filter(({ variable }) => !resample || visible(variable));
+    const asked = askedVariables(project).filter(({ variable }) => visible(variable));
     const response = await createDecisions(
       {
         model: request.parameters.model,
         input: decisionsInput(request),
-        questions: resample ? resampleQuestions(asked) : chooserQuestions(asked)
+        questions: resampleQuestions(asked)
       },
       request.signal
     );
     return {
-      output: resample
-        ? resampledVariants(asked, project.count, response, project.seen, (variable, value) =>
-            allowedChange(guard, variable, value)
-          )
-        : chosenVariants(asked, project.count, response),
+      output: resampledVariants(asked, project.count, response, project.seen, (variable, value) =>
+        allowedChange(guard, variable, value)
+      ),
       providerResponse: response,
       generation: {
         ...(response.model ? { model: response.model } : {}),

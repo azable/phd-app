@@ -12,9 +12,8 @@ import {
 } from './choosers';
 
 const document = { schemaVersion: 1, projectId: 'p', events: [] } as unknown as ProjectDocument;
-const request = (purpose: ChooserRequest['purpose']): ChooserRequest => ({
+const request = (): ChooserRequest => ({
   document,
-  purpose,
   source: 'source',
   count: 2,
   design: {
@@ -36,16 +35,11 @@ const design = {
 
 describe('randomChooser', () => {
   it('draws every variable afresh for more variants of a source', async () => {
-    const { choices } = await randomChooser.choose(request('resample'));
+    const { choices } = await randomChooser.choose(request());
     expect(choices).toEqual([
       { chosen: {}, randomise: true },
       { chosen: {}, randomise: true }
     ]);
-  });
-
-  it('draws only what is new to a new source', async () => {
-    const { choices } = await randomChooser.choose(request('new-source'));
-    expect(choices?.[0]).toEqual({ chosen: {}, randomise: ['Mark.fill'] });
   });
 });
 
@@ -58,14 +52,14 @@ describe('chooseVariants', () => {
         choices: [{ chosen: { 'Cell.fill': 'blue-100' } }]
       })
     };
-    const chosen = await chooseVariants(chooser, request('resample'));
+    const chosen = await chooseVariants(chooser, request());
     expect(chosen.chooser).toBe('model');
     expect(chosen.choices).toEqual([{ chosen: { 'Cell.fill': 'blue-100' } }]);
   });
 
   it('falls back to the random draw when the chooser returns none', async () => {
     const failing: VariantChooser = { id: 'model', choose: async ({ document }) => ({ document }) };
-    const chosen = await chooseVariants(failing, request('resample'));
+    const chosen = await chooseVariants(failing, request());
     expect(chosen.chooser).toBe('random');
     expect(chosen.choices).toHaveLength(2);
   });

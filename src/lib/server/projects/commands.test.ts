@@ -1119,8 +1119,7 @@ describe('submitProjectFeedback', () => {
         chooserFor: async () => 'model'
       });
 
-      const [{ context }] = choose.mock.calls[0];
-      expect(context.project.purpose).toBe('resample');
+      expect(choose).toHaveBeenCalledOnce();
       expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual([
         'amber-100',
         'blue-100'
@@ -2735,7 +2734,6 @@ describe('several variants from chat', () => {
 
     const [{ context }] = choosing.mock.calls[0];
     expect(context.project).toMatchObject({
-      purpose: 'resample',
       count: 4,
       settled: { 'views.Int': 'IntTally' }
     });
@@ -2814,7 +2812,7 @@ describe('several variants from chat', () => {
       { action: 'resample', count: 4 },
       { getChooser: () => chooser(choosing), chooserFor: async () => 'model' }
     );
-    expect(choosing.mock.calls[0][0].context.project).toMatchObject({ purpose: 'resample' });
+    expect(choosing.mock.calls[0][0].context.project).toMatchObject({ count: 4 });
     expect(presented(counted.result.appendedEvents)).toHaveLength(4);
 
     choosing.mockClear();

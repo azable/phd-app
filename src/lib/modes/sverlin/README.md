@@ -892,9 +892,10 @@ starter is each type in its first view, each kind in a plain look for what it
 is: values framed, text and layouts unframed, and pointers marked in amber, and
 every label paused `"on"`. A presentation built after a change keeps the values
 of the one it was made from where nothing else sets them, and takes the
-starter's for anything new; the assistant sets values with `vary`, and asking
-for several variants, or Another variant (in dev mode), asks the chooser, which
-may change what is shown where the conversation leaves it open.
+starter's for anything new; the assistant sets values with `vary`, or with
+`edit` or `revise` for the source it changes, and asking for several variants,
+or Another variant (in dev mode), asks the chooser, which may change what is
+shown where the conversation leaves it open.
 
 ### Declare what varies
 
@@ -915,8 +916,9 @@ variables:
   `cur` would at each step changing `prev`.
 - Give a source a listing of the algorithm as taught (see Listing), and more
   than one view of a type where the request leaves open what it shows (see Views
-  of types), as a position's number and its element's name; the chooser decides
-  whether a variant shows each (as `listing.language` none).
+  of types), as a position's number and its element's name; the design decides
+  whether a variant shows each, set by the assistant for a new or edited source
+  and by a chooser for more variants (as `listing.language` none).
 - Never write a look into the markup: a look the participant asks for is the
   values of a kind.
 
@@ -1002,8 +1004,8 @@ there. A region holds the text of what its label marks and no more: a loop's or
 an `if`'s own line goes with its test's label or none, never inside its body's,
 as `for i = 2 to n` stays outside `@insert[…]`; a test with a line of its own
 has a label of its own, as `while (@more[Waiting(queue)])` with
-`while @more[the queue is not empty]`, and the chooser decides whether to pause
-there.
+`while @more[the queue is not empty]`, and the design decides whether to pause
+there: the assistant for a new or edited source, a chooser for more variants.
 
 - Only the code of labels the steps pause at lights, all in one look: a step's
   label's region with the code inside it, and the parts done so far of a run
