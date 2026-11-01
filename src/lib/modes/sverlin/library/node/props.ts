@@ -12,8 +12,11 @@ export type Align = 'start' | 'center' | 'end';
 /** How arranged items spread along the layout direction. */
 export type Justify = 'start' | 'center' | 'end' | 'between' | 'around' | 'evenly';
 
-/** The page frame's aspect ratio; it lays out at a fixed logical size and scales to fit the page. */
-export type FrameRatio = '16:9' | '4:3' | '3:2' | '1:1' | '3:4' | '9:16';
+/**
+ * The page frame's aspect ratio; it lays out at a fixed logical width and scales to fit the page.
+ * fit takes the shape of what the frame holds, between the widest and tallest of the others.
+ */
+export type FrameRatio = 'fit' | '16:9' | '4:3' | '3:2' | '1:1' | '3:4' | '9:16';
 
 /**
  * How the page frame is shaped and arranges what the layout shown holds: the layout's kind's values,

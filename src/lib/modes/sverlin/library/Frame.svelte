@@ -10,9 +10,9 @@
 <script lang="ts">
   import { flushSync, untrack, type Component } from 'svelte';
 
-  import { flowExtent, neededFit } from './fit';
+  import { fittedHeight, flowExtent, neededFit } from './fit';
   import { layoutMemoryContext, provideArrangementParent, provideNodeIds } from './type-context';
-  import { alignments, frameRatios, frameWidth, justifications } from './node/scales';
+  import { alignments, fitShapes, frameRatios, frameWidth, justifications } from './node/scales';
   import type { FrameSettings } from './node/props';
   import { arrangementLayout } from './scene';
 
@@ -66,6 +66,15 @@
         parseFloat(getComputedStyle(block).rowGap) || 0,
         block.style.flexDirection === 'row'
       );
+      // A frame taking its content's shape is as tall as the content at the fit its width allows.
+      if (settings.ratio === 'fit') {
+        const padding = {
+          width: frameElement.clientWidth - inside.width,
+          height: frameElement.clientHeight - inside.height
+        };
+        fittedFrame = fittedHeight(width, padding, content, fitShapes);
+        inside.height = fittedFrame - padding.height;
+      }
       const needed = neededFit(inside, content);
       // Every step shows at the smallest fit any step needs, so the view never zooms between them.
       fit = memory ? Math.min(needed, ...memory.fits.values()) : needed;
@@ -126,7 +135,14 @@
     return () => observer.disconnect();
   });
   const width = frameWidth;
-  const height = $derived(Math.round(frameWidth / frameRatios[settings.ratio]));
+  // A frame taking its content's shape starts at its tallest, as its markup is laid out (see
+  // model/reserve.ts), until its content is measured.
+  let fittedFrame = $state<number>();
+  const height = $derived(
+    settings.ratio === 'fit'
+      ? (fittedFrame ?? Math.round(width / fitShapes.tallest))
+      : Math.round(frameWidth / frameRatios[settings.ratio])
+  );
 
   // The canvas element's own size, observed directly: the window size and its resize events can lag
   // behind the iframe's real size, such as when the app opens a pane, and a stale size would both

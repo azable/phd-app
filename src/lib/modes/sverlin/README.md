@@ -967,13 +967,14 @@ offer views that draw each reading.
 
 ### Page frame
 
-Every view sits in a page frame, a canvas laid out at a fixed logical size (1200
-pixels wide) and scaled to fit, so every presentation renders identically
+Every view sits in a page frame, a canvas laid out at a fixed logical width
+(1200 pixels) and scaled to fit, so every presentation renders identically
 whatever the pane size. The frame is the root `<Node>` of the layout shown, and
-its values are that layout's: its ratio is `Stacked.ratio` (16:9, 4:3, 3:2, 1:1,
-3:4, or 9:16), 16:9 in the starter; keep 16:9 unless the participant asks for
-another shape. It lays out what its root holds in the root's `layout`, a column
-or a row, `Stacked.gap` apart, spread and aligned by `Stacked.justify` and
+its values are that layout's: its ratio is `Stacked.ratio` (fit, 16:9, 4:3, 3:2,
+1:1, 3:4, or 9:16), fit in the starter, taking the shape of what it holds
+between 16:9 and 9:16; keep fit unless the participant asks for another shape.
+It lays out what its root holds in the root's `layout`, a column or a row,
+`Stacked.gap` apart, spread and aligned by `Stacked.justify` and
 `Stacked.align`, as between to put a title at the top and a note at the bottom,
 with `Stacked.padding` inside its edge. Use its width: lay sequences out across
 it rather than down it. Participants select nodes by clicking or dragging a box,

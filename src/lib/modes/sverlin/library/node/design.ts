@@ -216,7 +216,7 @@ export type DesignProp = keyof typeof propOptions;
  * Stacked.ratio, so each layout keeps its own frame (see design.server.ts).
  */
 export const frameOptions = {
-  ratio: ['16:9', '4:3', '3:2', '1:1', '3:4', '9:16'],
+  ratio: ['fit', '16:9', '4:3', '3:2', '1:1', '3:4', '9:16'],
   justify: propOptions.justify,
   align: propOptions.align,
   padding: spacing,
@@ -485,7 +485,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
 };
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {
-  ratio: '16:9',
+  ratio: 'fit',
   justify: 'center',
   align: 'center',
   padding: 1.5,

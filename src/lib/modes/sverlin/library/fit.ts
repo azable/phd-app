@@ -30,3 +30,19 @@ export function flowExtent(children: readonly Size[], gap: number, row: boolean)
     ? { width: total(widths), height: Math.max(0, ...heights) }
     : { width: Math.max(0, ...widths), height: total(heights) };
 }
+
+/**
+ * The height of a frame of a width taking the shape of its content (the fit ratio): the content
+ * at the fit its width allows, with the frame's padding round it, between the widest and the
+ * tallest shapes the frame otherwise offers, so it neither lies flat nor towers.
+ */
+export function fittedHeight(
+  width: number,
+  padding: { width: number; height: number },
+  content: Size,
+  shapes: { widest: number; tallest: number }
+): number {
+  const fit = neededFit({ width: width - padding.width, height: Infinity }, content);
+  const height = Math.ceil(content.height * fit + padding.height);
+  return Math.min(Math.max(height, width / shapes.widest), width / shapes.tallest);
+}

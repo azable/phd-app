@@ -26,7 +26,7 @@ describe('layouts of the page', () => {
   });
 
   it('gives each layout its frame as a kind, with the nodes its body writes', () => {
-    expect(starter['Stacked.ratio']).toBe('16:9');
+    expect(starter['Stacked.ratio']).toBe('fit');
     expect(starter['Side.gap']).toBe(1);
     expect(space['Side.ratio']).toContain('4:3');
     // The Side layout writes a node of its own, of its kind; the frame takes the shared props.
@@ -56,7 +56,7 @@ describe('layouts of the page', () => {
       name: 'Side'
     });
     expect(frameSettings(prepared.design, { ...built.variant, layout: 'Stacked' })).toMatchObject({
-      ratio: '16:9',
+      ratio: 'fit',
       gap: 2,
       layout: 'column',
       name: 'Stacked'
@@ -79,7 +79,7 @@ describe('layouts of the page', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const { variant } = await bundlePresentation(prepared, seed, { randomise: true });
       drawn.add(variant.layout);
-      expect(variant['Side.ratio']).toBe('16:9');
+      expect(variant['Side.ratio']).toBe('fit');
       expect(variant['Stacked.padding']).toBe(1.5);
     }
     expect(drawn).toEqual(new Set(['Stacked', 'Side']));

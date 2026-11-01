@@ -428,9 +428,9 @@ export function pointersContext(): readonly Pointer[] {
 
 /**
  * The pointers drawn around an element at a position, of those that can point there, outermost
- * first: those never at one element at the same step share a slot, each joining the first whose
- * pointers it is apart from, so an element keeps room only for as many labels as are ever there
- * together. Of each slot, the pointer at the position draws, else the first keeps the room.
+ * first: those never at one element at the same step share a slot, each joining the innermost
+ * whose pointers it is apart from, nearest the element, so an element keeps room only for as many
+ * labels as are ever there together. Of each slot, the pointer at the position draws, else the first keeps the room.
  */
 export function sharedSlots(
   types: TypeContext | undefined,
@@ -445,7 +445,7 @@ export function sharedSlots(
     (types?.apart(a.path, b.path) ?? false);
   const slots: Pointer[][] = [];
   for (const pointer of pointers) {
-    const slot = slots.find((members) => members.every((other) => apart(pointer, other)));
+    const slot = slots.findLast((members) => members.every((other) => apart(pointer, other)));
     if (slot) slot.push(pointer);
     else slots.push([pointer]);
   }

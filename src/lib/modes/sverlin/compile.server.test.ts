@@ -616,7 +616,7 @@ describe('single-component Svelte compilation', () => {
     const prepared = prepareSvelteComponent(
       '<script lang="sverlin"></script>{#snippet A()}<Node>a</Node>{/snippet}{#layout Main}<Node>{@render A()}</Node>{/layout}'
     );
-    expect(prepared.design.starter['Main.ratio']).toBe('16:9');
+    expect(prepared.design.starter['Main.ratio']).toBe('fit');
     const built = await bundlePresentation(prepared, 1, { chosen: { 'Main.ratio': '4:3' } });
     expect(built.javascript).toMatch(/"?ratio"?:"4:3"/u);
     await expect(

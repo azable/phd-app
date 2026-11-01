@@ -41,9 +41,9 @@ describe('positions at one element', () => {
     const at = (path: string, position: number, ref?: true) =>
       ({ path, position, ...(ref ? { ref } : {}) }) as Pointer;
     const [i, j, k] = [at('i', 3), at('j', 3), at('k', 5)];
-    // i and j are together at some step, so each keeps a slot; k joins i's.
+    // i and j are together at some step, so each keeps a slot; k joins the inner, j's.
     expect(sharedSlots(types, [i, j, k], 3)).toEqual([i, j]);
-    expect(sharedSlots(types, [i, j, k], 5)).toEqual([k, j]);
+    expect(sharedSlots(types, [i, j, k], 5)).toEqual([i, k]);
     // Where none is at the element, the first of each slot keeps the room.
     expect(sharedSlots(types, [i, j, k], 0)).toEqual([i, j]);
     // A reference's pointer, or one with no path, shares with none.

@@ -60,7 +60,7 @@ What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.
 Everything else is open, and yours to explore across the conversation: views,
 the layout shown (`layout`, as the parts side by side or stacked, each layout
-with its own frame, whose ratio stays 16:9 unless the participant asks for
+with its own frame, whose ratio stays fit unless the participant asks for
 another shape), colours, shapes, spacing, shadows, glows, fill styles, text
 case, a free layout’s form, pacing, and what is shown at all (a listing or none,
 as listing.language none; a type’s view or none; a kind’s shown false), so some
