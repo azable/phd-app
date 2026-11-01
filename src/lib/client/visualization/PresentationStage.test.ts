@@ -125,6 +125,12 @@ describe('presentation stage before a project’s first version', () => {
     expect(body).toMatch(/<div[^>]*\sinert[\s=>]/u);
   });
 
+  it('shows the loader on the empty stage of a project that presents no starter', () => {
+    const unpresented = blankProject().slice(0, 2);
+    expect(stage([...unpresented, requested(3)], false)).toContain('Making a first version…');
+    expect(stage(unpresented, false)).toContain('Your visualization will appear here.');
+  });
+
   it('shows the starter itself while nothing is at work', () => {
     const body = stage(blankProject(), false);
     expect(body).not.toContain('Making a first version…');

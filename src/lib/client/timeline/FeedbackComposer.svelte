@@ -64,6 +64,10 @@
   let editorRevision = $state(0);
   let focused = $state(false);
   const selected = $derived(selectedFeedbackContext(presentations, visualSelections));
+  // While the assistant replies, every system says it is thinking; where its turn runs apart from
+  // the message that asked for it, a message written meanwhile can still be sent, for its next turn.
+  const thinking = $derived(session.pending?.type === 'feedback' || session.assistantResponding);
+  const queueing = $derived(thinking && !session.pending && hasContent);
 
   export function referencePresentation(presentation: TimelinePresentation): void {
     insertReference(presentationReference(presentation.presentation, steps));
@@ -311,9 +315,11 @@
         {/key}
         <div class="flex items-center gap-2 border-t px-2 py-1.5">
           <span class="mr-auto text-sm text-muted-foreground">
-            {session.atHead
-              ? 'Enter submits · Shift+Enter adds a line'
-              : 'Return to present to respond'}
+            {!session.atHead
+              ? 'Return to present to respond'
+              : queueing
+                ? 'The assistant reads this once it has replied'
+                : 'Enter submits · Shift+Enter adds a line'}
           </span>
           <Button
             type="submit"
@@ -321,7 +327,7 @@
             aria-label="Submit project feedback"
             disabled={!session.atHead || !!session.pending || session.readOnly || !hasContent}
           >
-            {#if session.pending?.type === 'feedback'}
+            {#if thinking && !queueing}
               <Spinner data-icon="inline-start" />Thinking
             {:else}
               <SendIcon data-icon="inline-start" />Submit

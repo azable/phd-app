@@ -136,10 +136,13 @@
     const source = shown?.format === 'browser-bundle-v1' ? shown.source : shown?.authored;
     return stageActivity(session.events, source?.sha256, session.pending ?? undefined);
   });
-  // A blank project's starter stands in for its first version; a loader covers it while the
-  // assistant, or any operation, works on that version.
+  // Whether the assistant, or any operation, is working on the project.
+  const working = $derived(preparing || session.assistantResponding || !!activity);
+  // Before a project's first version, a loader shows while it is made: on the empty stage, as every
+  // system shows it, or over a blank project's starter, which stands in for that version.
+  const firstVersionPending = $derived(timelinePresentations(session.events).length === 0);
   const makingFirst = $derived(
-    (session.assistantResponding || !!activity) &&
+    working &&
       visible.length > 0 &&
       visible.every(({ presentation }) => blankStarter(session.events, presentation))
   );
@@ -313,6 +316,15 @@
     return presentationHeld(playbackContext, entry.presentation.presentationId, step);
   }
 </script>
+
+{#snippet loader(title: string)}
+  <Empty.Root class="border-0" aria-live="polite">
+    <Empty.Header>
+      <Empty.Media><Spinner /></Empty.Media>
+      <Empty.Title>{title}</Empty.Title>
+    </Empty.Header>
+  </Empty.Root>
+{/snippet}
 
 {#snippet controls()}
   <div
@@ -516,12 +528,7 @@
           {#if makingFirst}
             <!-- Over the starter, which stays laid out beneath so nothing moves when it lifts. -->
             <div class="absolute inset-0 z-20 flex bg-background">
-              <Empty.Root class="border-0" aria-live="polite">
-                <Empty.Header>
-                  <Empty.Media><Spinner /></Empty.Media>
-                  <Empty.Title>Making a first version…</Empty.Title>
-                </Empty.Header>
-              </Empty.Root>
+              {@render loader('Making a first version…')}
             </div>
           {/if}
           {#if selected && !session.readOnly}
@@ -604,16 +611,17 @@
     {/each}
   {:else}
     <div class="flex min-h-0 flex-1 bg-muted/30 p-2">
-      <Empty.Root class="border-0" aria-live="polite">
-        <Empty.Header>
-          {#if preparing}
-            <Empty.Media><Spinner /></Empty.Media>
-            <Empty.Title>Preparing a visualization…</Empty.Title>
-          {:else}
+      {#if working}
+        {@render loader(
+          firstVersionPending ? 'Making a first version…' : 'Preparing a visualization…'
+        )}
+      {:else}
+        <Empty.Root class="border-0" aria-live="polite">
+          <Empty.Header>
             <Empty.Title>Your visualization will appear here.</Empty.Title>
-          {/if}
-        </Empty.Header>
-      </Empty.Root>
+          </Empty.Header>
+        </Empty.Root>
+      {/if}
     </div>
   {/if}
 </section>
