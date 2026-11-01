@@ -158,7 +158,7 @@ export function arrangementInput<E>(
     const inside = [...descendants(read, element)];
     const anchor = (inner: E): Anchor => ({ box, ...read.boxIn(inner, element) });
     // What is seen of a node (see seenParts). Where that is boxes inside it, an arrow crossing the
-    // node's other content to reach them stops at the nearest box around them it draws, if any.
+    // node's other content to reach them stops at the nearest box around them it draws, else the child.
     const seen = (node: E): Anchor => {
       const shown = seenParts(read, node);
       if (shown[0] === node) return anchor(node);
@@ -183,7 +183,9 @@ export function arrangementInput<E>(
         y: top,
         width: right - left,
         height: bottom - top,
-        frame: outer ? { x: outer.x, y: outer.y, width: outer.width, height: outer.height } : null
+        ...(outer
+          ? { frame: { x: outer.x, y: outer.y, width: outer.width, height: outer.height } }
+          : {})
       };
     };
     // A node drawing an element of the state is also found by it, as vertices[2], the outermost

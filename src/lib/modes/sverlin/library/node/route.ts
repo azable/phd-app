@@ -242,15 +242,21 @@ export function routeCurve(
     };
     const start = endPoint(from, ends.from, c1);
     const end = endPoint(to, ends.to, c2);
+    // The curve's own control points lie a third of the way from where it leaves and arrives, so
+    // an end moved out to its node's edge, below a vertex's captions, does not double back.
+    const [k1, k2] = [1, 2].map((third) => ({
+      x: start.x + ((end.x - start.x) * third) / 3 + offset.x,
+      y: start.y + ((end.y - start.y) * third) / 3 + offset.y
+    }));
     let hits = 0;
     for (let i = 1; i < 24; i++) {
-      const point = cubicAt(start, c1, c2, end, i / 24);
+      const point = cubicAt(start, k1, k2, end, i / 24);
       for (const box of obstacles)
         if (point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom)
           hits++;
     }
     if (!best || hits < best.hits)
-      best = { curve: [start, c1, c2, end], halfway: cubicAt(start, c1, c2, end, 0.5), hits };
+      best = { curve: [start, k1, k2, end], halfway: cubicAt(start, k1, k2, end, 0.5), hits };
     if (hits === 0) break;
   }
   const { curve, halfway } = best as NonNullable<typeof best>;

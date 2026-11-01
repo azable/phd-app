@@ -100,14 +100,34 @@ describe('structures', () => {
     ).toMatchObject({ kind: 'layers', nodes: [0, 1, 2, 3, 4] });
   });
 
-  it('finds nothing in too few links, or in a graph with a cycle inside', () => {
-    expect(linked(3, [[0, 1]])).toBeUndefined();
+  it('layers a graph with cycles by distance from its start, and finds nothing without one', () => {
+    // 0 starts it; 2 leads back to 1.
     expect(
       linked(4, [
         [0, 1],
         [1, 2],
         [2, 1],
         [0, 3]
+      ])
+    ).toMatchObject({
+      kind: 'layers',
+      nodes: [0, 1, 3, 2],
+      depths: new Map([
+        [0, 0],
+        [1, 1],
+        [3, 1],
+        [2, 2]
+      ])
+    });
+    expect(linked(3, [[0, 1]])).toBeUndefined();
+    // Every node has a link in, so nothing starts it.
+    expect(
+      linked(4, [
+        [0, 1],
+        [1, 2],
+        [2, 0],
+        [2, 3],
+        [3, 1]
       ])
     ).toBeUndefined();
   });
@@ -250,5 +270,73 @@ describe('form placement', () => {
     const column = (node: number) => Math.round(centres.get(node)!.x);
     expect([column(1), column(3)]).toEqual([column(2), column(4)]);
     expect(new Set([0, 1, 2, 3, 4].map(column)).size).toBe(3);
+  });
+});
+
+describe('layered drawing', () => {
+  const size = { width: 50, height: 120 };
+  const centresOf = (pairs: [number, number][], seed = 1) => {
+    const structure = linked(Math.max(...pairs.flat()) + 1, pairs) as Structure;
+    expect(structure.kind).toBe('layers');
+    return formCentres('natural', structure, () => size, {
+      room: 28,
+      random: keyedRandom(seed, 'layers'),
+      direction: 'down'
+    });
+  };
+  // Whether two straight links cross between their ends.
+  const cross = (a: [Point, Point], b: [Point, Point]) => {
+    const side = (p: Point, q: Point, r: Point) =>
+      Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+    return (
+      side(a[0], a[1], b[0]) * side(a[0], a[1], b[1]) < 0 &&
+      side(b[0], b[1], a[0]) * side(b[0], b[1], a[1]) < 0
+    );
+  };
+  type Point = { x: number; y: number };
+  const crossings = (pairs: [number, number][], centres: Map<number, Point>) =>
+    pairs.flatMap(([s, t], i) =>
+      pairs
+        .slice(i + 1)
+        .filter(([u, v]) =>
+          cross([centres.get(s)!, centres.get(t)!], [centres.get(u)!, centres.get(v)!])
+        )
+    ).length;
+
+  it('draws a breadth-first search graph layer by layer, its start on top', () => {
+    // A leads to B and C, both to D, and D to E.
+    const bfs: [number, number][] = [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 3],
+      [3, 4]
+    ];
+    for (const seed of [1, 2, 3]) {
+      const centres = centresOf(bfs, seed);
+      const [a, b, c, d, e] = [0, 1, 2, 3, 4].map((node) => centres.get(node)!);
+      expect(b.y).toBe(c.y);
+      expect([a.y < b.y, b.y < d.y, d.y < e.y]).toEqual([true, true, true]);
+      // B and C side by side, clear of each other with room between, A, D and E over their middle.
+      expect(Math.abs(b.x - c.x)).toBeGreaterThan(size.width + 28);
+      expect([a.x, d.x, e.x]).toEqual([(b.x + c.x) / 2, (b.x + c.x) / 2, (b.x + c.x) / 2]);
+      // Layers a node's height and room for an arrow apart, not much more.
+      expect(b.y - a.y).toBeLessThan(size.height + 2 * 28);
+    }
+  });
+
+  it('orders each layer so links cross as little as they can', () => {
+    // Written so that taking each layer in order crosses: 0 leads to 3 and 1 to 2, and a link from
+    // 0 skips a layer.
+    const graph: [number, number][] = [
+      [0, 3],
+      [1, 2],
+      [0, 4],
+      [3, 5],
+      [2, 6],
+      [4, 5],
+      [0, 6]
+    ];
+    expect(crossings(graph, centresOf(graph))).toBe(0);
   });
 });

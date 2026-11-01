@@ -1,10 +1,10 @@
 /**
  * Forms for linked structures. The links of a free layout are read for the structure they make: a
  * path (such as a linked list), a cycle (a ring buffer), a tree (each node one parent), or a layered
- * graph (directed and acyclic, with merges). Every structure can take every form, drawn from the
- * seed unless the view names one, in its own proportions, so presentations differ in look while
- * showing the same structure, and a layout is the same wherever it is drawn. Anything else is left
- * to the general layout.
+ * graph (directed and acyclic, with merges, or with cycles and a start). Every structure can take
+ * every form, drawn from the seed unless the view names one, in its own proportions, so
+ * presentations differ in look while showing the same structure, and a layout is the same wherever
+ * it is drawn. Anything else is left to the general layout.
  */
 
 /**
@@ -28,7 +28,8 @@ type Size = { width: number; height: number };
 
 /**
  * The structure a layout's links make, over the nodes that take part in it, in reading order: along
- * a path or cycle, depth first through a tree, or topologically through a layered graph.
+ * a path or cycle, depth first through a tree, or topologically through a layered graph (breadth
+ * first where it has cycles).
  */
 export type Structure =
   | { kind: 'path' | 'cycle'; nodes: number[] }
@@ -37,7 +38,10 @@ export type Structure =
       kind: 'layers';
       nodes: number[];
       parents: Map<number, number[]>;
-      /** Each node's layer where undirected links are read away from a root: its distance from it. */
+      /**
+       * Each node's layer where links are read away from a start, undirected ones or a graph with
+       * cycles: its distance from it.
+       */
       depths?: Map<number, number>;
     };
 
@@ -46,8 +50,9 @@ export type StructureKind = Structure['kind'];
 
 /**
  * The structure the largest group of linked nodes makes, from links in the order written, or
- * undefined when it is too small (fewer than three nodes) or has cycles beyond a single ring. A link
- * with directed false, a pair drawn as one line, joins its nodes either way (see oriented).
+ * undefined when it is too small (fewer than three nodes) or has cycles beyond a single ring and no
+ * start (a node no link points to) reaching every node. A link with directed false, a pair drawn as
+ * one line, joins its nodes either way (see oriented).
  */
 export function findStructure(
   count: number,
@@ -98,8 +103,23 @@ export function findStructure(
       order.push(at);
     return { kind: start === undefined ? 'cycle' : 'path', nodes: order };
   }
-  if (!acyclic(nodes, children)) return undefined;
   const roots = nodes.filter((node) => ins(node) === 0);
+  if (!acyclic(nodes, children)) {
+    // A graph with cycles but a start, as a directed graph a search walks from its source: layers
+    // by distance from its starts, read breadth first, with links back up drawn across them. With
+    // no start, or nodes no start reaches, it is left to the general layout.
+    const depths = new Map(roots.map((root) => [root, 0]));
+    for (const queue = [...roots]; queue.length; ) {
+      const node = queue.shift() as number;
+      for (const child of children.get(node) ?? [])
+        if (!depths.has(child)) {
+          depths.set(child, (depths.get(node) as number) + 1);
+          queue.push(child);
+        }
+    }
+    if (!roots.length || depths.size < nodes.length) return undefined;
+    return { kind: 'layers', nodes: [...depths.keys()], parents, depths };
+  }
   // A tree: one root, and every other node one parent; read depth first, so a node is followed by
   // its subtree.
   if (roots.length === 1 && nodes.every((node) => ins(node) <= 1)) {
@@ -222,16 +242,36 @@ export function formCentres(
   const down = Math.max(...sizes.map(({ height }) => height)) + options.room;
   const step = { across, down };
   const runs = options.flow ?? (options.direction && axisOf[options.direction]);
-  if (form === 'natural' && structure.kind === 'tree')
-    return treeCentres(structure, step, runs === 'x');
-  if (form === 'natural' && structure.kind === 'layers')
-    return layerCentres(structure, step, options.random, runs === 'x');
+  if (form === 'natural' && (structure.kind === 'tree' || structure.kind === 'layers')) {
+    // Layers lie a node's depth and room for an arrow apart, and nodes in a layer a node's breadth
+    // and as much room apart, so arrows fanning out from one node stay apart.
+    const sideways = runs === 'x';
+    const fanned = {
+      along: (sideways ? down : across) + options.room / 2,
+      deep: (sideways ? across : down) + options.room / 2
+    };
+    const placed =
+      structure.kind === 'tree' ? treeCentres(structure, fanned) : layerCentres(structure, fanned);
+    return new Map(
+      [...placed].map(([node, { along, deep }]) => [
+        node,
+        sideways ? { x: deep, y: along } : { x: along, y: deep }
+      ])
+    );
+  }
   // A cycle's own shape is a ring, whichever way it runs, and a path's a line. Sequence forms lie
-  // along x, and running along y turns them, swapping each centre's axes.
+  // along x, and running along y turns them, swapping each centre's axes and the steps they take,
+  // so a column of tall nodes keeps room for its arrows.
   const ring = form === 'natural' && structure.kind === 'cycle';
   const shape = form === 'natural' ? (ring ? 'ring' : 'line') : form;
-  const placed = sequenceCentres(shape, sizes.length, structure.kind === 'cycle', step, options);
   const turned = !ring && (shape === 'line' ? runs : options.flow) === 'y';
+  const placed = sequenceCentres(
+    shape,
+    sizes.length,
+    structure.kind === 'cycle',
+    turned ? { across: down, down: across } : step,
+    options
+  );
   return new Map(
     structure.nodes.map((node, i) => [
       node,
@@ -330,45 +370,41 @@ function sequenceCentres(
   }
 }
 
+/** Where a tree or layered graph places a node: along its layer, and how deep, in pixels. */
+type Layered = Map<number, { along: number; deep: number }>;
+type Spacing = { along: number; deep: number };
+
 function treeCentres(
   { root, children }: Extract<Structure, { kind: 'tree' }>,
-  { across, down }: Step,
-  sideways: boolean
-): Map<number, Point> {
+  { along, deep }: Spacing
+): Layered {
   // Leaves take consecutive slots and a parent sits over the middle of its children; depth is the
   // number of links from the root.
-  const slot = new Map<number, number>();
-  const depth = new Map<number, number>();
-  const order: number[] = [];
+  const placed: Layered = new Map();
   let leaves = 0;
-  const visit = (node: number, level: number) => {
-    depth.set(node, level);
-    order.push(node);
+  const visit = (node: number, level: number): number => {
     const kids = children.get(node) ?? [];
-    if (!kids.length) slot.set(node, leaves++);
-    else {
-      for (const kid of kids) visit(kid, level + 1);
-      slot.set(node, ((slot.get(kids[0]) ?? 0) + (slot.get(kids[kids.length - 1]) ?? 0)) / 2);
-    }
+    const slots = kids.map((kid) => visit(kid, level + 1));
+    const slot = slots.length ? (slots[0] + slots[slots.length - 1]) / 2 : leaves++;
+    placed.set(node, { along: slot * along, deep: level * deep });
+    return slot;
   };
   visit(root, 0);
-  const place = (node: number): Point => {
-    const s = slot.get(node) ?? 0;
-    const d = depth.get(node) ?? 0;
-    return sideways ? { x: d * across * 1.4, y: s * down } : { x: s * across, y: d * down * 1.4 };
-  };
-  return new Map(order.map((node) => [node, place(node)]));
+  return placed;
 }
 
+/**
+ * A layered graph drawn as Sugiyama et al. (1981) do: each node in a layer, links spanning several
+ * layers passing through a stand-in at each between, so they keep a lane; nodes in each layer
+ * ordered by where their neighbours are, sweeping down and up and keeping the order that crosses
+ * fewest links; then each node set over its neighbours as near as its layer's order allows.
+ */
 function layerCentres(
   { nodes, parents, depths }: Extract<Structure, { kind: 'layers' }>,
-  { across, down }: Step,
-  random: (key: string) => number,
-  sideways: boolean
-): Map<number, Point> {
-  // Each node sits one layer below its deepest parent, or, in an undirected graph, at its distance
-  // from the root; within a layer, nodes are ordered by where their parents are, with the seed
-  // breaking ties.
+  { along, deep }: Spacing
+): Layered {
+  // Each node sits one layer below its deepest parent, or, given depths (an undirected graph, or
+  // one with cycles), at its distance from its start.
   const layer = new Map<number, number>();
   const layerOf = (node: number, seen = new Set<number>()): number => {
     if (layer.has(node)) return layer.get(node) as number;
@@ -379,25 +415,126 @@ function layerCentres(
     return value;
   };
   for (const node of nodes) layer.set(node, depths?.get(node) ?? layerOf(node));
-  const layers: number[][] = [];
-  for (const node of nodes) (layers[layer.get(node) ?? 0] ??= []).push(node);
-  const position = new Map<number, number>();
-  for (const row of layers.filter(Boolean)) {
-    const weight = (node: number) => {
-      const above = (parents.get(node) ?? []).map((parent) => position.get(parent) ?? 0);
-      return (
-        (above.length ? above.reduce((sum, p) => sum + p, 0) / above.length : 0) +
-        random(`layer.${node}`) * 0.01
+  const rows: number[][] = Array.from({ length: Math.max(...layer.values()) + 1 }, () => []);
+  for (const node of nodes) rows[layer.get(node) as number].push(node);
+
+  // Links between layers, each from its upper end; stand-ins have negative numbers. Links within a
+  // layer lie along it and do not order it.
+  const below = new Map<number, number[]>();
+  const above = new Map<number, number[]>();
+  const join = (upper: number, lower: number) => {
+    below.set(upper, [...(below.get(upper) ?? []), lower]);
+    above.set(lower, [...(above.get(lower) ?? []), upper]);
+  };
+  let stand = -1;
+  for (const node of nodes)
+    for (const parent of parents.get(node) ?? []) {
+      const [upper, lower] = [parent, node].sort(
+        (a, b) => (layer.get(a) as number) - (layer.get(b) as number)
       );
-    };
-    row.sort((a, b) => weight(a) - weight(b));
-    row.forEach((node, i) => position.set(node, i - (row.length - 1) / 2));
+      const [top, bottom] = [layer.get(upper) as number, layer.get(lower) as number];
+      if (top === bottom) continue;
+      let at = upper;
+      for (let level = top + 1; level < bottom; level++) {
+        rows[level].push(stand);
+        layer.set(stand, level);
+        join(at, stand);
+        at = stand--;
+      }
+      join(at, lower);
+    }
+
+  // Ordering: each node by the mean place of its neighbours in the layer before, ties kept in the
+  // order they were, at first the reading order, so a node's neighbours lie as its links list them.
+  const place = new Map<number, number>();
+  const index = () => rows.forEach((row) => row.forEach((node, i) => place.set(node, i)));
+  const mean = (values: readonly number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
+  const order = (row: number[], by: ReadonlyMap<number, number[]>) => {
+    const key = new Map(
+      row.map((node, i) => {
+        const near = by.get(node) ?? [];
+        return [node, near.length ? mean(near.map((other) => place.get(other) ?? 0)) : i];
+      })
+    );
+    row.sort((a, b) => (key.get(a) as number) - (key.get(b) as number));
+    row.forEach((node, i) => place.set(node, i));
+  };
+  const crossings = () => {
+    let count = 0;
+    for (const row of rows) {
+      const links = row.flatMap((upper) =>
+        (below.get(upper) ?? []).map((lower) => [place.get(upper), place.get(lower)] as number[])
+      );
+      for (const [i, [u1, l1]] of links.entries())
+        for (const [u2, l2] of links.slice(i + 1)) if ((u1 - u2) * (l1 - l2) < 0) count++;
+    }
+    return count;
+  };
+  index();
+  for (const row of rows.slice(1)) order(row, above);
+  let best = rows.map((row) => [...row]);
+  let fewest = crossings();
+  // Sweeps down and up, as many as settle the small graphs of algorithms.
+  for (let sweep = 1; sweep < 8 && fewest > 0; sweep++) {
+    if (sweep % 2) for (const row of rows.slice(0, -1).reverse()) order(row, below);
+    else for (const row of rows.slice(1)) order(row, above);
+    const now = crossings();
+    if (now < fewest) [fewest, best] = [now, rows.map((row) => [...row])];
+  }
+  best.forEach((row, level) => (rows[level] = row));
+  index();
+
+  // Placing: in slots a node wide, a stand-in half one; each layer packed, then set over its
+  // neighbours, down, up, and down again, as near as keeping its order and slots allows.
+  const width = (node: number) => (node >= 0 ? 1 : 0.5);
+  const at = new Map<number, number>();
+  const settle = (row: readonly number[], wanted: readonly number[]) =>
+    keptApart(
+      wanted,
+      row.map((node, i) => (i ? (width(row[i - 1]) + width(node)) / 2 : 0))
+    ).forEach((value, i) => at.set(row[i], value));
+  for (const row of rows)
+    settle(
+      row,
+      row.map(() => 0)
+    );
+  const toward = (row: readonly number[], by: ReadonlyMap<number, number[]>) =>
+    settle(
+      row,
+      row.map((node) => {
+        const near = by.get(node) ?? [];
+        return near.length ? mean(near.map((other) => at.get(other) ?? 0)) : (at.get(node) ?? 0);
+      })
+    );
+  for (const pass of [0, 1, 2]) {
+    if (pass % 2) for (const row of rows.slice(0, -1).reverse()) toward(row, below);
+    else for (const row of rows.slice(1)) toward(row, above);
   }
   return new Map(
-    nodes.map((node) => {
-      const along = (position.get(node) ?? 0) * (sideways ? down : across);
-      const deep = (layer.get(node) ?? 0) * (sideways ? across : down) * 1.4;
-      return [node, sideways ? { x: deep, y: along } : { x: along, y: deep }];
-    })
+    nodes.map((node) => [
+      node,
+      { along: (at.get(node) ?? 0) * along, deep: (layer.get(node) ?? 0) * deep }
+    ])
   );
+}
+
+/**
+ * Places in order, each at least its gap after the one before, as near as they can be to the places
+ * wanted (least squares): the pool-adjacent-violators algorithm over the places less their gaps.
+ */
+function keptApart(wanted: readonly number[], gaps: readonly number[]): number[] {
+  const offsets: number[] = [];
+  gaps.forEach((gap, i) => offsets.push((offsets[i - 1] ?? 0) + gap));
+  const pools: { sum: number; count: number }[] = [];
+  wanted.forEach((value, i) => {
+    pools.push({ sum: value - offsets[i], count: 1 });
+    while (pools.length > 1) {
+      const [before, last] = pools.slice(-2);
+      if (before.sum / before.count <= last.sum / last.count) break;
+      pools.splice(-2, 2, { sum: before.sum + last.sum, count: before.count + last.count });
+    }
+  });
+  return pools
+    .flatMap(({ sum, count }) => Array<number>(count).fill(sum / count))
+    .map((value, i) => value + offsets[i]);
 }

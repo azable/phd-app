@@ -826,24 +826,26 @@ A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
 arrows present at every step (a link that comes and goes is drawn on top of it
 but does not change it): a path such as a linked list, a cycle, a tree, or a
-layered graph (acyclic, with nodes that have several parents). Every structure
-takes every form: `natural` (the start), the structure's own shape, a path in a
-line, a cycle closed into a ring, a tree branching, and a layered graph stacking
-its layers (an undirected graph's layers are each node's distance from its
-first); or, along its reading order (a path in link order, a tree depth first, a
-layered graph each node after its parents), `line`, `snake` (rows read back and
-forth), `wave`, `arc`, or `scatter` (free positions that keep each node near the
-next). `direction`, `down` or `right`, is the way a `natural` or `line` layout
-runs where no `flow` sets it, as a `flow` would: it starts `right` for a path or
-a cycle and `down` for a tree or a layered graph, and a layout with a `flow` has
-none. A layout whose data makes no structure has no `form` or `direction` and is
-laid out freely, unless the page finds a structure in the links it draws, which
-it draws `natural`. `curve`, `straight` (the start) or `curved`, is how its
-arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are
-drawn from. A free layout keeps its form's own proportions and takes the size of
-everything it draws, its links' curves, heads and labels included, so the same
-values draw the same layout wherever it is, whatever the frame or what is beside
-it.
+layered graph (acyclic, with nodes that have several parents, or with cycles and
+a start, a node no arrow points to). Every structure takes every form: `natural`
+(the start), the structure's own shape, a path in a line, a cycle closed into a
+ring, a tree branching, and a layered graph stacking its layers, each ordered so
+its arrows cross as little as they can (an undirected graph's layers, and those
+of a graph with cycles, are each node's distance from its first or its start);
+or, along its reading order (a path in link order, a tree depth first, a layered
+graph each node after its parents, or breadth first where it has cycles),
+`line`, `snake` (rows read back and forth), `wave`, `arc`, or `scatter` (free
+positions that keep each node near the next). `direction`, `down` or `right`, is
+the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
+would: it starts `right` for a path or a cycle and `down` for a tree or a
+layered graph, and a layout with a `flow` has none. A layout whose data makes no
+structure has no `form` or `direction` and is laid out freely, unless the page
+finds a structure in the links it draws, which it draws `natural`. `curve`,
+`straight` (the start) or `curved`, is how its arrows prefer to run.
+`layoutSeed`, 1 to 32, is what its spacing and nudges are drawn from. A free
+layout keeps its form's own proportions and takes the size of everything it
+draws, its links' curves, heads and labels included, so the same values draw the
+same layout wherever it is, whatever the frame or what is beside it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -1160,7 +1162,9 @@ prop, as `Arrow.Link` for a link in `Arrow`.
   of an element, a link with no `from` starts at the node drawing that element,
   as a node's `next`. An arrow meets what is seen of its end: a node with no
   stroke or fill of its own is met at the bordered or filled boxes inside it, as
-  a vertex's name cell rather than the column holding it and its caption.
+  a vertex's name cell rather than the column holding it and its caption, unless
+  reaching them would cross that other content: an arrow down from a vertex with
+  captions under it leaves below them, in line with its name cell.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round

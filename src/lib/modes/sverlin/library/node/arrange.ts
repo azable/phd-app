@@ -143,8 +143,8 @@ class BoundedLayout extends Layout {
 
 /**
  * A box a link attaches to: inside child `box`, relative to that child's top-left. `frame` is the box
- * around it where an arrow crossing the child's other content stops instead: unset, the whole child;
- * null, none, as for what is seen of a node that draws no box of its own (see visible.ts).
+ * around it where an arrow crossing the child's other content stops instead: unset, the whole child,
+ * as for what is seen of a node that draws no box of its own (see visible.ts).
  */
 export type Anchor = {
   box: number;
@@ -152,7 +152,7 @@ export type Anchor = {
   y: number;
   width: number;
   height: number;
-  frame?: { x: number; y: number; width: number; height: number } | null;
+  frame?: { x: number; y: number; width: number; height: number };
 };
 
 // The least room left for an arrow between the boxes it joins, so it is always visible.
@@ -490,10 +490,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       )
     ];
     // An end inside a bigger child, such as a record's pointer field, knows the box around it (its
-    // frame, else the child) and the child's other content, so the arrow can meet that box's edge
-    // rather than cross that content.
+    // frame, else the child, as the column holding a vertex's name cell and its captions) and the
+    // child's other content, so the arrow can meet that box's edge rather than cross that content,
+    // as an arrow down from a vertex leaves below the captions under it.
     const surround = (anchor: Anchor, box: Box) => {
-      if (anchor.frame === null) return undefined;
       const outer = boxAt(anchor.frame ? { ...anchor.frame, box: anchor.box } : whole(anchor.box));
       const inside =
         outer.right - outer.left > box.right - box.left + 1 ||
