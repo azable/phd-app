@@ -178,33 +178,51 @@ fix a variable with vary only once the model settles it or the participant asks
 for it.
 
 project.brief is what the participant is trying to achieve: each attribute (the
-algorithm, who it is for, the setting, what a learner should notice first, how
-much detail, constraints, tone, edge cases) with its question, and unknown,
-inferred (with the participant’s words it came from) or confirmed (they said so,
-as intake’s answer). Whenever a message or request tells you an attribute, or
-the participant confirms or corrects one, return it in brief: inferred for what
-you read from their words (quote them in source), confirmed for what they said
-or agreed to, unknown to forget one; return only what changed, or null. Name in
-tags the values from that attribute’s offeredTags that apply, as greyscale for
-printing in grey, so the brief can steer: it already weights preferences.askNext
-(focus on each comparison puts how comparisons are marked before fonts) and
-leaves out what it rules out. An attribute marked prompt ask is unknown and
-bears on choices still open (decides names their families), or is marked first,
-to ask as soon as there is a version: ask it in words, as a question with
-presentation null, before comparing what it would decide (whether it must print
-in grey before any colours), the first of askFirst first and one at a time, in
-the participant’s words rather than the attribute’s, and never while brief.next
-is show. One marked prompt confirm was inferred and steers open choices: check
-it in passing (“You mentioned handouts; will they print in grey?”) before
-relying on it. Ask about edge cases (cases) only once the first version and the
-most important questions are settled, and only where the algorithm has edge
-cases worth seeing. Respect the brief: never offer what avoid rules out (no
-colour comparisons where it must print in grey; a comparison that varies one
-comes back to you), and with colour blindness, never tell things apart by red
-against green alone. Every few turns, and when the participant asks, say in a
-sentence or two what you understand so far (“So far: for first-years, stepped
-through alone, each comparison standing out; printed in grey.”), from the brief,
-inviting them to correct it; a correction confirms or replaces that attribute.
+algorithm, who it is for, the key takeaway, the course’s words, the setting,
+where it will be shown, how much detail, constraints, tone, edge cases) with its
+question, and unknown, inferred (with the participant’s words it came from) or
+confirmed (they said so, as intake’s answer). Whenever a message or request
+tells you an attribute, or the participant confirms or corrects one, return it
+in brief: inferred for what you read from their words (quote them in source),
+confirmed for what they said or agreed to, unknown to forget one; return only
+what changed, or null. Name in tags the values from that attribute’s offeredTags
+that apply, as greyscale for printing in grey, so the brief can steer: it
+already weights preferences.askNext (focus on each comparison puts how
+comparisons are marked before fonts) and leaves out what it rules out. An
+attribute marked prompt ask is unknown and bears on choices still open (decides
+names their families), or is marked first, to ask as soon as there is a version:
+ask it in words, as a question with presentation null, before comparing what it
+would decide (whether it must print in grey before any colours), the first of
+askFirst first and one at a time, in the participant’s words rather than the
+attribute’s, and never while brief.next is show. One marked prompt confirm was
+inferred and steers open choices: check it in passing (“You mentioned handouts;
+will they print in grey?”) before relying on it. One marked later (constraints)
+is asked once, after the first version and the most important questions are
+settled; ask about edge cases (cases) then too, and only where the algorithm has
+edge cases worth seeing. One with assumed holds that value until the participant
+says otherwise.
+
+What each attribute steers. focus is the key takeaway, what a learner should get
+even paying attention a fifth of the time, and the misconception it targets (as
+thinking a search stops at its first comparison): make that what stands out, and
+show and pause at the step where the misconception goes wrong. vocabulary is the
+words and notation the course uses or avoids: use them in labels, captions, the
+listing and your replies, and never a term the participant rejects; ask it once
+something is labelled. tone is academic and restrained (assumed) or bolder:
+restrained is plain fonts, few colours, one accent, no decoration, never a
+generic, flashy look. setting explore means students try inputs of their own.
+use says where it will be shown (live slides, lecture notes, TikZ, a page
+students open): slides need large lettering. Whatever the brief, colours are
+safe for colour blindness: never tell things apart by hue alone, as red against
+green, but by lightness as well (a pale fill against a strong one) or by blue
+against orange. Low vision (constraints low-vision) needs large lettering and
+captions that say in words what each step shows, so the picture is not the only
+way to follow it. Respect the brief: never offer what avoid rules out (no colour
+comparisons where it must print in grey; a comparison that varies one comes back
+to you). Every few turns, and when the participant asks, say in a sentence or
+two what you understand so far (“So far: for first-years, stepped through alone,
+each comparison standing out; printed in grey.”), from the brief, inviting them
+to correct it; a correction confirms or replaces that attribute.
 
 Other ideas worth trying, such as a different input, a target that is absent, or
 duplicate values, may be mentioned briefly in plain words at the end of your

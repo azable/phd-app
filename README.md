@@ -131,23 +131,25 @@ views or arrangement), goes in the assistant's context as `preferences`, and so
 into each request's recorded prompt. Beside it goes the design brief, `brief`:
 the attributes of what the participant is trying to achieve, defined in
 [`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first, then
-those marked `askFirst`, as who it is for, asked before any comparison), each
-unknown, inferred or confirmed, from intake's answers and the `brief` each
-assistant decision returns, recorded on its `assistant.responded`; which are
-worth asking or confirming now, and, once a question in words has been asked
-since anything new was last shown, `next: "show"`, so the next turn shows a
-change or a comparison rather than asking again
-([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
-brief keeps out of comparisons, as colour where it must print in grey, which a
-comparison varying it is sent back to the assistant for. The brief's values
-weight the summary's ranking of what is worth asking. The assistant may also ask
-one `question` at a time, in words or about a presentation (one shown, or the
-first its decision makes, with elements to highlight), answered by the
-participant's next message, which records the question it answers
-(`feedback.submitted` `answers`); the chat shows each question as the last
-paragraph of its reply, which is left without a last sentence or paragraph that
-repeats it, the next message being its answer, and each comparison pair its
-question and answer as a caption
+those marked `askFirst`, who it is for and the key takeaway, asked one at a time
+before any comparison; those marked `later`, as low vision or printing in grey,
+asked once, late; and an `assumed` default, as tone's restrained look, steering
+while unknown), each unknown, inferred or confirmed, from intake's answers and
+the `brief` each assistant decision returns, recorded on its
+`assistant.responded`; which are worth asking or confirming now, and, once a
+question in words has been asked since anything new was last shown,
+`next: "show"`, so the next turn shows a change or a comparison rather than
+asking again ([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts));
+and what the brief keeps out of comparisons, as colour where it must print in
+grey, which a comparison varying it is sent back to the assistant for. The
+brief's values weight the summary's ranking of what is worth asking. The
+assistant may also ask one `question` at a time, in words or about a
+presentation (one shown, or the first its decision makes, with elements to
+highlight), answered by the participant's next message, which records the
+question it answers (`feedback.submitted` `answers`); the chat shows each
+question as the last paragraph of its reply, which is left without a last
+sentence or paragraph that repeats it, the next message being its answer, and
+each comparison pair its question and answer as a caption
 ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side hiding the layout itself or most of the picture

@@ -702,7 +702,7 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[Prev(j)]]` and `values[@to[j]]`, with
-`Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-100`, turns only
+`Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
 the pairs found out of order red, and with `pause@insert.swap.to` on, as a step
 of their own before anything is written. Showing or hiding something at some
 steps needs no flag, sentinel, or cast in the algorithm: a label, a pointer at a
@@ -848,6 +848,11 @@ it.
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
 pink, and rose) in 11 shades from 50, the lightest, to 950, as `blue-600`.
+Colours that tell things apart must differ to readers with red–green colour
+blindness too: differ in lightness, three shades or more (`amber-100` against
+`red-300`, not `red-100`), or as blue against orange or amber, never as red
+against green or another hue alone. The starter's look is safe, neutral with one
+amber accent.
 
 ### Places
 

@@ -31,12 +31,14 @@ function said(id: number, text: string): ProjectEvent {
 }
 
 describe('the brief’s attributes', () => {
-  it('starts with intake’s questions, then the plan’s attributes, each asked and explained', () => {
+  it('starts with intake’s questions, then Stage 5’s attributes, each asked and explained', () => {
     expect(briefKeys).toEqual([
       'algorithm',
       'audience',
-      'setting',
       'focus',
+      'vocabulary',
+      'setting',
+      'use',
       'detail',
       'constraints',
       'tone',
@@ -103,7 +105,7 @@ describe('the brief from the events', () => {
             value: 'first-year students',
             status: 'inferred',
             source: 'for my first-years',
-            tags: ['novice', 'playful']
+            tags: ['novice', 'bold']
           },
           { key: 'constraints', value: 'prints in grey', status: 'inferred', tags: ['greyscale'] }
         ]
@@ -128,7 +130,7 @@ describe('the brief from the events', () => {
     expect(
       projectBrief([
         responded(3, {
-          brief: [{ key: 'audience', value: 'x', status: 'inferred', tags: ['playful'] }]
+          brief: [{ key: 'audience', value: 'x', status: 'inferred', tags: ['bold'] }]
         })
       ]).find(({ key }) => key === 'audience')
     ).not.toHaveProperty('tags');

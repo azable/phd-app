@@ -52,16 +52,22 @@ export type BriefAttribute = {
    * reply asks, unless the request already said it.
    */
   askFirst?: true;
+  /** Asked once, late: once the first version and the most important questions are settled. */
+  later?: true;
+  /** The tag that holds while it is unknown, steering as if inferred: its default. */
+  assumed?: string;
   /** Values the assistant can name it by, each with how it steers. */
   tags?: Record<string, BriefSteer>;
 };
 
 /** Variables for how a step's comparison is marked: pointers, and kinds or labels naming one. */
 const comparisonMarks = /^pointers\.|\.Pointed\.|compar/i;
+/** Variables for how a position is labelled: its pointer views, as `i`, `A[i]` or a word. */
+const positionLabels = /^pointers\./;
 
 /**
- * The attributes, in the order they are asked. Intake's questions come first. A first guess, to
- * check against what Study 1's participants asked for and cared about (plan, Stage 3s).
+ * The attributes, in the order they are asked. Intake's questions come first. Stage 3s's first
+ * guess, revised against what Study 1's participants asked for and cared about (plan, Stage 5).
  */
 export const briefAttributes = [
   {
@@ -83,30 +89,58 @@ export const briefAttributes = [
     }
   },
   {
-    key: 'setting',
-    question:
-      'Will it be explained in a lecture, stepped through by a learner alone, or revised from?',
-    why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan.',
-    bearsOn: ['lettering', 'shown', 'pacing'],
-    tags: {
-      lecture: { families: { lettering: 1.4, shape: 1.1 } },
-      alone: { families: { shown: 1.3, pacing: 1.3 } },
-      revision: { families: { shown: 1.2, pacing: 0.7 } }
-    }
-  },
-  {
     key: 'focus',
     question:
-      'What should a learner notice first: each comparison, the overall pattern, or where it ends up?',
-    why: 'What is marked and how follows what a learner should notice.',
+      'What should a learner take away, even if they only half follow it, and is there a misconception it should tackle?',
+    why: 'What is marked, and where it pauses, follows the key takeaway and what learners get wrong.',
     bearsOn: ['views', 'shown', 'arrangement', 'colour'],
+    askFirst: true,
     tags: {
       comparisons: {
         matching: [{ pattern: comparisonMarks, weight: 2.5 }],
         families: { lettering: 0.8 }
       },
       pattern: { families: { arrangement: 1.4, views: 1.2, pacing: 0.8 } },
-      result: { families: { shown: 1.3 } }
+      result: { families: { shown: 1.3 } },
+      // The step where learners go wrong has to show, and pause.
+      misconception: { families: { shown: 1.2, pacing: 1.3 } }
+    }
+  },
+  {
+    key: 'vocabulary',
+    question:
+      'Are there words or notation your course uses for this, or avoids, such as `i` or `A[i]` for a position?',
+    why: 'Labels, captions and the listing should speak as the course does.',
+    bearsOn: ['views'],
+    tags: {
+      notation: { matching: [{ pattern: positionLabels, weight: 1.3 }] },
+      words: { matching: [{ pattern: positionLabels, weight: 1.3 }] }
+    }
+  },
+  {
+    key: 'setting',
+    question:
+      'Will it be explained in a lecture, stepped through by students alone, revised from, or explored by students with inputs of their own?',
+    why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan; exploring, it must take other inputs.',
+    bearsOn: ['lettering', 'shown', 'pacing'],
+    tags: {
+      lecture: { families: { lettering: 1.4, shape: 1.1 } },
+      alone: { families: { shown: 1.3, pacing: 1.3 } },
+      revision: { families: { shown: 1.2, pacing: 0.7 } },
+      explore: { families: { shown: 1.2 } }
+    }
+  },
+  {
+    key: 'use',
+    question:
+      'Where will it be shown: live on slides, in lecture notes, as TikZ in your notes, or as a page students open?',
+    why: 'Where it is shown decides the export it needs and how large it must read.',
+    bearsOn: ['lettering'],
+    tags: {
+      slides: { families: { lettering: 1.3 } },
+      notes: {},
+      tikz: {},
+      page: {}
     }
   },
   {
@@ -122,14 +156,15 @@ export const briefAttributes = [
   {
     key: 'constraints',
     question:
-      'Is there anything to keep or avoid, such as colour blindness, printing in grey, or no code listing?',
-    why: 'A constraint rules options out before any are compared.',
+      'Will anyone need to read it with low vision, or will it be printed in grey? Anything else to keep or avoid, such as the code listing?',
+    why: 'A constraint rules options out before any are compared. Colours are colour-blind safe whatever it says.',
     bearsOn: ['colour', 'views'],
+    later: true,
     tags: {
       greyscale: {
         excludes: { what: 'colours', families: ['colour'], reason: 'it must print in grey' }
       },
-      'colour-blind': {},
+      'low-vision': { families: { lettering: 1.4 } },
       'no-listing': {
         excludes: { what: 'the listing', pattern: /^listing\./, reason: 'it has no code listing' }
       }
@@ -137,12 +172,13 @@ export const briefAttributes = [
   },
   {
     key: 'tone',
-    question: 'Should it look plain or playful?',
-    why: 'Tone shows in fonts, colours and shapes.',
+    question: 'Should it look academic and restrained, or bolder?',
+    why: 'Tone shows in fonts, colours and shapes; a generic, flashy look reads as made by AI.',
     bearsOn: ['lettering', 'colour', 'shape'],
+    assumed: 'restrained',
     tags: {
-      plain: { families: { lettering: 0.8, shape: 0.8 } },
-      playful: { families: { lettering: 1.4, colour: 1.4, shape: 1.4 } }
+      restrained: { families: { lettering: 0.8, shape: 0.8 } },
+      bold: { families: { lettering: 1.4, colour: 1.4, shape: 1.4 } }
     }
   },
   {

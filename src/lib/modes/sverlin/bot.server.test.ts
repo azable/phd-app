@@ -180,7 +180,7 @@ describe('single-component Svelte assistant', () => {
           value: ' printed in grey ',
           status: 'inferred',
           source: 'for the handouts',
-          tags: ['greyscale', 'playful']
+          tags: ['greyscale', 'bold']
         },
         { key: 'tone', value: '', status: 'unknown', source: null, tags: [] }
       ]).brief

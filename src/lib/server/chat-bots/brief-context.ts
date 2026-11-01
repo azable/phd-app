@@ -6,6 +6,7 @@
 
 import {
   briefAttribute,
+  briefKeys,
   type BriefItem,
   type BriefKey,
   type BriefSteer,
@@ -41,6 +42,10 @@ export type AiBriefItem = {
   prompt?: 'ask' | 'confirm';
   /** Unknown and asked first (brief.ts askFirst): as soon as there is a version, before comparing. */
   first?: true;
+  /** Unknown and asked once, late (brief.ts later). */
+  later?: true;
+  /** Unknown, and its default holds meanwhile (brief.ts assumed), steering as a tag would. */
+  assumed?: string;
   /** The families of open choices it bears on or steers. */
   decides?: ChoiceFamily[];
 };
@@ -61,9 +66,9 @@ export type AiBrief = {
 
 /**
  * What is asked before what: the subject; unknowns asked first; other unknowns; inferences to
- * confirm.
+ * confirm; unknowns asked late.
  */
-const ranks = ['subject', 'first', 'unknown', 'confirm'] as const;
+const ranks = ['subject', 'first', 'unknown', 'confirm', 'later'] as const;
 type Rank = (typeof ranks)[number];
 
 /** At most this many attributes are suggested to ask at a time; they are asked one at a time. */
@@ -83,11 +88,13 @@ export function questionsSinceShown(events: readonly ProjectEvent[]): number {
   return asked;
 }
 
-/** The steers an attribute's tags name. */
+/** The steers an attribute's tags name, or while it is unknown, its default's (brief.ts assumed). */
 function steers(item: BriefItem): BriefSteer[] {
-  if (item.status === 'unknown') return [];
-  const tags = (briefAttribute(item.key).tags ?? {}) as Record<string, BriefSteer>;
-  return (item.tags ?? []).flatMap((tag) => (tags[tag] ? [tags[tag]] : []));
+  const attribute = briefAttribute(item.key);
+  const tags = (attribute.tags ?? {}) as Record<string, BriefSteer>;
+  const named =
+    item.status !== 'unknown' ? (item.tags ?? []) : attribute.assumed ? [attribute.assumed] : [];
+  return named.flatMap((tag) => (tags[tag] ? [tags[tag]] : []));
 }
 
 function steering(all: readonly BriefSteer[]): BriefSteering {
@@ -122,8 +129,9 @@ export function briefSteering(brief: readonly BriefItem[]): BriefSteering {
 /**
  * The brief for the assistant, given the choices still open (preference-summary.ts openChoices):
  * the subject while unknown, then unknown attributes asked first (brief.ts askFirst) whatever they
- * bear on, then other unknowns bearing on open choices, the one bearing on the most worth first,
- * are worth asking; an inferred one whose values steer or exclude open choices, worth confirming.
+ * bear on, in order, then other unknowns bearing on open choices, the one bearing on the most worth
+ * first, are worth asking; an inferred one whose values steer or exclude open choices, worth
+ * confirming; and last, unknowns asked late (brief.ts later).
  * At most one question in words comes between things shown: once one has been asked since (see
  * questionsSinceShown), the next turn shows.
  */
@@ -158,20 +166,25 @@ export function briefContext(
         ranked.push({ key: item.key, rank: 'subject', worth: Infinity });
         return { ...base, prompt: 'ask' };
       }
-      if (attribute.bearsOn === 'inputs') return base;
+      const unknown = { ...base, ...(attribute.assumed ? { assumed: attribute.assumed } : {}) };
+      if (attribute.bearsOn === 'inputs') return unknown;
       const families = attribute.bearsOn;
       const bearing = kept.filter(({ family }) => families.includes(family));
-      if (!bearing.length && !attribute.askFirst) return base;
+      if (!bearing.length && !attribute.askFirst) return unknown;
       ranked.push({
         key: item.key,
-        rank: attribute.askFirst ? 'first' : 'unknown',
-        worth: Math.max(0, ...bearing.map(({ worth }) => worth))
+        rank: attribute.askFirst ? 'first' : attribute.later ? 'later' : 'unknown',
+        // Those asked first go in the attributes' order: who it is for before the takeaway.
+        worth: attribute.askFirst
+          ? -briefKeys.indexOf(item.key)
+          : Math.max(0, ...bearing.map(({ worth }) => worth))
       });
       const decides = families.filter((f) => bearing.some(({ family }) => family === f));
       return {
-        ...base,
+        ...unknown,
         prompt: 'ask',
         ...(attribute.askFirst ? { first: true } : {}),
+        ...(attribute.later ? { later: true } : {}),
         ...(decides.length ? { decides } : {})
       };
     }

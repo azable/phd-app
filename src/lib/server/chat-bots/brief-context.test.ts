@@ -80,6 +80,43 @@ describe('the brief steering the preference summary', () => {
 describe('the brief in the assistant’s context', () => {
   const open = openChoices([], design);
 
+  it('assumes a restrained look while the tone is unknown, steering as if it were said', () => {
+    const unknown = briefContext(brief({}), open).attributes.find(({ key }) => key === 'tone');
+    expect(unknown).toMatchObject({ status: 'unknown', assumed: 'restrained' });
+    expect(briefSteering(brief({})).weight('Cell.font')).toBeCloseTo(0.8);
+    const bold = brief({ tone: { status: 'confirmed', value: 'bolder', tags: ['bold'] } });
+    expect(briefSteering(bold).weight('Cell.font')).toBeCloseTo(1.4);
+    expect(
+      briefContext(bold, open).attributes.find(({ key }) => key === 'tone')
+    ).not.toHaveProperty('assumed');
+  });
+
+  it('asks about low vision and printing once, late, after the other questions', () => {
+    const algorithm = { status: 'confirmed', value: 'insertion sort' } as const;
+    const audience = { status: 'confirmed' as const, value: 'first-years', tags: ['novice'] };
+    const focus = { status: 'confirmed' as const, value: 'each comparison', tags: ['comparisons'] };
+    const context = briefContext(brief({ algorithm, audience, focus }), open);
+    expect(context.attributes.find(({ key }) => key === 'constraints')).toMatchObject({
+      prompt: 'ask',
+      later: true
+    });
+    expect(context.askFirst).not.toContain('constraints');
+    const rest = briefContext(
+      brief({
+        algorithm,
+        audience,
+        focus,
+        vocabulary: { status: 'confirmed', value: 'the code’s names' },
+        setting: { status: 'confirmed', value: 'a lecture' },
+        use: { status: 'confirmed', value: 'slides' },
+        detail: { status: 'confirmed', value: 'every step' },
+        tone: { status: 'confirmed', value: 'restrained', tags: ['restrained'] }
+      }),
+      open
+    );
+    expect(rest.askFirst).toEqual(['constraints']);
+  });
+
   it('marks unknown attributes bearing on open choices to ask, the subject first', () => {
     const context = briefContext(brief({}), open);
     const byKey = Object.fromEntries(context.attributes.map((item) => [item.key, item]));
@@ -93,16 +130,18 @@ describe('the brief in the assistant’s context', () => {
     expect(context.avoid).toEqual([]);
   });
 
-  it('asks nothing of an attribute whose choices are all decided or excluded, but who it is for', () => {
+  it('asks nothing of an attribute whose choices are all decided, but who it is for and the takeaway', () => {
     const context = briefContext(
       brief({ algorithm: { status: 'confirmed', value: 'insertion sort' } }),
       []
     );
     expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([
-      expect.objectContaining({ key: 'audience', prompt: 'ask', first: true })
+      expect.objectContaining({ key: 'audience', prompt: 'ask', first: true }),
+      expect.objectContaining({ key: 'focus', prompt: 'ask', first: true })
     ]);
     expect(context.attributes.find(({ key }) => key === 'audience')).not.toHaveProperty('decides');
-    expect(context.askFirst).toEqual(['audience']);
+    // Asked in the attributes' order, one at a time.
+    expect(context.askFirst).toEqual(['audience', 'focus']);
   });
 
   it('puts who it is for, while unknown, before every other question, whatever they bear on', () => {
