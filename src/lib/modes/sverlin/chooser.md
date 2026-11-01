@@ -39,13 +39,12 @@ as text that reads on its fill and spacing that suits the corners, and give one
 meaning one look across the kinds that show it, such as every current element’s
 fill. Make a new kind look like what it is: a pointer or a highlight stands out,
 a caption is quieter than a title. A decoration says something, as a strike a
-value that is gone: use one only where it does. A border says something too, as a
-box that holds a value or groups a part: give one only to the kinds where it
+value that is gone: use one only where it does. A border says something too, as
+a box that holds a value or groups a part: give one only to the kinds where it
 does, never every kind at once, and leave text such as titles, captions and
-labels unboxed. Where views of one type say
-different things, as pointer views captioned i and j, they are not looks: choose
-each place’s view by what it says, as pointers.Position@j for the one captioned
-j, and never draw them at random.
+labels unboxed. Where views of one type say different things, as pointer views
+captioned i and j, they are not looks: choose each place’s view by what it says,
+as pointers.Position@j for the one captioned j, and never draw them at random.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go. project.runs gives each label’s runs and how many change
