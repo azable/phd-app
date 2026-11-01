@@ -8,6 +8,7 @@ import {
   pendingAssistantTurnRequests
 } from '$lib/shared/projects/operations';
 import {
+  InvalidProjectDocumentError,
   normalizeProjectEvent,
   type NewProjectEvent,
   type ProjectEvent
@@ -230,10 +231,31 @@ export class PostgresProjectRepository implements ProjectRepository {
 /** Default repository used by server routes and project operations. */
 export const projectRepository: ProjectRepository = new PostgresProjectRepository();
 
-/** Refuse export or deletion while a selected project's Timeline is still changing. */
-export async function assertNoActiveProjectOperations(ownerUserId?: string): Promise<void> {
-  for (const summary of await projectRepository.list(ownerUserId)) {
-    const document = await projectRepository.load(summary.projectId);
+/** Projects skipped as unreadable, each logged once. */
+const unreadableProjects = new Set<string>();
+
+/**
+ * Refuse export or deletion while a selected project's Timeline is still changing. A project whose
+ * Timeline no longer reads as the events are now defined runs no operation (none can load it), and
+ * one deleted since the list has none, so neither keeps the others from being exported or deleted.
+ */
+export async function assertNoActiveProjectOperations(
+  ownerUserId?: string,
+  repository: ProjectReader = projectRepository
+): Promise<void> {
+  for (const summary of await repository.list(ownerUserId)) {
+    let document: ProjectDocument;
+    try {
+      document = await repository.load(summary.projectId);
+    } catch (cause) {
+      if (cause instanceof ProjectNotFoundError) continue;
+      if (!(cause instanceof InvalidProjectDocumentError)) throw cause;
+      if (!unreadableProjects.has(summary.projectId)) {
+        unreadableProjects.add(summary.projectId);
+        console.warn(`Skipping project ${summary.projectId}, whose Timeline no longer reads.`);
+      }
+      continue;
+    }
     if (activeProjectOperation(document) || pendingAssistantTurnRequests(document).length > 0) {
       throw new Error(
         'A project operation is currently running. Wait for it to finish and try again.'

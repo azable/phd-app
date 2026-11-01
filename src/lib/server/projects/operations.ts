@@ -32,7 +32,7 @@ import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
 import { projectOperationDeadlineError, runWithProjectOperationSignal } from './operation-context';
 import { recoveryEventsForInterruptedOperations } from './recovery';
-import { projectRepository, type ProjectRepository } from './repository';
+import { ProjectNotFoundError, projectRepository, type ProjectRepository } from './repository';
 import {
   renameProject,
   advanceProjectPresentations,
@@ -209,34 +209,43 @@ export class ProjectOperationExecutor {
     for (const summary of await this.repository.list()) {
       const document = await this.readableProject(summary.projectId);
       if (!document) continue;
-      const active = activeProjectOperation(document);
-      if (!active || this.#active.has(active.operationId)) continue;
-      const lease = await this.lock.acquire(active.operationId);
-      if (!lease) continue;
       try {
-        const latest = await this.repository.load(summary.projectId);
-        const current = projectOperation(latest, active.operationId);
-        if (!current || current.status === 'completed' || current.status === 'failed') continue;
-        const related = latest.events.filter(
-          (event) => event.operationId === active.operationId && event.id > active.acceptedEventId
-        );
-        await this.repository.append(summary.projectId, latest.events.length, [
-          ...recoveryEventsForInterruptedOperations(related),
-          lifecycleFailure(
-            active.operationId,
-            active.kind,
-            'cancelled',
-            'The project operation was interrupted by a server restart. Retry the operation.'
-          )
-        ]);
-        recovered += 1;
-      } finally {
-        await lease.release();
+        if (await this.recoverProject(summary.projectId, document)) recovered += 1;
+      } catch (cause) {
+        console.error(`Could not recover operations of project ${summary.projectId}.`, cause);
       }
-      this.queueAssistantProject(summary.projectId);
     }
     await this.discoverQueuedAssistantTurns();
     return recovered;
+  }
+
+  /** Fail the project's active operation if no process runs it, saying whether one was failed. */
+  private async recoverProject(projectId: string, document: ProjectDocument): Promise<boolean> {
+    const active = activeProjectOperation(document);
+    if (!active || this.#active.has(active.operationId)) return false;
+    const lease = await this.lock.acquire(active.operationId);
+    if (!lease) return false;
+    try {
+      const latest = await this.repository.load(projectId);
+      const current = projectOperation(latest, active.operationId);
+      if (!current || current.status === 'completed' || current.status === 'failed') return false;
+      const related = latest.events.filter(
+        (event) => event.operationId === active.operationId && event.id > active.acceptedEventId
+      );
+      await this.repository.append(projectId, latest.events.length, [
+        ...recoveryEventsForInterruptedOperations(related),
+        lifecycleFailure(
+          active.operationId,
+          active.kind,
+          'cancelled',
+          'The project operation was interrupted by a server restart. Retry the operation.'
+        )
+      ]);
+    } finally {
+      await lease.release();
+    }
+    this.queueAssistantProject(projectId);
+    return true;
   }
 
   /** Periodically catch overlap where a replacement starts before the old process exits. */
@@ -414,14 +423,19 @@ export class ProjectOperationExecutor {
   }
 
   /**
-   * A project for the scans across every project, none where its Timeline no longer reads as the
-   * events are now defined (made before a change to them), so one such project stops no other.
+   * A project for the scans across every project, none where it cannot be loaded, so one such
+   * project stops no other: deleted since the list, its Timeline no longer reading as the events
+   * are now defined (made before a change to them), logged once, or any other failure, logged.
    */
   private async readableProject(projectId: string): Promise<ProjectDocument | undefined> {
     try {
       return await this.repository.load(projectId);
     } catch (cause) {
-      if (!(cause instanceof InvalidProjectDocumentError)) throw cause;
+      if (cause instanceof ProjectNotFoundError) return undefined;
+      if (!(cause instanceof InvalidProjectDocumentError)) {
+        console.error(`Could not load project ${projectId} while scanning projects.`, cause);
+        return undefined;
+      }
       if (!this.#unreadable.has(projectId)) {
         this.#unreadable.add(projectId);
         console.warn(

@@ -9,6 +9,7 @@ import { pendingAssistantTurnRequests, projectOperation } from '$lib/shared/proj
 import { MemoryProjectRepository } from './memory-repository.test-support';
 import { currentProjectOperationDeadline } from './operation-context';
 import { ProjectOperationExecutor } from './operations';
+import { assertNoActiveProjectOperations, ProjectNotFoundError } from './repository';
 
 describe('ProjectOperationExecutor', () => {
   it('records accepted and completed boundaries around an injected command', async () => {
@@ -65,6 +66,51 @@ describe('ProjectOperationExecutor', () => {
     );
 
     await expect(executor.recoverInterrupted()).resolves.toBe(0);
+  });
+
+  it('recovers past projects deleted since the list or failing to load', async () => {
+    const deleted = randomUUID();
+    const failing = randomUUID();
+    const repository = new (class extends MemoryProjectRepository {
+      override async load(projectId: string) {
+        if (projectId === deleted) throw new ProjectNotFoundError(projectId);
+        if (projectId === failing) throw new Error('Connection reset');
+        return super.load(projectId);
+      }
+    })();
+    await repository.create(rootDocument(deleted, randomUUID()), 'owner');
+    await repository.create(rootDocument(failing, randomUUID()), 'owner');
+    const interrupted = randomUUID();
+    await repository.create(rootDocument(interrupted, randomUUID()), 'owner');
+    await repository.append(interrupted, 1, [acceptedEvent(randomUUID())]);
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => ({ release: async () => undefined }) },
+      async () => {
+        throw new Error('No command runs.');
+      }
+    );
+
+    await expect(executor.recoverInterrupted()).resolves.toBe(1);
+  });
+
+  it('lets an export or deletion past a project whose Timeline no longer reads', async () => {
+    const unreadable = randomUUID();
+    const repository = new (class extends MemoryProjectRepository {
+      override async load(projectId: string) {
+        if (projectId === unreadable) throw new InvalidProjectDocumentError('Invalid type');
+        return super.load(projectId);
+      }
+    })();
+    await repository.create(rootDocument(unreadable, randomUUID()), 'owner');
+    const running = randomUUID();
+    await repository.create(rootDocument(running, randomUUID()), 'owner');
+
+    await expect(assertNoActiveProjectOperations(undefined, repository)).resolves.toBeUndefined();
+    await repository.append(running, 1, [acceptedEvent(randomUUID())]);
+    await expect(assertNoActiveProjectOperations(undefined, repository)).rejects.toThrow(
+      'currently running'
+    );
   });
 
   it('accepts a command on a head that only a load report has moved since', async () => {
@@ -598,6 +644,16 @@ async function eventually(condition: () => boolean | Promise<boolean>): Promise<
 function commandForFailureCase(kind: 'assistant-turn' | 'initial-build', _operationId: string) {
   if (kind === 'assistant-turn') return { type: 'assistant-turn' as const, requestEventIds: [1] };
   return { type: 'initial-build' as const, seed: 1 };
+}
+
+function acceptedEvent(operationId: string) {
+  return {
+    type: 'operation.accepted' as const,
+    actor: { kind: 'user' as const },
+    operationId,
+    createdAt: '2026-08-30T00:00:01.000Z',
+    payload: { kind: 'initial-build' as const }
+  };
 }
 
 function rootDocument(projectId: string, operationId: string): ProjectDocument {
