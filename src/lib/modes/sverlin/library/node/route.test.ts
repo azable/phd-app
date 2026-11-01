@@ -210,6 +210,22 @@ describe('an arrow reaching what its node draws', () => {
     expect(slant?.start.x).toBeCloseTo(60 - (15 * (180 - 74)) / (180 - 25), 5);
   });
 
+  it('meets the element past the empty corner of a caption wider than it', () => {
+    // Coming in aslant from below left, it ends in the caption's box beside the name: the line to
+    // the name's middle crosses only the caption's top corner, above its text.
+    const aslant = reachDrawn(
+      'M-100,120 C-60,110 -20,90 12,52',
+      { start: [], end: [name, caption] },
+      none
+    );
+    expect(aslant?.end.x).toBeCloseTo(20, 5);
+    expect(aslant?.end.y).toBeLessThan(50);
+    // From straight below, through the caption's text, it still stops under the caption.
+    expect(
+      reachDrawn('M45,300 C45,260 45,220 45,90', { start: [], end: [name, caption] }, none)?.end
+    ).toEqual(point(45, 74));
+  });
+
   it('reaches what is drawn from a curve leaving sideways, keeping its bend', () => {
     // Leaving to the right, as an arc between vertices side by side: carried on the way it
     // leaves, it would never meet the vertex.

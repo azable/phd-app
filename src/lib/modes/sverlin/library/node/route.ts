@@ -316,23 +316,41 @@ export function reachDrawn(
     const length = Math.hypot(middle.x - at.x, middle.y - at.y);
     if (!length) return undefined;
     const toward = { x: (middle.x - at.x) / length, y: (middle.y - at.y) / length };
-    // How far towards the middle it first enters a box drawn there.
-    const entries = boxes.flatMap((box) => {
+    // How far towards the middle the line is inside a box, if it crosses it.
+    const crossing = (box: Box): [number, number] | undefined => {
       let [near, far] = [0, Infinity];
       for (const [origin, step, low, high] of [
         [at.x, toward.x, box.left, box.right],
         [at.y, toward.y, box.top, box.bottom]
       ]) {
         if (step === 0) {
-          if (origin < low || origin > high) return [];
+          if (origin < low || origin > high) return undefined;
           continue;
         }
         const [t1, t2] = [(low - origin) / step, (high - origin) / step].sort((p, q) => p - q);
         [near, far] = [Math.max(near, t1), Math.min(far, t2)];
       }
-      return near <= far ? [near] : [];
-    });
-    if (!entries.length) return undefined;
+      return near <= far ? [near, far] : undefined;
+    };
+    // It stops at what else is drawn, as a caption, only where it would cross the caption's middle
+    // on the way to the element: an arrow coming in aslant meets the element past the empty corner
+    // of a caption wider than it, rather than ending beside the caption's text.
+    const element = crossing(boxes[0]);
+    if (!element) return undefined;
+    const entries = [
+      element[0],
+      ...boxes.slice(1).flatMap((box) => {
+        const inset = (box.bottom - box.top) / 3;
+        const middle = crossing({
+          left: box.left + inset,
+          top: box.top + inset,
+          right: box.right - inset,
+          bottom: box.bottom - inset
+        });
+        const entry = crossing(box);
+        return entry && middle && middle[0] < element[0] ? [entry[0]] : [];
+      })
+    ];
     const reach = Math.min(...entries) - short;
     // Within a pixel, it meets it already.
     return reach < 1 ? undefined : { x: at.x + toward.x * reach, y: at.y + toward.y * reach };

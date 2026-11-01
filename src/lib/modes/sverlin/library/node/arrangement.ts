@@ -293,7 +293,15 @@ export function arrangeChildren<E>(
         const anchor = anchors[key];
         if (!anchor) return [];
         const { x, y } = placements[anchor.box];
-        return [anchor, ...visible.filter((part) => part.box === anchor.box)].map((box) => ({
+        // A box drawn round the element, as a pointer's fill at some steps, is crossed to meet the
+        // element, so the arrow keeps its place from step to step.
+        const around = (part: Anchor) =>
+          part.x <= anchor.x &&
+          part.y <= anchor.y &&
+          part.x + part.width >= anchor.x + anchor.width &&
+          part.y + part.height >= anchor.y + anchor.height;
+        const parts = visible.filter((part) => part.box === anchor.box && !around(part));
+        return [anchor, ...parts].map((box) => ({
           left: x + box.x,
           top: y + box.y,
           right: x + box.x + box.width,

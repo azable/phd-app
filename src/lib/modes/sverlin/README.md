@@ -1189,7 +1189,10 @@ prop, as `Arrow.Link` for a link in `Arrow`.
   reaching them would cross that other content: an arrow down from a vertex with
   captions under it leaves just below what is drawn under it at that step, its
   captions or a pointer's label, in line with its name cell, not below room kept
-  for a label shown only at other steps.
+  for a label shown only at other steps. An arrow coming in aslant passes the
+  empty corner of a caption wider than the name cell to meet the cell, and
+  crosses a pointer's fill round the vertex, so it keeps its place from step to
+  step.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round

@@ -42,7 +42,7 @@ const reader: Reader<Fake> = {
  * A vertex as a breadth-first search draws it: a name cell over a caption, and a pointer's label
  * under them that keeps its room, hidden, at the steps the pointer is elsewhere.
  */
-const vertex = (index: number, labelled: boolean): Fake => {
+const vertex = (index: number, labelled: boolean, filled = false): Fake => {
   const node = (id: string, y: number, height: number, extra: Record<string, string> = {}) =>
     fake({ 'data-sv-node': `${id}${index}`, ...extra }, { x: 0, y, width: 80, height });
   const label = node('label', 100, 24, labelled ? {} : { 'data-sv-hidden': 'true' });
@@ -50,11 +50,15 @@ const vertex = (index: number, labelled: boolean): Fake => {
     { 'data-sv-node': `v${index}`, 'data-sv-slot': `v[${index}]` },
     { x: 0, y: 0, width: 80, height: 130 },
     [
-      fake({ 'data-sv-node': `column${index}` }, { x: 0, y: 0, width: 80, height: 130 }, [
-        node('name', 0, 50, { 'data-sv-framed': 'true', 'data-sv-fill': 'white' }),
-        node('caption', 50, 24),
-        label
-      ])
+      fake(
+        { 'data-sv-node': `column${index}`, ...(filled ? { 'data-sv-fill': 'yellow' } : {}) },
+        { x: 0, y: 0, width: 80, height: 130 },
+        [
+          node('name', 0, 50, { 'data-sv-framed': 'true', 'data-sv-fill': 'white' }),
+          node('caption', 50, 24),
+          label
+        ]
+      )
     ]
   );
 };
@@ -65,9 +69,9 @@ const link = (from: number, to: number) =>
     { x: 0, y: 0, width: 0, height: 0 }
   );
 
-const arrowsFrom = (labelled: boolean) => {
+const arrowsFrom = (labelled: boolean, filled = false) => {
   const host = fake({}, { x: 0, y: 0, width: 0, height: 0 }, [
-    vertex(0, labelled),
+    vertex(0, labelled, filled),
     vertex(1, false),
     vertex(2, false),
     link(0, 1),
@@ -86,5 +90,9 @@ describe('a free layout’s arrows', () => {
   it('leave a vertex below what it draws at the step, not the room kept for a hidden label', () => {
     for (const edge of arrowsFrom(false)) expect(edge.y1).toBeCloseTo(74, 5);
     for (const edge of arrowsFrom(true)) expect(edge.y1).toBeCloseTo(124, 5);
+  });
+
+  it('keep their place where a pointer paints a box round the vertex', () => {
+    for (const edge of arrowsFrom(false, true)) expect(edge.y1).toBeCloseTo(74, 5);
   });
 });
