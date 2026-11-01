@@ -159,6 +159,19 @@ describe('presentation stage during a later turn', () => {
     expect(body).not.toContain('Updating…');
     expect(body).not.toContain('opacity-75');
   });
+
+  it('holds the answers while another turn replies, saying why', () => {
+    for (const running of [[requested(3)], [accepted(3)]]) {
+      const body = stage([...askedPair(), ...running], false);
+      expect(disabled(body, 'Prefer the top version')).toBe(true);
+      expect(body).toContain('Answer once the assistant has replied.');
+    }
+    // The turn that asked the comparison may still be running.
+    const asking = { ...accepted(3), operationId } as ProjectEvent;
+    const body = stage([...askedPair(), asking], false);
+    expect(disabled(body, 'Prefer the top version')).toBe(false);
+    expect(body).not.toContain('Answer once the assistant has replied.');
+  });
 });
 
 describe('presentation stage showing a comparison from the timeline', () => {

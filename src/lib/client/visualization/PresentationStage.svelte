@@ -35,7 +35,7 @@
   } from './presentation-playback.svelte';
   import { comparisonProgress, pairQuestion, timelinePresentations } from './presentation-history';
   import PresentationViewport from './PresentationViewport.svelte';
-  import { blankStarter, stageActivity } from './stage-activity';
+  import { assistantTurnAfter, blankStarter, stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
 
@@ -126,6 +126,11 @@
   );
   // The pair just answered, kept dimmed while the assistant replies to it.
   const awaiting = $derived(selection.awaiting(session.events, layout));
+  // A reply on its way that will change the stage, which the pair's answers wait for.
+  const replyPending = $derived(
+    visible.length === 2 && assistantTurnAfter(session.events, visible[0].operationId)
+  );
+  const uid = $props.id();
   const preparing = $derived(
     session.refillPending ||
       (!!session.pending && visualizationOperationKinds.includes(session.pending.type))
@@ -403,6 +408,7 @@
         class="flex flex-wrap items-center justify-center gap-1.5 rounded-lg bg-muted p-1"
         role="group"
         aria-label="Your answer"
+        aria-describedby={replyPending && !awaiting ? `${uid}-unavailable` : undefined}
       >
         {#each answers as { answer, label, text, icons } (answer)}
           <Button
@@ -411,7 +417,7 @@
             aria-label={label}
             title={label}
             onclick={() => prefer(answer)}
-            disabled={disabled || answering || !!awaiting}
+            disabled={disabled || answering || !!awaiting || replyPending}
           >
             {#each icons as Icon, index (index)}<Icon
                 data-icon={index === 0 ? 'inline-start' : undefined}
@@ -421,6 +427,11 @@
           </Button>
         {/each}
       </div>
+      {#if replyPending && !awaiting}
+        <p id={`${uid}-unavailable`} class="text-sm text-muted-foreground" role="status">
+          Answer once the assistant has replied.
+        </p>
+      {/if}
     {/if}
     {#if selection.buffered && !selection.questionPairs && selection.followingLatest && visible.length}
       <Button

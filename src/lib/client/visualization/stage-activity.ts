@@ -74,6 +74,25 @@ function operationActivity(
 }
 
 /**
+ * Whether an assistant turn other than the one that showed the stage's version is waiting or
+ * running: what it replies will change the stage, so an answer given meanwhile would be moot.
+ */
+export function assistantTurnAfter(
+  events: readonly ProjectEvent[],
+  shownOperationId: string | undefined
+): boolean {
+  return (
+    pendingAssistantTurnRequests(events).length > 0 ||
+    projectOperations(events).some(
+      ({ kind, status, operationId }) =>
+        kind === 'assistant-turn' &&
+        (status === 'accepted' || status === 'running') &&
+        operationId !== shownOperationId
+    )
+  );
+}
+
+/**
  * Whether a presentation shows a blank project's starter (“Start your visualization”), built from
  * the source the project was created with: a stand-in until its first version, not a version.
  */
