@@ -110,15 +110,10 @@ that leaves none waiting starts the assistant's turn. A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side the variant guard would change is recorded as rejected
 (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired as edits
-that did not apply are. The assistant's reply may carry suggestions, directions
-its comparisons cannot ask, stored on its `assistant.responded` event and shown
-under the newest reply as buttons until a message or preference answers it
-(three, the rest behind More); a click sends one as the participant's message,
-its `feedback.submitted` naming the reply in `fromSuggestion`, and the assistant
-sees both in its conversation. Every presentation currently shows every master
-step. Every array and object is made by a collection or record type the domain
-block defines, and each step records the domain type of every value by path
-beside its plain values. Every view is mounted inside the page frame,
+that did not apply are. Every presentation currently shows every master step.
+Every array and object is made by a collection or record type the domain block
+defines, and each step records the domain type of every value by path beside its
+plain values. Every view is mounted inside the page frame,
 [`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
 it out at a fixed logical size and scales it to fit the page, as a zoomable,
 pannable canvas with a dashed outline; the sandboxed page loads once per
@@ -361,9 +356,17 @@ projections, and interaction schemas remain under
 [`src/lib/shared/study/`](src/lib/shared/study/). The main study compares
 Svelte-backed `sverlin` in a two-candidate workspace with script-free, per-frame
 `html` in a single-candidate workspace. The separate `html-js` mode is not a
-study condition. The protocol defines the counterbalanced order, 15-minute task
-duration, and interaction-capture policy; the comments beside its limits explain
-their sampling and delivery tradeoffs.
+study condition. A project outside a study, as an administrator trying one,
+works under the condition for its mode in the first study open to enrollment
+(`trialCondition` in the registry, applied by `projectTrialCondition` in
+[`study.ts`](src/lib/server/study.ts)): its layout, presentation buffer and
+chooser, so a `sverlin` project shows pairs side by side, with the assistant's
+questions, as in the study. Dev mode shows the newest variants rather than the
+buffer's next pair, so those New pair and Another variant make show at once. A
+mode no open study has keeps one presentation and no buffer, comparing two when
+an administrator selects them. The protocol defines the counterbalanced order,
+15-minute task duration, and interaction-capture policy; the comments beside its
+limits explain their sampling and delivery tradeoffs.
 
 New blank projects start by asking which algorithm to visualise before
 authoring. The assistants use a bounded five-call ladder: one initial call, up

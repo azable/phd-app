@@ -175,8 +175,6 @@ export type SourceArtifactChatOutput = {
   reply: GeneratedMessageContent;
   decision: SourceDecision;
   recovery?: RecoveryExplanation;
-  /** Comparisons worth making next, most useful first, offered under the reply. */
-  suggestions?: string[];
 };
 
 /** Candidate-based modes share one orchestration shape; each mode validates its own manifest. */

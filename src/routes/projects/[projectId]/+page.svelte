@@ -33,5 +33,6 @@
     {devMode}
     configuredChooser={data.chooser}
     study={data.study}
+    trial={data.trial}
   />
 {/key}

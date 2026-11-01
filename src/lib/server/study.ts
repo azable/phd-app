@@ -10,7 +10,11 @@ import * as schema from '$lib/server/db/schema';
 import { projectRepository, ProjectNotFoundError } from '$lib/server/projects/repository';
 import { createProject, buildProjectPresentations } from '$lib/server/projects/service';
 import { projectSnapshotAt } from '$lib/shared/projects/projection';
-import { resolveStudyArm, type ResolvedStudyPhase } from '$lib/shared/study/definition';
+import {
+  resolveStudyArm,
+  type ResolvedStudyPhase,
+  type StudyCondition
+} from '$lib/shared/study/definition';
 import type { StudyInteractionCapturePolicy } from '$lib/shared/study/interactions';
 import type { ChooserId } from '$lib/shared/choosers';
 import {
@@ -21,7 +25,12 @@ import {
   type StudyRunKind,
   type StudyRunSnapshot
 } from '$lib/shared/study/projection';
-import { studyDefinition, studyRegistration, type StudyRef } from '$lib/shared/study/registry';
+import {
+  studyDefinition,
+  studyRegistration,
+  trialCondition,
+  type StudyRef
+} from '$lib/shared/study/registry';
 
 type StudyRunRow = typeof schema.studyRuns.$inferSelect;
 type StudyPhaseRunRow = typeof schema.studyPhaseRuns.$inferSelect;
@@ -319,6 +328,23 @@ export async function studyProjectContext(
     ...(row.layout ? { layout: row.layout } : {}),
     ...(row.view ? { view: row.view } : {})
   };
+}
+
+/**
+ * The study condition a project outside any study is tried under (see `trialCondition`); none for
+ * a study's own project, which has its phase's.
+ */
+export async function projectTrialCondition(
+  projectId: string,
+  study: StudyProjectContext | undefined
+): Promise<StudyCondition | undefined> {
+  if (study) return undefined;
+  const [row] = await database()
+    .select({ mode: schema.projects.mode })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  return row ? trialCondition(row.mode) : undefined;
 }
 
 /** Enforce that participant mutations target only their current live task project. */

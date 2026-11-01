@@ -64,8 +64,6 @@
     onChooseFailure?: (
       failure: { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
     ) => void;
-    /** Send a reply's suggestion as the participant's message; without it, none are offered. */
-    onSuggestion?: (suggestion: string, replyEventId: number) => void;
   };
 
   let {
@@ -81,13 +79,8 @@
     chosenRequest,
     onChooseRequest = () => {},
     chosenFailure,
-    onChooseFailure = () => {},
-    onSuggestion
+    onChooseFailure = () => {}
   }: Props = $props();
-  // The suggestions shown before More: the most useful few, so the reply stays short.
-  const visibleSuggestions = 3;
-  // The reply whose suggestions are all shown, by its event id.
-  let allSuggestionsOf = $state<number | undefined>();
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
   const items = $derived(participantTimeline(session.events, { audit }));
@@ -192,32 +185,6 @@
           inverted={item.actor === 'user'}
           onReferenceActivate={activateReference}
         />
-        {#if item.suggestions && onSuggestion}
-          {@const all = allSuggestionsOf === item.eventId}
-          <div class="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Suggested comparisons">
-            {#each all ? item.suggestions : item.suggestions.slice(0, visibleSuggestions) as suggestion, index (index)}
-              <Button
-                size="sm"
-                variant="outline"
-                class="h-auto min-h-7 py-1 text-left whitespace-normal"
-                disabled={!session.atHead || !!session.pending}
-                onclick={() => onSuggestion(suggestion, item.eventId)}
-              >
-                {suggestion}
-              </Button>
-            {/each}
-            {#if item.suggestions.length > visibleSuggestions}
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-expanded={all}
-                onclick={() => (allSuggestionsOf = all ? undefined : item.eventId)}
-              >
-                {all ? 'Fewer' : `More (${item.suggestions.length - visibleSuggestions})`}
-              </Button>
-            {/if}
-          </div>
-        {/if}
       </article>
     {:else if item.kind === 'note'}
       {@const of = item.of}

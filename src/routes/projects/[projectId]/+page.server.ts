@@ -3,7 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { projectInspectionContext, requireAdmin } from '$lib/server/authorization';
 import { listProjectTemplates } from '$lib/server/projects/starter-catalog';
 import { projectChooserId } from '$lib/server/projects/chooser-config';
-import { forceStudyPreview, studyRunState } from '$lib/server/study';
+import { forceStudyPreview, projectTrialCondition, studyRunState } from '$lib/server/study';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -49,6 +49,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
             };
     }
   }
+  const trial = await projectTrialCondition(params.projectId, inspection.study);
   return {
     authEnabled: true,
     isAdmin: principal.kind === 'admin',
@@ -56,7 +57,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     templates: principal.kind === 'admin' && !inspection.readOnly ? listProjectTemplates() : [],
     // The chooser the dev-mode chooser picker starts from.
     ...(principal.kind === 'admin' ? { chooser: await projectChooserId(params.projectId) } : {}),
-    study
+    study,
+    ...(trial
+      ? {
+          trial: {
+            layout: trial.workspace.layout,
+            ...(trial.presentationBufferTarget
+              ? { presentationBufferTarget: trial.presentationBufferTarget }
+              : {})
+          }
+        }
+      : {})
   };
 };
 

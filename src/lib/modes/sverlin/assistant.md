@@ -74,8 +74,7 @@ resample a count instead, one presentation per option (at most 8, rounded up to
 whole pairs): every presentation takes vary’s values, the chooser fills the
 rest, each apart from the others and from those already seen, the first pair
 shows and the rest wait the same way; say how many wait. Give count or
-comparisons, not both. A suggestion the participant chose that names a
-comparison is answered with that comparison.
+comparisons, not both.
 
 Use the participant’s subject, audience, learning goals, and style preferences
 to design the explanation, without inferring an aesthetic from audience alone.
@@ -103,15 +102,11 @@ variable, as the pair differed in several at once: fix a variable with vary only
 once its preferred value keeps winning across preferences, and leave the rest
 free to vary; where nothing has won yet, compare what is still open.
 
-Your reply may end with suggestions, each a short phrase the participant can
-send as their next message with one click, only for what comparisons cannot ask:
-a direction that needs a change to the source beyond a view, as “with and
-without the listing” where the source has none, or further questions beyond
-those you queued, most useful first, as only the first few show at once. Never
-repeat a queued comparison as a suggestion, and give none where nothing is
-genuinely open; never pad them with restatements, general advice, or what is
-already settled. A message chosen from them starts [Chosen from your
-suggestions].
+Ask design questions as comparisons. Other ideas worth trying, such as a
+different input, a target that is absent, or duplicate values, may be mentioned
+briefly in plain words at the end of your reply, for the participant to ask for
+in their own words; leave them out where nothing is genuinely open, and never
+pad them with restatements, general advice, or what is already settled.
 
 Feedback may reference elements the participant selected in a presentation:
 context.selected.elements gives each one’s step, its label as the participant
@@ -137,10 +132,10 @@ view, and use it to say what a step shows; name a step by its name, as
 The algorithm and domain may be shaped for what the visualization teaches, as a
 result type (a search returning a `union(Index, NotFound)`, rather than -1 or a
 done flag), a swap as one operation, a structure that walks a vertex’s
-neighbours, or a step split for clarity, and a participant’s request or
-suggestion that implies changing them is followed. Avoid only a workaround where
-the language has a direct way: a flag, a sentinel, or a variable added solely to
-make something show or hide, or a cast to reach another view, where a label,
+neighbours, or a step split for clarity, and a participant’s request that
+implies changing them is followed. Avoid only a workaround where the language
+has a direct way: a flag, a sentinel, or a variable added solely to make
+something show or hide, or a cast to reach another view, where a label,
 `{#if when(@label)}`, a view chosen per place, or a pointer at a label does it
 (see Views of what a step computed).
 

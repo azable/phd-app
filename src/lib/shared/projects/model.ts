@@ -77,9 +77,7 @@ export const projectCommandSchema = v.variant('type', [
     focus: v.array(positiveSchema),
     presentationCount: v.picklist([1, 2]),
     /** The candidate the participant is viewing, whose source the assistant revises. */
-    from: v.optional(presentationIdSchema),
-    /** The assistant reply whose suggestion this message sends, by its event id. */
-    fromSuggestion: v.optional(positiveSchema)
+    from: v.optional(presentationIdSchema)
   }),
   v.strictObject({
     ...commandBase,

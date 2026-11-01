@@ -314,7 +314,7 @@ const conversationCases = {
   'assistant.responded': (event) => [
     {
       role: 'assistant',
-      content: `${event.payload.inReplyTo?.length ? `[In reply to interaction events ${event.payload.inReplyTo.join(', ')}]\n` : ''}${plainMessageText(event.payload.content)}${event.payload.suggestions ? `\n\n[Suggested comparisons, offered as buttons: ${event.payload.suggestions.join('; ')}]` : ''}`
+      content: `${event.payload.inReplyTo?.length ? `[In reply to interaction events ${event.payload.inReplyTo.join(', ')}]\n` : ''}${plainMessageText(event.payload.content)}`
     } as const
   ],
   'system.notified': () => []
@@ -634,9 +634,7 @@ function runtimeFailureText(event: ProjectEventOf<'visualization.runtime-failed'
 }
 
 function feedbackMessage(event: ProjectEventOf<'feedback.submitted'>): string {
-  const details = [
-    `${event.payload.fromSuggestion ? '[Chosen from your suggestions] ' : ''}${plainMessageText(event.payload.content)}`
-  ];
+  const details = [plainMessageText(event.payload.content)];
   if (event.payload.focus.length > 0) {
     details.push(`Focused timeline events: ${event.payload.focus.join(', ')}`);
   }

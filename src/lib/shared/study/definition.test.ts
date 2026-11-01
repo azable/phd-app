@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { mainStudy } from '$lib/studies/main';
-import { registeredStudies, registerStudies, studyDefinition } from './registry';
+import { registeredStudies, registerStudies, studyDefinition, trialCondition } from './registry';
 import { defineStudy, resolveStudyArm } from './definition';
 
 describe('study definition', () => {
@@ -49,5 +49,30 @@ describe('study definition', () => {
       }
     };
     expect(() => defineStudy(definition)).toThrow('unknown chooser');
+  });
+});
+
+describe('trialCondition', () => {
+  const other = { ...mainStudy, id: 'other-study' };
+
+  it('takes the condition for the mode from the registered main study', () => {
+    expect(trialCondition('sverlin')).toBe(mainStudy.conditions.sverlin);
+    expect(trialCondition('html')).toBe(mainStudy.conditions.html);
+  });
+
+  it('has none for a mode no open study has', () => {
+    expect(trialCondition('html-js')).toBeUndefined();
+    expect(trialCondition('sverlin', [{ definition: mainStudy, enrollment: 'closed' }])).toBe(
+      undefined
+    );
+  });
+
+  it('takes the first open study with a condition for the mode', () => {
+    expect(
+      trialCondition('sverlin', [
+        { definition: mainStudy, enrollment: 'closed' },
+        { definition: other, enrollment: 'open' }
+      ])
+    ).toBe(other.conditions.sverlin);
   });
 });

@@ -327,8 +327,6 @@ export function queueProjectFeedback(
     presentationCount: 1 | 2;
     /** The candidate the participant is viewing. */
     from?: string;
-    /** The assistant reply whose suggestion the message sends. */
-    fromSuggestion?: EventId;
     deadlineAt?: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -337,14 +335,6 @@ export function queueProjectFeedback(
     assertCurrentProjectOperationActive();
     const before = await dependencies.repository.load(options.projectId);
     assertAcceptedInteraction(before, options.operationId, 'feedback');
-    const suggested = options.fromSuggestion
-      ? before.events[options.fromSuggestion - 1]
-      : undefined;
-    if (
-      options.fromSuggestion &&
-      (suggested?.type !== 'assistant.responded' || !suggested.payload.suggestions)
-    )
-      throw new Error('The message names a reply that made no suggestions.');
     const focus = validateFocus(before, options.focus);
     const content = await validateMessageContent(before, options.content);
     // The assistant revises the source of the candidate the participant is viewing.
@@ -368,8 +358,7 @@ export function queueProjectFeedback(
             content,
             focus,
             presentationCount: options.presentationCount,
-            ...(options.from ? { viewing: options.from } : {}),
-            ...(options.fromSuggestion ? { fromSuggestion: options.fromSuggestion } : {})
+            ...(options.from ? { viewing: options.from } : {})
           }
         }),
         draftEvent({
@@ -715,7 +704,7 @@ async function handleParticipantIntake(
     const activeStep = activeParticipantIntakeStep(current);
     if (!activeStep) return { document: current, author: true };
 
-    // The last question's answer, or an answer to a question no longer asked, completes intake.
+    // The last question's answer completes intake.
     const next = nextParticipantIntakeStep(activeStep);
     if (!next) {
       current = await completeParticipantIntake(
@@ -891,8 +880,7 @@ async function runSverlinAssistantTurn(
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
-          inReplyTo,
-          { suggestions: generation.result.suggestions }
+          inReplyTo
         );
       }
 
@@ -1428,7 +1416,6 @@ async function runSverlinGeneration(
         reply: result.reply,
         decision: result.decision,
         recovery: result.recovery ?? null,
-        suggestions: result.suggestions ?? [],
         generation: result.generation
       })
     },
@@ -2183,10 +2170,7 @@ function appendAssistantResponse(
   operationId: string,
   dependencies: ProjectCommandDependencies,
   inReplyTo: readonly EventId[] = [],
-  {
-    intakeStep,
-    suggestions
-  }: { intakeStep?: ParticipantIntakeStepId; suggestions?: readonly string[] } = {}
+  { intakeStep }: { intakeStep?: ParticipantIntakeStepId } = {}
 ) {
   return appendProjectEvents(
     document,
@@ -2198,8 +2182,7 @@ function appendAssistantResponse(
         payload: {
           content: typeof content === 'string' ? markdownMessage(content) : content,
           ...(inReplyTo.length > 0 ? { inReplyTo: [...inReplyTo] } : {}),
-          ...(intakeStep ? { intakeStep } : {}),
-          ...(suggestions?.length ? { suggestions: [...suggestions] } : {})
+          ...(intakeStep ? { intakeStep } : {})
         }
       })
     ],
@@ -2423,7 +2406,7 @@ function validateElementReference(document: ProjectDocument, reference: ElementR
   if (!locateElement(value.source.text, reference.element.id))
     throw new Error(`Element ${reference.element.id} is not a node of that presentation.`);
   for (const { node } of reference.element.layouts ?? [])
-    if (node !== 'frame' && !locateElement(value.source.text, node))
+    if (!locateElement(value.source.text, node))
       throw new Error(`Layout node ${node} is not a node of that presentation.`);
 }
 

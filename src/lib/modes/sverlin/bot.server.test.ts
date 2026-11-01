@@ -151,23 +151,6 @@ describe('single-component Svelte assistant', () => {
       expect(() => parse(invalid)).toThrow(/invalid structured response/i);
   });
 
-  it('keeps at most twelve non-blank suggestions', () => {
-    const parse = (suggestions: unknown) =>
-      aiAssistant.parseOutput({
-        reply: [{ type: 'markdown', text: 'Done.' }],
-        decision: { action: 'respond' },
-        recovery: null,
-        suggestions
-      });
-    expect(parse([])).not.toHaveProperty('suggestions');
-    expect(parse([' cells or tallies ', '  ', 'with the listing'])).toMatchObject({
-      suggestions: ['cells or tallies', 'with the listing']
-    });
-    expect(
-      parse(Array.from({ length: 14 }, (_, index) => `option ${index}`)).suggestions
-    ).toHaveLength(12);
-  });
-
   it('rejects unsupported message content in assistant discussion', () => {
     expect(() =>
       aiAssistant.parseOutput({

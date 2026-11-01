@@ -2,6 +2,7 @@ import { isHttpError, json } from '@sveltejs/kit';
 import * as v from 'valibot';
 
 import { requireProjectMutationAccess } from '$lib/server/authorization';
+import { projectTrialCondition } from '$lib/server/study';
 import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { ProjectConflictError, ProjectNotFoundError } from '$lib/server/projects/repository';
 import { operationIdSchema, positiveSchema } from '$lib/shared/projects/events/values';
@@ -14,7 +15,9 @@ const requestSchema = v.object({ operationId: operationIdSchema, expectedHead: p
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     const inspection = await requireProjectMutationAccess(locals, params.projectId);
-    const target = inspection.study?.presentationBufferTarget;
+    const target =
+      inspection.study?.presentationBufferTarget ??
+      (await projectTrialCondition(params.projectId, inspection.study))?.presentationBufferTarget;
     if (!target)
       return json({ error: 'This project has no presentation buffer.' }, { status: 400 });
     const parsed = v.safeParse(requestSchema, await request.json());

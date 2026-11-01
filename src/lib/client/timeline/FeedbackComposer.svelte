@@ -74,14 +74,7 @@
     insertReferences(selectionReferences(selection));
   }
 
-  /** Send a reply's suggestion as the participant's message, as typed one is, leaving the draft. */
-  export async function sendSuggestion(suggestion: string, replyEventId: number): Promise<void> {
-    if (!(await send([{ type: 'markdown', text: suggestion }], replyEventId))) return;
-    session.focusedEvents = [];
-    onSubmitted();
-  }
-
-  async function send(editorContent: MessageContent, fromSuggestion?: number): Promise<boolean> {
+  async function send(editorContent: MessageContent): Promise<boolean> {
     if (!session.atHead || session.pending || session.readOnly) return false;
     const content = feedbackSubmissionContent(editorContent, automaticContext);
     const from = base ?? baseCandidate(presentations);
@@ -90,8 +83,7 @@
       content,
       focus: session.focusedEvents,
       presentationCount,
-      ...(from ? { from } : {}),
-      ...(fromSuggestion ? { fromSuggestion } : {})
+      ...(from ? { from } : {})
     });
   }
 

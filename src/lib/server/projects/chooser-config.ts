@@ -1,9 +1,9 @@
 /**
- * Which chooser a project's variants come from: its study condition's, else SVERLIN_CHOOSER, else
- * the model.
+ * Which chooser a project's variants come from: its study condition's (or, outside a study, the
+ * condition it is tried under), else SVERLIN_CHOOSER, else the model.
  */
 
-import { studyProjectContext } from '$lib/server/study';
+import { projectTrialCondition, studyProjectContext } from '$lib/server/study';
 import { chooserIds, type ChooserId } from '$lib/shared/choosers';
 
 const isChooserId = (value: unknown): value is ChooserId => chooserIds.includes(value as ChooserId);
@@ -29,5 +29,8 @@ export function withDevChooser<Command extends { type: string; chooser?: Chooser
 }
 
 export async function projectChooserId(projectId: string): Promise<ChooserId> {
-  return (await studyProjectContext(projectId))?.chooser ?? defaultChooserId();
+  const study = await studyProjectContext(projectId);
+  return (
+    study?.chooser ?? (await projectTrialCondition(projectId, study))?.chooser ?? defaultChooserId()
+  );
 }

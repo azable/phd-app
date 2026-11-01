@@ -1,6 +1,7 @@
 /** Versioned study-protocol registry used by enrollment, playback, and exports. */
 
-import type { StudyDefinition } from './definition';
+import type { VisualizationMode } from '$lib/shared/presentations';
+import type { StudyCondition, StudyDefinition } from './definition';
 import { mainStudy } from '$lib/studies/main';
 
 export type StudyRef = { id: string; version: number };
@@ -37,6 +38,22 @@ export function studyRegistration(ref: StudyRef): StudyRegistration {
 /** Return every configured protocol version, including versions closed to new enrollment. */
 export function registeredStudies(): StudyRegistration[] {
   return [...registrations];
+}
+
+/**
+ * The condition a project outside any study works under, so trying a project behaves as the study
+ * does: the condition for its mode in the first study open to enrollment that has one.
+ */
+export function trialCondition(
+  mode: VisualizationMode,
+  studies: readonly StudyRegistration[] = registrations
+): StudyCondition | undefined {
+  for (const { definition, enrollment } of studies) {
+    if (enrollment !== 'open') continue;
+    const condition = Object.values(definition.conditions).find((entry) => entry.mode === mode);
+    if (condition) return condition;
+  }
+  return undefined;
 }
 
 /** Validate an immutable list of configured protocol versions before serving it. */

@@ -105,6 +105,8 @@
     configuredChooser?: ChooserId;
     readOnly?: boolean;
     study?: StudyTask;
+    /** Outside a study, the settings of the study condition for the project's mode. */
+    trial?: Pick<StudyTask, 'layout' | 'presentationBufferTarget'>;
   };
 
   let {
@@ -116,26 +118,36 @@
     devMode = false,
     configuredChooser,
     readOnly = false,
-    study
+    study,
+    trial
   }: Props = $props();
 
-  // The route keys this component by project ID, so the session is intentionally instance-scoped.
+  // The route keys this component by project ID, dev mode and study task, so these are
+  // instance-scoped.
+  // svelte-ignore state_referenced_locally
+  const condition = study ?? trial;
+  // svelte-ignore state_referenced_locally
+  const initialDeveloperView =
+    isAdmin && study?.context !== 'admin-preview' && !readOnly && devMode;
   // svelte-ignore state_referenced_locally
   const session = new ProjectSession(
     projectId,
-    isAdmin && study?.context !== 'admin-preview' && !readOnly && devMode,
-    study?.layout ?? 'single',
-    study?.expired || readOnly ? undefined : study?.presentationBufferTarget,
+    initialDeveloperView,
+    condition?.layout ?? 'single',
+    study?.expired || readOnly ? undefined : condition?.presentationBufferTarget,
     readOnly
   );
   const presentationSelection = new PresentationSelection(
-    untrack(() => !!study?.presentationBufferTarget),
-    // Outside studies the selection implies the layout: two variants compare, one is shown alone.
-    (next) => {
-      if (!showAdminControls || busy) return false;
-      layout = next;
-      return true;
-    }
+    // Dev mode shows the newest variants, so those its controls make show at once.
+    !!condition?.presentationBufferTarget && !initialDeveloperView,
+    // Without a condition the selection implies the layout: two variants compare, one is shown alone.
+    condition
+      ? undefined
+      : (next) => {
+          if (!showAdminControls || busy) return false;
+          layout = next;
+          return true;
+        }
   );
   const presentationPlayback = new PresentationPlayback();
   // Elements selected in the visible presentations, to reference in feedback.
@@ -175,9 +187,7 @@
   let editMode = $state<ProjectArtifactEditMode>('readonly');
   let renaming = $state(false);
   let titleDraft = $state('');
-  // The route keys this component when the study task changes.
-  // svelte-ignore state_referenced_locally
-  let layout = $state<PresentationLayout>(study?.layout ?? 'single');
+  let layout = $state<PresentationLayout>(condition?.layout ?? 'single');
   // svelte-ignore state_referenced_locally
   let expired = $state(study?.expired ?? false);
   let studyAdvancing = $state(false);
@@ -629,10 +639,6 @@
                     sourceLinks.show(failure.source, diagnosticRanges(failure.source, problems));
                   }
                 }}
-                onSuggestion={!expired && !session.readOnly
-                  ? (suggestion, replyEventId) =>
-                      feedbackComposer?.sendSuggestion(suggestion, replyEventId)
-                  : undefined}
               />
               {#if !expired && !session.readOnly}
                 <FeedbackComposer
