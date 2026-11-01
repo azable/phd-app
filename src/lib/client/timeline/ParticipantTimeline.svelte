@@ -355,11 +355,12 @@
                           ><XIcon class="size-4" aria-hidden="true" /><span class="sr-only"
                             >Not chosen:</span
                           ></span
-                        >{:else if answer === 'unsure'}<span
+                        >{:else}<span
                           class="inline-flex shrink-0 text-muted-foreground"
-                          title="You were unsure"
+                          title={answer === 'unsure' ? 'You were unsure' : 'Not answered yet'}
                           ><CircleQuestionMarkIcon class="size-4" aria-hidden="true" /><span
-                            class="sr-only">Unsure:</span
+                            class="sr-only"
+                            >{answer === 'unsure' ? 'Unsure:' : 'Not answered:'}</span
                           ></span
                         >{/if}<span class="relative z-10 min-w-0"
                         >{@render versionPill(pills[id], label && `${label}:`)}</span

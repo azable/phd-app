@@ -116,6 +116,8 @@ describe('participant timeline', () => {
     const unsure = timeline(comparison(['skip']));
     expect(unsure).not.toMatch(/Your choice:|Not chosen:/);
     expect(unsure.match(/Unsure:/g)).toHaveLength(2);
+    const unanswered = timeline(comparison([]));
+    expect(unanswered.match(/Not answered:/g)).toHaveLength(2);
   });
 
   it('renders questions and side labels as inline Markdown, with no blocks in a button', () => {
