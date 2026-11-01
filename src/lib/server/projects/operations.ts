@@ -106,6 +106,9 @@ export class ProjectOperationExecutor {
   #recoveryTimer?: ReturnType<typeof setInterval>;
   /** Projects the scans skip, warned about once each. */
   readonly #unreadable = new Set<string>();
+  /** The head of each project the last scan found with nothing to do, so the next skips it. */
+  #idleHeads = new Map<string, number>();
+  #scan?: Promise<number>;
   readonly #assistantProjects = new Set<string>();
   #assistantDrain?: Promise<void>;
 
@@ -207,19 +210,44 @@ export class ProjectOperationExecutor {
     }
   }
 
-  /** Mark operations abandoned by replaced processes as explicitly cancelled. */
-  async recoverInterrupted(): Promise<number> {
+  /**
+   * Mark operations abandoned by replaced processes as explicitly cancelled, and queue assistant
+   * turns waiting to run. A scan still running is shared rather than overlapped. Each scan loads
+   * a project once, and only if it has changed since a scan last found nothing to do in it: one
+   * with an operation or a waiting turn is loaded every scan, until it settles, so work another
+   * process abandons is still found. The first scan loads every project.
+   */
+  recoverInterrupted(): Promise<number> {
+    this.#scan ??= this.scanProjects().finally(() => (this.#scan = undefined));
+    return this.#scan;
+  }
+
+  private async scanProjects(): Promise<number> {
     let recovered = 0;
-    for (const summary of await this.repository.list()) {
-      const document = await this.readableProject(summary.projectId);
-      if (!document) continue;
+    const idleHeads = new Map<string, number>();
+    for (const { projectId, eventCount } of await this.repository.list()) {
+      if (this.#idleHeads.get(projectId) === eventCount) {
+        idleHeads.set(projectId, eventCount);
+        continue;
+      }
+      const document = await this.readableProject(projectId);
+      if (!document) {
+        if (this.#unreadable.has(projectId)) idleHeads.set(projectId, eventCount);
+        continue;
+      }
+      const waiting = pendingAssistantTurnRequests(document).length > 0;
+      if (!activeProjectOperation(document) && !waiting) {
+        idleHeads.set(projectId, eventCount);
+        continue;
+      }
       try {
-        if (await this.recoverProject(summary.projectId, document)) recovered += 1;
+        if (await this.recoverProject(projectId, document)) recovered += 1;
+        else if (waiting) this.queueAssistantProject(projectId);
       } catch (cause) {
-        console.error(`Could not recover operations of project ${summary.projectId}.`, cause);
+        console.error(`Could not recover operations of project ${projectId}.`, cause);
       }
     }
-    await this.discoverQueuedAssistantTurns();
+    this.#idleHeads = idleHeads;
     return recovered;
   }
 
@@ -415,14 +443,6 @@ export class ProjectOperationExecutor {
         }
         console.error(`Could not start queued assistant turn for ${projectId}.`, cause);
       }
-    }
-  }
-
-  private async discoverQueuedAssistantTurns(): Promise<void> {
-    for (const summary of await this.repository.list()) {
-      const document = await this.readableProject(summary.projectId);
-      if (document && pendingAssistantTurnRequests(document).length > 0)
-        this.queueAssistantProject(summary.projectId);
     }
   }
 

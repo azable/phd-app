@@ -79,6 +79,48 @@ describe('ProjectOperationExecutor', () => {
     logged.mockRestore();
   });
 
+  it('loads only projects changed since a scan found nothing to do, never overlapping scans', async () => {
+    const loads: string[] = [];
+    const lists = { count: 0 };
+    const repository = new (class extends MemoryProjectRepository {
+      override async list(ownerUserId?: string) {
+        lists.count += 1;
+        return super.list(ownerUserId);
+      }
+      override async load(projectId: string) {
+        loads.push(projectId);
+        return super.load(projectId);
+      }
+    })();
+    const idle = randomUUID();
+    const changed = randomUUID();
+    const interrupted = randomUUID();
+    for (const projectId of [idle, changed, interrupted])
+      await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+    await repository.append(interrupted, 1, [acceptedEvent(randomUUID())]);
+    // Another process holds the interrupted operation until it exits.
+    let held = true;
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => (held ? null : { release: async () => undefined }) },
+      async () => {
+        throw new Error('No command runs.');
+      }
+    );
+
+    await Promise.all([executor.recoverInterrupted(), executor.recoverInterrupted()]);
+    expect(lists.count).toBe(1);
+    expect(loads.toSorted()).toEqual([idle, changed, interrupted].toSorted());
+
+    loads.length = 0;
+    await repository.append(changed, 1, [acceptedEvent(randomUUID())]);
+    held = false;
+    await expect(executor.recoverInterrupted()).resolves.toBe(2);
+    expect(loads.filter((projectId) => projectId === idle)).toEqual([]);
+    expect(loads).toContain(changed);
+    expect(loads).toContain(interrupted);
+  });
+
   it('recovers past a project whose Timeline no longer reads', async () => {
     const unreadable = randomUUID();
     const repository = new (class extends MemoryProjectRepository {
