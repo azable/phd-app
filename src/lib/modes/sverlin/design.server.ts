@@ -59,15 +59,15 @@ const propsOf = ({ role, free }: DesignKind) =>
     : roleProps[role];
 
 /**
- * A kind's starting value for a prop: a free layout runs right where its structure is a path or a
- * cycle, and down where it branches, and a link's head is none where every link of its kind is a
- * two-way line, as an undirected graph's edges.
+ * A kind's starting value for a prop: a free layout runs right, across the wide stage, unless its
+ * structure is a tree, which branches down as trees are drawn; and a link's head is none where
+ * every link of its kind is a two-way line, as an undirected graph's edges.
  */
 const starterLook = ({ role, free, lines }: DesignKind, prop: string) =>
   prop === 'direction' && free
-    ? free.structure === 'path' || free.structure === 'cycle'
-      ? 'right'
-      : 'down'
+    ? free.structure === 'tree'
+      ? 'down'
+      : 'right'
     : prop === 'head' && lines
       ? 'none'
       : (starterLooks[role][prop] ?? starterFreeLayout[prop]);

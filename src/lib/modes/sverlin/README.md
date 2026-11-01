@@ -839,8 +839,8 @@ graph each node after its parents, or breadth first where it has cycles),
 `line`, `snake` (rows read back and forth), `wave`, `arc`, or `scatter` (free
 positions that keep each node near the next). `direction`, `down` or `right`, is
 the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
-would: it starts `right` for a path or a cycle and `down` for a tree or a
-layered graph, and a layout with a `flow` has none. A layout whose data makes no
+would: it starts `right` for a path, a cycle or a layered graph, across the wide
+stage, and `down` for a tree, as trees are drawn, and a layout with a `flow` has none. A layout whose data makes no
 structure has no `form` or `direction` and is laid out freely, unless the page
 finds a structure in the links it draws, which it draws `natural`. `curve`,
 `straight` (the start) or `curved`, is how its arrows prefer to run.

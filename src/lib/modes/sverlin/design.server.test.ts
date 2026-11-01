@@ -286,10 +286,10 @@ describe('free layouts', () => {
       'Heap.curve': 'straight',
       'Heap.layoutSeed': 1
     });
-    // The tree's flow sets the way it runs; a graph with none runs down unless a variant says.
+    // The tree's flow sets the way it runs; a graph with none runs right unless a variant says.
     expect(Object.hasOwn(tree.space, 'Heap.direction')).toBe(false);
     expect(graph.space['Graph.direction']).toEqual(['down', 'right']);
-    expect(graph.starter['Graph.direction']).toBe('down');
+    expect(graph.starter['Graph.direction']).toBe('right');
     // Rows and columns have no such look.
     expect(Object.keys(space).filter((key) => key.endsWith('.form'))).toEqual([]);
     expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Heap.form']);
