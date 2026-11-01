@@ -2629,7 +2629,8 @@ describe('assistant edits', () => {
   });
 });
 
-describe('several variants from chat', () => {
+// Its tests build real presentations, several through the chooser: slower on CI than 5 s.
+describe('several variants from chat', { timeout: 30_000 }, () => {
   const chooser = (generatePrepared: ReturnType<typeof vi.fn>) =>
     ({
       preparePrompt: async (request: { project: unknown }) => ({
@@ -2778,7 +2779,6 @@ describe('several variants from chat', () => {
     );
   });
 
-  // Builds real presentations, several through the chooser: slower on CI than the default 5 s.
   it('resamples with a count through the chooser, and without one as before', async () => {
     choosing.mockClear();
     const counted = await decide(
@@ -2797,7 +2797,7 @@ describe('several variants from chat', () => {
     expect(
       plain.result.appendedEvents.filter(({ type }) => type === 'visualization.presented').length
     ).toBeLessThanOrEqual(2);
-  }, 30_000);
+  });
   const views = (left: string, right: string) => ({
     question: 'Cells or tallies for the numbers?',
     left: [{ variable: 'views.Int', value: left }],
