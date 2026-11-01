@@ -11,7 +11,7 @@ import type {
   WorkspaceResource
 } from '$lib/shared/projects/model';
 
-import { ProjectSession } from './project-session.svelte';
+import { ProjectSession, serverBusyMessage } from './project-session.svelte';
 
 const navigation = vi.hoisted(() => ({ goto: vi.fn() }));
 
@@ -297,6 +297,83 @@ describe('ProjectSession', () => {
     expect(session.assistantResponding).toBe(true);
   });
 
+  it('sends a command again while the server is busy, without showing an error', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const initial = projectResource([createdEvent()], 'Initial');
+    const accepted = projectResource(
+      [...initial.document.events, operationAcceptedEvent(2, 'rename')],
+      'Initial'
+    );
+    const commands = routeFetch(initial, [
+      errorResponse(503, 'Busy.'),
+      errorResponse(503, 'Busy.'),
+      acceptedResponse(2)
+    ]);
+    const session = createSession();
+    await session.open();
+
+    const running = session.runCommand({ type: 'rename', title: 'Renamed' });
+    await vi.waitFor(() => expect(commands.sent).toHaveLength(1));
+    expect(session.pending?.type).toBe('rename');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(commands.sent).toHaveLength(2);
+    expect(session.error).toBeNull();
+    commands.resource = accepted;
+    commands.events = [
+      renamedEvent(3, operationId, 'Initial', 'Renamed'),
+      operationCompletedEvent(4, 'rename')
+    ];
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await expect(running).resolves.toBe(true);
+    expect(commands.sent).toHaveLength(3);
+    expect(new Set(commands.sent.map((body) => body.operationId))).toEqual(new Set([operationId]));
+    expect(session.error).toBeNull();
+  });
+
+  it('tells the participant the server is busy once every retry is refused', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const commands = routeFetch(
+      projectResource([createdEvent()], 'Initial'),
+      Array.from({ length: 6 }, () => errorResponse(503, 'Busy.'))
+    );
+    const session = createSession();
+    await session.open();
+
+    const running = session.runCommand({ type: 'rename', title: 'Renamed' });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(commands.sent).toHaveLength(5);
+    expect(session.error).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(running).resolves.toBe(false);
+    expect(commands.sent).toHaveLength(6);
+    expect(session.error).toBe(serverBusyMessage);
+  });
+
+  it('keeps a runtime report the server is too busy for and sends it again later', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const initial = projectResource([createdEvent()], 'Initial');
+    const commands = routeFetch(initial, [
+      ...Array.from({ length: 6 }, () => errorResponse(503, 'Busy.')),
+      acceptedResponse(2)
+    ]);
+    const session = createSession();
+    await session.open();
+
+    session.reportRuntimeFailure({ presentationId: 'presentation-test', message: 'Broke.' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(commands.sent).toHaveLength(6);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(commands.sent).toHaveLength(7);
+    expect(commands.sent.at(-1)).toMatchObject({
+      type: 'report-runtime-error',
+      presentationId: 'presentation-test',
+      message: 'Broke.'
+    });
+  });
+
   it('creates a project from an explicit template and preserves Dev detail', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ projectId: 'dev-project', operationId }), {
@@ -344,6 +421,35 @@ function response(resource: unknown): Response {
   return new Response(JSON.stringify(resource), {
     headers: { 'content-type': 'application/json' }
   });
+}
+
+function acceptedResponse(acceptedEventId: number): Response {
+  return new Response(JSON.stringify({ projectId: 'project-test', operationId, acceptedEventId }), {
+    status: 202,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+/**
+ * Answer the session's requests by route, whenever its event polling runs: the resource, new events
+ * after the head, and each command POST with the next given response, recording what was sent.
+ */
+function routeFetch(resource: ProjectResource, commandResponses: Response[]) {
+  const routes = {
+    resource,
+    events: [] as ProjectEvent[],
+    sent: [] as Record<string, unknown>[]
+  };
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.includes('/events?after=')) {
+      const after = Number(new URL(url, 'http://localhost').searchParams.get('after'));
+      return eventResponse(routes.events.filter((event) => event.id > after));
+    }
+    if (init?.method !== 'POST') return response(routes.resource);
+    routes.sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    return commandResponses.shift() ?? errorResponse(500, 'Unexpected command.');
+  });
+  return routes;
 }
 
 function errorResponse(status: number, error: string): Response {

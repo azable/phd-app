@@ -177,7 +177,7 @@ export class PresentationSelection {
     activeIds: readonly string[]
   ): string | undefined {
     if (!isSverlinPresentation(selected.presentation))
-      return 'HTML visualizations can only be viewed one at a time.';
+      return 'These visualizations can only be viewed one at a time.';
     if (activeIds.length >= 2) return 'Deselect one visualization before adding another.';
     const current = presentationsById(all, activeIds);
     if (current.length === 1 && !compatibleSverlinPair(current[0], selected))

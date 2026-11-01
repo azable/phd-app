@@ -78,7 +78,7 @@ export class ProjectSession {
   #loadReportsSeen = new SvelteSet<string>();
   #loadReportSending = false;
   #refillBlocked = false;
-  #refillRetryTimer?: ReturnType<typeof setTimeout>;
+  #backgroundRetryTimer?: ReturnType<typeof setTimeout>;
   #loadVersion = 0;
   /** Last non-cancellation failure while filling the ahead-of-time presentation buffer. */
   refillError = $state<string | null>(null);
@@ -223,7 +223,7 @@ export class ProjectSession {
     this.#request?.abort();
     this.#commandRequest?.abort();
     this.#refillRequest?.abort();
-    clearTimeout(this.#refillRetryTimer);
+    clearTimeout(this.#backgroundRetryTimer);
     this.#runtimeReportRequest?.abort();
     this.disconnect();
   }
@@ -284,12 +284,11 @@ export class ProjectSession {
     this.error = null;
 
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(this.projectId)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...input, operationId, expectedHead: this.head }),
-        signal: request.signal
-      });
+      const response = await this.postCommand(
+        { ...input, operationId, expectedHead: this.head },
+        request.signal
+      );
+      if (response.status === 503) throw new Error(serverBusyMessage);
       if (!response.ok) {
         throw new Error(await responseError(response));
       }
@@ -345,6 +344,7 @@ export class ProjectSession {
     })
       .then((response) => {
         // A conflict means an operation started; the report waits for the next quiet moment.
+        if (response.status === 503) return this.retryBackgroundLater();
         if (response.status !== 409) this.#loadReports.delete(key);
       })
       .catch(() => {
@@ -384,20 +384,19 @@ export class ProjectSession {
     const [key, failure] = next.value;
     const request = new AbortController();
     this.#runtimeReportRequest = request;
-    void fetch(`/api/projects/${encodeURIComponent(this.projectId)}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
+    void this.postCommand(
+      {
         type: 'report-runtime-error',
         ...failure,
         operationId: crypto.randomUUID(),
         expectedHead: this.head
-      }),
-      signal: request.signal
-    })
+      },
+      request.signal
+    )
       .then(async (response) => {
         // A conflict means the project moved on; the report waits for the next quiet moment.
         if (response.status === 409) return;
+        if (response.status === 503) return this.retryBackgroundLater();
         this.#runtimeReports.delete(key);
         this.#runtimeReportsSent.add(key);
         if (response.ok) await this.reloadResource(request.signal);
@@ -608,7 +607,7 @@ export class ProjectSession {
     })
       .then(async (response) => {
         // The project moved on or the server is busy; the refill waits for the next quiet moment.
-        if (response.status === 409 || response.status === 503) return this.retryRefillLater();
+        if (response.status === 409 || response.status === 503) return this.retryBackgroundLater();
         if (!response.ok) throw new Error(await responseError(response));
         await this.reloadResource(request.signal);
       })
@@ -623,21 +622,55 @@ export class ProjectSession {
       });
   }
 
-  /** Try the refill again after a pause, unless a new event starts it sooner. */
-  private retryRefillLater(): void {
-    clearTimeout(this.#refillRetryTimer);
-    this.#refillRetryTimer = setTimeout(() => {
-      this.#refillRetryTimer = undefined;
+  /**
+   * Try background work, the refill and the reports, again after a pause, unless a new event starts
+   * it sooner.
+   */
+  private retryBackgroundLater(): void {
+    clearTimeout(this.#backgroundRetryTimer);
+    this.#backgroundRetryTimer = setTimeout(() => {
+      this.#backgroundRetryTimer = undefined;
       this.reconcilePresentationBuffer();
-    }, refillRetryDelayMs);
+      this.flushRuntimeReports();
+      this.flushLoadReports();
+    }, backgroundRetryDelayMs);
+  }
+
+  /**
+   * Send a project command, sending it again after each pause in busyRetryDelaysMs while the server
+   * is full (503). Nothing of a refused command was recorded, so the same command, with its
+   * operation id, is sent again; the last response is returned whatever it is.
+   */
+  private async postCommand(body: object, signal: AbortSignal): Promise<Response> {
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await fetch(`/api/projects/${encodeURIComponent(this.projectId)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal
+      });
+      if (response.status !== 503 || attempt === busyRetryDelaysMs.length) return response;
+      await delay(busyRetryDelaysMs[attempt], signal);
+    }
   }
 }
 
 /**
- * Pause before retrying a refill that lost a race. Refills take tens of seconds, so a few more
- * go unnoticed, while a busy server sees at most one small rejected request per pause per page.
+ * Pause before retrying background work that lost a race or found the server busy. Refills take
+ * tens of seconds, so a few more go unnoticed, while a busy server sees at most one small rejected
+ * request per pause per page.
  */
-const refillRetryDelayMs = 5_000;
+const backgroundRetryDelayMs = 5_000;
+
+/**
+ * Pauses between sends of a command the server is too busy to accept, 30 seconds in all. A place
+ * frees when any running operation ends, and operations take tens of seconds, so most commands are
+ * accepted within a few tries; past that the participant is told, rather than left waiting.
+ */
+const busyRetryDelaysMs = [1_000, 2_000, 4_000, 8_000, 15_000];
+
+/** Shown when a command is still refused as busy after every retry. */
+export const serverBusyMessage = 'The server is busy. Try again in a moment.';
 
 function parseProjectResource(value: unknown): ProjectResource {
   return normalizeProjectResource(value);

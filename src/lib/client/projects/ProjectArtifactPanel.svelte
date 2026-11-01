@@ -31,6 +31,8 @@
   type Props = {
     session: ProjectSession;
     presentationCount: 1 | 2;
+    /** Name the source file by its path; otherwise “Source”, since the path names the mode. */
+    developerView?: boolean;
     editMode?: ProjectArtifactEditMode;
     /** Elements selected in visible presentations, with the source each presentation was built from. */
     selectedSources?: readonly { source: string; ids: readonly string[] }[];
@@ -74,6 +76,7 @@
   let {
     session,
     presentationCount,
+    developerView = false,
     editMode = $bindable<ProjectArtifactEditMode>('readonly'),
     selectedSources = [],
     drawnSources = [],
@@ -118,6 +121,7 @@
   let editor = $state<{ focus: () => void } | null>(null);
 
   const artifact = $derived(session.snapshot.artifacts[session.snapshot.entryArtifactId]);
+  const sourceName = $derived(developerView ? artifact?.path : 'Source');
   // The source the visible presentations were built from, when it is not the newest one: the panel
   // shows it, so their draws can be marked, and editing it builds a new candidate from it.
   const candidateSource = $derived.by(() => {
@@ -252,7 +256,7 @@
         <div class="mr-auto min-w-0">
           {#if variantJson && editMode === 'readonly' && !failed}
             <div class="flex gap-1" role="tablist" aria-label="Shown file">
-              {#each [['source', artifact.path], ['variant', 'variant.json']] as [id, name] (id)}
+              {#each [['source', sourceName], ['variant', 'variant.json']] as [id, name] (id)}
                 <button
                   type="button"
                   role="tab"
@@ -274,7 +278,7 @@
               {/each}
             </div>
           {:else}
-            <p class="truncate font-mono text-sm">{artifact.path}</p>
+            <p class="truncate font-mono text-sm">{sourceName}</p>
           {/if}
           {#if !session.atHead}
             <p class="text-sm text-muted-foreground">Artifact at event #{session.snapshot.at}</p>

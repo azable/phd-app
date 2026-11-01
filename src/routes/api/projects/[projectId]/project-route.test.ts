@@ -9,8 +9,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/server/projects/service', () => ({
   loadProjectResource: mocks.loadProjectResource
 }));
+const { CapacityError } = vi.hoisted(() => ({
+  CapacityError: class ProjectOperationCapacityError extends Error {}
+}));
+
 vi.mock('$lib/server/projects/operations', () => ({
-  projectOperationExecutor: { accept: mocks.accept }
+  projectOperationExecutor: { accept: mocks.accept },
+  ProjectOperationCapacityError: CapacityError
 }));
 vi.mock('$lib/server/authorization', () => ({
   requireProjectAccess: vi.fn(async (locals) => locals.principal),
@@ -79,6 +84,22 @@ describe('project JSON API', () => {
     );
     expect(stale.status).toBe(409);
     await expect(stale.json()).resolves.toEqual({ error: 'stale' });
+  });
+
+  it('refuses a command as busy (503) while the server is full, for the browser to resend', async () => {
+    const { POST } = await import('./+server');
+    mocks.accept.mockRejectedValueOnce(new CapacityError('Busy.'));
+    const busy = await POST(
+      request('POST', { type: 'rebuild', operationId, expectedHead: 2, seed: 1 })
+    );
+    expect(busy.status).toBe(503);
+    await expect(busy.json()).resolves.toEqual({ error: 'Busy.' });
+
+    mocks.accept.mockRejectedValueOnce(new Error('Something else.'));
+    const failed = await POST(
+      request('POST', { type: 'rebuild', operationId, expectedHead: 2, seed: 1 })
+    );
+    expect(failed.status).toBe(422);
   });
 
   it('passes the server-authoritative study deadline into asynchronous work', async () => {

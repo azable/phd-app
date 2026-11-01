@@ -68,6 +68,14 @@ type ExecuteCommand = (options: {
   deadlineAt?: number;
 }) => Promise<ProjectCommandResult>;
 
+/**
+ * Operations running at once across every project. Most of an operation is spent waiting on the
+ * model, so this is not a CPU bound: builds, the CPU work, take turns under their own smaller limit
+ * (buildLimit in modes/build-limit.server.ts). Each running operation holds one database
+ * connection for its lock, so the pool (db/index.ts) keeps room above this for everything else.
+ */
+export const operationCapacity = 6;
+
 /** Raised when this small deployment has reached its explicit work capacity. */
 export class ProjectOperationCapacityError extends Error {
   constructor() {
@@ -98,7 +106,7 @@ export class ProjectOperationExecutor {
     private readonly repository: ProjectRepository = latestModule((loaded) => loaded.repository),
     private readonly lock: OperationLock = latestModule((loaded) => loaded.lock),
     private readonly execute: ExecuteCommand = (options) => latestLoaded().execute(options),
-    private readonly capacity = 2
+    private readonly capacity = operationCapacity
   ) {}
 
   /** Persist acceptance before returning, then execute without holding the HTTP request open. */

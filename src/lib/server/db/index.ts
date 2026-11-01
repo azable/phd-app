@@ -16,7 +16,9 @@ function connect(): DatabaseState {
   const url =
     process.env.DATABASE_URL?.trim() || 'postgres://postgres:postgres@127.0.0.1:5432/sverlin';
   const client = postgres(url, {
-    max: readPositiveInteger(process.env.SVERLIN_DATABASE_POOL_SIZE, 5),
+    // Six running operations each hold a connection for their lock (operations.ts), and a
+    // participant's feedback or answer holds one while it runs; the rest serve queries.
+    max: readPositiveInteger(process.env.SVERLIN_DATABASE_POOL_SIZE, 12),
     prepare: false,
     idle_timeout: 20,
     connect_timeout: 15,

@@ -763,6 +763,7 @@
             <ProjectArtifactPanel
               {session}
               {presentationCount}
+              {developerView}
               {selectedSources}
               {drawnSources}
               onSaved={() => {

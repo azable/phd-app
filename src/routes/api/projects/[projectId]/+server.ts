@@ -9,7 +9,10 @@ import {
   requireProjectMutationAccess
 } from '$lib/server/authorization';
 import { withDevChooser } from '$lib/server/projects/chooser-config';
-import { projectOperationExecutor } from '$lib/server/projects/operations';
+import {
+  ProjectOperationCapacityError,
+  projectOperationExecutor
+} from '$lib/server/projects/operations';
 import { ProjectConflictError, ProjectNotFoundError } from '$lib/server/projects/repository';
 import { loadProjectResource } from '$lib/server/projects/service';
 
@@ -57,6 +60,10 @@ function projectError(cause: unknown) {
     (cause instanceof Error && cause.name === 'ProjectConflictError')
   ) {
     return json({ error: cause.message }, { status: 409 });
+  }
+  // A full server: the browser waits briefly and sends the same command again.
+  if (cause instanceof ProjectOperationCapacityError) {
+    return json({ error: cause.message }, { status: 503 });
   }
   if (cause instanceof InvalidProjectDocumentError || cause instanceof SyntaxError) {
     return json({ error: cause.message }, { status: 400 });

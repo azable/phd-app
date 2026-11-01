@@ -1,5 +1,6 @@
 /** Discover server-only mode builders by folder convention from the public catalogue. */
 
+import { buildLimit } from './build-limit.server';
 import { modeCatalog } from './catalog';
 import type {
   DesignValues,
@@ -75,9 +76,25 @@ const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {
   eager: true
 });
 
+/** Each mode's builders, every build waiting its turn under the shared build limit. */
 export const modeBuilders = Object.fromEntries(
-  Object.keys(modeCatalog).map((id) => [id, modules[`./${id}/build.server.ts`]])
+  Object.keys(modeCatalog).map((id) => [id, limited(modules[`./${id}/build.server.ts`])])
 ) as Record<VisualizationMode, ModeBuilders>;
+
+function limited(builders: ModeBuilders | undefined): ModeBuilders | undefined {
+  if (!builders) return undefined;
+  const { buildPresentation, buildBatch } = builders;
+  return {
+    ...(buildPresentation && {
+      buildPresentation: (...options: Parameters<PresentationBuilder>) =>
+        buildLimit.run(() => buildPresentation(...options))
+    }),
+    ...(buildBatch && {
+      buildBatch: (...[source, requests, signal]: Parameters<SourceBatchBuilder>) =>
+        buildLimit.run(() => buildBatch(source, requests, signal), signal)
+    })
+  };
+}
 
 for (const pathname of Object.keys(modules)) {
   const id = pathname.split('/').at(-2) ?? '';
