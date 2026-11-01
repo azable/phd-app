@@ -45,6 +45,67 @@ describe('ProjectOperationExecutor', () => {
     expect(operation).toMatchObject({ kind: 'initial-build', status: 'completed' });
   });
 
+  it('accepts a command on a head that only a load report has moved since', async () => {
+    const repository = new MemoryProjectRepository();
+    const projectId = randomUUID();
+    await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => ({ release: async () => undefined }) },
+      async ({ projectId: id }) => ({ document: await repository.load(id), appendedEvents: [] })
+    );
+    const append = (event: Parameters<MemoryProjectRepository['append']>[2][number]) =>
+      repository
+        .load(projectId)
+        .then((document) => repository.append(projectId, document.events.length, [event]));
+    const envelope = {
+      actor: { kind: 'system' },
+      operationId: randomUUID(),
+      createdAt: new Date().toISOString()
+    } as const;
+    await append({
+      ...envelope,
+      type: 'visualization.loaded',
+      payload: {
+        presentationId: randomUUID(),
+        outcome: 'ready',
+        sinceLoadMs: 84,
+        measuringMs: 0,
+        recordingMs: 3,
+        showingMs: 20,
+        passes: 1,
+        mostChanges: 0,
+        visibility: 'visible'
+      }
+    });
+
+    const operationId = randomUUID();
+    const accepted = await executor.accept({
+      projectId,
+      operationId,
+      expectedHead: 1,
+      command: { type: 'initial-build', seed: 1 }
+    });
+    expect(accepted.acceptedEventId).toBe(3);
+    await terminal(repository, projectId, operationId);
+
+    // Any other event since is still a conflict.
+    await append({
+      ...envelope,
+      type: 'project.renamed',
+      payload: { previousTitle: 'Initial', title: 'Elsewhere' }
+    });
+    const head = (await repository.load(projectId)).events.length;
+    await expect(
+      executor.accept({
+        projectId,
+        operationId: randomUUID(),
+        expectedHead: head - 1,
+        command: { type: 'initial-build', seed: 1 }
+      })
+    ).rejects.toMatchObject({ name: 'ProjectConflictError' });
+  });
+
   it('does not rebase an assistant acceptance past a concurrent foreground acceptance', async () => {
     const projectId = randomUUID();
     const foregroundId = randomUUID();

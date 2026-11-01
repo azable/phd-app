@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
+import { loadReportLine } from './load-reports';
 import { participantTimeline } from './participant-timeline';
 
 const presentationIds = [
@@ -189,6 +190,38 @@ describe('participant Timeline projection', () => {
     );
     expect(items.at(-1)).toMatchObject({ kind: 'error' });
     expect(items.at(-1)).not.toHaveProperty('failed');
+  });
+
+  it('shows how a presentation loaded only for audit, as developer view does', () => {
+    const before = events();
+    const loaded: ProjectEvent = {
+      id: before.length + 1,
+      type: 'visualization.loaded',
+      actor: { kind: 'system' },
+      operationId: '12345678-1234-4123-8123-123456789abf',
+      createdAt: '2026-01-01T00:00:10.000Z',
+      payload: {
+        presentationId: presentationIds[0],
+        outcome: 'ready',
+        sinceLoadMs: 84,
+        layout: 'server',
+        measuringMs: 0,
+        recordingMs: 3,
+        showingMs: 20,
+        passes: 1,
+        mostChanges: 0,
+        visibility: 'visible',
+        devicePixelRatio: 2,
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/142.0.0.0 Safari/537.36'
+      }
+    };
+    expect(participantTimeline([...before, loaded])).toEqual(participantTimeline(before));
+    expect(participantTimeline([...before, loaded], { audit: true }).at(-1)).toEqual({
+      id: `load-${loaded.id}`,
+      kind: 'load',
+      event: loaded
+    });
+    expect(loadReportLine(loaded.payload)).toBe('server layout · 84 ms · Chrome/macOS · 2×');
   });
 });
 

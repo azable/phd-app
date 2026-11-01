@@ -332,6 +332,35 @@ async function loadFonts(): Promise<boolean> {
 const fonts = document.querySelector<HTMLMetaElement>('meta[name="sverlin-fonts"]')?.content;
 
 /**
+ * Report how wide this page sets a sample text in each embedded font, at the sizes text is drawn
+ * at, so the app's load report can be compared with the server's measure of the same text. It
+ * takes about a millisecond.
+ */
+function reportFontWidths(loaded: boolean) {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context || window.parent === window) return;
+  const sample = '0123456789 Hamburgefonstiv ∞→';
+  const widths: Record<string, number> = {};
+  for (const family of new Set([...document.fonts].map((face) => face.family.replace(/"/gu, ''))))
+    for (const weight of [400, 700])
+      for (const size of [16, 13.6]) {
+        context.font = `${weight} ${size}px "${family}"`;
+        widths[`${family} ${weight} ${size}`] = +context.measureText(sample).width.toFixed(4);
+      }
+  window.parent.postMessage(
+    {
+      type: 'sverlin:fonts',
+      ...(fonts ? { version: fonts } : {}),
+      loaded,
+      sample,
+      widths,
+      devicePixelRatio: window.devicePixelRatio
+    },
+    '*'
+  );
+}
+
+/**
  * Work out every step's layout before any is shown, without mounting any (see library/record.ts).
  * Laying out gives the page back for a moment between its parts, so a long presentation never
  * holds its page up for long.
@@ -373,6 +402,7 @@ async function recordSteps() {
 async function layOut() {
   const started = performance.now();
   const loaded = await loadFonts();
+  reportFontWidths(loaded);
   const given = loaded
     ? geometryFor(playback.__sverlinGeometry, fonts, window.devicePixelRatio)
     : undefined;

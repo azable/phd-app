@@ -16,6 +16,8 @@ import {
   presentationViewSeed
 } from '$lib/shared/presentations';
 
+import { loadReportLine } from './load-reports';
+
 /** Icon families available to Timeline event cards. */
 export type TimelineEventIcon =
   | 'assistant'
@@ -194,6 +196,13 @@ const presenters = {
       'failure',
       'Recording the failure…',
       'destructive'
+    ),
+  'visualization.loaded': (event) =>
+    details(
+      event.payload.outcome === 'ready' ? 'Visualization loaded' : 'Visualization stalled loading',
+      loadReportLine(event.payload),
+      'visualization',
+      'Recording how it loaded…'
     ),
   'visualization.variant-reverted': (event) =>
     details(

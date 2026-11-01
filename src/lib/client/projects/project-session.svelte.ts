@@ -73,6 +73,10 @@ export class ProjectSession {
   >();
   #runtimeReportsSent = new SvelteSet<string>();
   #runtimeReportRequest?: AbortController;
+  /** Load reports waiting to be sent, by presentation and outcome, and every one ever queued. */
+  #loadReports = new SvelteMap<string, PresentationLoadTiming>();
+  #loadReportsSeen = new SvelteSet<string>();
+  #loadReportSending = false;
   #refillBlocked = false;
   #loadVersion = 0;
   /** Last non-cancellation failure while filling the ahead-of-time presentation buffer. */
@@ -306,18 +310,49 @@ export class ProjectSession {
   }
 
   /**
-   * Send how long a presentation took to appear to the server's log, for auditing load times. It is
-   * fire-and-forget and outside the Timeline, so it never delays or conflicts with commands.
+   * Record how a presentation loaded, for debugging (see presentation-load-timing.ts): its first
+   * outcome, and a later ready after stalled, once each per page load. A viewer who may change the
+   * project sends it when the project is quiet, to be recorded in the Timeline without affecting
+   * the participant's own commands; any other viewer sends it at once, only to the server's log.
    */
   reportLoadTiming(timing: PresentationLoadTiming): void {
+    const key = `${timing.presentationId} ${timing.outcome}`;
+    if (this.#loadReportsSeen.has(key)) return;
+    this.#loadReportsSeen.add(key);
+    this.#loadReports.set(key, timing);
+    this.flushLoadReports();
+  }
+
+  private flushLoadReports(): void {
+    const next = this.#loadReports.entries().next();
+    if (next.done || this.#loadReportSending) return;
+    const busy =
+      !this.#resource ||
+      !this.atHead ||
+      !!this.pending ||
+      !!this.#refillRequest ||
+      !!activeProjectOperation(this.events);
+    if (!this.readOnly && busy) return;
+    const [key, timing] = next.value;
+    this.#loadReportSending = true;
     void fetch(`/api/projects/${encodeURIComponent(this.projectId)}/load-timings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(timing),
       keepalive: true
-    }).catch(() => {
-      // A lost timing report only loses a log line.
-    });
+    })
+      .then((response) => {
+        // A conflict means an operation started; the report waits for the next quiet moment.
+        if (response.status !== 409) this.#loadReports.delete(key);
+      })
+      .catch(() => {
+        // A lost report only loses a diagnostic.
+        this.#loadReports.delete(key);
+      })
+      .finally(() => {
+        this.#loadReportSending = false;
+        if (!this.#loadReports.has(key)) this.flushLoadReports();
+      });
   }
 
   /**
@@ -379,6 +414,7 @@ export class ProjectSession {
     this.refillError = null;
     this.reconcilePresentationBuffer();
     this.flushRuntimeReports();
+    this.flushLoadReports();
   }
 
   /** Stop automatic generation when the local task timer reaches its deadline. */
@@ -480,6 +516,7 @@ export class ProjectSession {
       this.refillError = null;
     }
     if (!cancelledRefill) this.reconcilePresentationBuffer();
+    this.flushLoadReports();
   }
 
   private async recover(): Promise<void> {
@@ -500,6 +537,7 @@ export class ProjectSession {
       this.restoreRefillFailure();
       this.reconcilePresentationBuffer();
       this.flushRuntimeReports();
+      this.flushLoadReports();
       return;
     }
     const workspace = value as WorkspaceResource;
@@ -518,6 +556,7 @@ export class ProjectSession {
     this.restoreRefillFailure();
     this.reconcilePresentationBuffer();
     this.flushRuntimeReports();
+    this.flushLoadReports();
   }
 
   private restoreRefillFailure(): void {

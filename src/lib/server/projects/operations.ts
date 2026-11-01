@@ -17,7 +17,7 @@ import {
   pendingAssistantTurnRequests,
   projectOperation
 } from '$lib/shared/projects/operations';
-import { projectSnapshotAt } from '$lib/shared/projects/projection';
+import { headStillCurrent, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { sqlClient } from '$lib/server/db';
 
 import {
@@ -30,7 +30,7 @@ import {
 import { runProjectCommand } from './command-lock';
 import { projectOperationDeadlineError, runWithProjectOperationSignal } from './operation-context';
 import { recoveryEventsForInterruptedOperations } from './recovery';
-import { ProjectConflictError, projectRepository, type ProjectRepository } from './repository';
+import { projectRepository, type ProjectRepository } from './repository';
 import {
   renameProject,
   advanceProjectPresentations,
@@ -418,10 +418,9 @@ export class ProjectOperationExecutor {
       if (activeProjectOperation(document)) {
         throw new Error('This project already has an active operation.');
       }
-      if (!mayRebase && document.events.length !== expectedHead) {
-        throw new ProjectConflictError();
-      }
-      return this.repository.append(projectId, document.events.length, [event]);
+      return this.repository.append(projectId, mayRebase ? document.events.length : expectedHead, [
+        event
+      ]);
     });
   }
 
@@ -438,8 +437,11 @@ export class ProjectOperationExecutor {
       conflict.name = 'ProjectConflictError';
       throw conflict;
     }
-    const intervening = document.events.slice(expectedHead);
-    if (intervening.some((event) => event.operationId !== operationId)) {
+    // Only the cancelled refill's own events may have come since, besides what never conflicts.
+    const others = document.events
+      .slice(expectedHead)
+      .filter((event) => event.operationId !== operationId);
+    if (!headStillCurrent(others, 0)) {
       const conflict = new Error('The project changed before this operation was accepted.');
       conflict.name = 'ProjectConflictError';
       throw conflict;

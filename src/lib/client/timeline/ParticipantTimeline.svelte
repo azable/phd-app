@@ -3,6 +3,8 @@
 
   import BotIcon from '@lucide/svelte/icons/bot';
   import CodeIcon from '@lucide/svelte/icons/code';
+  import CopyIcon from '@lucide/svelte/icons/copy';
+  import GaugeIcon from '@lucide/svelte/icons/gauge';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
   import StickyNoteIcon from '@lucide/svelte/icons/sticky-note';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
@@ -36,6 +38,7 @@
   import MessageContent from './MessageContent.svelte';
   import { presentProjectEvent } from './event-presentation';
   import { agentOutcome, agentTokens } from './agent-requests';
+  import { loadReportLine } from './load-reports';
   import { participantTimeline } from './participant-timeline';
 
   type Props = {
@@ -270,6 +273,37 @@
             : ''}
         </span>
       </button>
+    {:else if item.kind === 'load'}
+      {@const report = item.event.payload}
+      {@const json = JSON.stringify(report, null, 2)}
+      <!-- How a presentation loaded, for audit: one compact line; opening it shows the report. -->
+      <details
+        class="ml-6 w-[calc(100%-1.5rem)] min-w-0 rounded-lg border border-dashed px-2 py-1 text-xs text-muted-foreground open:border-solid open:bg-muted open:text-foreground"
+      >
+        <summary
+          class="flex cursor-pointer list-none items-center gap-1.5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <GaugeIcon class="size-3.5 shrink-0" />
+          <span class="shrink-0">
+            {report.outcome === 'ready' ? 'Loaded' : 'Stalled'}
+            {presentationDisplayId(report.presentationId)}
+          </span>
+          <span class="truncate font-mono">{loadReportLine(report)}</span>
+        </summary>
+        <div class="relative mt-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="absolute top-0 right-0"
+            aria-label="Copy the load report"
+            title="Copy the load report"
+            onclick={() => void navigator.clipboard.writeText(json)}
+          >
+            <CopyIcon />
+          </Button>
+          <pre class="max-h-80 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{json}</pre>
+        </div>
+      </details>
     {:else if item.kind === 'version'}
       {@const chosen = chosenSource === item.sourceHash}
       {@const source = sourceId(item.sourceHash)}

@@ -265,6 +265,8 @@ const timelineCases = {
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
   'visualization.variant-reverted': (event) =>
     `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(event.payload.values)}, though its source draws without them; shown instead with ${JSON.stringify(event.payload.shown)} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
+  // Left out of the index (projectAiContext).
+  'visualization.loaded': (event) => `Presentation ${event.payload.presentationId} loaded.`,
   'assistant.responded': () => 'Assistant responded to the user.',
   'system.notified': (event) => `System ${event.payload.severity}: ${event.payload.message}`
 } satisfies ProjectEventCases<string>;
@@ -298,6 +300,7 @@ const conversationCases = {
   ],
   // A variant's failure, already shown as before, is not the source's to fix.
   'visualization.variant-reverted': () => [],
+  'visualization.loaded': () => [],
   // Written with its pair's differences, which need the presentations (projectConversationMessages).
   'visualization.preference-recorded': () => [],
   'assistant.responded': (event) => [
@@ -403,20 +406,22 @@ export function projectAiContext(
 ): AiProjectContext {
   const snapshot = projectSnapshotAt(document);
   const interaction = assistantInteraction(document, selection.interactionEventIds ?? []);
-  const timelineEvents = document.events.slice(-recentTimelineEventLimit);
+  // Load reports are diagnostics for developers, not part of the project's story.
+  const events = document.events.filter(({ type }) => type !== 'visualization.loaded');
+  const timelineEvents = events.slice(-recentTimelineEventLimit);
 
   return {
     projectId: document.projectId,
     title: snapshot.title,
-    headEventId: projectHead(document).id,
+    headEventId: events.at(-1)?.id ?? projectHead(document).id,
     base: projectWorkspace(snapshot),
     versions: sourceVersions(document),
     design: designVariables(viewedPresentation(document, selection.interactionEventIds ?? [])),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     timelineWindow: {
-      totalEventCount: document.events.length,
-      omittedEventCount: document.events.length - timelineEvents.length
+      totalEventCount: events.length,
+      omittedEventCount: events.length - timelineEvents.length
     },
     interfaceCapabilities: [
       'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',

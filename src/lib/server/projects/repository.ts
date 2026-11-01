@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm';
 
-import { summarizeProject } from '$lib/shared/projects/projection';
+import { headStillCurrent, summarizeProject } from '$lib/shared/projects/projection';
 import {
   activeProjectOperation,
   pendingAssistantTurnRequests
@@ -155,17 +155,23 @@ export class PostgresProjectRepository implements ProjectRepository {
         .for('update')
         .limit(1);
       if (!locked[0]) throw new ProjectNotFoundError(projectId);
-      if (locked[0].head !== expectedHead) throw new ProjectConflictError();
-
-      const events = pendingEvents.map(
-        (pending, index): ProjectEvent =>
-          ({ ...pending, id: expectedHead + index + 1 }) as ProjectEvent
-      );
+      const { head } = locked[0];
       const rows = await transaction
         .select({ event: schema.projectEvents.event })
         .from(schema.projectEvents)
         .where(eq(schema.projectEvents.projectId, projectId))
         .orderBy(asc(schema.projectEvents.eventId));
+      if (
+        !headStillCurrent(
+          rows.map(({ event }) => event),
+          expectedHead
+        )
+      )
+        throw new ProjectConflictError();
+
+      const events = pendingEvents.map(
+        (pending, index): ProjectEvent => ({ ...pending, id: head + index + 1 }) as ProjectEvent
+      );
       const document = normalizeProject({
         schemaVersion: projectSchemaVersion,
         projectId,

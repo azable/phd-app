@@ -7,7 +7,7 @@ import {
   presentationScenarioKey,
   alignPresentationFrames
 } from '$lib/shared/presentations';
-import { projectHead } from '$lib/shared/projects/projection';
+import { headStillCurrent } from '$lib/shared/projects/projection';
 
 import { runProjectCommand } from './command-lock';
 import { projectRepository } from './repository';
@@ -120,7 +120,7 @@ async function checkedDocument(
   dependencies: PresentationCommandDependencies
 ) {
   const document = await dependencies.repository.load(projectId);
-  if (projectHead(document).id !== expectedHead) {
+  if (!headStillCurrent(document.events, expectedHead)) {
     const error = new Error('The project changed before this operation completed.');
     error.name = 'ProjectConflictError';
     throw error;

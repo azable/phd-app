@@ -9,7 +9,9 @@
   import type { SelectedElement } from '$lib/client/visualization/visual-selection.svelte';
   import type { BrowserBundlePresentation } from '$lib/shared/presentations';
   import {
+    fontWidthsSchema,
     layoutPassSchema,
+    type FontWidths,
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
@@ -166,10 +168,17 @@
   });
 
   // Load timing, for auditing and debugging slow or stuck loads: when this presentation's page
-  // started loading here, each layout pass the page reports, and the outcome, logged to the console
-  // as [sverlin] and reported once ready, or as stalled when not ready after a while.
+  // started loading here, how wide it set text in each embedded font, each layout pass it reports,
+  // and the outcome, logged to the console as [sverlin] and reported once ready, or as stalled
+  // when not ready after a while.
   // A plain object schema drops the message's type, keeping only the pass.
   const timingMessage = v.object(layoutPassSchema.entries);
+  const fontsMessage = v.object({
+    ...fontWidthsSchema.entries,
+    devicePixelRatio: v.pipe(v.number(), v.minValue(0), v.maxValue(100))
+  });
+  let fonts: FontWidths | undefined;
+  let pageRatio: number | undefined;
   type Pass = v.InferOutput<typeof layoutPassSchema>;
   let passes: Pass[] = [];
   let loadStarted = 0;
@@ -213,7 +222,10 @@
       visibility: globalThis.document.visibilityState === 'visible' ? 'visible' : 'hidden',
       ...(frameAtLoad ? { frameAtLoad } : {}),
       ...(iframe ? { frameAtOutcome: frameBox() } : {}),
-      ...(last ? { last } : {})
+      ...(last ? { last } : {}),
+      devicePixelRatio: pageRatio ?? window.devicePixelRatio,
+      userAgent: navigator.userAgent.slice(0, 1_000),
+      ...(fonts ? { fonts } : {})
     };
   }
   // Ten seconds is far beyond a normal load, about a third of a second for a six-step linked list.
@@ -224,6 +236,8 @@
     loadStarted = performance.now();
     loadedAt = undefined;
     frameAtLoad = undefined;
+    fonts = undefined;
+    pageRatio = undefined;
     const watchdog = setTimeout(() => {
       if (untrack(() => ready)) return;
       const timing = loadTiming('stalled');
@@ -267,6 +281,14 @@
               ? `${logName()} waiting for its ${pass.waitedFor} before laying out`
               : `${logName()} still ${pass.phase} step ${pass.step} after ${pass.ms} ms, ${pass.changes ?? 0} layout changes`
           );
+        return;
+      }
+      if (data?.type === 'sverlin:fonts') {
+        const parsed = v.safeParse(fontsMessage, data);
+        if (!parsed.success) return;
+        const { devicePixelRatio, ...widths } = parsed.output;
+        fonts = widths;
+        pageRatio = devicePixelRatio;
         return;
       }
       if (data?.type === 'sverlin:loaded') {

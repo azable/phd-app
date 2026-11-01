@@ -7,7 +7,7 @@ import {
   type ProjectId,
   type ProjectSummary
 } from '$lib/shared/projects/model';
-import { summarizeProject } from '$lib/shared/projects/projection';
+import { headStillCurrent, summarizeProject } from '$lib/shared/projects/projection';
 
 import {
   ProjectConflictError,
@@ -56,7 +56,7 @@ export class MemoryProjectRepository implements ProjectRepository {
       const stored = this.#projects.get(projectId);
       if (!stored) throw new ProjectNotFoundError(projectId);
       const head = stored.document.events.at(-1)?.id ?? 0;
-      if (head !== expectedHead) throw new ProjectConflictError();
+      if (!headStillCurrent(stored.document.events, expectedHead)) throw new ProjectConflictError();
 
       const events = pendingEvents.map(
         (event, index): ProjectEvent => ({ ...event, id: head + index + 1 }) as ProjectEvent

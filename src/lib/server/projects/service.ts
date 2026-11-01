@@ -41,14 +41,16 @@ import {
   presentationMode,
   presentationVariant
 } from '$lib/shared/presentations';
-import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
+import { activeProjectOperation } from '$lib/shared/projects/operations';
+import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
 
 import { runProjectCommand } from './command-lock';
 import { currentProjectOperationSignal } from './operation-context';
 import { recordText } from './fingerprints';
-import { projectRepository } from './repository';
+import { ProjectConflictError, projectRepository } from './repository';
 import { resolveProjectTemplate } from './starter-catalog';
 import { stepSignature } from '$lib/modes/signature.server';
 import { modeBuilders, type BuildRequest, type ModeBuildResult } from '$lib/modes/server';
@@ -622,6 +624,40 @@ function repairsAutomatically(
   return repairs < maximumAutomaticRepairs;
 }
 
+/**
+ * Record how a presentation loaded, as one inert event at the head, outside any operation. While an
+ * operation runs it would move the head that operation appends to, so it is refused as a conflict
+ * and the browser sends it again once the project is quiet. Commands accepted on a head that only
+ * load reports have since moved are not conflicts (see headStillCurrent).
+ */
+export function recordPresentationLoad(
+  options: { projectId: string; report: PresentationLoadTiming },
+  dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
+): Promise<ProjectDocument> {
+  return runProjectCommand(options.projectId, async () => {
+    const before = await dependencies.repository.load(options.projectId);
+    if (activeProjectOperation(before)) throw new ProjectConflictError();
+    const presented = before.events.some(
+      (event) =>
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.presentationId === options.report.presentationId
+    );
+    if (!presented) throw new Error('Only a presented visualization can report its load.');
+    return appendProjectEvents(
+      before,
+      [
+        draftEvent({
+          type: 'visualization.loaded',
+          actor: { kind: 'system' },
+          operationId: randomUUID(),
+          payload: options.report
+        })
+      ],
+      dependencies
+    );
+  });
+}
+
 /** Append a user-authored project title change. */
 export function renameProject(
   options: {
@@ -1139,7 +1175,7 @@ async function checkedDocument(
   dependencies: ProjectServiceDependencies
 ) {
   const document = await dependencies.repository.load(projectId);
-  if (projectHead(document).id !== expectedHead) {
+  if (!headStillCurrent(document.events, expectedHead)) {
     const error = new Error('The project changed before this operation completed.');
     error.name = 'ProjectConflictError';
     throw error;

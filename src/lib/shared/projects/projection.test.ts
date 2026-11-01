@@ -7,7 +7,7 @@ import {
   type ProjectEventOf
 } from './events';
 import { normalizeProject, parseProjectCommand, type ProjectDocument } from './model';
-import { projectSnapshotAt, summarizeProject } from './projection';
+import { headStillCurrent, projectSnapshotAt, summarizeProject } from './projection';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const displaySetId = '22345678-1234-4234-8234-123456789abc';
@@ -101,6 +101,19 @@ describe('project model and projection', () => {
       ]
     };
     expect(projectSnapshotAt(withResponse)).toEqual({ ...projectSnapshotAt(document), at: 6 });
+  });
+
+  it('keeps an expected head current past load reports, and only past them', () => {
+    const read: Pick<ProjectEvent, 'type'>[] = [
+      { type: 'project.created' },
+      { type: 'visualization.presented' }
+    ];
+    const loaded = [...read, { type: 'visualization.loaded' as const }];
+    expect(headStillCurrent(read, 2)).toBe(true);
+    expect(headStillCurrent(loaded, 2)).toBe(true);
+    expect(headStillCurrent([...loaded, { type: 'project.renamed' }], 2)).toBe(false);
+    // A head the Timeline has not reached is never current.
+    expect(headStillCurrent(read, 3)).toBe(false);
   });
 });
 

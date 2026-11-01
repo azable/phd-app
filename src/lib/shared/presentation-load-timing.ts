@@ -1,7 +1,8 @@
 /**
- * How long a presentation took to appear in the browser, reported to the server's log so load
- * times can be audited. It never enters the project Timeline, so reporting cannot conflict with
- * the participant's own commands.
+ * How a presentation loaded in the browser: how long it took to appear, where its layout came from,
+ * and the browser and fonts it was laid out in. Each report is written to the server's log and
+ * recorded in the project Timeline as a visualization.loaded event, shown only in developer view,
+ * so a project's exported data carries what is needed to debug a load from another system.
  */
 
 import * as v from 'valibot';
@@ -28,6 +29,20 @@ export const layoutPassSchema = v.strictObject({
 
 const pixels = v.pipe(v.number(), v.integer(), v.minValue(-100_000), v.maxValue(100_000));
 const frameBoxSchema = v.strictObject({ width: pixels, height: pixels, top: pixels, left: pixels });
+
+/** How wide the page set a sample text in each embedded font, to compare with the server's measure. */
+export const fontWidthsSchema = v.strictObject({
+  /** The embedded fonts' version, as the sandbox document names it. */
+  version: v.optional(v.pipe(v.string(), v.maxLength(100))),
+  /** Whether every embedded font loaded; if not, the widths are of the fonts the page fell back to. */
+  loaded: v.boolean(),
+  sample: v.pipe(v.string(), v.maxLength(100)),
+  /** Each width in pixels, keyed by "family weight size", as "Inter 400 16". */
+  widths: v.pipe(
+    v.record(v.pipe(v.string(), v.maxLength(100)), v.pipe(v.number(), v.minValue(0))),
+    v.maxEntries(64)
+  )
+});
 
 export const presentationLoadTimingSchema = v.strictObject({
   presentationId: presentationIdSchema,
@@ -56,7 +71,13 @@ export const presentationLoadTimingSchema = v.strictObject({
   frameAtLoad: v.optional(frameBoxSchema),
   frameAtOutcome: v.optional(frameBoxSchema),
   /** The last pass the page reported, which for a stalled load is where it waits. */
-  last: v.optional(layoutPassSchema)
+  last: v.optional(layoutPassSchema),
+  /** The page's device pixel ratio, which geometry from the server must match. */
+  devicePixelRatio: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100))),
+  userAgent: v.optional(v.pipe(v.string(), v.maxLength(1_000))),
+  /** Measured as soon as the fonts loaded, before laying out; absent if the page never got there. */
+  fonts: v.optional(fontWidthsSchema)
 });
 
 export type PresentationLoadTiming = v.InferOutput<typeof presentationLoadTimingSchema>;
+export type FontWidths = v.InferOutput<typeof fontWidthsSchema>;

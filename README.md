@@ -303,14 +303,20 @@ to a local Chrome or Chromium executable.
 `pnpm run export:data -- --scope projects --project PROJECT_ID` selects one
 project. Exports include complete Timelines, versioned study definitions, and
 interaction telemetry where available; see
-[`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Presentation
-load times are not exported: each time a Sverlin presentation first shows a
-step, or is still not showing one after 10 seconds, the browser reports it and
-the web process writes one `sverlin.presentation-load` JSON line to its log
-(devenv's `web` process output), with the time per layout phase and where a
-stalled page waits; see
+[`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Each time a
+Sverlin presentation first shows a step, or is still not showing one after 10
+seconds, the browser reports how it loaded: the time per layout phase, where its
+layout came from, where a stalled page waits, the user agent and device pixel
+ratio, and how wide the page set a sample text in each embedded font; see
 [`src/lib/shared/presentation-load-timing.ts`](src/lib/shared/presentation-load-timing.ts).
-The browser console shows the same as `[sverlin]` lines.
+Once the project is quiet, it is recorded as a `visualization.loaded` event,
+which changes nothing else, so it is in the export's `project.json` (a viewer
+who may not change the project, such as an administrator, records nothing). The
+web process also writes it as a `sverlin.presentation-load` JSON line to its log
+(devenv's `web` process output), and the browser console shows it as `[sverlin]`
+lines. Developer view (`?dev=1`) shows each in the chat as one line, which opens
+to the full report with a copy button; participants and the assistant never see
+it.
 
 Project and export formats start at version 1. The fresh database baseline uses
 `mode` for visualization workflows and `kind` for participant/preview study

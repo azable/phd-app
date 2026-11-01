@@ -27,7 +27,7 @@ import {
   presentationStepName,
   presentationVariant
 } from '$lib/shared/presentations';
-import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
+import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
 import {
   getChatbot,
@@ -2085,7 +2085,7 @@ function rebasingRepository(repository: ProjectRepository): ProjectRepository {
 }
 
 function assertHead(document: ProjectDocument, expectedHead: EventId) {
-  if (projectHead(document).id !== expectedHead) {
+  if (!headStillCurrent(document.events, expectedHead)) {
     const error = new Error('The project changed before this operation completed.');
     error.name = 'ProjectConflictError';
     throw error;

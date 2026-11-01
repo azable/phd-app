@@ -58,7 +58,9 @@ export type ParticipantTimelineItem =
       failed?: { source: string; by: 'assistant' | 'save' };
     }
   /** A request to a model, shown for audit in developer view. */
-  | { id: string; kind: 'request'; value: AgentRequest };
+  | { id: string; kind: 'request'; value: AgentRequest }
+  /** How a presentation loaded in a viewer's browser, shown for audit in developer view. */
+  | { id: string; kind: 'load'; event: ProjectEventOf<'visualization.loaded'> };
 
 /** Keep research data lossless while deriving a concise participant conversation locally. */
 export function participantTimeline(
@@ -111,6 +113,10 @@ export function participantTimeline(
       if (options.audit)
         for (const value of agentRequests(related))
           items.push({ id: `request-${value.request.id}`, kind: 'request', value });
+      if (options.audit)
+        for (const event of related)
+          if (event.type === 'visualization.loaded')
+            items.push({ id: `load-${event.id}`, kind: 'load', event });
       for (const event of related) {
         if (event.type === 'assistant.responded') {
           items.push(

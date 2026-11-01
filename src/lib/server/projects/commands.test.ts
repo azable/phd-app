@@ -262,6 +262,74 @@ describe('createProject', () => {
     ).rejects.toThrow('Only a presented visualization');
   });
 
+  it('records how a presentation loaded as one inert event, never during an operation', async () => {
+    const { getProjectTemplate } = await import('./starter-catalog');
+    const { createProject, recordPresentationLoad } = await import('./service');
+    const { projectAiContext, projectConversationMessages } =
+      await import('$lib/server/chat-bots/project-context');
+    const created = await createProject(
+      { creation: { templateId: getProjectTemplate('linear-search').id } },
+      serviceDependencies
+    );
+    const presented = created.events.find((event) => event.type === 'visualization.presented');
+    if (presented?.type !== 'visualization.presented') throw new Error('Expected a presentation.');
+    const report = {
+      presentationId: presented.payload.presentation.presentationId,
+      outcome: 'ready' as const,
+      sinceLoadMs: 84,
+      layout: 'server' as const,
+      measuringMs: 0,
+      recordingMs: 3,
+      showingMs: 20,
+      passes: 1,
+      mostChanges: 0,
+      visibility: 'visible' as const,
+      devicePixelRatio: 2,
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/142.0.0.0 Safari/537.36',
+      fonts: { version: 'v1', loaded: true, sample: 'Hamburgefonstiv', widths: { 'A 400 16': 9 } }
+    };
+
+    const recorded = await recordPresentationLoad(
+      { projectId: created.projectId, report },
+      serviceDependencies
+    );
+
+    expect(recorded.events.slice(created.events.length)).toMatchObject([
+      { type: 'visualization.loaded', actor: { kind: 'system' }, payload: report }
+    ]);
+    expect(projectSnapshotAt(recorded)).toEqual({
+      ...projectSnapshotAt(created),
+      at: recorded.events.length
+    });
+    // The assistant never sees it.
+    expect(projectConversationMessages(recorded.events)).toEqual(
+      projectConversationMessages(created.events)
+    );
+    expect(projectAiContext(recorded).timeline.map(({ type }) => type)).not.toContain(
+      'visualization.loaded'
+    );
+    // While an operation runs it would move that operation's head, so it is refused.
+    const running = await serviceDependencies.repository.append(
+      created.projectId,
+      recorded.events.length,
+      [
+        {
+          type: 'operation.accepted',
+          actor: { kind: 'user' },
+          operationId: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          payload: { kind: 'rename' }
+        }
+      ]
+    );
+    await expect(
+      recordPresentationLoad({ projectId: created.projectId, report }, serviceDependencies)
+    ).rejects.toMatchObject({ name: 'ProjectConflictError' });
+    expect((await serviceDependencies.repository.load(created.projectId)).events).toHaveLength(
+      running.document.events.length
+    );
+  });
+
   it('shows a variant that fails as before, asking the assistant for no repair', async () => {
     const { getProjectTemplate } = await import('./starter-catalog');
     const { buildProjectPresentations, createProject, reportRuntimeFailure } =

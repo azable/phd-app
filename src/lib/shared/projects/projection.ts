@@ -65,6 +65,7 @@ const stateTransitions = {
   'visualization.preference-recorded': null,
   'visualization.runtime-failed': null,
   'visualization.variant-reverted': null,
+  'visualization.loaded': null,
   'assistant.responded': null,
   'revision.edits-rejected': null,
   'system.notified': null
@@ -73,6 +74,21 @@ const stateTransitions = {
 /** Return the final event in a valid project document. */
 export function projectHead(document: ProjectDocument): ProjectEvent {
   return document.events.at(-1)!;
+}
+
+/**
+ * Whether a writer that read the Timeline up to expectedHead may still append to it: nothing came
+ * after but load reports (visualization.loaded), which change no project state, so they never make
+ * a write conflict. Every comparison of an expected head goes through this.
+ */
+export function headStillCurrent(
+  events: readonly Pick<ProjectEvent, 'type'>[],
+  expectedHead: number
+): boolean {
+  return (
+    expectedHead <= events.length &&
+    events.slice(expectedHead).every(({ type }) => type === 'visualization.loaded')
+  );
 }
 
 /** Reconstruct project state at a stable event position. */
