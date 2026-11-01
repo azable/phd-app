@@ -110,12 +110,12 @@ describe('reserveSizes', () => {
 });
 
 describe('probeComponent', () => {
-  it("sizes a component by the largest of its cases, a pixel more, and finds its values' font", () => {
+  it("sizes a component by the largest of its cases, in whole pixels, and finds its values' font", () => {
     const memory = memoryOf();
     const card = (text: string) =>
       `<div class="sv-node" data-sv-node="k" data-sv-component="Card">${cell('inner', text)}</div>`;
     expect(probeComponent(frame(card('1') + card('333')), 'Card', options(memory))).toEqual({
-      box: { width: 25, height: 25 },
+      box: { width: 24, height: 24 },
       font: 'normal 400 16px sans-serif'
     });
   });

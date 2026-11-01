@@ -334,17 +334,22 @@ function sizer(options: ReserveOptions) {
     signatures.set(element, known);
     return known;
   }
-  const sizes = new Map<string, Size>();
-  /** An element's own size laid out on its own, in whole pixels; once for all elements alike. */
-  function sizeAlone(at: Read, element: ModelElement): Size {
+  const extents = new Map<string, Size>();
+  /** An element's own size laid out on its own, to the 64th; once for all elements alike. */
+  function extentAlone(at: Read, element: ModelElement): Size {
     const key = signature(at, element) + roomTag(at, element);
-    let size = sizes.get(key);
-    if (!size) {
+    let extent = extents.get(key);
+    if (!extent) {
       const box = layOutAlone(at, element).boxes.get(element);
-      size = { width: Math.round(box?.width ?? 0), height: Math.round(box?.height ?? 0) };
-      sizes.set(key, size);
+      extent = { width: box?.width ?? 0, height: box?.height ?? 0 };
+      extents.set(key, extent);
     }
-    return size;
+    return extent;
+  }
+  /** An element's own size laid out on its own, in whole pixels. */
+  function sizeAlone(at: Read, element: ModelElement): Size {
+    const { width, height } = extentAlone(at, element);
+    return { width: Math.round(width), height: Math.round(height) };
   }
 
   return {
@@ -354,6 +359,7 @@ function sizer(options: ReserveOptions) {
     alone,
     layOutAlone,
     hostReader,
+    extentAlone,
     sizeAlone,
     layouts: () => layouts
   };
@@ -361,8 +367,8 @@ function sizer(options: ReserveOptions) {
 
 /**
  * Size a typed component from markup drawing it for its cases (see probeMarkup in
- * components.server.ts): the largest box any of its roots reaches, a pixel more than the whole
- * pixels it rounds to, so it is never smaller than what it holds, over the box it already keeps;
+ * components.server.ts): the largest box any of its roots reaches, rounded up to whole pixels, so
+ * it is never smaller than what it holds, over the box it already keeps;
  * and the font its values are drawn in. A root holding a free layout is sized by the layout's
  * solution, which drawing its cases does not give, so it is left out.
  */
@@ -380,10 +386,12 @@ export function probeComponent(
     classesOf(element).includes('sv-arranged') || elementsOf(element).some(holdsArrangement);
   const visit = (element: ModelElement) => {
     if (element.attributes['data-sv-component'] === name && !holdsArrangement(element)) {
-      const size = model.sizeAlone(at, element);
+      // Not a pixel more: a box an odd number of pixels taller than its line puts the baseline on
+      // a half pixel, and the browser draws text on a whole one, half a pixel off centre.
+      const size = model.extentAlone(at, element);
       box = {
-        width: Math.max(box?.width ?? 0, size.width + 1),
-        height: Math.max(box?.height ?? 0, size.height + 1)
+        width: Math.max(box?.width ?? 0, Math.ceil(size.width)),
+        height: Math.max(box?.height ?? 0, Math.ceil(size.height))
       };
       const value = find(element, 'value');
       const look = value && at.styled.get(value)?.look;

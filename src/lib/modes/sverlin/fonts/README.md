@@ -30,9 +30,13 @@ from nixpkgs' font packages and `dejavu-fonts-ttf`, with fontTools
 ([`subset.py`](../../../../../scripts/fonts/subset.py)): each face is subset to
 Latin, Greek, punctuation, arrows, mathematical operators, shapes and check
 marks, stripped of hinting so every browser and the server take the same
-advances, and given one set of vertical metrics every platform reads alike. The
-same sources make the same files. The `.woff2` files are the page's, the `.ttf`
-files the server's, the same glyphs and metrics.
+advances, and given one set of vertical metrics every platform reads alike. Its
+digits are its lining figures, all of one height (Zilla Slab's own are
+old-style, each at its own height, and the page selects no figure features), and
+its line is centred on them, its height kept, so a number sits in the middle of
+the node around it in every font. The same sources make the same files. The
+`.woff2` files are the page's, the `.ttf` files the server's, the same glyphs
+and metrics.
 
 `faces.json`, written by `subset.py`, is the one list of the design's fonts:
 each `font` value with its family, the machine's fonts the page goes on to, and

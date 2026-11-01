@@ -1,10 +1,10 @@
 """Make the fonts every presentation embeds (see src/lib/modes/sverlin/fonts/README.md).
 
 Run through build.sh, which finds the source fonts. Each face is instanced (variable sources),
-subset to the characters Sverlin draws, stripped of hinting so every browser and the server take
-the same unhinted advances, given one set of vertical metrics every platform reads alike, and
-renamed, as the Open Font License asks of modified fonts. The fallback face holds only characters
-some text face lacks.
+subset to the characters Sverlin draws, given lining figures, stripped of hinting so every browser
+and the server take the same unhinted advances, given one set of vertical metrics every platform
+reads alike, centred on the digits, and renamed, as the Open Font License asks of modified fonts.
+The fallback face holds only characters some text face lacks.
 """
 
 import hashlib
@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from fontTools import subset
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
 
@@ -30,6 +31,7 @@ RANGES = [
     (0x2900, 0x297F),  # supplemental arrows
 ]
 CHARACTERS = {code for start, end in RANGES for code in range(start, end + 1)}
+DIGITS = range(ord("0"), ord("9") + 1)
 
 class Face(NamedTuple):
     family: str
@@ -103,7 +105,14 @@ def covered(font: TTFont) -> set:
     return set(font.getBestCmap())
 
 
-def finish(font: TTFont, family: str, weight: int, origin: str, characters: set) -> TTFont:
+def finish(
+    font: TTFont,
+    family: str,
+    weight: int,
+    origin: str,
+    characters: set,
+    centre: float | None = None,
+) -> TTFont:
     if font["OS/2"].version < 4:
         upgrade(font)
     options = subset.Options()
@@ -129,6 +138,11 @@ def finish(font: TTFont, family: str, weight: int, origin: str, characters: set)
     # One set of vertical metrics, read alike on every platform: typographic metrics equal to
     # hhea's, which FreeType and Core Text read, and marked for use, which DirectWrite then reads.
     hhea, os2 = font["hhea"], font["OS/2"]
+    # A line's box centred on the digits' centre, its height unchanged, so a number is centred in
+    # the box around it (a node centres its line box) whatever the font.
+    if centre is not None:
+        shift = round((hhea.ascent + hhea.descent) / 2 - centre)
+        hhea.ascent, hhea.descent = hhea.ascent - shift, hhea.descent - shift
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = (
         hhea.ascent,
         hhea.descent,
@@ -154,27 +168,63 @@ def upgrade(font: TTFont) -> None:
     os2.version = 4
 
 
-def bounds_top(glyphs, cmap, character: str) -> int:
-    from fontTools.pens.boundsPen import BoundsPen
-
+def bounds(glyphs, cmap, character: str) -> tuple | None:
     pen = BoundsPen(glyphs)
     glyphs[cmap[ord(character)]].draw(pen)
-    return round(pen.bounds[3]) if pen.bounds else 0
+    return pen.bounds
+
+
+def bounds_top(glyphs, cmap, character: str) -> int:
+    box = bounds(glyphs, cmap, character)
+    return round(box[3]) if box else 0
+
+
+def lining(font: TTFont) -> TTFont:
+    """Draw the digits as the font's lining figures, all of one height, where its own are not (Zilla
+    Slab's are old-style, each at its own height): the page selects no figure features."""
+    gsub = font["GSUB"].table if "GSUB" in font else None
+    if gsub is None or gsub.FeatureList is None:
+        return font
+    figures = {}
+    for record in gsub.FeatureList.FeatureRecord:
+        if record.FeatureTag != "lnum":
+            continue
+        for index in record.Feature.LookupListIndex:
+            lookup = gsub.LookupList.Lookup[index]
+            for table in lookup.SubTable:
+                table = table.ExtSubTable if lookup.LookupType == 7 else table
+                figures.update(getattr(table, "mapping", {}))
+    for table in font["cmap"].tables:
+        for code in DIGITS:
+            if table.cmap.get(code) in figures:
+                table.cmap[code] = figures[table.cmap[code]]
+    return font
+
+
+def digits_centre(font: TTFont) -> float:
+    """Halfway between the digits' lowest and highest ink, in font units."""
+    glyphs, cmap = font.getGlyphSet(), font.getBestCmap()
+    boxes = [bounds(glyphs, cmap, chr(code)) for code in DIGITS]
+    return (min(box[1] for box in boxes) + max(box[3] for box in boxes)) / 2
 
 
 def main() -> None:
     out = Path(sys.argv[1])
     sources = {key: Path(value) for key, value in (arg.split("=", 1) for arg in sys.argv[2:])}
     out.mkdir(parents=True, exist_ok=True)
-    for weight in WEIGHTS:
-        text_coverage = None
-        for role, face in FACES.items():
-            font = source(sources, face.source, weight)
+    text_coverage: dict[int, set] = {}
+    for role, face in FACES.items():
+        fonts = {weight: lining(source(sources, face.source, weight)) for weight in WEIGHTS}
+        # One centre for both weights, so that their lines keep one baseline.
+        centre = sum(map(digits_centre, fonts.values())) / len(fonts)
+        for weight, font in fonts.items():
             have = covered(font) & CHARACTERS
-            text_coverage = have if text_coverage is None else text_coverage & have
-            save(finish(font, face.family, weight, face.origin, have), out / f"{role}-{weight}")
+            text_coverage[weight] = text_coverage.get(weight, have) & have
+            font = finish(font, face.family, weight, face.origin, have, centre)
+            save(font, out / f"{role}-{weight}")
+    for weight in WEIGHTS:
         font = source(sources, FALLBACK.source, weight)
-        missing = (covered(font) & CHARACTERS) - text_coverage
+        missing = (covered(font) & CHARACTERS) - text_coverage[weight]
         fallback = finish(font, FALLBACK.family, weight, FALLBACK.origin, missing)
         save(fallback, out / f"symbols-{weight}")
     write_manifest(out)
