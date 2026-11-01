@@ -26,6 +26,9 @@
     provideHidden,
     insideComponentBox,
     leftOutContext,
+    listingContext,
+    provideRenderPlace,
+    renderPlaceContext,
     layoutMemoryContext,
     movingIdentity,
     nodeIdsContext,
@@ -64,6 +67,7 @@
     strokeStyleCss
   } from './design';
   import { fontClass } from '../fonts';
+  import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
 
@@ -84,7 +88,8 @@
     __text = false,
     __itemOf,
     __itemAt,
-    __items
+    __items,
+    __places
   }: {
     /** A primitive to display, when the node has no children. */
     value?: Primitive;
@@ -121,6 +126,8 @@
     __itemAt?: number;
     /** Internal: set by the compiler on a node whose children are one {#each}: what it iterates, which makes this node a collection. */
     __items?: ArrayLike<unknown>;
+    /** Internal: the places of the root's pointers at the element this node draws again, by their names (see Pointed). */
+    __places?: readonly string[];
   } = $props();
 
   const types = typeContext();
@@ -177,6 +184,19 @@
   // The element the outermost node of a pointer's view is drawn around, active or not.
   const drawnAround = pointerAroundContext();
   if (drawnAround) providePointerAround(undefined);
+  // The places this node refers to, where a listing's token names them (see listing/places.ts):
+  // those of the pointers at the element it draws, the render at a place it is the outermost node
+  // of, or the pointer at a place whose view it is the outermost node of where the pointer is.
+  const renderPlace = renderPlaceContext();
+  if (renderPlace) provideRenderPlace(undefined);
+  const listing = listingContext();
+  const ownPlaces = untrack(() => {
+    const place = placeContext();
+    return namedPlaces(listing, [
+      renderPlace,
+      drawnAround && pointerIdentity && place && !place.within ? place.at : undefined
+    ]);
+  });
   const identity = untrack(() =>
     slot === undefined
       ? pointerIdentity
@@ -237,6 +257,14 @@
   );
   if (hiddenHere) provideHidden(true);
   const hidden = hiddenHere ? true : hiddenContext();
+  // A node only keeping its room refers to nothing.
+  const places = untrack(() =>
+    hidden ? [] : namedPlaces(listing, [...ownPlaces, ...(__places ?? [])])
+  );
+  const light = untrack(() => {
+    const colour = lightOf(listing, places);
+    return colour ? nodeLight(listing?.places?.look, colour) : {};
+  });
   // Left out of the presentation, as its kind's shown false leaves it out (see left-out.ts).
   const leftOut = untrack(() => __ref !== undefined && (leftOutContext()?.has(__ref) ?? false));
   // A node keeps a least size so that changing content never moves anything around it. A typed
@@ -353,7 +381,13 @@
 {/snippet}
 
 {#snippet pointed(props: Record<string, unknown>)}
-  <Node {...given} __id={id} __slot={slot} {...props} />
+  <Node
+    {...given}
+    __id={id}
+    __slot={slot}
+    {...props}
+    __places={[...ownPlaces, ...((props.__places as string[] | undefined) ?? [])]}
+  />
 {/snippet}
 
 {#snippet itemCopy()}
@@ -411,6 +445,7 @@
       data-sv-glow={effects.glow ? 'on' : undefined}
       data-sv-fill-style={fillStyle?.style}
       data-sv-decoration={decoration ? look('decoration') : undefined}
+      data-sv-place={places.length ? places.join(' ') : undefined}
       class:cell={(!arrangement && !children && !__text) || __field}
       class:text={__text}
       style:font-size={measured('size', 'rem')}
@@ -418,7 +453,9 @@
       style:color={textColour}
       style:background-color={fillColour}
       style:background-image={fillStyle?.css}
-      style:box-shadow={effects.css}
+      style:box-shadow={[effects.css, light.shadow].filter(Boolean).join(', ') || undefined}
+      style:outline={light.outline}
+      style:outline-offset={light.outlineOffset}
       style:text-transform={textCase?.transform}
       style:font-variant-caps={textCase?.caps}
       style:text-decoration-line={__text ? decoration : undefined}

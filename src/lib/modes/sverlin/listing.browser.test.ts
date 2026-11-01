@@ -185,3 +185,137 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
+
+const search = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Flag = type('boolean');
+  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
+  const Before = binop((a: Index, b: Index) => Flag(a <= b));
+  const Less = binop((a: Int, b: Int) => Flag(a < b));
+  const Next = unop((p: Index) => Index(p + 1));
+  const Prev = unop((p: Index) => Index(p - 1));
+  const Last = unop((v: Values) => Index(v.length - 1));
+</script>
+<script lang="sverlin" input>
+  const values = Values([3, 8, 15, 23, 42, 57, 71]);
+  const target = Int(42);
+</script>
+<script lang="sverlin">
+  let lo = Index(0);
+  let hi = Last(values);
+  while (@open[Before(lo, hi)]) @probe{
+    const mid = @mid[Middle(lo, hi)];
+    if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
+    else @left[hi = Prev(mid);]
+  }
+</script>
+<script lang="sverlin" listing="pseudocode">
+  while @open[$lo[lo] <= $hi[hi]]
+    @probe[@mid[$mid[mid] = (lo + hi) / 2]
+    if @low[$mid[A[mid]] < $target[target]]
+      @right[$lo[lo] = mid + 1]
+    else
+      @left[$hi[hi] = mid - 1]]
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
+{#layout Main}
+  <Node layout="row">
+    <Listing />
+    <Node>{@render Goal()}{@render Cells()}</Node>
+    {@render Index(lo)}
+    {@render Index(hi)}
+    {@render Index(mid)}
+  </Node>
+{/layout}`;
+
+it.skipIf(!enabled)(
+  'lights a place in the listing and the picture alike, hovering one outlining the others',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(search);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: {
+        'pause@open': 'off',
+        'pause@probe': 'off',
+        'pause@probe.mid': 'off',
+        'pause@probe.low': 'on',
+        'pause@probe.right': 'off',
+        'pause@probe.left': 'off',
+        'Arrow.Pointed@mid.fill': 'sky-200',
+        'IntCell@target.fill': 'white',
+        'IntCell@target.stroke': 'violet-500',
+        'listing.places': 'fill'
+      }
+    });
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
+    await page.waitForFunction(
+      (layer) => document.querySelector(`${layer} [data-sv-kind="listing-token"][style]`),
+      layer
+    );
+    // Every reference to a place, its style, and whether it is a token.
+    const references = () =>
+      page.evaluate(
+        (layer) =>
+          [...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-place]`)].map((node) => ({
+            places: node.dataset.svPlace ?? '',
+            token: node.dataset.svKind === 'listing-token',
+            text: node.textContent ?? '',
+            style: node.getAttribute('style') ?? '',
+            hovered: node.hasAttribute('data-sv-hovered')
+          })),
+        layer
+      );
+    const sky = colourCss('sky-200')!;
+    const violet = colourCss('violet-500')!;
+    // Comparing A[mid] with the target lights mid and the target, in the listing and the picture.
+    const lit = await references();
+    const tokens = lit.filter(({ token }) => token);
+    expect(
+      tokens.filter(({ places }) => places === '@mid').every(({ style }) => style.includes(sky))
+    ).toBe(true);
+    expect(tokens.find(({ places }) => places === '@target')?.style).toContain(violet);
+    expect(tokens.find(({ places }) => places === '@lo')?.style ?? '').not.toContain('background');
+    // The element mid points at, with a band round it, and the target's cell, in its stroke, as
+    // its fill is white.
+    const element = lit.find(({ token, places }) => !token && places.includes('@mid'));
+    expect(element?.text).toBe('23');
+    const band = /box-shadow:([^;]*)/u.exec(element?.style ?? '')?.[1] ?? '';
+    expect(band).toContain(sky);
+    expect(band).toContain('3px');
+    const goal = lit.find(({ token, places }) => !token && places === '@target');
+    expect(goal?.text).toBe('42');
+    expect(goal?.style).toContain(violet);
+    // lo and hi point at the ends, unlit at this step, but marked.
+    expect(lit.filter(({ token, places }) => !token && /@lo|@hi/u.test(places)).length).toBe(2);
+    // Hovering the target's token outlines its cell, and the other way round.
+    const hover = (selector: string) =>
+      page.evaluate(
+        ({ layer, selector }) => {
+          const node = [...document.querySelectorAll<HTMLElement>(`${layer} ${selector}`)][0];
+          node.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+        },
+        { layer, selector }
+      );
+    await hover('[data-sv-kind="listing-token"][data-sv-place="@target"]');
+    const fromToken = (await references()).filter(({ hovered }) => hovered);
+    expect(fromToken.map(({ token }) => token).sort()).toEqual([false, true]);
+    await hover('[data-sv-place~="@mid"]:not([data-sv-kind="listing-token"])');
+    const fromNode = (await references()).filter(({ hovered }) => hovered);
+    expect(fromNode.filter(({ token }) => token).map(({ text }) => text)).toEqual([
+      'mid',
+      'A[mid]'
+    ]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+);

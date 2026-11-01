@@ -11,7 +11,13 @@
   import { flushSync, untrack, type Component } from 'svelte';
 
   import { flowExtent, neededFit } from './fit';
-  import { layoutMemoryContext, provideArrangementParent, provideNodeIds } from './type-context';
+  import { hoverPlaces } from './listing/places';
+  import {
+    layoutMemoryContext,
+    listingContext,
+    provideArrangementParent,
+    provideNodeIds
+  } from './type-context';
   import { alignments, frameRatios, frameWidth, justifications } from './node/scales';
   import type { FrameSettings } from './node/props';
   import { arrangementLayout } from './scene';
@@ -36,6 +42,8 @@
 
   provideNodeIds();
   const memory = layoutMemoryContext();
+  // Hovering a place's reference, a listing token or a node it marks, outlines every other.
+  const placePaints = listingContext()?.places?.paints;
 
   let frameElement = $state<HTMLDivElement>();
   let rootElement = $state<HTMLDivElement>();
@@ -467,6 +475,8 @@
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
+  onpointerover={(event) => hoverPlaces(event.currentTarget, event.target, placePaints)}
+  onpointerleave={(event) => hoverPlaces(event.currentTarget, null, placePaints)}
   ondblclick={onDoubleClick}
 >
   <div
@@ -606,6 +616,11 @@
     outline: 2px solid var(--sv-select);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+  /* Every reference to the place hovered, dashed in its colour, taking no room. */
+  .sv-viewport :global([data-sv-hovered]) {
+    outline: 2px dashed var(--sv-hover) !important;
+    outline-offset: 2px !important;
   }
   .sv-box {
     border: 1px solid var(--sv-select);

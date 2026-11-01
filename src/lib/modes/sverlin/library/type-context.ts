@@ -8,6 +8,7 @@ import { getContext, setContext, type Snippet } from 'svelte';
 import { placedKind, type DesignValues, type Place } from './node/design';
 import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
+import type { ListingPlaces } from './steps';
 
 export type TypeContext = {
   /** The atomic type name of item `index` of a container taken from the props, if typed. */
@@ -146,6 +147,9 @@ export type ShownListing = {
   /** Its regions, by their labels' full names, outer before inner, each painted as its place says. */
   regions: readonly { label: string; start: number; end: number }[];
   lit: readonly (readonly [number, number])[];
+  /** Where its tokens name places the variant lights, those, and the places the step touches. */
+  places?: ListingPlaces;
+  touched?: readonly string[];
 };
 
 export function listingContext(): ShownListing | undefined {
@@ -412,6 +416,18 @@ export function providePlace(place: Place | undefined): void {
 
 export function placeContext(): Place | undefined {
   return getContext<Place | undefined>('sverlin:place');
+}
+
+/**
+ * Inside a render at a place of the root or a part, until its outermost node: the place, by its
+ * name, as @key, which that node refers to (see listing/places.ts).
+ */
+export function provideRenderPlace(place: string | undefined): void {
+  setContext('sverlin:render-place', place);
+}
+
+export function renderPlaceContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:render-place');
 }
 
 export function pointersContext(): readonly Pointer[] {
