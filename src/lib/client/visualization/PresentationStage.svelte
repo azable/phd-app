@@ -143,12 +143,26 @@
       visible.length > 0 &&
       visible.every(({ presentation }) => blankStarter(session.events, presentation))
   );
+  // A later turn with no comparison up: the version shown stays, dimmed a little, until it ends.
+  const updatingVersion = $derived(
+    session.assistantResponding && !question && !makingFirst && visible.length > 0
+  );
   // What the stage says it is doing, and how it dims the version it shows meanwhile.
   const status = $derived(
-    awaiting === 'updating' ? 'Updating…' : awaiting || makingFirst ? undefined : activity?.label
+    awaiting === 'updating' || updatingVersion
+      ? 'Updating…'
+      : awaiting || makingFirst
+        ? undefined
+        : activity?.label
   );
-  const dimmed = $derived<'answered' | 'replaced' | undefined>(
-    awaiting === 'updating' ? 'answered' : activity?.replacing ? 'replaced' : undefined
+  const dimmed = $derived<'answered' | 'replaced' | 'updating' | undefined>(
+    awaiting === 'updating'
+      ? 'answered'
+      : activity?.replacing
+        ? 'replaced'
+        : updatingVersion
+          ? 'updating'
+          : undefined
   );
   // Which of its operation's comparisons this is, and whether it has just replaced the one answered.
   const progress = $derived(
@@ -560,13 +574,14 @@
               {/if}
             </div>
           {/if}
-          <!-- Dimmed while an operation replaces it, so it reads as the old version, and greyed while
-            the assistant replies to the pair. -->
+          <!-- Dimmed while an operation replaces it, so it reads as the old version, a little while the
+            assistant works on it, and greyed while the assistant replies to the pair. -->
           <div
             inert={makingFirst}
             class={[
               'flex min-h-0 min-w-0 flex-1 transition-[opacity,filter]',
               dimmed === 'replaced' && 'opacity-60',
+              dimmed === 'updating' && 'opacity-75',
               dimmed === 'answered' && 'opacity-50 grayscale'
             ]}
           >

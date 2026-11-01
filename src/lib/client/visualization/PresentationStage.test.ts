@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
 import type { ProjectEvent } from '$lib/shared/projects/events';
+import { pendingAssistantTurnRequests, projectOperations } from '$lib/shared/projects/operations';
 
 import PresentationStage from './PresentationStage.svelte';
 import { timelinePresentations } from './presentation-history';
@@ -131,6 +132,29 @@ describe('presentation stage before a project’s first version', () => {
   });
 });
 
+describe('presentation stage during a later turn', () => {
+  const shownVersion = () => blankProject().slice(2);
+
+  it('dims the version shown a little, saying it is updating, until the turn ends', () => {
+    for (const running of [[requested(4)], [accepted(4)]]) {
+      const body = stage([...shownVersion(), ...running], false);
+      expect(body).toContain('Updating…');
+      expect(body).toContain('opacity-75');
+      expect(body).not.toContain('Making a first version…');
+    }
+    const ended = stage([...shownVersion(), accepted(4), completed(5)], false);
+    expect(ended).not.toContain('Updating…');
+    expect(ended).not.toContain('opacity-75');
+  });
+
+  it('leaves a comparison up undimmed, saying what the turn does', () => {
+    const body = stage([...askedPair(), accepted(3)], false);
+    expect(body).toContain('Thinking…');
+    expect(body).not.toContain('Updating…');
+    expect(body).not.toContain('opacity-75');
+  });
+});
+
 describe('presentation stage showing a comparison from the timeline', () => {
   it('shows an answered pair side by side with its question, marking the side chosen', () => {
     const body = stage([...askedPair(), answered(3, { preferred: ids[1] })], false, true);
@@ -246,6 +270,13 @@ function stage(
     );
   const session = {
     events,
+    // As the session derives it, which the timeline's indicator also shows.
+    assistantResponding:
+      pendingAssistantTurnRequests(events).length > 0 ||
+      projectOperations(events).some(
+        ({ kind, status }) =>
+          kind === 'assistant-turn' && (status === 'accepted' || status === 'running')
+      ),
     pending: null,
     refillPending: false,
     readOnly: false,
@@ -381,6 +412,17 @@ function accepted(id: number): ProjectEvent {
   return {
     id,
     type: 'operation.accepted',
+    actor: { kind: 'system' },
+    operationId: turnId,
+    createdAt: `2026-11-01T00:00:0${id}.000Z`,
+    payload: { kind: 'assistant-turn' }
+  };
+}
+
+function completed(id: number): ProjectEvent {
+  return {
+    id,
+    type: 'operation.completed',
     actor: { kind: 'system' },
     operationId: turnId,
     createdAt: `2026-11-01T00:00:0${id}.000Z`,
