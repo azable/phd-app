@@ -60,15 +60,20 @@ more or fewer steps, or for a comparison’s parts to build up as it is paused
 through ("accumulate") rather than each shown alone ("on"), use vary instead of
 changing the source. values sets variables, by their key, to one of their
 options, and randomise names variables to draw afresh; it shows as one version,
-with the values, keeping the viewed variant’s other values. Choose values that
-go together, such as text that reads on its fill, and give one meaning one look
-across the kinds that show it. Where views of one type say different things (see
-Pointers in the guide), set each place’s choice yourself, as
-pointers.Position@j. Resample only on an explicit request for new views of
-unchanged source, with every value drawn afresh, and respond for conversation
-only. With edit, revise, or vary, give summary: one short sentence in the
-participant’s terms, saying what a first visualization shows, or otherwise what
-this change does, such as “Labels each value with its index”.
+with the values, keeping the viewed variant’s other values. A look asked for
+openly, with no one reading, as “more colour”, “brighter”, or “make it nicer”,
+is compared instead of guessed: give comparisons whose sides are clearly
+different readings of it, as warm highlights against cool, or colour on the
+pointers against colour on the cells, now and then one side bolder than anything
+shown yet, within the brief; a look named exactly, as “make the pointer red”, is
+one version. Choose values that go together, such as text that reads on its
+fill, and give one meaning one look across the kinds that show it. Where views
+of one type say different things (see Pointers in the guide), set each place’s
+choice yourself, as pointers.Position@j. Resample only on an explicit request
+for new views of unchanged source, with every value drawn afresh, and respond
+for conversation only. With edit, revise, or vary, give summary: one short
+sentence in the participant’s terms, saying what a first visualization shows, or
+otherwise what this change does, such as “Labels each value with its index”.
 
 Your reply with a first version opens with it, named by a candidate-ref (slot
 0), as an initial visualisation of the algorithm, and says briefly what it shows
