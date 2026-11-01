@@ -36,8 +36,8 @@ export type AiBriefItem = {
   /** The values brief tags may name for it, each steering what is worth asking or compared. */
   offeredTags?: string[];
   /**
-   * ask: unknown, and asked first or bearing on choices still open, to ask in words before
-   * comparing them;
+   * ask: unknown, and asked first (see first) or bearing on choices still open, to ask in words
+   * before comparing them;
    * show: the same, but asked by showing, a comparison whose sides stand for its tags (decides
    * names the families such a pair would vary);
    * confirm: inferred, and it steers choices still open.
@@ -48,7 +48,10 @@ export type AiBriefItem = {
    * comparison; both, what a picture shows by a comparison and the rest in words.
    */
   asked?: 'showing' | 'both';
-  /** Unknown and asked first (brief.ts askFirst): as soon as there is a version, before comparing. */
+  /**
+   * Unknown and asked first (brief.ts askFirst): the first of askFirst so marked is the first
+   * reply's question, with the first version; the rest follow, one between things shown.
+   */
   first?: true;
   /** Unknown and asked once, late (brief.ts later). */
   later?: true;

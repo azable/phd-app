@@ -186,6 +186,26 @@ describe('the brief in the assistant’s context', () => {
     expect(said.attributes.find(({ key }) => key === 'audience')).not.toHaveProperty('first');
   });
 
+  it('has the first reply ask the takeaway when the request already said who it is for', () => {
+    const request = brief({
+      algorithm: { status: 'inferred', value: 'linear search', source: 'Linear search' },
+      audience: {
+        status: 'inferred',
+        value: 'beginner programming students',
+        source: 'beginner programming students',
+        tags: ['novice']
+      }
+    });
+    // Before the first version: nothing shown, nothing asked.
+    const context = briefContext(request, open, conversationState([]));
+    expect(context).not.toHaveProperty('next');
+    expect(context.askFirst[0]).toBe('focus');
+    expect(context.attributes.find(({ key }) => key === 'focus')).toMatchObject({
+      prompt: 'ask',
+      first: true
+    });
+  });
+
   it('marks an inferred value that steers open choices to confirm, after unknowns', () => {
     const context = briefContext(
       brief({

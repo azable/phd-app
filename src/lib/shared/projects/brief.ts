@@ -62,8 +62,9 @@ export type BriefAttribute = {
   /** Intake's message asking it, when it also invites more than the question does. */
   opening?: string;
   /**
-   * Asked as soon as there is a version, before any comparison, while unknown: what the first
-   * reply asks, unless the request already said it.
+   * Asked in words from the first version on, while unknown: the first reply, with the first
+   * version, asks the first of them still unknown; the rest, one at a time, each with a later
+   * comparison or change, one question in words between things shown.
    */
   askFirst?: true;
   /** Asked once, late: once the first version and the most important questions are settled. */
