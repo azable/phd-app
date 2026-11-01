@@ -92,8 +92,13 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
-{@render Cells()}
-{@render Inserting()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+    {@render Inserting()}
+  </Node>
+{/layout}`;
     const keys = (await stepsOf(source, 4, { 'pause@insert.key': 'off' })).map((nodes) =>
       nodes.find((node) => node.startsWith('Inserting'))
     );
@@ -130,9 +135,14 @@ it.skipIf(!enabled)(
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Swapped()}<Node>swap {@render Int(@sweep.pair.swap.a)} and {@render Int(@sweep.pair.swap.b)}</Node>{/snippet}
 {#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}?</Node>{/snippet}
-{@render Cells()}
-{@render Greater(@sweep.pair.test)}
-{@render Swapped()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+    {@render Greater(@sweep.pair.test)}
+    {@render Swapped()}
+  </Node>
+{/layout}`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
     const [, compare, swap, , , last] = await stepsOf(source, 6, {
@@ -167,8 +177,13 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{@render Cells()}
-{#each runs(@check.at) as p}{@render Index(p)}{/each}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+    {#each runs(@check.at) as p}{@render Index(p)}{/each}
+  </Node>
+{/layout}`;
     const checked = (await stepsOf(search, 4, { 'pause@check.at': 'off' })).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
@@ -195,9 +210,14 @@ it.skipIf(!enabled)(
 {#snippet Reading(r: At)}<Pointed />{/snippet}
 {#snippet DigitRow()}<Node>{#each digits as d}{@render Digit(d)}{/each}</Node>{/snippet}
 {#snippet CountRow()}<Node>{#each counts as c}{@render Count(c)}{/each}</Node>{/snippet}
-{@render DigitRow()}
-{@render CountRow()}
-{@render At(v)}`;
+
+{#layout Main}
+  <Node>
+    {@render DigitRow()}
+    {@render CountRow()}
+    {@render At(v)}
+  </Node>
+{/layout}`;
     const reading = (await stepsOf(counting, 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
     );

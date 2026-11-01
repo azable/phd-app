@@ -28,9 +28,9 @@ export type FrameSettings = {
   gap: number;
   /** How what the layout holds is arranged. */
   layout: FrameLayout;
-  /** The layout shown, and its root <Node>'s line:column; none for a source without layouts. */
-  name?: string;
-  ref?: string;
+  /** The layout shown, and its root <Node>'s line:column. */
+  name: string;
+  ref: string;
 };
 
 /** The arrangements the page frame offers its top-level nodes. */

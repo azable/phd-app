@@ -13,7 +13,12 @@ export const visualizationPresentedEventSchema = v.object({
   payload: v.object({
     displaySetId: v.pipe(v.string(), v.uuid()),
     slot: v.picklist([0, 1]),
-    presentation: renderablePresentationSchema
+    presentation: renderablePresentationSchema,
+    /**
+     * The question the assistant's comparison asks of this display set's pair, which a preference
+     * between them answers (it names the display set).
+     */
+    question: v.optional(v.string())
   })
 });
 

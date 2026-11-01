@@ -100,7 +100,11 @@ while @more[the queue is not empty]
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Board()}
-{@render VertexRef(start)}
-{@render VertexRef(current)}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render VertexRef(start)}
+    {@render VertexRef(current)}
+  </Node>
+{/layout}

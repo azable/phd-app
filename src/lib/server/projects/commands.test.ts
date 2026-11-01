@@ -2196,7 +2196,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}{@render Shown()}`,
+              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n{#layout Main}<Node>{@render Shown()}</Node>{/layout}`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -2509,13 +2509,18 @@ describe('assistant edits', () => {
 
   it('applies the edits to the source it revises, and records what they change', async () => {
     const { document, source } = await created('Edited');
+    // The caption is a part, rendered in the layout, as the top level holds only parts and layouts.
+    const captioned = source
+      .replace('{#layout Main}', '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}')
+      .replace('{@render Result()}', '{@render Result()}{@render Note()}');
     mocks.generatePrepared.mockReset().mockResolvedValue(
       edit(
         [
           {
-            find: source,
-            replace: `${source}\n{#snippet Note()}<Node>Caption</Node>{/snippet}{@render Note()}`
-          }
+            find: '{#layout Main}',
+            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+          },
+          { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
         ],
         'Adds a caption'
       )
@@ -2529,9 +2534,7 @@ describe('assistant edits', () => {
       summary: 'Adds a caption'
     });
     const [change] = revised?.payload.changes ?? [];
-    expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(
-      `${source}\n{#snippet Note()}<Node>Caption</Node>{/snippet}{@render Note()}`
-    );
+    expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(captioned);
   });
 
   it('asks again with what kept the edits from applying, and accepts the correction', async () => {
@@ -2683,7 +2686,8 @@ describe('several variants from chat', () => {
             {
               payload: {
                 displaySetId: event.payload.displaySetId,
-                presentation: event.payload.presentation
+                presentation: event.payload.presentation,
+                question: event.payload.question
               }
             }
           ]
@@ -2814,6 +2818,102 @@ describe('several variants from chat', () => {
     expect(
       plain.result.appendedEvents.filter(({ type }) => type === 'visualization.presented').length
     ).toBeLessThanOrEqual(2);
+  });
+  const views = (left: string, right: string) => ({
+    question: 'Cells or tallies for the numbers?',
+    left: [{ variable: 'views.Int', value: left }],
+    right: [{ variable: 'views.Int', value: right }]
+  });
+  const marks = {
+    question: 'Amber or blue marks?',
+    left: [{ variable: 'Highlight.Pointed.fill', value: 'amber-100' }],
+    right: [{ variable: 'Highlight.Pointed.fill', value: 'blue-100' }]
+  };
+
+  it('builds each comparison as a pair differing only as given, with its question, the first shown and the rest queued', async () => {
+    const choose = vi.fn();
+    const { before, result } = await decide(
+      {
+        action: 'vary',
+        values: [],
+        randomise: [],
+        count: null,
+        comparisons: [views('IntCell', 'IntTally'), marks],
+        summary: 'Asks two questions'
+      },
+      { getChooser: () => chooser(choose), chooserFor: async () => 'model' }
+    );
+
+    expect(choose).not.toHaveBeenCalled();
+    const shown = presented(result.appendedEvents);
+    expect(shown).toHaveLength(4);
+    // With no presentation named, the turn builds on the newest (viewedPresentation).
+    const viewed = presented(before.events).at(-1)!.payload.presentation;
+    // Each pair differs only in what its comparison sets, and the variables that follow them.
+    const following = [/^views\.(\w+\.)?Int(@.*)?$/u, /^Highlight\.Pointed(@\w+)?\.fill$/u];
+    for (const index of [0, 1]) {
+      const [left, right] = shown.slice(index * 2, index * 2 + 2).map(({ payload }) => payload);
+      expect(left.displaySetId).toBe(right.displaySetId);
+      expect(left.question).toBe(
+        index ? 'Amber or blue marks?' : 'Cells or tallies for the numbers?'
+      );
+      const differing = Object.keys({
+        ...left.presentation.variant,
+        ...right.presentation.variant
+      }).filter((key) => left.presentation.variant?.[key] !== right.presentation.variant?.[key]);
+      expect(differing.length).toBeGreaterThan(0);
+      expect(differing.every((key) => following[index].test(key))).toBe(true);
+      // Nothing is drawn afresh: every other value is the viewed variant's.
+      for (const [key, value] of Object.entries(left.presentation.variant ?? {}))
+        if (!following[index].test(key) && key in (viewed.variant ?? {}))
+          expect(value).toBe(viewed.variant?.[key]);
+    }
+    const { presentationBufferState, waitingBehind } =
+      await import('$lib/shared/projects/presentation-buffer');
+    const buffer = presentationBufferState(result.document, 0);
+    expect(buffer.available.map(({ presentationId }) => presentationId)).toEqual(
+      shown.map(({ payload }) => payload.presentation.presentationId)
+    );
+    expect(waitingBehind(buffer, buffer.available[0].presentationId)).toHaveLength(2);
+  });
+
+  it('reports comparisons that cannot be built as given back to the assistant to repair', async () => {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const document = await createProject(
+      { title: 'Invalid', creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    mocks.generatePrepared
+      .mockReset()
+      .mockResolvedValueOnce({
+        ...generation(undefined, 'Two questions.'),
+        decision: {
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: [views('IntCell', 'IntBogus'), views('IntCell', 'IntCell')],
+          summary: 'Asks two questions'
+        }
+      })
+      .mockResolvedValueOnce(generation(undefined, 'Sorry.'));
+
+    const result = await submitProjectFeedback(
+      feedbackOptions(document, 'Compare.', '93345678-1234-4123-8123-123456789abc'),
+      commandDependencies
+    );
+
+    const rejected = result.appendedEvents.find(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected?.payload).toMatchObject({
+      rejected: 'comparisons',
+      problems: [expect.stringContaining('IntBogus'), expect.stringContaining('the same values')]
+    });
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
+      expect.objectContaining({ code: 'comparison_not_built' }),
+      expect.objectContaining({ code: 'comparison_not_built' })
+    ]);
+    expect(presented(result.appendedEvents)).toEqual([]);
   });
 });
 

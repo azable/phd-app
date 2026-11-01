@@ -24,8 +24,12 @@ ${algorithm}
 ${listing}
 </script>
 {#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}
-<Listing />
-{@render Cells()}`;
+{#layout Main}
+  <Node>
+    <Listing />
+    {@render Cells()}
+  </Node>
+{/layout}`;
 
 const insertion = blocks(
   `  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {

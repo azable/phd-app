@@ -21,6 +21,7 @@
     presentationPlaybackContext,
     type PresentationPlayback
   } from './presentation-playback.svelte';
+  import { pairQuestion } from './presentation-history';
   import PresentationViewport from './PresentationViewport.svelte';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
@@ -92,6 +93,7 @@
     'restore'
   ];
   const visible = $derived(selection.selected(session.events, layout));
+  const question = $derived(layout === 'comparison' ? pairQuestion(visible) : undefined);
   const preparing = $derived(
     session.refillPending ||
       (!!session.pending && visualizationOperationKinds.includes(session.pending.type))
@@ -265,6 +267,14 @@
   aria-label="Visualization presentations"
 >
   {#if visible.length}
+    {#if question}
+      <p
+        class="shrink-0 border-b bg-background px-3 py-2 text-center text-base font-medium"
+        data-replay-region="comparison-question"
+      >
+        {question}
+      </p>
+    {/if}
     {#each visible as entry, index (entry.presentation.presentationId)}
       {@const presentationId = entry.presentation.presentationId}
       {@const selected = visualSelections.for(presentationId, step)}

@@ -1100,7 +1100,9 @@ async function recordBuildResult(
 export async function activateBuiltPresentations(
   recorded: RecordedBuildBatch,
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies,
-  actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' }
+  actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' },
+  /** The question the set's pair asks, for an assistant's comparison. */
+  question?: string
 ): Promise<ProjectDocument> {
   if (recorded.builds.length === 0 || recorded.builds.some((item) => !item.result.ok)) {
     throw new Error('Only a complete successful build batch can be presented.');
@@ -1149,7 +1151,12 @@ export async function activateBuiltPresentations(
         type: 'visualization.presented',
         actor,
         operationId,
-        payload: { displaySetId, slot: slot as 0 | 1, presentation }
+        payload: {
+          displaySetId,
+          slot: slot as 0 | 1,
+          presentation,
+          ...(question ? { question } : {})
+        }
       })
     ),
     dependencies
@@ -1165,7 +1172,9 @@ export async function queueBuiltPresentations(
   recorded: RecordedBuildBatch,
   setSize: 1 | 2,
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies,
-  actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' }
+  actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' },
+  /** The question each set asks, in order, for an assistant's comparisons. */
+  questions: readonly string[] = []
 ): Promise<ProjectDocument> {
   const operationId = recorded.builds[0]?.operationId;
   if (!operationId) throw new Error('Only a complete successful build batch can be presented.');
@@ -1191,7 +1200,8 @@ export async function queueBuiltPresentations(
     document = await activateBuiltPresentations(
       { document, builds: recorded.builds.slice(start, start + setSize) },
       dependencies,
-      actor
+      actor,
+      questions[start / setSize]
     );
   return document;
 }

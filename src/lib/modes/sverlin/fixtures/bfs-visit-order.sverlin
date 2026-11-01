@@ -145,8 +145,11 @@ BFS(start)
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Lesson()}
-{@render VertexRef(current)}
-{@render VertexRef(@visit.look.next)}
-
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Lesson()}
+    {@render VertexRef(current)}
+    {@render VertexRef(@visit.look.next)}
+  </Node>
+{/layout}

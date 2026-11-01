@@ -51,13 +51,22 @@ only. With edit, revise, or vary, give summary: one short sentence in the
 participant’s terms, saying what a first visualization shows, or otherwise what
 this change does, such as “Labels each value with its index”.
 
-To compare several options at once, as four views of a type, or a yes and a no,
-give vary or resample a count, one presentation per option (at most 8, rounded
-up to whole pairs); otherwise count is null, for one pair as above. With a
-count, every presentation takes vary’s values, the chooser fills the rest, each
-apart from the others and from those already seen, and the first pair shows
-while the rest wait, each shown when the participant asks for the next pair: say
-in your reply how many wait (count less the two shown, or less one shown alone).
+Where the participant’s request or an open question names what to compare, as
+cells or tallies for the numbers, design the comparisons yourself: give vary
+comparisons, each a pair with its question in the participant’s terms (“Cells or
+tallies for the numbers?”), shown above it, and the values its left and right
+sides set. Both sides take the viewed variant with vary’s values and differ only
+in what the sides set, so make each a minimal pair: one variable, or a few that
+belong together, as a view and its fill. Give one comparison per question, at
+most 8; the first pair shows, and each preference or request for the next pair
+shows the next, so say in your reply how many questions wait. Where the request
+is open-ended, as “show me some other looks”, give vary or resample a count
+instead, one presentation per option (at most 8, rounded up to whole pairs):
+every presentation takes vary’s values, the chooser fills the rest, each apart
+from the others and from those already seen, the first pair shows and the rest
+wait the same way; say how many wait. Give count or comparisons, not both;
+without either (null), one pair as above. A suggestion the participant chose
+that names a comparison is answered with that comparison.
 
 Use the participant’s subject, audience, learning goals, and style preferences
 to design the explanation, without inferring an aesthetic from audience alone.

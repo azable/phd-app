@@ -40,6 +40,64 @@ const count = v.optional(
   )
 );
 
+/** One variable set to one of its options. */
+const designValue = v.strictObject({
+  variable: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description(
+      'A variable from project.design, by its key, as Compared.Pointed.fill, views.Int, or pointers.Index.'
+    )
+  ),
+  value: v.pipe(
+    v.union([v.string(), v.number(), v.boolean()]),
+    v.description('One of the variable’s options.')
+  )
+});
+
+/** The most comparisons one vary asks, each a pair. */
+export const maximumComparisons = 8;
+
+/**
+ * Pairs the assistant designs, each asking one question: both sides take the viewed variant with
+ * the vary's values, and differ only in the values each side sets. Optional (null in the strict
+ * response); not with a count.
+ */
+const comparisons = v.optional(
+  v.nullable(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          question: v.pipe(
+            v.string(),
+            v.trim(),
+            v.minLength(1),
+            v.maxLength(120),
+            v.description(
+              'What the pair asks, in the participant’s terms, shown above it, as “Cells or tallies for the numbers?”.'
+            )
+          ),
+          left: v.pipe(
+            v.array(designValue),
+            v.minLength(1),
+            v.description('The values the first of the pair sets.')
+          ),
+          right: v.pipe(
+            v.array(designValue),
+            v.minLength(1),
+            v.description('The values the second of the pair sets.')
+          )
+        })
+      ),
+      v.minLength(1),
+      v.maxLength(maximumComparisons),
+      v.description(
+        'Pairs to compare, one per question, or null. The first pair shows; the rest wait for New pair or a preference.'
+      )
+    )
+  )
+);
+
 /** Every decision, by its action. */
 export const sourceDecisions = {
   /** A reply alone: the source and its presentations stay as they are. */
@@ -54,32 +112,26 @@ export const sourceDecisions = {
   /**
    * New presentations of the source as it is, with values for some of its variables: the rest keep
    * the viewed variant's values in the first presentation, except those to randomise; with a count,
-   * every presentation takes the values and the chooser fills the rest.
+   * every presentation takes the values and the chooser fills the rest; with comparisons, each is a
+   * pair differing only in what its sides set.
    */
-  vary: v.strictObject({
-    action: v.literal('vary'),
-    values: v.array(
-      v.strictObject({
-        variable: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description(
-            'A variable from project.design, by its key, as Compared.Pointed.fill, views.Int, or pointers.Index.'
-          )
-        ),
-        value: v.pipe(
-          v.union([v.string(), v.number(), v.boolean()]),
-          v.description('One of the variable’s options.')
-        )
-      })
-    ),
-    randomise: v.pipe(
-      v.array(v.string()),
-      v.description('Variables, by key, to give fresh random values.')
-    ),
-    count,
-    summary
-  }),
+  vary: v.pipe(
+    v.strictObject({
+      action: v.literal('vary'),
+      values: v.array(designValue),
+      randomise: v.pipe(
+        v.array(v.string()),
+        v.description('Variables, by key, to give fresh random values.')
+      ),
+      count,
+      comparisons,
+      summary
+    }),
+    v.check(
+      ({ count, comparisons }) => !count || !comparisons,
+      'A vary gives a count or comparisons, not both.'
+    )
+  ),
 
   /**
    * Edits to the source being revised, applied in order: each replaces text that occurs in it

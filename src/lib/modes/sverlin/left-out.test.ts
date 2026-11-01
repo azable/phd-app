@@ -26,10 +26,15 @@ const source = `<script lang="sverlin" domain>
 {#snippet Picked()}<Node>picked {@render Int(v)}</Node>{/snippet}
 {#snippet Both()}<Node>{@render Int(v)} and {@render Int(values[0])}</Node>{/snippet}
 {#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
-{@render Title()}
-{@render Picked()}
-{@render Both()}
-{@render Cells()}`;
+
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Picked()}
+    {@render Both()}
+    {@render Cells()}
+  </Node>
+{/layout}`;
 
 const prepared = prepareSvelteComponent(source);
 const siteIn = (text: string) => (written: string) => siteOf(text, text.indexOf(written));

@@ -138,7 +138,12 @@ it.skipIf(!enabled)(
     {#each values as v, k}{@render Int(v)}<Link from={k} to={partner[k]} />{/each}
   </Node>
 {/snippet}
-{@render Cells()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+  </Node>
+{/layout}`;
     const { steps, errors } = await linksAtEachStep(pairs);
     for (const step of steps)
       expect(step).toEqual([

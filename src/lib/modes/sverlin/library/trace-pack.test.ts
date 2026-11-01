@@ -4,7 +4,7 @@ import { packStates, unpackStates } from './trace-pack';
 
 describe('packed states', () => {
   it('keep shared values once and repeated ones by index, unpacking to the states as built', () => {
-    const design = { 'Cell.fill': 'amber-100', 'frame.ratio': '16:9' };
+    const design = { 'Cell.fill': 'amber-100', 'Main.ratio': '16:9' };
     const states = [
       { i: 0, __design: design, __types: { i: 'Index' }, __absent: [] },
       { i: 1, __design: design, __types: { i: 'Index' }, __absent: ['j'] },

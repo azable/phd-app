@@ -114,9 +114,12 @@
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Graph()}
-{@render Status()}
-{@render VertexIndex(current)}
-{@render EdgeIndex(e)}
-
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Graph()}
+    {@render Status()}
+    {@render VertexIndex(current)}
+    {@render EdgeIndex(e)}
+  </Node>
+{/layout}

@@ -27,7 +27,6 @@ const hiddenAtMost = 0.5;
 export type PictureTree = {
   snippets: Map<string, string[]>;
   root: string[];
-  listings: number;
   layouts: Map<string, string[]>;
 };
 
@@ -38,7 +37,6 @@ export function pictureTree(source: string): PictureTree {
   const open: string[] = [];
   const layouts = new Map<string, string[]>();
   let layout: string[] | undefined;
-  let listings = 0;
   const tokens =
     /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|\{#layout\s+([A-Za-z_]\w*)|\{\/layout\s*\}/gu;
   for (const match of markup.matchAll(tokens)) {
@@ -55,12 +53,10 @@ export function pictureTree(source: string): PictureTree {
         root.push(match[2]);
         layout?.push(match[2]);
       }
-    } else if (open.length === 0) {
-      listings += 1;
-      layout?.push('<Listing>');
-    } else snippets.get(open.at(-1)!)!.push('<Listing>');
+    } else if (open.length === 0) layout?.push('<Listing>');
+    else snippets.get(open.at(-1)!)!.push('<Listing>');
   }
-  return { snippets, root, listings, layouts };
+  return { snippets, root, layouts };
 }
 
 type Hidden = { snippets: Set<string>; types: Set<string>; listing: boolean };
@@ -86,14 +82,9 @@ function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): 
     sizes.set(name, total);
     return total;
   };
-  // With layouts, the one shown, the first where the variant names none.
-  if (tree.layouts.size) {
-    const shown = tree.layouts.get(String(variant.layout)) ?? [...tree.layouts.values()][0] ?? [];
-    return shown.reduce((sum, name) => sum + size(name, []), 0);
-  }
-  return (
-    tree.root.reduce((sum, name) => sum + size(name, []), 0) + (hidden.listing ? 0 : tree.listings)
-  );
+  // The layout shown, the first where the variant names none.
+  const shown = tree.layouts.get(String(variant.layout)) ?? [...tree.layouts.values()][0] ?? [];
+  return shown.reduce((sum, name) => sum + size(name, []), 0);
 }
 
 /** The snippet a kind's shown variable hides: the last kind in its path, before any place. */

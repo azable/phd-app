@@ -134,8 +134,12 @@ while cur ≠ ∅
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Board()}
-{@render NodeRef(prev)}
-{@render NodeRef(cur)}
-{@render NodeRef(after)}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render NodeRef(prev)}
+    {@render NodeRef(cur)}
+    {@render NodeRef(after)}
+  </Node>
+{/layout}

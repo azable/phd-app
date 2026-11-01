@@ -34,11 +34,13 @@ const insertion = `
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{@render Cells()}`;
+{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}`;
 
-const prepare = (view: string, algorithm = insertion) =>
-  prepareSvelteComponent(`${domain}${algorithm}\n${view}`);
+/** A source of the algorithm and its parts, its one layout holding `view`. */
+const prepare = (view: string, algorithm = insertion, parts = '') =>
+  prepareSvelteComponent(
+    `${domain}${algorithm}\n${parts}\n{#layout Main}<Node>${view}</Node>{/layout}`
+  );
 
 describe('labels read in the view', () => {
   it('are rewritten as identifiers of the same length, outside tags and strings', () => {
@@ -58,7 +60,9 @@ describe('labels read in the view', () => {
 
   it('give the value the labelled expression gave in a step’s own code, in a part of the page', () => {
     const prepared = prepare(
-      '{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}{@render Inserting()}'
+      '{@render Inserting()}',
+      insertion,
+      '{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}'
     );
     expect(prepared.labelled).toEqual({
       ℓinsertˑkey: {
@@ -107,7 +111,11 @@ describe('labels read in the view', () => {
       '@insert.key labels a statement, which gives no value; label its expression, as const key = @key[values[i]].'
     );
     expect(() =>
-      prepare('{#snippet Shown(v: Values)}<Node>{@render Int(@insert.key)}</Node>{/snippet}')
+      prepare(
+        '{@render Cells()}',
+        insertion,
+        '{#snippet Shown(v: Values)}<Node>{@render Int(@insert.key)}</Node>{/snippet}'
+      )
     ).toThrow('@insert.key is read in a view, which sees only its value');
   });
 

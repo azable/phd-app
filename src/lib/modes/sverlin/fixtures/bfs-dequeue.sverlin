@@ -83,13 +83,17 @@
     {@render QueueLine()}
   </Node>
 {/snippet}
-
-{@render Title()}
-{@render Board()}
 {#snippet Taken()}
   <Node layout="row">
     <Node>current</Node>
     {@render VertexRef(current)}
   </Node>
 {/snippet}
-{@render Taken()}
+
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render Taken()}
+  </Node>
+{/layout}

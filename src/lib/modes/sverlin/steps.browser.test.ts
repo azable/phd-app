@@ -47,8 +47,13 @@ it.skipIf(!enabled)(
 {#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet At()}<Node>at {@render Index(i)}</Node>{/snippet}
-{@render Cells()}
-{@render At()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+    {@render At()}
+  </Node>
+{/layout}`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
@@ -138,9 +143,14 @@ it.skipIf(!enabled)(
 {#snippet Title()}<Node>Pass</Node>{/snippet}
 {#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
 {#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
-{@render Title()}
-{@render Key()}
-{@render Cells()}`;
+
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Key()}
+    {@render Cells()}
+  </Node>
+{/layout}`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.
     const whole = source.replace(

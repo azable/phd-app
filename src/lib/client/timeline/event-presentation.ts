@@ -149,10 +149,12 @@ const presenters = {
     ),
   'revision.edits-rejected': (event) =>
     details(
-      'Edits not applied',
+      event.payload.rejected ? 'Comparisons not built' : 'Edits not applied',
       event.payload.problems[0] ?? 'The edits could not be placed in the source.',
       'failure',
-      'Edits did not apply; checking repair…',
+      event.payload.rejected
+        ? 'Comparisons could not be built; checking repair…'
+        : 'Edits did not apply; checking repair…',
       'destructive'
     ),
   'artifact.version-created': (event) =>

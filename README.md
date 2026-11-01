@@ -57,7 +57,7 @@ which the compiler generates from the markup and the library
 ([`design.server.ts`](src/lib/modes/sverlin/design.server.ts), options in
 [`library/node/design.ts`](src/lib/modes/sverlin/library/node/design.ts)): each
 type rendered by name chooses among its views and none (`views.Int`), the page
-frame has its settings (`frame.ratio`, …), and every kind of node, a view and
+frame has its values (`Stacked.ratio`, …), and every kind of node, a view and
 the tags a node has (`Here[current]`), has a variable per prop, each with a
 finite set of options. A kind a node takes only at some steps, by a tag the
 state decides, varies paint, text, and inset but not layout or what is shown,
@@ -90,7 +90,16 @@ chooser filling each around the values the `vary` sets, and queues them in the
 presentation buffer: what it held is consumed, the first pair shows, and each
 Next pair, or New pair in dev mode, consumes the shown pair to show the next
 (`queueBuiltPresentations`, `waitingBehind` in
-[`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). The
+[`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
+`vary` may instead give `comparisons` the assistant designs, each a question and
+the values its two sides set: each is built as one pair, both from the viewed
+variant with the `vary`'s values, differing only as its sides do, with no
+chooser or random draw, and queued the same way. The question is stored on the
+pair's `visualization.presented` events and shown above it on the stage, and a
+preference naming that display set is read with it in the assistant's context; a
+comparison with an option its variable lacks, sides alike, or a side the variant
+guard would change is recorded as rejected (`revision.edits-rejected` with
+`rejected: "comparisons"`) and repaired as edits that did not apply are. The
 assistant's reply may carry suggestions, comparisons worth making, stored on its
 `assistant.responded` event and shown under the newest reply as buttons until a
 message or preference answers it (three, the rest behind More); a click sends

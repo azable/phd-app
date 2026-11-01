@@ -59,7 +59,12 @@ const insertion = `<script lang="sverlin" domain>
     <Link from={@insert.swap.from} to={@insert.swap.to} />
   </Node>
 {/snippet}
-{@render Cells()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+  </Node>
+{/layout}`;
 
 it.skipIf(!enabled)(
   'joins the two swapped cells with an arrow at the swap step only',

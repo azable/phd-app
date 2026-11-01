@@ -108,8 +108,8 @@ it.skipIf(!enabled)(
   async () => {
     // A snake, whose rows once followed the room it had.
     const snake = { ...arcs, 'Graph.form': 'snake' };
-    const wide = await graphOf(dijkstra, { ...snake, 'frame.ratio': '16:9' });
-    const square = await graphOf(dijkstra, { ...snake, 'frame.ratio': '1:1' });
+    const wide = await graphOf(dijkstra, { ...snake, 'Main.ratio': '16:9' });
+    const square = await graphOf(dijkstra, { ...snake, 'Main.ratio': '1:1' });
     const neighbour = await graphOf(
       dijkstra.replace(
         'Each edge label is its weight.',

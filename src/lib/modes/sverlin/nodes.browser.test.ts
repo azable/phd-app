@@ -43,7 +43,12 @@ const list = (algorithm: string) => `<script lang="sverlin" domain>
   <Node layout="row">{@render Name(n.name)}{@render NextField()}</Node>
 {/snippet}
 {#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>{/snippet}
-{@render Heap()}`;
+
+{#layout Main}
+  <Node>
+    {@render Heap()}
+  </Node>
+{/layout}`;
 
 /** Each step's arrows, between the names of the nodes they join, and its nodes' text. */
 async function play(source: string, count: number) {

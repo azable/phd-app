@@ -139,14 +139,6 @@ export const frameOptions = {
 } satisfies Record<string, readonly (string | number)[]>;
 
 /**
- * The layout a source without layout blocks reads as, holding its top level. With no root to say
- * how that is arranged, its kind also has `layout`, as Page.layout; variants saved before layouts
- * gave its frame as frame.*, read as Page.*.
- */
-export const implicitLayout = 'Page';
-export const implicitLayoutOptions = { layout: ['column', 'row'] };
-
-/**
  * The props of a listing's lit text, as a kind's: its fill, a stroke drawn inside it, its corners,
  * and its text; `color` none keeps the listing's ink. Code a step finished, code it keeps as run,
  * and code leading up to it all light alike. A region of the listing sets its own paint

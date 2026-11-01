@@ -77,6 +77,10 @@
   <Node>Insert next value {@render Int(@sequence.pick)}</Node>
 {/snippet}
 
-{@render Title()}
-{@render Heap()}
-{@render Status()}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Heap()}
+    {@render Status()}
+  </Node>
+{/layout}

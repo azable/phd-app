@@ -54,7 +54,12 @@ const insertion = `<script lang="sverlin" domain>
     {#if when(@insert.swap)}{@render Caption()}{/if}
   </Node>
 {/snippet}
-{@render Board()}`;
+
+{#layout Main}
+  <Node>
+    {@render Board()}
+  </Node>
+{/layout}`;
 
 const off = {
   'pause@insert': 'off',

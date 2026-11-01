@@ -72,6 +72,10 @@
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Graph()}
-{@render QueueLine()}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Graph()}
+    {@render QueueLine()}
+  </Node>
+{/layout}

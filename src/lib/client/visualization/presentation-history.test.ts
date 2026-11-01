@@ -6,6 +6,7 @@ import {
   availablePresentations,
   candidateId,
   latestPresentations,
+  pairQuestion,
   presentationDisplayId,
   timelinePresentations
 } from './presentation-history';
@@ -190,6 +191,18 @@ describe('presentation history', () => {
         .selected(comparisonEvents(), 'comparison')
         .map(({ presentation }) => presentation.presentationId)
     ).toEqual(presentationIds.slice(2));
+  });
+
+  it('names the question a shown pair of one comparison asks', () => {
+    const asked = comparisonEvents().map((event) =>
+      event.type === 'visualization.presented' && event.payload.displaySetId === setTwo
+        ? { ...event, payload: { ...event.payload, question: 'Cells or tallies?' } }
+        : event
+    );
+    const pairs = timelinePresentations(asked);
+    expect(pairQuestion(pairs.slice(2))).toBe('Cells or tallies?');
+    expect(pairQuestion(pairs.slice(0, 2))).toBeUndefined();
+    expect(pairQuestion(pairs.slice(1, 3))).toBeUndefined();
   });
 
   it('shows the first of the sets one operation queued until New pair consumes it', () => {

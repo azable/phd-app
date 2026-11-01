@@ -24,9 +24,13 @@ const source = `<script lang="sverlin" domain>
 {#snippet Row(list: Values)}
   {#snippet Under()}<Node>i</Node>{/snippet}
 {/snippet}
-{@render Index(@compare.left)}
-{@render Index(@compare.right)}
-{@render Int(@compare.swap.held)}`;
+{#layout Main}
+  <Node>
+    {@render Index(@compare.left)}
+    {@render Index(@compare.right)}
+    {@render Int(@compare.swap.held)}
+  </Node>
+{/layout}`;
 
 /** The text each region covers. */
 const named = (text: string) =>
@@ -63,8 +67,12 @@ describe('references in messages', () => {
   @rise[if @compare[A[@left[i - 1]] > A[i]]]
   @fall[if @compare[A[@left[i - 1]] < A[i]]]
 </script>
-{@render Index(@rise.compare.left)}
-{@render Index(@fall.compare.left)}`;
+{#layout Main}
+  <Node>
+    {@render Index(@rise.compare.left)}
+    {@render Index(@fall.compare.left)}
+  </Node>
+{/layout}`;
     const at = (label: string) => referenceRanges(twice, label).map(({ from }) => from);
     const all = (text: string) =>
       [...twice.matchAll(new RegExp(text.replace(/[.[()]/gu, '\\$&'), 'gu'))].map(
@@ -99,8 +107,8 @@ describe('references in messages', () => {
   it('name lines, a line and column, or a run of lines', () => {
     expect(named('line 12')).toEqual(['{#snippet Highlight(p: Index)}<Pointed />{/snippet}']);
     expect(named('12:11')).toEqual(['Highlight(p: Index)}<Pointed />{/snippet}']);
-    expect(named('lines 16-17')).toEqual([
-      '{@render Index(@compare.left)}\n{@render Index(@compare.right)}'
+    expect(named('lines 18-19')).toEqual([
+      '    {@render Index(@compare.left)}\n    {@render Index(@compare.right)}'
     ]);
     expect(named('line 99')).toEqual([]);
   });
@@ -180,7 +188,12 @@ describe('code in an error message', () => {
 </script>
 <script lang="sverlin">let i = Index(1);</script>
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{@render Highlight(@left)}`;
+
+{#layout Main}
+  <Node>
+    {@render Highlight(@left)}
+  </Node>
+{/layout}`;
   const code = (text: string, inSource = dotted) =>
     codeIn(inSource, text).flatMap((span) => (span.code ? [span.text] : []));
 
@@ -215,7 +228,7 @@ describe('code in an error message', () => {
 describe('problems of a build', () => {
   it('cover from their position to their end, or to the end of the line', () => {
     const ranges = diagnosticRanges(source, [
-      { message: 'here', raw: 'here', severity: 'error', line: 16, column: 10 },
+      { message: 'here', raw: 'here', severity: 'error', line: 18, column: 14 },
       {
         message: 'span',
         raw: 'span',
@@ -242,7 +255,7 @@ describe('design variables with a row of their own', () => {
       'Highlight.Pointed.fill': 'amber-100',
       'Highlight.Pointed@left.fill': 'sky-100',
       'IntCell.fill': 'white',
-      'frame.gap': 0.5,
+      'Main.gap': 0.5,
       'listing.language': 'code'
     }
   };
@@ -253,7 +266,7 @@ describe('design variables with a row of their own', () => {
       'Highlight.Pointed.fill',
       'IntCell.fill',
       'pointers.Index@found',
-      'frame.gap',
+      'Main.gap',
       'listing.language'
     ])
       expect(ghostKey(` ${key} `, design)).toBe(key);

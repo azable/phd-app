@@ -2,19 +2,17 @@
  * Layout blocks, `{#layout Name}…{/layout}`: each an arrangement of the whole page, its body one root
  * <Node>, the frame. Svelte has no such block, so before the view is parsed each becomes
  * `{#if __L.Name}…{/if}`, as long, drawn only where the variant's layout is Name (the prop __L holds
- * it), and its root's tags are blanked, so what the root holds is the page's top level, as it was
- * before layouts, and every check of the top level holds for it. A source without layout blocks
- * reads as one layout, Page, holding its top level (see implicitLayout).
+ * it), and its root's tags are blanked, so what the root holds is the page's top level, and every
+ * check of the top level holds for it. Every source declares at least one layout.
  */
 
 import type { FrameLayout } from './library/node/props';
-import { implicitLayout } from './library/node/design';
 
 /** The prop holding the layout shown, as { Stacked: true }. */
 export const layoutProp = '__L';
 
 /** One layout of the page: its name, and its root's row or column and tag, by its offset. */
-export type PageLayout = { name: string; direction?: FrameLayout; root?: number };
+export type PageLayout = { name: string; direction: FrameLayout; root: number };
 
 type Part = {
   type?: string;
@@ -85,22 +83,27 @@ const blank = (text: string, from: number, to: number) =>
 const significant = (part: Part) =>
   part.type !== 'Comment' && !(part.type === 'Text' && !part.data?.trim());
 
+/** What the compiler says of a source without layouts. */
+export const noLayoutMessage =
+  'The view declares no layout: put what the page draws in {#layout Main}<Node>…</Node>{/layout}, one root <Node> holding the parts, and a second layout for another arrangement.';
+
 /**
  * The page's layouts, and the view as Svelte parses it: each layout block an {#if}, its root's tags
- * blanked. `parse` gives the markup's top-level parts, from Svelte's parser.
+ * blanked. `parse` gives the markup's top-level parts, from Svelte's parser. A view without layout
+ * blocks has none, which the compiler refuses (see noLayoutMessage), with the view's other problems.
  */
 export function pageLayouts(
   text: string,
   parse: (text: string) => Part[]
-): { text: string; layouts: PageLayout[]; declared: boolean; problems: Problem[] } {
-  if (!/\{#layout\b/u.test(text))
-    return { text, layouts: [{ name: implicitLayout }], declared: false, problems: [] };
+): { text: string; layouts: PageLayout[]; problems: Problem[] } {
+  if (!/\{#layout\b/u.test(text)) return { text, layouts: [], problems: [] };
   const { text: blocks, problems } = rewritten(text);
   // A block left as written would only fail to parse.
-  if (problems.length) return { text: blocks, layouts: [], declared: true, problems };
+  if (problems.length) return { text: blocks, layouts: [], problems };
   const top = parse(blocks);
   let view = blocks;
   const layouts: PageLayout[] = [];
+  const names = new Set<string>();
   for (const part of top) {
     const name = layoutNameOf(part);
     if (name === undefined) {
@@ -113,11 +116,12 @@ export function pageLayouts(
       continue;
     }
     const start = part.start ?? 0;
-    if (layouts.some((layout) => layout.name === name))
+    if (names.has(name))
       problems.push({
         message: `Two layouts are named ${name}; each layout's name is its kind, so give each its own.`,
         start
       });
+    names.add(name);
     if (part.else)
       problems.push({
         message: `A layout has no {:else}: the variant shows one layout at a time, so write another arrangement as a layout of its own, {#layout Other}…{/layout}.`,
@@ -130,7 +134,6 @@ export function pageLayouts(
         message: `The layout ${name}'s body is one root <Node>, the frame, holding what the page shows, as {#layout ${name}}<Node layout="row">{@render Board()}{@render Table()}</Node>{/layout}; every other part goes inside it.`,
         start: (root ?? part).start ?? start
       });
-      layouts.push({ name });
       continue;
     }
     const rootStart = root.start ?? start;
@@ -178,5 +181,5 @@ export function pageLayouts(
   };
   for (const part of top) nested(part.children ?? [], 1);
   for (const part of top) nested(part.else, 1);
-  return { text: view, layouts, declared: true, problems };
+  return { text: view, layouts, problems };
 }

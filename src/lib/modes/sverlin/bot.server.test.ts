@@ -127,6 +127,30 @@ describe('single-component Svelte assistant', () => {
     expect(decision.oneOf.find(({ properties }) => 'count' in properties)).toBeDefined();
   });
 
+  it('parses a vary’s comparisons, or a count, never both', () => {
+    const parse = (extra: object) =>
+      aiAssistant.parseOutput({
+        reply: [{ type: 'markdown', text: 'Done.' }],
+        decision: { action: 'vary', values: [], randomise: [], summary: 'Asks', ...extra },
+        recovery: null
+      });
+    const comparison = {
+      question: ' Cells or tallies? ',
+      left: [{ variable: 'views.Int', value: 'IntCell' }],
+      right: [{ variable: 'views.Int', value: 'IntTally' }]
+    };
+    expect(parse({ count: null, comparisons: [comparison] })).toMatchObject({
+      decision: { comparisons: [{ question: 'Cells or tallies?' }] }
+    });
+    for (const invalid of [
+      { count: 4, comparisons: [comparison] },
+      { comparisons: [] },
+      { comparisons: Array(9).fill(comparison) },
+      { comparisons: [{ ...comparison, right: [] }] }
+    ])
+      expect(() => parse(invalid)).toThrow(/invalid structured response/i);
+  });
+
   it('keeps at most twelve non-blank suggestions', () => {
     const parse = (suggestions: unknown) =>
       aiAssistant.parseOutput({
@@ -182,7 +206,7 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">let last = Count(9); for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(value: Count)}<Node {value} />{/snippet}{@render Count(last)}`;
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">let last = Count(9); for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(value: Count)}<Node {value} />{/snippet}{#layout Main}<Node>{@render Count(last)}</Node>{/layout}`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
     // Named by their labels' runs: the input as given (here none), a step per pass, then the step

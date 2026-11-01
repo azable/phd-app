@@ -89,6 +89,8 @@ export type TimelinePresentation = {
   displaySetId?: string;
   slot: 0 | 1;
   presentation: RenderablePresentation;
+  /** The question its pair asks, for an assistant's comparison. */
+  question?: string;
 };
 
 /** A 32-bit FNV-1a hash of text. */
@@ -174,7 +176,8 @@ export function timelinePresentations(events: readonly ProjectEvent[]): Timeline
           operationId: event.operationId,
           displaySetId: event.payload.displaySetId,
           slot: event.payload.slot,
-          presentation: event.payload.presentation
+          presentation: event.payload.presentation,
+          ...(event.payload.question ? { question: event.payload.question } : {})
         }
       ];
     }
@@ -221,6 +224,14 @@ export function newestPresentations(
   );
   const next = made.find(({ presentation }) => available.has(presentation.presentationId));
   return next ? presentationGroup(all, next, layout) : latestPresentations(all, layout);
+}
+
+/** The question a shown pair asks, where both are of one assistant's comparison. */
+export function pairQuestion(visible: readonly TimelinePresentation[]): string | undefined {
+  const [first, second] = visible;
+  return visible.length === 2 && first.displaySetId === second.displaySetId
+    ? first.question
+    : undefined;
 }
 
 /** Return the FIFO current-source candidates not consumed by committed participant actions. */

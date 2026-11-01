@@ -49,6 +49,7 @@ import {
   designVariables,
   viewedPresentation,
   type AiContextSelection,
+  type AiDesign,
   type AiProjectContext
 } from '$lib/server/chat-bots/project-context';
 import type {
@@ -102,7 +103,7 @@ import {
   type VariantChooser
 } from './choosers';
 import { projectChooserId } from './chooser-config';
-import { settledValues } from './variant-guard';
+import { guardedChoice, pictureTree, settledValues, type GuardContext } from './variant-guard';
 
 /** Replaceable AI and persistence boundaries used by command unit tests. */
 export type ProjectCommandDependencies = {
@@ -851,6 +852,60 @@ async function runSverlinAssistantTurn(
         'count' in decision && decision.count
           ? Math.ceil(decision.count / presentationCount) * presentationCount
           : undefined;
+      // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
+      // holds every candidate set aside, and the next attempt repairs it.
+      const reject = async (
+        kind: 'edits' | 'comparisons',
+        problems: string[],
+        failedSource: string
+      ) => {
+        const summary = `Attempt ${attempt}: the ${kind} could not be ${kind === 'edits' ? 'applied' : 'built'}. ${problems.join(' ')}`;
+        failureSummaries.push(summary);
+        current = await appendProjectEvents(
+          current,
+          [
+            draftEvent({
+              type: 'revision.edits-rejected',
+              actor: { kind: 'system' },
+              operationId,
+              payload: {
+                attempt,
+                ...generationReference(current, operationId),
+                ...(kind === 'comparisons' ? { rejected: kind } : {}),
+                problems
+              }
+            })
+          ],
+          dependencies.projectService
+        );
+        if (attempt === chatbot.config.attemptProfiles.length) {
+          return {
+            document: await appendExhaustedSverlinFailure(
+              current,
+              operationId,
+              summary,
+              dependencies
+            ),
+            done: true
+          };
+        }
+        buildFeedback = {
+          attempt,
+          buildEventId: projectHead(current).id,
+          failedSource,
+          assistantReply: generatedReplyText(generation.result.reply),
+          diagnostics: problems.map((message) => ({
+            severity: 'error' as const,
+            code: kind === 'edits' ? 'edit_not_applied' : 'comparison_not_built',
+            message,
+            raw: message
+          })),
+          priorFailureSummaries: [...failureSummaries]
+        };
+        return { document: current, done: false };
+      };
+      // The pairs a vary's comparisons ask, each built as given.
+      let pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']> | undefined;
       let candidate: string | undefined;
       let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
         base: viewed
@@ -867,59 +922,25 @@ async function runSverlinAssistantTurn(
         case 'revise':
           candidate = decision.source;
           break;
-        case 'vary':
+        case 'vary': {
           candidate = buildFeedback?.failedSource ?? entrySource(current);
           variant = variedValues(viewed, decision);
+          if (!decision.comparisons) break;
+          const problems = comparisonProblems(
+            decision.comparisons,
+            designVariables(
+              viewedPresentation(current, contextSelection.interactionEventIds ?? [])
+            ),
+            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} }
+          );
+          if (problems.length) return reject('comparisons', problems, candidate);
+          pairs = decision.comparisons;
           break;
+        }
         case 'edit': {
           const base = buildFeedback?.failedSource ?? entrySource(current);
           const edited = applySourceEdits(base, decision.edits);
-          if ('problems' in edited) {
-            const summary = `Attempt ${attempt}: the edits could not be applied. ${edited.problems.join(' ')}`;
-            failureSummaries.push(summary);
-            // Recorded, as a failed build is, so the Timeline holds every candidate set aside.
-            current = await appendProjectEvents(
-              current,
-              [
-                draftEvent({
-                  type: 'revision.edits-rejected',
-                  actor: { kind: 'system' },
-                  operationId,
-                  payload: {
-                    attempt,
-                    ...generationReference(current, operationId),
-                    problems: edited.problems
-                  }
-                })
-              ],
-              dependencies.projectService
-            );
-            if (attempt === chatbot.config.attemptProfiles.length) {
-              return {
-                document: await appendExhaustedSverlinFailure(
-                  current,
-                  operationId,
-                  summary,
-                  dependencies
-                ),
-                done: true
-              };
-            }
-            buildFeedback = {
-              attempt,
-              buildEventId: projectHead(current).id,
-              failedSource: base,
-              assistantReply: generatedReplyText(generation.result.reply),
-              diagnostics: edited.problems.map((message) => ({
-                severity: 'error' as const,
-                code: 'edit_not_applied',
-                message,
-                raw: message
-              })),
-              priorFailureSummaries: [...failureSummaries]
-            };
-            return { document: current, done: false };
-          }
+          if ('problems' in edited) return reject('edits', edited.problems, base);
           candidate = edited.source;
           break;
         }
@@ -964,21 +985,19 @@ async function runSverlinAssistantTurn(
       }
 
       // Every attempt builds the same seeds, more of them when a decision asks for more.
-      const size = queued ?? presentationCount;
+      const size = pairs ? pairs.length * 2 : (queued ?? presentationCount);
       if (seeds.length < size)
         seeds = [...seeds, ...freshPresentationSeeds(size - seeds.length, seeds)];
       const batchSeeds = seeds.slice(0, size);
       const randomised = variant.randomise;
-      const requests = basedRequests(
-        batchSeeds,
-        variant.base,
-        variant.chosen,
-        randomised === true
-      ).map((request, index) =>
-        index === 0 && Array.isArray(randomised) && randomised.length
-          ? { ...request, variant: { ...request.variant, randomise: randomised } }
-          : request
-      );
+      const requests = pairs
+        ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs)
+        : basedRequests(batchSeeds, variant.base, variant.chosen, randomised === true).map(
+            (request, index) =>
+              index === 0 && Array.isArray(randomised) && randomised.length
+                ? { ...request, variant: { ...request.variant, randomise: randomised } }
+                : request
+          );
       const built = await buildCandidateBatch(
         { document: current, candidate, requests, operationId, attempt },
         dependencies
@@ -1001,7 +1020,7 @@ async function runSverlinAssistantTurn(
                 },
                 dependencies
               )
-            : queued
+            : queued && !pairs
               ? await chosenBuild(
                   {
                     document: current,
@@ -1033,7 +1052,11 @@ async function runSverlinAssistantTurn(
               recovery: generation.result.recovery,
               recoveryReply: generation.result.reply,
               inReplyTo,
-              ...(queued ? { setSize: presentationCount } : {})
+              ...(pairs
+                ? { setSize: 2 as const, questions: pairs.map(({ question }) => question) }
+                : queued
+                  ? { setSize: presentationCount }
+                  : {})
             },
             dependencies
           ),
@@ -1601,6 +1624,65 @@ async function chosenBuild(
     : { document: rebuilt.document, recorded: options.recorded };
 }
 
+/**
+ * Two builds per comparison, both from the viewed variant with the vary's values, each side with
+ * the values it sets and nothing else drawn, so the pair differs only as the comparison asks.
+ */
+function comparisonRequests(
+  seeds: readonly number[],
+  viewed: DesignValues | undefined,
+  values: DesignValues,
+  pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']>
+): BuildRequest[] {
+  return pairs.flatMap(({ left, right }, index) =>
+    [left, right].map((side, slot) => ({
+      seed: seeds[index * 2 + slot],
+      variant: {
+        ...(viewed ? { base: viewed } : {}),
+        chosen: { ...values, ...designValues(side) }
+      }
+    }))
+  );
+}
+
+function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
+  return Object.fromEntries(values.map(({ variable, value }) => [variable, value])) as DesignValues;
+}
+
+/**
+ * What keeps a vary's comparisons from being built as given: a value its variable does not offer,
+ * two sides alike, or a side the variant guard would change (hiding too much, or a top-level part).
+ */
+function comparisonProblems(
+  pairs: NonNullable<SourceDecisionOf<'vary'>['comparisons']>,
+  design: AiDesign,
+  guard: GuardContext
+): string[] {
+  return pairs.flatMap(({ question, left, right }, index) => {
+    const name = `Comparison ${index + 1} (“${question}”)`;
+    const problems = [...left, ...right].flatMap(({ variable, value }) =>
+      offeredOptions(design, variable)?.includes(value)
+        ? []
+        : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
+    );
+    const sides = [designValues(left), designValues(right)];
+    const differ = Object.keys({ ...sides[0], ...sides[1] }).some(
+      (variable) =>
+        (sides[0][variable] ?? guard.base[variable]) !==
+        (sides[1][variable] ?? guard.base[variable])
+    );
+    if (!differ) problems.push(`${name}: its two sides set the same values.`);
+    for (const side of sides)
+      if (
+        Object.keys(guardedChoice(guard, { chosen: side }).chosen).length < Object.keys(side).length
+      )
+        problems.push(
+          `${name}: a side hides a top-level part, too much of the picture, or more than one thing.`
+        );
+    return problems;
+  });
+}
+
 /** A choice with the values the assistant fixed, which it neither changes nor draws afresh. */
 function keeping(choice: VariantChoice, fixed: DesignValues): VariantChoice {
   const randomise =
@@ -1658,6 +1740,8 @@ async function acceptSverlinCandidate(
     inReplyTo: readonly EventId[];
     /** Presentations shown at once, when the batch is queued (queueBuiltPresentations). */
     setSize?: 1 | 2;
+    /** The question each queued set asks, for a vary's comparisons. */
+    questions?: readonly string[];
   },
   dependencies: ProjectCommandDependencies
 ) {
@@ -1693,7 +1777,8 @@ async function acceptSverlinCandidate(
         { ...options.recorded, document },
         options.setSize,
         dependencies.projectService,
-        options.generationEvent.actor
+        options.generationEvent.actor,
+        options.questions
       )
     : await activateBuiltPresentations(
         { ...options.recorded, document },

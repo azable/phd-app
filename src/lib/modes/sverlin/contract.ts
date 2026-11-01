@@ -62,10 +62,15 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 {#snippet Ask(e: Equal)}<Node>is {@render Int(e.a)} equal to {@render Int(e.b)}?</Node>{/snippet}
 {#snippet Checking()}<Node>Checking index {@render Index(i)}: {@render Equal(@check)}</Node>{/snippet}
 {#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
-{@render Title()}
-{@render Caption()}
-{@render Values(values)}
-{@render Index(i)}
-{@render Index(found)}
-{@render Checking()}
-{@render Result()}`;
+
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Caption()}
+    {@render Values(values)}
+    {@render Index(i)}
+    {@render Index(found)}
+    {@render Checking()}
+    {@render Result()}
+  </Node>
+{/layout}`;

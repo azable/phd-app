@@ -282,8 +282,7 @@ describe('design variables in the AI context', () => {
       variant: {
         layout: 'Side',
         'Side.ratio': '16:9',
-        'Stacked.ratio': '4:3',
-        'Page.layout': 'row'
+        'Stacked.ratio': '4:3'
       }
     });
     const options = (key: string) =>
@@ -291,7 +290,6 @@ describe('design variables in the AI context', () => {
     expect(options('layout')).toEqual(['Side', 'Stacked']);
     expect(options('Side.ratio')).toBe('ratio');
     expect(design.options.ratio).toContain('4:3');
-    expect(design.options.layout).toEqual(['column', 'row']);
   });
 
   it('offers each free layout exactly the forms and directions its design takes', () => {
@@ -348,5 +346,59 @@ describe('suggestions in the conversation', () => {
       },
       { role: 'user', content: '[Chosen from your suggestions] cells or tallies' }
     ]);
+  });
+});
+
+describe('comparisons in the conversation', () => {
+  it('reads each preference with its comparison’s question and answer', () => {
+    const value = document();
+    const at = value.events.length;
+    const ids = ['12345678-1234-4123-8123-123456789ac1', '12345678-1234-4123-8123-123456789ac2'];
+    const displaySetId = '12345678-1234-4123-8123-123456789abd';
+    for (const [slot, id] of ids.entries())
+      value.events.push({
+        id: at + slot + 1,
+        type: 'visualization.presented',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: `2026-01-01T00:00:0${slot + 4}.000Z`,
+        payload: {
+          displaySetId,
+          slot: slot as 0 | 1,
+          question: 'Cells or tallies for the numbers?',
+          presentation: {
+            presentationId: id,
+            format: 'browser-bundle-v1',
+            mode: 'sverlin',
+            stepSignature: 'shared',
+            labels: ['Start'],
+            seed: slot + 1,
+            source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
+            html: recorded('', 'text/html'),
+            javascript: recorded('', 'text/javascript'),
+            variant: { 'views.Int': slot ? 'IntTally' : 'IntCell' }
+          }
+        }
+      });
+    value.events.push({
+      id: at + 3,
+      type: 'visualization.preference-recorded',
+      operationId,
+      actor: { kind: 'user' },
+      createdAt: '2026-01-01T00:00:06.000Z',
+      payload: { displaySetId, presentations: [ids[0], ids[1]], preferred: ids[1], step: 0 }
+    });
+
+    expect(projectConversationMessages(value.events)).toEqual([
+      {
+        role: 'user',
+        content: expect.stringMatching(
+          /^Cells or tallies for the numbers\? → views\.Int IntTally\. /u
+        )
+      }
+    ]);
+    expect(
+      projectAiContext(value, { eventIds: [], interactionEventIds: [at + 3] }).interaction
+    ).toMatchObject({ kind: 'preference', question: 'Cells or tallies for the numbers?' });
   });
 });

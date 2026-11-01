@@ -30,7 +30,6 @@ import type {
 import { presentationStepLabels } from '$lib/shared/presentations';
 import {
   frameOptions,
-  implicitLayoutOptions,
   listingOptions,
   listingPropOptions,
   overflowOptions,
@@ -138,6 +137,8 @@ export type AiInteraction =
       step: number;
       /** The variables the pair gave different values, the preferred value first. */
       differences: VariantDifference[];
+      /** The question the pair asked, where it was one of the assistant's comparisons. */
+      question?: string;
     }
   | {
       kind: 'batch';
@@ -148,6 +149,7 @@ export type AiInteraction =
         alternativePresentationId: string;
         step: number;
         differences: VariantDifference[];
+        question?: string;
       }>;
     };
 
@@ -256,7 +258,7 @@ const timelineCases = {
   'build.failed': (event) =>
     `Build failed (${event.payload.failureKind}) with ${event.payload.diagnostics.length} diagnostic(s).`,
   'revision.edits-rejected': (event) =>
-    `Rejected the edits of generation attempt ${event.payload.attempt}: ${event.payload.problems.join(' ')}`,
+    `Rejected the ${event.payload.rejected ?? 'edits'} of generation attempt ${event.payload.attempt}: ${event.payload.problems.join(' ')}`,
   'artifact.version-created': (event) => {
     const id = entryHash(event);
     return `Created ${event.payload.origin.kind} source version${id ? ` ${id.slice(0, 6)}` : ''}${event.payload.summary ? `: ${event.payload.summary}` : ''}.`;
@@ -332,6 +334,7 @@ export function projectConversationMessages(
   events: readonly ProjectEvent[]
 ): ConversationMessage[] {
   const variants = presentedVariants(events);
+  const questions = presentedQuestions(events);
   // A failure its variant caused asks for no fix of the source (see visualization.variant-reverted).
   const reverted = new Set(
     events.flatMap((event) =>
@@ -340,7 +343,7 @@ export function projectConversationMessages(
   );
   return events.flatMap((event) =>
     event.type === 'visualization.preference-recorded'
-      ? [{ role: 'user', content: preferenceMessage(event, variants) } as const]
+      ? [{ role: 'user', content: preferenceMessage(event, variants, questions) } as const]
       : event.type === 'visualization.runtime-failed' && reverted.has(event.payload.presentationId)
         ? []
         : matchProjectEvent<ConversationMessage[]>(event, conversationCases)
@@ -380,9 +383,21 @@ export function variantDifferences(
 const namedDifferences = 12;
 
 /** A preference as the participant's message, with what its pair differed in. */
+/** The question each presentation's pair asked, by its id, for an assistant's comparisons. */
+function presentedQuestions(events: readonly ProjectEvent[]): Map<string, string> {
+  return new Map(
+    events.flatMap((event) =>
+      event.type === 'visualization.presented' && event.payload.question
+        ? [[event.payload.presentation.presentationId, event.payload.question] as const]
+        : []
+    )
+  );
+}
+
 function preferenceMessage(
   event: Extract<ProjectEvent, { type: 'visualization.preference-recorded' }>,
-  variants: ReadonlyMap<string, DesignValues>
+  variants: ReadonlyMap<string, DesignValues>,
+  questions: ReadonlyMap<string, string>
 ): string {
   const other = event.payload.presentations.find((id) => id !== event.payload.preferred);
   const differences = variantDifferences(
@@ -399,7 +414,12 @@ function preferenceMessage(
   const differed = named.length
     ? ` They differed in ${named.join('; ')}${more > 0 ? `; and ${more} more` : ''}.`
     : '';
-  return `I preferred presentation ${event.payload.preferred} over the alternative${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}.${differed}`;
+  // A comparison's answer, as the values the preferred side set: “Cells or tallies?” → views.Int IntTally.
+  const question = questions.get(event.payload.preferred);
+  const answer = question
+    ? `${question} → ${differences.map(({ variable, preferred }) => `${variable} ${String(preferred ?? 'unset')}`).join(', ') || 'either'}. `
+    : '';
+  return `${answer}I preferred presentation ${event.payload.preferred} over the alternative${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}.${differed}`;
 }
 
 /** Build the pure, explicitly bounded project context supplied to the AI assistant. */
@@ -463,6 +483,7 @@ function assistantInteraction(
     return event;
   });
   const variants = presentedVariants(document.events);
+  const questions = presentedQuestions(document.events);
   const preferences = interactions.flatMap((event) => {
     if (event.type !== 'visualization.preference-recorded') return [];
     const alternativePresentationId = event.payload.presentations.find(
@@ -471,8 +492,10 @@ function assistantInteraction(
     if (!alternativePresentationId) {
       throw new Error('The preference interaction has no alternative presentation.');
     }
+    const question = questions.get(event.payload.preferred);
     return [
       {
+        ...(question ? { question } : {}),
         eventId: event.id,
         preferredPresentationId: event.payload.preferred,
         alternativePresentationId,
@@ -706,7 +729,6 @@ export function designVariables(
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
-      ...implicitLayoutOptions,
       'listing.language': listingOptions['listing.language'],
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,

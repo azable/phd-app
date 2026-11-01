@@ -84,6 +84,10 @@
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Board()}
-{@render VertexRef(current)}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render VertexRef(current)}
+  </Node>
+{/layout}

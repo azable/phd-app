@@ -41,7 +41,11 @@
   </Node>
 {/snippet}
 
-{@render Cells()}
-{@render Bounds()}
-{@render Index(lo)}
-{@render Index(hi)}
+{#layout Main}
+  <Node>
+    {@render Cells()}
+    {@render Bounds()}
+    {@render Index(lo)}
+    {@render Index(hi)}
+  </Node>
+{/layout}

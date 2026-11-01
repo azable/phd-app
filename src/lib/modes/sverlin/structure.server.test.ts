@@ -36,7 +36,12 @@ const list = `<script lang="sverlin" domain>
 {#snippet Heap()}
   <Node layout="free">{#each all(ListNode) as node}{@render ListNode(node)}{/each}</Node>
 {/snippet}
-{@render Heap()}`;
+
+{#layout Main}
+  <Node>
+    {@render Heap()}
+  </Node>
+{/layout}`;
 
 const ring = `<script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C', 'D']);
@@ -59,7 +64,12 @@ const ring = `<script lang="sverlin" domain>
     {#each names as name, k}{@render Name(name)}<Link from={k} to={next[k]} />{/each}
   </Node>
 {/snippet}
-{@render Ring()}`;
+
+{#layout Main}
+  <Node>
+    {@render Ring()}
+  </Node>
+{/layout}`;
 
 const unlinked = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -75,7 +85,12 @@ const unlinked = `<script lang="sverlin" domain>
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{@render Cells()}`;
+
+{#layout Main}
+  <Node>
+    {@render Cells()}
+  </Node>
+{/layout}`;
 
 const designOf = (source: string) => prepareSvelteComponent(source).design;
 

@@ -10,8 +10,7 @@ import {
   buildVariant,
   DesignValueError,
   listingRegionFallbacks,
-  listingRegionSpace,
-  type VariantRequest
+  listingRegionSpace
 } from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
@@ -21,7 +20,7 @@ describe('design space', () => {
   it('has every view of each type rendered by name, the layout’s frame, and every prop of every kind', () => {
     expect(space['views.Int']).toEqual(['IntCell', 'IntTally', 'none']);
     expect(space['views.Index']).toEqual(['IndexText', 'none']);
-    expect(space['Page.ratio']).toContain('4:3');
+    expect(space['Main.ratio']).toContain('4:3');
     const kinds = new Set(
       Object.keys(space)
         .filter(
@@ -29,7 +28,7 @@ describe('design space', () => {
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
             key !== 'layout' &&
-            !key.startsWith('Page.') &&
+            !key.startsWith('Main.') &&
             !key.includes('@')
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
@@ -296,44 +295,6 @@ describe('free layouts', () => {
     expect(() =>
       buildVariant(tree.space, tree.starter, { chosen: { 'Heap.form': 'spiral' } }, 1)
     ).toThrow(DesignValueError);
-  });
-
-  it('draw a form saved before every structure took every form as it drew then', () => {
-    const built = (design: typeof graph, request: VariantRequest) =>
-      buildVariant(design.space, design.starter, request, 1).values;
-    const look = (values: Record<string, unknown>, kind: string) => [
-      values[`${kind}.form`],
-      values[`${kind}.direction`]
-    ];
-    // A saved variant: its legacy form, and a sequence form running right, as it then did.
-    const saved = (form: string) => ({ ...graph.starter, 'Graph.form': form });
-    const withoutDirection = (form: string) =>
-      Object.fromEntries(Object.entries(saved(form)).filter(([key]) => key !== 'Graph.direction'));
-    for (const [form, drawn] of [
-      ['layers-down', ['natural', 'down']],
-      ['layers-right', ['natural', 'right']],
-      ['ring', ['natural', 'down']],
-      ['snake', ['snake', 'right']],
-      ['line', ['line', 'right']]
-    ] as const)
-      expect(look(built(graph, { base: withoutDirection(form) }), 'Graph'), form).toEqual(drawn);
-    // A variant saved with a direction keeps it; a chosen form keeps the base's direction unless
-    // its old name says another.
-    const down = { ...graph.starter, 'Graph.direction': 'down' };
-    expect(look(built(graph, { base: saved('snake') }), 'Graph')).toEqual(['snake', 'down']);
-    expect(look(built(graph, { base: down, chosen: { 'Graph.form': 'line' } }), 'Graph')).toEqual([
-      'line',
-      'down'
-    ]);
-    expect(
-      look(built(graph, { base: down, chosen: { 'Graph.form': 'layers-right' } }), 'Graph')
-    ).toEqual(['natural', 'right']);
-    // Where the flow sets the way, the form alone changes.
-    for (const form of ['tree-down', 'indented', 'radial'])
-      expect(look(built(tree, { base: { ...tree.starter, 'Heap.form': form } }), 'Heap')).toEqual([
-        'natural',
-        undefined
-      ]);
   });
 
   it('give a link’s kind its route, head, and head size, which a vary keeps', () => {

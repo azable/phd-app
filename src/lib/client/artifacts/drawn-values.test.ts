@@ -16,7 +16,6 @@ import {
   tagGhosts,
   unchosenLayouts,
   unchosenViews,
-  untaggedFrame,
   valueText,
   viewMarkers
 } from './drawn-values';
@@ -202,7 +201,7 @@ describe('variant markers', () => {
     '{#snippet Here(i: Index)}\n  <Pointed />\n{/snippet}\n{#snippet Title()}<Node>Search</Node>{/snippet}';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
-    'frame.ratio': '16:9',
+    'Main.ratio': '16:9',
     'Here.Pointed.fill': fill,
     'Here.Pointed.size': 1,
     'Title.size': 1.5
@@ -266,17 +265,6 @@ describe('variant markers', () => {
     expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
   });
 
-  it('leaves a frame no tag holds above the source: one saved before layouts, or Page’s', () => {
-    const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
-    expect(ghosts.flatMap(({ props }) => props.map(({ name }) => name))).not.toContain('ratio');
-    expect(untaggedFrame(presentations).map(({ name }) => name)).toEqual(['ratio']);
-    const legacy = presentations.map((presentation) => ({
-      ...presentation,
-      variant: { 'Page.layout': 'row', 'Page.ratio': '4:3', layout: 'Page' }
-    }));
-    expect(untaggedFrame(legacy).map(({ key }) => key)).toEqual(['Page.ratio', 'Page.layout']);
-  });
-
   it('puts a layout’s frame in its root’s chip, and greys the layouts no variant shows', () => {
     const laid =
       '{#layout Side}\n  <Node layout="row">{@render Title()}</Node>\n{/layout}\n{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}';
@@ -292,7 +280,6 @@ describe('variant markers', () => {
     const [side, stacked] = tagGhosts(state, shown);
     expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
     expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
-    expect(untaggedFrame(shown)).toEqual([]);
     expect(unchosenLayouts(state, shown).map(({ from, to }) => laid.slice(from, to))).toEqual([
       '{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}'
     ]);

@@ -50,11 +50,15 @@
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Board()}
-{@render Position(@pass.pair.compare.left)}
-{@render Position(@pass.pair.compare.right)}
-{#if when(@pass.pair.swap)}
-  {@render Position(@pass.pair.swap.from)}
-  {@render Position(@pass.pair.swap.to)}
-{/if}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render Position(@pass.pair.compare.left)}
+    {@render Position(@pass.pair.compare.right)}
+    {#if when(@pass.pair.swap)}
+      {@render Position(@pass.pair.swap.from)}
+      {@render Position(@pass.pair.swap.to)}
+    {/if}
+  </Node>
+{/layout}

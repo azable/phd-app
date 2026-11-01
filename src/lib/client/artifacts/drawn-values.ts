@@ -5,10 +5,9 @@
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
  * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
  * a place, as {@render Index(@left)}, a chip opening that place's own values. A layout's root's chip
- * holds its frame; a source without layouts, whose frame no tag holds, shows it above the source.
- * After each label's mark in the algorithm, where its steps pause. Views of a type and layouts that
- * no shown presentation's variant chose are greyed out, and so are nodes every shown presentation
- * left out (see left-out.ts). A presentation built
+ * holds its frame. After each label's mark in the algorithm, where its steps pause. Views of a type
+ * and layouts that no shown presentation's variant chose are greyed out, and so are nodes every
+ * shown presentation left out (see left-out.ts). A presentation built
  * while sources had design blocks also marks each draw call with the value each shown presentation
  * drew there.
  *
@@ -21,7 +20,6 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import {
   colourCss,
   frameOptions,
-  implicitLayoutOptions,
   listingOptions,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
@@ -159,8 +157,8 @@ export function unchosenViews(
 }
 
 /**
- * The layouts no shown presentation drew, each from its {#layout to the end of its {/layout}. A
- * presentation that recorded no layout, as one of a source without layouts, leaves them be.
+ * The layouts no shown presentation drew, each from its {#layout to the end of its {/layout}, while
+ * every shown presentation recorded its layout.
  */
 export function unchosenLayouts(
   state: EditorState,
@@ -295,8 +293,7 @@ const originText: Record<string, string> = {
 };
 
 // Variables in a fixed order, as stored variants may come back with their keys reordered.
-const frameOrder = [...Object.keys(frameOptions), ...Object.keys(implicitLayoutOptions)];
-const propOrder = [...frameOrder, ...Object.keys(propOptions)];
+const propOrder = [...Object.keys(frameOptions), ...Object.keys(propOptions)];
 const listingOrder = Object.keys(listingOptions);
 const byOrder = (order: readonly string[], of: (key: string) => string) => (a: string, b: string) =>
   order.indexOf(of(a)) - order.indexOf(of(b)) || a.localeCompare(b);
@@ -516,40 +513,6 @@ export function placeGhosts(
 
 /** The props a place sets of its own: what tells one render apart. */
 const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
-
-/**
- * The page frame's values no tag holds, in each shown presentation's variant, each named by its
- * setting: those of the layout a source without layouts reads as, which has no root, as Page.ratio,
- * and a presentation's built before layouts, as frame.ratio. A layout's root's chip holds its own.
- */
-export function untaggedFrame(presentations: readonly DrawnPresentation[]): GhostProp[] {
-  const tagged = new Set(
-    presentations.flatMap(({ kinds = {} }) => Object.values(kinds).flatMap((keys) => keys))
-  );
-  const variants = presentations.map(({ variant = {} }) => variant);
-  const layouts = new Set(
-    variants.flatMap((variant) =>
-      Object.keys(variant)
-        .filter((key) => key.endsWith('.ratio'))
-        .map((key) => key.slice(0, -'.ratio'.length))
-    )
-  );
-  const settingOf = (key: string) => key.slice(key.lastIndexOf('.') + 1);
-  const keys = new Set(
-    variants.flatMap((variant) =>
-      Object.keys(variant).filter((key) => {
-        const kind = key.slice(0, key.lastIndexOf('.'));
-        return (
-          frameOrder.includes(settingOf(key)) &&
-          (kind === 'frame' || (layouts.has(kind) && !tagged.has(kind)))
-        );
-      })
-    )
-  );
-  return [...keys]
-    .sort(byOrder(frameOrder, settingOf))
-    .map((key) => variable(presentations, key, settingOf(key)));
-}
 
 /**
  * Where each label of the algorithm pauses in each shown presentation's variant, after its mark, as
@@ -873,44 +836,12 @@ class PauseWidget extends WidgetType {
   }
 }
 
-/**
- * Above a source without layouts: its page frame, which no tag holds, as pills that wrap, each with
- * every shown presentation's value where they differ.
- */
-class StripWidget extends WidgetType {
-  constructor(
-    private readonly props: readonly GhostProp[],
-    private readonly revealed: readonly string[] = []
-  ) {
-    super();
-  }
-
-  eq(other: StripWidget): boolean {
-    return (
-      JSON.stringify([other.props, other.revealed]) === JSON.stringify([this.props, this.revealed])
-    );
-  }
-
-  toDOM(): HTMLElement {
-    const strip = document.createElement('div');
-    strip.className = 'cm-design-strip';
-    for (const prop of this.props) strip.append(pill(prop, this.revealed));
-    return strip;
-  }
-
-  ignoreEvent(): boolean {
-    return false;
-  }
-}
-
 /** Open or close the ghost props of the tag whose chip is at a position. */
 const toggleGhosts = StateEffect.define<number>();
 
 type DrawnState = {
   markers: DrawnMarker[];
   ghosts: TagGhosts[];
-  /** The page frame no tag holds, in each shown variant. */
-  strip: GhostProp[];
   /** Where the chips of the tags whose ghost props are open are. */
   open: number[];
   unchosen: UnchosenView[];
@@ -921,14 +852,10 @@ const differingCall = Decoration.mark({ class: 'cm-drawn-call cm-drawn-differs' 
 
 function decorations(
   state: EditorState,
-  { markers, ghosts, strip, open, unchosen }: DrawnState
+  { markers, ghosts, open, unchosen }: DrawnState
 ): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const keys = revealedKeys(state);
-  if (strip.length)
-    marks.push(
-      Decoration.widget({ widget: new StripWidget(strip, keys), block: true, side: -1 }).range(0)
-    );
   for (const { from, to, title } of unchosen)
     if (from < to)
       marks.push(Decoration.mark({ class: 'cm-unchosen', attributes: { title } }).range(from, to));
@@ -974,7 +901,7 @@ function decorations(
 
 // Markers keep their places through edits, as CodeMirror maps them, until the next set replaces them.
 const drawnField = StateField.define<DrawnState>({
-  create: () => ({ markers: [], ghosts: [], strip: [], open: [], unchosen: [] }),
+  create: () => ({ markers: [], ghosts: [], open: [], unchosen: [] }),
   update(value, transaction) {
     const { changes } = transaction;
     let next: DrawnState = transaction.docChanged
@@ -988,7 +915,6 @@ const drawnField = StateField.define<DrawnState>({
             }))
             .filter(({ from, to }) => from < to),
           ghosts: value.ghosts.map((tag) => ({ ...tag, at: changes.mapPos(tag.at, 1) })),
-          strip: value.strip,
           open: value.open.map((at) => changes.mapPos(at, 1)),
           unchosen: value.unchosen.map((view) => ({
             ...view,
@@ -1010,8 +936,6 @@ const drawnField = StateField.define<DrawnState>({
             ...viewMarkers(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from),
           ghosts,
-          // A frame no tag holds shows above the source.
-          strip: untaggedFrame(effect.value.presentations),
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: [
@@ -1048,8 +972,7 @@ const drawnField = StateField.define<DrawnState>({
 
 /**
  * Where the first row of these design variables is: the line its ghost props open under, or a
- * label's pause sits on, or the top of the source for a page-frame pill; undefined where none has a
- * row.
+ * label's pause sits on; undefined where none has a row.
  */
 export function ghostRowAt(state: EditorState, keys: readonly string[]): number | undefined {
   const drawn = state.field(drawnField, false);
@@ -1057,22 +980,11 @@ export function ghostRowAt(state: EditorState, keys: readonly string[]): number 
   const ghost = drawn.ghosts.find(({ props }) =>
     props.some(({ key }) => key && keys.includes(key))
   );
-  if (ghost && ghost.at <= state.doc.length) return state.doc.lineAt(ghost.at).to;
-  return drawn.strip.some(({ key }) => key && keys.includes(key)) ? 0 : undefined;
+  return ghost && ghost.at <= state.doc.length ? state.doc.lineAt(ghost.at).to : undefined;
 }
 
 const drawnTheme = EditorView.baseTheme({
   '.cm-unchosen': { opacity: '0.4' },
-  // Kept in view and wrapping, however wide long lines make the content.
-  '.cm-design-strip': {
-    position: 'sticky',
-    left: '0',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.25rem',
-    maxWidth: '44rem',
-    padding: '0.25rem 0.5rem 0.35rem'
-  },
   '.cm-drawn-call': {
     textDecoration: 'underline dotted color-mix(in oklab, #16a34a 70%, transparent)',
     textUnderlineOffset: '3px'

@@ -141,6 +141,10 @@ DIJKSTRA(graph, source)
   </Node>
 {/snippet}
 
-{@render Title()}
-{@render Board()}
-{@render VertexRef(v)}
+{#layout Main}
+  <Node>
+    {@render Title()}
+    {@render Board()}
+    {@render VertexRef(v)}
+  </Node>
+{/layout}

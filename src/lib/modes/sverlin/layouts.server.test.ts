@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, frameSettings, prepareSvelteComponent } from './compile.server';
-import bubble from './fixtures/bubble-arrow.sverlin?raw';
 import layouts from './fixtures/bubble-layouts.sverlin?raw';
 
 /** The fixture's view with its layouts replaced. */
@@ -69,27 +68,10 @@ describe('layouts of the page', () => {
     expect(frameSettings(prepared.design, without).name).toBe('Stacked');
   });
 
-  it('reads a source without layouts as one layout, Page, its frame.* values as Page.*', async () => {
-    const legacy = prepareSvelteComponent(bubble);
-    expect(legacy.design.space.layout).toEqual(['Page']);
-    expect(legacy.design.space['Page.layout']).toEqual(['column', 'row']);
-    const built = await bundlePresentation(legacy, 1, {
-      base: { 'frame.ratio': '1:1', 'frame.layout': 'row', 'frame.gap': 0.5 }
-    });
-    expect(built.variant).toMatchObject({
-      'Page.ratio': '1:1',
-      'Page.layout': 'row',
-      'Page.gap': 0.5
-    });
-    expect(built.origins['Page.ratio']).toBe('kept');
-    expect(frameSettings(legacy.design, built.variant)).toEqual({
-      ratio: '1:1',
-      justify: 'center',
-      align: 'center',
-      padding: 1.5,
-      gap: 0.5,
-      layout: 'row'
-    });
+  it('refuses a source without layouts, naming the fix', () => {
+    expect(problemOf(withView('{@render Title()}\n{@render Board()}'))).toMatch(
+      /declares no layout: put what the page draws in \{#layout Main\}/u
+    );
   });
 
   it('draws layouts afresh at random, keeping each frame', async () => {

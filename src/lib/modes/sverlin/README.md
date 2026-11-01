@@ -51,8 +51,9 @@ each kind its look. Every input and algorithm variable in scope at the selected
 step and the library components are already in scope; never write `import`, and
 never declare names `Node`, `Link`, `Pointed`, or `Listing`.
 
-- The top level holds parts, views, and at least one layout. A snippet without
-  parameters is a part of the page, as
+- The top level holds parts, views, and at least one layout: every source
+  declares its layouts, and one without is refused. A snippet without parameters
+  is a part of the page, as
   `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
   renders it, `{@render Title()}`; a part reads what a layout reads and renders
   parts, views, and operators. A layout, `{#layout Side}…{/layout}`, arranges
@@ -747,9 +748,7 @@ The design space is every variable of a component's look, found in its markup:
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
   node a layout writes beside its parts, as a row in its root, is of its kind
-  too. A source without layouts reads as one layout, `Page`, holding its top
-  level, arranged by `Page.layout` (`column` or `row`); a variant saved with
-  `frame.ratio` reads it as `Page.ratio`.
+  too.
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
   `listing.lit@insert.compare.left.fill`, which follows its label's mark until

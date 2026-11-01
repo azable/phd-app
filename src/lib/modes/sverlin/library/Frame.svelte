@@ -473,7 +473,7 @@
     bind:this={frameElement}
     class="sv-frame"
     data-sv-node={settings.ref}
-    data-sv-label={settings.ref ? `the page, as ${settings.name ?? 'laid out'}` : undefined}
+    data-sv-label="the page, as {settings.name}"
     style:width="{width}px"
     style:height="{height}px"
     style:transform="translate(-50%, -50%) translate({panX}px, {panY}px) scale({shown})"

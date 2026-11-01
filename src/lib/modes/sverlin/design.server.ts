@@ -6,14 +6,11 @@
  */
 
 import { keyedRandom } from './algorithm/random.server';
-import type { Direction } from './library/node/forms';
 import type { LayoutStructure } from './structure.server';
 import {
   colourParts,
   frameOptions,
   freeLayoutProps,
-  implicitLayout,
-  implicitLayoutOptions,
   listingOptions,
   listingPropOptions,
   listingRegionProps,
@@ -88,38 +85,28 @@ const placePropsOf = ({ role }: DesignKind) =>
   roleProps[role].filter((prop) => placeProps.has(prop));
 
 /**
- * The page's layouts, by name, the first shown where a variant names none, and whether they are the
- * one a source without layout blocks reads as (see implicitLayout).
+ * The layout shown, never none, and each layout's frame, as Stacked.ratio, of the page's layouts by
+ * name, the first shown where a variant names none.
  */
-export type DesignLayouts = { names: readonly string[]; implicit?: boolean };
-
-const legacyLayouts: DesignLayouts = { names: [implicitLayout], implicit: true };
-
-/** A layout's variables: its frame's, and, for the one a source without layouts reads as, how it arranges. */
-function layoutProps(implicit = false): Record<string, readonly DesignValue[]> {
-  return implicit ? { ...frameOptions, ...implicitLayoutOptions } : frameOptions;
-}
-
-/** The layout shown, never none, and each layout's frame, as Stacked.ratio. */
-function layoutSpace({ names, implicit }: DesignLayouts): DesignSpace {
+function layoutSpace(names: readonly string[]): DesignSpace {
   return {
     layout: [...names],
     ...Object.fromEntries(
       names.flatMap((name) =>
-        Object.entries(layoutProps(implicit)).map(([prop, options]) => [`${name}.${prop}`, options])
+        Object.entries(frameOptions).map(([prop, options]) => [`${name}.${prop}`, options])
       )
     )
   };
 }
 
-function layoutStarter({ names, implicit }: DesignLayouts): Record<string, DesignValue> {
+function layoutStarter(names: readonly string[]): Record<string, DesignValue> {
   return {
     layout: names[0],
     ...Object.fromEntries(
       names.flatMap((name) =>
-        Object.entries(layoutProps(implicit)).map(([prop, options]) => [
+        Object.keys(frameOptions).map((prop) => [
           `${name}.${prop}`,
-          (starterFrame as Record<string, DesignValue>)[prop] ?? options[0]
+          starterFrame[prop as keyof typeof starterFrame]
         ])
       )
     )
@@ -251,44 +238,6 @@ function litListingKey(key: string): string | undefined {
   return key;
 }
 
-/**
- * Forms saved before every structure took every form, each drawn now as natural, with the way it
- * ran where the old form said: a tree or layers down or right, an indented tree down; a ring and a
- * radial tree as they come.
- */
-const legacyForms: Readonly<Record<string, Direction | undefined>> = {
-  'tree-down': 'down',
-  'layers-down': 'down',
-  indented: 'down',
-  'tree-right': 'right',
-  'layers-right': 'right',
-  ring: undefined,
-  radial: undefined
-};
-
-/**
- * Values with each form saved before every structure took every form as it draws now (see
- * legacyForms), and, in a variant saved before layouts had a direction (`saved`, a whole variant),
- * a sequence form running right, along x, as it then did.
- */
-function currentForms(
-  space: DesignSpace,
-  values: Readonly<Record<string, unknown>>,
-  saved: boolean
-): Record<string, unknown> {
-  const current = { ...values };
-  for (const [key, value] of Object.entries(values)) {
-    if (!key.endsWith('.form') || typeof value !== 'string') continue;
-    const legacy = Object.hasOwn(legacyForms, value);
-    if (legacy) current[key] = 'natural';
-    const direction = `${key.slice(0, -'form'.length)}direction`;
-    if (!Object.hasOwn(space, direction) || Object.hasOwn(values, direction)) continue;
-    const ran = legacy ? legacyForms[value] : saved && value !== 'natural' ? 'right' : undefined;
-    if (ran) current[direction] = ran;
-  }
-  return current;
-}
-
 /** The pauses a source starts with: every label on, for the chooser to thin. */
 export function starterPauses(labels: readonly string[]): Record<string, DesignValue> {
   return Object.fromEntries(labels.map((label) => [`pause@${label}`, 'on']));
@@ -317,7 +266,7 @@ export function designSpace(
   ownListings: readonly string[] = [],
   pointers: Readonly<Record<string, readonly string[]>> = {},
   places: DesignPlaces = { kinds: [], choices: [] },
-  layouts: DesignLayouts = legacyLayouts
+  layouts: readonly string[]
 ): DesignSpace {
   return {
     ...Object.fromEntries(
@@ -355,7 +304,7 @@ export function starterVariant(
   ownListings: readonly string[] = [],
   pointers: Readonly<Record<string, readonly string[]>> = {},
   places: DesignPlaces = { kinds: [], choices: [] },
-  layouts: DesignLayouts = legacyLayouts
+  layouts: readonly string[]
 ): Record<string, DesignValue> {
   return {
     ...Object.fromEntries(
@@ -448,8 +397,8 @@ export function buildVariant(
   seed: number,
   fallbacks: Readonly<Record<string, Fallback>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
-  const chosen = Object.entries(currentForms(space, request.chosen ?? {}, false)).map(
-    ([key, value]) => [frameKey(space, key), asPause(space, key, value)] as const
+  const chosen = Object.entries(request.chosen ?? {}).map(
+    ([key, value]) => [key, asPause(space, key, value)] as const
   );
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
@@ -463,15 +412,11 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  const base = currentForms(
-    space,
-    Object.fromEntries(
-      Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
-        const lit = litListingKey(key);
-        return lit === undefined ? [] : [[frameKey(space, fullPlaceKey(space, lit)), saved]];
-      })
-    ),
-    true
+  const base: Record<string, unknown> = Object.fromEntries(
+    Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
+      const lit = litListingKey(key);
+      return lit === undefined ? [] : [[fullPlaceKey(space, lit), saved]];
+    })
   );
   for (const [key, saved] of Object.entries(base)) {
     const value = asPause(space, key, saved);
@@ -521,16 +466,6 @@ function fullPlaceKey(space: DesignSpace, key: string): string {
     (other) => other.startsWith(head) && other.endsWith(`.${place}`)
   );
   return standing.length === 1 ? standing[0] : key;
-}
-
-/**
- * A key of the page frame saved before layouts, as frame.ratio, as the layout a source without
- * layouts reads as has it, Page.ratio, where the space has that; any other key as it is.
- */
-function frameKey(space: DesignSpace, key: string): string {
-  if (!key.startsWith('frame.')) return key;
-  const own = `${implicitLayout}.${key.slice('frame.'.length)}`;
-  return Object.hasOwn(space, own) ? own : key;
 }
 
 /**

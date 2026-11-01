@@ -64,11 +64,16 @@ const insertion = `<script lang="sverlin" domain>
     <Node>{#each values as v}{@render Int(v)}{/each}</Node>
   </Node>
 {/snippet}
-{@render Board()}
-{@render Position(@insert.compare.left)}
-{@render Position(@insert.compare.right)}
-{@render Position(@insert.swap.from)}
-{@render Position(@insert.swap.to)}`;
+
+{#layout Main}
+  <Node>
+    {@render Board()}
+    {@render Position(@insert.compare.left)}
+    {@render Position(@insert.compare.right)}
+    {@render Position(@insert.swap.from)}
+    {@render Position(@insert.swap.to)}
+  </Node>
+{/layout}`;
 
 it.skipIf(!enabled)(
   'paints each region as its mark, in pills that move no text',
