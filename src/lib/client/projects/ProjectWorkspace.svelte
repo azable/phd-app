@@ -225,6 +225,10 @@
   const adminPreview = $derived(study?.context === 'admin-preview');
   const showAdminControls = $derived(isAdmin && !adminPreview && !session.readOnly);
   const developerView = $derived(isAdmin && !adminPreview && !session.readOnly && devMode);
+  // The tab's title: the task, in a study, or the project's title; never the system's name.
+  const pageTitle = $derived(
+    study?.title || (session.resource ? session.snapshot.title : '') || 'Visualization'
+  );
   const busy = $derived(!!session.pending || session.creating);
   const mutationsDisabled = $derived(busy || expired || session.readOnly || editMode === 'editing');
   const presentationCount = $derived<1 | 2>(
@@ -474,6 +478,8 @@
     timelineObservation = value;
   }
 </script>
+
+<svelte:head><title>{pageTitle}</title></svelte:head>
 
 <div
   bind:this={workspaceRoot}

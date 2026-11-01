@@ -242,7 +242,8 @@
     return [own, placing].flatMap((arranged) => (arranged && arrangementLayout(arranged)) || []);
   }
 
-  // A selection is reported with a short label for each node: its type, if any, and its text.
+  // A selection is reported with a short label for each node, what the participant saw: its text,
+  // or for a node with none its type. Its tag, by its id, says the rest.
   function reportSelection() {
     const elements = selected.flatMap((id) => {
       const element = nodeElement(id);
@@ -250,16 +251,14 @@
       // innerText follows layout, so text in separate boxes stays separate words.
       const text = (element.innerText || element.textContent || '').replace(/\s+/gu, ' ').trim();
       // A link has no text of its own, so it brings a label: its own, or the keys it joins.
-      const typed =
-        element.dataset.svLabel ??
-        ([element.dataset.svType, text].filter(Boolean).join(' ') || 'node');
+      const seen = element.dataset.svLabel ?? (text || element.dataset.svType || 'node');
       // Cut whole code points, so an emoji is never split into a lone surrogate the server refuses.
       const label =
-        typed.length > maxLabel
-          ? `${Array.from(typed)
+        seen.length > maxLabel
+          ? `${Array.from(seen)
               .slice(0, maxLabel - 1)
               .join('')}…`
-          : typed;
+          : seen;
       return [
         {
           id,

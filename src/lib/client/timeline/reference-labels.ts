@@ -26,8 +26,8 @@ export function referenceChipLabel(reference: ReferenceSegment): string {
 /** What a chip adds to its presentation: the step, and for an element, its label. */
 export function referenceChipDetail(reference: ReferenceSegment): string | undefined {
   if (reference.type === 'presentation-ref')
-    return reference.step === undefined ? undefined : `S${reference.step + 1}`;
-  return `S${reference.step + 1} · ${shortLabel(reference.element.label)}`;
+    return reference.step === undefined ? undefined : `Step ${reference.step + 1}`;
+  return `Step ${reference.step + 1} · ${shortLabel(reference.element.label)}`;
 }
 
 /** Return the full description of one reference chip, shown on hover. */

@@ -202,8 +202,10 @@
   });
   const step = $derived(playback.stepFor(playbackContext));
   const stepCount = $derived(playbackContext.stepCount);
-  // The step's name, its label elided at the start as chat pills are (@…compare.left#3).
+  // The step's name, its label elided at the start as chat pills are (@…compare.left#3); in
+  // developer view only, as participants follow the step's number.
   const stepName = $derived.by(() => {
+    if (!session.developerView) return undefined;
     const label = playbackContext.frames[step]?.label;
     return isStepName(label) ? label : undefined;
   });

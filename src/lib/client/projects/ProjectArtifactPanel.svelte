@@ -330,9 +330,7 @@
           {/if}
         </div>
         {#if highlights.length}
-          <Badge variant="secondary"
-            >{highlights.length} selected {highlights.length === 1 ? 'node' : 'nodes'}</Badge
-          >
+          <Badge variant="secondary">{highlights.length} selected</Badge>
         {/if}
         {#if diagnosed.items.length}
           <button

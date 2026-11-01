@@ -16,11 +16,11 @@ describe('presentation reference labels', () => {
       element: { id: '55:1', label }
     });
     const presentation = presentationDisplayId(reference('').presentationId);
-    expect(referenceChipLabel(reference('Int 8'))).toBe(`${presentation} · S1 · Int 8`);
+    expect(referenceChipLabel(reference('Int 8'))).toBe(`${presentation} · Step 1 · Int 8`);
     const long = 'Begin with a one-item sorted prefix Insertion sort';
-    expect(referenceChipLabel(reference(long))).toBe(`${presentation} · S1 · Begin with a…`);
+    expect(referenceChipLabel(reference(long))).toBe(`${presentation} · Step 1 · Begin with a…`);
     expect(referenceChipLabel(reference('Supercalifragilisticexpialidocious'))).toBe(
-      `${presentation} · S1 · Supercalifragilistic…`
+      `${presentation} · Step 1 · Supercalifragilistic…`
     );
     expect(referenceChipTitle(reference(long))).toBe(`${presentation} · step 1 · ${long}`);
   });
@@ -41,7 +41,7 @@ describe('presentation reference labels', () => {
       step: 2
     };
     const presentation = presentationDisplayId(reference.presentationId);
-    expect(referenceChipLabel(reference)).toBe(`${presentation} · S3`);
+    expect(referenceChipLabel(reference)).toBe(`${presentation} · Step 3`);
     expect(referenceChipTitle(reference)).toBe(`${presentation} · step 3`);
   });
 
@@ -53,7 +53,7 @@ describe('presentation reference labels', () => {
       stepName: '@insert.swap#1'
     };
     const presentation = presentationDisplayId(reference.presentationId);
-    expect(referenceChipLabel(reference)).toBe(`${presentation} · S3`);
+    expect(referenceChipLabel(reference)).toBe(`${presentation} · Step 3`);
     expect(referenceChipTitle(reference)).toBe(`${presentation} · step 3, @insert.swap#1`);
   });
 });
