@@ -38,6 +38,8 @@
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
 
+  type PairAnswer = { kind: 'preferred'; presentationId: string } | { kind: 'tie' | 'skip' };
+
   type Props = {
     session: ProjectSession;
     selection: PresentationSelection;
@@ -65,6 +67,8 @@
   }: Props = $props();
   // Whether an answer to the shown pair is being saved.
   let answering = $state(false);
+  // The answer just given to one of the assistant's comparisons, marked before it is recorded.
+  let picked = $state<{ displaySetId?: string; answer: PairAnswer }>();
 
   // Each visible presentation's viewport, by presentation ID, to ask for exports.
   const viewports: Record<string, PresentationViewport | undefined> = $state({});
@@ -115,6 +119,12 @@
         )?.answer
       : undefined
   );
+  // The comparison's answer as marked: the one just given until it is recorded, then the latest.
+  const markedAnswer = $derived(
+    question && picked && picked.displaySetId === visible[0].displaySetId ? picked.answer : recorded
+  );
+  // The pair just answered, kept dimmed while the assistant replies to it.
+  const awaiting = $derived(selection.awaiting(session.events, layout));
   const preparing = $derived(
     session.refillPending ||
       (!!session.pending && visualizationOperationKinds.includes(session.pending.type))
@@ -125,6 +135,11 @@
     const source = shown?.format === 'browser-bundle-v1' ? shown.source : shown?.authored;
     return stageActivity(session.events, source?.sha256, session.pending ?? undefined);
   });
+  // What the stage says it is doing, and how it dims the version it shows meanwhile.
+  const status = $derived(awaiting ? 'Updating…' : activity?.label);
+  const dimmed = $derived<'answered' | 'replaced' | undefined>(
+    awaiting ? 'answered' : activity?.replacing ? 'replaced' : undefined
+  );
   const playbackContext = $derived(presentationPlaybackContext(visible));
   $effect.pre(() => {
     const context = playbackContext;
@@ -158,7 +173,8 @@
   // comparison's latest answer, or for another pair its answer at this step.
   const chosen = $derived.by((): string | undefined => {
     if (visible.length !== 2) return undefined;
-    if (question) return recorded?.kind === 'preferred' ? recorded.presentationId : recorded?.kind;
+    if (question)
+      return markedAnswer?.kind === 'preferred' ? markedAnswer.presentationId : markedAnswer?.kind;
     const preference = session.events.findLast(
       (event) =>
         event.type === 'visualization.preference-recorded' &&
@@ -198,25 +214,36 @@
   }
 
   /**
-   * Answer the pair: prefer one side, or say either is fine (tie) or unsure (skip). What
-   * follows shows at once; if the answer cannot be saved, the pair shows again at its step.
+   * Answer the pair: prefer one side, or say either is fine (tie) or unsure (skip). What follows
+   * shows as the selection decides (`PresentationSelection.answer`); if the answer cannot be saved,
+   * the pair shows again at its step.
    */
   async function prefer(answer: string | 'tie' | 'skip') {
     if (visible.length !== 2 || answering) return;
     const answered = visible;
     const at = step;
+    const tieOrSkip = answer === 'tie' || answer === 'skip';
     const command: ProjectCommandInput = {
       type: 'prefer',
       presentations: [selectedIds[0], selectedIds[1]],
-      ...(answer === 'tie' || answer === 'skip' ? { outcome: answer } : { preferred: answer }),
+      ...(tieOrSkip ? { outcome: answer } : { preferred: answer }),
       step: at
     };
     answering = true;
+    picked = {
+      displaySetId: answered[0].displaySetId,
+      answer: tieOrSkip ? { kind: answer } : { kind: 'preferred', presentationId: answer }
+    };
     try {
-      const saved = await selection.answer(answered, () => session.runCommand(command));
+      const saved = await selection.answer(
+        answered,
+        () => session.runCommand(command),
+        session.head
+      );
       if (!saved) playback.seek(presentationPlaybackContext(answered), at);
     } finally {
       answering = false;
+      picked = undefined;
     }
   }
 
@@ -325,7 +352,7 @@
             aria-label={label}
             title={label}
             onclick={() => prefer(answer)}
-            disabled={disabled || answering}
+            disabled={disabled || answering || !!awaiting}
           >
             {#each icons as Icon, index (index)}<Icon
                 data-icon={index === 0 ? 'inline-start' : undefined}
@@ -366,7 +393,7 @@
         data-replay-region="comparison-question"
       >
         <MessageContent content={[{ type: 'markdown', text: question }]} inline />
-        {#if recorded}
+        {#if recorded && !picked && !awaiting}
           <!-- What was answered, which the controls below change. -->
           <span class="block text-sm font-normal text-muted-foreground">
             {recorded.kind === 'skip'
@@ -379,9 +406,9 @@
     {#each visible as entry, index (entry.presentation.presentationId)}
       {@const presentationId = entry.presentation.presentationId}
       {@const choice =
-        recorded?.kind === 'tie'
+        markedAnswer?.kind === 'tie'
           ? 'Either is fine'
-          : recorded?.kind === 'preferred' && recorded.presentationId === presentationId
+          : markedAnswer?.kind === 'preferred' && markedAnswer.presentationId === presentationId
             ? 'Your choice'
             : undefined}
       {@const selected = visualSelections.for(presentationId, step)}
@@ -408,13 +435,13 @@
                 {choice}
               </p>
             {/if}
-            {#if index === 0 && activity}
+            {#if index === 0 && status}
               <p
                 class="flex items-center gap-1.5 rounded-md border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
                 role="status"
                 aria-live="polite"
               >
-                <Spinner class="size-3" aria-hidden="true" />{activity.label}
+                <Spinner class="size-3" aria-hidden="true" />{status}
               </p>
             {/if}
             {#if held(entry)}
@@ -476,11 +503,13 @@
               {/if}
             </div>
           {/if}
-          <!-- Dimmed while an operation replaces it, so it reads as the old version. -->
+          <!-- Dimmed while an operation replaces it, so it reads as the old version, and greyed while
+            the assistant replies to the pair. -->
           <div
             class={[
-              'flex min-h-0 min-w-0 flex-1 transition-opacity',
-              activity?.replacing && 'opacity-60'
+              'flex min-h-0 min-w-0 flex-1 transition-[opacity,filter]',
+              dimmed === 'replaced' && 'opacity-60',
+              dimmed === 'answered' && 'opacity-50 grayscale'
             ]}
           >
             <PresentationViewport

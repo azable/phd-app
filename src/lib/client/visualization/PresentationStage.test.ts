@@ -38,12 +38,36 @@ describe('presentation stage while the project is busy', () => {
   });
 });
 
-describe('presentation stage showing a comparison from the timeline', () => {
-  const badges = (body: string) =>
-    [...body.matchAll(/<p class="rounded-md bg-primary[^"]*">\s*([^<]*?)\s*<\/p>/g)].map(
-      ([, text]) => text
-    );
+const badges = (body: string) =>
+  [...body.matchAll(/<p class="rounded-md bg-primary[^"]*">\s*([^<]*?)\s*<\/p>/g)].map(
+    ([, text]) => text
+  );
 
+describe('presentation stage after the last comparison is answered', () => {
+  it('keeps the pair greyed, saying it is updating, with the chosen side marked', async () => {
+    const selection = new PresentationSelection(true, undefined, true);
+    await selection.answer(
+      timelinePresentations(askedPair()),
+      async () => true,
+      askedPair().length
+    );
+    const body = stage(
+      [...askedPair(), answered(3, { preferred: ids[1] }), requested(4)],
+      false,
+      false,
+      selection
+    );
+    expect(body.match(/data-replay-region="candidate-/g)).toHaveLength(2);
+    expect(body).toContain('Updating…');
+    expect(body).toContain('opacity-50 grayscale');
+    expect(badges(body)).toEqual(['Your choice']);
+    // Nothing to change while the reply comes, and no caption to shift the stage.
+    expect(disabled(body, 'Prefer the top version')).toBe(true);
+    expect(body).not.toContain('choose again to change your answer');
+  });
+});
+
+describe('presentation stage showing a comparison from the timeline', () => {
   it('shows an answered pair side by side with its question, marking the side chosen', () => {
     const body = stage([...askedPair(), answered(3, { preferred: ids[1] })], false, true);
     expect(body).toContain('Cells or tallies?');
@@ -144,8 +168,12 @@ function setAside(id: number): ProjectEvent {
 }
 
 /** The stage's markup; opened, with the pair chosen from the timeline rather than current. */
-function stage(events: ProjectEvent[], busy: boolean, opened = false): string {
-  const selection = new PresentationSelection(true, undefined, true);
+function stage(
+  events: ProjectEvent[],
+  busy: boolean,
+  opened = false,
+  selection = new PresentationSelection(true, undefined, true)
+): string {
   if (opened)
     selection.showPair(
       timelinePresentations(events).filter((entry) => entry.displaySetId === displaySetId),
@@ -204,6 +232,17 @@ function askedPair(labels = ['Start', 'Result'], differsAt?: number[]): ProjectE
       }
     }
   }));
+}
+
+function requested(id: number): ProjectEvent {
+  return {
+    id,
+    type: 'assistant.turn-requested',
+    actor: { kind: 'system' },
+    operationId: turnId,
+    createdAt: `2026-11-01T00:00:0${id}.000Z`,
+    payload: { interactionEventId: id - 1, presentationCount: 2 }
+  };
 }
 
 function accepted(id: number): ProjectEvent {

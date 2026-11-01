@@ -349,7 +349,8 @@ describe('answering a comparison', () => {
     let finish = (_saved: boolean) => {};
     const saving = selection.answer(
       answered,
-      () => new Promise<boolean>((resolve) => (finish = resolve))
+      () => new Promise<boolean>((resolve) => (finish = resolve)),
+      events.length
     );
     expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(2));
 
@@ -377,14 +378,18 @@ describe('answering a comparison', () => {
     const selection = new PresentationSelection(true, undefined, true);
     const answered = selection.selected(events, 'comparison');
 
-    expect(await selection.answer(answered, async () => false)).toBe(false);
+    expect(await selection.answer(answered, async () => false, events.length)).toBe(false);
     expect(selection.followingLatest).toBe(false);
     expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(0, 2));
 
     await expect(
-      selection.answer(answered, async () => {
-        throw new Error('offline');
-      })
+      selection.answer(
+        answered,
+        async () => {
+          throw new Error('offline');
+        },
+        events.length
+      )
     ).rejects.toThrow('offline');
     expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(0, 2));
   });

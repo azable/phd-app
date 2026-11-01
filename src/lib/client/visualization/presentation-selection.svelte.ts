@@ -1,6 +1,7 @@
 /** Reactive selection state shared by the Timeline and visualization stage. */
 
-import type { ProjectEvent } from '$lib/shared/projects/events';
+import type { EventId, ProjectEvent } from '$lib/shared/projects/events';
+import { projectOperation } from '$lib/shared/projects/operations';
 import { isSverlinPresentation, type PresentationLayout } from '$lib/shared/presentations';
 
 import {
@@ -21,6 +22,8 @@ export class PresentationSelection {
   notice = $state<string | null>(null);
   /** A pair answered while its answer is saved, left out as if recorded. */
   #answered = $state.raw<readonly string[]>([]);
+  /** The pair last answered, kept on the stage until what follows it arrives (see `awaiting`). */
+  #held = $state.raw<HeldPair>();
 
   /**
    * @param requestLayout Lets the selection imply the layout: Shift-selecting a second variant asks
@@ -39,8 +42,18 @@ export class PresentationSelection {
   /** Presentations currently shown on the stage. */
   selected(events: readonly ProjectEvent[], layout: PresentationLayout): TimelinePresentation[] {
     const all = timelinePresentations(events);
+    if (this.#holding(events, all, layout)) return presentationsById(all, this.#held?.ids ?? []);
     if (this.followingLatest) return this.automatic(events, all, layout);
     return presentationsById(all, this.selectedIds).slice(0, layout === 'comparison' ? 2 : 1);
+  }
+
+  /**
+   * Whether the pair last answered is still shown in place of what follows it: `updating` while no
+   * other comparison waits and the assistant's turn that the answer asked for has neither shown a
+   * version nor ended.
+   */
+  awaiting(events: readonly ProjectEvent[], layout: PresentationLayout): 'updating' | undefined {
+    return this.#holding(events, timelinePresentations(events), layout);
   }
 
   /** Activate a generated set, or use Shift to build a compatible historical pair. */
@@ -50,6 +63,7 @@ export class PresentationSelection {
     layout: PresentationLayout,
     extend = false
   ): void {
+    this.#held = undefined;
     const all = timelinePresentations(events);
     if (extend) {
       const activeIds = (
@@ -90,6 +104,7 @@ export class PresentationSelection {
     layout: PresentationLayout
   ): void {
     if (pair.length !== 2) return;
+    this.#held = undefined;
     const effective =
       layout !== 'comparison' && this.requestLayout?.('comparison') ? 'comparison' : layout;
     const ids = pair.map(({ presentation }) => presentation.presentationId);
@@ -105,32 +120,57 @@ export class PresentationSelection {
 
   /** Resume automatic selection of newly generated output. */
   returnToLatest(): void {
+    this.#held = undefined;
     this.followingLatest = true;
     this.notice = null;
   }
 
   /**
-   * Answer a pair: show what follows it at once, as if the answer were recorded, while `save`
-   * records it; if saving fails, show the answered pair again.
+   * Answer a pair: show what follows it, as if the answer were recorded, while `save` records it;
+   * if saving fails, show the answered pair again. Another comparison waiting shows at once; with
+   * none, one of the assistant's comparisons stays until its reply arrives (`awaiting`).
+   *
+   * @param head The Timeline's head when answering, after which the reply's events follow.
    */
   async answer(
     presentations: readonly TimelinePresentation[],
-    save: () => Promise<boolean>
+    save: () => Promise<boolean>,
+    head: EventId
   ): Promise<boolean> {
     const ids = presentations.map(({ presentation }) => presentation.presentationId);
     this.#answered = ids;
     this.returnToLatest();
+    const held: HeldPair | undefined = pairQuestion(presentations)
+      ? { ids, head, saving: true }
+      : undefined;
+    this.#held = held;
     let saved = false;
     try {
       saved = await save();
     } finally {
       this.#answered = [];
       if (!saved) {
+        this.#held = undefined;
         this.setIds(ids);
         this.followingLatest = false;
-      }
+      } else if (held && this.#held === held) this.#held = { ...held, saving: false };
     }
     return saved;
+  }
+
+  #holding(
+    events: readonly ProjectEvent[],
+    all: readonly TimelinePresentation[],
+    layout: PresentationLayout
+  ): 'updating' | undefined {
+    const held = this.#held;
+    if (!held || !this.followingLatest) return undefined;
+    const next = this.automatic(events, all, layout);
+    const nextIds = next.map(({ presentation }) => presentation.presentationId);
+    if (pairQuestion(next) && !sameIds(nextIds, held.ids)) return undefined;
+    if (events.some(({ id, type }) => id > held.head && type === 'visualization.presented'))
+      return undefined;
+    return held.saving || replyRunning(events, held.head) ? 'updating' : undefined;
   }
 
   private automatic(
@@ -212,6 +252,21 @@ export class PresentationSelection {
     if (sameIds(this.selectedIds, ids)) return;
     this.selectedIds = [...ids];
   }
+}
+
+type HeldPair = { ids: readonly string[]; head: EventId; saving: boolean };
+
+/** Whether the first assistant turn asked for after `head` is waiting or running. */
+function replyRunning(events: readonly ProjectEvent[], head: EventId): boolean {
+  const request = events.find(({ id, type }) => id > head && type === 'assistant.turn-requested');
+  if (!request) return false;
+  const claim = events.find(
+    (event) =>
+      event.type === 'assistant.turn-started' && event.payload.requestEventIds.includes(request.id)
+  );
+  if (!claim) return true;
+  const status = projectOperation(events, claim.operationId)?.status;
+  return status === 'accepted' || status === 'running';
 }
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {
