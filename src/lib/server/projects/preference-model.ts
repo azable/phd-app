@@ -81,14 +81,20 @@ function differingSides(left: DesignValues, right: DesignValues): [DesignValues,
   return [first, second];
 }
 
-/** The evidence a project's events hold: every answered comparison, and every vary decision. */
+/**
+ * The evidence a project's events hold: every answered comparison, a pair answered again by its
+ * latest answer only, and every vary decision.
+ */
 export function preferenceEvidence(events: readonly ProjectEvent[]): PreferenceEvidence {
   const variants = new Map<string, DesignValues>();
   const seen = new Map<string, Set<DesignValue>>();
   const duels: Duel[] = [];
   const fixes: Fix[] = [];
   let skipped = 0;
+  const latestAnswers = latestAnswerIds(events);
   for (const event of events) {
+    if (event.type === 'visualization.preference-recorded' && !latestAnswers.has(event.id))
+      continue;
     const presented = presentedVariant(event);
     if (presented) {
       variants.set(...presented);
@@ -133,6 +139,15 @@ export function preferenceEvidence(events: readonly ProjectEvent[]): PreferenceE
       }
   }
   return { duels, fixes, skipped };
+}
+
+/** The event of each pair's latest answer, a pair being its two presentations in either order. */
+function latestAnswerIds(events: readonly ProjectEvent[]): Set<number> {
+  const latest = new Map<string, number>();
+  for (const event of events)
+    if (event.type === 'visualization.preference-recorded')
+      latest.set(event.payload.presentations.toSorted().join('|'), event.id);
+  return new Set(latest.values());
 }
 
 /** The values a recorded assistant response's vary decision sets, if it made one. */

@@ -1,5 +1,7 @@
 /** Reactive, mode-neutral playback position for one or two retained presentations. */
 
+import { SvelteMap } from 'svelte/reactivity';
+
 import { alignPresentationFrames, presentationScenarioKey } from '$lib/shared/presentations';
 import type { TimelinePresentation } from './presentation-history';
 
@@ -57,24 +59,33 @@ export function localPresentationStep(
 export class PresentationPlayback {
   #contextKey = $state('');
   #step = $state(0);
+  /** The step each context was last left at, so returning to one shows it there again. */
+  #lastSteps = new SvelteMap<string, number>();
 
   activate(context: PresentationPlaybackContext): void {
     if (this.#contextKey !== context.key) {
       this.#contextKey = context.key;
-      this.#step = 0;
+      this.#step = this.#lastStep(context);
       return;
     }
     this.#step = clampStep(this.#step, context.stepCount);
   }
 
   stepFor(context: PresentationPlaybackContext): number {
-    return this.#contextKey === context.key ? clampStep(this.#step, context.stepCount) : 0;
+    return this.#contextKey === context.key
+      ? clampStep(this.#step, context.stepCount)
+      : this.#lastStep(context);
   }
 
   seek(context: PresentationPlaybackContext, step: number): number {
     this.#contextKey = context.key;
     this.#step = clampStep(step, context.stepCount);
+    this.#lastSteps.set(context.key, this.#step);
     return this.#step;
+  }
+
+  #lastStep(context: PresentationPlaybackContext): number {
+    return clampStep(this.#lastSteps.get(context.key) ?? 0, context.stepCount);
   }
 }
 

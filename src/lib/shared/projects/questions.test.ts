@@ -104,6 +104,24 @@ describe('questions', () => {
     expect(answerLabel(answered({ outcome: 'skip' }))).toEqual(words('later'));
   });
 
+  it('counts a pair’s latest answer, keeping every answer’s event', () => {
+    const answer = (payload: object) => ({
+      type: 'visualization.preference-recorded',
+      payload: { displaySetId: 's', presentations: ['a', 'b'], step: 0, ...payload }
+    });
+    const [question] = projectQuestions(
+      timeline(
+        presented('a', { displaySetId: 's', question: 'Cells or tallies?' }),
+        presented('b', { displaySetId: 's', slot: 1, question: 'Cells or tallies?' }),
+        answer({ preferred: 'b' }),
+        answer({ outcome: 'tie' }),
+        answer({ preferred: 'a' })
+      )
+    );
+    expect(question.answer).toEqual({ kind: 'preferred', eventId: 5, presentationId: 'a' });
+    expect(question.answerEventIds).toEqual([3, 4, 5]);
+  });
+
   it('keeps one question open at a time, a newer one replacing it', () => {
     const events = timeline(responded({ text: 'First?' }), responded({ text: 'Second?' }));
     expect(openQuestion(events)?.text).toBe('Second?');

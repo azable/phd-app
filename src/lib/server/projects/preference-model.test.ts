@@ -136,6 +136,25 @@ describe('the evidence in a project', () => {
     ]);
   });
 
+  it('counts only the latest answer to a pair answered again', () => {
+    const { events, answer } = project();
+    answer('IntCell', 'IntTally', 'skip');
+    const [left, right] = ['p1', 'p2'];
+    const again = (payload: object) =>
+      events.push({
+        id: events.length + 1,
+        type: 'visualization.preference-recorded',
+        payload: { presentations: [right, left], ...payload }
+      } as unknown as ProjectEvent);
+    again({ preferred: right });
+    again({ preferred: left });
+    const evidence = preferenceEvidence(events);
+    expect(evidence.skipped).toBe(0);
+    expect(evidence.duels.map(({ first, eventId }) => [first, eventId])).toEqual([
+      [{ 'views.Int': 'IntCell' }, 5]
+    ]);
+  });
+
   it('takes a vary decision as strong evidence against every other option seen', () => {
     const { events, answer, vary } = project();
     answer('IntCell', 'IntTally', 'left');

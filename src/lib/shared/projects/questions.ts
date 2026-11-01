@@ -4,7 +4,8 @@
  * the assistant made for it, with elements to highlight; answered in the chat), and about a
  * pair (a comparison, answered by a side, either is fine, or decide later). Read from the events,
  * each answer linked to its question: a message by the question it answers (feedback.submitted
- * `answers`), a pair's answer by its display set.
+ * `answers`), a pair's answer by its display set. A pair may be answered again; its latest answer
+ * counts.
  */
 
 import type { ProjectEvent } from './events';
@@ -28,7 +29,10 @@ export type ProjectQuestion = {
   /** What the participant would call each side of a pair, in slot order. */
   labels?: string[];
   displaySetId?: string;
+  /** Its answer once given; a pair's latest. */
   answer?: QuestionAnswer;
+  /** Every answer to a pair, by event id, in the order given. */
+  answerEventIds?: number[];
 };
 
 /** Every question asked, in the order asked, each with its answer once given. */
@@ -74,7 +78,8 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
         [...pairs.values()].find(({ presentationIds }) =>
           event.payload.presentations.every((id) => presentationIds.includes(id))
         );
-      if (!question || question.answer) continue;
+      if (!question) continue;
+      (question.answerEventIds ??= []).push(event.id);
       const outcome = comparisonOutcome(event.payload);
       const preferred = preferredPresentation(event.payload);
       question.answer =

@@ -59,6 +59,23 @@ describe('participant Timeline projection', () => {
     expect(Object.keys(turn.pills).toSorted()).toEqual([...presentationIds].toSorted());
   });
 
+  it('shows answers to a turn’s two comparisons, each in its own operation, only as captions', () => {
+    // Shaped like a recorded project: one turn asks two comparisons; each is answered at a later
+    // step in an operation of its own, a message between; a New pair without a question follows.
+    const values = twoComparisons();
+    const items = participantTimeline(values);
+    expect(items.map(({ id }) => id)).toEqual([
+      'assistant-2',
+      'user-12',
+      'presented-15',
+      'preference-17'
+    ]);
+    expect(turns(items)[0].comparisons.map(({ answer }) => answer)).toEqual([
+      [{ type: 'markdown', text: 'with `i`' }],
+      [{ type: 'markdown', text: 'plain message' }]
+    ]);
+  });
+
   it('shows a pair in its turn with its question and the preferred side’s label, which replaces the preference message', () => {
     const items = participantTimeline(askedPair());
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn']);
@@ -75,6 +92,16 @@ describe('participant Timeline projection', () => {
         }
       ]
     });
+  });
+
+  it('captions a changed answer with the latest, showing neither answer as a message', () => {
+    const values = askedPair();
+    const first = values.at(-1)!;
+    if (first.type !== 'visualization.preference-recorded') throw new Error('Expected an answer.');
+    values.push({ ...first, id: 6, payload: { ...first.payload, preferred: presentationIds[1] } });
+    const items = participantTimeline(values);
+    expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn']);
+    expect(turns(items)[0].comparisons[0].answer).toEqual([{ type: 'markdown', text: 'tallies' }]);
   });
 
   it('shows either is fine on an undesigned pair, and a question in words in its turn, its answer the next message', () => {
@@ -552,5 +579,113 @@ function events(): ProjectEvent[] {
         step: 0
       }
     }
+  ];
+}
+
+/**
+ * A turn asking two comparisons (events 2–6), each answered with its display set at step 6 in an
+ * operation of its own (9, 14), a message between them (12), and then a New pair without a question
+ * answered (15–17).
+ */
+function twoComparisons(): ProjectEvent[] {
+  const turn = '42345678-1234-4123-8123-123456789ab1';
+  const source = { text: 'source', sha256: 'a'.repeat(64), mediaType: 'text/x-svelte' };
+  const id = (n: number) => `42345678-1234-4123-8123-1234567890${String(n).padStart(2, '0')}`;
+  const sets = [id(91), id(92), id(93)];
+  const envelope = (eventId: number, operationId: string) => ({
+    id: eventId,
+    operationId,
+    createdAt: `2026-11-01T08:00:${String(eventId).padStart(2, '0')}.000Z`
+  });
+  const presented = (
+    eventId: number,
+    operationId: string,
+    set: number,
+    slot: 0 | 1,
+    asked?: { question: string; label: string }
+  ): ProjectEvent => ({
+    ...envelope(eventId, operationId),
+    type: 'visualization.presented',
+    actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+    payload: {
+      displaySetId: sets[set],
+      slot,
+      ...asked,
+      presentation: {
+        format: 'browser-bundle-v1',
+        mode: 'sverlin',
+        stepSignature: 'shared',
+        labels: Array.from({ length: 8 }, (_, step) => `Step ${step + 1}`),
+        source,
+        html: { text: '', sha256: 'c'.repeat(64), mediaType: 'text/html' },
+        javascript: { text: 'void 0;', sha256: 'b'.repeat(64), mediaType: 'text/javascript' },
+        presentationId: id(set * 2 + slot),
+        seed: set * 2 + slot,
+        variant: { 'views.Int': slot ? 'IntTally' : 'IntCell' }
+      }
+    }
+  });
+  const answered = (eventId: number, set: number): ProjectEvent[] => {
+    const operationId = id(50 + eventId);
+    return [
+      {
+        ...envelope(eventId - 1, operationId),
+        type: 'operation.accepted',
+        actor: { kind: 'system' },
+        payload: { kind: 'prefer' }
+      } as ProjectEvent,
+      {
+        ...envelope(eventId, operationId),
+        type: 'visualization.preference-recorded',
+        actor: { kind: 'user' },
+        payload: {
+          displaySetId: sets[set],
+          presentations: [id(set * 2), id(set * 2 + 1)],
+          preferred: id(set * 2),
+          step: 6
+        }
+      },
+      {
+        ...envelope(eventId + 1, operationId),
+        type: 'operation.completed',
+        actor: { kind: 'system' },
+        payload: {}
+      } as ProjectEvent
+    ];
+  };
+  return [
+    {
+      ...envelope(1, turn),
+      type: 'project.created',
+      actor: { kind: 'user' },
+      payload: { entryArtifactId: 'main' }
+    } as unknown as ProjectEvent,
+    {
+      ...envelope(2, turn),
+      type: 'assistant.responded',
+      actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+      payload: { content: [{ type: 'markdown', text: 'Two questions to compare.' }] }
+    },
+    presented(3, turn, 0, 0, { question: 'Should the marker carry `i`?', label: 'with `i`' }),
+    presented(4, turn, 0, 1, { question: 'Should the marker carry `i`?', label: 'without' }),
+    presented(5, turn, 1, 0, { question: 'How should the result appear?', label: 'plain message' }),
+    presented(6, turn, 1, 1, { question: 'How should the result appear?', label: 'banner' }),
+    {
+      ...envelope(7, turn),
+      type: 'operation.completed',
+      actor: { kind: 'system' },
+      payload: {}
+    } as ProjectEvent,
+    ...answered(9, 0),
+    {
+      ...envelope(12, id(80)),
+      type: 'feedback.submitted',
+      actor: { kind: 'user' },
+      payload: { content: [{ type: 'markdown', text: 'Any difference?' }], focus: [] }
+    },
+    ...answered(14, 1).slice(1, 2),
+    presented(15, id(81), 2, 0),
+    presented(16, id(81), 2, 1),
+    ...answered(17, 2).slice(1, 2)
   ];
 }

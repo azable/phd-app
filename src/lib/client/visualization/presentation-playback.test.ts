@@ -33,6 +33,18 @@ describe('presentation playback', () => {
     expect(playback.stepFor(other)).toBe(0);
   });
 
+  it('returns to a source at the step it was last left at', () => {
+    const playback = new PresentationPlayback();
+    const first = presentationPlaybackContext([presentation(1, 'a'.repeat(64), 4)]);
+    const other = presentationPlaybackContext([presentation(2, 'b'.repeat(64), 4)]);
+    playback.activate(first);
+    playback.seek(first, 2);
+    playback.activate(other);
+    expect(playback.stepFor(first)).toBe(2);
+    playback.activate(first);
+    expect(playback.stepFor(first)).toBe(2);
+  });
+
   it('maps one shared position to each visible presentation', () => {
     const left = presentation(1, 'a'.repeat(64), 3);
     const right = presentation(2, 'a'.repeat(64), 3);

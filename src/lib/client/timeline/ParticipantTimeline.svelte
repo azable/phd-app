@@ -21,7 +21,9 @@
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import {
     candidateId,
+    pairQuestion,
     presentationDisplayId,
+    presentationsById,
     sourceId,
     rememberCandidates,
     timelinePresentations,
@@ -96,10 +98,17 @@
     if (session.pending) return 'Recording your update…';
     return 'Generating more visualizations…';
   });
-  const selectedIds = $derived(
-    selection
-      .selected(session.events, layout)
-      .map(({ presentation }) => presentation.presentationId)
+  const visible = $derived(selection.selected(session.events, layout));
+  const selectedIds = $derived(visible.map(({ presentation }) => presentation.presentationId));
+  // The comparison whose pair the stage shows, by its display set, while nothing hides the stage.
+  const openPair = $derived(
+    layout === 'comparison' &&
+      !chosenSource &&
+      chosenRequest === undefined &&
+      chosenFailure === undefined &&
+      pairQuestion(visible)
+      ? visible[0].displaySetId
+      : undefined
   );
 
   function activatePresentation(presentation: TimelinePresentation, event: MouseEvent) {
@@ -154,6 +163,15 @@
     onChooseSource(undefined);
     selection.activate(presentation, session.events, layout);
     onQuestionElements(presentationId, question.elements ?? []);
+  }
+
+  /** Show a comparison's pair side by side, as the stage shows a current one, to view or answer. */
+  function showComparison(question: ProjectQuestion) {
+    const pair = presentationsById(timelinePresentations(session.events), question.presentationIds);
+    if (pair.length !== 2) return;
+    onPresentationChange();
+    onChooseSource(undefined);
+    selection.showPair(pair, session.events, layout);
   }
 
   function activateReference(
@@ -305,9 +323,24 @@
           {/if}
         {/if}
         {#each item.comparisons as { question, answer } (question.eventId)}
-          <!-- A comparison: its question, its pair, each side by its label, and the answer. -->
-          <div class="mt-3 border-t pt-2 text-sm">
-            <p class="font-medium">{question.text}</p>
+          {@const open = openPair !== undefined && openPair === question.displaySetId}
+          <!-- A comparison: its question, which shows its pair, each side by its label, and the
+            latest answer; outlined while the stage shows its pair. -->
+          <div
+            class={[
+              'mt-3 border-t pt-2 text-sm',
+              open && '-mx-2 rounded-lg border-transparent bg-muted px-2 pb-2 ring-2 ring-ring'
+            ]}
+          >
+            <p class="font-medium wrap-break-word">
+              <button
+                type="button"
+                class="max-w-full rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                title="Show this comparison"
+                aria-current={open ? 'true' : undefined}
+                onclick={() => showComparison(question)}>{question.text}</button
+              >
+            </p>
             <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 leading-7">
               {#each question.presentationIds as id, slot (id)}
                 {@const label = question.labels?.[slot]}

@@ -80,6 +80,29 @@ export class PresentationSelection {
     this.notice = null;
   }
 
+  /**
+   * Show a pair side by side, as one of the assistant's comparisons, current or not, is shown;
+   * following the latest only where it is what would show anyway.
+   */
+  showPair(
+    pair: readonly TimelinePresentation[],
+    events: readonly ProjectEvent[],
+    layout: PresentationLayout
+  ): void {
+    if (pair.length !== 2) return;
+    const effective =
+      layout !== 'comparison' && this.requestLayout?.('comparison') ? 'comparison' : layout;
+    const ids = pair.map(({ presentation }) => presentation.presentationId);
+    this.setIds(ids);
+    this.followingLatest = sameIds(
+      ids,
+      this.automatic(events, timelinePresentations(events), effective).map(
+        ({ presentation }) => presentation.presentationId
+      )
+    );
+    this.notice = null;
+  }
+
   /** Resume automatic selection of newly generated output. */
   returnToLatest(): void {
     this.followingLatest = true;

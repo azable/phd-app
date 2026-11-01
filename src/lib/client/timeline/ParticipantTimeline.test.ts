@@ -2,6 +2,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
+import { timelinePresentations } from '$lib/client/visualization/presentation-history';
 import { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import type { MessageContent } from '$lib/shared/projects/events/message-content';
@@ -62,6 +63,46 @@ describe('participant timeline', () => {
     expect(body).toMatch(/→<\/span>.*<p>cells<\/p>/su);
   });
 
+  const comparison = (answers: string[] = []) => [
+    ...turn([{ type: 'markdown', text: 'Two looks to compare.' }], {
+      pair: { question: 'Cells or tallies?', labels: ['cells', 'tallies'] }
+    }),
+    ...answers.map(
+      (preferred, index) =>
+        ({
+          id: 6 + index,
+          operationId: '22345678-1234-4234-8234-123456789abc',
+          createdAt: `2026-08-30T00:00:0${6 + index}.000Z`,
+          type: 'visualization.preference-recorded',
+          actor: { kind: 'user' },
+          payload: { displaySetId, presentations: [...ids], preferred, step: 0 }
+        }) as ProjectEvent
+    )
+  ];
+  const heading = (body: string) =>
+    body.match(/<button[^>]*title="Show this comparison"[^>]*>Cells or tallies\?<\/button>/)?.[0];
+
+  it('makes a comparison’s question a button that shows its pair, selected while it shows', () => {
+    const events = comparison([ids[0]]);
+    expect(heading(timeline(events))).toBeDefined();
+    expect(heading(timeline(events))).not.toContain('aria-current');
+    expect(heading(timeline(events, { open: true }))).toContain('aria-current="true"');
+    // A source chosen on its own hides the stage, so the comparison is no longer open.
+    const hidden = timeline(events, { open: true, chosenSource: 'a'.repeat(64) });
+    expect(heading(hidden)).not.toContain('aria-current');
+  });
+
+  it('selects the current comparison, which the stage shows on its own', () => {
+    expect(heading(timeline(comparison()))).toContain('aria-current="true"');
+  });
+
+  it('captions a changed answer with the latest', () => {
+    const body = timeline(comparison([ids[0], ids[1]]));
+    expect(body).toMatch(/→<\/span>.*<p>tallies<\/p>/su);
+    expect(body).not.toMatch(/→<\/span>.*<p>cells<\/p>/su);
+    expect(body.match(/<article/g)).toHaveLength(1);
+  });
+
   it('captions no answer in words, the next message being the answer', () => {
     const body = timeline([
       ...turn([{ type: 'markdown', text: 'Adds the digits.' }], {
@@ -95,7 +136,18 @@ describe('participant timeline', () => {
   });
 });
 
-function timeline(events: ProjectEvent[]): string {
+/** The timeline's markup; open, with the stage showing its pair as chosen from the timeline. */
+function timeline(
+  events: ProjectEvent[],
+  options: { open?: boolean; chosenSource?: string } = {}
+): string {
+  const selection = new PresentationSelection(true, undefined, true);
+  if (options.open)
+    selection.showPair(
+      timelinePresentations(events).filter((entry) => entry.displaySetId === displaySetId),
+      events,
+      'comparison'
+    );
   const session = {
     events,
     userAuthorLabel: 'You',
@@ -109,8 +161,9 @@ function timeline(events: ProjectEvent[]): string {
   return render(ParticipantTimeline, {
     props: {
       session,
-      selection: new PresentationSelection(true, undefined, true),
-      layout: 'comparison'
+      selection,
+      layout: 'comparison',
+      ...(options.chosenSource ? { chosenSource: options.chosenSource } : {})
     }
   }).body;
 }

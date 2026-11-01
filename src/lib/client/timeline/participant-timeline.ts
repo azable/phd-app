@@ -138,10 +138,8 @@ export function participantTimeline(
       question.displaySetId ? [[question.displaySetId, question] as const] : []
     )
   );
-  // Answers to pairs that asked a question show under it, not as messages of their own.
-  const answeredPairs = new Set(
-    questions.flatMap(({ kind, answer }) => (kind === 'pair' && answer ? [answer.eventId] : []))
-  );
+  // Answers to pairs that asked a question show under it, the latest, not as messages of their own.
+  const answeredPairs = new Set(questions.flatMap(({ answerEventIds = [] }) => answerEventIds));
   const placed = new Set<string>();
   // The source presented last, by hash, which a note that follows is about.
   let presented: string | undefined;

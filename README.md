@@ -117,12 +117,16 @@ label (`projectBrief` in [`brief.ts`](src/lib/shared/projects/brief.ts)); a tie
 or skip sets nothing. A pair is answered by preferring a side, Either is fine (a
 tie) or Decide later (a skip), all recorded as
 `visualization.preference-recorded`, a tie or skip as its `outcome` with no
-`preferred`. An answer on one of them asks the assistant for no turn while
-others wait (`waitingComparisons`); it sets aside, as `candidates-advanced` with
-reason `moot`, those the answer makes moot, asking the pair just answered, about
-a variable it settled, or something a value it settled hides (`mootComparison`
-in [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the
-answer that leaves none waiting starts the assistant's turn. A preference model
+`preferred`. Choosing a comparison's question in the chat shows its pair on the
+stage again, its latest answer marked, to answer it or answer it again (the same
+command, so it also rebases on a preferred side and may start a turn); a pair's
+latest answer is the one that counts, in its caption and in the preference
+model. An answer on one of them asks the assistant for no turn while others wait
+(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
+`moot`, those the answer makes moot, asking the pair just answered, about a
+variable it settled, or something a value it settled hides (`mootComparison` in
+[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
+that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
 Bayesian Bradley–Terry model with Davidson ties over every choice's options,
 fitted from the events on each call, decides what is settled for every chooser:

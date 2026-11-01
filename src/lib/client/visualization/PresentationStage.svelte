@@ -14,6 +14,7 @@
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
   import { elidedName } from '$lib/client/artifacts/source-references';
+  import { projectQuestions } from '$lib/shared/projects/questions';
 
   import { type PresentationSelection } from './presentation-selection.svelte';
   import {
@@ -97,6 +98,14 @@
   ];
   const visible = $derived(selection.selected(session.events, layout));
   const question = $derived(layout === 'comparison' ? pairQuestion(visible) : undefined);
+  // The latest answer to the assistant's comparison shown, once given; answering again changes it.
+  const recorded = $derived(
+    question
+      ? projectQuestions(session.events).find(
+          ({ kind, displaySetId }) => kind === 'pair' && displaySetId === visible[0].displaySetId
+        )?.answer
+      : undefined
+  );
   const preparing = $derived(
     session.refillPending ||
       (!!session.pending && visualizationOperationKinds.includes(session.pending.type))
@@ -132,8 +141,10 @@
     const current = step;
     untrack(() => visualSelections.retain(ids, current));
   });
+  // The side preferred: the comparison's latest answer, or for another pair its answer at this step.
   const preferred = $derived.by(() => {
     if (visible.length !== 2) return undefined;
+    if (question) return recorded?.kind === 'preferred' ? recorded.presentationId : undefined;
     const preference = session.events.findLast(
       (event) =>
         event.type === 'visualization.preference-recorded' &&
@@ -302,12 +313,28 @@
         data-replay-region="comparison-question"
       >
         {question}
+        {#if recorded}
+          <!-- What was answered, which the controls below change. -->
+          <span class="block text-sm font-normal text-muted-foreground">
+            {recorded.kind === 'skip'
+              ? 'You left this for later; answer it now if you like.'
+              : 'You answered this; choose again to change your answer.'}
+          </span>
+        {/if}
       </p>
     {/if}
     {#each visible as entry, index (entry.presentation.presentationId)}
       {@const presentationId = entry.presentation.presentationId}
+      {@const choice =
+        recorded?.kind === 'tie'
+          ? 'Either is fine'
+          : recorded?.kind === 'preferred' && recorded.presentationId === presentationId
+            ? 'Your choice'
+            : undefined}
       {@const selected = visualSelections.for(presentationId, step)}
       {@const targets = viewports[presentationId]?.renderTargets() ?? []}
+      <!-- Each candidate; the side the comparison's latest answer chose is outlined and badged, or
+        both where either is fine. -->
       <div
         class="flex min-h-0 flex-1 overflow-hidden bg-muted/30 p-2"
         data-replay-region={`candidate-${index + 1}`}
@@ -315,9 +342,19 @@
         in:fly={{ x: 24, duration: 180 }}
       >
         <div
-          class="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border bg-white shadow-sm"
+          class={[
+            'relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border bg-white shadow-sm',
+            choice && 'border-primary ring-2 ring-primary'
+          ]}
         >
           <div class="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+            {#if choice}
+              <p
+                class="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-sm"
+              >
+                {choice}
+              </p>
+            {/if}
             {#if index === 0 && activity}
               <p
                 class="flex items-center gap-1.5 rounded-md border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
