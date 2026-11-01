@@ -95,41 +95,15 @@ export function openQuestion(events: readonly ProjectEvent[]): ProjectQuestion |
   return latest && !latest.answer ? latest : undefined;
 }
 
-/** The most characters of a message an answer shows. */
-const answerLength = 60;
-
 /**
- * An answer as its question's caption shows it: the preferred side's label (“tallies”), either is
- * fine, later, or the start of the message, on one line with its references.
+ * A comparison's answer as its caption shows it: the preferred side's label (“tallies”), either is
+ * fine, or later. An answer in words needs none, as the message that follows is the answer.
  */
 export function answerLabel(question: ProjectQuestion): MessageContent | undefined {
   const answer = question.answer;
-  if (!answer) return undefined;
-  if (answer.kind === 'text') return abbreviated(answer.content);
+  if (!answer || answer.kind === 'text') return undefined;
   if (answer.kind !== 'preferred')
     return [{ type: 'markdown', text: answer.kind === 'tie' ? 'either is fine' : 'later' }];
   const slot = question.presentationIds.indexOf(answer.presentationId);
   return [{ type: 'markdown', text: question.labels?.[slot] ?? (slot === 0 ? 'top' : 'bottom') }];
-}
-
-/** A message on one line, its words cut to answerLength, the references among them kept. */
-function abbreviated(content: MessageContent): MessageContent {
-  let left = answerLength;
-  const shown: MessageContent = [];
-  for (const segment of content) {
-    if (segment.type !== 'markdown') {
-      if (left > 0) shown.push(segment);
-      continue;
-    }
-    const text = segment.text.replace(/\s+/gu, ' ');
-    const words = shown.length ? text : text.trimStart();
-    if (!words) continue;
-    if (left <= 0 || words.length > left) {
-      shown.push({ type: 'markdown', text: `${words.slice(0, Math.max(left - 1, 0)).trimEnd()}…` });
-      break;
-    }
-    shown.push({ type: 'markdown', text: words });
-    left -= words.length;
-  }
-  return shown;
 }

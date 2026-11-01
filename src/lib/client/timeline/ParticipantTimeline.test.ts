@@ -22,8 +22,10 @@ describe('participant timeline', () => {
     // One assistant message, which holds everything the turn did.
     expect(body.match(/<article/g)).toHaveLength(1);
     expect(body).toContain('Adds the digits.');
-    expect(body).toContain('Who is it for?');
-    expect(body).toContain('Answer in the chat');
+    // The question is the reply's last paragraph, emphasised, with no hint how to answer it.
+    expect(body).toMatch(/<p class="[^"]*font-medium[^"]*">(?:<!--[^>]*-->|\s)*Who is it for\?/u);
+    expect(body.lastIndexOf('aria-label="View ')).toBeLessThan(body.indexOf('Who is it for?'));
+    expect(body).not.toContain('Answer in the chat');
     // Neither version is named in the reply, so both are appended, each with its actions.
     expect(body.match(/aria-label="View /g)).toHaveLength(2);
     expect(body.match(/aria-label="Show the source of /g)).toHaveLength(2);
@@ -59,6 +61,38 @@ describe('participant timeline', () => {
     expect(body).toContain('tallies:');
     expect(body).toMatch(/→<\/span>.*<p>cells<\/p>/su);
   });
+
+  it('captions no answer in words, the next message being the answer', () => {
+    const body = timeline([
+      ...turn([{ type: 'markdown', text: 'Adds the digits.' }], {
+        question: { text: 'Who is it for?' }
+      }),
+      {
+        id: 6,
+        operationId: '22345678-1234-4234-8234-123456789abc',
+        createdAt: '2026-08-30T00:00:06.000Z',
+        type: 'feedback.submitted',
+        actor: { kind: 'user' },
+        payload: { content: [{ type: 'markdown', text: 'Students' }], focus: [], answers: 2 }
+      }
+    ]);
+    expect(body.match(/<article/g)).toHaveLength(2);
+    expect(body).toContain('Students');
+    expect(body).not.toContain('→');
+  });
+
+  it('ends a question about a presentation the reply does not name with its pill', () => {
+    const body = timeline(
+      turn([{ type: 'markdown', text: 'Adds the digits.' }], {
+        question: { text: 'Too dense?', presentationId: ids[1] }
+      })
+    );
+    const question = body.slice(body.indexOf('Too dense?'));
+    // Only the other version is appended to the reply; this one ends the question.
+    expect(body.match(/aria-label="View /g)).toHaveLength(2);
+    expect(question.match(/aria-label="View /g)).toHaveLength(1);
+    expect(question.indexOf('aria-label="View ')).toBeLessThan(question.indexOf('</p>'));
+  });
 });
 
 function timeline(events: ProjectEvent[]): string {
@@ -85,7 +119,7 @@ function timeline(events: ProjectEvent[]): string {
 function turn(
   content: MessageContent,
   options: {
-    question?: { text: string };
+    question?: { text: string; presentationId?: string };
     pair?: { question: string; labels: [string, string] };
     answered?: boolean;
   } = {}

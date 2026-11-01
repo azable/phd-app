@@ -20,7 +20,7 @@ import {
 
 import { agentRequests, type AgentRequest } from './agent-requests';
 
-/** A question with its answer as its caption shows it, once given. */
+/** A comparison's question with its answer as its caption shows it, once given. */
 export type CaptionedQuestion = { question: ProjectQuestion; answer?: MessageContent };
 
 /** A presentation as a pill in an assistant's message: what it shows, and its source. */
@@ -48,7 +48,8 @@ export type ParticipantTimelineItem =
   | { id: string; kind: 'message'; actor: 'user'; content: MessageContent; eventId: number }
   /**
    * One assistant turn as one message: its reply, naming the versions it presents inline; those it
-   * does not name as pills at its end; the comparisons it asks; and its question, last.
+   * does not name as pills at its end; its question, as the reply's last paragraph; and the
+   * comparisons it asks.
    */
   | {
       id: string;
@@ -62,8 +63,9 @@ export type ParticipantTimelineItem =
       appended: string[];
       /** Its comparisons: each pair's question, with its answer once given. */
       comparisons: CaptionedQuestion[];
-      /** Its question, with a pill only where the message does not already show what it is about. */
-      question?: CaptionedQuestion & { pill: boolean };
+      /** Its question, answered in words, with a pill only where the message does not already show
+       * what it is about. */
+      question?: { question: ProjectQuestion; pill: boolean };
       /** Every presentation it shows as a pill, by id. */
       pills: Record<string, VersionPill>;
       /** The sources first presented here, which a link to a version's parent finds. */
@@ -160,7 +162,7 @@ export function participantTimeline(
             question?.text
           ),
           eventId: event.id,
-          ...(question ? { question: { ...captioned(question), pill: false } } : {})
+          ...(question ? { question: { question, pill: false } } : {})
         }
       ];
     });
@@ -308,8 +310,8 @@ export function participantTimeline(
 }
 
 /**
- * A reply as shown above its question: without its last sentence or paragraph where that says the
- * question again, as the question shows under it.
+ * A reply as shown before its question: without its last sentence or paragraph where that says the
+ * question again, as the question follows it.
  */
 export function withoutRepeatedQuestion(
   content: MessageContent,

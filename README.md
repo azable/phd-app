@@ -140,10 +140,10 @@ weight the summary's ranking of what is worth asking. The assistant may also ask
 one `question` at a time, in words or about a presentation (one shown, or the
 first its decision makes, with elements to highlight), answered by the
 participant's next message, which records the question it answers
-(`feedback.submitted` `answers`); the chat shows each question, under a reply
-left without a last sentence or paragraph that repeats it, with its answer
-underneath, and each comparison pair its question and answer as a caption, a
-message's answer with its references as pills
+(`feedback.submitted` `answers`); the chat shows each question as the last
+paragraph of its reply, which is left without a last sentence or paragraph that
+repeats it, the next message being its answer, and each comparison pair its
+question and answer as a caption
 ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side hiding the layout itself or most of the picture

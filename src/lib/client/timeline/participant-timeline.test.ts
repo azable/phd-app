@@ -77,7 +77,7 @@ describe('participant Timeline projection', () => {
     });
   });
 
-  it('shows either is fine on an undesigned pair, and a question in words in its turn with its answer', () => {
+  it('shows either is fine on an undesigned pair, and a question in words in its turn, its answer the next message', () => {
     const values = events();
     values[4] = {
       ...values[4],
@@ -90,34 +90,13 @@ describe('participant Timeline projection', () => {
     const items = participantTimeline(values);
     expect(items.map(({ kind }) => kind)).toEqual(['message', 'turn', 'message', 'message']);
     expect(items[1]).toMatchObject({
-      question: {
-        question: { text: 'Who is it for?' },
-        answer: [{ type: 'markdown', text: 'Students' }],
-        pill: false
-      }
+      question: { question: { text: 'Who is it for?' }, pill: false }
     });
+    expect(items[1]).not.toHaveProperty('question.answer');
     expect(items[2]).toMatchObject({
       content: expect.arrayContaining([{ type: 'markdown', text: 'Either is fine:' }])
     });
-  });
-
-  it('captions an answer with its own references as pills', () => {
-    const captionOf = (content: object[]) => {
-      const values = events();
-      const responded = values[1];
-      if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
-      responded.payload.question = { text: 'Warm or cool?' };
-      values.push({
-        ...answer(6, ''),
-        payload: { content, focus: [], answers: 2 }
-      } as ProjectEvent);
-      return turns(participantTimeline(values))[0].question?.answer;
-    };
-    const named = { type: 'presentation-ref', presentationId: presentationIds[1] };
-    expect(captionOf([{ type: 'markdown', text: 'Like ' }, named])).toEqual([
-      { type: 'markdown', text: 'Like ' },
-      named
-    ]);
+    expect(items[3]).toMatchObject({ content: [{ type: 'markdown', text: 'Students' }] });
   });
 
   it('gives a question a pill only where the message does not show what it is about', () => {

@@ -2,7 +2,6 @@
   import { fly } from 'svelte/transition';
 
   import BotIcon from '@lucide/svelte/icons/bot';
-  import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import CopyIcon from '@lucide/svelte/icons/copy';
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
@@ -228,7 +227,7 @@
         </div>
       {/snippet}
       <!-- One assistant turn: its reply naming its versions, the pills of those it did not name,
-        its comparisons, and its question; a turn without a reply says what its versions show. -->
+        its question, and its comparisons; a turn without a reply says what its versions show. -->
       <article
         class={[
           'max-w-[88%] rounded-2xl border bg-card px-4 py-3 shadow-md',
@@ -251,6 +250,23 @@
             pill={inline}
             pilled={(id) => id in pills}
           />
+          {#if item.question}
+            {@const { question, pill } = item.question}
+            {@const about = pill ? pills[question.presentationIds[0]] : undefined}
+            <!-- Its question, the reply's last paragraph, answered by the next message; one about a
+              presentation shows it, its elements highlighted, with its pill where the reply does
+              not already show it. -->
+            <p class="mt-2 text-base leading-7 font-medium wrap-break-word">
+              {#if question.presentationIds.length}<button
+                  type="button"
+                  class="max-w-full rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  title="Show what this question is about"
+                  onclick={() => showQuestion(question)}>{question.text}</button
+                >{:else}{question.text}{/if}{#if about}{@render versionPill(about, undefined, () =>
+                  showQuestion(question)
+                )}{/if}
+            </p>
+          {/if}
         {:else}
           {#each item.summaries as summary (summary.sourceHash)}
             <div class="mb-1 flex flex-wrap items-baseline gap-x-1.5 text-sm text-muted-foreground">
@@ -303,37 +319,6 @@
             {#if answer}<div class="mt-1.5">{@render caption(answer)}</div>{/if}
           </div>
         {/each}
-        {#if item.question}
-          {@const { question, answer, pill } = item.question}
-          {@const about = pill ? pills[question.presentationIds[0]] : undefined}
-          <!-- Its question, answered in the chat; one about a presentation shows it, its elements
-            highlighted, with its own pill where the message does not already show it. -->
-          <div class="mt-3 border-t pt-2 text-sm">
-            <p class="flex items-start gap-1.5 leading-7 font-medium">
-              <CircleHelpIcon class="mt-1.5 size-4 shrink-0 text-primary" />
-              <span class="min-w-0">
-                {#if question.presentationIds.length}
-                  <button
-                    type="button"
-                    class="rounded-md text-left hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    title="Show what this question is about"
-                    onclick={() => showQuestion(question)}>{question.text}</button
-                  >
-                {:else}
-                  {question.text}
-                {/if}
-                {#if about}{@render versionPill(about, undefined, () =>
-                    showQuestion(question)
-                  )}{/if}
-              </span>
-            </p>
-            {#if answer}
-              <div class="mt-1.5 ml-5.5">{@render caption(answer)}</div>
-            {:else if !session.readOnly}
-              <p class="mt-1.5 ml-5.5 text-xs text-muted-foreground">Answer in the chat</p>
-            {/if}
-          </div>
-        {/if}
       </article>
     {:else if item.kind === 'note'}
       {@const of = item.of}

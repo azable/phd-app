@@ -109,27 +109,11 @@ describe('questions', () => {
     expect(openQuestion(events)?.text).toBe('Second?');
   });
 
-  it('abbreviates a long answer in its caption', () => {
+  it('captions no answer in words, the message that follows being the answer', () => {
     const [question] = projectQuestions(
-      timeline(responded({ text: 'Why?' }), message('Because '.repeat(20), 1))
+      timeline(responded({ text: 'Why?' }), message('Because.', 1))
     );
-    expect(answerLabel(question)).toEqual([
-      { type: 'markdown', text: expect.stringMatching(/^Because Because .{40,}…$/u) }
-    ]);
-  });
-
-  it('keeps an answer’s references, on one line', () => {
-    const reference = { type: 'presentation-ref', presentationId: 'a' };
-    const [question] = projectQuestions(
-      timeline(responded({ text: 'Why?' }), {
-        type: 'feedback.submitted',
-        payload: {
-          content: [reference, { type: 'markdown', text: '\n\nLike\nthis' }],
-          focus: [],
-          answers: 1
-        }
-      })
-    );
-    expect(answerLabel(question)).toEqual([reference, { type: 'markdown', text: ' Like this' }]);
+    expect(question.answer).toMatchObject({ kind: 'text' });
+    expect(answerLabel(question)).toBeUndefined();
   });
 });
