@@ -3,7 +3,10 @@
 import { presentationDisplayId } from '$lib/client/visualization/presentation-history';
 import type { MessageContentSegment } from '$lib/shared/projects/events/message-content';
 
-export type ReferenceSegment = Exclude<MessageContentSegment, { type: 'markdown' }>;
+export type ReferenceSegment = Exclude<
+  MessageContentSegment,
+  { type: 'markdown' | 'interface-ref' }
+>;
 
 /** Expand a reference into the individually actionable chips shown to participants. */
 export function singletonReferenceSegments(reference: ReferenceSegment): ReferenceSegment[] {

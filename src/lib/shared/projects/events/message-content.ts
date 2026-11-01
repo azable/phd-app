@@ -2,6 +2,7 @@
 
 import * as v from 'valibot';
 
+import { interfacePart, interfacePartIds } from '$lib/shared/interface-parts';
 import { presentationIdSchema, stepNameSchema } from '$lib/shared/presentations';
 import { naturalSchema, textSchema } from './values';
 
@@ -68,11 +69,24 @@ export const elementReferenceSegmentSchema = v.strictObject({
   element: selectedElementSchema
 });
 
-/** Runtime schema for one Markdown or exact visualization reference segment. */
+/**
+ * A part of the workspace an assistant's reply points at (shared/interface-parts.ts), shown as a
+ * pill with the part's name that highlights it.
+ */
+export const interfaceReferenceSegmentSchema = v.strictObject({
+  type: v.literal('interface-ref'),
+  part: v.picklist(interfacePartIds)
+});
+
+/**
+ * Runtime schema for one Markdown or exact visualization reference segment, or, in the assistant's
+ * replies only (see validateMessageContent in commands.ts), an interface part.
+ */
 export const messageContentSegmentSchema = v.variant('type', [
   markdownMessageSegmentSchema,
   presentationReferenceSegmentSchema,
-  elementReferenceSegmentSchema
+  elementReferenceSegmentSchema,
+  interfaceReferenceSegmentSchema
 ]);
 
 /** Runtime schema for a non-empty structured message. */
@@ -131,6 +145,8 @@ export function plainMessageText(content: MessageContent): string {
   return content
     .flatMap((segment) => {
       if (segment.type === 'markdown') return [segment.text];
+      if (segment.type === 'interface-ref')
+        return [`[Interface part ${segment.part}: ${interfacePart(segment.part).name}]`];
       if (segment.type === 'element-ref')
         return [
           `[Element "${segment.element.label}" (${segment.element.id}) at ${stepText(segment.step, segment.stepName)} of presentation ${segment.presentationId}]`

@@ -1,24 +1,29 @@
 /**
- * The parts of the project workspace a participant can be pointed at, by the interface tour now
- * and by the assistant later. Names and descriptions are participant-facing: they never name a
- * system or say how it works, keeping the study blind (see `modeCatalog`).
+ * The parts of the project workspace a participant can be pointed at, by the interface tour and by
+ * the assistant's replies (an `interface-ref` segment). Names and descriptions are
+ * participant-facing: they never name a system or say how it works, keeping the study blind (see
+ * `modeCatalog`).
  */
 
+import type { MessageContentSegment } from './projects/events/message-content';
 import type { VisualizationMode } from './presentations';
 
-export type InterfacePartId =
-  | 'timeline'
-  | 'version-pill'
-  | 'stage'
-  | 'step-controls'
-  | 'answer-buttons'
-  | 'comparison-card'
-  | 'choices-panel'
-  | 'export'
-  | 'source-panel'
-  | 'message-box'
-  | 'return-to-present'
-  | 'help';
+export const interfacePartIds = [
+  'timeline',
+  'version-pill',
+  'stage',
+  'step-controls',
+  'answer-buttons',
+  'comparison-card',
+  'choices-panel',
+  'export',
+  'source-panel',
+  'message-box',
+  'return-to-present',
+  'help'
+] as const;
+
+export type InterfacePartId = (typeof interfacePartIds)[number];
 
 /** How a part is found on the page: the match of `selector` (the last when `last`), `up` levels up. */
 export type InterfacePartLocator = { selector: string; last?: boolean; up?: number };
@@ -172,4 +177,16 @@ export function interfacePartsFor(
     const description = descriptions[mode];
     return description ? [{ id, name, description }] : [];
   });
+}
+
+/**
+ * A reply's reference to an interface part, as the system shows it: kept where its interface has
+ * the part, otherwise the part's name as plain text.
+ */
+export function interfaceReferenceFor(
+  part: InterfacePartId,
+  mode: VisualizationMode
+): MessageContentSegment {
+  const { name, descriptions } = interfacePart(part);
+  return descriptions[mode] ? { type: 'interface-ref', part } : { type: 'markdown', text: name };
 }

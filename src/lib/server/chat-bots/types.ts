@@ -8,6 +8,7 @@ import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 import * as v from 'valibot';
 
+import { interfacePartIds } from '$lib/shared/interface-parts';
 import { presentationIdSchema } from '$lib/shared/presentations';
 import { textSchema } from '$lib/shared/projects/events/values';
 
@@ -24,7 +25,9 @@ export type ConversationMessage = {
 export const generatedMessageSegmentSchema = v.variant('type', [
   v.strictObject({ type: v.literal('markdown'), text: textSchema }),
   v.strictObject({ type: v.literal('presentation-ref'), presentationId: presentationIdSchema }),
-  v.strictObject({ type: v.literal('candidate-ref'), slot: v.picklist([0, 1]) })
+  v.strictObject({ type: v.literal('candidate-ref'), slot: v.picklist([0, 1]) }),
+  // Any part's id; one the system's interface lacks is shown as the part's name.
+  v.strictObject({ type: v.literal('interface-ref'), part: v.picklist(interfacePartIds) })
 ]);
 
 export const generatedMessageContentSchema = v.pipe(
@@ -100,6 +103,15 @@ export const generatedMessageContentJsonSchema = {
           slot: { type: 'integer', enum: [0, 1] }
         },
         required: ['type', 'slot']
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          type: { type: 'string', enum: ['interface-ref'] },
+          part: { type: 'string', enum: [...interfacePartIds] }
+        },
+        required: ['type', 'part']
       }
     ]
   }

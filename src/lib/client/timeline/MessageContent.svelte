@@ -14,6 +14,8 @@
   import { sourceLinksContext } from '$lib/client/projects/source-links.svelte';
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
   import { knownCandidate } from '$lib/client/visualization/presentation-history';
+  import { clearHighlight, highlightPart } from '$lib/client/tour/spotlight.svelte';
+  import { interfacePart } from '$lib/shared/interface-parts';
 
   import {
     referenceChipDetail,
@@ -156,6 +158,27 @@
       <!-- The renderers apply the allowlist and URL policy before this HTML boundary. -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       <span class="message-markdown" {@attach !inline && linkReferences}>{@html html}</span>
+    {:else if segment.type === 'interface-ref'}
+      {@const name = interfacePart(segment.part).name}
+      <!-- A part of the workspace the reply points at: hovering, focusing or choosing it highlights
+        the part. -->
+      <span class={punctuation && 'ref-joined whitespace-nowrap'}
+        >{#if interactive && !inline}<button
+            type="button"
+            class="interface-ref mx-1 inline-flex items-center rounded-full border px-2 align-middle text-xs leading-5 font-medium"
+            title="Show the {name}"
+            onmouseenter={() => highlightPart(segment.part)}
+            onmouseleave={clearHighlight}
+            onfocus={() => highlightPart(segment.part)}
+            onblur={clearHighlight}
+            onclick={() => highlightPart(segment.part)}>{name}</button
+          >{:else}<span
+            class="interface-ref mx-1 inline-flex items-center rounded-full border px-2 align-middle text-xs leading-5 font-medium"
+            >{name}</span
+          >{/if}{#if punctuation}<span class="ref-punctuation ml-0.5">{punctuation}</span
+          >{/if}</span
+      >{after === 'space' ? ' ' : ''}{#if after === 'paragraph' && !inline}<span class="mt-2 block"
+        ></span>{/if}
     {:else}
       <!-- A pill keeps the punctuation after it on its line, without a gap before it. -->
       <span class={punctuation && 'ref-joined whitespace-nowrap'}>

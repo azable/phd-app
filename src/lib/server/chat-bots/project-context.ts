@@ -45,6 +45,7 @@ type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { stepRuns } from '$lib/shared/differing-steps';
+import { interfacePartsFor, type InterfacePartId } from '$lib/shared/interface-parts';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
@@ -248,6 +249,12 @@ export type AiProjectContext = {
   runs?: Record<string, AiLabelRuns>;
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
+  /**
+   * The parts of this system's workspace, each with its name and what it does, as the participant
+   * sees them: what an answer about using the interface draws on, pointing at a part with an
+   * interface-ref by its id.
+   */
+  interfaceParts: { id: InterfacePartId; name: string; description: string }[];
   interaction: AiInteraction;
   /**
    * The questions of the assistant's comparisons still to answer, the one showing first, each with
@@ -587,14 +594,19 @@ export function projectAiContext(
       totalEventCount: events.length,
       omittedEventCount: events.length - timelineEvents.length
     },
+    // What interfaceParts says of the controls is not repeated here: only how they bear on authoring
+    // and on reading the participant's messages.
     interfaceCapabilities: [
-      'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',
-      'The participant can select compatible retained presentations to compare a pair.',
-      'A visible pair has answer controls (prefer either side, either is fine, unsure); participants can reference retained presentations inline in messages.',
+      'The application owns the step controls; never draw replacement controls inside a visualization.',
       'A participant’s message starts with a note of what was on screen when they sent it, as (viewing presentation id at step 3, @insert.swap#1) or (comparing … with …): the number they saw in that presentation and the step’s name, as recordedSteps name it. It says where they were, not something they pointed at; a reference in their words, as [Presentation id at @insert.swap#1 (step 3)], is one they made.',
-      'Participants can select elements of a presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
-      'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
+      ...(snapshot.mode === 'sverlin'
+        ? [
+            'selected.elements traces each element a participant referenced to the <Node> tag that drew it.',
+            'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
+          ]
+        : [])
     ],
+    interfaceParts: interfacePartsFor(snapshot.mode),
     timeline: timelineEvents.map(projectAiTimelineEntry),
     selected: {
       events: selection.eventIds.map((id) => eventDetail(document, id)),

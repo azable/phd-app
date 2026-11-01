@@ -178,7 +178,7 @@
   }
 
   function activateReference(
-    reference: Exclude<MessageContentSegment, { type: 'markdown' }>,
+    reference: Exclude<MessageContentSegment, { type: 'markdown' | 'interface-ref' }>,
     extend: boolean
   ) {
     const presentation = timelinePresentations(session.events).find(

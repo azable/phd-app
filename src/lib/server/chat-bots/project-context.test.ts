@@ -87,6 +87,23 @@ describe('mode-neutral AI project context', () => {
     );
   });
 
+  it('gives each system’s assistant the parts of its own interface', () => {
+    const parts = (mode: 'sverlin' | 'html') => {
+      const value = document();
+      const created = value.events[0];
+      if (created.type === 'project.created') created.payload.creation.mode = mode;
+      return projectAiContext(value).interfaceParts.map(({ id }) => id);
+    };
+    expect(parts('sverlin')).toEqual(expect.arrayContaining(['answer-buttons', 'choices-panel']));
+    expect(parts('html')).toContain('step-controls');
+    expect(parts('html')).not.toContain('answer-buttons');
+    const [stepControls] = projectAiContext(document()).interfaceParts.filter(
+      ({ id }) => id === 'step-controls'
+    );
+    expect(stepControls).toMatchObject({ name: 'Step controls' });
+    expect(stepControls.description).toMatch(/Previous and Next/u);
+  });
+
   it('exposes presentation steps and preference interaction without executable bytes', () => {
     const value = document();
     const presentationId = '12345678-1234-4123-8123-123456789ac1';

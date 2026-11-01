@@ -33,6 +33,7 @@ import {
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { differingSteps } from '$lib/shared/differing-steps';
+import { interfaceReferenceFor } from '$lib/shared/interface-parts';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
 import {
   getChatbot,
@@ -2207,6 +2208,7 @@ function resolveAssistantContent(
   const knownPresentationIds = document.events.flatMap((event) =>
     event.type === 'visualization.presented' ? [event.payload.presentation.presentationId] : []
   );
+  const { mode } = projectSnapshotAt(document);
   const content: MessageContent = structureKnownPresentationReferences(
     reply,
     knownPresentationIds
@@ -2217,6 +2219,7 @@ function resolveAssistantContent(
         ? { type: 'presentation-ref', presentationId }
         : { type: 'markdown', text: 'that presentation' };
     }
+    if (segment.type === 'interface-ref') return interfaceReferenceFor(segment.part, mode);
     if (segment.type !== 'candidate-ref') return segment;
     const presentation = candidates[segment.slot];
     if (!presentation) {
@@ -2312,6 +2315,7 @@ function generatedReplyText(reply: GeneratedMessageContent): string {
     .map((segment) => {
       if (segment.type === 'markdown') return segment.text;
       if (segment.type === 'presentation-ref') return `[Presentation ${segment.presentationId}]`;
+      if (segment.type === 'interface-ref') return `[Interface part ${segment.part}]`;
       return `[Candidate ${segment.slot + 1}]`;
     })
     .join(' ');
@@ -2618,6 +2622,8 @@ async function validateMessageContent(
   const known = new Set(presentations);
   for (const segment of content) {
     if (segment.type === 'markdown') continue;
+    if (segment.type === 'interface-ref')
+      throw new Error('Only the assistant’s replies point at the interface.');
     if (!known.has(segment.presentationId)) {
       throw new Error(`Unknown referenced presentation ${segment.presentationId}.`);
     }
@@ -2626,7 +2632,9 @@ async function validateMessageContent(
       validateReferencedStep(document, segment.presentationId, segment.step);
   }
   return content.map((segment) =>
-    segment.type === 'markdown' ? segment : named(document, segment)
+    segment.type === 'markdown' || segment.type === 'interface-ref'
+      ? segment
+      : named(document, segment)
   );
 }
 
@@ -2659,10 +2667,9 @@ function viewedPresentations(viewing: FeedbackViewing | undefined): string[] {
 }
 
 /** A reference at a step, named as its presentation names the step, where it does. */
-function named<Reference extends Exclude<MessageContent[number], { type: 'markdown' }>>(
-  document: ProjectDocument,
-  reference: Reference
-): Reference {
+function named<
+  Reference extends Exclude<MessageContent[number], { type: 'markdown' | 'interface-ref' }>
+>(document: ProjectDocument, reference: Reference): Reference {
   const presentation = document.events.find(
     (event) =>
       event.type === 'visualization.presented' &&
@@ -2721,7 +2728,11 @@ function referencedElements(content: MessageContent): ElementReference[] {
 function referencedPresentations(content: MessageContent): string[] {
   return [
     ...new Set(
-      content.flatMap((segment) => (segment.type === 'markdown' ? [] : [segment.presentationId]))
+      content.flatMap((segment) =>
+        segment.type === 'markdown' || segment.type === 'interface-ref'
+          ? []
+          : [segment.presentationId]
+      )
     )
   ];
 }

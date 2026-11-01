@@ -480,7 +480,12 @@ interface, reopened from a help button, and one-time hints the first time
 comparisons, Choices, version tags or a past moment appear
 ([`src/lib/client/tour/`](src/lib/client/tour/)), all drawn from one list of the
 workspace's parts with plain descriptions per system
-([`interface-parts.ts`](src/lib/shared/interface-parts.ts)).
+([`interface-parts.ts`](src/lib/shared/interface-parts.ts)). Each system's
+assistant is given its system's parts as `interfaceParts` and, asked how to use
+the interface, may point at one with an `interface-ref` segment, recorded in its
+reply and shown as a pill with the part's name that highlights the part on hover
+or click; one its system lacks is recorded as the part's name in words, and a
+participant's message cannot carry one.
 
 New blank projects start by asking which algorithm to visualise before
 authoring, inviting the participant to say who it is for and whether to ask a
