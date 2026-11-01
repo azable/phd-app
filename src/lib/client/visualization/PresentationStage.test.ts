@@ -94,6 +94,30 @@ describe('presentation stage showing a comparison from the timeline', () => {
   });
 });
 
+describe('presentation stage showing where a pair differs', () => {
+  const differing = () => askedPair(['Start', 'Check 1', 'Check 2', 'Found'], [1, 2]);
+
+  it('opens a current comparison at its first difference, naming the steps that differ', () => {
+    const body = stage(differing(), false);
+    expect(body).toContain('Step 2 of 4');
+    expect(body).toMatch(/Differs at steps\s+2–3/u);
+    expect(disabled(body, 'Previous step that differs')).toBe(true);
+    expect(disabled(body, 'Next step that differs')).toBe(false);
+  });
+
+  it('opens a comparison from the timeline at its first difference too', () => {
+    const body = stage([...differing(), setAside(3)], false, true);
+    expect(body).toContain('Step 2 of 4');
+    expect(body).toMatch(/Differs at steps\s+2–3/u);
+  });
+
+  it('says nothing of differences where the server did not record them', () => {
+    const body = stage(askedPair(), false);
+    expect(body).toContain('Step 1 of 2');
+    expect(body).not.toContain('Differs at');
+  });
+});
+
 const ids = [1, 2].map((id) => `12345678-1234-4123-8123-123456789ac${id}`);
 
 function answered(id: number, answer: object): ProjectEvent {
@@ -155,7 +179,7 @@ function disabled(body: string, label: string): boolean {
   return /\sdisabled(=""|(?=[\s>]))/.test(tag);
 }
 
-function askedPair(): ProjectEvent[] {
+function askedPair(labels = ['Start', 'Result'], differsAt?: number[]): ProjectEvent[] {
   return [1, 2].map((id) => ({
     id,
     type: 'visualization.presented',
@@ -166,12 +190,13 @@ function askedPair(): ProjectEvent[] {
       displaySetId,
       slot: (id - 1) as 0 | 1,
       question: 'Cells or tallies?',
+      ...(differsAt ? { differsAt } : {}),
       presentation: {
         presentationId: `12345678-1234-4123-8123-123456789ac${id}`,
         format: 'browser-bundle-v1',
         mode: 'sverlin',
         stepSignature: 'shared-steps',
-        labels: ['Start', 'Result'],
+        labels,
         seed: id,
         source: { text: 'source', sha256: 'a'.repeat(64), mediaType: 'text/x-svelte' },
         html: { text: '', sha256: '0'.repeat(64), mediaType: 'text/html' },

@@ -5,6 +5,8 @@
   import CheckIcon from '@lucide/svelte/icons/check';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+  import ChevronsLeftIcon from '@lucide/svelte/icons/chevrons-left';
+  import ChevronsRightIcon from '@lucide/svelte/icons/chevrons-right';
   import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import DownloadIcon from '@lucide/svelte/icons/download';
   import EqualIcon from '@lucide/svelte/icons/equal';
@@ -21,6 +23,7 @@
   import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
   import { elidedName } from '$lib/client/artifacts/source-references';
   import { projectQuestions } from '$lib/shared/projects/questions';
+  import { nearestDifference, stepRanges } from '$lib/shared/differing-steps';
 
   import { type PresentationSelection } from './presentation-selection.svelte';
   import {
@@ -140,6 +143,10 @@
     const parts = elidedName(label);
     return parts ? `${parts.head}…${parts.tail}#${run}` : stepName;
   });
+  // Where a pair's sides draw differently, as the server laid them out, and the nearest either way.
+  const differsAt = $derived(playbackContext.differsAt);
+  const earlierDifference = $derived(differsAt && nearestDifference(differsAt, step, -1));
+  const laterDifference = $derived(differsAt && nearestDifference(differsAt, step, 1));
   const selectedIds = $derived(visible.map(({ presentation }) => presentation.presentationId));
   // A selection belongs to its step and its presentation; stepping or switching drops it.
   $effect(() => {
@@ -251,14 +258,48 @@
         Previous
       </Button>
       <!-- A fixed width, so the buttons stay put as the step's name changes. -->
-      <span
-        class="w-72 min-w-0 truncate text-center text-sm whitespace-nowrap text-muted-foreground"
-        title={stepName}
-      >
-        {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
-            class="mx-1">·</span
-          ><code class="font-mono text-xs">{shownStepName}</code>{/if}
-      </span>
+      <div class="flex w-72 min-w-0 flex-col items-center">
+        <span
+          class="w-full truncate text-center text-sm whitespace-nowrap text-muted-foreground"
+          title={stepName}
+        >
+          {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
+              class="mx-1">·</span
+            ><code class="font-mono text-xs">{shownStepName}</code>{/if}
+        </span>
+        {#if differsAt?.length}
+          <!-- Where the pair differs, the only steps worth comparing, and a jump to the nearest. -->
+          <span
+            class="flex max-w-full items-center gap-1 text-xs text-muted-foreground"
+            data-replay-region="differing-steps"
+          >
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Previous step that differs"
+              title="Previous step that differs"
+              onclick={() => earlierDifference !== undefined && seek(earlierDifference)}
+              disabled={earlierDifference === undefined}
+            >
+              <ChevronsLeftIcon />
+            </Button>
+            <span class="truncate">
+              Differs at step{differsAt.length > 1 ? 's' : ''}
+              {stepRanges(differsAt)}
+            </span>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Next step that differs"
+              title="Next step that differs"
+              onclick={() => laterDifference !== undefined && seek(laterDifference)}
+              disabled={laterDifference === undefined}
+            >
+              <ChevronsRightIcon />
+            </Button>
+          </span>
+        {/if}
+      </div>
       <Button
         size="lg"
         variant="outline"

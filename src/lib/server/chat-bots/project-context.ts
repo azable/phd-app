@@ -44,6 +44,7 @@ import {
 type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
+import { stepRuns } from '$lib/shared/differing-steps';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
@@ -167,6 +168,8 @@ export type AiInteraction =
        * alternative are then the pair's first and second.
        */
       outcome?: 'tie' | 'skip';
+      /** For a comparison, the steps at which its two sides draw differently, where known. */
+      differsAt?: string;
     }
   | {
       kind: 'batch';
@@ -180,6 +183,7 @@ export type AiInteraction =
         question?: string;
         answer?: string;
         outcome?: 'tie' | 'skip';
+        differsAt?: string;
       }>;
     };
 
@@ -245,7 +249,10 @@ export type AiProjectContext = {
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   interaction: AiInteraction;
-  /** The questions of the assistant's comparisons still to answer, the one showing first. */
+  /**
+   * The questions of the assistant's comparisons still to answer, the one showing first, each with
+   * the steps at which its two sides draw differently, where known.
+   */
   waitingComparisons?: string[];
   /**
    * What the preference model believes from every answer so far (preference-summary.ts): each
@@ -402,7 +409,10 @@ export function projectConversationMessages(
       return [{ role: 'user', content: preferenceMessage(event, variants, questions) }];
     if (event.type === 'visualization.runtime-failed' && reverted.has(event.payload.presentationId))
       return [];
-    const messages = matchProjectEvent<ConversationMessage[]>(event, conversationCases);
+    const messages =
+      event.type === 'feedback.submitted'
+        ? [{ role: 'user' as const, content: feedbackMessage(event, questions) }]
+        : matchProjectEvent<ConversationMessage[]>(event, conversationCases);
     // A question is read with its reply, and an answer with its question.
     const question =
       event.type === 'assistant.responded'
@@ -461,8 +471,17 @@ export function variantDifferences(
 // A preference names at most this many differences in the conversation, the rest counted.
 const namedDifferences = 12;
 
-/** The question a presentation's pair asked, and what the participant would call its side. */
-type PresentedQuestion = { question: string; label?: string };
+/**
+ * The question a presentation's pair asked, what the participant would call its side, its display
+ * set, and the steps at which the pair draws differently, with the steps' names.
+ */
+type PresentedQuestion = {
+  question: string;
+  label?: string;
+  displaySetId: string;
+  differsAt?: readonly number[];
+  stepNames: readonly string[];
+};
 
 /** The question each presentation's pair asked, by its id, for an assistant's comparisons. */
 function presentedQuestions(events: readonly ProjectEvent[]): Map<string, PresentedQuestion> {
@@ -474,7 +493,10 @@ function presentedQuestions(events: readonly ProjectEvent[]): Map<string, Presen
               event.payload.presentation.presentationId,
               {
                 question: event.payload.question,
-                ...(event.payload.label ? { label: event.payload.label } : {})
+                ...(event.payload.label ? { label: event.payload.label } : {}),
+                displaySetId: event.payload.displaySetId,
+                ...(event.payload.differsAt ? { differsAt: event.payload.differsAt } : {}),
+                stepNames: presentationStepLabels(event.payload.presentation)
               }
             ] as const
           ]
@@ -532,7 +554,11 @@ export function projectAiContext(
   // Load reports are diagnostics for developers, not part of the project's story.
   const events = document.events.filter(({ type }) => type !== 'visualization.loaded');
   const timelineEvents = events.slice(-recentTimelineEventLimit);
-  const waiting = waitingComparisons(document).map(({ question }) => question);
+  const asked = presentedQuestions(document.events);
+  const waiting = waitingComparisons(document).map(({ question, presentationIds: [first] }) => {
+    const differs = differencesText(asked.get(first ?? ''));
+    return differs ? `${question} (${differs})` : question;
+  });
   const design = designVariables(viewedPresentation(document, selection.interactionEventIds ?? []));
   const brief = projectBrief(document.events);
   const preferences = preferenceSummary(document.events, design, briefSteering(brief));
@@ -608,11 +634,13 @@ function assistantInteraction(
       throw new Error('The preference interaction has no alternative presentation.');
     }
     const { question, label } = questions.get(preferred) ?? {};
+    const differs = differencesText(questions.get(preferred));
     return [
       {
         ...(question ? { question } : {}),
         ...(label && outcome === 'preferred' ? { answer: label } : {}),
         ...(outcome === 'preferred' ? {} : { outcome }),
+        ...(differs ? { differsAt: differs } : {}),
         eventId: event.id,
         preferredPresentationId: preferred,
         alternativePresentationId,
@@ -765,24 +793,60 @@ function runtimeFailureText(event: ProjectEventOf<'visualization.runtime-failed'
   return `Presentation ${presentationId} failed while drawing ${step === undefined ? 'a step' : `step ${step + 1}`}: ${message}`;
 }
 
-function feedbackMessage(event: ProjectEventOf<'feedback.submitted'>): string {
+function feedbackMessage(
+  event: ProjectEventOf<'feedback.submitted'>,
+  questions: ReadonlyMap<string, PresentedQuestion> = new Map()
+): string {
   const { viewing } = event.payload;
   const said = plainMessageText(event.payload.content);
-  const details = [viewing ? `${viewingNote(viewing)}\n${said}` : said];
+  const details = [viewing ? `${viewingNote(viewing, questions)}\n${said}` : said];
   if (event.payload.focus.length > 0) {
     details.push(`Focused timeline events: ${event.payload.focus.join(', ')}`);
   }
   return details.filter(Boolean).join('\n\n');
 }
 
-/** What was on screen when a message was sent, as the note before it. */
-function viewingNote(viewing: FeedbackViewing): string {
+/**
+ * What was on screen when a message was sent, as the note before it; for one of the assistant's
+ * comparisons, with the steps at which its two sides draw differently.
+ */
+function viewingNote(
+  viewing: FeedbackViewing,
+  questions: ReadonlyMap<string, PresentedQuestion>
+): string {
   if ('source' in viewing) return `(viewing source ${viewing.source} on its own)`;
   const [first, second] = viewing.presentations.map(
     ({ presentationId, step, stepName }) =>
       `presentation ${presentationId}${step === undefined ? '' : ` at step ${step + 1}${stepName ? `, ${stepName}` : ''}`}`
   );
-  return second ? `(comparing ${first} with ${second})` : `(viewing ${first})`;
+  if (!second) return `(viewing ${first})`;
+  const [left, right] = viewing.presentations.map(({ presentationId }) =>
+    questions.get(presentationId)
+  );
+  const differs =
+    left && left.displaySetId === right?.displaySetId ? differencesText(left) : undefined;
+  return `(comparing ${first} with ${second}${differs ? `; ${differs}` : ''})`;
+}
+
+/**
+ * Where a comparison's two sides draw differently, as the server laid them out, each run of steps
+ * with its first and last step's names: “the two draw differently only at steps 3–9 (@a#1 to
+ * @b#2), alike at every other step”. None where the server did not lay them out.
+ */
+function differencesText(asked: PresentedQuestion | undefined): string | undefined {
+  if (!asked?.differsAt) return undefined;
+  if (!asked.differsAt.length) return 'the two draw the same at every step';
+  const named = (step: number) => asked.stepNames[step] ?? `step ${step + 1}`;
+  const runs = stepRuns(asked.differsAt).map(([first, last]) =>
+    first === last
+      ? `${first + 1} (${named(first)})`
+      : `${first + 1}–${last + 1} (${named(first)} to ${named(last)})`
+  );
+  const several = asked.differsAt.length > 1;
+  const all = asked.differsAt.length === asked.stepNames.length;
+  return all
+    ? 'the two draw differently at every step'
+    : `the two draw differently only at step${several ? 's' : ''} ${new Intl.ListFormat('en', { type: 'conjunction' }).format(runs)}, alike at every other step`;
 }
 
 function presentationSummary(

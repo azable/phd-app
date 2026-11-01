@@ -442,6 +442,79 @@ describe('comparisons in the conversation', () => {
       });
   }
 
+  it('says where a compared pair draws differently, by its steps’ names, as the server found', () => {
+    const value = document();
+    const ids: [string, string] = [
+      '12345678-1234-4123-8123-123456789ac1',
+      '12345678-1234-4123-8123-123456789ac2'
+    ];
+    const displaySetId = '12345678-1234-4123-8123-123456789abd';
+    const at = value.events.length;
+    for (const [slot, id] of ids.entries())
+      value.events.push({
+        id: at + slot + 1,
+        type: 'visualization.presented',
+        operationId,
+        actor: { kind: 'system' },
+        createdAt: `2026-01-01T00:00:0${slot + 4}.000Z`,
+        payload: {
+          displaySetId,
+          slot: slot as 0 | 1,
+          question: 'How large should the marker be?',
+          label: slot ? 'larger' : 'smaller',
+          differsAt: [1, 2, 4],
+          presentation: {
+            presentationId: id,
+            format: 'browser-bundle-v1',
+            mode: 'sverlin',
+            stepSignature: 'shared',
+            labels: ['start', '@scan.check#1', '@scan.check#2', '@found#1', '@done#1', 'end'],
+            seed: slot + 1,
+            source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
+            html: recorded('', 'text/html'),
+            javascript: recorded('', 'text/javascript'),
+            variant: { 'Marker.size': slot ? 1.5 : 1.25 }
+          }
+        }
+      });
+    value.events.push(
+      {
+        id: at + 3,
+        type: 'feedback.submitted',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:06.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Is there a difference?' }],
+          focus: [],
+          viewing: {
+            presentations: [
+              { presentationId: ids[0], step: 0, stepName: 'start' },
+              { presentationId: ids[1], step: 0, stepName: 'start' }
+            ]
+          }
+        }
+      },
+      {
+        id: at + 4,
+        type: 'visualization.preference-recorded',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:07.000Z',
+        payload: { displaySetId, presentations: ids, preferred: ids[1], step: 1 }
+      }
+    );
+    const differs =
+      'the two draw differently only at steps 2–3 (@scan.check#1 to @scan.check#2) and 5 (@done#1), alike at every other step';
+
+    expect(projectConversationMessages(value.events)[0].content).toBe(
+      `(comparing presentation ${ids[0]} at step 1, start with presentation ${ids[1]} at step 1, start; ${differs})\nIs there a difference?`
+    );
+    expect(
+      projectAiContext(value, { eventIds: [], interactionEventIds: [at + 4] }).interaction
+    ).toMatchObject({ kind: 'preference', differsAt: differs });
+  });
+
   it('reads either is fine as the two being equally good, with the model’s summary', () => {
     const value = document();
     const ids: [string, string] = [

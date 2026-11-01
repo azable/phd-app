@@ -91,6 +91,8 @@ export type TimelinePresentation = {
   presentation: RenderablePresentation;
   /** The question its pair asks, for an assistant's comparison. */
   question?: string;
+  /** With a question, the steps at which its pair draws differently, where the server knew. */
+  differsAt?: readonly number[];
 };
 
 /** A 32-bit FNV-1a hash of text. */
@@ -177,7 +179,8 @@ export function timelinePresentations(events: readonly ProjectEvent[]): Timeline
           displaySetId: event.payload.displaySetId,
           slot: event.payload.slot,
           presentation: event.payload.presentation,
-          ...(event.payload.question ? { question: event.payload.question } : {})
+          ...(event.payload.question ? { question: event.payload.question } : {}),
+          ...(event.payload.differsAt ? { differsAt: event.payload.differsAt } : {})
         }
       ];
     }

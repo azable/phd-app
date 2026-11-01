@@ -77,6 +77,35 @@ describe('presentation playback', () => {
     expect(presentationHeld(context, fine.presentation.presentationId, 1)).toBe(false);
   });
 
+  it('opens a pair at the first step its sides differ, only the first time it is shown', () => {
+    const playback = new PresentationPlayback();
+    const differing = (id: number) => ({
+      ...presentation(id, 'a'.repeat(64), 6),
+      differsAt: [2, 3]
+    });
+    const pair = presentationPlaybackContext([differing(1), differing(2)]);
+    expect(pair.differsAt).toEqual([2, 3]);
+    expect(playback.stepFor(pair)).toBe(2);
+    playback.activate(pair);
+    expect(playback.stepFor(pair)).toBe(2);
+    playback.seek(pair, 5);
+    const single = presentationPlaybackContext([presentation(3, 'a'.repeat(64), 6)]);
+    playback.activate(single);
+    playback.activate(pair);
+    expect(playback.stepFor(pair)).toBe(5);
+    // A pair never shown opens at its own first difference.
+    const other = presentationPlaybackContext([differing(4), differing(5)]);
+    playback.activate(other);
+    expect(playback.stepFor(other)).toBe(2);
+  });
+
+  it('counts a pair’s differences in shared steps where one side omits a step', () => {
+    const fine = { ...aligned(1, ['Start', 'A', 'B', 'End'], [0, 1, 2, 3]), differsAt: [2] };
+    const coarse = { ...aligned(2, ['Start', 'B', 'End'], [0, 2, 3]), differsAt: [2] };
+    expect(presentationPlaybackContext([fine, coarse]).differsAt).toEqual([2]);
+    expect(presentationPlaybackContext([fine]).differsAt).toBeUndefined();
+  });
+
   it('falls back to positional alignment without shared master steps', () => {
     const left = aligned(1, ['A', 'B', 'C'], [0, 1, 2]);
     const right = { ...aligned(2, ['A', 'B'], [0, 1]) };

@@ -283,7 +283,10 @@ its ids and anything under a pixel left out
 of an assistant's comparison are compared step by step
 ([`differing-steps.ts`](src/lib/shared/differing-steps.ts)): a pair drawing
 alike at every step goes back to the assistant as a comparison it cannot ask,
-and the steps where a pair differs are recorded with it.
+and the steps where a pair differs are recorded with it: the stage opens the
+pair at the first of them and names them under its step counter, with buttons to
+the nearest either way, and the assistant is told them with the participant's
+messages about the pair.
 
 Choose the visualization mode before a starting template on the Projects page or
 in the workspace's **New project** dialog. HTML and HTML/JavaScript modes offer

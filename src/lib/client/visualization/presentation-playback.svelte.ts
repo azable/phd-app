@@ -1,6 +1,6 @@
 /** Reactive, mode-neutral playback position for one or two retained presentations. */
 
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 import { alignPresentationFrames, presentationScenarioKey } from '$lib/shared/presentations';
 import type { TimelinePresentation } from './presentation-history';
@@ -17,6 +17,9 @@ export type PresentationPlaybackContext = {
   key: string;
   stepCount: number;
   frames: readonly PresentationPlaybackFrame[];
+  /** For a pair, which pair it is, and the frames at which its sides draw differently, if known. */
+  pair?: string;
+  differsAt?: readonly number[];
 };
 
 export function presentationPlaybackContext(
@@ -30,12 +33,24 @@ export function presentationPlaybackContext(
     presentation.format === 'browser-bundle-v1' ? presentationScenarioKey(presentation) : undefined
   );
   const sameSource = scenarios.every((key) => key !== undefined && key === scenarios[0]);
+  const ids = presentations.map(({ presentation }) => presentation.presentationId);
+  const [first, second] = presentations;
+  // A pair's differences are counted in each side's own steps, the same on both sides.
+  const differsAt =
+    presentations.length === 2 && first.differsAt && second.differsAt
+      ? first.differsAt.flatMap((local) => {
+          const frame = frames.findIndex(
+            ({ localSteps, held }) =>
+              localSteps[ids[0]] === local && !held.includes(ids[0]) && !held.includes(ids[1])
+          );
+          return frame < 0 ? [] : [frame];
+        })
+      : undefined;
   return {
-    key: sameSource
-      ? `source:${scenarios[0]}`
-      : `presentations:${presentations.map(({ presentation }) => presentation.presentationId).join(':')}`,
+    key: sameSource ? `source:${scenarios[0]}` : `presentations:${ids.join(':')}`,
     stepCount: frames.length,
-    frames
+    frames,
+    ...(differsAt ? { pair: ids.join(':'), differsAt } : {})
   };
 }
 
@@ -61,8 +76,16 @@ export class PresentationPlayback {
   #step = $state(0);
   /** The step each context was last left at, so returning to one shows it there again. */
   #lastSteps = new SvelteMap<string, number>();
+  /** The pairs shown, each opened at its first difference only the first time. */
+  #openedPairs = new SvelteSet<string>();
 
   activate(context: PresentationPlaybackContext): void {
+    const opening = this.#firstDifference(context);
+    if (opening !== undefined && context.pair) {
+      this.#openedPairs.add(context.pair);
+      this.seek(context, opening);
+      return;
+    }
     if (this.#contextKey !== context.key) {
       this.#contextKey = context.key;
       this.#step = this.#lastStep(context);
@@ -72,6 +95,8 @@ export class PresentationPlayback {
   }
 
   stepFor(context: PresentationPlaybackContext): number {
+    const opening = this.#firstDifference(context);
+    if (opening !== undefined) return opening;
     return this.#contextKey === context.key
       ? clampStep(this.#step, context.stepCount)
       : this.#lastStep(context);
@@ -82,6 +107,13 @@ export class PresentationPlayback {
     this.#step = clampStep(step, context.stepCount);
     this.#lastSteps.set(context.key, this.#step);
     return this.#step;
+  }
+
+  /** Where a pair never shown before opens: the first step at which its sides draw differently. */
+  #firstDifference(context: PresentationPlaybackContext): number | undefined {
+    if (!context.pair || !context.differsAt?.length || this.#openedPairs.has(context.pair))
+      return undefined;
+    return clampStep(context.differsAt[0], context.stepCount);
   }
 
   #lastStep(context: PresentationPlaybackContext): number {

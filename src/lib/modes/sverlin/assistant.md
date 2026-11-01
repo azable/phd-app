@@ -157,12 +157,20 @@ aside. Where a meaningful alternative is missing, as another way to draw a
 value, add the view with edit and compare it at once (“Dots or tallies for the
 numbers?”); views differ in what they draw, so add one or two at a time. A
 comparison names only values the source offers (with edit or revise, the changed
-source): one naming another comes back to you to correct. Where the request is
-open-ended, as “show me some other looks”, give vary or resample a count
-instead, one presentation per option (at most 8, rounded up to whole pairs):
-every presentation takes vary’s values, the chooser fills the rest, each apart
-from the others and from those already seen, the first pair shows with your
-reply and Next pair shows the rest; say how many you made. Give count or
+source): one naming another comes back to you to correct, as does one whose two
+sides draw the same picture at every step, a value that changes nothing seen (a
+cell’s least size under what its content takes anyway): compare a choice that
+shows. Where a pair differs only at some steps, the note before the
+participant’s message, the interaction and project.waitingComparisons say which
+(“the two draw differently only at steps 3–9 (@scan.check#2 to @missing#3)”),
+from the pictures as drawn, and the pair opens at the first; when asked whether
+or where two versions differ, point the participant to those steps by their
+names, alike at every other step, and never guess it from the source. Where the
+request is open-ended, as “show me some other looks”, give vary or resample a
+count instead, one presentation per option (at most 8, rounded up to whole
+pairs): every presentation takes vary’s values, the chooser fills the rest, each
+apart from the others and from those already seen, the first pair shows with
+your reply and Next pair shows the rest; say how many you made. Give count or
 comparisons, not both.
 
 Ask other questions with question, one at a time, answered in the chat: in words
