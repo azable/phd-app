@@ -16,12 +16,12 @@ describe('chatbot registry', () => {
     expect(assistantIntroduction('sverlin-assistant')).toEqual({
       botId: 'sverlin-assistant',
       step: 'algorithm',
-      text: 'What algorithm would you like to visualise?'
+      text: 'What algorithm would you like to visualise? If you like, tell me who it’s for, and whether you’d like me to ask a few questions first or start with a first version.'
     });
     expect(assistantIntroduction('html-assistant')).toEqual({
       botId: 'html-assistant',
       step: 'algorithm',
-      text: 'What algorithm would you like to visualise?'
+      text: 'What algorithm would you like to visualise? If you like, tell me who it’s for, and whether you’d like me to ask a few questions first or start with a first version.'
     });
     expect(assistantIntroduction('html-js-assistant')).toMatchObject({
       botId: 'html-js-assistant',

@@ -45,8 +45,12 @@ export type BriefAttribute = {
   /** The question, in the participant's words. */
   question: string;
   why: string;
-  /** The design choices it bears on, or the inputs a source is run on (Stage 4). */
-  bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject';
+  /**
+   * The design choices it bears on, the inputs a source is run on (Stage 4), the subject, or the
+   * conversation: how the participant likes to work, which steers what the assistant asks and
+   * offers rather than any choice.
+   */
+  bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject' | 'conversation';
   /**
    * How it is best asked: in words; by showing, a comparison whose sides stand for its tags, the
    * pick setting it (see projectBrief); or both, what a picture shows by a comparison (a label's
@@ -55,6 +59,8 @@ export type BriefAttribute = {
   asked: 'words' | 'showing' | 'both';
   /** Asked by intake, before the first version. */
   intake?: true;
+  /** Intake's message asking it, when it also invites more than the question does. */
+  opening?: string;
   /**
    * Asked as soon as there is a version, before any comparison, while unknown: what the first
    * reply asks, unless the request already said it.
@@ -62,6 +68,8 @@ export type BriefAttribute = {
   askFirst?: true;
   /** Asked once, late: once the first version and the most important questions are settled. */
   later?: true;
+  /** Asked with the first alternatives offered, after a version is shown, so it is concrete. */
+  withAlternatives?: true;
   /** The tag that holds while it is unknown, steering as if inferred: its default. */
   assumed?: string;
   /** Values the assistant can name it by, each with how it steers. */
@@ -81,6 +89,8 @@ export const briefAttributes = [
   {
     key: 'algorithm',
     question: 'What algorithm would you like to visualise?',
+    opening:
+      'What algorithm would you like to visualise? If you like, tell me who it’s for, and whether you’d like me to ask a few questions first or start with a first version.',
     why: 'Everything drawn follows from the algorithm and its steps.',
     bearsOn: 'subject',
     asked: 'words',
@@ -206,6 +216,28 @@ export const briefAttributes = [
     bearsOn: 'inputs',
     asked: 'words',
     tags: { usual: {}, edge: {} }
+  },
+  // How the participant likes to work, in two parts (plan, Stage 5): each a starting point they can
+  // change at any time, with a default.
+  {
+    key: 'questions',
+    question: 'Would you like me to ask a few questions first, or start with a first version?',
+    why: 'Some want to be asked what they want, as by an illustrator; others want a draft at once.',
+    bearsOn: 'conversation',
+    asked: 'words',
+    assumed: 'draft-first',
+    tags: { 'questions-first': {}, 'draft-first': {}, 'fewer-questions': {} }
+  },
+  {
+    key: 'lead',
+    question:
+      'From here, would you like me to suggest alternatives for you to choose from, or would you rather tell me what you want and I’ll make it? You can switch any time.',
+    why: 'Some would rather judge alternatives than describe what they want; others know exactly what they want.',
+    bearsOn: 'conversation',
+    asked: 'words',
+    withAlternatives: true,
+    assumed: 'mix',
+    tags: { suggest: {}, direct: {}, mix: {} }
   }
 ] as const satisfies readonly BriefAttribute[];
 

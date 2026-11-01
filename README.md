@@ -138,13 +138,16 @@ the attributes of what the participant is trying to achieve, defined in
 those marked `askFirst`, who it is for and the key takeaway, asked one at a time
 before any comparison; those marked `later`, as low vision or printing in grey,
 asked once, late; and an `assumed` default, as tone's restrained look, steering
-while unknown), each unknown, inferred or confirmed, from intake's answers and
-the `brief` each assistant decision returns, recorded on its
-`assistant.responded`; which are worth asking or confirming now, in words or,
-for those `brief.ts` marks `asked: "showing"`, by a comparison
-(`prompt: "show"`), and, once a question in words has been asked since anything
-new was last shown, `next: "show"`, so the next turn shows a change or a
-comparison rather than asking again
+while unknown; and how the participant likes to work, `questions` (questions
+first, a draft first or fewer questions) and `lead` (suggest alternatives,
+direct it, or a mix), whose defaults and steering the context gives as
+`working`, `lead` asked with the first alternatives offered), each unknown,
+inferred or confirmed, from intake's answers and the `brief` each assistant
+decision returns, recorded on its `assistant.responded`; which are worth asking
+or confirming now, in words or, for those `brief.ts` marks `asked: "showing"`,
+by a comparison (`prompt: "show"`), and, once a question in words has been asked
+since anything new was last shown, `next: "show"`, so the next turn shows a
+change or a comparison rather than asking again
 ([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
 brief keeps out of comparisons, as colour where it must print in grey, which a
 comparison varying it is sent back to the assistant for. The brief's values
@@ -440,10 +443,13 @@ interaction-capture policy; the comments beside its limits explain their
 sampling and delivery tradeoffs.
 
 New blank projects start by asking which algorithm to visualise before
-authoring. The assistants use a bounded five-call ladder: one initial call, up
-to three repairs, and a simpler fallback that explains what it reduced. Provider
-retries are disabled. The default 180-second request ceiling and study deadline
-bound each attempt; see
+authoring, inviting the participant to say who it is for and whether to ask a
+few questions first or start with a first version (the algorithm's `opening` in
+[`brief.ts`](src/lib/shared/projects/brief.ts), shown in every mode). The
+assistants use a bounded five-call ladder: one initial call, up to three
+repairs, and a simpler fallback that explains what it reduced. Provider retries
+are disabled. The default 180-second request ceiling and study deadline bound
+each attempt; see
 [`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts),
 [`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts),
 and

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { briefKeys, type BriefItem, type BriefKey } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { briefContext, briefSteering, questionsSinceShown } from './brief-context';
+import { briefContext, briefSteering, conversationState } from './brief-context';
 import { openChoices, preferenceSummary } from './preference-summary';
 import type { AiDesign } from './project-context';
 
@@ -154,7 +154,9 @@ describe('the brief in the assistant’s context', () => {
     );
     expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([
       expect.objectContaining({ key: 'audience', prompt: 'ask', first: true }),
-      expect.objectContaining({ key: 'focus', prompt: 'ask', first: true })
+      expect.objectContaining({ key: 'focus', prompt: 'ask', first: true }),
+      // Whether to suggest alternatives, asked with the first offered.
+      expect.objectContaining({ key: 'lead', prompt: 'ask', withAlternatives: true })
     ]);
     expect(context.attributes.find(({ key }) => key === 'audience')).not.toHaveProperty('decides');
     // Asked in the attributes' order, one at a time.
@@ -218,7 +220,8 @@ describe('at most one question in words between things shown', () => {
   const shown = { type: 'visualization.presented', payload: {} };
   const asked = { type: 'assistant.responded', payload: { question: { text: 'Who is it for?' } } };
   const replied = { type: 'assistant.responded', payload: {} };
-  const count = (events: object[]) => questionsSinceShown(events as ProjectEvent[]);
+  const count = (events: object[]) =>
+    conversationState(events as ProjectEvent[]).questionsSinceShown;
 
   it('counts the questions asked since anything was last shown', () => {
     expect(count([])).toBe(0);
@@ -230,7 +233,67 @@ describe('at most one question in words between things shown', () => {
 
   it('shows next once a question in words has been asked since', () => {
     const algorithm = { status: 'confirmed', value: 'breadth-first search' } as const;
-    expect(briefContext(brief({ algorithm }), [], 0)).not.toHaveProperty('next');
-    expect(briefContext(brief({ algorithm }), [], 1)).toMatchObject({ next: 'show' });
+    const state = (questionsSinceShown: number) => ({ questionsSinceShown, compared: false });
+    expect(briefContext(brief({ algorithm }), [], state(0))).not.toHaveProperty('next');
+    expect(briefContext(brief({ algorithm }), [], state(1))).toMatchObject({ next: 'show' });
+  });
+});
+
+describe('how the participant likes to work', () => {
+  const open = openChoices([], design);
+  const algorithm = { status: 'confirmed' as const, value: 'binary search' };
+  const byKey = (context: ReturnType<typeof briefContext>) =>
+    Object.fromEntries(context.attributes.map((item) => [item.key, item]));
+  const working = (questions: string, lead: string) =>
+    brief({
+      algorithm,
+      questions: { status: 'inferred', value: questions, tags: [questions] },
+      lead: { status: 'inferred', value: lead, tags: [lead] }
+    });
+
+  it('starts from a draft first and a mix of suggesting and directing', () => {
+    const context = briefContext(brief({ algorithm }), open);
+    expect(context.working).toEqual({ questions: 'draft-first', lead: 'mix' });
+    expect(byKey(context).questions).not.toHaveProperty('prompt');
+  });
+
+  it('asks whether to suggest alternatives with the first offered, and not after', () => {
+    const first = briefContext(brief({ algorithm }), open, {
+      questionsSinceShown: 0,
+      compared: false
+    });
+    expect(byKey(first).lead).toMatchObject({ prompt: 'ask', withAlternatives: true });
+    expect(first.askFirst).not.toContain('lead');
+    const later = briefContext(brief({ algorithm }), open, {
+      questionsSinceShown: 0,
+      compared: true
+    });
+    expect(byKey(later).lead).not.toHaveProperty('prompt');
+    const shown = { type: 'visualization.presented', payload: { question: 'Cells or tallies?' } };
+    expect(conversationState([shown] as unknown as ProjectEvent[]).compared).toBe(true);
+  });
+
+  it('asks nothing a version can be made without when they want fewer questions', () => {
+    const context = briefContext(working('fewer-questions', 'mix'), open);
+    expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([]);
+    expect(context.askFirst).toEqual([]);
+    // Only the algorithm, while unknown.
+    const none = briefContext(
+      brief({
+        questions: { status: 'inferred', value: 'just make it', tags: ['fewer-questions'] }
+      }),
+      open
+    );
+    expect(none.askFirst).toEqual(['algorithm']);
+  });
+
+  it('asks in words when they direct it, and shows what a picture answers when they want suggestions', () => {
+    const directed = byKey(briefContext(working('draft-first', 'direct'), open));
+    expect(directed.tone).toMatchObject({ prompt: 'ask', asked: 'showing' });
+    expect(directed.vocabulary).toMatchObject({ prompt: 'ask' });
+    const suggested = byKey(briefContext(working('draft-first', 'suggest'), open));
+    expect(suggested.tone).toMatchObject({ prompt: 'show' });
+    expect(suggested.vocabulary).toMatchObject({ prompt: 'show', asked: 'both' });
+    expect(suggested.focus).toMatchObject({ prompt: 'show', first: true });
   });
 });

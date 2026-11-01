@@ -18,7 +18,7 @@ export type ParticipantIntakeStep = {
  */
 export const visualizationParticipantIntake = intakeKeys.map((key) => ({
   id: key,
-  question: briefAttribute(key).question
+  question: briefAttribute(key).opening ?? briefAttribute(key).question
 })) as [ParticipantIntakeStep, ...ParticipantIntakeStep[]];
 
 export type ParticipantIntakeClassifierOutput = { decision: 'continue' | 'exit' };

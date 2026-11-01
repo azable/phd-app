@@ -7,6 +7,7 @@
 import {
   briefAttribute,
   briefKeys,
+  type BriefAttribute,
   type BriefItem,
   type BriefKey,
   type BriefSteer,
@@ -51,6 +52,8 @@ export type AiBriefItem = {
   first?: true;
   /** Unknown and asked once, late (brief.ts later). */
   later?: true;
+  /** Unknown, and asked with the first alternatives offered (brief.ts withAlternatives). */
+  withAlternatives?: true;
   /** Unknown, and its default holds meanwhile (brief.ts assumed), steering as a tag would. */
   assumed?: string;
   /** The families of open choices it bears on or steers. */
@@ -67,8 +70,26 @@ export type AiBrief = {
    * something (a change, or a comparison of preferences.showFirst) rather than asking another.
    */
   next?: 'show';
+  /**
+   * How the participant likes to work, as said or by default (brief.ts questions and lead):
+   * questions first, a draft first or fewer questions; alternatives suggested, the design directed
+   * by them, or a mix.
+   */
+  working: { questions: string; lead: string };
   /** What the brief keeps out of comparisons, and why, as “colours: it must print in grey”. */
   avoid: string[];
+};
+
+/** Where the conversation stands, from the events. */
+export type ConversationState = {
+  /**
+   * The questions in words the assistant has asked since anything new was last shown, a version
+   * or a pair: a reply is recorded after what its decision presents, so a question asked with a
+   * new version counts.
+   */
+  questionsSinceShown: number;
+  /** Whether any comparison has been offered yet. */
+  compared: boolean;
 };
 
 /**
@@ -81,18 +102,24 @@ type Rank = (typeof ranks)[number];
 /** At most this many attributes are suggested to ask at a time; they are asked one at a time. */
 const listedAskFirst = 3;
 
-/**
- * The questions in words the assistant has asked since anything new was last shown, a version or a
- * pair: a reply is recorded after what its decision presents, so a question asked with a new
- * version counts.
- */
-export function questionsSinceShown(events: readonly ProjectEvent[]): number {
-  let asked = 0;
+export function conversationState(events: readonly ProjectEvent[]): ConversationState {
+  let questionsSinceShown = 0;
+  let compared = false;
   for (const event of events) {
-    if (event.type === 'visualization.presented') asked = 0;
-    else if (event.type === 'assistant.responded' && event.payload.question) asked += 1;
+    if (event.type === 'visualization.presented') {
+      questionsSinceShown = 0;
+      compared ||= event.payload.question !== undefined;
+    } else if (event.type === 'assistant.responded' && event.payload.question)
+      questionsSinceShown += 1;
   }
-  return asked;
+  return { questionsSinceShown, compared };
+}
+
+/** A tag an attribute holds: the first it names, or while it is unknown, its default. */
+function held(brief: readonly BriefItem[], key: BriefKey): string {
+  const item = brief.find((entry) => entry.key === key);
+  const named = item?.status === 'unknown' ? undefined : item?.tags?.[0];
+  return named ?? briefAttribute(key).assumed ?? '';
 }
 
 /** The steers an attribute's tags name, or while it is unknown, its default's (brief.ts assumed). */
@@ -139,15 +166,25 @@ export function briefSteering(brief: readonly BriefItem[]): BriefSteering {
  * bear on, in order, then other unknowns bearing on open choices, the one bearing on the most worth
  * first, are worth asking, in words or, for those asked by showing (brief.ts asked), by a
  * comparison; an inferred one whose values steer or exclude open choices, worth
- * confirming; and last, unknowns asked late (brief.ts later).
- * At most one question in words comes between things shown: once one has been asked since (see
- * questionsSinceShown), the next turn shows.
+ * confirming; and last, unknowns asked late (brief.ts later). At most one question in words comes
+ * between things shown: once one has been asked since, the next turn shows.
+ *
+ * How the participant likes to work steers it: asked for fewer questions, only the subject is
+ * asked; directing the design, everything is asked in words; wanting alternatives suggested, what
+ * a picture can answer is shown. Whether they want alternatives is asked with the first offered.
  */
 export function briefContext(
   brief: readonly BriefItem[],
   open: readonly { variable: string; family: ChoiceFamily; worth: number }[],
-  askedSinceShown = 0
+  conversation: ConversationState = { questionsSinceShown: 0, compared: false }
 ): AiBrief {
+  const working = { questions: held(brief, 'questions'), lead: held(brief, 'lead') };
+  const fewer = working.questions === 'fewer-questions';
+  const promptFor = (asked: BriefAttribute['asked']) =>
+    working.lead !== 'direct' &&
+    (asked === 'showing' || (asked === 'both' && working.lead === 'suggest'))
+      ? ('show' as const)
+      : ('ask' as const);
   const whole = briefSteering(brief);
   const kept = open.filter(({ variable }) => !whole.excluded(variable));
   const ranked: { key: BriefKey; rank: Rank; worth: number }[] = [];
@@ -179,7 +216,11 @@ export function briefContext(
         ...(attribute.asked !== 'words' ? { asked: attribute.asked } : {}),
         ...(attribute.assumed ? { assumed: attribute.assumed } : {})
       };
-      if (attribute.bearsOn === 'inputs') return unknown;
+      if (attribute.bearsOn === 'inputs' || fewer) return unknown;
+      if (attribute.bearsOn === 'conversation')
+        return attribute.withAlternatives && !conversation.compared
+          ? { ...unknown, prompt: 'ask', withAlternatives: true }
+          : unknown;
       const families = attribute.bearsOn;
       const bearing = kept.filter(({ family }) => families.includes(family));
       if (!bearing.length && !attribute.askFirst) return unknown;
@@ -194,13 +235,13 @@ export function briefContext(
       const decides = families.filter((f) => bearing.some(({ family }) => family === f));
       return {
         ...unknown,
-        prompt: attribute.asked === 'showing' ? 'show' : 'ask',
+        prompt: promptFor(attribute.asked),
         ...(attribute.askFirst ? { first: true } : {}),
         ...(attribute.later ? { later: true } : {}),
         ...(decides.length ? { decides } : {})
       };
     }
-    if (item.status !== 'inferred') return base;
+    if (item.status !== 'inferred' || fewer) return base;
     const own = steering(steers(item));
     const steered = open.filter(
       ({ variable }) => own.excluded(variable) || own.weight(variable) !== 1
@@ -227,7 +268,8 @@ export function briefContext(
       .toSorted((a, b) => ranks.indexOf(a.rank) - ranks.indexOf(b.rank) || b.worth - a.worth)
       .slice(0, listedAskFirst)
       .map(({ key }) => key),
-    ...(askedSinceShown > 0 ? { next: 'show' as const } : {}),
+    ...(conversation.questionsSinceShown > 0 ? { next: 'show' as const } : {}),
+    working,
     avoid
   };
 }

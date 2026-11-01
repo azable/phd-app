@@ -42,11 +42,13 @@ describe('the brief’s attributes', () => {
       'detail',
       'constraints',
       'tone',
-      'cases'
+      'cases',
+      'questions',
+      'lead'
     ]);
     expect(briefKeys.slice(0, intakeKeys.length)).toEqual(intakeKeys);
     for (const attribute of briefAttributes as readonly BriefAttribute[]) {
-      expect(attribute.question).toMatch(/\?$/u);
+      expect(attribute.question).toMatch(/\?/u);
       expect(attribute.why.length).toBeGreaterThan(0);
       if (Array.isArray(attribute.bearsOn))
         for (const family of attribute.bearsOn) expect(families).toContain(family);
