@@ -5,12 +5,13 @@ import { linearSearchSource } from './contract';
 import bst from './fixtures/bst.sverlin?raw';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
-import { formsFor } from './library/node/forms';
+import { forms } from './library/node/forms';
 import {
   buildVariant,
   DesignValueError,
   listingRegionFallbacks,
-  listingRegionSpace
+  listingRegionSpace,
+  type VariantRequest
 } from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
@@ -260,25 +261,30 @@ describe('pauses chosen', () => {
 
 describe('free layouts', () => {
   const tree = prepareSvelteComponent(bst).design;
+  const graph = prepareSvelteComponent(bfs).design;
 
-  it('give the kind arranging one its form, curve, and layout seed', () => {
-    expect(tree.space['Heap.form']).toEqual(formsFor('tree', 'y'));
+  it('give the kind arranging one its form, direction, curve, and layout seed', () => {
+    expect(tree.space['Heap.form']).toEqual(forms);
     expect(tree.space['Heap.curve']).toEqual(['straight', 'curved']);
     expect(tree.space['Heap.layoutSeed']).toContain(1);
     expect(tree.starter).toMatchObject({
-      'Heap.form': 'tree-down',
+      'Heap.form': 'natural',
       'Heap.curve': 'straight',
       'Heap.layoutSeed': 1
     });
+    // The tree's flow sets the way it runs; a graph with none runs down unless a variant says.
+    expect(Object.hasOwn(tree.space, 'Heap.direction')).toBe(false);
+    expect(graph.space['Graph.direction']).toEqual(['down', 'right']);
+    expect(graph.starter['Graph.direction']).toBe('down');
     // Rows and columns have no such look.
     expect(Object.keys(space).filter((key) => key.endsWith('.form'))).toEqual([]);
     expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Heap.form']);
   });
 
   it('keep the layout of the variant built on unless a value changes it', () => {
-    const base = { ...tree.starter, 'Heap.form': 'indented', 'Heap.layoutSeed': 7 };
+    const base = { ...tree.starter, 'Heap.form': 'wave', 'Heap.layoutSeed': 7 };
     const paced = buildVariant(tree.space, tree.starter, { base, chosen: {} }, 99).values;
-    expect(paced).toMatchObject({ 'Heap.form': 'indented', 'Heap.layoutSeed': 7 });
+    expect(paced).toMatchObject({ 'Heap.form': 'wave', 'Heap.layoutSeed': 7 });
     const contrasted = buildVariant(
       tree.space,
       tree.starter,
@@ -286,14 +292,51 @@ describe('free layouts', () => {
       99
     ).values;
     expect(contrasted).toMatchObject({ 'Heap.form': 'snake', 'Heap.layoutSeed': 7 });
-    // A form the structure cannot take is refused, naming the ones it can.
+    // A form that is none of them is refused, naming them.
     expect(() =>
-      buildVariant(tree.space, tree.starter, { chosen: { 'Heap.form': 'ring' } }, 1)
+      buildVariant(tree.space, tree.starter, { chosen: { 'Heap.form': 'spiral' } }, 1)
     ).toThrow(DesignValueError);
   });
 
+  it('draw a form saved before every structure took every form as it drew then', () => {
+    const built = (design: typeof graph, request: VariantRequest) =>
+      buildVariant(design.space, design.starter, request, 1).values;
+    const look = (values: Record<string, unknown>, kind: string) => [
+      values[`${kind}.form`],
+      values[`${kind}.direction`]
+    ];
+    // A saved variant: its legacy form, and a sequence form running right, as it then did.
+    const saved = (form: string) => ({ ...graph.starter, 'Graph.form': form });
+    const withoutDirection = (form: string) =>
+      Object.fromEntries(Object.entries(saved(form)).filter(([key]) => key !== 'Graph.direction'));
+    for (const [form, drawn] of [
+      ['layers-down', ['natural', 'down']],
+      ['layers-right', ['natural', 'right']],
+      ['ring', ['natural', 'down']],
+      ['snake', ['snake', 'right']],
+      ['line', ['line', 'right']]
+    ] as const)
+      expect(look(built(graph, { base: withoutDirection(form) }), 'Graph'), form).toEqual(drawn);
+    // A variant saved with a direction keeps it; a chosen form keeps the base's direction unless
+    // its old name says another.
+    const down = { ...graph.starter, 'Graph.direction': 'down' };
+    expect(look(built(graph, { base: saved('snake') }), 'Graph')).toEqual(['snake', 'down']);
+    expect(look(built(graph, { base: down, chosen: { 'Graph.form': 'line' } }), 'Graph')).toEqual([
+      'line',
+      'down'
+    ]);
+    expect(
+      look(built(graph, { base: down, chosen: { 'Graph.form': 'layers-right' } }), 'Graph')
+    ).toEqual(['natural', 'right']);
+    // Where the flow sets the way, the form alone changes.
+    for (const form of ['tree-down', 'indented', 'radial'])
+      expect(look(built(tree, { base: { ...tree.starter, 'Heap.form': form } }), 'Heap')).toEqual([
+        'natural',
+        undefined
+      ]);
+  });
+
   it('give a link’s kind its route, head, and head size, which a vary keeps', () => {
-    const graph = prepareSvelteComponent(bfs).design;
     expect(graph.space['Graph.Link.route']).toEqual(['layout', 'straight', 'curved', 'wire']);
     expect(graph.space['Graph.Link.head']).toEqual([
       'none',

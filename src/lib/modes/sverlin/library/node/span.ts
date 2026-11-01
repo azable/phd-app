@@ -28,7 +28,7 @@ export type SpanInput = {
   boxes: ArrangeBox[];
   anchors: Record<string, KeyedAnchor>;
   parts: KeyedAnchor[];
-  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'curve' | 'gap'>;
+  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'direction' | 'curve' | 'gap'>;
 };
 
 /** An arrangement solved over every step, with each child's place by key. */

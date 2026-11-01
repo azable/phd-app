@@ -9,7 +9,7 @@
 
   import Arranged from './Arranged.svelte';
   import LinkOverlay from './LinkOverlay.svelte';
-  import type { Form } from './forms';
+  import type { Direction, Form } from './forms';
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
   import Overhang from './Overhang.svelte';
@@ -401,6 +401,7 @@
         <Arranged
           {flow}
           form={look('form') as Form | undefined}
+          direction={look('direction') as Direction | undefined}
           curve={look('curve') as 'straight' | 'curved' | undefined}
           layoutSeed={look('layoutSeed') as number | undefined}
           kind={__over?.kind ?? __view}

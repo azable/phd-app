@@ -537,6 +537,6 @@ it.skipIf(!enabled)(
       await formOf('none', 1200),
       await formOf('textbook', 600)
     ];
-    expect(forms).toEqual(['layers-down', 'layers-down', 'layers-down']);
+    expect(forms).toEqual(['natural', 'natural', 'natural']);
   }
 );

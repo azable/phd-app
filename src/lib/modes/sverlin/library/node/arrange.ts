@@ -7,14 +7,7 @@
 
 import { Layout } from 'webcola/dist/src/layout';
 
-import {
-  findStructure,
-  formCentres,
-  formsFor,
-  naturalForm,
-  sequenceForms,
-  type Form
-} from './forms';
+import { findStructure, formCentres, type Direction, type Form } from './forms';
 import { headDrawing, headTrim, type HeadEnds } from './heads';
 import {
   curvePath,
@@ -67,8 +60,11 @@ export type ArrangeResult = {
   choices: LayoutChoices;
 };
 
-/** The choices an arrangement drew: the form of its linked structure, if any, and how arrows curve. */
-export type LayoutChoices = { form?: Form; curve?: 'straight' | 'curved' };
+/**
+ * The choices an arrangement drew: the form of its linked structure, if any, the direction it runs
+ * where its kind sets one, and how arrows curve.
+ */
+export type LayoutChoices = { form?: Form; direction?: Direction; curve?: 'straight' | 'curved' };
 
 export type Point = { x: number; y: number };
 
@@ -81,8 +77,10 @@ export type ArrangeOptions = {
   gap: number;
   /** A random number in [0, 1) for a key, or undefined to start every child at the centre. */
   random?: (key: string) => number;
-  /** The form the linked structure takes, if it can; unset, or one it cannot take, its natural one. */
+  /** The form the linked structure takes; unset, its natural one. */
   form?: Form;
+  /** The way the linked structure runs where no flow sets it (see formCentres). */
+  direction?: Direction;
   /** Keys (see linkKey) of the links present at every step; only these decide the structure. Unset, all do. */
   permanent?: ReadonlySet<string>;
   /** Whether arrows prefer to run straight or to curve; unset, the seed draws it. */
@@ -242,8 +240,8 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
 
   // The links of a free arrangement are read for the structure they make, such as a path, a tree,
   // or a layered graph, from links present at every step only, so a link that comes and goes is
-  // drawn but does not change it. The structure takes its kind's form where it can, else its natural
-  // one, in the form's own proportions, so the same values draw the same layout wherever it is.
+  // drawn but does not change it. The structure takes its kind's form, else its natural one, in the
+  // form's own proportions, so the same values draw the same layout wherever it is.
   // A node's links are read in the order they leave it, by where they start inside it, so a tree's
   // left field leads to the child placed left of its right field's.
   const leaving = (link: (typeof laidLinks)[number]) =>
@@ -261,26 +259,16 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
           (firstFrom.get(a.source) ?? 0) - (firstFrom.get(b.source) ?? 0) || leaving(a) - leaving(b)
       )
   );
-  const along = options.flow === 'y' ? 'y' : 'x';
-  const sizeOf = (node: number) => boxes[node];
-  // Sequence forms lie along x; a vertical flow turns them, swapping each centre's axes.
-  const placedIn = (form: Form) => {
-    if (!structure) return undefined;
-    const turned = along === 'y' && (sequenceForms as readonly Form[]).includes(form);
-    const centres = formCentres(form, structure, sizeOf, {
-      room,
-      random: options.random ?? (() => 0.5)
-    });
-    return turned
-      ? new Map([...centres].map(([node, { x, y }]) => [node, { x: y, y: x }]))
-      : centres;
-  };
-  const form: Form | undefined = !structure
-    ? undefined
-    : options.form && formsFor(structure.kind, options.flow).includes(options.form)
-      ? options.form
-      : naturalForm(structure.kind, options.flow);
-  const formed = form ? placedIn(form) : undefined;
+  const form: Form | undefined = structure ? (options.form ?? 'natural') : undefined;
+  const formed =
+    structure && form
+      ? formCentres(form, structure, (node) => boxes[node], {
+          room,
+          random: options.random ?? (() => 0.5),
+          flow: options.flow,
+          direction: options.direction
+        })
+      : undefined;
   const inStructure = new Set(formed ? formed.keys() : []);
 
   // Along a flow, each directed link's target anchor sits at least a link's length further along
@@ -594,7 +582,11 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     width: Math.max(...drawn.map((box) => box.right)) - outerLeft,
     height: Math.max(...drawn.map((box) => box.bottom)) - outerTop,
     problems,
-    choices: { ...(form ? { form } : {}), ...(options.curve ? { curve: options.curve } : {}) }
+    choices: {
+      ...(form ? { form } : {}),
+      ...(form && options.direction ? { direction: options.direction } : {}),
+      ...(options.curve ? { curve: options.curve } : {})
+    }
   };
 }
 

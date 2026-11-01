@@ -214,7 +214,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const { page, errors } = await open(cards, {
-      'Graph.form': 'layers-down',
+      'Graph.form': 'natural',
       'Graph.Link.route': 'wire'
     });
     const wires = await page.evaluate((layer) => {

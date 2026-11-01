@@ -17,7 +17,7 @@
   } from '../type-context';
   import type { ArrangeEdge } from './arrange';
   import { arrangeChildren } from './arrangement';
-  import type { Form } from './forms';
+  import type { Direction, Form } from './forms';
   import LinkLines, { type LineStyle } from './LinkLines.svelte';
   import { placeLabels } from './markers';
   import type { Spacing } from './props';
@@ -26,6 +26,7 @@
   let {
     flow,
     form,
+    direction,
     curve,
     layoutSeed,
     kind,
@@ -34,8 +35,10 @@
     children
   }: {
     flow?: 'x' | 'y';
-    /** The form the linked structure takes; unset, or one it cannot take, its natural one. */
+    /** The form the linked structure takes; unset, its natural one. */
     form?: Form;
+    /** The way it runs where no flow sets it (see forms.ts). */
+    direction?: Direction;
     curve?: 'straight' | 'curved';
     /** The seed of its kind's layout, the variant's; unset, 1. */
     layoutSeed?: number;
@@ -61,7 +64,7 @@
     width: number;
     height: number;
     edges: ArrangeEdge[];
-    choices: { form?: string; curve?: 'straight' | 'curved' };
+    choices: { form?: string; direction?: string; curve?: 'straight' | 'curved' };
     styles: Record<string, LineStyle>;
   }>();
   // Bumped when a nested arrangement settles, to lay out again with its new size.
@@ -99,7 +102,7 @@
     void revision;
     if (!host) return;
     const placed = host;
-    const props = { flow, form, curve, layoutSeed, gap, scope };
+    const props = { flow, form, direction, curve, layoutSeed, gap, scope };
     const laid = untrack(() => arrangeChildren(mountedReader(placed), placed, props, memory));
     for (const problem of laid.problems) console.warn(`Node layout: ${problem}`);
     laid.elements.forEach((element, index) => {
@@ -129,10 +132,11 @@
 <!-- data-sv-arrange carries its props, for a step laid out on the layout model (model/drawn.ts). -->
 <div
   class="sv-arranged"
-  data-sv-arrange={JSON.stringify({ flow, form, curve, layoutSeed, gap, scope })}
+  data-sv-arrange={JSON.stringify({ flow, form, direction, curve, layoutSeed, gap, scope })}
   data-sv-layout-seed={layoutSeed}
   data-sv-layout-kind={layoutSeed === undefined ? undefined : kind}
   data-sv-form={result?.choices.form}
+  data-sv-direction={result?.choices.direction}
   data-sv-curve={result?.choices.curve}
   style:width={result ? `${result.width}px` : undefined}
   style:height={result ? `${result.height}px` : undefined}

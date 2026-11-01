@@ -6,7 +6,7 @@
  */
 
 import { keyedRandom } from './algorithm/random.server';
-import { formsFor, naturalForm, type StructureKind } from './library/node/forms';
+import type { Direction } from './library/node/forms';
 import type { LayoutStructure } from './structure.server';
 import {
   colourParts,
@@ -24,7 +24,6 @@ import {
   starterFreeLayout,
   starterListing,
   starterLooks,
-  type DesignProp,
   type DesignValues,
   type KindRole
 } from './library/node/design';
@@ -46,29 +45,32 @@ export type DesignKind = {
 };
 
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
-// the natural form of a structure it finds that the trace could not show.
+// the natural form of a structure it finds that the trace could not show. One whose flow sets the
+// way it runs has no direction.
 const propsOf = ({ role, free }: DesignKind) =>
   free
     ? [
         ...roleProps[role],
-        ...freeLayoutProps.filter((prop) => prop !== 'form' || free.structure !== 'none')
+        ...freeLayoutProps.filter((prop) =>
+          prop === 'form'
+            ? free.structure !== 'none'
+            : prop === 'direction'
+              ? free.structure !== 'none' && !free.flow
+              : true
+        )
       ]
     : roleProps[role];
 
-// Only a layout whose data makes a structure has a form (see propsOf).
-const formKind = (free: NonNullable<DesignKind['free']>) => free.structure as StructureKind;
-
-/** A kind's options for a prop: a free layout's forms are those its structure can take. */
-const optionsFor = ({ role, free }: DesignKind, prop: DesignProp) =>
-  prop === 'form' && free ? formsFor(formKind(free), free.flow) : optionsOf(role, prop);
-
 /**
- * A kind's starting value for a prop: a free layout's form is its structure's natural one, and a
- * link's head none where every link of its kind is a two-way line, as an undirected graph's edges.
+ * A kind's starting value for a prop: a free layout runs right where its structure is a path or a
+ * cycle, and down where it branches, and a link's head is none where every link of its kind is a
+ * two-way line, as an undirected graph's edges.
  */
 const starterLook = ({ role, free, lines }: DesignKind, prop: string) =>
-  prop === 'form' && free
-    ? naturalForm(formKind(free), free.flow)
+  prop === 'direction' && free
+    ? free.structure === 'path' || free.structure === 'cycle'
+      ? 'right'
+      : 'down'
     : prop === 'head' && lines
       ? 'none'
       : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
@@ -249,6 +251,44 @@ function litListingKey(key: string): string | undefined {
   return key;
 }
 
+/**
+ * Forms saved before every structure took every form, each drawn now as natural, with the way it
+ * ran where the old form said: a tree or layers down or right, an indented tree down; a ring and a
+ * radial tree as they come.
+ */
+const legacyForms: Readonly<Record<string, Direction | undefined>> = {
+  'tree-down': 'down',
+  'layers-down': 'down',
+  indented: 'down',
+  'tree-right': 'right',
+  'layers-right': 'right',
+  ring: undefined,
+  radial: undefined
+};
+
+/**
+ * Values with each form saved before every structure took every form as it draws now (see
+ * legacyForms), and, in a variant saved before layouts had a direction (`saved`, a whole variant),
+ * a sequence form running right, along x, as it then did.
+ */
+function currentForms(
+  space: DesignSpace,
+  values: Readonly<Record<string, unknown>>,
+  saved: boolean
+): Record<string, unknown> {
+  const current = { ...values };
+  for (const [key, value] of Object.entries(values)) {
+    if (!key.endsWith('.form') || typeof value !== 'string') continue;
+    const legacy = Object.hasOwn(legacyForms, value);
+    if (legacy) current[key] = 'natural';
+    const direction = `${key.slice(0, -'form'.length)}direction`;
+    if (!Object.hasOwn(space, direction) || Object.hasOwn(values, direction)) continue;
+    const ran = legacy ? legacyForms[value] : saved && value !== 'natural' ? 'right' : undefined;
+    if (ran) current[direction] = ran;
+  }
+  return current;
+}
+
 /** The pauses a source starts with: every label on, for the chooser to thin. */
 export function starterPauses(labels: readonly string[]): Record<string, DesignValue> {
   return Object.fromEntries(labels.map((label) => [`pause@${label}`, 'on']));
@@ -294,7 +334,7 @@ export function designSpace(
       : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsFor(kind, prop)])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
       )
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
@@ -408,7 +448,7 @@ export function buildVariant(
   seed: number,
   fallbacks: Readonly<Record<string, Fallback>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
-  const chosen = Object.entries(request.chosen ?? {}).map(
+  const chosen = Object.entries(currentForms(space, request.chosen ?? {}, false)).map(
     ([key, value]) => [frameKey(space, key), asPause(space, key, value)] as const
   );
   const problems = chosen
@@ -423,11 +463,15 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  const base = Object.fromEntries(
-    Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
-      const lit = litListingKey(key);
-      return lit === undefined ? [] : [[frameKey(space, fullPlaceKey(space, lit)), saved]];
-    })
+  const base = currentForms(
+    space,
+    Object.fromEntries(
+      Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
+        const lit = litListingKey(key);
+        return lit === undefined ? [] : [[frameKey(space, fullPlaceKey(space, lit)), saved]];
+      })
+    ),
+    true
   );
   for (const [key, saved] of Object.entries(base)) {
     const value = asPause(space, key, saved);

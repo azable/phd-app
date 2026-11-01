@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sequenceForms } from './forms';
+import { forms } from './forms';
 import { pathBounds } from './route';
 import {
   arrange,
@@ -151,7 +151,7 @@ describe('links along a flow', () => {
   it('lays a cycle out as a ring, every node on one circle', () => {
     const ring = arrange(columns, {
       links: ['n0 -> n1', 'n1 -> n2', 'n2 -> n0'],
-      form: 'ring',
+      form: 'natural',
       gap: 6,
       anchors,
       random: keyedRandom(3, 'list')
@@ -173,6 +173,7 @@ describe('links along a flow', () => {
     const list = Array.from({ length: 8 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
     const links = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
     const looks = new Set<string>();
+    const sequenceForms = forms.filter((form) => form !== 'natural');
     for (const form of sequenceForms) {
       const result = arrange(list, {
         links,
@@ -192,23 +193,29 @@ describe('links along a flow', () => {
     expect(looks.size).toBe(sequenceForms.length);
   });
 
-  it('draws the structure’s natural form, whatever the seed, where none fits', () => {
+  it('draws the structure’s natural form where none is named, the way it runs', () => {
     const list = Array.from({ length: 6 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
-    const chain = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
     const tree = ['n0 -> n1', 'n0 -> n2', 'n1 -> n3', 'n1 -> n4', 'n2 -> n5'];
+    // Whether the root's first child lies below it rather than beside it.
+    const branchesDown = ({ placements: [root, child] }: ReturnType<typeof arrange>) =>
+      child.y - root.y > Math.abs(child.x - root.x);
     for (const seed of [1, 2, 3])
-      for (const [links, flow, natural] of [
-        [chain, undefined, 'line'],
-        [tree, undefined, 'tree-down'],
-        [tree, 'x', 'tree-right']
+      for (const [ways, down] of [
+        [{}, true],
+        [{ flow: 'y' }, true],
+        [{ flow: 'x' }, false],
+        [{ direction: 'down' }, true],
+        [{ direction: 'right' }, false]
       ] as const) {
-        const random = keyedRandom(seed, 'list');
-        const unnamed = arrange(list, { links, gap: 8, flow, random });
-        const unfit = arrange(list, {
-          ...{ links, gap: 8, flow, random },
-          form: 'ring'
+        const result = arrange(list, {
+          links: tree,
+          gap: 8,
+          ...ways,
+          random: keyedRandom(seed, 'list')
         });
-        expect([unnamed.choices.form, unfit.choices.form]).toEqual([natural, natural]);
+        expect(result.choices.form).toBe('natural');
+        expect(result.choices.direction).toBe('direction' in ways ? ways.direction : undefined);
+        expect(branchesDown(result)).toBe(down);
       }
   });
 });
@@ -317,27 +324,24 @@ describe('link components', () => {
   });
 });
 
-describe('forms along a flow', () => {
+describe('forms running a direction', () => {
   const tree = ['r', 'a', 'b', 'c', 'd'].map((key) => ({ key, width: 40, height: 30 }));
   const links = ['r -> a', 'r -> b', 'a -> c', 'a -> d'];
 
-  it('draws only forms whose links run the way the flow points', () => {
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const across = arrange(tree, {
-        links,
-        gap: 8,
-        flow: 'x',
-        random: keyedRandom(seed, 'layout')
-      });
-      const down = arrange(tree, {
-        links,
-        gap: 8,
-        flow: 'y',
-        random: keyedRandom(seed, 'layout')
-      });
-      expect(['tree-down', 'radial', 'indented']).not.toContain(across.choices.form);
-      expect(['tree-right', 'radial']).not.toContain(down.choices.form);
-    }
+  it('lays a structure out naturally or in a line along its direction as along that flow', () => {
+    for (const form of forms)
+      for (const [direction, flow] of [
+        ['down', 'y'],
+        ['right', 'x']
+      ] as const) {
+        const random = keyedRandom(1, 'layout');
+        const directed = arrange(tree, { links, gap: 8, form, direction, random });
+        const flowing = arrange(tree, { links, gap: 8, form, flow, random });
+        const unset = arrange(tree, { links, gap: 8, form, random });
+        // The other sequence forms keep their own way.
+        const like = form === 'natural' || form === 'line' ? flowing : unset;
+        expect(directed.placements, `${form} ${direction}`).toEqual(like.placements);
+      }
   });
 });
 
@@ -361,7 +365,7 @@ describe('a tree drawn from its fields', () => {
           { from: 'r.left', to: 'a', directed: true }
         ],
         anchors: { 'r.left': field(0, 'left'), 'r.right': field(0, 'right') },
-        form: 'tree-down',
+        form: 'natural',
         flow: 'y',
         gap: 8,
         random: keyedRandom(seed, 'layout')

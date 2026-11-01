@@ -94,8 +94,8 @@ describe('resampledVariants', () => {
     },
     {
       variable: 'Graph.form',
-      value: 'layers-down',
-      options: ['layers-down', 'layers-right', 'snake']
+      value: 'natural',
+      options: ['natural', 'line', 'snake', 'wave', 'arc', 'scatter']
     },
     { variable: 'pause@visit', value: 'on', options: ['on', 'off'] }
   ];
@@ -128,7 +128,7 @@ describe('resampledVariants', () => {
         name: 'Graph.form',
         choice: 'snake',
         probabilities: [
-          { value: 'layers-right', probability: 0.2 },
+          { value: 'line', probability: 0.2 },
           { value: 'snake', probability: 0.4 },
           { value: '(keep)', probability: 0.4 }
         ],

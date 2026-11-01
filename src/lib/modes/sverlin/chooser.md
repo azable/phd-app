@@ -16,9 +16,10 @@ its value in the variant the presentations start from: the one the participant
 was viewing, with the starter’s values for anything new. project.source is the
 source, project.summary what the assistant’s change does, project.runs each
 label’s runs, and project.structures each free layout kind’s structure as its
-data makes it (path, cycle, tree, layers, or none), whose forms are its form’s
-options, so a pair contrasting forms can show the structure in shapes that
-really differ; the conversation says what the participant asked for.
+data makes it (path, cycle, tree, layers, or none), which its natural form draws
+as its own shape, so a pair contrasting forms can show the structure in shapes
+that really differ (its direction turns only a natural or line form); the
+conversation says what the participant asked for.
 
 project.purpose says why you are choosing: "new-source" after the assistant's
 change, or "resample" when the participant asks for other variants of the source

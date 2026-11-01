@@ -85,11 +85,12 @@ describe('structure over a whole animation', () => {
 
   it('reads the structure from links present at every step, drawing the rest on top', () => {
     const steps = [step(path, 3), step([...path, { from: 'b', to: 'd', id: '4:1' }], 3)];
-    // The link that comes and goes would make a layered graph; only the path counts, so a layered
-    // form does not apply, and one that suits the path is drawn instead.
-    for (const input of steps) input.options.form = 'layers-down';
+    // The link that comes and goes would make a layered graph; only the path counts, so its natural
+    // form is the path's, a line.
+    for (const input of steps) input.options.form = 'natural';
     const span = solveSpan(steps);
-    expect(span.choices.form).not.toBe('layers-down');
+    for (const input of steps) input.options.form = 'line';
+    expect(span.positions).toEqual(solveSpan(steps).positions);
     expect(span.problems).toEqual([]);
     expect(span.edges.map(({ id }) => id)).toEqual(['1:1', '2:1', '3:1', '4:1']);
   });
@@ -109,12 +110,13 @@ describe('structure over a whole animation', () => {
       options: {
         links: tree.slice(0, count - 1).map((link) => ({ ...link, directed: true })),
         gap: 8,
-        form: 'tree-down' as const
+        form: 'natural' as const
       }
     });
     const span = solveSpan([grown(1), grown(2), grown(3), grown(4)]);
-    // Every link is structure, so the tree form the view asks for takes it.
+    // Every link is structure, so it branches as a tree, down from its root.
     expect(span.problems).toEqual([]);
-    expect(span.choices.form).toBe('tree-down');
+    expect(span.positions.b.y).toBeGreaterThan(span.positions.a.y);
+    expect(span.positions.c.y).toBeGreaterThan(span.positions.a.y);
   });
 });

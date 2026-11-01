@@ -13,8 +13,8 @@
  *
  * Only links present at every step where both their ends exist count, as on the page (see
  * library/node/span.ts), and findStructure classifies them. Links inside {#if} are left out, and a
- * variant may draw no links where the data has them; there the page finds its own structure, and a
- * form it cannot take falls back to that structure's natural one.
+ * variant may draw no links where the data has them; there the page finds its own structure, which
+ * takes the variant's form as any structure does.
  *
  * The same reading, over every node holding links, row and column alike, tells which kinds of link
  * are all two-way lines, as an undirected graph's edges are, whose heads start as none.

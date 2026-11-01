@@ -15,7 +15,7 @@ import {
   type LayoutChoices,
   type LinkSpec
 } from './arrange';
-import type { Form } from './forms';
+import type { Direction, Form } from './forms';
 import type { LineStyle } from './LinkLines.svelte';
 import { labelsIn, markerLook } from './markers';
 import type { Spacing } from './props';
@@ -26,8 +26,10 @@ import { seenParts, unionOf } from './visible';
 /** A free layout's props, which its element also carries for a step laid out on the model. */
 export type ArrangementProps = {
   flow?: 'x' | 'y';
-  /** The form the linked structure takes; unset, or one it cannot take, its natural one. */
+  /** The form the linked structure takes; unset, its natural one. */
   form?: Form;
+  /** The way it runs where no flow sets it (see formCentres). */
+  direction?: Direction;
   curve?: 'straight' | 'curved';
   /** The seed of its kind's layout, the variant's; unset, 1. */
   layoutSeed?: number;
@@ -68,7 +70,7 @@ export function arrangementInput<E>(
   host: E,
   props: ArrangementProps
 ): ArrangementInput<E> {
-  const { flow, form, curve, layoutSeed, gap, scope } = props;
+  const { flow, form, direction, curve, layoutSeed, gap, scope } = props;
   // The seed this arrangement draws every choice from: its kind's, mixed with its place, so two
   // arrangements of one kind differ, and each stays the same while the variant keeps that seed.
   const drawSeed = layoutSeedFor(layoutSeed ?? 1, scope);
@@ -216,7 +218,7 @@ export function arrangementInput<E>(
     }
   });
   for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
-  const options = { links: specs, flow, form, curve, gap: space };
+  const options = { links: specs, flow, form, direction, curve, gap: space };
   const keyed = (anchor: Anchor) => ({ ...anchor, box: boxes[anchor.box].key });
   return {
     input: {

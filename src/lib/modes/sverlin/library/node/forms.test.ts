@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { keyedRandom } from './arrange';
-import { findStructure, formCentres, formsFor, sequenceForms, type Structure } from './forms';
+import {
+  findStructure,
+  formCentres,
+  forms,
+  type Direction,
+  type Form,
+  type Structure
+} from './forms';
 
 const linked = (count: number, pairs: [number, number][]) =>
   findStructure(
@@ -105,28 +112,58 @@ describe('structures', () => {
     ).toBeUndefined();
   });
 
-  it('offers sequence forms for any structure, as well as forms of its own', () => {
+  it('draws each structure naturally as its own shape, running along its flow or direction', () => {
     const tree = linked(4, [
       [0, 1],
       [0, 2],
       [1, 3]
     ]) as Structure;
-    const layers = linked(4, [
-      [1, 2],
-      [0, 2],
-      [2, 3]
+    const path = linked(3, [
+      [0, 1],
+      [1, 2]
     ]) as Structure;
     const cycle = linked(3, [
       [0, 1],
       [1, 2],
       [2, 0]
     ]) as Structure;
-    for (const structure of [tree, layers, cycle])
-      expect(formsFor(structure.kind)).toEqual(expect.arrayContaining([...sequenceForms]));
-    expect(formsFor(tree.kind)).toEqual(expect.arrayContaining(['tree-down', 'radial']));
-    expect(formsFor(tree.kind)).not.toContain('ring');
-    expect(formsFor(layers.kind)).toEqual(expect.arrayContaining(['layers-down', 'layers-right']));
-    expect(formsFor(cycle.kind)).toContain('ring');
+    type Ways = { flow?: 'x' | 'y'; direction?: Direction };
+    const centres = (form: Form, structure: Structure, ways: Ways = {}) =>
+      formCentres(form, structure, () => ({ width: 40, height: 20 }), {
+        room: 20,
+        random: keyedRandom(1, form),
+        ...ways
+      });
+    const down: Ways[] = [
+      {},
+      { flow: 'y' },
+      { direction: 'down' },
+      { flow: 'y', direction: 'right' }
+    ];
+    const across: Ways[] = [
+      { flow: 'x' },
+      { direction: 'right' },
+      { flow: 'x', direction: 'down' }
+    ];
+    // A tree branches down unless it runs along x; a path is a line, running the same way.
+    for (const ways of down) {
+      const branched = centres('natural', tree, ways);
+      expect(branched.get(1)!.y).toBeGreaterThan(branched.get(0)!.y);
+    }
+    for (const ways of across) {
+      const branched = centres('natural', tree, ways);
+      expect(branched.get(1)!.x).toBeGreaterThan(branched.get(0)!.x);
+    }
+    for (const ways of [...down, ...across])
+      expect(centres('natural', path, ways)).toEqual(centres('line', path, ways));
+    const column = centres('line', path, { direction: 'down' });
+    expect(new Set([...column.values()].map(({ x }) => x)).size).toBe(1);
+    // The other sequence forms keep their own way, and a cycle's ring is the same either way.
+    expect(centres('snake', path, { direction: 'down' })).toEqual(centres('snake', path));
+    const ring = centres('natural', cycle);
+    for (const ways of [...down, ...across]) expect(centres('natural', cycle, ways)).toEqual(ring);
+    const radii = [...ring.values()].map(({ x, y }) => Math.round(Math.hypot(x, y)));
+    expect(new Set(radii).size).toBe(1);
   });
 });
 
@@ -151,24 +188,26 @@ describe('form placement', () => {
     ]) as Structure
   ];
 
-  it('places every node of every form clear of the others, for any seed', () => {
+  it('places every node of every form clear of the others, either way, for any seed', () => {
     for (const structure of structures)
-      for (const form of formsFor(structure.kind))
-        for (const seed of [1, 2, 3, 4]) {
-          const centres = formCentres(form, structure, () => size, {
-            room: 20,
-            random: keyedRandom(seed, form)
-          });
-          const points = structure.nodes.map((node) => centres.get(node));
-          expect(points.every(Boolean), `${form} places every node`).toBe(true);
-          for (const [i, p] of points.entries())
-            for (const q of points.slice(i + 1))
-              expect(
-                Math.abs(p!.x - q!.x) >= size.width - 0.5 ||
-                  Math.abs(p!.y - q!.y) >= size.height - 0.5,
-                `${form} (seed ${seed}) keeps nodes apart`
-              ).toBe(true);
-        }
+      for (const form of forms)
+        for (const direction of [undefined, 'down', 'right'] as const)
+          for (const seed of [1, 2, 3, 4]) {
+            const centres = formCentres(form, structure, () => size, {
+              room: 20,
+              random: keyedRandom(seed, form),
+              direction
+            });
+            const points = structure.nodes.map((node) => centres.get(node));
+            expect(points.every(Boolean), `${form} places every node`).toBe(true);
+            for (const [i, p] of points.entries())
+              for (const q of points.slice(i + 1))
+                expect(
+                  Math.abs(p!.x - q!.x) >= size.width - 0.5 ||
+                    Math.abs(p!.y - q!.y) >= size.height - 0.5,
+                  `${form} (seed ${seed}) keeps nodes apart`
+                ).toBe(true);
+          }
   });
 
   it('rows a snake from its count and its nodes alone, as near a square as they go', () => {
@@ -203,9 +242,10 @@ describe('form placement', () => {
       ).map(([source, target]) => ({ source, target, directed: false }))
     ) as Structure;
     expect(graph.kind).toBe('layers');
-    const centres = formCentres('layers-right', graph, () => size, {
+    const centres = formCentres('natural', graph, () => size, {
       room: 20,
-      random: keyedRandom(1, 'layers')
+      random: keyedRandom(1, 'layers'),
+      direction: 'right'
     });
     const column = (node: number) => Math.round(centres.get(node)!.x);
     expect([column(1), column(3)]).toEqual([column(2), column(4)]);

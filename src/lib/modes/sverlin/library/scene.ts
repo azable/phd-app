@@ -125,26 +125,28 @@ export function describeFrame(layer: HTMLElement): SceneFrame | undefined {
 
 /**
  * The free layout an arrangement drew: the node it arranges, the kind whose variables hold its look,
- * that kind's layout seed, and the form and curve it drew.
+ * that kind's layout seed, and the form, direction and curve it drew.
  */
 export type ArrangementLayout = {
   node: string;
   kind?: string;
   seed: number;
   form?: string;
+  direction?: string;
   curve?: string;
 };
 
 /** The layout of one arrangement (an .sv-arranged element), once it has laid out. */
 export function arrangementLayout(arranged: HTMLElement): ArrangementLayout | undefined {
   const node = arranged.closest<HTMLElement>('[data-sv-node]')?.dataset.svNode;
-  const { svLayoutSeed, svLayoutKind, svForm, svCurve } = arranged.dataset;
+  const { svLayoutSeed, svLayoutKind, svForm, svDirection, svCurve } = arranged.dataset;
   if (!node || !Number.isFinite(Number(svLayoutSeed))) return undefined;
   return {
     node,
     ...(svLayoutKind ? { kind: svLayoutKind } : {}),
     seed: Number(svLayoutSeed),
     ...(svForm ? { form: svForm } : {}),
+    ...(svDirection ? { direction: svDirection } : {}),
     ...(svCurve ? { curve: svCurve } : {})
   };
 }

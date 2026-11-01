@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
+import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
+import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
@@ -289,6 +292,21 @@ describe('design variables in the AI context', () => {
     expect(options('Side.ratio')).toBe('ratio');
     expect(design.options.ratio).toContain('4:3');
     expect(design.options.layout).toEqual(['column', 'row']);
+  });
+
+  it('offers each free layout exactly the forms and directions its design takes', () => {
+    for (const source of [bfs, bst]) {
+      const { space, starter } = prepareSvelteComponent(source).design;
+      const design = designVariables({ variant: starter });
+      const layout = design.variables.filter(
+        ({ variable }) => !variable.startsWith('pause@') && /\.(form|direction)$/u.test(variable)
+      );
+      expect(layout.length).toBeGreaterThan(0);
+      for (const { variable, options } of layout)
+        expect(typeof options === 'string' ? design.options[options] : options).toEqual(
+          space[variable]
+        );
+    }
   });
 });
 

@@ -1,28 +1,27 @@
 /**
  * Forms for linked structures. The links of a free layout are read for the structure they make: a
  * path (such as a linked list), a cycle (a ring buffer), a tree (each node one parent), or a layered
- * graph (directed and acyclic, with merges). Each structure has several forms, drawn from the seed
- * unless the view names one, in its own proportions, so presentations differ in look while showing
- * the same structure, and a layout is the same wherever it is drawn. Anything else is left to the
- * general layout.
+ * graph (directed and acyclic, with merges). Every structure can take every form, drawn from the
+ * seed unless the view names one, in its own proportions, so presentations differ in look while
+ * showing the same structure, and a layout is the same wherever it is drawn. Anything else is left
+ * to the general layout.
  */
 
-/** Forms that lay any structure out in sequence, along its reading order. */
-export const sequenceForms = ['line', 'snake', 'wave', 'arc', 'scatter'] as const;
-export const cycleForms = ['ring'] as const;
-export const treeForms = ['tree-down', 'tree-right', 'radial', 'indented'] as const;
-export const layerForms = ['layers-down', 'layers-right'] as const;
-export const forms = [
-  ...sequenceForms,
-  ...cycleForms,
-  ...treeForms,
-  ...layerForms
-] as readonly Form[];
-export type Form =
-  | (typeof sequenceForms)[number]
-  | (typeof cycleForms)[number]
-  | (typeof treeForms)[number]
-  | (typeof layerForms)[number];
+/**
+ * The structure's own shape (a path in a line, a cycle closed into a ring, a tree branching, a
+ * layered graph stacking its layers), then forms that lay any structure out in sequence along its
+ * reading order, with links that skip ahead curving round.
+ */
+export const forms = ['natural', 'line', 'snake', 'wave', 'arc', 'scatter'] as const;
+export type Form = (typeof forms)[number];
+
+/**
+ * The way a layout with no flow runs, as a flow would: a tree's or layered graph's links down it or
+ * across, and a line, a path's own shape, along it.
+ */
+export const directions = ['down', 'right'] as const;
+export type Direction = (typeof directions)[number];
+const axisOf = { down: 'y', right: 'x' } as const;
 
 type Point = { x: number; y: number };
 type Size = { width: number; height: number };
@@ -44,40 +43,6 @@ export type Structure =
 
 /** What a structure is: a path, a cycle, a tree, or a layered graph. */
 export type StructureKind = Structure['kind'];
-
-/** The forms whose links would run against a flow, which a layout with that flow leaves out. */
-const against: Record<'x' | 'y', readonly Form[]> = {
-  x: ['tree-down', 'layers-down', 'radial', 'indented'],
-  y: ['tree-right', 'layers-right', 'radial']
-};
-
-/**
- * The forms a structure can take, along its flow if it has one. Any structure can be laid out in
- * sequence along its reading order, with links that skip ahead curving round; a cycle can also
- * close into a ring, a tree branch out, and a layered graph stack its layers.
- */
-export function formsFor(kind: StructureKind, flow?: 'x' | 'y'): readonly Form[] {
-  const forms: readonly Form[] =
-    kind === 'cycle'
-      ? [...cycleForms, ...sequenceForms]
-      : kind === 'tree'
-        ? [...sequenceForms, ...treeForms]
-        : kind === 'layers'
-          ? [...sequenceForms, ...layerForms]
-          : sequenceForms;
-  return flow ? forms.filter((form) => !against[flow].includes(form)) : forms;
-}
-
-/**
- * The form a structure takes unless its kind names another it can take: a path in a line, a cycle
- * in a ring, a tree branching down, or rightwards along x, a layered graph in layers likewise.
- */
-export function naturalForm(kind: StructureKind, flow?: 'x' | 'y'): Form {
-  if (kind === 'cycle') return 'ring';
-  if (kind === 'tree') return flow === 'x' ? 'tree-right' : 'tree-down';
-  if (kind === 'layers') return flow === 'x' ? 'layers-right' : 'layers-down';
-  return 'line';
-}
 
 /**
  * The structure the largest group of linked nodes makes, from links in the order written, or
@@ -236,39 +201,49 @@ function acyclic(nodes: readonly number[], children: ReadonlyMap<number, number[
 
 /**
  * Centres for a structure's nodes in a form, in the form's own proportions. `random` varies each
- * form's free parameters, such as a wave's height or a node order.
+ * form's free parameters, such as a wave's height or a node order. A tree or layered graph's own
+ * shape, and a line, run along the flow, else the direction: unset, a tree branches down and a line
+ * lies along x. The other sequence forms lie along x unless the flow is y.
  */
 export function formCentres(
   form: Form,
   structure: Structure,
   sizeOf: (node: number) => Size,
-  options: { room: number; random: (key: string) => number }
+  options: {
+    room: number;
+    random: (key: string) => number;
+    flow?: 'x' | 'y';
+    direction?: Direction;
+  }
 ): Map<number, Point> {
   const sizes = structure.nodes.map(sizeOf);
   // One step fits the widest node and room for an arrow; rows fit the tallest node and an arrow.
   const across = Math.max(...sizes.map(({ width }) => width)) + options.room;
   const down = Math.max(...sizes.map(({ height }) => height)) + options.room;
   const step = { across, down };
-  let centres: Map<number, Point>;
-  // Sequence forms, and a ring, run along the structure's reading order, whatever its shape.
-  const inSequence =
-    (sequenceForms as readonly Form[]).includes(form) ||
-    (cycleForms as readonly Form[]).includes(form);
-  if (!inSequence && structure.kind === 'tree')
-    centres = treeCentres(form, structure, step, options.random);
-  else if (!inSequence && structure.kind === 'layers')
-    centres = layerCentres(form, structure, step, options.random);
-  else {
-    const placed = sequenceCentres(form, sizes.length, structure.kind === 'cycle', step, options);
-    centres = new Map(structure.nodes.map((node, i) => [node, placed[i]]));
-  }
-  return centres;
+  const runs = options.flow ?? (options.direction && axisOf[options.direction]);
+  if (form === 'natural' && structure.kind === 'tree')
+    return treeCentres(structure, step, runs === 'x');
+  if (form === 'natural' && structure.kind === 'layers')
+    return layerCentres(structure, step, options.random, runs === 'x');
+  // A cycle's own shape is a ring, whichever way it runs, and a path's a line. Sequence forms lie
+  // along x, and running along y turns them, swapping each centre's axes.
+  const ring = form === 'natural' && structure.kind === 'cycle';
+  const shape = form === 'natural' ? (ring ? 'ring' : 'line') : form;
+  const placed = sequenceCentres(shape, sizes.length, structure.kind === 'cycle', step, options);
+  const turned = !ring && (shape === 'line' ? runs : options.flow) === 'y';
+  return new Map(
+    structure.nodes.map((node, i) => [
+      node,
+      turned ? { x: placed[i].y, y: placed[i].x } : placed[i]
+    ])
+  );
 }
 
 type Step = { across: number; down: number };
 
 function sequenceCentres(
-  form: Form,
+  form: Exclude<Form, 'natural'> | 'ring',
   count: number,
   cycle: boolean,
   { across, down }: Step,
@@ -350,19 +325,18 @@ function sequenceCentres(
       }));
     }
     default:
-      // A line, and any form meant for another structure.
+      // A line.
       return indices.map((i) => ({ x: i * across, y: 0 }));
   }
 }
 
 function treeCentres(
-  form: Form,
   { root, children }: Extract<Structure, { kind: 'tree' }>,
   { across, down }: Step,
-  random: (key: string) => number
+  sideways: boolean
 ): Map<number, Point> {
   // Leaves take consecutive slots and a parent sits over the middle of its children; depth is the
-  // number of links from the root. The indented form lists nodes in order instead, by depth.
+  // number of links from the root.
   const slot = new Map<number, number>();
   const depth = new Map<number, number>();
   const order: number[] = [];
@@ -381,30 +355,16 @@ function treeCentres(
   const place = (node: number): Point => {
     const s = slot.get(node) ?? 0;
     const d = depth.get(node) ?? 0;
-    switch (form) {
-      case 'tree-right':
-        return { x: d * across * 1.4, y: s * down };
-      case 'radial': {
-        // Rings round the root, over a sweep the seed chooses.
-        const sweep = (1.2 + random('radial.sweep') * 0.8) * Math.PI;
-        const angle = (s / Math.max(1, leaves)) * sweep;
-        const radius = d * Math.max(across, down) * 1.2;
-        return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
-      }
-      case 'indented':
-        return { x: d * across * 0.6, y: order.indexOf(node) * down };
-      default:
-        return { x: s * across, y: d * down * 1.4 };
-    }
+    return sideways ? { x: d * across * 1.4, y: s * down } : { x: s * across, y: d * down * 1.4 };
   };
   return new Map(order.map((node) => [node, place(node)]));
 }
 
 function layerCentres(
-  form: Form,
   { nodes, parents, depths }: Extract<Structure, { kind: 'layers' }>,
   { across, down }: Step,
-  random: (key: string) => number
+  random: (key: string) => number,
+  sideways: boolean
 ): Map<number, Point> {
   // Each node sits one layer below its deepest parent, or, in an undirected graph, at its distance
   // from the root; within a layer, nodes are ordered by where their parents are, with the seed
@@ -433,7 +393,6 @@ function layerCentres(
     row.sort((a, b) => weight(a) - weight(b));
     row.forEach((node, i) => position.set(node, i - (row.length - 1) / 2));
   }
-  const sideways = form === 'layers-right';
   return new Map(
     nodes.map((node) => {
       const along = (position.get(node) ?? 0) * (sideways ? down : across);

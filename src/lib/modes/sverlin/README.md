@@ -819,24 +819,24 @@ A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
 arrows present at every step (a link that comes and goes is drawn on top of it
 but does not change it): a path such as a linked list, a cycle, a tree, or a
-layered graph (acyclic, with nodes that have several parents). Any structure can
-lie along its reading order (a path in link order, a tree depth first, a layered
-graph each node after its parents) as `line`, `snake` (rows read back and
+layered graph (acyclic, with nodes that have several parents). Every structure
+takes every form: `natural` (the start), the structure's own shape, a path in a
+line, a cycle closed into a ring, a tree branching, and a layered graph stacking
+its layers (an undirected graph's layers are each node's distance from its
+first); or, along its reading order (a path in link order, a tree depth first, a
+layered graph each node after its parents), `line`, `snake` (rows read back and
 forth), `wave`, `arc`, or `scatter` (free positions that keep each node near the
-next); a cycle can also take `ring`, a tree `tree-down`, `tree-right`, `radial`,
-or `indented`, and a layered graph `layers-down` or `layers-right`, as its
-`flow` allows; an undirected graph's layers are each node's distance from its
-first. A layout's options are the forms its data's structure can take, and it
-starts in that structure's natural form: a path in a `line`, a cycle in a
-`ring`, a tree `tree-down` and a layered graph `layers-down` (`-right` along
-`flow` x); a layout whose data makes no structure has no `form` and is laid out
-freely. Where the page finds the links it draws make another structure, a form
-that one cannot take is drawn in its natural form. `curve`, `straight` (the
-start) or `curved`, is how its arrows prefer to run. `layoutSeed`, 1 to 32, is
-what its spacing and nudges are drawn from. A free layout keeps its form's own
-proportions and takes the size of everything it draws, its links' curves, heads
-and labels included, so the same values draw the same layout wherever it is,
-whatever the frame or what is beside it.
+next). `direction`, `down` or `right`, is the way a `natural` or `line` layout
+runs where no `flow` sets it, as a `flow` would: it starts `right` for a path or
+a cycle and `down` for a tree or a layered graph, and a layout with a `flow` has
+none. A layout whose data makes no structure has no `form` or `direction` and is
+laid out freely, unless the page finds a structure in the links it draws, which
+it draws `natural`. `curve`, `straight` (the start) or `curved`, is how its
+arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are
+drawn from. A free layout keeps its form's own proportions and takes the size of
+everything it draws, its links' curves, heads and labels included, so the same
+values draw the same layout wherever it is, whatever the frame or what is beside
+it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -1113,15 +1113,15 @@ whatever its layout. Every direct child is placed; put content that belongs
 together, such as a value and its index, in one child node.
 
 - `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
-  downwards, as for a list or a tree; only forms that run that way are drawn.
-  Set it only when asked; an undirected graph has no flow.
+  downwards, as for a list or a tree, and every form runs that way. Set it only
+  when asked; an undirected graph has no flow.
 
-A free layout's look, `form`, `curve`, and `layoutSeed`, is its kind's (see
-Design), never a prop, and arrows bend round other nodes and labels. A selection
-reports each free layout around the element, with its kind, its `layoutSeed`,
-and the form it drew: to keep a layout the participant liked ("keep this layout
-but …"), vary that kind's `form` and `layoutSeed` to them, and its `curve` only
-if they name it.
+A free layout's look, `form`, `direction`, `curve`, and `layoutSeed`, is its
+kind's (see Design), never a prop, and arrows bend round other nodes and labels.
+A selection reports each free layout around the element, with its kind, its
+`layoutSeed`, and the form and direction it drew: to keep a layout the
+participant liked ("keep this layout but …"), vary that kind's `form`,
+`direction` and `layoutSeed` to them, and its `curve` only if they name it.
 
 ## Link
 

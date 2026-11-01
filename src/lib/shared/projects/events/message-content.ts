@@ -37,11 +37,13 @@ export const elementIdSchema = v.pipe(
 export const elementLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(120));
 
 const layoutFormSchema = v.picklist([
+  'natural',
   'line',
   'snake',
   'wave',
   'arc',
   'scatter',
+  // Forms of references made before every structure took every form.
   'ring',
   'tree-down',
   'tree-right',
@@ -53,14 +55,15 @@ const layoutFormSchema = v.picklist([
 
 /**
  * A free layout around a selected element: the node it belongs to (an element id, or 'frame' for
- * the page), the kind whose variables hold its look, that kind's layout seed, and the form and curve
- * it drew, so feedback can keep it by setting those variables.
+ * the page), the kind whose variables hold its look, that kind's layout seed, and the form,
+ * direction and curve it drew, so feedback can keep it by setting those variables.
  */
 export const elementLayoutSchema = v.strictObject({
   node: v.union([v.literal('frame'), elementIdSchema]),
   kind: v.optional(v.pipe(v.string(), v.maxLength(200))),
   seed: v.pipe(v.number(), v.safeInteger()),
   form: v.optional(layoutFormSchema),
+  direction: v.optional(v.picklist(['down', 'right'])),
   curve: v.optional(v.picklist(['straight', 'curved']))
 });
 

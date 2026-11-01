@@ -5,7 +5,7 @@
  */
 
 import { fontValues } from '../fonts';
-import { forms } from './forms';
+import { directions, forms } from './forms';
 import { headShapes, headSizes } from './heads';
 
 /** Hues of the colour range, each in every shade; neutral has no hue. */
@@ -93,8 +93,9 @@ const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
  * Each prop's options: lengths in em, except size in rem and radius, strokeWidth and headSize in
- * pixels; a free layout's form, its arrows' curve, and the seed its spacing and nudges are drawn
- * from; and how a link runs, as its layout's arrows or its own way, and the heads at its ends.
+ * pixels; a free layout's form, the way it runs, its arrows' curve, and the seed its spacing and
+ * nudges are drawn from; and how a link runs, as its layout's arrows or its own way, and the heads
+ * at its ends.
  */
 export const propOptions = {
   shown: [true, false],
@@ -115,6 +116,7 @@ export const propOptions = {
   strokeStyle: ['solid', 'dashed', 'dotted'],
   overflow: ['shown', 'hidden', 'included', 'excluded'],
   form: forms,
+  direction: directions,
   curve: ['straight', 'curved'],
   route: ['layout', 'straight', 'curved', 'wire'],
   head: headShapes,
@@ -226,10 +228,11 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
 };
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
-export const freeLayoutProps: readonly DesignProp[] = ['form', 'curve', 'layoutSeed'];
+export const freeLayoutProps: readonly DesignProp[] = ['form', 'direction', 'curve', 'layoutSeed'];
 
-/** A free layout's starting look, besides its form, which its structure gives (see forms.ts). */
+/** A free layout's starting look, but for its direction (see starterLook in design.server.ts). */
 export const starterFreeLayout: Record<string, string | number> = {
+  form: 'natural',
   curve: 'straight',
   layoutSeed: 1
 };

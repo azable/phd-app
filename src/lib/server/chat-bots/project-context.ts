@@ -173,8 +173,9 @@ export type AiSelectedElement = {
   source: ElementLocation;
   /**
    * The free layouts around the element: the one placing it and the one placing its children. Each
-   * gives the arranging node (its tag in the source), its kind, that kind's layoutSeed, and the form
-   * and curve it drew; varying the kind's form and layoutSeed to these keeps the layout.
+   * gives the arranging node (its tag in the source), its kind, that kind's layoutSeed, and the form,
+   * direction and curve it drew; varying the kind's form, direction and layoutSeed to these keeps
+   * the layout.
    */
   layouts: Array<{
     node: string;
@@ -182,6 +183,7 @@ export type AiSelectedElement = {
     kind?: string;
     layoutSeed: number;
     form?: string;
+    direction?: string;
     curve?: string;
   }>;
 };

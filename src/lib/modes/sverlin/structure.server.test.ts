@@ -5,6 +5,7 @@ import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import reversal from './fixtures/list-markers.sverlin?raw';
+import { propOptions } from './library/node/design';
 
 const list = `<script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C']);
@@ -123,7 +124,7 @@ describe('free layout structures', () => {
     expect(designOf(reversal).structures).toEqual({ Heap: 'none' });
   });
 
-  it('start each layout in its structure’s natural form, offering the forms it can take', () => {
+  it('start each layout natural, running the way its structure does, with every form offered', () => {
     const starts = [list, bst, ring, bfs].map((source) => {
       const { space, starter } = designOf(source);
       const [kind] = Object.keys(space)
@@ -131,19 +132,27 @@ describe('free layout structures', () => {
         .map((key) => key.slice(0, -'.form'.length));
       return {
         form: starter[`${kind}.form`],
+        direction: starter[`${kind}.direction`],
         curve: starter[`${kind}.curve`],
-        offers: space[`${kind}.form`].includes(starter[`${kind}.form`])
+        forms: space[`${kind}.form`],
+        directions: space[`${kind}.direction`]
       };
     });
-    expect(starts.map(({ form }) => form)).toEqual(['line', 'tree-down', 'ring', 'layers-down']);
-    expect(starts.every(({ curve, offers }) => curve === 'straight' && offers)).toBe(true);
-    // The tree runs downwards (flow="y"), so forms running across are not offered.
-    expect(designOf(bst).space['Heap.form']).not.toContain('tree-right');
-    expect(designOf(ring).space['Ring.form']).toContain('ring');
-    expect(designOf(list).space['Heap.form']).not.toContain('ring');
+    expect(starts.every(({ form, curve }) => form === 'natural' && curve === 'straight')).toBe(
+      true
+    );
+    expect(starts.every(({ forms }) => forms.join() === propOptions.form.join())).toBe(true);
+    // A path or a ring runs right, a graph down; the tree's flow="y" sets its way, so it has none.
+    expect(starts.map(({ direction }) => direction)).toEqual(['right', undefined, 'right', 'down']);
+    expect(starts.map(({ directions }) => directions?.join())).toEqual([
+      'down,right',
+      undefined,
+      'down,right',
+      'down,right'
+    ]);
     // A layout whose data makes no structure has no form, as the page lays it out freely.
     const free = designOf(unlinked).space;
-    expect(Object.keys(free).some((key) => key.endsWith('.form'))).toBe(false);
+    expect(Object.keys(free).some((key) => /\.(form|direction)$/u.test(key))).toBe(false);
     expect(Object.keys(free).some((key) => key.endsWith('.layoutSeed'))).toBe(true);
   });
 });
