@@ -1,5 +1,5 @@
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
 import type { ProjectEvent } from '$lib/shared/projects/events';
@@ -7,12 +7,20 @@ import type { ProjectEvent } from '$lib/shared/projects/events';
 import PresentationStage from './PresentationStage.svelte';
 import { timelinePresentations } from './presentation-history';
 import { PresentationPlayback } from './presentation-playback.svelte';
-import { PresentationSelection } from './presentation-selection.svelte';
+import {
+  arrivalHighlightMs,
+  pickConfirmationMs,
+  PresentationSelection
+} from './presentation-selection.svelte';
 import { VisualSelections } from './visual-selection.svelte';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const displaySetId = '12345678-1234-4123-8123-123456789abd';
 const turnId = '12345678-1234-4123-8123-123456789abe';
+const secondSetId = '12345678-1234-4123-8123-123456789abf';
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 describe('presentation stage while the project is busy', () => {
   it('freezes answers but keeps stepping', () => {
@@ -51,6 +59,7 @@ describe('presentation stage after the last comparison is answered', () => {
       async () => true,
       askedPair().length
     );
+    vi.advanceTimersByTime(pickConfirmationMs);
     const body = stage(
       [...askedPair(), answered(3, { preferred: ids[1] }), requested(4)],
       false,
@@ -64,6 +73,44 @@ describe('presentation stage after the last comparison is answered', () => {
     // Nothing to change while the reply comes, and no caption to shift the stage.
     expect(disabled(body, 'Prefer the top version')).toBe(true);
     expect(body).not.toContain('choose again to change your answer');
+  });
+});
+
+describe('presentation stage between comparisons', () => {
+  const both = () => [...askedPair(), ...secondPair()];
+
+  it('first shows the pick on the pair answered, not dimmed', async () => {
+    const selection = new PresentationSelection(true, undefined, true);
+    await selection.answer(timelinePresentations(askedPair()), async () => true, 4);
+    const body = stage([...both(), answered(5, { preferred: ids[0] })], false, false, selection);
+    expect(body).toContain('Cells or tallies?');
+    expect(badges(body)).toEqual(['Your choice']);
+    expect(body).not.toContain('Updating…');
+    expect(body).not.toContain('grayscale');
+    expect(disabled(body, 'Prefer the bottom version')).toBe(true);
+    expect(body).not.toContain('choose again to change your answer');
+  });
+
+  it('then shows the next, its question highlighted a while and counted', async () => {
+    const selection = new PresentationSelection(true, undefined, true);
+    await selection.answer(timelinePresentations(askedPair()), async () => true, 4);
+    vi.advanceTimersByTime(pickConfirmationMs);
+    const events = [...both(), answered(5, { preferred: ids[0] })];
+    const body = stage(events, false, false, selection);
+    expect(body).toContain('Rows or columns?');
+    expect(body).toMatch(/Question\s+2\s+of\s+2/u);
+    expect(body).toContain('bg-primary/15');
+    expect(body).toContain('motion-reduce:transition-none');
+    expect(badges(body)).toEqual([]);
+    expect(disabled(body, 'Prefer the top version')).toBe(false);
+
+    vi.advanceTimersByTime(arrivalHighlightMs);
+    expect(stage(events, false, false, selection)).not.toContain('bg-primary/15');
+  });
+
+  it('counts the first of several, and none for a comparison asked alone', () => {
+    expect(stage(both(), false)).toMatch(/Question\s+1\s+of\s+2/u);
+    expect(stage(askedPair(), false)).not.toContain('Question 1');
   });
 });
 
@@ -243,6 +290,27 @@ function requested(id: number): ProjectEvent {
     createdAt: `2026-11-01T00:00:0${id}.000Z`,
     payload: { interactionEventId: id - 1, presentationCount: 2 }
   };
+}
+
+/** A second comparison the same operation asked, after `askedPair`. */
+function secondPair(): ProjectEvent[] {
+  return askedPair().map((event) => {
+    if (event.type !== 'visualization.presented') return event;
+    const id = event.id + 2;
+    return {
+      ...event,
+      id,
+      payload: {
+        ...event.payload,
+        displaySetId: secondSetId,
+        question: 'Rows or columns?',
+        presentation: {
+          ...event.payload.presentation,
+          presentationId: `12345678-1234-4123-8123-123456789ac${id}`
+        }
+      }
+    } as ProjectEvent;
+  });
 }
 
 function accepted(id: number): ProjectEvent {

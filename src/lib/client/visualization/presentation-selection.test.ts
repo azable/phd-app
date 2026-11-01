@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
 import { timelinePresentations } from './presentation-history';
-import { PresentationSelection } from './presentation-selection.svelte';
+import {
+  arrivalHighlightMs,
+  pickConfirmationMs,
+  PresentationSelection
+} from './presentation-selection.svelte';
 
 const operations = { asked: uuid('a01'), answer: uuid('a02'), turn: uuid('a03') };
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 describe('answering the last of the assistant’s comparisons', () => {
   it('keeps the pair while the answer is saved and the assistant replies', async () => {
@@ -13,6 +20,9 @@ describe('answering the last of the assistant’s comparisons', () => {
     const selection = questions();
     const saving = deferred();
     const answered = selection.answer(pairOf(asked, 'p1'), () => saving.promise, 3);
+    expect(shown(selection, asked)).toEqual(['p1-0', 'p1-1']);
+    expect(selection.awaiting(asked, 'comparison')).toBe('confirming');
+    vi.advanceTimersByTime(pickConfirmationMs);
     expect(shown(selection, asked)).toEqual(['p1-0', 'p1-1']);
     expect(selection.awaiting(asked, 'comparison')).toBe('updating');
 
@@ -28,6 +38,7 @@ describe('answering the last of the assistant’s comparisons', () => {
     const asked = [version(1), ...pair(2, 'p1')];
     const selection = questions();
     await selection.answer(pairOf(asked, 'p1'), async () => true, 3);
+    vi.advanceTimersByTime(pickConfirmationMs);
     const replied = [...asked, preference(4, 'p1'), requested(5), accepted(6), started(7, 5)];
     const revised = [...replied, version(8, 'v2', operations.turn)];
     expect(shown(selection, revised)).toEqual(['v2']);
@@ -38,6 +49,7 @@ describe('answering the last of the assistant’s comparisons', () => {
     const asked = [version(1), ...pair(2, 'p1')];
     const selection = questions();
     await selection.answer(pairOf(asked, 'p1'), async () => true, 3);
+    vi.advanceTimersByTime(pickConfirmationMs);
     const replied = [
       ...asked,
       preference(4, 'p1'),
@@ -56,6 +68,43 @@ describe('answering the last of the assistant’s comparisons', () => {
     expect(await selection.answer(pairOf(asked, 'p1'), async () => false, 3)).toBe(false);
     expect(shown(selection, asked)).toEqual(['p1-0', 'p1-1']);
     expect(selection.awaiting(asked, 'comparison')).toBeUndefined();
+    vi.advanceTimersByTime(pickConfirmationMs);
+    expect(shown(selection, asked)).toEqual(['p1-0', 'p1-1']);
+  });
+});
+
+describe('answering a comparison while another waits', () => {
+  it('confirms the pick on the pair, then shows the next, its question highlighted a while', async () => {
+    const asked = [version(1), ...pair(2, 'p1'), ...pair(4, 'p2')];
+    const selection = questions();
+    const saving = deferred();
+    const answered = selection.answer(pairOf(asked, 'p1'), () => saving.promise, 5);
+    vi.advanceTimersByTime(pickConfirmationMs - 1);
+    expect(shown(selection, asked)).toEqual(['p1-0', 'p1-1']);
+    expect(selection.awaiting(asked, 'comparison')).toBe('confirming');
+    expect(selection.arrived(asked, 'comparison')).toBe(false);
+
+    vi.advanceTimersByTime(1);
+    expect(shown(selection, asked)).toEqual(['p2-0', 'p2-1']);
+    expect(selection.awaiting(asked, 'comparison')).toBeUndefined();
+    expect(selection.arrived(asked, 'comparison')).toBe(true);
+
+    saving.resolve(true);
+    await answered;
+    const recorded = [...asked, preference(6, 'p1')];
+    expect(shown(selection, recorded)).toEqual(['p2-0', 'p2-1']);
+    vi.advanceTimersByTime(arrivalHighlightMs);
+    expect(selection.arrived(recorded, 'comparison')).toBe(false);
+  });
+
+  it('confirms the pick though it is saved at once', async () => {
+    const asked = [version(1), ...pair(2, 'p1'), ...pair(4, 'p2')];
+    const selection = questions();
+    await selection.answer(pairOf(asked, 'p1'), async () => true, 5);
+    const recorded = [...asked, preference(6, 'p1')];
+    expect(shown(selection, recorded)).toEqual(['p1-0', 'p1-1']);
+    vi.advanceTimersByTime(pickConfirmationMs);
+    expect(shown(selection, recorded)).toEqual(['p2-0', 'p2-1']);
   });
 });
 

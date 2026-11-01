@@ -10,7 +10,8 @@
   import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import DownloadIcon from '@lucide/svelte/icons/download';
   import EqualIcon from '@lucide/svelte/icons/equal';
-  import { fly } from 'svelte/transition';
+  import { prefersReducedMotion } from 'svelte/motion';
+  import { fade, fly } from 'svelte/transition';
 
   import { Button } from '$lib/client/components/ui/button';
   import MessageContent from '$lib/client/timeline/MessageContent.svelte';
@@ -32,7 +33,7 @@
     presentationPlaybackContext,
     type PresentationPlayback
   } from './presentation-playback.svelte';
-  import { pairQuestion } from './presentation-history';
+  import { comparisonProgress, pairQuestion, timelinePresentations } from './presentation-history';
   import PresentationViewport from './PresentationViewport.svelte';
   import { stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
@@ -136,10 +137,35 @@
     return stageActivity(session.events, source?.sha256, session.pending ?? undefined);
   });
   // What the stage says it is doing, and how it dims the version it shows meanwhile.
-  const status = $derived(awaiting ? 'Updating…' : activity?.label);
-  const dimmed = $derived<'answered' | 'replaced' | undefined>(
-    awaiting ? 'answered' : activity?.replacing ? 'replaced' : undefined
+  const status = $derived(
+    awaiting === 'updating' ? 'Updating…' : awaiting ? undefined : activity?.label
   );
+  const dimmed = $derived<'answered' | 'replaced' | undefined>(
+    awaiting === 'updating' ? 'answered' : activity?.replacing ? 'replaced' : undefined
+  );
+  // Which of its operation's comparisons this is, and whether it has just replaced the one answered.
+  const progress = $derived(
+    question ? comparisonProgress(timelinePresentations(session.events), visible) : undefined
+  );
+  const arrived = $derived(selection.arrived(session.events, layout));
+  /**
+   * A comparison that replaces the one answered takes the focus the answer's button had, so the
+   * keyboard and screen readers continue from its question.
+   */
+  function focusOnArrival(bar: HTMLElement) {
+    if (!arrived) return;
+    const focused = document.activeElement;
+    if (focused === document.body || (focused && bar.closest('section')?.contains(focused)))
+      bar.focus({ preventScroll: true });
+  }
+  /**
+   * A version's entrance: one of the assistant's comparisons fades in, anything else slides;
+   * neither moves with reduced motion.
+   */
+  function enter(node: Element) {
+    if (prefersReducedMotion.current) return { duration: 0 };
+    return question ? fade(node, { duration: 250 }) : fly(node, { x: 24, duration: 180 });
+  }
   const playbackContext = $derived(presentationPlaybackContext(visible));
   $effect.pre(() => {
     const context = playbackContext;
@@ -388,10 +414,23 @@
 >
   {#if visible.length}
     {#if question}
+      <!-- Tinted for a moment when it replaces the comparison just answered; the colour changes at
+        once with reduced motion. -->
       <p
-        class="shrink-0 border-b bg-background px-3 py-2 text-center text-base font-medium"
+        {@attach focusOnArrival}
+        tabindex="-1"
+        class={[
+          'shrink-0 border-b px-3 py-2 text-center text-base font-medium outline-none',
+          'transition-colors duration-700 motion-reduce:transition-none',
+          arrived ? 'bg-primary/15' : 'bg-background'
+        ]}
         data-replay-region="comparison-question"
       >
+        {#if progress && progress.count > 1}
+          <span class="mr-2 text-sm font-normal text-muted-foreground tabular-nums">
+            Question {progress.number} of {progress.count}
+          </span>
+        {/if}
         <MessageContent content={[{ type: 'markdown', text: question }]} inline />
         {#if recorded && !picked && !awaiting}
           <!-- What was answered, which the controls below change. -->
@@ -419,7 +458,7 @@
         class="flex min-h-0 flex-1 overflow-hidden bg-muted/30 p-2"
         data-replay-region={`candidate-${index + 1}`}
         data-replay-presentation-id={entry.presentation.presentationId}
-        in:fly={{ x: 24, duration: 180 }}
+        in:enter
       >
         <div
           class={[

@@ -257,6 +257,26 @@ export function pairQuestion(visible: readonly TimelinePresentation[]): string |
 }
 
 /**
+ * Where a shown comparison falls among those its operation asked, as “2 of 3”; undefined unless it
+ * is one of the assistant's comparisons.
+ */
+export function comparisonProgress(
+  presentations: readonly TimelinePresentation[],
+  visible: readonly TimelinePresentation[]
+): { number: number; count: number } | undefined {
+  if (!pairQuestion(visible)) return undefined;
+  const { operationId, displaySetId } = visible[0];
+  const asked = [
+    ...new Set(
+      presentations
+        .filter((entry) => entry.operationId === operationId && entry.question)
+        .map((entry) => entry.displaySetId)
+    )
+  ];
+  return { number: asked.indexOf(displaySetId) + 1, count: asked.length };
+}
+
+/**
  * Return the FIFO current-source candidates not consumed by committed participant actions, nor
  * answered while the answer is being saved.
  */

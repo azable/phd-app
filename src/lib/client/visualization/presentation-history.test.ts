@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
 import type { DesignValues } from '$lib/shared/presentations';
@@ -6,12 +6,13 @@ import type { DesignValues } from '$lib/shared/presentations';
 import {
   availablePresentations,
   candidateId,
+  comparisonProgress,
   latestPresentations,
   pairQuestion,
   presentationDisplayId,
   timelinePresentations
 } from './presentation-history';
-import { PresentationSelection } from './presentation-selection.svelte';
+import { pickConfirmationMs, PresentationSelection } from './presentation-selection.svelte';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const setOne = '12345678-1234-4123-8123-123456789abd';
@@ -340,7 +341,8 @@ describe('answering a comparison', () => {
   const ids = (shown: readonly { presentation: { presentationId: string } }[]) =>
     shown.map(({ presentation }) => presentation.presentationId);
 
-  it('shows the next queued pair while the answer is saved, and keeps it once saved', async () => {
+  it('shows the next queued pair once the pick is confirmed, saved or not', async () => {
+    vi.useFakeTimers();
     const events = asked();
     const selection = new PresentationSelection(true, undefined, true);
     const answered = selection.selected(events, 'comparison');
@@ -352,6 +354,8 @@ describe('answering a comparison', () => {
       () => new Promise<boolean>((resolve) => (finish = resolve)),
       events.length
     );
+    expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(0, 2));
+    vi.advanceTimersByTime(pickConfirmationMs);
     expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(2));
 
     events.push({
@@ -371,6 +375,16 @@ describe('answering a comparison', () => {
     expect(await saving).toBe(true);
     expect(selection.followingLatest).toBe(true);
     expect(ids(selection.selected(events, 'comparison'))).toEqual(presentationIds.slice(2));
+    vi.useRealTimers();
+  });
+
+  it('counts the comparisons its operation asked', () => {
+    const all = timelinePresentations(asked());
+    expect(comparisonProgress(all, all.slice(2))).toEqual({ number: 1, count: 1 });
+    const together = timelinePresentations(asked().map((event) => ({ ...event, operationId })));
+    expect(comparisonProgress(together, together.slice(0, 2))).toEqual({ number: 1, count: 2 });
+    expect(comparisonProgress(together, together.slice(2))).toEqual({ number: 2, count: 2 });
+    expect(comparisonProgress(all, all.slice(0, 1))).toBeUndefined();
   });
 
   it('returns to the answered pair when saving fails', async () => {

@@ -15,6 +15,14 @@ import {
   type TimelinePresentation
 } from './presentation-history';
 
+/**
+ * How long a comparison's answer shows on its pair before the next comparison replaces it, so the
+ * pick is seen to register: about the half second people take to notice a change they made.
+ */
+export const pickConfirmationMs = 500;
+/** How long the question of the comparison that replaced it stays highlighted, to be noticed. */
+export const arrivalHighlightMs = 1200;
+
 /** Coordinates generated sets, custom pairs, and live-head following. */
 export class PresentationSelection {
   selectedIds = $state.raw<string[]>([]);
@@ -24,6 +32,8 @@ export class PresentationSelection {
   #answered = $state.raw<readonly string[]>([]);
   /** The pair last answered, kept on the stage until what follows it arrives (see `awaiting`). */
   #held = $state.raw<HeldPair>();
+  /** The comparison answered last, once the next has replaced it, for a while (see `arrived`). */
+  #replaced = $state.raw<readonly string[]>();
 
   /**
    * @param requestLayout Lets the selection imply the layout: Shift-selecting a second variant asks
@@ -48,12 +58,21 @@ export class PresentationSelection {
   }
 
   /**
-   * Whether the pair last answered is still shown in place of what follows it: `updating` while no
-   * other comparison waits and the assistant's turn that the answer asked for has neither shown a
-   * version nor ended.
+   * Whether the pair last answered is still shown in place of what follows it: `confirming` while
+   * its answer shows on it (`pickConfirmationMs`); then `updating` while no other comparison waits
+   * and the assistant's turn that the answer asked for has neither shown a version nor ended.
    */
-  awaiting(events: readonly ProjectEvent[], layout: PresentationLayout): 'updating' | undefined {
+  awaiting(events: readonly ProjectEvent[], layout: PresentationLayout): Awaiting | undefined {
     return this.#holding(events, timelinePresentations(events), layout);
+  }
+
+  /** Whether the comparison shown has just replaced the one answered (`arrivalHighlightMs`). */
+  arrived(events: readonly ProjectEvent[], layout: PresentationLayout): boolean {
+    const replaced = this.#replaced;
+    if (!replaced) return false;
+    const shown = this.selected(events, layout);
+    const ids = shown.map(({ presentation }) => presentation.presentationId);
+    return !!pairQuestion(shown) && !sameIds(ids, replaced);
   }
 
   /** Activate a generated set, or use Shift to build a compatible historical pair. */
@@ -64,6 +83,7 @@ export class PresentationSelection {
     extend = false
   ): void {
     this.#held = undefined;
+    this.#replaced = undefined;
     const all = timelinePresentations(events);
     if (extend) {
       const activeIds = (
@@ -105,6 +125,7 @@ export class PresentationSelection {
   ): void {
     if (pair.length !== 2) return;
     this.#held = undefined;
+    this.#replaced = undefined;
     const effective =
       layout !== 'comparison' && this.requestLayout?.('comparison') ? 'comparison' : layout;
     const ids = pair.map(({ presentation }) => presentation.presentationId);
@@ -121,14 +142,16 @@ export class PresentationSelection {
   /** Resume automatic selection of newly generated output. */
   returnToLatest(): void {
     this.#held = undefined;
+    this.#replaced = undefined;
     this.followingLatest = true;
     this.notice = null;
   }
 
   /**
    * Answer a pair: show what follows it, as if the answer were recorded, while `save` records it;
-   * if saving fails, show the answered pair again. Another comparison waiting shows at once; with
-   * none, one of the assistant's comparisons stays until its reply arrives (`awaiting`).
+   * if saving fails, show the answered pair again. One of the assistant's comparisons first shows
+   * its answer (`awaiting`); then another comparison waiting replaces it, or with none it stays
+   * until its reply arrives.
    *
    * @param head The Timeline's head when answering, after which the reply's events follow.
    */
@@ -140,10 +163,17 @@ export class PresentationSelection {
     const ids = presentations.map(({ presentation }) => presentation.presentationId);
     this.#answered = ids;
     this.returnToLatest();
-    const held: HeldPair | undefined = pairQuestion(presentations)
-      ? { ids, head, saving: true }
-      : undefined;
-    this.#held = held;
+    if (pairQuestion(presentations)) {
+      this.#held = { ids, head, saving: true, confirming: true };
+      setTimeout(() => {
+        if (this.#held?.ids !== ids) return;
+        this.#held = { ...this.#held, confirming: false };
+        this.#replaced = ids;
+        setTimeout(() => {
+          if (this.#replaced === ids) this.#replaced = undefined;
+        }, arrivalHighlightMs);
+      }, pickConfirmationMs);
+    }
     let saved = false;
     try {
       saved = await save();
@@ -153,7 +183,7 @@ export class PresentationSelection {
         this.#held = undefined;
         this.setIds(ids);
         this.followingLatest = false;
-      } else if (held && this.#held === held) this.#held = { ...held, saving: false };
+      } else if (this.#held?.ids === ids) this.#held = { ...this.#held, saving: false };
     }
     return saved;
   }
@@ -162,9 +192,10 @@ export class PresentationSelection {
     events: readonly ProjectEvent[],
     all: readonly TimelinePresentation[],
     layout: PresentationLayout
-  ): 'updating' | undefined {
+  ): Awaiting | undefined {
     const held = this.#held;
     if (!held || !this.followingLatest) return undefined;
+    if (held.confirming) return 'confirming';
     const next = this.automatic(events, all, layout);
     const nextIds = next.map(({ presentation }) => presentation.presentationId);
     if (pairQuestion(next) && !sameIds(nextIds, held.ids)) return undefined;
@@ -254,7 +285,8 @@ export class PresentationSelection {
   }
 }
 
-type HeldPair = { ids: readonly string[]; head: EventId; saving: boolean };
+type Awaiting = 'confirming' | 'updating';
+type HeldPair = { ids: readonly string[]; head: EventId; saving: boolean; confirming: boolean };
 
 /** Whether the first assistant turn asked for after `head` is waiting or running. */
 function replyRunning(events: readonly ProjectEvent[], head: EventId): boolean {
