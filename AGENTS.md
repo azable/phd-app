@@ -169,11 +169,11 @@ attempt navigation.
   PostgreSQL integration tests. Use `devenv up -d postgres` first for the
   latter. Run `pnpm run check`, `pnpm run lint`, and focused mode/build tests
   after relevant changes.
-- `pnpm run test:browser` takes minutes; never run it whole by default. Run
-  only the `*.browser.test.ts` files that cover what changed, once, and none
-  for changes that cannot affect what the page draws (prompts, the guide, the
-  AI context, server commands). When merging, run only the tests covering code
-  both sides changed.
+- `pnpm run test:browser` takes minutes; never run it whole by default. Run only
+  the `*.browser.test.ts` files that cover what changed, once, and none for
+  changes that cannot affect what the page draws (prompts, the guide, the AI
+  context, server commands). When merging, run only the tests covering code both
+  sides changed.
 - After Svelte component or module changes, run `pnpm run check`, the
   `@sveltejs/mcp` autofixer required by the repository skill, and manually
   verify affected browser interactions. There is no automated E2E suite. Do not
