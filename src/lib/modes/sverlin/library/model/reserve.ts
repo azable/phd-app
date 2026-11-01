@@ -584,59 +584,98 @@ export function* elementsUnder(element: ModelElement): Generator<ModelElement> {
 }
 
 /**
- * What a step draws, laid out as it is shown, as text: every element's box, font, paint and text,
- * each free layout's children where its solution places them with the links it draws, and the
- * links a row or column routes over its children. Ids, which tell nothing about the picture, are
- * left out, so two presentations drawing the same picture describe it alike (see drawnText).
+ * What a step draws, laid out as it is shown, as text: every element seen, with its font, paint and
+ * text, and the box of each that shows one (seenBox); each free layout's children where its
+ * solution places them with the links it draws; and the links a row or column routes over its
+ * children. Only what is seen and the room it keeps itself count: laid out without what is hidden,
+ * as a node keeping its room until it shows, and without the room kept in what shows no box, and
+ * placed from the top left of what is seen, so room kept for what does not show moves nothing.
+ * Ids, which tell nothing about the picture, are left out too, so two presentations drawing the
+ * same picture describe it alike (see drawnText).
  */
 export function describeDrawn(markup: ModelElement, options: ReserveOptions): string | undefined {
-  const model = sizer(options);
-  const at = model.read({ markup });
+  const shown = seenOnly(markup);
+  const seen = [...elementsUnder(shown)].filter((element) => seenBox(element, ownText(element)));
+  const kept = (attribute: string) =>
+    new Set(seen.flatMap(({ attributes }) => attributes[attribute] ?? []));
+  const nodes = kept('data-sv-node');
+  const components = kept('data-sv-component');
+  const { memory } = options;
+  const model = sizer({
+    ...options,
+    memory: {
+      ...memory,
+      reserved: new Map([...memory.reserved].filter(([id]) => nodes.has(id))),
+      components: new Map([...memory.components].filter(([name]) => components.has(name)))
+    }
+  });
+  const at = model.read({ markup: shown });
   if (!at) return undefined;
   const laid = model.layOutAlone(at, at.frame, true);
-  const parts: string[] = [];
+  // Each part, given where what is seen starts, and the place of each box seen, which it starts at.
+  const parts: { seen?: [number, number]; value: (origin: [number, number]) => unknown }[] = [];
+  const placed = (
+    left: number,
+    top: number,
+    value: (place: [number, number]) => unknown,
+    seen = true
+  ): (typeof parts)[number] => ({
+    ...(seen ? { seen: [left, top] as [number, number] } : {}),
+    value: ([originLeft, originTop]) => value([left - originLeft, top - originTop])
+  });
   const walk = (
     element: ModelElement,
     boxIn: (inner: ModelElement) => Box,
     x: number,
-    y: number
+    y: number,
+    hiddenAbove = false
   ) => {
     const { attributes } = element;
     if (attributes['data-sv-link'] !== undefined || attributes['data-sv-link-label'] !== undefined)
       return;
     const look = at.styled.get(element)?.look;
     if (look?.display === 'none') return;
+    // Hidden as the page hides it (page.ts): inherited, unless shown again inside.
+    const hiddenAs = attributes['data-sv-hidden'] ?? element.style.visibility;
+    const hidden =
+      hiddenAs === 'true' || hiddenAs === 'hidden' || (hiddenAbove && !isShown(hiddenAs));
     const box = boxIn(element);
     const left = box.x + x;
     const top = box.y + y;
-    parts.push(
-      drawnText([
+    const text = ownText(element);
+    if (!hidden) {
+      const [tag, ...rest] = [
         element.tag,
-        [left, top, box.width, box.height],
         look && [look.fontSize, look.fontWeight, look.fontStyle, look.fontFamily, look.border],
         look && [look.textTransform, look.fontVariantCaps],
         Object.entries(element.style).filter(([name]) => paintProperties.has(name)),
         Object.entries(attributes).filter(([name]) => !unseenAttributes.has(name)),
-        element.children.filter((child) => !isElement(child)).join('')
-      ])
-    );
+        text
+      ];
+      parts.push(
+        seenBox(element, text)
+          ? placed(left, top, (place) => [tag, [...place, box.width, box.height], ...rest])
+          : { value: () => [tag, ...rest] }
+      );
+    }
     if (attributes['data-sv-overlaid'] !== undefined) {
       const axis = classesOf(element).includes('row') ? 'row' : 'column';
       const route = routeOverlay(model.layoutReader(at, laid), element, axis);
-      parts.push(drawnText(['links', [left, top], route.lines]));
+      parts.push(placed(left, top, (place) => ['links', place, route.lines], false));
       for (const { label, middle } of route.labels)
         walk(
           label,
           (inner) => model.layoutReader(at, laid).boxIn(inner, label),
           left + middle.x,
-          top + middle.y
+          top + middle.y,
+          hidden
         );
     }
     const host = classesOf(element).includes('sv-arranged')
       ? elementsOf(element).find((child) => classesOf(child).includes('placed'))
       : undefined;
     if (!host) {
-      for (const child of elementsOf(element)) walk(child, boxIn, x, y);
+      for (const child of elementsOf(element)) walk(child, boxIn, x, y, hidden);
       return;
     }
     // Placed as the page places them (see Arranged.svelte), each child laid out on its own.
@@ -646,12 +685,18 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
     const hostBox = boxIn(host);
     const hostLeft = hostBox.x + x;
     const hostTop = hostBox.y + y;
-    parts.push(
-      drawnText(['arranged', [arranged.width, arranged.height], arranged.edges, arranged.styles])
-    );
+    parts.push({
+      value: () => ['arranged', [arranged.width, arranged.height], arranged.edges, arranged.styles]
+    });
     arranged.elements.forEach((child, index) => {
       const { x: placedX, y: placedY } = arranged.placements[index];
-      walk(child, (inner) => read.boxIn(inner, child), hostLeft + placedX, hostTop + placedY);
+      walk(
+        child,
+        (inner) => read.boxIn(inner, child),
+        hostLeft + placedX,
+        hostTop + placedY,
+        hidden
+      );
     });
     for (const edge of arranged.edges) {
       const label = edge.id === undefined ? undefined : arranged.labels.get(edge.id);
@@ -660,12 +705,100 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
           label,
           (inner) => read.boxIn(inner, label),
           hostLeft + edge.middle.x,
-          hostTop + edge.middle.y
+          hostTop + edge.middle.y,
+          hidden
         );
     }
   };
   walk(at.frame, (element) => laid.boxes.get(element) ?? { x: 0, y: 0, width: 0, height: 0 }, 0, 0);
-  return parts.join('\n');
+  const places = parts.flatMap(({ seen }) => (seen ? [seen] : []));
+  const origin: [number, number] = places.length
+    ? [Math.min(...places.map(([left]) => left)), Math.min(...places.map(([, top]) => top))]
+    : [0, 0];
+  return parts.map(({ value }) => drawnText(value(origin))).join('\n');
+}
+
+function ownText(element: ModelElement): string {
+  return element.children.filter((child) => !isElement(child)).join('');
+}
+
+/**
+ * Whether an element shows its box, which its size and place are then seen by: one not a plain
+ * block or span, as an svg; one with text of its own; or one that paints a box, as Node does in
+ * its inline style: a fill, a stroke or a shadow. Any other only holds what is inside it.
+ */
+function seenBox(element: ModelElement, text: string): boolean {
+  if (element.tag !== 'div' && element.tag !== 'span') return true;
+  if (text.trim() || element.attributes['data-sv-framed'] !== undefined) return true;
+  const { style } = element;
+  return (
+    (parseFloat(style['border-width'] ?? '') > 0 && style['border-style'] !== 'none') ||
+    !unpainted(style['background-color']) ||
+    !unpainted(style['background-image']) ||
+    !unpainted(style['box-shadow'])
+  );
+}
+
+/**
+ * Markup as far as it is seen: without what the page hides (page.ts), as a node keeping its room
+ * until it shows, unless something inside it shows again; and without the room a node showing no
+ * box keeps, the largest size it reaches (Node's least size in pixels), keeping its own least size.
+ */
+function seenOnly(element: ModelElement): ModelElement {
+  if (hiddenHere(element) && !showsInside(element))
+    return { ...element, style: { ...element.style, display: 'none' } };
+  let changed = false;
+  const children = element.children.map((child) => {
+    if (!isElement(child)) return child;
+    const drawn = seenOnly(child);
+    changed ||= drawn !== child;
+    return drawn;
+  });
+  const style =
+    classesOf(element).includes('sv-node') && !seenBox(element, ownText(element))
+      ? withoutKeptRoom(element.style)
+      : element.style;
+  return changed || style !== element.style ? { ...element, style, children } : element;
+}
+
+/** A style without the pixels of a least size, keeping a least size in other units. */
+function withoutKeptRoom(style: ModelElement['style']): ModelElement['style'] {
+  const least = (value: string | undefined) =>
+    value === undefined || !/\dpx/u.test(value)
+      ? value
+      : /^max\((.*),\s*[\d.]+px\)$/u.exec(value)?.[1]?.trim();
+  const kept = Object.entries(style).flatMap(([property, value]) => {
+    if (property !== 'min-width' && property !== 'min-height') return [[property, value]];
+    const own = least(value);
+    return own === undefined ? [] : [[property, own]];
+  });
+  return kept.length === Object.keys(style).length &&
+    kept.every(([property, value]) => style[property] === value)
+    ? style
+    : Object.fromEntries(kept);
+}
+
+function hiddenHere(element: ModelElement): boolean {
+  const hiddenAs = element.attributes['data-sv-hidden'] ?? element.style.visibility;
+  return hiddenAs === 'true' || hiddenAs === 'hidden';
+}
+
+function showsInside(element: ModelElement): boolean {
+  return elementsOf(element).some(
+    (child) =>
+      isShown(child.attributes['data-sv-hidden'] ?? child.style.visibility) || showsInside(child)
+  );
+}
+
+function unpainted(value: string | undefined): boolean {
+  return (
+    value === undefined || ['', 'none', 'transparent', 'rgba(0, 0, 0, 0)'].includes(value.trim())
+  );
+}
+
+/** Whether an element shows again inside a hidden one, as the page shows it (page.ts). */
+function isShown(hiddenAs: string | undefined): boolean {
+  return hiddenAs === 'false' || hiddenAs === 'visible';
 }
 
 /** Inline declarations that paint, rather than size or place, what an element draws. */

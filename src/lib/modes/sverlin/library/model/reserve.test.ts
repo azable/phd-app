@@ -157,8 +157,34 @@ describe('describeDrawn', () => {
   });
 
   it('leaves out what moves or grows by less than a pixel', () => {
-    const sized = (width: string) => drawn(cell('a', '1', ` style="width: ${width}"`));
+    const sized = (width: string) =>
+      drawn(cell('a', '1', ` style="width: ${width}; background-color: white"`));
     expect(sized('40.2px')).toBe(sized('40px'));
     expect(sized('43px')).not.toBe(sized('40px'));
+  });
+
+  it('leaves out what is hidden, the room kept for it, and the size of what paints no box', () => {
+    const label = (hidden: string) =>
+      `<div class="sv-node" data-sv-node="l" data-sv-hidden="${hidden}">lo</div>`;
+    // A mark keeping its room, the largest it reaches, for a label not yet shown.
+    const mark = (content: string, room = '') =>
+      `<div class="sv-node" data-sv-node="m" style="${room}"><div class="items">${content}</div></div>`;
+    const picture = drawn(row('p', cell('a', '1'), mark('')));
+    expect(drawn(row('p', cell('a', '1'), mark(label('true'), 'min-height: 96px')))).toBe(picture);
+    // Shown, or shown again inside what is hidden, it is seen.
+    expect(drawn(row('p', cell('a', '1'), mark(label('false'))))).not.toBe(picture);
+    expect(
+      drawn(
+        row(
+          'p',
+          cell('a', '1'),
+          `<div class="sv-node" data-sv-node="h" data-sv-hidden="true">${mark(label('false'))}</div>`
+        )
+      )
+    ).not.toBe(picture);
+    // Room a painted box keeps is seen as its size.
+    const painted = (room: string) =>
+      drawn(row('p', cell('a', '1', ` style="background-color: white; ${room}"`)));
+    expect(painted('min-height: 96px')).not.toBe(painted(''));
   });
 });

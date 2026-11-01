@@ -82,6 +82,31 @@ describe('laying out on the server', () => {
     ).toEqual(Array.from({ length: 16 }, (_, index) => index + 1));
   }, 60_000);
 
+  it('counts no step where marks differ only in the room kept for labels not yet shown', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/search-labels.sverlin', 'utf8');
+    const prepared = prepareSvelteComponent(source);
+    const drawnWith = async (labels: boolean) =>
+      (
+        await bundlePresentation(
+          prepared,
+          1,
+          {
+            chosen: {
+              'pointers.Index@lo': 'LowerMark',
+              'pointers.Index@hi': 'UpperMark',
+              'LowerMark.LowerLabel.shown': labels,
+              'UpperMark.UpperLabel.shown': labels
+            }
+          },
+          { serverLayout: true }
+        )
+      ).layout?.drawn;
+    const labelled = await drawnWith(true);
+    // Before lo and hi are set, both draw the cells alone, the labelled keeping room for its labels.
+    expect(differingSteps(labelled, await drawnWith(false))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
+  }, 60_000);
+
   it('lays a node out in its case, wider uppercase, alike at the starter', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
