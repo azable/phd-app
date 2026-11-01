@@ -43,7 +43,7 @@ const comparisonAnswer = {
 
 /**
  * Runtime schema for an answer to a comparison of two compatible presentations: one preferred, or,
- * as its outcome, either is fine (a tie, evidence the two are close) or decide later (a skip, no
+ * as its outcome, either is fine (a tie, evidence the two are close) or unsure (a skip, no
  * evidence, the question open to be asked again).
  */
 export const visualizationPreferenceRecordedEventSchema = v.object({
@@ -57,10 +57,10 @@ export const visualizationPreferenceRecordedEventSchema = v.object({
 
 type ComparisonAnswer = v.InferOutput<typeof visualizationPreferenceRecordedEventSchema>['payload'];
 
-/** An answer to a comparison: one of the pair preferred, either is fine, or decide later. */
+/** An answer to a comparison: one of the pair preferred, either is fine, or unsure. */
 export type ComparisonOutcome = 'preferred' | 'tie' | 'skip';
 
-/** The presentation an answer preferred, or none for either is fine and decide later. */
+/** The presentation an answer preferred, or none for either is fine and unsure. */
 export function preferredPresentation(answer: ComparisonAnswer): string | undefined {
   return 'preferred' in answer ? answer.preferred : undefined;
 }

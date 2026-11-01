@@ -71,7 +71,7 @@ describe('presentation preferences', () => {
     );
   });
 
-  it('records either is fine and decide later as the comparison’s outcome, naming no side', async () => {
+  it('records either is fine and unsure as the comparison’s outcome, naming no side', async () => {
     const repository = new MemoryProjectRepository();
     const ids = [randomUUID(), randomUUID()] as [string, string];
     const displaySetId = randomUUID();

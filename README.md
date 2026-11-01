@@ -107,24 +107,27 @@ decision's one version, and the rest are built after it, one pair at a time,
 each queued as soon as it is built (`presentRemainingComparisons` in
 [`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
 the pair's `visualization.presented` events, each with its side's `label`, and
-shown above it on the stage; the chat caption and the assistant's context give a
-preferred side as its label (“Cells or tallies? → tallies”), and a preference
-naming that display set is read with it in the assistant's context. A comparison
-may also ask a brief attribute by showing, naming it and the tag each side
-stands for (tone: restrained or bold), stored as each side's `brief`: preferring
-a side sets the attribute, inferred, its source the question and the side's
-label (`projectBrief` in [`brief.ts`](src/lib/shared/projects/brief.ts)); a tie
-or skip sets nothing. A pair is answered by preferring a side, Either is fine (a
-tie) or Decide later (a skip), all recorded as
-`visualization.preference-recorded`, a tie or skip as its `outcome` with no
-`preferred`. Choosing a comparison's question in the chat shows its pair on the
-stage again, its latest answer marked, to answer it or answer it again (the same
-command, so it also rebases on a preferred side and may start a turn); a pair's
-latest answer is the one that counts, in its caption and in the preference
-model. An answer on one of them asks the assistant for no turn while others wait
-(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
-`moot`, those the answer makes moot, asking the pair just answered, about a
-variable it settled, or something a value it settled hides (`mootComparison` in
+shown above it on the stage and as a card in the chat, each side by its label;
+the assistant's context gives a preferred side as its label (“Cells or tallies?
+→ tallies”), and a preference naming that display set is read with it in the
+assistant's context. A comparison may also ask a brief attribute by showing,
+naming it and the tag each side stands for (tone: restrained or bold), stored as
+each side's `brief`: preferring a side sets the attribute, inferred, its source
+the question and the side's label (`projectBrief` in
+[`brief.ts`](src/lib/shared/projects/brief.ts)); a tie or skip sets nothing. A
+pair is answered by preferring a side (Top or Bottom), Either (a tie) or Unsure
+(a skip), all recorded as `visualization.preference-recorded`, a tie or skip as
+its `outcome` with no `preferred`. The card marks each side by the latest
+answer, a tick beside the chosen side and a cross beside the other (ticks on
+both for Either), or a question mark beside each while it is unanswered or
+Unsure. Choosing the card shows its pair on the stage again, to answer it or
+answer it again (the same command, so it also rebases on a preferred side and
+may start a turn); a pair's latest answer is the one that counts, on its card
+and in the preference model. An answer on one of them asks the assistant for no
+turn while others wait (`waitingComparisons`); it sets aside, as
+`candidates-advanced` with reason `moot`, those the answer makes moot, asking
+the pair just answered, about a variable it settled, or something a value it
+settled hides (`mootComparison` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
 that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
@@ -166,10 +169,9 @@ first its decision makes, with elements to highlight), answered by the
 participant's next message, which records the question it answers
 (`feedback.submitted` `answers`); the chat shows each question as the last
 paragraph of its reply, which is left without a last sentence or paragraph that
-repeats it, the next message being its answer, and each comparison pair its
-question and answer as a caption
-([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
-option its variable lacks (in the changed source, for `edit` and `revise`),
+repeats it, the next message being its answer, and each comparison pair as its
+card ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with
+an option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side hiding the layout itself or most of the picture
 (`allowedComparisonSide` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a
@@ -462,6 +464,21 @@ no buffer, comparing two when an administrator selects them. The protocol
 defines the counterbalanced order, 15-minute task duration, and
 interaction-capture policy; the comments beside its limits explain their
 sampling and delivery tradeoffs.
+
+The stage says what it is waiting for
+([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):
+before a project's first version, “Making a first version…” over the blank
+starter; with another comparison waiting, an answer is confirmed briefly before
+the next pair fades in, its question counted (“Question 2 of 3”); after the last
+answer of a set, the pair is held, greyed with “Updating…” and the chosen side
+marked, until the turn shows something or ends; and while the assistant works
+with no comparison up, the version shown is dimmed slightly with “Updating…”. A
+participant's first project opens with a short, skippable introduction to the
+interface, reopened from a help button, and one-time hints the first time
+comparisons, Choices, version tags or a past moment appear
+([`src/lib/client/tour/`](src/lib/client/tour/)), all drawn from one list of the
+workspace's parts with plain descriptions per system
+([`interface-parts.ts`](src/lib/shared/interface-parts.ts)).
 
 New blank projects start by asking which algorithm to visualise before
 authoring, inviting the participant to say who it is for and whether to ask a

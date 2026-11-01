@@ -346,7 +346,7 @@ export function projectBrief(
         sides.set(presentation.presentationId, { question, label, ...brief });
     } else if (event.type === 'visualization.preference-recorded') {
       // A side preferred sets what it stands for, as inferred from the pick; either is fine and
-      // decide later set nothing.
+      // unsure set nothing.
       const side = 'preferred' in event.payload ? sides.get(event.payload.preferred) : undefined;
       if (side)
         set(

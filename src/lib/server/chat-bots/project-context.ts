@@ -164,7 +164,7 @@ export type AiInteraction =
       /** The preferred side as the participant would call it, as “tallies”, for a comparison. */
       answer?: string;
       /**
-       * Either is fine (tie) or decide later (skip), where no side was preferred: the preferred and
+       * Either is fine (tie) or unsure (skip), where no side was preferred: the preferred and
        * alternative are then the pair's first and second.
        */
       outcome?: 'tie' | 'skip';
@@ -326,7 +326,7 @@ const timelineCases = {
     const preferred = preferredPresentation(event.payload);
     const [first, second] = event.payload.presentations;
     if (!preferred)
-      return `${comparisonOutcome(event.payload) === 'tie' ? 'Either is fine' : 'Decide later'} between presentations ${first} and ${second} at step ${event.payload.step}.`;
+      return `${comparisonOutcome(event.payload) === 'tie' ? 'Either is fine' : 'Unsure'} between presentations ${first} and ${second} at step ${event.payload.step}.`;
     return `Preferred presentation ${preferred} over ${event.payload.presentations.find((id) => id !== preferred) ?? 'the alternative'} at step ${event.payload.step}.`;
   },
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
@@ -533,11 +533,11 @@ function preferenceMessage(
   const { question, label } = questions.get(preferred) ?? {};
   const where = `${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}`;
   if (outcome !== 'preferred') {
-    const said = outcome === 'tie' ? 'either is fine' : 'decide later';
+    const said = outcome === 'tie' ? 'either is fine' : 'unsure';
     const meaning =
       outcome === 'tie'
         ? 'I find the two equally good, so this choice does not matter to me.'
-        : 'I would rather decide this later; ask it again another time.';
+        : 'I am unsure which I prefer; ask it again another time, perhaps in other words.';
     return `${question ? `${question} → ${said}. ` : ''}${meaning} (Presentations ${preferred} and ${other ?? 'the alternative'}${where}.)${differed}`;
   }
   const answer = question ? `${question} → ${label ?? 'the presentation preferred'}. ` : '';
@@ -590,7 +590,7 @@ export function projectAiContext(
     interfaceCapabilities: [
       'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',
       'The participant can select compatible retained presentations to compare a pair.',
-      'A visible pair has answer controls (prefer either side, either is fine, decide later); participants can reference retained presentations inline in messages.',
+      'A visible pair has answer controls (prefer either side, either is fine, unsure); participants can reference retained presentations inline in messages.',
       'A participant’s message starts with a note of what was on screen when they sent it, as (viewing presentation id at step 3, @insert.swap#1) or (comparing … with …): the number they saw in that presentation and the step’s name, as recordedSteps name it. It says where they were, not something they pointed at; a reference in their words, as [Presentation id at @insert.swap#1 (step 3)], is one they made.',
       'Participants can select elements of a presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
       'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'

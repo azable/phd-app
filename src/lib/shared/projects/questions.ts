@@ -2,7 +2,7 @@
  * The assistant's questions to the participant, of three kinds, each with what it is about and how
  * it is answered: in words (text, answered in the chat), about a presentation (one shown, or one
  * the assistant made for it, with elements to highlight; answered in the chat), and about a
- * pair (a comparison, answered by a side, either is fine, or decide later). Read from the events,
+ * pair (a comparison, answered by a side, either is fine, or unsure). Read from the events,
  * each answer linked to its question: a message by the question it answers (feedback.submitted
  * `answers`), a pair's answer by its display set. A pair may be answered again; its latest answer
  * counts.
@@ -98,17 +98,4 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
 export function openQuestion(events: readonly ProjectEvent[]): ProjectQuestion | undefined {
   const latest = projectQuestions(events).findLast(({ kind }) => kind !== 'pair');
   return latest && !latest.answer ? latest : undefined;
-}
-
-/**
- * A comparison's answer as its caption shows it: the preferred side's label (“tallies”), either is
- * fine, or later. An answer in words needs none, as the message that follows is the answer.
- */
-export function answerLabel(question: ProjectQuestion): MessageContent | undefined {
-  const answer = question.answer;
-  if (!answer || answer.kind === 'text') return undefined;
-  if (answer.kind !== 'preferred')
-    return [{ type: 'markdown', text: answer.kind === 'tie' ? 'either is fine' : 'later' }];
-  const slot = question.presentationIds.indexOf(answer.presentationId);
-  return [{ type: 'markdown', text: question.labels?.[slot] ?? (slot === 0 ? 'top' : 'bottom') }];
 }

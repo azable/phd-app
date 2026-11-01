@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent } from './events';
-import { answerLabel, openQuestion, projectQuestions } from './questions';
+import { openQuestion, projectQuestions } from './questions';
 
 /** Events numbered in order, each in the operation named. */
 function timeline(...events: object[]): ProjectEvent[] {
@@ -73,7 +73,7 @@ describe('questions', () => {
     ]);
   });
 
-  it('reads a pair with its question and the answer by side, either is fine, or later', () => {
+  it('reads a pair with its question and the answer by side, either is fine, or unsure', () => {
     const pair = [
       presented('a', { displaySetId: 's', question: 'Cells or tallies?', label: 'cells' }),
       presented('b', {
@@ -98,10 +98,8 @@ describe('questions', () => {
       labels: ['cells', 'tallies'],
       answer: { kind: 'preferred', presentationId: 'b' }
     });
-    const words = (text: string) => [{ type: 'markdown', text }];
-    expect(answerLabel(preferred)).toEqual(words('tallies'));
-    expect(answerLabel(answered({ outcome: 'tie' }))).toEqual(words('either is fine'));
-    expect(answerLabel(answered({ outcome: 'skip' }))).toEqual(words('later'));
+    expect(answered({ outcome: 'tie' }).answer).toMatchObject({ kind: 'tie' });
+    expect(answered({ outcome: 'skip' }).answer).toMatchObject({ kind: 'skip' });
   });
 
   it('counts a pair’s latest answer, keeping every answer’s event', () => {
@@ -127,11 +125,10 @@ describe('questions', () => {
     expect(openQuestion(events)?.text).toBe('Second?');
   });
 
-  it('captions no answer in words, the message that follows being the answer', () => {
+  it('takes the message that follows a question in words as its answer', () => {
     const [question] = projectQuestions(
       timeline(responded({ text: 'Why?' }), message('Because.', 1))
     );
     expect(question.answer).toMatchObject({ kind: 'text' });
-    expect(answerLabel(question)).toBeUndefined();
   });
 });

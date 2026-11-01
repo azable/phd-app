@@ -678,7 +678,7 @@ export function submitProjectPreference(
 }
 
 /**
- * The assistant builds on the candidate the participant preferred; either is fine and decide later
+ * The assistant builds on the candidate the participant preferred; either is fine and unsure
  * leave the source as it is.
  */
 function basedOnAnswer(

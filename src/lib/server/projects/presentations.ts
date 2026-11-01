@@ -31,7 +31,7 @@ const defaultDependencies: PresentationCommandDependencies = {
 
 /**
  * How a participant answered a comparison: the presentation preferred, or either is fine (tie) or
- * decide later (skip).
+ * unsure (skip).
  */
 export type PreferenceAnswer = { preferred: string } | { outcome: 'tie' | 'skip' };
 

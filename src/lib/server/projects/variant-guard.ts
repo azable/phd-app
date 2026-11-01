@@ -197,7 +197,7 @@ export function settledValues(events: readonly ProjectEvent[]): DesignValues {
  */
 export type Answer = { eventId: number; settled: DesignValues; pair: [DesignValues, DesignValues] };
 
-/** The answers recorded after an event, each but decide later, which answers nothing. */
+/** The answers recorded after an event, each but unsure, which answers nothing. */
 export function answersAfter(events: readonly ProjectEvent[], after: number): Answer[] {
   const variants = new Map<string, DesignValues>();
   const answers: Answer[] = [];

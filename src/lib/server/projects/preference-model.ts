@@ -8,7 +8,7 @@
  * options (Rasmussen and Williams 2006, algorithm 3.1).
  *
  * A preferred side is a win. Either is fine is a tie: Davidson's model, P(tie) = ν / (e^{d/2} +
- * e^{−d/2} + ν) for a utility difference d, so ties pull the two options together. Decide later is
+ * e^{−d/2} + ν) for a utility difference d, so ties pull the two options together. Unsure is
  * no evidence. A vary decision of the assistant, which records what the participant asked for in
  * chat, is strong evidence that its value beats every other the participant has seen.
  */

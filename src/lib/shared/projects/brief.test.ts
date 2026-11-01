@@ -171,7 +171,7 @@ describe('an attribute asked by showing', () => {
     });
   });
 
-  it('is left as it was by either is fine and decide later', () => {
+  it('is left as it was by either is fine and unsure', () => {
     expect(tone([...pair, answer({ outcome: 'tie' })])).toEqual({ key: 'tone', status: 'unknown' });
     expect(tone([...pair, answer({ outcome: 'skip' })])).toEqual({
       key: 'tone',

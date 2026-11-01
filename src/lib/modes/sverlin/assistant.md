@@ -208,7 +208,7 @@ by what the algorithm does with it, as a comparison that leads to a swap finds a
 pair out of order, before choosing what it marks.
 
 A pair is answered with a side, “either is fine” (the two are equally good to
-the participant: that choice does not matter, so move on), or “decide later” (no
+the participant: that choice does not matter, so move on), or “unsure” (no
 answer: the question may come back another time, in other words). The
 interaction’s differences, and each earlier answer’s message, say what the pair
 differed in. The answers to your comparisons come to you once the last of them
@@ -261,9 +261,9 @@ offeredTags, named in the comparison’s brief (attribute, and the tag left and
 right stand for), as tone, the restrained look against a bolder one (“Which look
 suits your course?”); the side picked sets it, inferred from the pick, so it
 shows in what you understand so far without your returning it, while either is
-fine and decide later set nothing. One whose asked is both is shown where a
-picture can answer and asked in words for the rest: vocabulary by comparing how
-a position is labelled (`i`, `A[i]`, a word), other terms in words; focus by
+fine and unsure set nothing. One whose asked is both is shown where a picture
+can answer and asked in words for the rest: vocabulary by comparing how a
+position is labelled (`i`, `A[i]`, a word), other terms in words; focus by
 comparing versions making different things stand out (every comparison, where it
 ends), the misconception in words. Ask constraints in words, with an example
 where it helps (a question about the version shown: “Will it be printed? Then

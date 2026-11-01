@@ -123,7 +123,7 @@ describe('the preference model', () => {
 });
 
 describe('the evidence in a project', () => {
-  it('counts a preference as a win, either is fine as a tie, and decide later as nothing', () => {
+  it('counts a preference as a win, either is fine as a tie, and unsure as nothing', () => {
     const { events, answer } = project();
     answer('IntCell', 'IntTally', 'right');
     answer('IntCell', 'IntDots', 'tie');
