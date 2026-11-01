@@ -293,14 +293,25 @@ function ownedBy(holder: HTMLElement | null, element: HTMLElement): holder is HT
 /** Text written in a node itself: outside its value and its child nodes. */
 function ownText(element: HTMLElement): string {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  const parts: string[] = [];
+  const pieces: (string | undefined)[] = [];
   for (let text = walker.nextNode(); text; text = walker.nextNode()) {
     const holder = text.parentElement;
-    if (!ownedBy(holder, element) || holder.closest('.value, svg')) continue;
-    const words = text.textContent?.trim();
-    if (words) parts.push(words);
+    const own = ownedBy(holder, element) && !holder.closest('.value, svg');
+    pieces.push(own ? (text.textContent ?? '') : undefined);
   }
-  return parts.join(' ');
+  return readingText(pieces);
+}
+
+/**
+ * Text pieces as they read, joined as written, so `A[`, `i` and `]` from separate text nodes (a
+ * block between them) read `A[i]`; a piece left out (undefined) parts its neighbours.
+ */
+export function readingText(pieces: readonly (string | undefined)[]): string {
+  return pieces
+    .map((piece) => piece ?? ' ')
+    .join('')
+    .replace(/\s+/gu, ' ')
+    .trim();
 }
 
 /**
