@@ -200,6 +200,18 @@
     const context = playbackContext;
     untrack(() => playback.activate(context));
   });
+  // A comparison shown again from the timeline opens at its first difference, as a new one does;
+  // once, so stepping from there is free.
+  let reopenedShown: object | undefined;
+  $effect.pre(() => {
+    const reopened = selection.reopened;
+    const context = playbackContext;
+    if (!reopened || reopened === reopenedShown) return;
+    const ids = visible.map(({ presentation }) => presentation.presentationId);
+    if (ids.length !== 2 || !reopened.ids.every((id) => ids.includes(id))) return;
+    reopenedShown = reopened;
+    untrack(() => playback.openAtFirstDifference(context));
+  });
   const step = $derived(playback.stepFor(playbackContext));
   const stepCount = $derived(playbackContext.stepCount);
   // The step's name, its label elided at the start as chat pills are (@…compare.left#3); in
@@ -361,14 +373,16 @@
             ><code class="font-mono text-xs">{shownStepName}</code>{/if}
         </span>
         {#if differsAt?.length}
-          <!-- Where the pair differs, the only steps worth comparing, and a jump to the nearest. -->
+          <!-- Where the pair differs, the only steps worth comparing, and a jump to the nearest, its
+            buttons 32-pixel targets that reach a little into the rows around. -->
           <span
             class="flex max-w-full items-center gap-1 text-xs text-muted-foreground"
             data-replay-region="differing-steps"
           >
             <Button
-              size="icon-xs"
+              size="icon"
               variant="ghost"
+              class="-my-1"
               aria-label="Previous step that differs"
               title="Previous step that differs"
               onclick={() => earlierDifference !== undefined && seek(earlierDifference)}
@@ -381,8 +395,9 @@
               {stepRanges(differsAt)}
             </span>
             <Button
-              size="icon-xs"
+              size="icon"
               variant="ghost"
+              class="-my-1"
               aria-label="Next step that differs"
               title="Next step that differs"
               onclick={() => laterDifference !== undefined && seek(laterDifference)}

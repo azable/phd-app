@@ -32,6 +32,8 @@ export class PresentationSelection {
   #answered = $state.raw<readonly string[]>([]);
   /** The pair last answered, kept on the stage until what follows it arrives (see `awaiting`). */
   #held = $state.raw<HeldPair>();
+  /** The pair last shown again from its comparison, a new object each time (see `showPair`). */
+  reopened = $state.raw<{ ids: readonly string[] }>();
   /** The comparison answered last, once the next has replaced it, for a while (see `arrived`). */
   #replaced = $state.raw<readonly string[]>();
 
@@ -130,6 +132,7 @@ export class PresentationSelection {
       layout !== 'comparison' && this.requestLayout?.('comparison') ? 'comparison' : layout;
     const ids = pair.map(({ presentation }) => presentation.presentationId);
     this.setIds(ids);
+    this.reopened = { ids };
     this.followingLatest = sameIds(
       ids,
       this.automatic(events, timelinePresentations(events), effective).map(

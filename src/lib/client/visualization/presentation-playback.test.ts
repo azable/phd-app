@@ -97,6 +97,10 @@ describe('presentation playback', () => {
     const other = presentationPlaybackContext([differing(4), differing(5)]);
     playback.activate(other);
     expect(playback.stepFor(other)).toBe(2);
+    // Shown again from its comparison, a pair opens at its first difference again.
+    playback.activate(pair);
+    playback.openAtFirstDifference(pair);
+    expect(playback.stepFor(pair)).toBe(2);
   });
 
   it('counts a pair’s differences in shared steps where one side omits a step', () => {

@@ -157,7 +157,8 @@
         : renderSafeMarkdown(segment.text)}
       <!-- The renderers apply the allowlist and URL policy before this HTML boundary. -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <span class="message-markdown" {@attach !inline && linkReferences}>{@html html}</span>
+      <span class="message-markdown" {@attach !inline && linkReferences}>{@html html}</span
+      >{after === 'space' ? ' ' : ''}
     {:else if segment.type === 'interface-ref'}
       {@const name = interfacePart(segment.part).name}
       <!-- A part of the workspace the reply points at: hovering, focusing or choosing it highlights

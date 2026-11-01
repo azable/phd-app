@@ -10,7 +10,7 @@ const text = (value: string) => ({ type: 'markdown', text: value }) as MessageCo
 describe('joinTrailingPunctuation', () => {
   it('moves the punctuation opening the next text onto the reference', () => {
     expect(joinTrailingPunctuation([text('as '), reference, text(', compare these')])).toEqual([
-      { segment: text('as ') },
+      { segment: text('as '), after: 'space' },
       { segment: reference, punctuation: ',', after: 'space' },
       { segment: text('compare these') }
     ]);
@@ -18,7 +18,7 @@ describe('joinTrailingPunctuation', () => {
 
   it('drops text that was only punctuation', () => {
     expect(joinTrailingPunctuation([text('as in '), reference, text('.')])).toEqual([
-      { segment: text('as in ') },
+      { segment: text('as in '), after: 'space' },
       { segment: reference, punctuation: '.' }
     ]);
   });
@@ -26,17 +26,29 @@ describe('joinTrailingPunctuation', () => {
   it('keeps a new paragraph after the punctuation', () => {
     expect(joinTrailingPunctuation([text('Viewing '), reference, text('.\n\nWith code?')])).toEqual(
       [
-        { segment: text('Viewing ') },
+        { segment: text('Viewing '), after: 'space' },
         { segment: reference, punctuation: '.', after: 'paragraph' },
         { segment: text('With code?') }
       ]
     );
   });
 
-  it('leaves text after a reference that opens with a word', () => {
+  it('keeps the space after a reference that markdown would drop', () => {
     expect(joinTrailingPunctuation([reference, text(' and more.')])).toEqual([
-      { segment: reference },
-      { segment: text(' and more.') }
+      { segment: reference, after: 'space' },
+      { segment: text('and more.') }
+    ]);
+    expect(joinTrailingPunctuation([reference, text('\n\nNext.')])).toEqual([
+      { segment: reference, after: 'paragraph' },
+      { segment: text('Next.') }
+    ]);
+  });
+
+  it('sets a word written straight after a reference apart from it', () => {
+    expect(joinTrailingPunctuation([text('See '), reference, text('I chose it.')])).toEqual([
+      { segment: text('See '), after: 'space' },
+      { segment: reference, after: 'space' },
+      { segment: text('I chose it.') }
     ]);
   });
 });

@@ -109,6 +109,13 @@ export class PresentationPlayback {
     return this.#step;
   }
 
+  /** Show a pair again from its first difference, as it opened the first time. */
+  openAtFirstDifference(context: PresentationPlaybackContext): void {
+    if (!context.pair || !context.differsAt?.length) return;
+    this.#openedPairs.add(context.pair);
+    this.seek(context, context.differsAt[0]);
+  }
+
   /** Where a pair never shown before opens: the first step at which its sides draw differently. */
   #firstDifference(context: PresentationPlaybackContext): number | undefined {
     if (!context.pair || !context.differsAt?.length || this.#openedPairs.has(context.pair))
