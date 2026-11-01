@@ -32,6 +32,18 @@ export function introTour(mode: VisualizationMode): Tour {
   return { id: `${mode}:intro`, steps: stepsFor(mode, introParts) };
 }
 
+/**
+ * An introduction's step left out because its part was not on screen yet, as the step controls
+ * before a first version, shown as a hint once it is: the hint's tour, and what marks it owed.
+ */
+export function deferredStep(intro: Tour, step: TourStep): { hint: Tour; owed: string } {
+  const mode = intro.id.slice(0, intro.id.indexOf(':'));
+  return {
+    hint: { id: `${mode}:hint:${step.part}`, steps: [step] },
+    owed: `${intro.id}:deferred:${step.part}`
+  };
+}
+
 /** The just-in-time hints of a system: only those whose first part its interface has. */
 export function hintTours(mode: VisualizationMode): Tour[] {
   return Object.entries(hintParts).flatMap(([name, parts]) => {
@@ -107,9 +119,19 @@ type Box = { top: number; left: number; width: number; height: number };
 type Size = { width: number; height: number };
 export type Side = 'bottom' | 'top' | 'right' | 'left' | 'over';
 
+// Parts among the timeline's messages: a popover beside them leaves the messages around readable.
+const besideParts: readonly InterfacePartId[] = ['version-pill', 'comparison-card'];
+
+/** The sides a popover for a part tries, in order. */
+export function popoverSides(part: InterfacePartId | undefined): Side[] {
+  return part && besideParts.includes(part)
+    ? ['right', 'left', 'bottom', 'top']
+    : ['bottom', 'top', 'right', 'left'];
+}
+
 /**
- * Where a popover of `size` goes beside `target` in the viewport: the first side with room, else
- * over the target's visible part (a part as large as the timeline leaves no room beside it).
+ * Where a popover of `size` goes beside `target` in the viewport: the first of `sides` with room,
+ * else over the target's visible part (a part as large as the timeline leaves no room beside it).
  * Always `margin` inside the viewport.
  */
 export function placePopover(
@@ -117,7 +139,8 @@ export function placePopover(
   size: Size,
   viewport: Size,
   gap = 12,
-  margin = 16
+  margin = 16,
+  sides: readonly Side[] = popoverSides(undefined)
 ): { top: number; left: number; side: Side } {
   const clamp = (value: number, length: number, room: number) =>
     Math.max(margin, Math.min(value, room - length - margin));
@@ -134,14 +157,29 @@ export function placePopover(
   const right = target.left + target.width;
   const across = centered(target.left, target.width, size.width, viewport.width);
   const down = centered(target.top, target.height, size.height, viewport.height);
-  if (viewport.height - bottom >= size.height + gap + margin)
-    return { top: bottom + gap, left: across, side: 'bottom' };
-  if (target.top >= size.height + gap + margin)
-    return { top: target.top - gap - size.height, left: across, side: 'top' };
-  if (viewport.width - right >= size.width + gap + margin)
-    return { top: down, left: right + gap, side: 'right' };
-  if (target.left >= size.width + gap + margin)
-    return { top: down, left: target.left - gap - size.width, side: 'left' };
+  const fits: Record<Side, { top: number; left: number } | undefined> = {
+    bottom:
+      viewport.height - bottom >= size.height + gap + margin
+        ? { top: bottom + gap, left: across }
+        : undefined,
+    top:
+      target.top >= size.height + gap + margin
+        ? { top: target.top - gap - size.height, left: across }
+        : undefined,
+    right:
+      viewport.width - right >= size.width + gap + margin
+        ? { top: down, left: right + gap }
+        : undefined,
+    left:
+      target.left >= size.width + gap + margin
+        ? { top: down, left: target.left - gap - size.width }
+        : undefined,
+    over: undefined
+  };
+  for (const side of sides) {
+    const place = fits[side];
+    if (place) return { ...place, side };
+  }
   // Inside the bottom of the target's visible part, where a large part's own content is least.
   const visibleBottom = Math.min(bottom, viewport.height);
   return {

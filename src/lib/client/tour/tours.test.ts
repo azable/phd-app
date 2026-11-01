@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hintTours, introTour, placePopover, SeenTours } from './tours';
+import { deferredStep, hintTours, introTour, placePopover, popoverSides, SeenTours } from './tours';
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -104,5 +104,28 @@ describe('popover placement', () => {
       side: 'over'
     });
     expect(placePopover(undefined, size, viewport)).toEqual({ top: 325, left: 350, side: 'over' });
+  });
+});
+
+describe('steps left out of the introduction', () => {
+  it('owes each as a hint of its own, marked by the introduction', () => {
+    const intro = introTour('sverlin');
+    const controls = intro.steps.find(({ part }) => part === 'step-controls')!;
+    expect(deferredStep(intro, controls)).toEqual({
+      hint: { id: 'sverlin:hint:step-controls', steps: [controls] },
+      owed: 'sverlin:intro:deferred:step-controls'
+    });
+  });
+});
+
+describe('popover placement beside the timeline’s messages', () => {
+  it('goes beside a version tag, leaving the messages below it readable', () => {
+    const viewport = { width: 1000, height: 800 };
+    const tag = { top: 200, left: 40, width: 120, height: 20 };
+    const size = { width: 300, height: 150 };
+    expect(placePopover(tag, size, viewport, 12, 16, popoverSides('version-pill')).side).toBe(
+      'right'
+    );
+    expect(placePopover(tag, size, viewport, 12, 16, popoverSides('stage')).side).toBe('bottom');
   });
 });

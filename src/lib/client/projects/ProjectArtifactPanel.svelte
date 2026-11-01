@@ -227,6 +227,8 @@
   // In developer view, the choices' document instead, as a diff for a pair.
   let rawShown = $state(false);
   const showingRaw = $derived(developerView && rawShown);
+  // The strip's buttons: a pair's differences or either side, and Details in developer view.
+  const choiceOptions = $derived(differences !== undefined || developerView);
   const optionButton =
     'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
   const optionOn = 'bg-background text-foreground ring-1 ring-border';
@@ -484,7 +486,12 @@
             showingRaw && 'flex-1 grid-rows-[auto_minmax(0,1fr)]'
           ]}
         >
-          <span class="truncate border-b bg-muted px-4 py-2 text-muted-foreground">
+          <span
+            class={[
+              'truncate border-b bg-muted px-4 py-2 text-muted-foreground',
+              !choiceOptions && 'col-span-2'
+            ]}
+          >
             {#if differences && showingDifferences}
               Choices: {differences.a.label} vs {differences.b.label} · {differences.keys.length
                 ? `${differences.keys.length} of ${differences.total} differ`
@@ -495,31 +502,35 @@
               Choices of the version shown
             {/if}
           </span>
-          <span
-            class="flex items-center gap-1 border-b bg-muted px-4 py-2 text-muted-foreground"
-            role="group"
-            aria-label="Choices shown"
-          >
-            {#if differences}
-              {#each shownVariantOptions as { id, name } (id)}
+          <!-- For one version only in developer view: the tour's Choices hint, which finds this
+            group, speaks of a pair. -->
+          {#if choiceOptions}
+            <span
+              class="flex items-center gap-1 border-b bg-muted px-4 py-2 text-muted-foreground"
+              role="group"
+              aria-label="Choices shown"
+            >
+              {#if differences}
+                {#each shownVariantOptions as { id, name } (id)}
+                  <button
+                    type="button"
+                    aria-pressed={shownVariant === id}
+                    class={[optionButton, shownVariant === id ? optionOn : 'hover:text-foreground']}
+                    onclick={() => (shownVariant = id)}>{name}</button
+                  >
+                {/each}
+              {/if}
+              {#if developerView}
                 <button
                   type="button"
-                  aria-pressed={shownVariant === id}
-                  class={[optionButton, shownVariant === id ? optionOn : 'hover:text-foreground']}
-                  onclick={() => (shownVariant = id)}>{name}</button
+                  aria-pressed={showingRaw}
+                  class={[optionButton, showingRaw ? optionOn : 'hover:text-foreground']}
+                  title="The choices as their document"
+                  onclick={() => (rawShown = !rawShown)}>Details</button
                 >
-              {/each}
-            {/if}
-            {#if developerView}
-              <button
-                type="button"
-                aria-pressed={showingRaw}
-                class={[optionButton, showingRaw ? optionOn : 'hover:text-foreground']}
-                title="The choices as their document"
-                onclick={() => (rawShown = !rawShown)}>Details</button
-              >
-            {/if}
-          </span>
+              {/if}
+            </span>
+          {/if}
           {#if showingRaw && differences && showingDifferences}
             <div class="col-span-2 min-h-48 overflow-hidden">
               <VariantDiff

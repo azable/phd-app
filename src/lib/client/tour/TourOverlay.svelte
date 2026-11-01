@@ -16,7 +16,7 @@
   import type { InterfacePartId } from '$lib/shared/interface-parts';
 
   import { findPart } from './spotlight.svelte';
-  import { placePopover } from './tours';
+  import { placePopover, popoverSides } from './tours';
 
   type Props = {
     /** The part spotlighted; the popover is centred when it is not on screen. */
@@ -86,7 +86,10 @@
         height: ring.bottom - ring.top
       },
       { width: popoverWidth, height: popoverHeight },
-      viewport
+      viewport,
+      12,
+      16,
+      popoverSides(part)
     )
   );
 
@@ -107,8 +110,9 @@
 
 <div class="pointer-events-none fixed inset-0 z-40" data-interface-tour>
   {#if ring}
+    <!-- An outline, not a ring: the dimming is a shadow, which would replace a ring's. -->
     <div
-      class="fixed rounded-lg ring-2 ring-primary motion-safe:transition-all motion-safe:duration-200"
+      class="fixed rounded-lg outline-2 outline-primary motion-safe:transition-all motion-safe:duration-200"
       style:top="{ring.top}px"
       style:left="{ring.left}px"
       style:width="{ring.right - ring.left}px"
