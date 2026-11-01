@@ -143,11 +143,11 @@ participant's next message, which records the question it answers
 (`feedback.submitted` `answers`); the chat shows each question, under a reply
 left without a last sentence or paragraph that repeats it, with its answer
 underneath, and each comparison pair its question and answer as a caption, a
-message's answer without the presentation it was viewing and with its references
-as pills ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison
-with an option its variable lacks (in the changed source, for `edit` and
-`revise`), sides alike, or a side hiding the layout itself or most of the
-picture (`allowedComparisonSide` in
+message's answer with its references as pills
+([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
+option its variable lacks (in the changed source, for `edit` and `revise`),
+sides alike, or a side hiding the layout itself or most of the picture
+(`allowedComparisonSide` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a
 chooser, the assistant may hide a top-level part such as a title) is recorded as
 rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired
@@ -229,10 +229,16 @@ come and go
 ([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)),
 and the frame reports selections as `sverlin:selection` messages, which the app
 validates and keeps per presentation and step. Feedback records them as
-`element-ref` segments; the server checks each id names a `<Node>` in that
-presentation's source ([`element-ref.ts`](src/lib/modes/sverlin/element-ref.ts))
-and gives the assistant the tag, its render, and the label the participant saw.
-The compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as
+`element-ref` segments at the start of the message; the server checks each id
+names a `<Node>` in that presentation's source
+([`element-ref.ts`](src/lib/modes/sverlin/element-ref.ts)) and gives the
+assistant the tag, its render, and the label the participant saw. Otherwise a
+message is only the participant's words: what was on screen (the presentation
+and step viewed, the pair compared, or a source chosen on its own) is recorded
+beside it as `feedback.submitted` `viewing`
+([`feedback-context.ts`](src/lib/client/timeline/feedback-context.ts)), not
+shown in the chat, and given to the assistant as a note before those words. The
+compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as
 `__view`, which with its `tags` gives its kind, and each node draws the
 variant's values for its kind. The compiler injects the library components and
 every input and algorithm value, the view each type rendered by name draws,

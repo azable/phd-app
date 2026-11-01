@@ -649,6 +649,7 @@ async function executeProjectCommand(options: {
             focus: options.command.focus,
             presentationCount: options.command.presentationCount,
             ...(options.command.from ? { from: options.command.from } : {}),
+            ...(options.command.viewing ? { viewing: options.command.viewing } : {}),
             ...(options.deadlineAt === undefined
               ? {}
               : { deadlineAt: new Date(options.deadlineAt).toISOString() })
@@ -657,7 +658,8 @@ async function executeProjectCommand(options: {
             ...common,
             content: options.command.content,
             focus: options.command.focus,
-            presentationCount: options.command.presentationCount
+            presentationCount: options.command.presentationCount,
+            ...(options.command.viewing ? { viewing: options.command.viewing } : {})
           });
     case 'advance-presentations':
       return advanceProjectPresentations({

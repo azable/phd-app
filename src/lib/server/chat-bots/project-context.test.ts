@@ -4,6 +4,8 @@ import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
 import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
 import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
 import { propOptions } from '$lib/modes/sverlin/library/node/design';
+import type { ProjectEvent } from '$lib/shared/projects/events';
+import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
@@ -473,6 +475,41 @@ describe('comparisons in the conversation', () => {
         role: 'user',
         content: '[Answering your question “Should the swap stand out more?”] Yes, much more.'
       }
+    ]);
+  });
+
+  it('notes what was on screen before the participant’s words', () => {
+    const value = document();
+    const [first, second] = [
+      '12345678-1234-4123-8123-123456789ac1',
+      '12345678-1234-4123-8123-123456789ac2'
+    ];
+    const message = (id: number, viewing: FeedbackViewing): ProjectEvent => ({
+      id,
+      type: 'feedback.submitted',
+      operationId,
+      actor: { kind: 'user' },
+      createdAt: '2026-01-01T00:00:07.000Z',
+      payload: {
+        content: [{ type: 'markdown', text: 'Make this step clearer.' }],
+        focus: [],
+        viewing
+      }
+    });
+    const at = value.events.length;
+    value.events.push(
+      message(at + 1, {
+        presentations: [{ presentationId: first, step: 6, stepName: '@search.check#4' }]
+      }),
+      message(at + 2, {
+        presentations: [{ presentationId: first, step: 0 }, { presentationId: second }]
+      }),
+      message(at + 3, { source: 'abc123' })
+    );
+    expect(projectConversationMessages(value.events).map(({ content }) => content)).toEqual([
+      `(viewing presentation ${first} at step 7, @search.check#4)\nMake this step clearer.`,
+      `(comparing presentation ${first} at step 1 with presentation ${second})\nMake this step clearer.`,
+      '(viewing source abc123 on its own)\nMake this step clearer.'
     ]);
   });
 

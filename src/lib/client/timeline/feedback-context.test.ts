@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { TimelinePresentation } from '$lib/client/visualization/presentation-history';
 
 import {
-  automaticFeedbackContext,
   feedbackSubmissionContent,
-  withoutFeedbackContext
+  feedbackViewing,
+  selectedFeedbackContext
 } from './feedback-context';
 
 const presentationIds = [
@@ -13,99 +13,57 @@ const presentationIds = [
   '12345678-1234-4123-8123-123456789ac2'
 ] as const;
 
-describe('automatic feedback context', () => {
-  it('retains the one visible presentation before participant prose', () => {
-    const context = automaticFeedbackContext([presentation(4, presentationIds[0])]);
-    expect(
-      feedbackSubmissionContent([{ type: 'markdown', text: 'Make it clearer.' }], context)
-    ).toEqual([
-      { type: 'markdown', text: 'Viewing ' },
-      { type: 'presentation-ref', presentationId: presentationIds[0] },
-      { type: 'markdown', text: '.\n\nMake it clearer.' }
-    ]);
+const words = [{ type: 'markdown' as const, text: 'Lecture' }];
+
+describe('feedback context', () => {
+  it('leaves the message as the participant wrote it where nothing is selected', () => {
+    const shown = [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])];
+    expect(feedbackSubmissionContent(words, selectedFeedbackContext(shown))).toEqual(words);
   });
 
-  it('references each visible presentation at the step it shows, by its number and name', () => {
-    expect(
-      automaticFeedbackContext(
-        [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
-        [],
-        undefined,
-        { [presentationIds[0]]: 2, [presentationIds[1]]: -1 }
-      )
-    ).toEqual([
-      { type: 'markdown', text: 'Comparing ' },
-      {
-        type: 'presentation-ref',
-        presentationId: presentationIds[0],
-        step: 2,
-        stepName: '@check#2'
-      },
-      { type: 'markdown', text: ' with ' },
-      { type: 'presentation-ref', presentationId: presentationIds[1] },
-      { type: 'markdown', text: '.' }
-    ]);
-  });
-
-  it('references selected elements in place of their presentation', () => {
+  it('starts the message with the elements selected in a visible presentation', () => {
     const element = { id: '62:7#2', label: 'Int 8' };
-    expect(
-      automaticFeedbackContext(
-        [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
-        [{ presentationId: presentationIds[1], step: 2, elements: [element] }]
-      )
-    ).toEqual([
-      { type: 'markdown', text: 'Comparing ' },
-      { type: 'presentation-ref', presentationId: presentationIds[0] },
-      { type: 'markdown', text: ' with ' },
+    const selected = selectedFeedbackContext(
+      [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
+      [{ presentationId: presentationIds[1], step: 2, elements: [element] }]
+    );
+    expect(feedbackSubmissionContent(words, selected)).toEqual([
       { type: 'element-ref', presentationId: presentationIds[1], step: 2, element },
-      { type: 'markdown', text: '.' }
+      ...words
     ]);
   });
 
-  it('references both visible presentations in a comparison', () => {
-    expect(
-      automaticFeedbackContext([
-        presentation(4, presentationIds[0]),
-        presentation(5, presentationIds[1])
-      ])
-    ).toEqual([
-      { type: 'markdown', text: 'Comparing ' },
-      { type: 'presentation-ref', presentationId: presentationIds[0] },
-      { type: 'markdown', text: ' with ' },
-      { type: 'presentation-ref', presentationId: presentationIds[1] },
-      { type: 'markdown', text: '.' }
-    ]);
-  });
-
-  it('takes the automatic context off a message, keeping what the participant wrote', () => {
-    const words = [{ type: 'markdown' as const, text: 'Warmer.' }];
-    const viewing = automaticFeedbackContext([presentation(4, presentationIds[0])]);
-    const comparing = automaticFeedbackContext([
-      presentation(4, presentationIds[0]),
-      presentation(5, presentationIds[1])
-    ]);
-    for (const context of [viewing, comparing, automaticFeedbackContext([], [], 'Main.Cell')])
-      expect(withoutFeedbackContext(feedbackSubmissionContent(words, context))).toEqual(words);
-    const inserted = [
-      { type: 'markdown' as const, text: 'Like ' },
-      { type: 'presentation-ref' as const, presentationId: presentationIds[0] },
-      { type: 'markdown' as const, text: ' but warmer.' }
-    ];
-    expect(withoutFeedbackContext(feedbackSubmissionContent(inserted, viewing))).toEqual(inserted);
-  });
-
-  it('preserves deliberately inserted chips exactly instead of duplicating context', () => {
+  it('preserves deliberately inserted chips exactly instead of adding the selection', () => {
     const explicit = [
       { type: 'markdown' as const, text: 'The spacing in ' },
       { type: 'presentation-ref' as const, presentationId: presentationIds[1] },
       { type: 'markdown' as const, text: ' is clearer.' }
     ];
-    const context = automaticFeedbackContext([
-      presentation(4, presentationIds[0]),
-      presentation(5, presentationIds[1])
-    ]);
-    expect(feedbackSubmissionContent(explicit, context)).toEqual(explicit);
+    const selected = selectedFeedbackContext(
+      [presentation(4, presentationIds[0])],
+      [{ presentationId: presentationIds[0], step: 0, elements: [{ id: '1:1', label: 'x' }] }]
+    );
+    expect(feedbackSubmissionContent(explicit, selected)).toEqual(explicit);
+  });
+
+  it('records each visible presentation at the step it shows, by its number and name', () => {
+    expect(
+      feedbackViewing(
+        [presentation(4, presentationIds[0]), presentation(5, presentationIds[1])],
+        undefined,
+        { [presentationIds[0]]: 2, [presentationIds[1]]: -1 }
+      )
+    ).toEqual({
+      presentations: [
+        { presentationId: presentationIds[0], step: 2, stepName: '@check#2' },
+        { presentationId: presentationIds[1] }
+      ]
+    });
+  });
+
+  it('records a source chosen on its own, and nothing where nothing is on screen', () => {
+    expect(feedbackViewing([], 'abc123')).toEqual({ source: 'abc123' });
+    expect(feedbackViewing([])).toBeUndefined();
   });
 });
 

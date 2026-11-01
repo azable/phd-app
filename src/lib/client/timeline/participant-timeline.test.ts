@@ -101,7 +101,7 @@ describe('participant Timeline projection', () => {
     });
   });
 
-  it('captions an answer without the presentation the participant was viewing, its own references as pills', () => {
+  it('captions an answer with its own references as pills', () => {
     const captionOf = (content: object[]) => {
       const values = events();
       const responded = values[1];
@@ -113,14 +113,6 @@ describe('participant Timeline projection', () => {
       } as ProjectEvent);
       return turns(participantTimeline(values))[0].question?.answer;
     };
-    const viewed = { type: 'presentation-ref', presentationId: presentationIds[0], step: 2 };
-    expect(
-      captionOf([
-        { type: 'markdown', text: 'Viewing ' },
-        viewed,
-        { type: 'markdown', text: '.\n\nWarm, please.' }
-      ])
-    ).toEqual([{ type: 'markdown', text: 'Warm, please.' }]);
     const named = { type: 'presentation-ref', presentationId: presentationIds[1] };
     expect(captionOf([{ type: 'markdown', text: 'Like ' }, named])).toEqual([
       { type: 'markdown', text: 'Like ' },

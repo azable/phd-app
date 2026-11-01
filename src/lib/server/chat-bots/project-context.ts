@@ -20,6 +20,7 @@ import {
   plainMessageText,
   type ElementReference
 } from '$lib/shared/projects/events/message-content';
+import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import {
   comparisonOutcome,
   preferredPresentation
@@ -542,7 +543,7 @@ export function projectAiContext(
       'The application owns previous/next step playback controls; never draw replacement controls inside a visualization.',
       'The participant can select compatible retained presentations to compare a pair.',
       'A visible pair has answer controls (prefer either side, either is fine, decide later); participants can reference retained presentations inline in messages.',
-      'A message viewing a presentation names the step the participant was on, as [Presentation id at @insert.swap#1 (step 3)]: its name, as recordedSteps name it, and the number the participant saw in that presentation.',
+      'A participant’s message starts with a note of what was on screen when they sent it, as (viewing presentation id at step 3, @insert.swap#1) or (comparing … with …): the number they saw in that presentation and the step’s name, as recordedSteps name it. It says where they were, not something they pointed at; a reference in their words, as [Presentation id at @insert.swap#1 (step 3)], is one they made.',
       'Participants can select elements of a presentation and reference them in messages; selected.elements traces each to the <Node> tag that drew it.',
       'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
     ],
@@ -723,11 +724,23 @@ function runtimeFailureText(event: ProjectEventOf<'visualization.runtime-failed'
 }
 
 function feedbackMessage(event: ProjectEventOf<'feedback.submitted'>): string {
-  const details = [plainMessageText(event.payload.content)];
+  const { viewing } = event.payload;
+  const said = plainMessageText(event.payload.content);
+  const details = [viewing ? `${viewingNote(viewing)}\n${said}` : said];
   if (event.payload.focus.length > 0) {
     details.push(`Focused timeline events: ${event.payload.focus.join(', ')}`);
   }
   return details.filter(Boolean).join('\n\n');
+}
+
+/** What was on screen when a message was sent, as the note before it. */
+function viewingNote(viewing: FeedbackViewing): string {
+  if ('source' in viewing) return `(viewing source ${viewing.source} on its own)`;
+  const [first, second] = viewing.presentations.map(
+    ({ presentationId, step, stepName }) =>
+      `presentation ${presentationId}${step === undefined ? '' : ` at step ${step + 1}${stepName ? `, ${stepName}` : ''}`}`
+  );
+  return second ? `(comparing ${first} with ${second})` : `(viewing ${first})`;
 }
 
 function presentationSummary(
@@ -764,7 +777,7 @@ export function viewedPresentation(
   const viewed = interactionEventIds
     .flatMap((id) => {
       const event = document.events.find((candidate) => candidate.id === id);
-      if (event?.type === 'feedback.submitted') return event.payload.viewing ?? [];
+      if (event?.type === 'feedback.submitted') return event.payload.from ?? [];
       if (event?.type === 'visualization.preference-recorded')
         return [preferredPresentation(event.payload) ?? event.payload.presentations[0]];
       if (event?.type === 'visualization.runtime-failed') return [event.payload.presentationId];

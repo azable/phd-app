@@ -36,6 +36,7 @@ import {
   type ProjectArtifact
 } from './events/values';
 import { messageContentSchema } from './events/message-content';
+import { feedbackViewingSchema } from './events/feedback-submitted';
 import { runtimeFailureSchema } from './events/visualization-runtime-failed';
 import { projectTemplateIdSchema, type ProjectCreation } from './creation';
 
@@ -77,7 +78,8 @@ export const projectCommandSchema = v.variant('type', [
     focus: v.array(positiveSchema),
     presentationCount: v.picklist([1, 2]),
     /** The candidate the participant is viewing, whose source the assistant revises. */
-    from: v.optional(presentationIdSchema)
+    from: v.optional(presentationIdSchema),
+    viewing: v.optional(feedbackViewingSchema)
   }),
   v.strictObject({
     ...commandBase,

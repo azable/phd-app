@@ -17,9 +17,10 @@
 
   import MessageContentView from './MessageContent.svelte';
   import {
-    automaticFeedbackContext,
     feedbackSubmissionContent,
+    feedbackViewing,
     presentationReference,
+    selectedFeedbackContext,
     selectionReferences
   } from './feedback-context';
   import {
@@ -39,7 +40,7 @@
     onDraftChange?: (content: MessageContent, focused: boolean) => void;
     /** The candidate feedback builds on, where none is shown, as for a source chosen on its own. */
     base?: string;
-    /** That source's id, which the message says it is viewing. */
+    /** That source's id, recorded as what the participant is viewing. */
     baseSource?: string;
     /** The step each visible presentation shows, by its id. */
     steps?: Readonly<Record<string, number>>;
@@ -62,9 +63,7 @@
   let hasExplicitReferences = $state(false);
   let editorRevision = $state(0);
   let focused = $state(false);
-  const automaticContext = $derived(
-    automaticFeedbackContext(presentations, visualSelections, baseSource, steps)
-  );
+  const selected = $derived(selectedFeedbackContext(presentations, visualSelections));
 
   export function referencePresentation(presentation: TimelinePresentation): void {
     insertReference(presentationReference(presentation.presentation, steps));
@@ -76,14 +75,16 @@
 
   async function send(editorContent: MessageContent): Promise<boolean> {
     if (!session.atHead || session.pending || session.readOnly) return false;
-    const content = feedbackSubmissionContent(editorContent, automaticContext);
+    const content = feedbackSubmissionContent(editorContent, selected);
     const from = base ?? baseCandidate(presentations);
+    const viewing = feedbackViewing(presentations, baseSource, steps);
     return session.runCommand({
       type: 'feedback',
       content,
       focus: session.focusedEvents,
       presentationCount,
-      ...(from ? { from } : {})
+      ...(from ? { from } : {}),
+      ...(viewing ? { viewing } : {})
     });
   }
 
@@ -282,12 +283,12 @@
       <div
         class="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring"
       >
-        {#if automaticContext.length > 0 && !hasExplicitReferences}
+        {#if selected.length > 0 && !hasExplicitReferences}
           <div
             class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-            data-testid="automatic-feedback-context"
+            data-testid="feedback-selection"
           >
-            <MessageContentView content={automaticContext} interactive={false} />
+            <MessageContentView content={selected} interactive={false} />
           </div>
         {/if}
         {#key editorRevision}

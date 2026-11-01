@@ -100,15 +100,12 @@ const answerLength = 60;
 
 /**
  * An answer as its question's caption shows it: the preferred side's label (“tallies”), either is
- * fine, later, or the start of the message, on one line with its references, of what words keeps.
+ * fine, later, or the start of the message, on one line with its references.
  */
-export function answerLabel(
-  question: ProjectQuestion,
-  words: (content: MessageContent) => MessageContent = (content) => content
-): MessageContent | undefined {
+export function answerLabel(question: ProjectQuestion): MessageContent | undefined {
   const answer = question.answer;
   if (!answer) return undefined;
-  if (answer.kind === 'text') return abbreviated(words(answer.content));
+  if (answer.kind === 'text') return abbreviated(answer.content);
   if (answer.kind !== 'preferred')
     return [{ type: 'markdown', text: answer.kind === 'tie' ? 'either is fine' : 'later' }];
   const slot = question.presentationIds.indexOf(answer.presentationId);

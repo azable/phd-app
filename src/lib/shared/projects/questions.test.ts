@@ -118,25 +118,18 @@ describe('questions', () => {
     ]);
   });
 
-  it('keeps an answer’s references and only what words keeps, on one line', () => {
+  it('keeps an answer’s references, on one line', () => {
     const reference = { type: 'presentation-ref', presentationId: 'a' };
     const [question] = projectQuestions(
       timeline(responded({ text: 'Why?' }), {
         type: 'feedback.submitted',
         payload: {
-          content: [
-            { type: 'markdown', text: 'Viewing ' },
-            reference,
-            { type: 'markdown', text: '.\n\nLike\nthis' }
-          ],
+          content: [reference, { type: 'markdown', text: '\n\nLike\nthis' }],
           focus: [],
           answers: 1
         }
       })
     );
-    expect(answerLabel(question, (content) => content.slice(1))).toEqual([
-      reference,
-      { type: 'markdown', text: '. Like this' }
-    ]);
+    expect(answerLabel(question)).toEqual([reference, { type: 'markdown', text: ' Like this' }]);
   });
 });

@@ -5,9 +5,10 @@ import {
   markdownMessage,
   type ElementReference
 } from '$lib/shared/projects/events/message-content';
+import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
-import type { BrowserBundlePresentation } from '$lib/shared/presentations';
+import { presentationStepName, type BrowserBundlePresentation } from '$lib/shared/presentations';
 
 import type { ProjectCommandDependencies } from './commands';
 import { MemoryProjectRepository } from './memory-repository.test-support';
@@ -611,6 +612,63 @@ describe('submitProjectFeedback', () => {
       }
     });
     expect(mocks.generatePrepared).not.toHaveBeenCalled();
+  });
+
+  it('records what was on screen beside the message, not in it', async () => {
+    const { createProject } = await import('./service');
+    const { queueProjectFeedback } = await import('./commands');
+    const created = await createProject(
+      { title: 'Viewed', creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    const [shown] = created.events.flatMap((event) =>
+      event.type === 'visualization.presented' ? [event.payload.presentation] : []
+    );
+    const queue = async (operationId: string, viewing: FeedbackViewing) => {
+      const before = await serviceDependencies.repository.load(created.projectId);
+      await serviceDependencies.repository.append(created.projectId, projectHead(before).id, [
+        {
+          type: 'operation.accepted',
+          actor: { kind: 'user' },
+          operationId,
+          createdAt: '2026-08-30T12:00:00.000Z',
+          payload: { kind: 'feedback' }
+        }
+      ]);
+      const result = await queueProjectFeedback(
+        {
+          projectId: created.projectId,
+          operationId,
+          content: markdownMessage('Lecture'),
+          focus: [],
+          presentationCount: 2,
+          viewing
+        },
+        commandDependencies
+      );
+      return result.appendedEvents[0];
+    };
+
+    // The step is named as the presentation names it, not as the browser said.
+    const stepName = presentationStepName(shown, 1);
+    expect(
+      await queue('12345678-1234-4123-8123-123456789abc', {
+        presentations: [{ presentationId: shown.presentationId, step: 1, stepName: '@made.up#1' }]
+      })
+    ).toMatchObject({
+      type: 'feedback.submitted',
+      payload: {
+        content: markdownMessage('Lecture'),
+        viewing: {
+          presentations: [
+            { presentationId: shown.presentationId, step: 1, ...(stepName ? { stepName } : {}) }
+          ]
+        }
+      }
+    });
+    expect(await queue('12345678-1234-4123-8123-123456789abd', { source: 'abc123' })).toMatchObject(
+      { payload: { viewing: { source: 'abc123' } } }
+    );
   });
 
   it('processes a claimed interaction and correlates the early assistant observation', async () => {
@@ -2505,7 +2563,7 @@ describe('assistant edits', () => {
           content: markdownMessage('Try tallies.'),
           focus: [],
           presentationCount: 2,
-          viewing: viewed.presentationId
+          from: viewed.presentationId
         }
       },
       {

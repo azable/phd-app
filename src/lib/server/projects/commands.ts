@@ -16,6 +16,7 @@ import {
   type ElementReference,
   type MessageContent
 } from '$lib/shared/projects/events/message-content';
+import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import type { ArtifactChange, RecordedText } from '$lib/shared/projects/events/values';
 import type { ProjectCommandResult, ProjectDocument } from '$lib/shared/projects/model';
 import {
@@ -338,6 +339,7 @@ export function queueProjectFeedback(
     presentationCount: 1 | 2;
     /** The candidate the participant is viewing. */
     from?: string;
+    viewing?: FeedbackViewing;
     deadlineAt?: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -348,6 +350,7 @@ export function queueProjectFeedback(
     assertAcceptedInteraction(before, options.operationId, 'feedback');
     const focus = validateFocus(before, options.focus);
     const content = await validateMessageContent(before, options.content);
+    const viewing = options.viewing && validateViewing(before, options.viewing);
     // The assistant revises the source of the candidate the participant is viewing.
     const based = options.from
       ? await baseOnPresentation(
@@ -369,7 +372,8 @@ export function queueProjectFeedback(
             content,
             focus,
             presentationCount: options.presentationCount,
-            ...(options.from ? { viewing: options.from } : {}),
+            ...(options.from ? { from: options.from } : {}),
+            ...(viewing ? { viewing } : {}),
             ...answering(based)
           }
         }),
@@ -485,6 +489,7 @@ export async function runQueuedAssistantTurn(
     presentationIds: [
       ...new Set([
         ...referencedPresentations(content),
+        ...feedback.flatMap((event) => viewedPresentations(event.payload.viewing)),
         ...preferences.flatMap((event) => event.payload.presentations),
         ...interactions.flatMap((event) =>
           event?.type === 'visualization.runtime-failed' ? [event.payload.presentationId] : []
@@ -563,6 +568,7 @@ export function submitProjectFeedback(
     focus: EventId[];
     presentationCount: 1 | 2;
     operationId: string;
+    viewing?: FeedbackViewing;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
 ): Promise<ProjectCommandResult> {
@@ -579,6 +585,7 @@ async function submitProjectFeedbackUnlocked(
     focus: EventId[];
     presentationCount: 1 | 2;
     operationId: string;
+    viewing?: FeedbackViewing;
   },
   dependencies: ProjectCommandDependencies
 ): Promise<ProjectCommandResult> {
@@ -586,7 +593,10 @@ async function submitProjectFeedbackUnlocked(
   assertHead(before, options.expectedHead);
   const focus = validateFocus(before, options.focus);
   const content = await validateMessageContent(before, options.content);
-  const presentations = referencedPresentations(content);
+  const viewing = options.viewing && validateViewing(before, options.viewing);
+  const presentations = [
+    ...new Set([...referencedPresentations(content), ...viewedPresentations(viewing)])
+  ];
 
   let document = await appendProjectEvents(
     before,
@@ -595,7 +605,7 @@ async function submitProjectFeedbackUnlocked(
         type: 'feedback.submitted',
         actor: { kind: 'user' },
         operationId: options.operationId,
-        payload: { content, focus, ...answering(before) }
+        payload: { content, focus, ...(viewing ? { viewing } : {}), ...answering(before) }
       })
     ],
     dependencies.projectService
@@ -2506,6 +2516,34 @@ async function validateMessageContent(
   return content.map((segment) =>
     segment.type === 'markdown' ? segment : named(document, segment)
   );
+}
+
+/** What was on screen, its presentations known and at steps they have, each step named. */
+function validateViewing(document: ProjectDocument, viewing: FeedbackViewing): FeedbackViewing {
+  if (!('presentations' in viewing)) return viewing;
+  validatePresentations(document, viewedPresentations(viewing));
+  return {
+    presentations: viewing.presentations.map(({ presentationId, step }) => {
+      if (step === undefined) return { presentationId };
+      validateReferencedStep(document, presentationId, step);
+      const { stepName } = named<Extract<MessageContent[number], { type: 'presentation-ref' }>>(
+        document,
+        {
+          type: 'presentation-ref',
+          presentationId,
+          step
+        }
+      );
+      return { presentationId, step, ...(stepName ? { stepName } : {}) };
+    })
+  };
+}
+
+/** The presentations on screen, by id. */
+function viewedPresentations(viewing: FeedbackViewing | undefined): string[] {
+  return viewing && 'presentations' in viewing
+    ? viewing.presentations.map(({ presentationId }) => presentationId)
+    : [];
 }
 
 /** A reference at a step, named as its presentation names the step, where it does. */
