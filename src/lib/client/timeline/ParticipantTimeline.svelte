@@ -215,8 +215,10 @@
       {/snippet}
       {#snippet caption(answer: Content)}
         <!-- An answer under its question, its references as pills. -->
-        <div class="flex items-baseline gap-1 text-muted-foreground [&_.message-content]:text-sm">
-          <span>→</span>
+        <div
+          class="flex items-baseline gap-1.5 text-muted-foreground [&_.message-content]:min-w-0 [&_.message-content]:text-sm"
+        >
+          <span class="shrink-0">→</span>
           <MessageContent
             content={answer}
             onReferenceActivate={activateReference}
@@ -290,13 +292,15 @@
           <!-- A comparison: its question, its pair, each side by its label, and the answer. -->
           <div class="mt-3 border-t pt-2 text-sm">
             <p class="font-medium">{question.text}</p>
-            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 leading-7">
               {#each question.presentationIds as id, slot (id)}
                 {@const label = question.labels?.[slot]}
-                {#if pills[id]}{@render versionPill(pills[id], label && `${label}:`)}{/if}
+                {#if pills[id]}<span class="inline-flex items-center"
+                    >{@render versionPill(pills[id], label && `${label}:`)}</span
+                  >{/if}
               {/each}
-              {#if answer}{@render caption(answer)}{/if}
             </div>
+            {#if answer}<div class="mt-1.5">{@render caption(answer)}</div>{/if}
           </div>
         {/each}
         {#if item.question}
@@ -305,9 +309,9 @@
           <!-- Its question, answered in the chat; one about a presentation shows it, its elements
             highlighted, with its own pill where the message does not already show it. -->
           <div class="mt-3 border-t pt-2 text-sm">
-            <p class="flex items-start gap-1.5 font-medium">
-              <CircleHelpIcon class="mt-0.5 size-4 shrink-0 text-primary" />
-              <span>
+            <p class="flex items-start gap-1.5 leading-7 font-medium">
+              <CircleHelpIcon class="mt-1.5 size-4 shrink-0 text-primary" />
+              <span class="min-w-0">
                 {#if question.presentationIds.length}
                   <button
                     type="button"
@@ -324,9 +328,9 @@
               </span>
             </p>
             {#if answer}
-              <div class="ml-5.5">{@render caption(answer)}</div>
+              <div class="mt-1.5 ml-5.5">{@render caption(answer)}</div>
             {:else if !session.readOnly}
-              <p class="ml-5.5 text-xs text-muted-foreground">Answer in the chat</p>
+              <p class="mt-1.5 ml-5.5 text-xs text-muted-foreground">Answer in the chat</p>
             {/if}
           </div>
         {/if}

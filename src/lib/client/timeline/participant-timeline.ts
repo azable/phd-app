@@ -156,7 +156,10 @@ export function participantTimeline(
       return [
         {
           ...emptyTurn(`assistant-${event.id}`),
-          content: structureKnownPresentationReferences(event.payload.content, presentationIds),
+          content: withoutRepeatedQuestion(
+            structureKnownPresentationReferences(event.payload.content, presentationIds),
+            question?.text
+          ),
           eventId: event.id,
           ...(question ? { question: { ...captioned(question), pill: false } } : {})
         }
@@ -304,6 +307,67 @@ export function participantTimeline(
       return items;
     });
 }
+
+/**
+ * A reply as shown above its question: without its last sentence or paragraph where that says the
+ * question again, as the question shows under it.
+ */
+export function withoutRepeatedQuestion(
+  content: MessageContent,
+  question: string | undefined
+): MessageContent {
+  const last = content.at(-1);
+  if (!question || last?.type !== 'markdown') return content;
+  const text = last.text.trimEnd();
+  // Where the last sentence and the last paragraph start, where they start in this text.
+  const sentences = [...text.matchAll(/[.!?:]\s+/g)].map(({ index, 0: end }) => index + end.length);
+  const paragraphs = [...text.matchAll(/\n\s*\n/g)].map(({ index, 0: end }) => index + end.length);
+  const whole = content.length === 1 ? 0 : undefined;
+  const start = [sentences.at(-1) ?? whole, paragraphs.at(-1) ?? whole].find(
+    (at) => at !== undefined && repeats(text.slice(at), question)
+  );
+  if (start === undefined) return content;
+  const kept = text.slice(0, start).trimEnd();
+  return [...content.slice(0, -1), ...(kept ? [{ ...last, text: kept }] : [])];
+}
+
+/**
+ * Whether a passage says essentially the question: the same words, one within the other (at least
+ * half its length), or, both asking, reworded with most of the same words.
+ */
+function repeats(passage: string, question: string): boolean {
+  const [said, asked] = [normalised(passage), normalised(question)];
+  if (!said || !asked) return false;
+  const [shorter, longer] = said.length < asked.length ? [said, asked] : [asked, said];
+  if (longer.includes(shorter) && shorter.length * 2 >= longer.length) return true;
+  if (!passage.trim().endsWith('?')) return false;
+  const words = (value: string) =>
+    new Set(value.split(' ').filter((word) => !commonWords.has(word)));
+  const [a, b] = [words(said), words(asked)];
+  const shared = [...a].filter((word) => b.has(word)).length;
+  return a.size + b.size > 0 && (2 * shared) / (a.size + b.size) >= rewordedOverlap;
+}
+
+const normalised = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/**
+ * The share of their words (the Dice coefficient, beyond common words) a reworded repeat keeps.
+ * The repeat seen in trials kept 0.7: “Would you like me to suggest some alternatives to
+ * compare—for example, different ways to mark the current cell or arrange the pseudocode?” for
+ * “Would you like me to suggest alternatives to compare, such as different current-cell markers or
+ * pseudocode arrangements?”.
+ */
+const rewordedOverlap = 0.6;
+
+const commonWords = new Set(
+  'a an and any are as at be by can do for from how i if in is it like me my of on or say so some such that the them they this to was we what when which who would you your'.split(
+    ' '
+  )
+);
 
 function emptyTurn(id: string): Turn {
   return { id, kind: 'turn', summaries: [], appended: [], comparisons: [], pills: {}, firsts: [] };

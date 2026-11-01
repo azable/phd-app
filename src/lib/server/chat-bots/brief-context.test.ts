@@ -87,18 +87,44 @@ describe('the brief in the assistant’s context', () => {
     expect(byKey.tone.decides).toEqual(['lettering', 'colour']);
     // Edge cases are asked once the first version is settled, as assistant.md says.
     expect(byKey.cases).not.toHaveProperty('prompt');
-    expect(context.askFirst[0]).toBe('algorithm');
+    expect(context.askFirst.slice(0, 2)).toEqual(['algorithm', 'audience']);
     expect(context.askFirst).toHaveLength(3);
     expect(context.avoid).toEqual([]);
   });
 
-  it('asks nothing of an attribute whose choices are all decided or excluded', () => {
+  it('asks nothing of an attribute whose choices are all decided or excluded, but who it is for', () => {
     const context = briefContext(
       brief({ algorithm: { status: 'confirmed', value: 'insertion sort' } }),
       []
     );
-    expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([]);
-    expect(context.askFirst).toEqual([]);
+    expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([
+      expect.objectContaining({ key: 'audience', prompt: 'ask', first: true })
+    ]);
+    expect(context.attributes.find(({ key }) => key === 'audience')).not.toHaveProperty('decides');
+    expect(context.askFirst).toEqual(['audience']);
+  });
+
+  it('puts who it is for, while unknown, before every other question, whatever they bear on', () => {
+    const algorithm = { status: 'confirmed', value: 'linear search' } as const;
+    // Only a colour is open, worth much, which who it is for does not bear on.
+    const weighted = [{ variable: 'Cell.fill', family: 'colour' as const, worth: 10 }];
+    const context = briefContext(brief({ algorithm }), weighted);
+    expect(context.askFirst[0]).toBe('audience');
+    expect(context.attributes.find(({ key }) => key === 'audience')).toMatchObject({
+      prompt: 'ask',
+      first: true
+    });
+    expect(context.attributes.find(({ key }) => key === 'constraints')).not.toHaveProperty('first');
+    // Once the request says who it is for, it is not asked first.
+    const said = briefContext(
+      brief({
+        algorithm,
+        audience: { status: 'inferred', value: 'first-years', tags: ['novice'] }
+      }),
+      weighted
+    );
+    expect(said.askFirst[0]).not.toBe('audience');
+    expect(said.attributes.find(({ key }) => key === 'audience')).not.toHaveProperty('first');
   });
 
   it('marks an inferred value that steers open choices to confirm, after unknowns', () => {

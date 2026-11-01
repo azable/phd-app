@@ -33,10 +33,13 @@ export type AiBriefItem = {
   /** The values brief tags may name for it, each steering what is worth asking or compared. */
   offeredTags?: string[];
   /**
-   * ask: unknown, and it bears on choices still open, to ask in words before comparing them;
+   * ask: unknown, and asked first or bearing on choices still open, to ask in words before
+   * comparing them;
    * confirm: inferred, and it steers choices still open.
    */
   prompt?: 'ask' | 'confirm';
+  /** Unknown and asked first (brief.ts askFirst): as soon as there is a version, before comparing. */
+  first?: true;
   /** The families of open choices it bears on or steers. */
   decides?: ChoiceFamily[];
 };
@@ -44,11 +47,18 @@ export type AiBriefItem = {
 /** The brief for the assistant. */
 export type AiBrief = {
   attributes: AiBriefItem[];
-  /** The attributes most worth asking or confirming, most first. */
+  /** The attributes most worth asking or confirming, most first: those asked first lead. */
   askFirst: BriefKey[];
   /** What the brief keeps out of comparisons, and why, as “colours: it must print in grey”. */
   avoid: string[];
 };
+
+/**
+ * What is asked before what: the subject; unknowns asked first; other unknowns; inferences to
+ * confirm.
+ */
+const ranks = ['subject', 'first', 'unknown', 'confirm'] as const;
+type Rank = (typeof ranks)[number];
 
 /** At most this many attributes are suggested to ask at a time; they are asked one at a time. */
 const listedAskFirst = 3;
@@ -91,8 +101,9 @@ export function briefSteering(brief: readonly BriefItem[]): BriefSteering {
 
 /**
  * The brief for the assistant, given the choices still open (preference-summary.ts openChoices):
- * an unknown attribute bearing on open choices is worth asking, the one bearing on the most worth
- * first; an inferred one whose values steer or exclude open choices, worth confirming.
+ * the subject while unknown, then unknown attributes asked first (brief.ts askFirst) whatever they
+ * bear on, then other unknowns bearing on open choices, the one bearing on the most worth first,
+ * are worth asking; an inferred one whose values steer or exclude open choices, worth confirming.
  */
 export function briefContext(
   brief: readonly BriefItem[],
@@ -100,7 +111,7 @@ export function briefContext(
 ): AiBrief {
   const whole = briefSteering(brief);
   const kept = open.filter(({ variable }) => !whole.excluded(variable));
-  const ranked: { key: BriefKey; worth: number; confirm: boolean }[] = [];
+  const ranked: { key: BriefKey; rank: Rank; worth: number }[] = [];
   const attributes = brief.map((item): AiBriefItem => {
     const attribute = briefAttribute(item.key);
     const known =
@@ -121,22 +132,24 @@ export function briefContext(
     };
     if (item.status === 'unknown') {
       if (attribute.bearsOn === 'subject') {
-        ranked.push({ key: item.key, worth: Infinity, confirm: false });
+        ranked.push({ key: item.key, rank: 'subject', worth: Infinity });
         return { ...base, prompt: 'ask' };
       }
       if (attribute.bearsOn === 'inputs') return base;
       const families = attribute.bearsOn;
       const bearing = kept.filter(({ family }) => families.includes(family));
-      if (!bearing.length) return base;
+      if (!bearing.length && !attribute.askFirst) return base;
       ranked.push({
         key: item.key,
-        worth: Math.max(...bearing.map(({ worth }) => worth)),
-        confirm: false
+        rank: attribute.askFirst ? 'first' : 'unknown',
+        worth: Math.max(0, ...bearing.map(({ worth }) => worth))
       });
+      const decides = families.filter((f) => bearing.some(({ family }) => family === f));
       return {
         ...base,
         prompt: 'ask',
-        decides: families.filter((f) => bearing.some(({ family }) => family === f))
+        ...(attribute.askFirst ? { first: true } : {}),
+        ...(decides.length ? { decides } : {})
       };
     }
     if (item.status !== 'inferred') return base;
@@ -147,8 +160,8 @@ export function briefContext(
     if (!steered.length) return base;
     ranked.push({
       key: item.key,
-      worth: Math.max(...steered.map(({ worth }) => worth)),
-      confirm: true
+      rank: 'confirm',
+      worth: Math.max(...steered.map(({ worth }) => worth))
     });
     return {
       ...base,
@@ -161,9 +174,9 @@ export function briefContext(
     .flatMap(({ excludes }) => (excludes ? [`${excludes.what}: ${excludes.reason}`] : []));
   return {
     attributes,
-    // Unknowns before inferences to confirm, each by the most worth it bears on.
+    // By rank, then by the most worth each bears on.
     askFirst: ranked
-      .toSorted((a, b) => Number(a.confirm) - Number(b.confirm) || b.worth - a.worth)
+      .toSorted((a, b) => ranks.indexOf(a.rank) - ranks.indexOf(b.rank) || b.worth - a.worth)
       .slice(0, listedAskFirst)
       .map(({ key }) => key),
     avoid

@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
 import { loadReportLine } from './load-reports';
-import { participantTimeline, type ParticipantTimelineItem } from './participant-timeline';
+import {
+  participantTimeline,
+  withoutRepeatedQuestion,
+  type ParticipantTimelineItem
+} from './participant-timeline';
 
 const presentationIds = [
   '12345678-1234-4123-8123-123456789ac1',
@@ -163,6 +167,25 @@ describe('participant Timeline projection', () => {
     const [, later] = turns(participantTimeline(values));
     expect(later).toMatchObject({ appended: [], question: { pill: true } });
     expect(Object.keys(later.pills)).toEqual([presentationIds[0]]);
+  });
+
+  it('leaves out of a reply its last sentence where that says its question again', () => {
+    const values = events();
+    const responded = values[1];
+    if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+    responded.payload.content = [
+      { type: 'markdown', text: 'I’ll keep the listing, as in ' },
+      { type: 'presentation-ref', presentationId: presentationIds[0] },
+      { type: 'markdown', text: '. Who is it for, and how familiar are they with linear search?' }
+    ];
+    responded.payload.question = {
+      text: 'Who is it for, and how familiar are they with linear search?'
+    };
+    expect(turns(participantTimeline(values))[0].content).toEqual([
+      { type: 'markdown', text: 'I’ll keep the listing, as in ' },
+      { type: 'presentation-ref', presentationId: presentationIds[0] },
+      { type: 'markdown', text: '.' }
+    ]);
   });
 
   it('shows a variant where it was made, in a turn of its own, after the turn that first showed its source', () => {
@@ -348,6 +371,50 @@ describe('participant Timeline projection', () => {
       event: loaded
     });
     expect(loadReportLine(loaded.payload)).toBe('server layout · 84 ms · Chrome/macOS · 2×');
+  });
+});
+
+describe('a reply without its repeated question', () => {
+  const reply = (text: string) => [{ type: 'markdown' as const, text }];
+
+  it('drops a last paragraph that rewords the question, as seen in trials', () => {
+    expect(
+      withoutRepeatedQuestion(
+        reply(
+          'Linear search, checking each cell in turn:\n\nWould you like me to suggest some alternatives to compare—for example, different ways to mark the current cell or arrange the pseudocode?'
+        ),
+        'Would you like me to suggest alternatives to compare, such as different current-cell markers or pseudocode arrangements?'
+      )
+    ).toEqual(reply('Linear search, checking each cell in turn:'));
+  });
+
+  it('drops a last sentence that holds the question or is held by it, whatever its case and marks', () => {
+    expect(
+      withoutRepeatedQuestion(
+        reply('Here it is. To refine it, **who is it for?**'),
+        'Who is it for?'
+      )
+    ).toEqual(reply('Here it is.'));
+    expect(withoutRepeatedQuestion(reply('Done. Who is it for?'), 'So, who is it for?')).toEqual(
+      reply('Done.')
+    );
+  });
+
+  it('keeps a reply whose ending asks something else or only shares a word with the question', () => {
+    const kept = [
+      ['Done. Would you like me to compare colours?', 'Would you like to compare fonts?'],
+      ['Shown with cells.', 'Cells or tallies for the numbers, or neither?'],
+      ['Who is it for?', 'Should it print in grey?']
+    ];
+    for (const [text, question] of kept)
+      expect(withoutRepeatedQuestion(reply(text), question)).toEqual(reply(text));
+    expect(withoutRepeatedQuestion(reply('Who is it for?'), undefined)).toEqual(
+      reply('Who is it for?')
+    );
+  });
+
+  it('leaves nothing of a reply that is only the question', () => {
+    expect(withoutRepeatedQuestion(reply('Who is it for?'), 'Who is it for?')).toEqual([]);
   });
 });
 

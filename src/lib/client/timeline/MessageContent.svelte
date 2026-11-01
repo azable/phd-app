@@ -4,6 +4,7 @@
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import { renderSafeMarkdown } from './markdown';
+  import { joinTrailingPunctuation } from './message-punctuation';
   import {
     elidedName,
     ghostKey,
@@ -130,7 +131,7 @@
   {@const detail = referenceChipDetail(reference)}
   {#if known}
     <CandidateIdPill {...known} />
-    {#if detail}<span class="font-mono text-xs">{detail}</span>{/if}
+    {#if detail}<span class="pr-1 font-mono text-xs">{detail}</span>{/if}
   {:else}
     <span class="rounded-md bg-muted px-1.5 font-mono text-xs leading-5 text-foreground"
       >{referenceChipLabel(reference)}</span
@@ -138,44 +139,53 @@
   {/if}
 {/snippet}
 
-<div class="message-content text-base">
-  {#each content as segment, index (`${segment.type}-${index}`)}
+<!-- Lines tall enough for a pill (20px) in the text's middle without pushing lines apart. -->
+<div class="message-content text-base leading-7">
+  {#each joinTrailingPunctuation(content) as { segment, punctuation, after }, index (`${segment.type}-${index}`)}
     {#if segment.type === 'markdown'}
       {@const html = renderSafeMarkdown(segment.text)}
       <!-- renderSafeMarkdown applies the allowlist and URL policy before this HTML boundary. -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       <span class="message-markdown" {@attach linkReferences}>{@html html}</span>
     {:else}
-      {#each singletonReferenceSegments(segment) as reference, position (position)}
-        {#if pill && reference.type === 'presentation-ref' && reference.step === undefined && pilled(reference.presentationId)}
-          {@render pill(reference.presentationId)}
-        {:else if interactive}
-          <button
-            type="button"
-            class="group mx-0.5 inline-flex items-center gap-1 rounded-md align-middle leading-none focus-visible:outline-none"
-            class:bg-background={inverted}
-            class:text-foreground={inverted}
-            title={referenceChipTitle(reference)}
-            onclick={(event) => onReferenceActivate(reference, event.shiftKey)}
-          >
-            {@render chip(reference)}
-          </button>
-        {:else}
-          <span
-            class="mx-0.5 inline-flex items-center gap-1 rounded-md align-middle"
-            class:bg-background={inverted}
-            class:text-foreground={inverted}
-            title={referenceChipTitle(reference)}
-          >
-            {@render chip(reference)}
-          </span>
-        {/if}
-      {/each}
+      <!-- A pill keeps the punctuation after it on its line, without a gap before it. -->
+      <span class={punctuation && 'ref-joined whitespace-nowrap'}>
+        {#each singletonReferenceSegments(segment) as reference, position (position)}
+          {#if pill && reference.type === 'presentation-ref' && reference.step === undefined && pilled(reference.presentationId)}
+            {@render pill(reference.presentationId)}
+          {:else if interactive}
+            <button
+              type="button"
+              class="group mx-1 inline-flex items-center gap-1.5 rounded-md align-middle leading-none focus-visible:outline-none"
+              class:bg-background={inverted}
+              class:text-foreground={inverted}
+              title={referenceChipTitle(reference)}
+              onclick={(event) => onReferenceActivate(reference, event.shiftKey)}
+            >
+              {@render chip(reference)}
+            </button>
+          {:else}
+            <span
+              class="mx-1 inline-flex items-center gap-1.5 rounded-md align-middle leading-none"
+              class:bg-background={inverted}
+              class:text-foreground={inverted}
+              title={referenceChipTitle(reference)}
+            >
+              {@render chip(reference)}
+            </span>
+          {/if}
+        {/each}{#if punctuation}<span class="ref-punctuation ml-0.5">{punctuation}</span>{/if}</span
+      >{after === 'space' ? ' ' : ''}{#if after === 'paragraph'}<span class="mt-2 block"
+        ></span>{/if}
     {/if}
   {/each}
 </div>
 
 <style>
+  .message-content :global(.ref-joined > :nth-last-child(2)) {
+    margin-right: 0;
+  }
+
   .message-content :global(.message-markdown > p:first-child) {
     display: inline;
   }

@@ -127,7 +127,8 @@ each touched choice's likeliest option, what is most worth asking and what was
 never compared, goes in the assistant's context as `preferences`, and so into
 each request's recorded prompt. Beside it goes the design brief, `brief`: the
 attributes of what the participant is trying to achieve, defined in
-[`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first), each
+[`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first, then
+those marked `askFirst`, as who it is for, asked before any comparison), each
 unknown, inferred or confirmed, from intake's answers and the `brief` each
 assistant decision returns, recorded on its `assistant.responded`; which are
 worth asking or confirming now
@@ -138,7 +139,8 @@ weight the summary's ranking of what is worth asking. The assistant may also ask
 one `question` at a time, in words or about a presentation (one shown, or the
 first its decision makes, with elements to highlight), answered by the
 participant's next message, which records the question it answers
-(`feedback.submitted` `answers`); the chat shows each question with its answer
+(`feedback.submitted` `answers`); the chat shows each question, under a reply
+left without a last sentence or paragraph that repeats it, with its answer
 underneath, and each comparison pair its question and answer as a caption, a
 message's answer without the presentation it was viewing and with its references
 as pills ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison

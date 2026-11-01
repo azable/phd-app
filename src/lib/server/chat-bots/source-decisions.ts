@@ -147,7 +147,7 @@ const question = v.optional(
         v.minLength(1),
         v.maxLength(200),
         v.description(
-          'The question, in the participant’s terms, shown in the chat until they answer it in a message, as “Should the swapped pair stand out more?”.'
+          'The question, in the participant’s terms, shown under your reply (so not repeated in it) until they answer it in a message, saying briefly why it is asked, as “To help me refine it further, who is it for?”.'
         )
       ),
       presentation: v.pipe(

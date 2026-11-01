@@ -47,6 +47,11 @@ export type BriefAttribute = {
   bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject';
   /** Asked by intake, before the first version. */
   intake?: true;
+  /**
+   * Asked as soon as there is a version, before any offer to compare, while unknown: what the
+   * first reply asks, unless the request already said it.
+   */
+  askFirst?: true;
   /** Values the assistant can name it by, each with how it steers. */
   tags?: Record<string, BriefSteer>;
 };
@@ -71,6 +76,7 @@ export const briefAttributes = [
     question: 'Who is it for, and what do they already know?',
     why: 'Newcomers need more shown and slower steps; those who know the basics, less.',
     bearsOn: ['shown', 'pacing', 'views'],
+    askFirst: true,
     tags: {
       novice: { families: { shown: 1.3, pacing: 1.2 } },
       experienced: { families: { pacing: 0.8 } }
