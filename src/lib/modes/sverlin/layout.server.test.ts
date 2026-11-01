@@ -48,7 +48,7 @@ describe('laying out on the server', () => {
   it('leaves to the page a text no embedded font draws', async () => {
     const { geometries, failure } = await layOutOnServer(
       answering(
-        `__sverlinHost.width('a 漢字', "normal 400 16px 'Sverlin Sans', 'Sverlin Symbols', system-ui"); return { borders: [] };`
+        `__sverlinHost.width('a 漢字', "normal 400 16px 'Vis Sans', 'Vis Symbols', system-ui"); return { borders: [] };`
       )
     );
     expect(geometries).toBeUndefined();
@@ -107,7 +107,7 @@ describe('laying out on the server', () => {
 });
 
 describe('text measured on the server', () => {
-  const sans = "normal 400 16px 'Sverlin Sans', 'Sverlin Symbols', system-ui, sans-serif";
+  const sans = "normal 400 16px 'Vis Sans', 'Vis Symbols', system-ui, sans-serif";
 
   it('draws a character its face lacks in the embedded fallback, and says which it cannot', () => {
     const measure = serverMeasure();
@@ -152,7 +152,7 @@ describe('text measured on the server', () => {
   it('takes the bold face from 600 and a size in whole 64ths of a pixel', () => {
     const measure = serverMeasure();
     const at = (weight: number, size: number) =>
-      measure.width('Distance', `normal ${weight} ${size}px 'Sverlin Sans', system-ui`);
+      measure.width('Distance', `normal ${weight} ${size}px 'Vis Sans', system-ui`);
     expect(at(600, 16)).toBe(at(700, 16));
     expect(at(500, 16)).toBe(at(400, 16));
     expect(at(400, 13.6)).toBe(at(400, 13.59375));

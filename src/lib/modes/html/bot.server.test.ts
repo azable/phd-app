@@ -15,6 +15,25 @@ describe('HTML assistant contract', () => {
     expect(htmlAssistant.initialPrompt).toContain('Do not infer a visual style from an audience');
   });
 
+  it('opens with questions or a first version, as the participant chose, and knows the interface', () => {
+    expect(htmlAssistant.initialPrompt).toContain('If they ask for questions first');
+    expect(htmlAssistant.initialPrompt).toContain('what students should be able to do');
+    expect(htmlAssistant.initialPrompt).toContain('interface-ref');
+    expect(
+      htmlAssistant.parseOutput({
+        reply: [
+          { type: 'markdown', text: 'Use the' },
+          { type: 'interface-ref', part: 'step-controls' }
+        ],
+        candidates: [],
+        recovery: null
+      }).reply
+    ).toEqual([
+      { type: 'markdown', text: 'Use the' },
+      { type: 'interface-ref', part: 'step-controls' }
+    ]);
+  });
+
   it('accepts zero or one labelled candidate per conversational turn', () => {
     expect(
       htmlAssistant.parseOutput({

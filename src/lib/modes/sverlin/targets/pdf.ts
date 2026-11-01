@@ -48,7 +48,7 @@ const embeddedFaces = new Map(
   manifest.faces.map(({ file, family, weight }) => [`${family.toLowerCase()} ${weight}`, file])
 );
 /**
- * Each face's name in the PDF, as its /BaseFont: its family's last word (Sans for Sverlin Sans), so
+ * Each face's name in the PDF, as its /BaseFont: its family's last word (Sans for Vis Sans), so
  * the name shows no product, and its weight; or DejaVu's file.
  */
 const fontNames = new Map(

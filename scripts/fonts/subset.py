@@ -44,37 +44,37 @@ class Face(NamedTuple):
 # The design's font values, each a text face, in the order the design offers them, the first the
 # starter's and the page's own.
 FACES = {
-    "sans": Face("Sverlin Sans", "inter", "Inter 4.1", "system-ui, sans-serif", "sans"),
+    "sans": Face("Vis Sans", "inter", "Inter 4.1", "system-ui, sans-serif", "sans"),
     "serif": Face(
-        "Sverlin Serif",
+        "Vis Serif",
         "source-serif",
         "Source Serif 4.005",
         "ui-serif, Georgia, 'Times New Roman', serif",
         "serif",
     ),
     "mono": Face(
-        "Sverlin Mono",
+        "Vis Mono",
         "jetbrains-mono",
         "JetBrains Mono NL 2.304",
         "ui-monospace, Menlo, Consolas, monospace",
         "mono",
     ),
     "legible": Face(
-        "Sverlin Legible",
+        "Vis Legible",
         "atkinson",
         "Atkinson Hyperlegible Next 2.001",
         "system-ui, sans-serif",
         "sans",
     ),
     "casual": Face(
-        "Sverlin Casual",
+        "Vis Casual",
         "comic-neue",
         "Comic Neue 2.51",
         "'Comic Sans MS', system-ui, sans-serif",
         "sans",
     ),
     "slab": Face(
-        "Sverlin Slab",
+        "Vis Slab",
         "zilla-slab",
         "Zilla Slab 1.002",
         "Rockwell, ui-serif, Georgia, serif",
@@ -82,7 +82,7 @@ FACES = {
     ),
 }
 # Second in every font list, for the characters some text face lacks.
-FALLBACK = Face("Sverlin Symbols", "dejavu", "DejaVu Sans 2.37")
+FALLBACK = Face("Vis Symbols", "dejavu", "DejaVu Sans 2.37")
 WEIGHTS = {400: "Regular", 700: "Bold"}
 
 
@@ -134,7 +134,7 @@ def finish(
     names.setName(f"{family} {style}", 4, 3, 1, 0x409)
     names.setName("Version 1.0", 5, 3, 1, 0x409)
     names.setName(f"{family.replace(' ', '')}-{style}", 6, 3, 1, 0x409)
-    names.setName(f"Subset of {origin} for Sverlin, renamed as its licence asks.", 10, 3, 1, 0x409)
+    names.setName(f"Subset of {origin}, renamed as its licence asks.", 10, 3, 1, 0x409)
     # One set of vertical metrics, read alike on every platform: typographic metrics equal to
     # hhea's, which FreeType and Core Text read, and marked for use, which DirectWrite then reads.
     hhea, os2 = font["hhea"], font["OS/2"]

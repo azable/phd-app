@@ -3,111 +3,111 @@
   "fonts": [
     {
       "value": "sans",
-      "family": "Sverlin Sans",
+      "family": "Vis Sans",
       "fallbacks": "system-ui, sans-serif",
       "pdf": "sans"
     },
     {
       "value": "serif",
-      "family": "Sverlin Serif",
+      "family": "Vis Serif",
       "fallbacks": "ui-serif, Georgia, 'Times New Roman', serif",
       "pdf": "serif"
     },
     {
       "value": "mono",
-      "family": "Sverlin Mono",
+      "family": "Vis Mono",
       "fallbacks": "ui-monospace, Menlo, Consolas, monospace",
       "pdf": "mono"
     },
     {
       "value": "legible",
-      "family": "Sverlin Legible",
+      "family": "Vis Legible",
       "fallbacks": "system-ui, sans-serif",
       "pdf": "sans"
     },
     {
       "value": "casual",
-      "family": "Sverlin Casual",
+      "family": "Vis Casual",
       "fallbacks": "'Comic Sans MS', system-ui, sans-serif",
       "pdf": "sans"
     },
     {
       "value": "slab",
-      "family": "Sverlin Slab",
+      "family": "Vis Slab",
       "fallbacks": "Rockwell, ui-serif, Georgia, serif",
       "pdf": "serif"
     }
   ],
-  "fallback": "Sverlin Symbols",
+  "fallback": "Vis Symbols",
   "faces": [
     {
       "file": "sans-400",
-      "family": "Sverlin Sans",
+      "family": "Vis Sans",
       "weight": 400
     },
     {
       "file": "sans-700",
-      "family": "Sverlin Sans",
+      "family": "Vis Sans",
       "weight": 700
     },
     {
       "file": "serif-400",
-      "family": "Sverlin Serif",
+      "family": "Vis Serif",
       "weight": 400
     },
     {
       "file": "serif-700",
-      "family": "Sverlin Serif",
+      "family": "Vis Serif",
       "weight": 700
     },
     {
       "file": "mono-400",
-      "family": "Sverlin Mono",
+      "family": "Vis Mono",
       "weight": 400
     },
     {
       "file": "mono-700",
-      "family": "Sverlin Mono",
+      "family": "Vis Mono",
       "weight": 700
     },
     {
       "file": "legible-400",
-      "family": "Sverlin Legible",
+      "family": "Vis Legible",
       "weight": 400
     },
     {
       "file": "legible-700",
-      "family": "Sverlin Legible",
+      "family": "Vis Legible",
       "weight": 700
     },
     {
       "file": "casual-400",
-      "family": "Sverlin Casual",
+      "family": "Vis Casual",
       "weight": 400
     },
     {
       "file": "casual-700",
-      "family": "Sverlin Casual",
+      "family": "Vis Casual",
       "weight": 700
     },
     {
       "file": "slab-400",
-      "family": "Sverlin Slab",
+      "family": "Vis Slab",
       "weight": 400
     },
     {
       "file": "slab-700",
-      "family": "Sverlin Slab",
+      "family": "Vis Slab",
       "weight": 700
     },
     {
       "file": "symbols-400",
-      "family": "Sverlin Symbols",
+      "family": "Vis Symbols",
       "weight": 400
     },
     {
       "file": "symbols-700",
-      "family": "Sverlin Symbols",
+      "family": "Vis Symbols",
       "weight": 700
     }
   ]

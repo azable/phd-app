@@ -490,12 +490,15 @@ participant's message cannot carry one.
 New blank projects start by asking which algorithm to visualise before
 authoring, inviting the participant to say who it is for and whether to ask a
 few questions first or start with a first version (the algorithm's `opening` in
-[`brief.ts`](src/lib/shared/projects/brief.ts), shown in every mode). The
-assistants use a bounded five-call ladder: one initial call, up to three
-repairs, and a simpler fallback that explains what it reduced. A Sverlin ladder
-whose repairs keep failing with new problems stops early, keeping the current
-version and saying so (`runAttemptLadder`). Provider retries are disabled. The
-default 180-second request ceiling and study deadline bound each attempt; see
+[`brief.ts`](src/lib/shared/projects/brief.ts), shown in every mode); every
+mode's assistant, asked for questions first, asks who it is for and what
+students should be able to do before building, and otherwise builds a first
+version. The assistants use a bounded five-call ladder: one initial call, up to
+three repairs, and a simpler fallback that explains what it reduced. A Sverlin
+ladder whose repairs keep failing with new problems stops early, keeping the
+current version and saying so (`runAttemptLadder`). Provider retries are
+disabled. The default 180-second request ceiling and study deadline bound each
+attempt; see
 [`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts),
 [`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts),
 and

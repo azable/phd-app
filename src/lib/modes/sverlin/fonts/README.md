@@ -9,21 +9,24 @@ fallback face for the characters any of them lacks (`∅`, `✓`, arrows,
 mathematical operators, and Greek in the faces without it), second in every font
 list:
 
-| Family          | Design `font` | Subset of                        | Licence                                             |
-| --------------- | ------------- | -------------------------------- | --------------------------------------------------- |
-| Sverlin Sans    | `sans`        | Inter 4.1                        | [OFL 1.1](LICENSE-Inter.txt)                        |
-| Sverlin Serif   | `serif`       | Source Serif 4.005               | [OFL 1.1](LICENSE-SourceSerif.md)                   |
-| Sverlin Mono    | `mono`        | JetBrains Mono NL 2.304          | [OFL 1.1](LICENSE-JetBrainsMono.txt)                |
-| Sverlin Legible | `legible`     | Atkinson Hyperlegible Next 2.001 | [OFL 1.1](LICENSE-AtkinsonHyperlegibleNext.txt)     |
-| Sverlin Casual  | `casual`      | Comic Neue 2.51                  | [OFL 1.1](LICENSE-ComicNeue.txt)                    |
-| Sverlin Slab    | `slab`        | Zilla Slab 1.002                 | [OFL 1.1](LICENSE-ZillaSlab.txt)                    |
-| Sverlin Symbols | (fallback)    | DejaVu Sans 2.37                 | [Bitstream Vera, public domain](LICENSE-DejaVu.txt) |
+| Family      | Design `font` | Subset of                        | Licence                                             |
+| ----------- | ------------- | -------------------------------- | --------------------------------------------------- |
+| Vis Sans    | `sans`        | Inter 4.1                        | [OFL 1.1](LICENSE-Inter.txt)                        |
+| Vis Serif   | `serif`       | Source Serif 4.005               | [OFL 1.1](LICENSE-SourceSerif.md)                   |
+| Vis Mono    | `mono`        | JetBrains Mono NL 2.304          | [OFL 1.1](LICENSE-JetBrainsMono.txt)                |
+| Vis Legible | `legible`     | Atkinson Hyperlegible Next 2.001 | [OFL 1.1](LICENSE-AtkinsonHyperlegibleNext.txt)     |
+| Vis Casual  | `casual`      | Comic Neue 2.51                  | [OFL 1.1](LICENSE-ComicNeue.txt)                    |
+| Vis Slab    | `slab`        | Zilla Slab 1.002                 | [OFL 1.1](LICENSE-ZillaSlab.txt)                    |
+| Vis Symbols | (fallback)    | DejaVu Sans 2.37                 | [Bitstream Vera, public domain](LICENSE-DejaVu.txt) |
 
 Each comes in regular (400) and bold (700), the weights the design draws. The
 mono face is JetBrains Mono's NL cut, without ligatures, so `!=` and `->` read
 as typed. The faces are renamed, as the Open Font License asks of modified fonts
-and Source Serif's reserved name `Source` requires; their copyright and licence
-notices are kept in the files.
+and Source Serif's reserved name `Source` requires, with a neutral prefix,
+`Vis`, so neither the page nor an export names the system a participant is
+using; their copyright and licence notices are kept in the files. The files' own
+name tables still give the earlier names, `Sverlin Sans` and so on, until
+`build.sh` is run again.
 
 [`scripts/fonts/build.sh`](../../../../../scripts/fonts/build.sh) makes them,
 from nixpkgs' font packages and `dejavu-fonts-ttf`, with fontTools

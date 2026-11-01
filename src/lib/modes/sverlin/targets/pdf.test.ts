@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import * as v from 'valibot';
 import { describe, expect, it, vi } from 'vitest';
 
-import { fontList } from '../library/fonts';
+import { fontList, fontValues } from '../library/fonts';
 import type { SceneText } from '../library';
 import { sceneMessageSchema, type SverlinScene } from '../scene';
 import { faceFiles, fallbackRuns, renderPdf } from './pdf';
@@ -44,6 +44,10 @@ async function readFont(file: string): Promise<ArrayBuffer> {
 }
 
 describe('faceFiles', () => {
+  it('names the embedded families neutrally, after no system', () => {
+    for (const value of fontValues) expect(fontList(value)).toMatch(/^'Vis \w+', 'Vis Symbols', /u);
+  });
+
   it('takes the embedded faces a font list starts with, at the weight drawn, then DejaVu', () => {
     expect(faceFiles(fontList('serif'), 400)).toEqual(['serif-400', 'symbols-400', 'DejaVuSerif']);
     expect(faceFiles(fontList('casual'), 700)).toEqual([
@@ -51,7 +55,7 @@ describe('faceFiles', () => {
       'symbols-700',
       'DejaVuSans-Bold'
     ]);
-    expect(faceFiles(`"Sverlin Mono", "Sverlin Symbols", monospace`, 600)).toEqual([
+    expect(faceFiles(`"Vis Mono", "Vis Symbols", monospace`, 600)).toEqual([
       'mono-700',
       'symbols-700',
       'DejaVuSansMono-Bold'
