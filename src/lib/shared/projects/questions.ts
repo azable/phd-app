@@ -1,7 +1,7 @@
 /**
  * The assistant's questions to the participant, of three kinds, each with what it is about and how
- * it is answered: in words (text, answered in the chat), about a presentation (one shown, or an
- * example the assistant made for it, with elements to highlight; answered in the chat), and about a
+ * it is answered: in words (text, answered in the chat), about a presentation (one shown, or one
+ * the assistant made for it, with elements to highlight; answered in the chat), and about a
  * pair (a comparison, answered by a side, either is fine, or decide later). Read from the events,
  * each answer linked to its question: a message by the question it answers (feedback.submitted
  * `answers`), a pair's answer by its display set.
@@ -36,27 +36,19 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
   const questions: ProjectQuestion[] = [];
   const asked = new Map<number, ProjectQuestion>();
   const pairs = new Map<string, ProjectQuestion>();
-  // Questions whose example is the next presentation their operation shows, by operation.
-  const awaitingExample = new Map<string, ProjectQuestion>();
   for (const event of events) {
     if (event.type === 'assistant.responded' && event.payload.question) {
-      const { text, presentationId, example, elements } = event.payload.question;
+      const { text, presentationId, elements } = event.payload.question;
       const question: ProjectQuestion = {
-        kind: presentationId || example ? 'presentation' : 'text',
+        kind: presentationId ? 'presentation' : 'text',
         eventId: event.id,
         text,
         presentationIds: presentationId ? [presentationId] : [],
         ...(elements?.length ? { elements } : {})
       };
-      if (example) awaitingExample.set(event.operationId, question);
       asked.set(event.id, question);
       questions.push(question);
     } else if (event.type === 'visualization.presented') {
-      const example = awaitingExample.get(event.operationId);
-      if (example) {
-        example.presentationIds = [event.payload.presentation.presentationId];
-        awaitingExample.delete(event.operationId);
-      }
       if (!event.payload.question) continue;
       const pair = pairs.get(event.payload.displaySetId);
       const question: ProjectQuestion = pair ?? {
@@ -91,12 +83,6 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
           : { kind: outcome === 'tie' ? 'tie' : 'skip', eventId: event.id };
     }
   }
-  // An example never presented, as when its build failed, leaves a question in words.
-  for (const question of questions)
-    if (question.kind === 'presentation' && !question.presentationIds.length) {
-      question.kind = 'text';
-      delete question.elements;
-    }
   return questions;
 }
 

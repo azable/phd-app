@@ -68,12 +68,12 @@ and such a node keeps the largest inset of every kind its tag can be, so nothing
 in it moves between steps. A build gives every variable a value: the starter's,
 a base variant's where it still fits, randomised (keeping the base's equal
 values equal, colours' shades, and what is shown), or chosen (an option the
-space lacks, or a variable it does not have, is an error). After the assistant
-changes the source, and on Another variant or New pair (dev mode only, in the
-top bar beside the Dev switch, with a picker of the chooser for that press), a
-chooser picks each presentation's values from the design space, starting from
-the viewed variant, given the variants of that source already shown. The
-choosers are interchangeable
+space lacks, or a variable it does not have, is an error). On Another variant or
+New pair (dev mode only, in the top bar beside the Dev switch, with a picker of
+the chooser for that press), and for the presentations an assistant's `vary` or
+`resample` with a `count` makes, a chooser picks each presentation's values from
+the design space, starting from the viewed variant, given the variants of that
+source already shown. The choosers are interchangeable
 ([`choosers.ts`](src/lib/server/projects/choosers.ts)): the model
 ([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
 smaller model call), OpenAI's Decisions API
@@ -81,12 +81,13 @@ smaller model call), OpenAI's Decisions API
 or a random draw. A study condition names one (`chooser`), else
 `SVERLIN_CHOOSER`, else the model (a resample's own chooser is honoured only
 from an administrator); a chooser that fails, or keeps Another variant waiting
-over 20 seconds, gives way to the random draw. After the assistant's change the
-presentations are built again with the chosen values, the first build standing
-if choosing fails; after a manual change the first presentation keeps the viewed
-variant's values and the second is randomised; refills of the presentation
-buffer stay random, as most are never shown; the assistant's `vary` decision
-sets values without changing the source
+over 20 seconds, gives way to the random draw. The assistant is the one author
+of a turn: its change to the source, or a `vary` without a `count` (which sets
+values without changing the source), shows as one version, its first build, with
+the viewed variant's values where they still fit and the starter's for anything
+new, and no chooser call; after a manual change the first presentation keeps the
+viewed variant's values and the second is randomised; refills of the
+presentation buffer stay random, as most are never shown
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
 `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many, the
 chooser filling each around the values the `vary` sets, and queues them in the
@@ -99,8 +100,8 @@ each a question and its two sides, each a short label in the participant's words
 and the values it sets: each is built as one pair, both from the viewed variant
 (with the `vary`'s values), differing only as its sides do, with no chooser or
 random draw. The first pair is built alone and shown at once, in place of the
-chooser's pair for a changed source, and the rest are built after it, one pair
-at a time, each queued as soon as it is built (`presentRemainingComparisons` in
+decision's one version, and the rest are built after it, one pair at a time,
+each queued as soon as it is built (`presentRemainingComparisons` in
 [`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
 the pair's `visualization.presented` events, each with its side's `label`, and
 shown above it on the stage; the chat caption and the assistant's context give a
@@ -153,11 +154,14 @@ rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired
 as edits that did not apply are, the repair told to keep unchanged the
 comparisons that could be built; on the last attempt those are built without the
 others (`kept`), the reply saying which were left out. The assistant's reply,
-with its question, is recorded only with the decision accepted, before what it
-presents, so a reply whose decision was set aside is never shown. Every
-presentation currently shows every master step. Every array and object is made
-by a collection or record type the domain block defines, and each step records
-the domain type of every value by path beside its plain values. Every view is
+with its question, is recorded last, once its decision is accepted and has
+presented its version (or first comparison pair), so a reply whose decision was
+set aside is never shown and the reply, its pill and its question arrive
+together; a `candidate-ref` in the reply (slot 0, or a pair's slot 1) and a
+question about the new version name what the turn presented. Every presentation
+currently shows every master step. Every array and object is made by a
+collection or record type the domain block defines, and each step records the
+domain type of every value by path beside its plain values. Every view is
 mounted inside the page frame,
 [`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
 it out at a fixed logical size and scales it to fit the page, as a zoomable,

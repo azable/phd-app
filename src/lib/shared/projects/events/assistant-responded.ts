@@ -19,14 +19,13 @@ export const assistantRespondedEventSchema = v.object({
     intakeStep: v.optional(participantIntakeStepSchema),
     /**
      * A question for the participant to answer in the chat (see shared/projects/questions.ts): in
-     * words, or about a presentation, one shown before or, as example, the first this operation
-     * presents next, with elements in it to highlight.
+     * words, or about a presentation, one shown before or the first its decision presented, with
+     * elements in it to highlight.
      */
     question: v.optional(
       v.object({
         text: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
         presentationId: v.optional(presentationIdSchema),
-        example: v.optional(v.literal(true)),
         elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
       })
     ),

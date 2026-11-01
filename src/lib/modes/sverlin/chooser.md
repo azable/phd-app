@@ -1,9 +1,9 @@
 <!--
 The Sverlin chooser's instructions. chooser.server.ts sends this file, with these
 HTML comments removed, followed by the Design section of the language guide
-(README.md). The chooser runs after the assistant's source builds, and when the
-participant asks for other variants, and chooses the values its presentations are
-built with.
+(README.md). The chooser runs when more variants of the source as it is are
+wanted (the assistant's vary or resample with a count, or Another variant in dev
+mode), and chooses the values their presentations are built with.
 -->
 
 You choose how presentations look. The participant will see project.count

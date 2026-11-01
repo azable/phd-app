@@ -129,7 +129,7 @@ describe('participant Timeline projection', () => {
   });
 
   it('gives a question a pill only where the message does not show what it is about', () => {
-    const asking = (question: { text: string; presentationId?: string; example?: true }) => {
+    const asking = (question: { text: string; presentationId?: string }) => {
       const values = events();
       const responded = values[1];
       if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
@@ -144,11 +144,31 @@ describe('participant Timeline projection', () => {
     expect(
       asking({ text: 'Too dense?', presentationId: presentationIds[1] }).question
     ).toMatchObject({ pill: false });
-    // About the example the turn made but did not name: its pill, in place of the appended one.
-    const example = asking({ text: 'Like this?', example: true });
+    // About a presentation the turn made but did not name: its pill, in place of the appended one.
+    const example = asking({ text: 'Like this?', presentationId: presentationIds[0] });
     expect(example.question).toMatchObject({ pill: true });
     expect(example.appended).toEqual([]);
     expect(Object.keys(example.pills)).toContain(presentationIds[0]);
+  });
+
+  it('names in a reply recorded after them the versions its turn made, with no pill appended', () => {
+    const [feedback, responded, ...rest] = events();
+    if (responded.type !== 'assistant.responded') throw new Error('Missing response.');
+    const presented = rest.filter(({ type }) => type === 'visualization.presented');
+    responded.payload.content = [
+      { type: 'presentation-ref', presentationId: presentationIds[0] },
+      { type: 'markdown', text: 'is an initial visualisation of addition.' }
+    ];
+    responded.payload.question = { text: 'Too dense?', presentationId: presentationIds[0] };
+    const values = [feedback, ...presented, responded].map(
+      (event, index) => ({ ...event, id: index + 1 }) as ProjectEvent
+    );
+    const [turn] = turns(participantTimeline(values));
+    expect(turn.appended).toEqual([presentationIds[1]]);
+    expect(turn.question).toMatchObject({
+      question: { presentationIds: [presentationIds[0]] },
+      pill: false
+    });
   });
 
   it('shows a question about an earlier presentation with its pill', () => {

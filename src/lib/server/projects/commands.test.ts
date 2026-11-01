@@ -481,7 +481,7 @@ describe('participant intake', () => {
     const document = await withActiveIntake(created, 'algorithm');
     mocks.preparePrompt.mockImplementation(async () => generationPrompt('initial'));
     mocks.generatePrepared.mockResolvedValue(
-      generation('valid intake source', 'I am preparing two distinct options.')
+      generation('valid intake source', 'Here is linear search.')
     );
 
     const result = await submitProjectFeedback(
@@ -502,7 +502,7 @@ describe('participant intake', () => {
     ).toEqual([]);
     expect(
       result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 });
 
@@ -905,17 +905,17 @@ describe('submitProjectFeedback', () => {
     expect(JSON.stringify(result.appendedEvents)).not.toContain('struggledWith');
   });
 
-  it('builds a synchronized comparison from two distinct fresh seeds', async () => {
+  it('presents one version of a new source where the stage shows two', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
     const { createProject } = await import('./service');
     const { submitProjectFeedback } = await import('./commands');
-    const created = await createProject({ title: 'Comparison' }, serviceDependencies);
+    const created = await createProject({ title: 'One version' }, serviceDependencies);
 
     const result = await submitProjectFeedback(
       {
         projectId: created.projectId,
         expectedHead: projectHead(created).id,
-        content: markdownMessage('Show two alternatives'),
+        content: markdownMessage('Show linear search'),
         focus: [],
         presentationCount: 2,
         operationId: '12345678-1234-4123-8123-123456789abc'
@@ -924,121 +924,26 @@ describe('submitProjectFeedback', () => {
     );
 
     const buildRequests = result.appendedEvents.filter((event) => event.type === 'build.requested');
-    expect(new Set(buildRequests.map(({ payload }) => payload.seed)).size).toBe(2);
-    const presented = result.appendedEvents.filter(
-      (event) => event.type === 'visualization.presented'
-    );
-    expect(presented).toHaveLength(2);
-    expect(new Set(presented.map(({ payload }) => payload.displaySetId)).size).toBe(1);
-    expect(new Set(presented.map(({ payload }) => payload.presentation.presentationId)).size).toBe(
-      2
-    );
     const buildResults = result.appendedEvents.filter((event) => event.type === 'build.succeeded');
-    expect(buildRequests).toHaveLength(2);
-    expect(buildResults).toHaveLength(2);
+    expect(buildRequests).toHaveLength(1);
+    expect(buildResults).toHaveLength(1);
+    expect(buildResults[0].payload.buildId).toBe(buildRequests[0].payload.buildId);
+    expect(buildResults[0].payload.bundle.mediaType).toBe('application/json');
     expect(
-      new Set([
-        ...buildRequests.map(({ payload }) => payload.buildId),
-        ...buildResults.map(({ payload }) => payload.buildId)
-      ]).size
-    ).toBe(1);
-    expect(
-      buildResults.every(({ payload }) => payload.bundle.mediaType === 'application/json')
-    ).toBe(true);
+      result.appendedEvents.filter((event) => event.type === 'visualization.presented')
+    ).toHaveLength(1);
   });
 
-  it('builds a new source again with the variants the chooser picks from its design space', async () => {
+  it('asks no chooser for a new source: its first build stands, with the starter’s values for what is new', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
-    const choose = vi.fn(async (prompt: { context: { project: { design: unknown } } }) => ({
-      variants: [
-        {
-          values: [
-            { variable: 'Shown.fill', value: 'amber-100' },
-            { variable: 'Shown.fill', value: 'not-a-colour' },
-            { variable: 'Shown.depth', value: 3 }
-          ],
-          randomise: []
-        },
-        { values: [{ variable: 'Shown.fill', value: 'blue-100' }], randomise: ['Shown.font'] }
-      ],
-      prompt,
-      generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
-    }));
+    const choose = vi.fn();
     const chooserDependencies: ProjectCommandDependencies = {
       ...commandDependencies,
+      chooserFor: async () => 'model',
       getChooser: () =>
         ({
-          preparePrompt: async (request: { project: unknown }) => ({
-            initialPrompt: 'Choose',
-            messages: [],
-            context: { project: request.project },
-            attempt: { number: 1, purpose: 'choosing' },
-            parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
-            responseFormat: { name: 'design_variants', schema: {} }
-          }),
+          preparePrompt: async () => ({}),
           generatePrepared: choose,
-          requestTimeoutMs: () => 180_000
-        }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>
-    };
-    const { createProject } = await import('./service');
-    const { submitProjectFeedback } = await import('./commands');
-    const created = await createProject({ title: 'Chosen' }, serviceDependencies);
-
-    const result = await submitProjectFeedback(
-      {
-        projectId: created.projectId,
-        expectedHead: projectHead(created).id,
-        content: markdownMessage('Show two alternatives'),
-        focus: [],
-        presentationCount: 2,
-        operationId: '12345678-1234-4123-8123-123456789abc'
-      },
-      chooserDependencies
-    );
-
-    const [{ context }] = choose.mock.calls[0];
-    expect(JSON.stringify(context.project.design)).toContain('"variable":"Shown.fill"');
-    expect(
-      result.appendedEvents.some(
-        (event) => event.type === 'ai.generation-requested' && event.payload.purpose === 'choosing'
-      )
-    ).toBe(true);
-    // Built once to compile, then again with the chosen variants, which are what is shown.
-    expect(result.appendedEvents.filter((event) => event.type === 'build.requested')).toHaveLength(
-      4
-    );
-    const shown = result.appendedEvents.flatMap((event) =>
-      event.type === 'visualization.presented' &&
-      event.payload.presentation.format === 'browser-bundle-v1'
-        ? [event.payload.presentation]
-        : []
-    );
-    expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual(['amber-100', 'blue-100']);
-    expect(shown.map(({ origins }) => origins?.['Shown.fill'])).toEqual(['chosen', 'chosen']);
-    // What the chooser left is the starter's still, not kept from the first build.
-    expect(
-      Object.entries(shown[0].origins ?? {}).filter(
-        ([key, origin]) => key !== 'Shown.fill' && origin !== 'starter'
-      )
-    ).toEqual([]);
-    expect(shown[0].variant).not.toHaveProperty('Shown.depth');
-  });
-
-  it('shows the first build when choosing fails', async () => {
-    mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
-    const chooserDependencies: ProjectCommandDependencies = {
-      ...commandDependencies,
-      getChooser: () =>
-        ({
-          preparePrompt: async () => ({
-            initialPrompt: 'Choose',
-            messages: [],
-            context: {},
-            attempt: { number: 1, purpose: 'choosing' },
-            parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
-            responseFormat: { name: 'design_variants', schema: {} }
-          }),
-          generatePrepared: vi.fn().mockRejectedValue(new Error('The chooser timed out.')),
           requestTimeoutMs: () => 180_000
         }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>
     };
@@ -1052,20 +957,28 @@ describe('submitProjectFeedback', () => {
         expectedHead: projectHead(created).id,
         content: markdownMessage('Show one'),
         focus: [],
-        presentationCount: 1,
+        presentationCount: 2,
         operationId: '12345678-1234-4123-8123-123456789abc'
       },
       chooserDependencies
     );
 
-    expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(true);
-    expect(result.appendedEvents.some((event) => event.type === 'system.notified')).toBe(false);
+    expect(choose).not.toHaveBeenCalled();
+    expect(
+      result.appendedEvents.some(
+        (event) => event.type === 'ai.generation-requested' && event.payload.purpose === 'choosing'
+      )
+    ).toBe(false);
     expect(result.appendedEvents.filter((event) => event.type === 'build.requested')).toHaveLength(
       1
     );
-    expect(
-      result.appendedEvents.filter((event) => event.type === 'visualization.presented')
-    ).toHaveLength(1);
+    const [shown] = result.appendedEvents.flatMap((event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.format === 'browser-bundle-v1'
+        ? [event.payload.presentation]
+        : []
+    );
+    expect(new Set(Object.values(shown.origins ?? {}))).toEqual(new Set(['starter']));
   });
 
   describe('Another variant', () => {
@@ -1218,7 +1131,7 @@ describe('submitProjectFeedback', () => {
     });
   });
 
-  it('repairs a failed component batch using the same two seeds', async () => {
+  it('repairs a failed component batch using the same seed', async () => {
     mocks.generatePrepared
       .mockReset()
       .mockResolvedValueOnce(generation('broken first source', 'First'))
@@ -1240,12 +1153,11 @@ describe('submitProjectFeedback', () => {
     );
 
     const requests = result.appendedEvents.filter((event) => event.type === 'build.requested');
-    expect(requests.map(({ payload }) => payload.seed).slice(0, 2)).toEqual(
-      requests.map(({ payload }) => payload.seed).slice(2)
-    );
+    expect(requests).toHaveLength(2);
+    expect(requests[0].payload.seed).toBe(requests[1].payload.seed);
     expect(
       result.appendedEvents.filter((event) => event.type === 'visualization.presented')
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it('uses the fifth attempt for a simpler working fallback and explains it', async () => {
@@ -1299,10 +1211,10 @@ describe('submitProjectFeedback', () => {
     });
     const buildRequests = result.appendedEvents.filter((event) => event.type === 'build.requested');
     expect(new Set(buildRequests.map(({ payload }) => payload.seed)).size).toBe(1);
-    // Only the accepted attempt's reply is recorded, before what it presents.
+    // Only the accepted attempt's reply is recorded, after what it presents.
     const replies = result.appendedEvents.filter(({ type }) => type === 'assistant.responded');
     expect(replies).toHaveLength(1);
-    expect(result.appendedEvents.indexOf(replies[0])).toBeLessThan(
+    expect(result.appendedEvents.indexOf(replies[0])).toBeGreaterThan(
       result.appendedEvents.findIndex(({ type }) => type === 'visualization.presented')
     );
     expect(replies[0]).toMatchObject({
@@ -1373,7 +1285,7 @@ describe('submitProjectFeedback', () => {
     });
   });
 
-  it('proactively builds a revised pair when preference evidence is sufficient', async () => {
+  it('proactively builds a revised version when preference evidence is sufficient', async () => {
     const { submitProjectPreference } = await import('./commands');
     const comparison = await createComparisonProject('Preference adaptation');
     mocks.generatePrepared
@@ -1396,7 +1308,7 @@ describe('submitProjectFeedback', () => {
 
     expect(
       result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(result.appendedEvents).toContainEqual(
       expect.objectContaining({ type: 'artifact.version-created' })
     );
@@ -1406,8 +1318,8 @@ describe('submitProjectFeedback', () => {
     const shownIndex = result.appendedEvents.findIndex(
       ({ type }) => type === 'visualization.presented'
     );
-    expect(observationIndex).toBeGreaterThanOrEqual(0);
-    expect(observationIndex).toBeLessThan(shownIndex);
+    expect(shownIndex).toBeGreaterThanOrEqual(0);
+    expect(observationIndex).toBeGreaterThan(shownIndex);
     expect(result.appendedEvents[observationIndex]).toMatchObject({
       type: 'assistant.responded',
       payload: { content: markdownMessage('I adapted the spacing.') }
@@ -2260,11 +2172,26 @@ async function createComparisonProject(title: string): Promise<{
   const created = await createProject({ title }, serviceDependencies);
   mocks.generatePrepared
     .mockReset()
-    .mockResolvedValue(generation('valid comparison source', 'Compare these candidates.'));
-  const result = await submitProjectFeedback(
+    .mockResolvedValueOnce(generation('valid comparison source', 'Here is one.'))
+    .mockResolvedValueOnce({
+      ...generation(undefined, 'Compare these candidates.'),
+      decision: { action: 'resample' }
+    });
+  const revised = await submitProjectFeedback(
     {
       projectId: created.projectId,
       expectedHead: projectHead(created).id,
+      content: markdownMessage('Create one'),
+      focus: [],
+      presentationCount: 2,
+      operationId: '12345678-1234-4123-8123-123456789abb'
+    },
+    commandDependencies
+  );
+  const result = await submitProjectFeedback(
+    {
+      projectId: created.projectId,
+      expectedHead: projectHead(revised.document).id,
       content: markdownMessage('Create a comparison'),
       focus: [],
       presentationCount: 2,
@@ -2548,7 +2475,7 @@ describe('assistant edits', () => {
     expect(change?.operation === 'upsert' && change.artifact.content.text).toContain('Corrected');
   });
 
-  it('varies the viewed variant: chosen values in both, the rest kept in the first and randomised in the second', async () => {
+  it('varies the viewed variant in one version, where two are shown: chosen values set, the rest kept', async () => {
     const { createProject } = await import('./service');
     const { runQueuedAssistantTurn } = await import('./commands');
     const document = await createProject(
@@ -2619,7 +2546,10 @@ describe('assistant edits', () => {
     );
 
     expect(result.appendedEvents.map(({ type }) => type)).not.toContain('artifact.version-created');
-    const [first, second] = presented(result.appendedEvents);
+    // A vary without a count or comparisons presents one version, not an unlabelled pair.
+    const shown = presented(result.appendedEvents);
+    expect(shown).toHaveLength(1);
+    const [first] = shown;
     const origins = (presentation: BrowserBundlePresentation) =>
       Object.fromEntries(
         Object.entries(presentation.variant ?? {}).map(([key, value]) => [
@@ -2628,7 +2558,6 @@ describe('assistant edits', () => {
         ])
       );
     expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
-    expect(origins(second)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
     expect(origins(first)['Highlight.Pointed.fill'].origin).not.toBe('chosen');
     // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
     const follows = (key: string) =>
@@ -2636,7 +2565,6 @@ describe('assistant edits', () => {
     for (const [key, { value, origin }] of Object.entries(origins(first)))
       if (key !== 'views.Int' && key !== 'Highlight.Pointed.fill' && !follows(key))
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
-    expect(Object.values(origins(second)).some(({ origin }) => origin === 'random')).toBe(true);
   });
 });
 
@@ -3085,7 +3013,49 @@ describe('several variants from chat', () => {
     { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
   ];
 
-  it('shows a changed source’s first comparison in place of the chooser’s pair, before building the rest', async () => {
+  it('records the reply after the version it presents, naming it and asking about it', async () => {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject({ title: 'Reply last' }, serviceDependencies);
+    const decided = generation('valid source', 'unused');
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      ...decided,
+      reply: [
+        { type: 'candidate-ref', slot: 0 },
+        { type: 'markdown', text: 'is an initial visualisation of linear search.' }
+      ],
+      decision: {
+        ...decided.decision,
+        question: { text: 'Is the target clear?', presentation: 'new', elements: null }
+      }
+    });
+
+    const result = await submitProjectFeedback(
+      feedbackOptions(created, 'Linear search', '12345678-1234-4123-8123-123456789abc'),
+      commandDependencies
+    );
+
+    const types = result.appendedEvents.map(({ type }) => type);
+    const shown = result.appendedEvents.filter((event) => event.type === 'visualization.presented');
+    expect(shown).toHaveLength(1);
+    expect(types.indexOf('assistant.responded')).toBe(types.length - 1);
+    expect(types.indexOf('assistant.responded')).toBeGreaterThan(
+      types.indexOf('visualization.presented')
+    );
+    const shownId =
+      shown[0].type === 'visualization.presented' && shown[0].payload.presentation.presentationId;
+    expect(replies(result.appendedEvents)).toEqual([
+      {
+        content: [
+          { type: 'presentation-ref', presentationId: shownId },
+          { type: 'markdown', text: 'is an initial visualisation of linear search.' }
+        ],
+        question: { text: 'Is the target clear?', presentationId: shownId }
+      }
+    ]);
+  });
+
+  it('shows a changed source’s first comparison with the reply, before building the rest', async () => {
     const choose = vi.fn();
     const { result } = await decide(
       {
@@ -3114,6 +3084,10 @@ describe('several variants from chat', () => {
     const builds = types.flatMap((type, index) => (type === 'build.requested' ? [index] : []));
     expect(builds.filter((index) => index < firstShown)).toHaveLength(2);
     expect(builds.filter((index) => index > firstShown)).toHaveLength(2);
+    // The reply follows the first pair, before the rest are built.
+    const replied = types.indexOf('assistant.responded');
+    expect(replied).toBe(firstShown + 2);
+    expect(builds.filter((index) => index > replied)).toHaveLength(2);
     const { presentationBufferState, waitingBehind } =
       await import('$lib/shared/projects/presentation-buffer');
     const buffer = presentationBufferState(result.document, 0);
@@ -3236,6 +3210,6 @@ describe('several variants from chat', () => {
     expect(mocks.preparePrompt.mock.calls.at(-1)?.[0]).toMatchObject({ turn: 'feedback' });
     mocks.preparePrompt.mockClear();
     await createComparisonProject('First source');
-    expect(mocks.preparePrompt.mock.calls.at(-1)?.[0]).toMatchObject({ turn: 'authoring' });
+    expect(mocks.preparePrompt.mock.calls[0]?.[0]).toMatchObject({ turn: 'authoring' });
   });
 });

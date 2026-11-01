@@ -4,7 +4,7 @@ import {
   generatedMessageContentSchema,
   parseRecoveryExplanation,
   recoveryExplanationJsonSchema,
-  retainedMessageContentJsonSchema,
+  generatedMessageContentJsonSchema,
   type ChatBotConfig
 } from '$lib/server/chat-bots/types';
 import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
@@ -100,7 +100,7 @@ export default {
       type: 'object',
       additionalProperties: false,
       properties: {
-        reply: retainedMessageContentJsonSchema,
+        reply: generatedMessageContentJsonSchema,
         decision: sourceDecisionJsonSchema,
         brief: briefUpdateJsonSchema,
         recovery: recoveryExplanationJsonSchema

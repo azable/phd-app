@@ -885,11 +885,11 @@ an error: rename the label.
 A variant gives every variable a value, and a presentation draws one. The
 starter is each type in its first view, each kind in a plain look for what it
 is: values framed, text and layouts unframed, and pointers marked in amber, and
-every label paused `"on"`. After a change to the source, the chooser chooses
-each presentation's values, and a presentation built after a change keeps the
-values of the one it was made from where nothing else sets them; the assistant
-sets values with `vary`, and Another variant (in dev mode) asks the chooser
-again, which may change what is shown where the conversation leaves it open.
+every label paused `"on"`. A presentation built after a change keeps the values
+of the one it was made from where nothing else sets them, and takes the
+starter's for anything new; the assistant sets values with `vary`, and asking
+for several variants, or Another variant (in dev mode), asks the chooser, which
+may change what is shown where the conversation leaves it open.
 
 ### Declare what varies
 

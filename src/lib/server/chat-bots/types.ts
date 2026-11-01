@@ -105,12 +105,6 @@ export const generatedMessageContentJsonSchema = {
   }
 } as const;
 
-/** Reply schema for background Sverlin observations, which can reference only retained output. */
-export const retainedMessageContentJsonSchema = {
-  ...generatedMessageContentJsonSchema,
-  items: { anyOf: generatedMessageContentJsonSchema.items.anyOf.slice(0, 2) }
-} as const;
-
 /** Failed generated source and diagnostics supplied to one repair attempt. */
 export type BuildFeedback = {
   attempt: number;

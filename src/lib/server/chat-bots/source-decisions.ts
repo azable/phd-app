@@ -32,8 +32,9 @@ const summary = v.pipe(
 export const maximumVariants = 8;
 
 /**
- * How many presentations to make, filled by the project's chooser; the first pair shows and the rest
- * wait for New pair. Optional (null in the strict response) for one pair as before.
+ * How many presentations to make, filled by the project's chooser; the first set shows and the rest
+ * wait for Next pair. Optional (null in the strict response): a vary then shows one version, a
+ * resample the next set.
  */
 const count = v.optional(
   v.nullable(
@@ -43,7 +44,7 @@ const count = v.optional(
       v.minValue(2),
       v.maxValue(maximumVariants),
       v.description(
-        'How many presentations to make, one per option compared (four views of a type, 4; a yes or no, 2), or null for one pair as before. The first pair shows; the rest wait for New pair.'
+        'How many presentations to make, one per option compared (four views of a type, 4; a yes or no, 2), or null for one version (a resample: the next pair). The first pair shows with your reply; Next pair shows the rest.'
       )
     )
   )
@@ -93,8 +94,7 @@ export const maximumComparisons = 8;
 /**
  * Pairs the assistant designs, each asking one question: both sides take the viewed variant (with a
  * vary's values) and differ only in the values each side sets. Optional (null in the strict
- * response); not with a count. With a change to the source, its first pair shows in place of the
- * chooser's.
+ * response); not with a count. Its first pair shows in place of the decision's one version.
  */
 const comparisons = v.optional(
   v.nullable(
@@ -123,7 +123,7 @@ const comparisons = v.optional(
       v.minLength(1),
       v.maxLength(maximumComparisons),
       v.description(
-        'Pairs to compare, one per question, most useful first, or null. The first pair shows as soon as it is built; the rest wait, each shown once the one before is answered.'
+        'Pairs to compare, one per question, most useful first, or null. The first pair shows with your reply; each answer shows the next.'
       )
     )
   )
@@ -178,10 +178,10 @@ export const sourceDecisions = {
   resample: v.strictObject({ action: v.literal('resample'), count }),
 
   /**
-   * New presentations of the source as it is, with values for some of its variables: the rest keep
-   * the viewed variant's values in the first presentation, except those to randomise; with a count,
-   * every presentation takes the values and the chooser fills the rest; with comparisons, each is a
-   * pair differing only in what its sides set.
+   * A new presentation of the source as it is, with values for some of its variables: the rest keep
+   * the viewed variant's values, except those to randomise; with a count, that many presentations,
+   * each taking the values, the chooser filling the rest; with comparisons, each a pair differing
+   * only in what its sides set.
    */
   vary: v.pipe(
     v.strictObject({

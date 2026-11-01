@@ -1,6 +1,6 @@
 /**
- * The Sverlin chooser: after the assistant's source builds, it chooses the values of the variants
- * its presentations are built with, from the source's design space.
+ * The Sverlin chooser: when more variants of a source are wanted, it chooses the values they are
+ * built with, from the source's design space.
  */
 
 import * as v from 'valibot';

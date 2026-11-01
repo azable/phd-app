@@ -69,6 +69,7 @@ import type {
 import type {
   Comparisons,
   DecisionQuestion,
+  SourceDecision,
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
 import { openQuestion } from '$lib/shared/projects/questions';
@@ -874,6 +875,7 @@ async function runSverlinAssistantTurn(
           operationId,
           contextSelection,
           turn,
+          presentationCount,
           ...(buildFeedback ? { buildFeedback } : {})
         },
         dependencies
@@ -886,17 +888,23 @@ async function runSverlinAssistantTurn(
       for (const entry of generation.result.brief ?? []) turnBrief.set(entry.key, entry);
       const brief = turnBrief.size ? [...turnBrief.values()] : undefined;
 
-      // The reply is recorded with its decision once that is accepted, before what it presents, so
-      // the reply of an attempt set aside is never the turn's. A blank reply to a change says what
-      // the change does instead; the fallback's starts with what it simplified. A note follows
-      // what the reply says, as which comparisons were left out.
-      const recordReply = (document: ProjectDocument, note?: string) => {
+      // The reply is recorded last, once its decision is accepted and has presented its version (a
+      // comparison's first pair), so the reply of an attempt set aside is never the turn's and the
+      // reply, its question, and what it presents arrive together; its candidate-refs, and a
+      // question about the new version, name what this turn presented. A blank reply to a change
+      // says what the change does instead; the fallback's starts with what it simplified. A note
+      // follows what the reply says, as which comparisons were left out.
+      const recordReply = (
+        document: ProjectDocument,
+        presented: readonly RenderablePresentation[] = [],
+        note?: string
+      ) => {
         const { reply, decision, recovery } = generation.result;
         const summary = 'summary' in decision ? decision.summary : undefined;
         const question = recordedQuestion(
           document,
           'question' in decision ? decision.question : undefined,
-          decision.action !== 'respond'
+          presented
         );
         const said: GeneratedMessageContent =
           blankReply(reply) && summary ? [{ type: 'markdown', text: summary }] : reply;
@@ -908,7 +916,7 @@ async function runSverlinAssistantTurn(
             : [...said, { type: 'markdown', text: note }];
         return appendAssistantResponse(
           document,
-          resolveAssistantContent(document, replyWithRecovery(noted, recovery), []),
+          resolveAssistantContent(document, replyWithRecovery(noted, recovery), presented),
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
@@ -1094,7 +1102,6 @@ async function runSverlinAssistantTurn(
       }
       if (candidate === undefined) {
         if (attempt === 1) {
-          current = await recordReply(current);
           const advanced =
             decision.action === 'resample'
               ? await advanceCandidatesForAgent(
@@ -1104,8 +1111,10 @@ async function runSverlinAssistantTurn(
                   dependencies
                 )
               : { document: current, presentations: [] };
-          current = advanced.document;
-          return { document: advanced.document, done: true };
+          return {
+            document: await recordReply(advanced.document, advanced.presentations),
+            done: true
+          };
         }
         failureSummaries.push(`Attempt ${attempt} did not return corrected source.`);
         if (!buildFeedback || attempt === chatbot.config.attemptProfiles.length) {
@@ -1128,8 +1137,9 @@ async function runSverlinAssistantTurn(
         return { document: current, done: false };
       }
 
-      // Every attempt builds the same seeds, more of them when a decision asks for more.
-      const size = pairs ? pairs.length * 2 : (queued ?? presentationCount);
+      // Every attempt builds the same seeds, more of them when a decision asks for more: a decision
+      // without comparisons or a count presents one version.
+      const size = pairs ? pairs.length * 2 : (queued ?? 1);
       if (seeds.length < size)
         seeds = [...seeds, ...freshPresentationSeeds(size - seeds.length, seeds)];
       const batchSeeds = seeds.slice(0, size);
@@ -1173,45 +1183,28 @@ async function runSverlinAssistantTurn(
           );
           if (screened) return screened;
         }
-        current = await recordReply(current, leftOut);
-        // A new source's presentations, and those a decision with a count queues, show the
-        // variants the chooser picks from its design space; the first build stands if it fails.
-        // The assistant's comparisons show in their place.
-        const shown = pairs
-          ? { document: current, recorded: built.recorded }
-          : decision.action === 'revise' || decision.action === 'edit'
-            ? await chosenBuild(
-                {
-                  document: current,
-                  recorded: built.recorded,
-                  candidate,
-                  summary: decision.summary,
-                  seeds: batchSeeds,
-                  operationId,
-                  attempt
-                },
-                dependencies
-              )
-            : queued
-              ? await chosenBuild(
-                  {
-                    document: current,
-                    recorded: built.recorded,
-                    candidate,
-                    ...('summary' in decision ? { summary: decision.summary } : {}),
-                    seeds: batchSeeds,
-                    operationId,
-                    attempt,
-                    asItIs: {
-                      base: { ...variant.base, ...variant.chosen },
-                      fixed: variant.chosen ?? {}
-                    }
-                  },
-                  dependencies
-                )
-              : { document: current, recorded: built.recorded };
+        // The assistant is the one author of a new or edited source: its first build stands. Only
+        // the presentations a vary or resample with a count queues, more variants of the source as
+        // it is, show the variants the chooser picks; the first build stands if that fails.
+        const shown = queued
+          ? await chosenBuild(
+              {
+                document: current,
+                recorded: built.recorded,
+                candidate,
+                ...('summary' in decision ? { summary: decision.summary } : {}),
+                seeds: batchSeeds,
+                operationId,
+                attempt,
+                base: { ...variant.base, ...variant.chosen },
+                fixed: variant.chosen ?? {}
+              },
+              dependencies
+            )
+          : { document: current, recorded: built.recorded };
         current = shown.document;
         assertCurrentProjectOperationActive();
+        const acceptedAfter = projectHead(current).id;
         current = await acceptSverlinCandidate(
           {
             document: current,
@@ -1228,6 +1221,7 @@ async function runSverlinAssistantTurn(
           },
           dependencies
         );
+        current = await recordReply(current, firstPresentedSet(current, acceptedAfter), leftOut);
         if (pairs)
           current = await presentRemainingComparisons(
             {
@@ -1468,6 +1462,7 @@ async function runSverlinGeneration(
     operationId: string;
     contextSelection: AiContextSelection;
     turn: ChatTurn;
+    presentationCount: 1 | 2;
     buildFeedback?: BuildFeedback;
   },
   dependencies: ProjectCommandDependencies
@@ -1507,7 +1502,11 @@ async function runSverlinGeneration(
             result.providerResponse
           );
         }
-        validateGeneratedReply(result.reply, 0, result.providerResponse);
+        validateGeneratedReply(
+          result.reply,
+          shownSlots(result.decision, options.presentationCount),
+          result.providerResponse
+        );
         if (
           (result.decision.action === 'respond' || result.decision.action === 'resample') &&
           blankReply(result.reply)
@@ -1723,10 +1722,11 @@ async function buildCandidateBatch(
 }
 
 /**
- * Build a candidate again with the variants the chooser picks from its design space, starting from
- * the first build's variant (the viewed one, with the starter's values for anything new). A value
- * the space does not offer is left out. Without a chooser, or when choosing or building fails, the
- * first build stands.
+ * Build more variants of the source as it is again, as a vary or resample with a count asks, with
+ * those the chooser picks from its design space: from the viewed variant with the values the
+ * assistant fixes, which every variant keeps, given the variants of the source already seen. A
+ * value the space does not offer is left out. With the random draw, or when choosing or building
+ * fails, the first build stands.
  */
 async function chosenBuild(
   options: {
@@ -1737,11 +1737,9 @@ async function chosenBuild(
     seeds: readonly number[];
     operationId: string;
     attempt: number;
-    /**
-     * More variants of the source as it is, as a vary or resample with a count asks: from the
-     * viewed variant with the values the assistant fixes, which every variant keeps.
-     */
-    asItIs?: { base?: DesignValues; fixed: DesignValues };
+    /** The variant every build starts from: the viewed one, with the fixed values. */
+    base?: DesignValues;
+    fixed: DesignValues;
   },
   dependencies: ProjectCommandDependencies
 ): Promise<{ document: ProjectDocument; recorded: RecordedBuildBatch }> {
@@ -1749,48 +1747,34 @@ async function chosenBuild(
   const [first] = options.recorded.builds;
   const bundle = first?.result.ok && 'bundle' in first ? first.result.bundle : undefined;
   const chooser = await projectChooser(options.document.projectId, dependencies);
-  // With the random draw, the first build already keeps what was viewed and draws what is new.
+  // With the random draw, the first build already draws every variant but the first afresh.
   if (chooser.id === 'random' || !bundle?.variant) return firstBuild;
-  const asItIs = options.asItIs;
-  const viewed = asItIs?.base && Object.keys(asItIs.base).length ? asItIs.base : undefined;
-  const seen = asItIs
-    ? differences(
-        sourcePresentations(options.document, sourceSha256(options.candidate))
-          .slice(-recentlySeen)
-          .reverse()
-          .flatMap(({ variant }) => (variant ? [variant] : [])),
-        viewed
-      )
-    : [];
+  const base = options.base && Object.keys(options.base).length ? options.base : undefined;
+  const seen = differences(
+    sourcePresentations(options.document, sourceSha256(options.candidate))
+      .slice(-recentlySeen)
+      .reverse()
+      .flatMap(({ variant }) => (variant ? [variant] : [])),
+    base
+  );
   const chosen = await chooseVariants(chooser, {
     document: options.document,
-    purpose: asItIs ? 'resample' : 'new-source',
+    purpose: 'resample',
     source: options.candidate,
     ...(options.summary ? { summary: options.summary } : {}),
     count: options.seeds.length,
-    design: viewed ? { ...bundle, variant: { ...bundle.variant, ...viewed } } : bundle,
+    design: base ? { ...bundle, variant: { ...bundle.variant, ...base } } : bundle,
     seen,
-    settled: { ...settledValues(options.document.events), ...asItIs?.fixed },
+    settled: { ...settledValues(options.document.events), ...options.fixed },
     operationId: options.operationId,
     attempt: options.attempt
   });
   if (chosen.chooser === 'random') return { ...firstBuild, document: chosen.document };
-  // The first build's values kept from the viewed variant, not those it took from the starter, so
-  // the rebuild's starter values are still recorded as the starter's.
-  const base = asItIs
-    ? viewed
-    : bundle.origins
-      ? Object.fromEntries(
-          Object.entries(bundle.variant).filter(([key]) => bundle.origins?.[key] !== 'starter')
-        )
-      : bundle.variant;
-  const choices = asItIs
-    ? distinctChoices(
-        chosen.choices.map((choice) => keeping(choice, asItIs.fixed)),
-        base,
-        seen
-      )
-    : chosen.choices;
+  const choices = distinctChoices(
+    chosen.choices.map((choice) => keeping(choice, options.fixed)),
+    base,
+    seen
+  );
   const requests = chosenRequests(options.seeds, designVariables(bundle), base, choices);
   const rebuilt = await buildCandidateBatch(
     {
@@ -2142,6 +2126,17 @@ async function advanceCandidatesForAgent(
   };
 }
 
+/** The first display set presented after an event, by slot: what a reply's candidate-refs name. */
+function firstPresentedSet(document: ProjectDocument, after: EventId): RenderablePresentation[] {
+  const presented = document.events.flatMap((event) =>
+    event.id > after && event.type === 'visualization.presented' ? [event.payload] : []
+  );
+  return presented
+    .filter(({ displaySetId }) => displaySetId === presented[0]?.displaySetId)
+    .toSorted((left, right) => left.slot - right.slot)
+    .map(({ presentation }) => presentation);
+}
+
 function resolveAssistantContent(
   document: ProjectDocument,
   reply: GeneratedMessageContent,
@@ -2199,6 +2194,18 @@ function generationReference(
     (event) => event.operationId === operationId && event.type === 'ai.generation-succeeded'
   )?.id;
   return id === undefined ? {} : { generationEventId: id };
+}
+
+/**
+ * How many presentations a decision shows first, which its reply's candidate-refs can name: none
+ * for a reply alone, a comparison's pair, a set of those a count or resample makes, or one version.
+ */
+function shownSlots(decision: SourceDecision, presentationCount: 1 | 2): number {
+  if (decision.action === 'respond') return 0;
+  if ('comparisons' in decision && decision.comparisons?.length) return 2;
+  if (decision.action === 'resample' || ('count' in decision && decision.count))
+    return presentationCount;
+  return 1;
 }
 
 function blankReply(reply: GeneratedMessageContent): boolean {
@@ -2274,24 +2281,26 @@ function answering(document: ProjectDocument): { answers?: EventId } {
 function recordedQuestion(
   document: ProjectDocument,
   question: DecisionQuestion | null | undefined,
-  makesPresentations: boolean
+  /** What the decision presented, the first of which a question about "new" is about. */
+  presented: readonly RenderablePresentation[]
 ): AssistantQuestion | undefined {
   if (!question) return undefined;
-  const shown =
-    question.presentation !== null &&
-    question.presentation !== 'new' &&
-    document.events.some(
-      (event) =>
-        event.type === 'visualization.presented' &&
-        event.payload.presentation.presentationId === question.presentation
-    );
-  const example = question.presentation === 'new' && makesPresentations;
+  const presentationId =
+    question.presentation === 'new'
+      ? presented[0]?.presentationId
+      : question.presentation !== null &&
+          document.events.some(
+            (event) =>
+              event.type === 'visualization.presented' &&
+              event.payload.presentation.presentationId === question.presentation
+          )
+        ? question.presentation
+        : undefined;
   const elements = (question.elements ?? []).filter((id) => v.is(elementIdSchema, id));
   return {
     text: question.text,
-    ...(shown ? { presentationId: question.presentation! } : {}),
-    ...(example ? { example: true as const } : {}),
-    ...((shown || example) && elements.length ? { elements } : {})
+    ...(presentationId ? { presentationId } : {}),
+    ...(presentationId && elements.length ? { elements } : {})
   };
 }
 

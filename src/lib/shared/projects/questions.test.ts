@@ -62,19 +62,14 @@ describe('questions', () => {
     expect(openQuestion(events.slice(0, 1))?.eventId).toBe(1);
   });
 
-  it('takes a question’s example as the next presentation its operation shows', () => {
+  it('reads a question about the presentation its turn made, recorded after it', () => {
     const events = timeline(
       presented('x', { operationId: 'earlier' }),
-      responded({ text: 'Like this?', example: true, elements: ['3:5'] }, 'turn'),
       presented('e', { operationId: 'turn' }),
-      presented('f', { operationId: 'turn', slot: 1, displaySetId: 'set-e' })
+      responded({ text: 'Like this?', presentationId: 'e', elements: ['3:5'] }, 'turn')
     );
     expect(projectQuestions(events)).toMatchObject([
       { kind: 'presentation', presentationIds: ['e'], elements: ['3:5'] }
-    ]);
-    // Without a presentation, as when the example failed to build, it is a question in words.
-    expect(projectQuestions(events.slice(0, 2))).toMatchObject([
-      { kind: 'text', presentationIds: [] }
     ]);
   });
 
