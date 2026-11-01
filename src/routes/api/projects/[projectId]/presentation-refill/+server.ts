@@ -3,7 +3,10 @@ import * as v from 'valibot';
 
 import { requireProjectMutationAccess } from '$lib/server/authorization';
 import { projectTrialCondition } from '$lib/server/study';
-import { projectOperationExecutor } from '$lib/server/projects/operations';
+import {
+  ProjectOperationCapacityError,
+  projectOperationExecutor
+} from '$lib/server/projects/operations';
 import { ProjectConflictError, ProjectNotFoundError } from '$lib/server/projects/repository';
 import { operationIdSchema, positiveSchema } from '$lib/shared/projects/events/values';
 
@@ -41,6 +44,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       (cause instanceof Error && cause.name === 'ProjectConflictError')
     ) {
       return json({ error: cause.message }, { status: 409 });
+    }
+    if (cause instanceof ProjectOperationCapacityError) {
+      return json({ error: cause.message }, { status: 503 });
     }
     return json(
       { error: cause instanceof Error ? cause.message : 'Presentation generation failed.' },

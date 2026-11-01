@@ -118,6 +118,41 @@ describe('layouts of the page', () => {
     ],
     ['a nameless layout', '{#layout}<Node>{@render Board()}</Node>{/layout}', 'is no layout'],
     [
+      'an opening ending with >',
+      '{#layout A><Node>{@render Board()}</Node>{/layout}',
+      '{#layout A> ends with >: close the opening with }, as {#layout A}.'
+    ],
+    [
+      'an opening without its brace',
+      '{#layout A\n<Node>{@render Board()}</Node>\n{/layout}',
+      '{#layout A is never closed: close the opening with }, as {#layout A}.'
+    ],
+    [
+      'a closing ending with >',
+      '{#layout A}<Node>{@render Board()}</Node>{/layout>',
+      '{/layout> does not close the layout: close the layout with {/layout}.'
+    ],
+    [
+      'a closing without its brace',
+      '{#layout A}<Node>{@render Board()}</Node>{/layout\n',
+      '{/layout does not close the layout: close the layout with {/layout}.'
+    ],
+    [
+      'a layout never closed',
+      '{#layout A}<Node>{@render Board()}</Node>\n{#layout B}<Node>{@render Title()}</Node>{/layout}',
+      'The layout A is never closed: close the layout with {/layout}'
+    ],
+    [
+      'a closing without an opening',
+      '{#layout A}<Node>{@render Board()}</Node>{/layout}{/layout}',
+      'This {/layout} closes no layout'
+    ],
+    [
+      'only a closing',
+      '<Node>{@render Board()}</Node>{/layout}',
+      'This {/layout} closes no layout'
+    ],
+    [
       'text in the root',
       '{#layout A}<Node>Bubble sort {@render Board()}</Node>{/layout}',
       'Text outside a <Node>'
@@ -136,6 +171,17 @@ describe('layouts of the page', () => {
       const { line, column } = cause as { line: number; column: number };
       const lines = source.split('\n');
       expect(lines[line - 1].slice(column - 1)).toMatch(/^\{@render Missing/u);
+    }
+  });
+
+  it('points at a malformed closing', () => {
+    const source = withView('{#layout A}\n  <Node>{@render Board()}</Node>\n{/layout>');
+    try {
+      prepareSvelteComponent(source);
+      expect.unreachable();
+    } catch (cause) {
+      const { line, column } = cause as { line: number; column: number };
+      expect(source.split('\n')[line - 1].slice(column - 1)).toBe('{/layout>');
     }
   });
 });

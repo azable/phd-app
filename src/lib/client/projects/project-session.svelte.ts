@@ -78,6 +78,7 @@ export class ProjectSession {
   #loadReportsSeen = new SvelteSet<string>();
   #loadReportSending = false;
   #refillBlocked = false;
+  #refillRetryTimer?: ReturnType<typeof setTimeout>;
   #loadVersion = 0;
   /** Last non-cancellation failure while filling the ahead-of-time presentation buffer. */
   refillError = $state<string | null>(null);
@@ -222,6 +223,7 @@ export class ProjectSession {
     this.#request?.abort();
     this.#commandRequest?.abort();
     this.#refillRequest?.abort();
+    clearTimeout(this.#refillRetryTimer);
     this.#runtimeReportRequest?.abort();
     this.disconnect();
   }
@@ -605,6 +607,8 @@ export class ProjectSession {
       signal: request.signal
     })
       .then(async (response) => {
+        // The project moved on or the server is busy; the refill waits for the next quiet moment.
+        if (response.status === 409 || response.status === 503) return this.retryRefillLater();
         if (!response.ok) throw new Error(await responseError(response));
         await this.reloadResource(request.signal);
       })
@@ -618,7 +622,22 @@ export class ProjectSession {
         if (this.#refillRequest === request) this.#refillRequest = undefined;
       });
   }
+
+  /** Try the refill again after a pause, unless a new event starts it sooner. */
+  private retryRefillLater(): void {
+    clearTimeout(this.#refillRetryTimer);
+    this.#refillRetryTimer = setTimeout(() => {
+      this.#refillRetryTimer = undefined;
+      this.reconcilePresentationBuffer();
+    }, refillRetryDelayMs);
+  }
 }
+
+/**
+ * Pause before retrying a refill that lost a race. Refills take tens of seconds, so a few more
+ * go unnoticed, while a busy server sees at most one small rejected request per pause per page.
+ */
+const refillRetryDelayMs = 5_000;
 
 function parseProjectResource(value: unknown): ProjectResource {
   return normalizeProjectResource(value);

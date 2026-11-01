@@ -38,26 +38,72 @@ export function layoutNameOf(block: unknown): string | undefined {
     : undefined;
 }
 
-const opening = /\{#layout\b([^}]*)\}/gu;
-const closing = /\{\/layout(\s*)\}/gu;
+/** Where each opening or closing of a layout starts, written well or not. */
+const layoutTag = /\{([#/])layout\b/gu;
+const wellOpened = /^\{#layout([ \t]+)([A-Za-z_$][\w$]*)([ \t]*)\}/u;
+const wellClosed = /^\{\/layout[ \t]*\}/u;
 
-/** Each layout block as an {#if} of the same length, keeping every offset and line in place. */
+/** What is wrong with an opening that is not {#layout Name}, and its fix. */
+function openingProblem(line: string): string {
+  const named = /^\{#layout[ \t]+([A-Za-z_$][\w$]*)[ \t]*(>?)/u.exec(line);
+  if (named?.[2])
+    return `${named[0]} ends with >: close the opening with }, as {#layout ${named[1]}}.`;
+  if (named && /^(<|$)/u.test(line.slice(named[0].length)))
+    return `${named[0]} is never closed: close the opening with }, as {#layout ${named[1]}}.`;
+  const written = /^\{#layout[^}]*\}?/u.exec(line)![0];
+  return `${written} is no layout: write {#layout Name}, its name one word naming the arrangement, as {#layout Side}, on one line.`;
+}
+
+/**
+ * Each layout block as an {#if} of the same length, keeping every offset and line in place; any
+ * opening or closing written otherwise, or left unpaired, is a problem naming its fix.
+ */
 function rewritten(text: string): { text: string; problems: Problem[] } {
   const problems: Problem[] = [];
-  const replaced = text
-    .replace(opening, (whole, inside: string, start: number) => {
-      const named = /^([ \t]+)([A-Za-z_$][\w$]*)([ \t]*)$/u.exec(inside);
+  const open: { name: string; start: number }[] = [];
+  let replaced = text;
+  const replace = (start: number, written: string, tag: string) => {
+    replaced =
+      replaced.slice(0, start) +
+      tag.padEnd(written.length) +
+      replaced.slice(start + written.length);
+  };
+  for (const { 1: kind, index: start } of text.matchAll(layoutTag)) {
+    const line = text.slice(start).split('\n', 1)[0];
+    if (kind === '#') {
+      const named = wellOpened.exec(line);
+      open.push({ name: named?.[2] ?? 'opened here', start });
       if (!named) {
-        problems.push({
-          message: `${whole} is no layout: write {#layout Name}, its name one word naming the arrangement, as {#layout Side}, on one line.`,
-          start
-        });
-        return whole.replace(/[^\n]/gu, ' ');
+        problems.push({ message: openingProblem(line), start });
+        continue;
       }
-      const [, before, name, after] = named;
-      return `{#if ${layoutProp}.${name}${' '.repeat(before.length + after.length - 1)}}`;
-    })
-    .replace(closing, (whole) => `{/if}${' '.repeat(whole.length - '{/if}'.length)}`);
+      const [whole, before, name, after] = named;
+      replace(
+        start,
+        whole,
+        `{#if ${layoutProp}.${name}${' '.repeat(before.length + after.length - 1)}}`
+      );
+      continue;
+    }
+    if (!open.pop())
+      problems.push({
+        message:
+          'This {/layout} closes no layout: open each layout with {#layout Name} before its root <Node>, or remove the extra {/layout}.',
+        start
+      });
+    const closed = wellClosed.exec(line);
+    if (closed) replace(start, closed[0], '{/if}');
+    else
+      problems.push({
+        message: `${/^\{\/layout[ \t]*>?/u.exec(line)![0]} does not close the layout: close the layout with {/layout}.`,
+        start
+      });
+  }
+  for (const { name, start } of open)
+    problems.push({
+      message: `The layout ${name} is never closed: close the layout with {/layout} after its root <Node>.`,
+      start
+    });
   return { text: replaced, problems };
 }
 
@@ -96,7 +142,7 @@ export function pageLayouts(
   text: string,
   parse: (text: string) => Part[]
 ): { text: string; layouts: PageLayout[]; problems: Problem[] } {
-  if (!/\{#layout\b/u.test(text)) return { text, layouts: [], problems: [] };
+  if (!/\{[#/]layout\b/u.test(text)) return { text, layouts: [], problems: [] };
   const { text: blocks, problems } = rewritten(text);
   // A block left as written would only fail to parse.
   if (problems.length) return { text: blocks, layouts: [], problems };

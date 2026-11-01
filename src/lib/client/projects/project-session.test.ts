@@ -32,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const session of sessions.splice(0)) session.dispose();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('ProjectSession', () => {
@@ -156,6 +157,45 @@ describe('ProjectSession', () => {
     expect(refillRequest[0]).toBe('/api/projects/project-test/presentation-refill');
     expect(JSON.parse(String(refillRequest[1].body))).toEqual({ operationId, expectedHead: 4 });
     expect(session.refillPending).toBe(true);
+  });
+
+  it.each([
+    [409, 'The project changed.'],
+    [503, 'The server is busy.']
+  ])('retries a refill refused with %i without showing an error', async (status, error) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const initial = bufferedProjectResource();
+    fetchMock
+      .mockResolvedValueOnce(response(workspaceResource(initial)))
+      .mockResolvedValueOnce(errorResponse(status, error))
+      .mockResolvedValueOnce(errorResponse(status, error));
+
+    const session = new ProjectSession('project-test', false, 'comparison', 4);
+    sessions.push(session);
+    await session.open();
+    await vi.waitFor(() => expect(session.refillPending).toBe(false));
+
+    expect(session.refillError).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/projects/project-test/presentation-refill');
+  });
+
+  it('shows a refill refused for another reason and stops refilling', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const initial = bufferedProjectResource();
+    fetchMock
+      .mockResolvedValueOnce(response(workspaceResource(initial)))
+      .mockResolvedValueOnce(errorResponse(422, 'Presentation generation failed.'));
+
+    const session = new ProjectSession('project-test', false, 'comparison', 4);
+    sessions.push(session);
+    await session.open();
+    await vi.waitFor(() => expect(session.refillError).toBe('Presentation generation failed.'));
+
+    vi.advanceTimersByTime(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('does not request a buffer refill before the current source has a presentation', async () => {
@@ -302,6 +342,13 @@ function createSession(): ProjectSession {
 
 function response(resource: unknown): Response {
   return new Response(JSON.stringify(resource), {
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function errorResponse(status: number, error: string): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
     headers: { 'content-type': 'application/json' }
   });
 }
