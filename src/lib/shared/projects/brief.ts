@@ -211,8 +211,9 @@ export const briefAttributes = [
   {
     key: 'cases',
     question:
-      'Only the usual case, or edge cases too, such as a target that is absent or duplicates?',
-    why: 'Edge cases are inputs of their own, worth seeing only where the algorithm has them.',
+      'Which example should it show: the usual case, or an edge case such as a target that is absent or duplicates?',
+    // Until a source can hold several inputs (plan, Stage 6), each case is a version of its own.
+    why: 'A visualisation runs on one example, its input; another case is a version of its own with that input changed.',
     bearsOn: 'inputs',
     asked: 'words',
     tags: { usual: {}, edge: {} }
