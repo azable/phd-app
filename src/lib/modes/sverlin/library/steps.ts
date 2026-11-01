@@ -140,6 +140,33 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
       }
     }
 
+  // The positions any step records at the same element as each other, by their paths (indices left
+  // out), so pointers never at one element together can share one slot (see sharedSlots). A path
+  // here with itself has two of its positions together, as edges[0].to and edges[1].to.
+  const together = new Map<string, Set<string>>();
+  const recorded = new Set<string>();
+  for (const step of states as StepState[]) {
+    const at = new Map<string, string[]>();
+    for (const [path, target] of Object.entries(step.__targets ?? {})) {
+      const standsIn = (name: string) => step.__absent?.includes(name.split(/[.[]/u)[0]) ?? false;
+      if (standsIn(path) || standsIn(target)) continue;
+      const position = valueAt(step, path);
+      if (typeof position !== 'number') continue;
+      recorded.add(anyIndex(path));
+      const element = `${step.__identities?.[target] ?? target}#${position}`;
+      at.set(element, [...(at.get(element) ?? []), anyIndex(path)]);
+    }
+    for (const paths of at.values())
+      paths.forEach((path, i) => {
+        for (const other of paths.filter((_, j) => j !== i))
+          together.set(path, (together.get(path) ?? new Set()).add(other));
+      });
+  }
+  const apart = (a: string, b: string) =>
+    recorded.has(anyIndex(a)) &&
+    recorded.has(anyIndex(b)) &&
+    !(together.get(anyIndex(a))?.has(anyIndex(b)) ?? false);
+
   /** A type's unit, or that of the nearest type it refines. */
   function unitOf(typeName: string): string | undefined {
     for (let name: string | undefined = typeName; name && atoms[name]; name = atoms[name].parent)
@@ -235,6 +262,7 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
             reachedFrom: (path: string) => reached.get(anyIndex(path)),
             pastEnds: (collection: string, path?: string) =>
               pastEnds.get(endsKey(collection, path)) ?? { before: 0, after: 0 },
+            apart,
             lengthOf: (path: string) => {
               const collection = containers.get(path);
               return Array.isArray(collection) ? collection.length : undefined;

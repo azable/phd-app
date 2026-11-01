@@ -2,8 +2,10 @@
   The root's pointers into a collection drawn around one of its slots, outermost first: each
   pointer's view, given the slot's position, with its <Pointed> drawing what is inside it, the
   next pointer or, innermost, the element itself. A pointer not at the slot keeps its room hidden,
-  so every slot has the same size wherever the pointers are. An end slot, before the first element
-  or after the last, keeps a hidden copy of its neighbour, so pointers there line up with the rest.
+  so every slot has the same size wherever the pointers are; pointers never at one element together
+  share one room, the one at the slot drawing (see sharedSlots). An end slot, before the first
+  element or after the last, keeps a hidden copy of its neighbour, so pointers there line up with
+  the rest.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
@@ -16,6 +18,8 @@
     providePointerAround,
     providePointerIdentity,
     provideSlot,
+    sharedSlots,
+    typeContext,
     type Pointer
   } from '../type-context';
 
@@ -25,7 +29,8 @@
     name,
     outer = {},
     draw,
-    placeholder = false
+    placeholder = false,
+    slotted = false
   }: {
     pointers: readonly Pointer[];
     position: number;
@@ -34,11 +39,14 @@
     outer?: Record<string, unknown>;
     draw?: Snippet<[Record<string, unknown>]>;
     placeholder?: boolean;
+    /** Whether the pointers are already one for each slot, as inside the outermost. */
+    slotted?: boolean;
   } = $props();
 
+  const types = typeContext();
   // Each step mounts afresh, so the props are read once.
   const { pointer, inside, active } = untrack(() => {
-    const [first, ...rest] = pointers;
+    const [first, ...rest] = slotted ? pointers : sharedSlots(types, pointers, position);
     return { pointer: first, inside: rest, active: first.position === position };
   });
   untrack(() =>
@@ -59,7 +67,7 @@
 </script>
 
 {#snippet next(props: Record<string, unknown>)}
-  <Pointing pointers={inside} {position} {name} outer={props} {draw} {placeholder} />
+  <Pointing pointers={inside} {position} {name} outer={props} {draw} {placeholder} slotted />
 {/snippet}
 
 {@render pointer.view(position)}

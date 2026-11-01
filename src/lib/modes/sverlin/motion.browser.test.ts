@@ -392,6 +392,92 @@ it.skipIf(!enabled)(
   }
 );
 
+const apart = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Index = index(Values);
+  const Turn = unop((p: Index) => Index((p + 1) % 4));
+</script>
+<script lang="sverlin" input>
+  const values = Values([1, 4, 6, 2]);
+</script>
+<script lang="sverlin">
+  @start[let i = Index(0);
+  let j = Index(2);]
+  @once[i = Turn(i);
+  j = Turn(j);]
+  @twice[i = Turn(i);
+  j = Turn(j);]
+</script>
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Short(at: Index)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}
+{#snippet Long(at: Index)}<Node layout="column"><Pointed /><Node>the other one</Node></Node>{/snippet}
+
+{#layout Main}
+  <Node>
+    {@render Values(values)}
+    {@render Index(i)}
+    {@render Index(j)}
+  </Node>
+{/layout}`;
+
+it.skipIf(!enabled)(
+  'keeps every element in place as pointers never at one element share a slot for their labels',
+  { timeout: 120_000 },
+  async () => {
+    const prepared = prepareSvelteComponent(apart);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: { 'pointers.Index@i': 'Short', 'pointers.Index@j': 'Long' }
+    });
+    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    await page.setContent(
+      `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
+    );
+    const frame = page.frames()[1];
+    const step = (index: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelector('iframe')
+          ?.contentWindow?.postMessage({ type: 'sverlin:step', step: index }, '*');
+      }, index);
+    await step(1);
+    await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
+      timeout: 60_000
+    });
+    const first = await placed(frame);
+    for (let index = 2; index < prepared.master.length; index++) {
+      await step(index);
+      await page.waitForTimeout(1500);
+      await frame.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      const now = await placed(frame);
+      for (const [identity, at] of Object.entries(first))
+        if (now[identity] && !identity.startsWith('pointer'))
+          expect(now[identity], `step ${index + 1}, identity ${identity}`).toEqual(at);
+      // Each label sits right under its element, in the one slot the two share.
+      const tops = await frame.evaluate(() =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) .sv-node'
+          )
+        ]
+          .filter(
+            (node) =>
+              ['i', 'the other one'].includes(node.innerText.trim()) &&
+              !node.closest('[data-sv-hidden="true"]') &&
+              !node.querySelector('.sv-node')
+          )
+          .map((node) => Math.round(node.getBoundingClientRect().top))
+      );
+      expect(tops, `step ${index + 1}`).toHaveLength(2);
+      expect(new Set(tops).size, `step ${index + 1}`).toBe(1);
+    }
+    await page.close();
+  }
+);
+
 const far = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);

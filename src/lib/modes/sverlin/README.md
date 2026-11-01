@@ -153,11 +153,13 @@ written in the view so the label is a kind of its own.
   as its number, through its other views (`views.Index`). A pointer only another
   layout renders draws nothing and keeps no room.
 - The page draws the pointer around the element wherever that is drawn. Every
-  element keeps room for every pointer that can point into its collection, and a
+  element keeps room for the pointers that can point into its collection, and a
   position shown past an end gets a slot there, so nothing moves as pointers
-  move. Pointers at one element nest, the one rendered last outermost. A pointer
-  out of scope, pointing nowhere, or in an `{#if}` branch not taken draws
-  nothing and keeps its room.
+  move. Pointers at one element nest, the one rendered last outermost; pointers
+  never at the same element at the same step share one slot, so an element keeps
+  room only for as many labels as are ever there together. A pointer out of
+  scope, pointing nowhere, or in an `{#if}` branch not taken draws nothing and
+  keeps its room.
 - A pointer view may read the input and algorithm variables, so its label can
   follow the state. A pointer at an element drawn as a link, as the edge being
   examined, gives the link its kind's stroke and width.

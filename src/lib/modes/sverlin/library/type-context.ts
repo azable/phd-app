@@ -39,6 +39,11 @@ export type TypeContext = {
    * a pointer drawing it keeps, none where none goes past.
    */
   pastEnds(collection: string, path?: string): { before: number; after: number };
+  /**
+   * Whether positions at two paths (as current and w, or edges[2].to for any edge's) are each
+   * recorded at some step and never at the same element at the same step.
+   */
+  apart(a: string, b: string): boolean;
   /** The variables holding a value of a type, such as the Values collections. */
   variablesOf(typeName: string): string[];
   /** The type of the value at a path this step, such as End for a node's next at the end. */
@@ -324,6 +329,8 @@ export type Pointer = {
   inside?: boolean;
   /** The place it is rendered at (see Place). */
   place?: Place;
+  /** A reference's pointer, its path holding no position (see PointerCall). */
+  ref?: true;
 };
 
 /** Resolve the root's pointers to the collections and positions they point at, for its nodes. */
@@ -397,7 +404,8 @@ export function providePointers(calls: readonly PointerCall[]): void {
             reaches: path === undefined ? undefined : types?.reachedFrom(path),
             path,
             ...(inside ? { inside } : {}),
-            ...(call.place ? { place: call.place } : {})
+            ...(call.place ? { place: call.place } : {}),
+            ...(call.ref ? { ref: true as const } : {})
           }
         ]
       : [];
@@ -416,6 +424,34 @@ export function placeContext(): Place | undefined {
 
 export function pointersContext(): readonly Pointer[] {
   return getContext<readonly Pointer[] | undefined>('sverlin:pointers') ?? [];
+}
+
+/**
+ * The pointers drawn around an element at a position, of those that can point there, outermost
+ * first: those never at one element at the same step share a slot, each joining the first whose
+ * pointers it is apart from, so an element keeps room only for as many labels as are ever there
+ * together. Of each slot, the pointer at the position draws, else the first keeps the room.
+ */
+export function sharedSlots(
+  types: TypeContext | undefined,
+  pointers: readonly Pointer[],
+  position: number
+): Pointer[] {
+  const apart = (a: Pointer, b: Pointer) =>
+    !a.ref &&
+    !b.ref &&
+    a.path !== undefined &&
+    b.path !== undefined &&
+    (types?.apart(a.path, b.path) ?? false);
+  const slots: Pointer[][] = [];
+  for (const pointer of pointers) {
+    const slot = slots.find((members) => members.every((other) => apart(pointer, other)));
+    if (slot) slot.push(pointer);
+    else slots.push([pointer]);
+  }
+  return slots.map(
+    (members) => members.find((pointer) => pointer.position === position) ?? members[0]
+  );
 }
 
 /**
