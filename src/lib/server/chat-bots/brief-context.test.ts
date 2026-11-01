@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { briefKeys, type BriefItem, type BriefKey } from '$lib/shared/projects/brief';
+import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { briefContext, briefSteering } from './brief-context';
+import { briefContext, briefSteering, questionsSinceShown } from './brief-context';
 import { openChoices, preferenceSummary } from './preference-summary';
 import type { AiDesign } from './project-context';
 
@@ -154,5 +155,26 @@ describe('the brief in the assistant’s context', () => {
     // Unknowns bearing on open choices come first.
     expect(context.askFirst).not.toContain('constraints');
     expect(context.avoid).toEqual(['colours: it must print in grey']);
+  });
+});
+
+describe('at most one question in words between things shown', () => {
+  const shown = { type: 'visualization.presented', payload: {} };
+  const asked = { type: 'assistant.responded', payload: { question: { text: 'Who is it for?' } } };
+  const replied = { type: 'assistant.responded', payload: {} };
+  const count = (events: object[]) => questionsSinceShown(events as ProjectEvent[]);
+
+  it('counts the questions asked since anything was last shown', () => {
+    expect(count([])).toBe(0);
+    // A first version, its reply asking who it is for: one question since it showed.
+    expect(count([shown, asked])).toBe(1);
+    expect(count([shown, asked, replied, asked])).toBe(2);
+    expect(count([shown, asked, shown, replied])).toBe(0);
+  });
+
+  it('shows next once a question in words has been asked since', () => {
+    const algorithm = { status: 'confirmed', value: 'breadth-first search' } as const;
+    expect(briefContext(brief({ algorithm }), [], 0)).not.toHaveProperty('next');
+    expect(briefContext(brief({ algorithm }), [], 1)).toMatchObject({ next: 'show' });
   });
 });

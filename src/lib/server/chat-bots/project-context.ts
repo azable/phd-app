@@ -49,7 +49,7 @@ import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/que
 
 import { projectBrief } from '$lib/shared/projects/brief';
 
-import { briefContext, briefSteering, type AiBrief } from './brief-context';
+import { briefContext, briefSteering, questionsSinceShown, type AiBrief } from './brief-context';
 import { openChoices, preferenceSummary, type AiPreferences } from './preference-summary';
 
 /** Compact, body-free entry that lets the AI identify one retained event. */
@@ -534,7 +534,11 @@ export function projectAiContext(
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),
     ...(preferences ? { preferences } : {}),
-    brief: briefContext(brief, openChoices(document.events, design)),
+    brief: briefContext(
+      brief,
+      openChoices(document.events, design),
+      questionsSinceShown(document.events)
+    ),
     timelineWindow: {
       totalEventCount: events.length,
       omittedEventCount: events.length - timelineEvents.length

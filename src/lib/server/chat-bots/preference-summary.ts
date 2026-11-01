@@ -2,7 +2,8 @@
  * The preference model's advice to the assistant (see preference-model.ts): for each choice of the
  * design the answers have touched, its likeliest option, how sure the model is, and whether it is
  * settled; which open choices are most worth asking next; and which have never been compared, by
- * family, so the assistant knows what is unexplored. Bounded, so it stays a small part of the
+ * family, so the assistant knows what is unexplored; and the riskiest visual choice no alternative
+ * has shown, to compare before asking more in words. Bounded, so it stays a small part of the
  * context whatever the design's size.
  */
 
@@ -86,6 +87,13 @@ export type AiChoice = {
 /** A question worth asking next: one choice, or a family's choices asked together (colours). */
 export type AiAskNext = { variables: string[]; family: ChoiceFamily; worth: number };
 
+/**
+ * The riskiest visual choice no alternative has shown yet, to compare before asking in words: a free
+ * layout (its form, direction and seed, a first automatic layout being a guess), or else the
+ * never-compared choice of views or arrangement most worth asking.
+ */
+export type AiShowFirst = { variables: string[]; family: ChoiceFamily; layout?: true };
+
 /** What the preference model believes, for the assistant. */
 export type AiPreferences = {
   /** Comparisons answered by a side or either is fine, and those left for later. */
@@ -98,6 +106,7 @@ export type AiPreferences = {
   askNext: AiAskNext[];
   /** Choices never compared, by family, with a few of each. */
   unexplored: { family: ChoiceFamily; count: number; examples: string[] }[];
+  showFirst?: AiShowFirst;
 };
 
 // Bounds on the summary: about 2,000 characters for a large design.
@@ -117,7 +126,13 @@ type Standing = {
   state?: ChoiceState;
 };
 
-type Standings = { evidence: PreferenceEvidence; choices: Standing[]; eventCount: number };
+type Standings = {
+  evidence: PreferenceEvidence;
+  choices: Standing[];
+  /** Every variable the evidence touched, the seeds left out of choices included. */
+  touched: ReadonlySet<string>;
+  eventCount: number;
+};
 
 /**
  * Standings by events and design, so the summary and openChoices fit the model once per context; an
@@ -136,9 +151,64 @@ function standings(events: readonly ProjectEvent[], design: AiDesign): Standings
     const state = states.get(variable);
     return [{ variable, options: listed, ...choiceFamily(variable), ...(state ? { state } : {}) }];
   });
-  const result = { evidence, choices, eventCount: events.length };
+  const result = { evidence, choices, touched: new Set(states.keys()), eventCount: events.length };
   fitted.set(events, (fitted.get(events) ?? new WeakMap()).set(design, result));
   return result;
+}
+
+/** A free layout's props a comparison of its arrangement varies (design.ts freeLayoutProps). */
+const layoutProps = ['form', 'direction', 'layoutSeed'] as const;
+/** Those, or its curve, compared or asked for: its arrangement has been seen in an alternative. */
+const seenLayoutProps = [...layoutProps, 'curve'];
+
+/** Families whose choices change the picture enough to show before asking about them in words. */
+const shownFirst: ReadonlySet<ChoiceFamily> = new Set(['views', 'arrangement']);
+/** Below this impact a choice is a detail (a route, an alignment), not a risk worth showing first. */
+const showFirstImpact = 0.45;
+
+/**
+ * The riskiest choice no alternative has shown: a free layout never compared first (only a free
+ * layout has a seed), the one whose form or direction is most worth asking, then the never-compared
+ * choice of views or arrangement most worth asking, each by the brief's weights.
+ */
+function riskiest(
+  { choices, touched }: Standings,
+  design: AiDesign,
+  steering: BriefSteering | undefined
+): AiShowFirst | undefined {
+  const kept = (variable: string) => !steering?.excluded(variable);
+  const worth = (choice: Standing) =>
+    (openWorth(choice) ?? 0) * (steering?.weight(choice.variable) ?? 1);
+  const present = new Set(design.variables.map(({ variable }) => variable));
+  const layoutKinds = design.variables
+    .filter(({ variable }) => variable.endsWith('.layoutSeed'))
+    .map(({ variable }) => variable.slice(0, -'.layoutSeed'.length));
+  const ofLayout = new Set(
+    layoutKinds.flatMap((kind) => seenLayoutProps.map((prop) => `${kind}.${prop}`))
+  );
+  const [layout] = layoutKinds
+    .filter((kind) => !seenLayoutProps.some((prop) => touched.has(`${kind}.${prop}`)))
+    .map((kind) => {
+      const variables = layoutProps
+        .map((prop) => `${kind}.${prop}`)
+        .filter((variable) => present.has(variable) && kept(variable));
+      const arranging = choices.filter(({ variable }) => variables.includes(variable));
+      return { variables, worth: Math.max(0, ...arranging.map(worth)) };
+    })
+    .filter(({ variables }) => variables.length)
+    .toSorted((a, b) => b.worth - a.worth);
+  if (layout) return { variables: layout.variables, family: 'arrangement', layout: true };
+  const [unseen] = choices
+    .filter(
+      (choice) =>
+        !choice.state &&
+        !ofLayout.has(choice.variable) &&
+        shownFirst.has(choice.family) &&
+        choice.impact >= showFirstImpact &&
+        kept(choice.variable)
+    )
+    .toSorted((a, b) => worth(b) - worth(a));
+  return unseen ? { variables: [unseen.variable], family: unseen.family } : undefined;
 }
 
 /** How much a choice still open is worth asking: uncertainty weighted by how much it changes. */
@@ -170,8 +240,10 @@ export function preferenceSummary(
   design: AiDesign,
   steering?: BriefSteering
 ): AiPreferences | undefined {
-  const { evidence, choices } = standings(events, design);
+  const standing = standings(events, design);
+  const { evidence, choices } = standing;
   if (!choices.length) return undefined;
+  const showFirst = riskiest(standing, design, steering);
   const answered = new Set(
     evidence.duels.filter(({ weight }) => weight === 1).map(({ eventId }) => eventId)
   );
@@ -241,6 +313,7 @@ export function preferenceSummary(
         impact: Math.max(...variables.map(({ impact }) => impact))
       }))
       .toSorted((a, b) => b.impact - a.impact)
-      .map(({ impact: _impact, ...family }) => family)
+      .map(({ impact: _impact, ...family }) => family),
+    ...(showFirst ? { showFirst } : {})
   };
 }

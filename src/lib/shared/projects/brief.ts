@@ -48,8 +48,8 @@ export type BriefAttribute = {
   /** Asked by intake, before the first version. */
   intake?: true;
   /**
-   * Asked as soon as there is a version, before any offer to compare, while unknown: what the
-   * first reply asks, unless the request already said it.
+   * Asked as soon as there is a version, before any comparison, while unknown: what the first
+   * reply asks, unless the request already said it.
    */
   askFirst?: true;
   /** Values the assistant can name it by, each with how it steers. */

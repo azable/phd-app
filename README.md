@@ -124,15 +124,19 @@ a choice one option of which is at least 0.9 likely best over two answers, a
 fine was its latest answer, the value showing; skips are no evidence. Its
 summary
 ([`preference-summary.ts`](src/lib/server/chat-bots/preference-summary.ts)),
-each touched choice's likeliest option, what is most worth asking and what was
-never compared, goes in the assistant's context as `preferences`, and so into
-each request's recorded prompt. Beside it goes the design brief, `brief`: the
-attributes of what the participant is trying to achieve, defined in
+each touched choice's likeliest option, what is most worth asking, what was
+never compared, and `showFirst`, the riskiest choice no alternative has shown (a
+free layout never compared first, its first automatic layout being a guess, then
+views or arrangement), goes in the assistant's context as `preferences`, and so
+into each request's recorded prompt. Beside it goes the design brief, `brief`:
+the attributes of what the participant is trying to achieve, defined in
 [`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first, then
 those marked `askFirst`, as who it is for, asked before any comparison), each
 unknown, inferred or confirmed, from intake's answers and the `brief` each
 assistant decision returns, recorded on its `assistant.responded`; which are
-worth asking or confirming now
+worth asking or confirming now, and, once a question in words has been asked
+since anything new was last shown, `next: "show"`, so the next turn shows a
+change or a comparison rather than asking again
 ([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
 brief keeps out of comparisons, as colour where it must print in grey, which a
 comparison varying it is sent back to the assistant for. The brief's values

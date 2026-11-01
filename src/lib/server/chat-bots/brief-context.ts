@@ -11,6 +11,7 @@ import {
   type BriefSteer,
   type ChoiceFamily
 } from '$lib/shared/projects/brief';
+import type { ProjectEvent } from '$lib/shared/projects/events';
 
 import { choiceFamily } from './preference-summary';
 
@@ -49,6 +50,11 @@ export type AiBrief = {
   attributes: AiBriefItem[];
   /** The attributes most worth asking or confirming, most first: those asked first lead. */
   askFirst: BriefKey[];
+  /**
+   * show: a question in words has been asked since anything new was last shown, so this turn shows
+   * something (a change, or a comparison of preferences.showFirst) rather than asking another.
+   */
+  next?: 'show';
   /** What the brief keeps out of comparisons, and why, as “colours: it must print in grey”. */
   avoid: string[];
 };
@@ -62,6 +68,20 @@ type Rank = (typeof ranks)[number];
 
 /** At most this many attributes are suggested to ask at a time; they are asked one at a time. */
 const listedAskFirst = 3;
+
+/**
+ * The questions in words the assistant has asked since anything new was last shown, a version or a
+ * pair: a reply is recorded after what its decision presents, so a question asked with a new
+ * version counts.
+ */
+export function questionsSinceShown(events: readonly ProjectEvent[]): number {
+  let asked = 0;
+  for (const event of events) {
+    if (event.type === 'visualization.presented') asked = 0;
+    else if (event.type === 'assistant.responded' && event.payload.question) asked += 1;
+  }
+  return asked;
+}
 
 /** The steers an attribute's tags name. */
 function steers(item: BriefItem): BriefSteer[] {
@@ -104,10 +124,13 @@ export function briefSteering(brief: readonly BriefItem[]): BriefSteering {
  * the subject while unknown, then unknown attributes asked first (brief.ts askFirst) whatever they
  * bear on, then other unknowns bearing on open choices, the one bearing on the most worth first,
  * are worth asking; an inferred one whose values steer or exclude open choices, worth confirming.
+ * At most one question in words comes between things shown: once one has been asked since (see
+ * questionsSinceShown), the next turn shows.
  */
 export function briefContext(
   brief: readonly BriefItem[],
-  open: readonly { variable: string; family: ChoiceFamily; worth: number }[]
+  open: readonly { variable: string; family: ChoiceFamily; worth: number }[],
+  askedSinceShown = 0
 ): AiBrief {
   const whole = briefSteering(brief);
   const kept = open.filter(({ variable }) => !whole.excluded(variable));
@@ -179,6 +202,7 @@ export function briefContext(
       .toSorted((a, b) => ranks.indexOf(a.rank) - ranks.indexOf(b.rank) || b.worth - a.worth)
       .slice(0, listedAskFirst)
       .map(({ key }) => key),
+    ...(askedSinceShown > 0 ? { next: 'show' as const } : {}),
     avoid
   };
 }

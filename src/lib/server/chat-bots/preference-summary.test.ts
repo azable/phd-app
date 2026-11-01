@@ -18,27 +18,40 @@ const design: AiDesign = {
   ]
 };
 
-function answered(left: string, right: string, preferred: 0 | 1): ProjectEvent[] {
-  const presented = (id: string, view: string, slot: number) => ({
-    id: slot + 1,
+/** A pair of the two variants presented and answered, its events numbered from `first`. */
+function duel(
+  left: Record<string, string | number>,
+  right: Record<string, string | number>,
+  preferred: 0 | 1,
+  first = 1
+): ProjectEvent[] {
+  const presented = (variant: Record<string, string | number>, slot: number) => ({
+    id: first + slot,
     type: 'visualization.presented',
     payload: {
       presentation: {
         format: 'browser-bundle-v1',
-        presentationId: id,
-        variant: { 'views.Int': view }
+        presentationId: `p${first + slot}`,
+        variant
       }
     }
   });
   return [
-    presented('a', left, 0),
-    presented('b', right, 1),
+    presented(left, 0),
+    presented(right, 1),
     {
-      id: 3,
+      id: first + 2,
       type: 'visualization.preference-recorded',
-      payload: { presentations: ['a', 'b'], preferred: preferred ? 'b' : 'a' }
+      payload: {
+        presentations: [`p${first}`, `p${first + 1}`],
+        preferred: `p${first + preferred}`
+      }
     }
   ] as unknown as ProjectEvent[];
+}
+
+function answered(left: string, right: string, preferred: 0 | 1): ProjectEvent[] {
+  return duel({ 'views.Int': left }, { 'views.Int': right }, preferred);
 }
 
 describe('the preference summary', () => {
@@ -102,6 +115,23 @@ describe('the preference summary', () => {
       }
     ]);
     expect(JSON.stringify(summary).length).toBeLessThan(500);
+  });
+
+  it('shows a free layout never compared first, a first automatic layout being a guess', () => {
+    expect(preferenceSummary([], design)!.showFirst).toEqual({
+      variables: ['Graph.form', 'Graph.layoutSeed'],
+      family: 'arrangement',
+      layout: true
+    });
+    // Once its arrangement was compared, even by its seed alone, the choice of views comes next.
+    const seeds = duel({ 'Graph.layoutSeed': 1 }, { 'Graph.layoutSeed': 2 }, 0);
+    expect(preferenceSummary(seeds, design)!.showFirst).toEqual({
+      variables: ['views.Int'],
+      family: 'views'
+    });
+    // Once that was compared too, nothing is left to show first: fonts and colours never are.
+    const both = [...seeds, ...duel({ 'views.Int': 'IntCell' }, { 'views.Int': 'IntTally' }, 1, 4)];
+    expect(preferenceSummary(both, design)!.showFirst).toBeUndefined();
   });
 
   it('has nothing to say of a design without choices', () => {
