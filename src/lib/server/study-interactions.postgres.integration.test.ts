@@ -134,6 +134,22 @@ it.skipIf(!enabled)(
         now
       )
     ).rejects.toMatchObject({ status: 409 });
+    // A participant's clock running seconds behind the server's still records the task from its start
+    // (a pilot participant's ran 7 s behind); one minutes adrift is refused.
+    await expect(
+      ingestStudyInteractions(
+        principal,
+        interactionBatch(projectId, new Date(now.getTime() - 7_000)),
+        now
+      )
+    ).resolves.toMatchObject({ acceptedThrough: 1 });
+    await expect(
+      ingestStudyInteractions(
+        principal,
+        interactionBatch(projectId, new Date(now.getTime() - 180_000)),
+        now
+      )
+    ).rejects.toMatchObject({ status: 410, code: 'session-outside-phase' });
     const endedAt = new Date(now.getTime() + 2_000);
     await database()
       .update(schema.studyPhaseRuns)

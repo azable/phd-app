@@ -149,6 +149,8 @@ export type ProjectCommandDependencies = {
   chooserFor?: (projectId: string) => Promise<ChooserId>;
   /** How long Another variant waits for a chooser bot before drawing at random. */
   resampleTimeLimitMs?: number;
+  /** Draws whether each comparison shows its sides the other way round (below 0.5 keeps them). */
+  comparisonOrder?: () => number;
 };
 
 export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
@@ -932,11 +934,10 @@ async function runSverlinAssistantTurn(
       // The source each decision asks to build, if any. Edits apply to the source being revised:
       // the failed candidate when repairing it.
       const { decision } = generation.result;
-      // With a count, that many presentations, in whole sets: the first shows and the rest wait.
-      const queued =
-        'count' in decision && decision.count
-          ? Math.ceil(decision.count / presentationCount) * presentationCount
-          : undefined;
+      // The assistant designs every alternative as a comparison, so no chooser fills presentations it
+      // did not design: a count goes back to it once to redesign, and after that is ignored.
+      const queued: number | undefined = undefined;
+      const counted = 'count' in decision && Boolean(decision.count);
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
@@ -1000,7 +1001,7 @@ async function runSverlinAssistantTurn(
       };
       // The pairs a decision's comparisons ask, each built as given, and whether they were checked
       // against the design before building: a changed source's design is known only once built.
-      let pairs: Comparisons | undefined;
+      let pairs: ShownComparison[] | undefined;
       let checked = false;
       let candidate: string | undefined;
       let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
@@ -1060,6 +1061,14 @@ async function runSverlinAssistantTurn(
         leftOut = `I left out ${list(droppedQuestions)}, which could not be built as asked.`;
         return undefined;
       };
+      if (counted && attempt === 1)
+        return reject(
+          'comparisons',
+          [
+            'A count is not built: design the alternatives yourself as comparisons, three or four pairs across families, each asking what it shows, and leave count null.'
+          ],
+          buildFeedback?.failedSource ?? entrySource(current)
+        );
       switch (decision.action) {
         case 'respond':
           break;
@@ -1108,6 +1117,7 @@ async function runSverlinAssistantTurn(
             `Unhandled decision ${(decision satisfies never as { action: string }).action}.`
           );
       }
+      if (pairs) pairs = shownInRandomOrder(pairs, dependencies.comparisonOrder);
       if (candidate === undefined) {
         if (attempt === 1) {
           const advanced =
@@ -1246,7 +1256,13 @@ async function runSverlinAssistantTurn(
           },
           dependencies
         );
-        current = await recordReply(current, firstPresentedSet(current, acceptedAfter), leftOut);
+        // The reply names the first pair's sides in the assistant's order, whichever shows on top.
+        const presented = firstPresentedSet(current, acceptedAfter);
+        current = await recordReply(
+          current,
+          pairs?.[0]?.swapped ? [presented[1], presented[0], ...presented.slice(2)] : presented,
+          leftOut
+        );
         if (pairs)
           current = await presentRemainingComparisons(
             {
@@ -1840,15 +1856,48 @@ function comparisonRequests(
   );
 }
 
+/** A comparison as shown: its sides the other way round where swapped. */
+type ShownComparison = Comparisons[number] & { swapped?: true };
+
+/**
+ * The comparisons with each pair's order drawn at random, so which side shows on top says nothing
+ * of the assistant's order and a preference is not confounded with position.
+ */
+export function shownInRandomOrder(
+  comparisons: Comparisons,
+  random: () => number = Math.random
+): ShownComparison[] {
+  return comparisons.map((comparison) =>
+    random() < 0.5
+      ? comparison
+      : {
+          ...comparison,
+          left: comparison.right,
+          right: comparison.left,
+          ...(comparison.brief
+            ? {
+                brief: {
+                  ...comparison.brief,
+                  left: comparison.brief.right,
+                  right: comparison.brief.left
+                }
+              }
+            : {}),
+          swapped: true as const
+        }
+  );
+}
+
 function pairQuestion(
-  { question, left, right, brief }: Comparisons[number],
+  { question, left, right, brief, swapped }: ShownComparison,
   differsAt?: readonly number[]
 ): PairQuestion {
   return {
     question,
     labels: [left.label, right.label],
     ...(brief ? { brief: { key: brief.attribute, tags: [brief.left, brief.right] } } : {}),
-    ...(differsAt ? { differsAt } : {})
+    ...(differsAt ? { differsAt } : {}),
+    ...(swapped ? { swapped } : {})
   };
 }
 
@@ -1951,7 +2000,7 @@ async function presentRemainingComparisons(
   options: {
     document: ProjectDocument;
     candidate: string;
-    pairs: Comparisons;
+    pairs: ShownComparison[];
     seeds: readonly number[];
     viewed: DesignValues | undefined;
     /** The values every side takes, a vary's. */
@@ -2122,7 +2171,8 @@ async function presentAfterRebase(
           ...(left.brief && right.brief
             ? { brief: { key: left.brief.key, tags: [left.brief.tag, right.brief.tag] } }
             : {}),
-          ...(left.differsAt ? { differsAt: left.differsAt } : {})
+          ...(left.differsAt ? { differsAt: left.differsAt } : {}),
+          ...(left.swapped ? { swapped: left.swapped } : {})
         }
       : undefined;
   if (next)
@@ -2326,17 +2376,34 @@ function firstPresentedSet(document: ProjectDocument, after: EventId): Renderabl
     .map(({ presentation }) => presentation);
 }
 
+/**
+ * CSS rules at the start of a reply's text, as `.panel{display:none}`, which a model sometimes
+ * leaks from the code it wrote: never meant for the participant.
+ */
+const leadingStyleRules =
+  /^(?:\s*[.#]?[a-z][\w-]*(?:\s*[,>+~]?\s*[.#]?[a-z][\w-]*)*\s*\{[^{}]*:[^{}]*\})+\s*/iu;
+
+/** A reply with any CSS leaked at the start of its text segments taken out. */
+export function withoutLeakedStyles(reply: GeneratedMessageContent): GeneratedMessageContent {
+  return reply.flatMap((segment): GeneratedMessageContent => {
+    if (segment.type !== 'markdown') return [segment];
+    const text = segment.text.replace(leadingStyleRules, '');
+    return text === segment.text ? [segment] : text.trim() ? [{ ...segment, text }] : [];
+  });
+}
+
 function resolveAssistantContent(
   document: ProjectDocument,
   reply: GeneratedMessageContent,
   candidates: readonly RenderablePresentation[]
 ): MessageContent {
+  const shown = withoutLeakedStyles(reply);
   const knownPresentationIds = document.events.flatMap((event) =>
     event.type === 'visualization.presented' ? [event.payload.presentation.presentationId] : []
   );
   const { mode } = projectSnapshotAt(document);
   const content: MessageContent = structureKnownPresentationReferences(
-    reply,
+    shown,
     knownPresentationIds
   ).map((segment) => {
     if (segment.type === 'presentation-ref') {
@@ -2348,9 +2415,9 @@ function resolveAssistantContent(
     if (segment.type === 'interface-ref') return interfaceReferenceFor(segment.part, mode);
     if (segment.type !== 'candidate-ref') return segment;
     const presentation = candidates[segment.slot];
-    if (!presentation) {
-      throw new Error(`The assistant referenced unavailable candidate slot ${segment.slot}.`);
-    }
+    // A version a count queues behind the first, as the second of a pair a single view shows one
+    // at a time, is named in words rather than failing the turn.
+    if (!presentation) return { type: 'markdown', text: 'the next version' };
     return { type: 'presentation-ref', presentationId: presentation.presentationId };
   });
   return content;
@@ -2394,8 +2461,9 @@ function generationReference(
 function shownSlots(decision: SourceDecision, presentationCount: 1 | 2): number {
   if (decision.action === 'respond') return 0;
   if ('comparisons' in decision && decision.comparisons?.length) return 2;
-  if (decision.action === 'resample' || ('count' in decision && decision.count))
-    return presentationCount;
+  // A count is ignored (see runSverlinTurn), but a reply naming its first pair is read as words.
+  if ('count' in decision && decision.count) return 2;
+  if (decision.action === 'resample') return presentationCount;
   return 1;
 }
 

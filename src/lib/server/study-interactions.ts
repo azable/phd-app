@@ -16,8 +16,11 @@ import { studyDefinition } from '$lib/shared/study/registry';
 // Normal clients flush every five seconds; thirty batches leave headroom for reconnect drains.
 const batchRateWindowMs = 60_000;
 const batchRateLimit = 30;
-// Client and server clocks may differ slightly without admitting post-deadline collection.
-const clientClockToleranceMs = 5_000;
+// How far a participant's clock may be from the server's: laptops drift by seconds, and a pilot
+// participant's ran 7 s behind, so a 5 s allowance refused a task page that loaded promptly and lost its
+// capture. Collection stays bounded by the recorder stopping at the deadline and by the delivery
+// window, both in server time; analysis places events by the phase's server times.
+const clientClockToleranceMs = 120_000;
 
 type RateWindow = { startedAt: number; count: number };
 const rateWindows = new Map<string, RateWindow>();

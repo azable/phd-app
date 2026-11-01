@@ -44,7 +44,7 @@ const count = v.optional(
       v.minValue(2),
       v.maxValue(maximumVariants),
       v.description(
-        'How many presentations to make, one per option compared (four views of a type, 4; a yes or no, 2), or null for one version (a resample: the next pair). The first pair shows with your reply; Next pair shows the rest.'
+        'Null: design alternatives as comparisons instead. A number only on the participant’s explicit request for many new views of the unchanged source, which the chooser fills; null for one version (a resample: the next pair).'
       )
     )
   )
@@ -150,7 +150,7 @@ const comparisons = v.optional(
               v.string(),
               v.trim(),
               v.minLength(1),
-              v.maxLength(120),
+              v.maxLength(160),
               v.description(
                 'What the pair asks, in the participant’s terms, shown above it, as “Cells or tallies for the numbers?”.'
               )
@@ -190,7 +190,7 @@ const question = v.optional(
         v.string(),
         v.trim(),
         v.minLength(1),
-        v.maxLength(200),
+        v.maxLength(400),
         v.description(
           'The question, in the participant’s terms, shown under your reply (so not repeated in it) until they answer it in a message, saying briefly why it is asked, as “To help me refine it further, who is it for?”.'
         )

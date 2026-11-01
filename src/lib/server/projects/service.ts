@@ -1113,6 +1113,8 @@ export type PairQuestion = {
   labels: readonly [string, string];
   brief?: { key: BriefKey; tags: readonly [string, string] };
   differsAt?: readonly number[];
+  /** Whether the assistant's second side shows first, as each pair's order is drawn at random. */
+  swapped?: true;
 };
 
 /** Promote a complete successful batch to one synchronized active display set. */
@@ -1176,7 +1178,8 @@ export async function activateBuiltPresentations(
           presentation,
           ...(pair ? { question: pair.question, label: pair.labels[slot] } : {}),
           ...(pair?.brief ? { brief: { key: pair.brief.key, tag: pair.brief.tags[slot] } } : {}),
-          ...(pair?.differsAt ? { differsAt: [...pair.differsAt] } : {})
+          ...(pair?.differsAt ? { differsAt: [...pair.differsAt] } : {}),
+          ...(pair?.swapped ? { swapped: true as const } : {})
         }
       })
     ),

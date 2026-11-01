@@ -742,6 +742,12 @@ async function prepareInteractionExport(
   }
 }
 
+/**
+ * A first batch arrives one flush interval (5 s) after the page starts recording, plus the page's
+ * load; one much later means the start of the phase went unrecorded.
+ */
+const lateCaptureSeconds = 30;
+
 type InteractionDeliveryStatus = 'complete' | 'incomplete' | 'open' | 'pending';
 
 function interactionCoverage(snapshot: ExportInteractionSnapshot, exportedAt: string) {
@@ -782,12 +788,26 @@ function interactionCoverage(snapshot: ExportInteractionSnapshot, exportedAt: st
   }
   const projects = snapshot.expectedProjects.map((project) => {
     const projectSessions = sessionsByProject.get(project.projectId) ?? [];
+    // How long after the phase began the server first heard from it: a session refused at its start
+    // loses the time until the next page load, though the sessions recorded after it are complete.
+    const firstReceivedAt = Math.min(
+      ...snapshot.sessions
+        .filter(({ projectId }) => projectId === project.projectId)
+        .map(({ createdAt }) => new Date(createdAt).getTime())
+    );
+    const unrecordedSeconds = Math.round(
+      (firstReceivedAt - new Date(project.captureStartedAt).getTime()) / 1_000
+    );
     return {
       ...project,
       status: projectSessions.length ? 'recorded' : 'missing',
-      sessionIds: projectSessions.map(({ sessionId }) => sessionId)
+      sessionIds: projectSessions.map(({ sessionId }) => sessionId),
+      ...(Number.isFinite(unrecordedSeconds) && unrecordedSeconds > lateCaptureSeconds
+        ? { unrecordedSeconds }
+        : {})
     };
   });
+  const lateProjects = projects.filter((project) => 'unrecordedSeconds' in project);
   const droppedByReason: Record<string, number> = {};
   let droppedEventCount = 0;
   for (const event of snapshot.events) {
@@ -813,6 +833,10 @@ function interactionCoverage(snapshot: ExportInteractionSnapshot, exportedAt: st
     ...(missingProjectCount
       ? [`${missingProjectCount} started participant task project(s) have no interaction session.`]
       : []),
+    ...lateProjects.map(
+      (project) =>
+        `${project.studyPhaseId} (${project.projectId}) has no interaction records for its first ${project.unrecordedSeconds} s: the first session reached the server that long after the phase began.`
+    ),
     ...(incompleteSessionCount
       ? [`${incompleteSessionCount} interaction session(s) are incomplete after delivery closed.`]
       : []),

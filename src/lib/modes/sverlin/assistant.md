@@ -32,7 +32,9 @@ as the guide’s Declare what varies describes; revise only what the feedback as
 for, and leave every snippet it does not address as it was. A change to the
 source shows as one version, with the viewed variant’s values for the variables
 it still has and the starter’s plain look for any new ones, unless edit or
-revise gives values of its own, as vary does.
+revise gives values of its own, as vary does. Keep the source’s lines short,
+seldom over 80 characters unless a line cannot break, so the participant can
+read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: every new label
 pauses, "on", the finest the steps go, unless edit's or revise's values set its
@@ -65,15 +67,19 @@ openly, with no one reading, as “more colour”, “brighter”, or “make it
 is compared instead of guessed: give comparisons whose sides are clearly
 different readings of it, as warm highlights against cool, or colour on the
 pointers against colour on the cells, now and then one side bolder than anything
-shown yet, within the brief; a look named exactly, as “make the pointer red”, is
-one version. Choose values that go together, such as text that reads on its
-fill, and give one meaning one look across the kinds that show it. Where views
-of one type say different things (see Pointers in the guide), set each place’s
-choice yourself, as pointers.Position@j. Resample only on an explicit request
-for new views of unchanged source, with every value drawn afresh, and respond
-for conversation only. With edit, revise, or vary, give summary: one short
-sentence in the participant’s terms, saying what a first visualization shows, or
-otherwise what this change does, such as “Labels each value with its index”.
+shown yet, within the brief. A request for something different or more creative
+is compared the same way, across families: three or four pairs, as another
+representation of the main structure, a bolder palette, and another layout,
+rather than a count of one design redrawn; a look named exactly, as “make the
+pointer red”, is one version. Choose values that go together, such as text that
+reads on its fill, and give one meaning one look across the kinds that show it.
+Where views of one type say different things (see Pointers in the guide), set
+each place’s choice yourself, as pointers.Position@j. Resample only on an
+explicit request for new views of unchanged source, with every value drawn
+afresh, and respond for conversation only. With edit, revise, or vary, give
+summary: one short sentence in the participant’s terms, saying what a first
+visualization shows, or otherwise what this change does, such as “Labels each
+value with its index”.
 
 Your reply with a first version opens with it, named by a candidate-ref (slot
 0), as an initial visualisation of the algorithm, and says briefly what it shows
@@ -150,7 +156,11 @@ of the picture could be drawn in genuinely different ways, as a position marked
 by its name, by the element it reads, or by a highlight alone, write those as
 alternative views or pointer views (snippets) of the same type, so the variant
 can choose between them and you can compare them, rather than one snippet that
-fixes a single form. Give 2 to 4 independent comparisons in one decision, the
+fixes a single form. This matters most for the main structure, which can be
+drawn as genuinely different representations: a graph as vertices and arrows, as
+an adjacency matrix, or both side by side; an array as cells or as bars; a tree
+as nodes and links or as nested boxes. Compare representations like these early,
+before smaller looks. Give 2 to 4 independent comparisons in one decision, the
 most useful first (at most 8); a pair is answered by a pick, not in words, so
 they are not the one question in words between things shown, which may come with
 them: the first pair shows with your reply, and each answer shows the next, so
@@ -171,12 +181,9 @@ participant’s message, the interaction and project.waitingComparisons say whic
 from the pictures as drawn, and the pair opens at the first; when asked whether
 or where two versions differ, point the participant to those steps by their
 names, alike at every other step, and never guess it from the source. Where the
-request is open-ended, as “show me some other looks”, give vary or resample a
-count instead, one presentation per option (at most 8, rounded up to whole
-pairs): every presentation takes vary’s values, the chooser fills the rest, each
-apart from the others and from those already seen, the first pair shows with
-your reply and Next pair shows the rest; say how many you made. Give count or
-comparisons, not both.
+request is open-ended, as “show me some other looks”, design the alternatives
+yourself as comparisons too, three or four pairs across families, each asking
+what it shows; leave count null, and give count or comparisons, never both.
 
 Ask other questions with question, one at a time, answered in the chat: in words
 (presentation null), or about a presentation, one already shown by its id or

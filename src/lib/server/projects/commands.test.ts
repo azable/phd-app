@@ -122,6 +122,8 @@ beforeEach(() => {
   commandDependencies = {
     repository,
     projectService: serviceDependencies,
+    // Comparisons keep the assistant's order unless a test draws otherwise.
+    comparisonOrder: () => 0,
     getChatbot: () =>
       ({
         config: { attemptProfiles: mocks.attemptProfiles },
@@ -2867,7 +2869,8 @@ describe('several variants from chat', () => {
                 question: event.payload.question,
                 label: event.payload.label,
                 brief: event.payload.brief,
-                differsAt: event.payload.differsAt
+                differsAt: event.payload.differsAt,
+                swapped: event.payload.swapped
               }
             }
           ]
@@ -2892,9 +2895,9 @@ describe('several variants from chat', () => {
     return { before: document, result };
   }
 
-  it('fills every presentation through the chooser around the values the assistant fixed, the first pair shown and the rest queued', async () => {
+  it('sends a count back to the assistant to design comparisons, never filling it through the chooser', async () => {
     choosing.mockClear();
-    const { before, result } = await decide(
+    const { result } = await decide(
       {
         action: 'vary',
         values: [{ variable: 'views.Int', value: 'IntTally' }],
@@ -2904,99 +2907,14 @@ describe('several variants from chat', () => {
       },
       { getChooser: () => chooser(choosing), chooserFor: async () => 'model' }
     );
-
-    const [{ context }] = choosing.mock.calls[0];
-    expect(context.project).toMatchObject({
-      count: 4,
-      settled: { 'views.Int': 'IntTally' }
-    });
-    const shown = presented(result.appendedEvents);
-    expect(shown.map(({ payload }) => payload.presentation.variant?.['views.Int'])).toEqual(
-      Array(4).fill('IntTally')
-    );
-    expect(
-      shown.map(({ payload }) => payload.presentation.variant?.['Highlight.Pointed.fill'])
-    ).toEqual(fills);
-    expect(new Set(shown.map(({ payload }) => payload.displaySetId)).size).toBe(2);
-    // What was waiting is consumed, so the new pair heads the buffer and the second waits behind it.
-    const { presentationBufferState, waitingBehind } =
-      await import('$lib/shared/projects/presentation-buffer');
-    const buffer = presentationBufferState(result.document, 0);
-    expect(buffer.available.map(({ presentationId }) => presentationId)).toEqual(
-      shown.map(({ payload }) => payload.presentation.presentationId)
-    );
-    expect(buffer.consumedPresentationIds).toEqual(
-      new Set(presented(before.events).map(({ payload }) => payload.presentation.presentationId))
-    );
-    expect(waitingBehind(buffer, buffer.available[0].presentationId)).toHaveLength(2);
-
-    // New pair shows the queued pair without building.
-    const { buildProjectPresentations } = await import('./service');
-    const next = await buildProjectPresentations(
-      {
-        projectId: result.document.projectId,
-        expectedHead: projectHead(result.document).id,
-        operationId: '92345678-1234-4123-8123-123456789abd',
-        presentationCount: 2,
-        from: buffer.available[0].presentationId
-      },
-      serviceDependencies
-    );
-    expect(next.appendedEvents).toEqual([
-      expect.objectContaining({
-        type: 'visualization.candidates-advanced',
-        payload: {
-          presentations: buffer.available.slice(0, 2).map((p) => p.presentationId),
-          reason: 'next'
-        }
-      })
-    ]);
-  });
-
-  it('draws the rest at random, keeping the fixed values, when the chooser fails', async () => {
-    const { result } = await decide(
-      {
-        action: 'vary',
-        values: [{ variable: 'views.Int', value: 'IntTally' }],
-        randomise: [],
-        count: 3,
-        summary: 'Tallies'
-      },
-      {
-        getChooser: () => chooser(vi.fn().mockRejectedValue(new Error('Unavailable.'))),
-        chooserFor: async () => 'model'
-      }
-    );
-
-    expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(true);
-    const shown = presented(result.appendedEvents);
-    // Three rounded up to two whole pairs.
-    expect(shown.map(({ payload }) => payload.presentation.variant?.['views.Int'])).toEqual(
-      Array(4).fill('IntTally')
-    );
-    expect(shown.map(({ payload }) => payload.presentation.origins?.['views.Int'])).toEqual(
-      Array(4).fill('chosen')
-    );
-  });
-
-  it('resamples with a count through the chooser, and without one as before', async () => {
-    choosing.mockClear();
-    const counted = await decide(
-      { action: 'resample', count: 4 },
-      { getChooser: () => chooser(choosing), chooserFor: async () => 'model' }
-    );
-    expect(choosing.mock.calls[0][0].context.project).toMatchObject({ count: 4 });
-    expect(presented(counted.result.appendedEvents)).toHaveLength(4);
-
-    choosing.mockClear();
-    const plain = await decide(
-      { action: 'resample', count: null },
-      { getChooser: () => chooser(choosing), chooserFor: async () => 'model' }
-    );
     expect(choosing).not.toHaveBeenCalled();
+    const rejected = result.appendedEvents.filter(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected.length).toBeGreaterThan(0);
+    expect(JSON.stringify(rejected[0])).toContain('A count is not built');
+    // On the last attempt the count is ignored: one version, not four.
     expect(
-      plain.result.appendedEvents.filter(({ type }) => type === 'visualization.presented').length
-    ).toBeLessThanOrEqual(2);
+      result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
+    ).toHaveLength(1);
   });
   const views = (left: string, right: string) => ({
     question: 'Cells or tallies for the numbers?',
@@ -3067,6 +2985,65 @@ describe('several variants from chat', () => {
       shown.map(({ payload }) => payload.presentation.presentationId)
     );
     expect(waitingBehind(buffer, buffer.available[0].presentationId)).toHaveLength(2);
+  });
+
+  it('shows a pair the other way round where its order is drawn so, recording it', async () => {
+    const tone = { attribute: 'tone', left: 'restrained', right: 'bold' };
+    const { result } = await decide(
+      {
+        action: 'vary',
+        values: [],
+        randomise: [],
+        count: null,
+        comparisons: [{ ...marks, brief: tone }],
+        summary: 'Asks one question'
+      },
+      { comparisonOrder: () => 0.9 }
+    );
+    const [top, bottom] = presented(result.appendedEvents).map(({ payload }) => payload);
+    expect([top.label, bottom.label]).toEqual(['blue', 'amber']);
+    expect([top.brief?.tag, bottom.brief?.tag]).toEqual(['bold', 'restrained']);
+    expect([top.swapped, bottom.swapped]).toEqual([true, true]);
+  });
+
+  it('names in words a version a single view queues behind the first, rather than failing', async () => {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const document = await createProject(
+      { title: 'Single', creation: { templateId: 'linear-search' }, presentationCount: 1 },
+      serviceDependencies
+    );
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      ...generation(undefined, 'unused'),
+      reply: [
+        { type: 'candidate-ref', slot: 0 },
+        { type: 'markdown', text: ' and ' },
+        { type: 'candidate-ref', slot: 1 },
+        { type: 'markdown', text: ' are the first two.' }
+      ],
+      decision: {
+        action: 'vary',
+        values: [],
+        randomise: [],
+        count: 4,
+        comparisons: null,
+        summary: 'Four looks'
+      }
+    });
+    const result = await submitProjectFeedback(
+      {
+        ...feedbackOptions(document, 'Show me a few.', '92345678-1234-4123-8123-123456789abe'),
+        presentationCount: 1
+      },
+      {
+        ...commandDependencies,
+        getChooser: () => chooser(vi.fn()),
+        chooserFor: async () => 'random'
+      }
+    );
+    expect(result.appendedEvents.some(({ type }) => type === 'operation.failed')).toBe(false);
+    const reply = result.appendedEvents.findLast(({ type }) => type === 'assistant.responded');
+    expect(JSON.stringify(reply)).toContain('the next version');
   });
 
   it('reports comparisons that cannot be built as given back to the assistant to repair', async () => {
@@ -3581,5 +3558,21 @@ describe('several variants from chat', () => {
     mocks.preparePrompt.mockClear();
     await createComparisonProject('First source');
     expect(mocks.preparePrompt.mock.calls[0]?.[0]).toMatchObject({ turn: 'authoring' });
+  });
+});
+
+describe('a reply’s text', () => {
+  it('loses CSS a model leaked at its start, and nothing else', async () => {
+    const { withoutLeakedStyles } = await import('./commands');
+    expect(
+      withoutLeakedStyles([
+        { type: 'markdown', text: '.panel{display:none} Lighter borders now.' },
+        { type: 'markdown', text: '.a, .b > p { color: red; }' },
+        { type: 'markdown', text: 'Use {i} as the index; costs are {a: 1}.' }
+      ])
+    ).toEqual([
+      { type: 'markdown', text: 'Lighter borders now.' },
+      { type: 'markdown', text: 'Use {i} as the index; costs are {a: 1}.' }
+    ]);
   });
 });

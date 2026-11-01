@@ -226,6 +226,10 @@ export class ProjectInteractionDelivery {
     if (response.status === 401) return 'retry';
     if (response.status === 403 || response.status === 410) {
       await this.#outbox.abandon(stored.session.id);
+      console.warn('Participant interaction session was refused and discarded.', {
+        sessionId: stored.session.id,
+        reason: error.code ?? `HTTP ${response.status}`
+      });
       return 'abandoned';
     }
     if (response.status === 429 || response.status >= 500) return 'retry';

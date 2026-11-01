@@ -31,7 +31,12 @@ export const visualizationPresentedEventSchema = v.object({
      * With a question, the steps, counted from 0, at which the pair's two sides draw differently,
      * as the server laid them out (see shared/differing-steps.ts); unset where it did not.
      */
-    differsAt: v.optional(v.array(naturalSchema))
+    differsAt: v.optional(v.array(naturalSchema)),
+    /**
+     * With a question, set where the pair shows the assistant's sides the other way round: each
+     * pair's order is drawn at random, so a preference is not confounded with which side is on top.
+     */
+    swapped: v.optional(v.literal(true))
   })
 });
 

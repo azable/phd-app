@@ -242,6 +242,65 @@ describe('project data export traversal', () => {
       droppedByReason: { 'outbox-limit': 2 }
     });
   });
+
+  it('warns of a phase whose first session reached the server long after the phase began', async () => {
+    const snapshot = fixtureSnapshot();
+    snapshot.projects = [];
+    const files = new Map<string, Uint8Array>();
+    const session = (id: string, projectId: string, createdAt: string) => ({
+      id,
+      projectId,
+      schemaVersion: 1,
+      clientStartedAt: createdAt,
+      clientTimeOrigin: 1,
+      initialViewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      applicationVersion: '0.0.1',
+      capture: {},
+      acceptedThrough: 1,
+      recordedThrough: 1,
+      createdAt,
+      updatedAt: createdAt
+    });
+    const source: ExportDataSource = {
+      collect: vi.fn(async () => snapshot),
+      collectInteractions: vi.fn(async () => ({
+        // As in the pilot: the first task heard from 7 s in, the second only after a reload, 184 s in.
+        sessions: [
+          session(
+            '12345678-1234-4123-8123-123456789abc',
+            'project-one',
+            '2026-08-30T10:00:07.000Z'
+          ),
+          session('22345678-1234-4123-8123-123456789abc', 'project-two', '2026-08-30T10:18:04.000Z')
+        ],
+        events: [],
+        expectedProjects: [
+          { projectId: 'project-one', captureStartedAt: '2026-08-30T10:00:00.000Z' },
+          { projectId: 'project-two', captureStartedAt: '2026-08-30T10:15:00.000Z' }
+        ].map((project, index) => ({
+          ...project,
+          studyRunId: 'run-one',
+          studyPhaseId: `task-${index + 1}`,
+          captureEndedAt: '2026-08-30T11:00:00.000Z',
+          deliveryEndsAt: '2026-08-31T11:00:00.000Z'
+        }))
+      }))
+    };
+
+    const manifest = await writeDataExport(
+      source,
+      { write: (pathname, value) => void files.set(pathname, Uint8Array.from(value)) },
+      { type: 'projects' },
+      '2026-09-01T12:00:00.000Z'
+    );
+
+    expect(manifest.interactions.warnings).toEqual([
+      expect.stringContaining('task-2 (project-two) has no interaction records for its first 184 s')
+    ]);
+    const coverage = JSON.parse(Buffer.from(files.get('interactions/coverage.json')!).toString());
+    expect(coverage.projects[0]).not.toHaveProperty('unrecordedSeconds');
+    expect(coverage.projects[1]).toMatchObject({ unrecordedSeconds: 184 });
+  });
 });
 
 function fixtureSnapshot(): ExportSnapshot {
