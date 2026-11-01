@@ -24,6 +24,7 @@
   import FeedbackComposer from '$lib/client/timeline/FeedbackComposer.svelte';
   import Timeline from '$lib/client/timeline/Timeline.svelte';
   import { agentRequestAt } from '$lib/client/timeline/agent-requests';
+  import InterfaceTour from '$lib/client/tour/InterfaceTour.svelte';
   import PresentationStage from '$lib/client/visualization/PresentationStage.svelte';
   import {
     presentationPlaybackContext,
@@ -577,6 +578,12 @@
             >
               <Tabs.Trigger value="timeline">Timeline</Tabs.Trigger>
               {#if developerView}<Badge variant="secondary">Developer details</Badge>{/if}
+              <InterfaceTour
+                mode={session.snapshot.mode}
+                viewer={study?.context === 'participant' ? study.participantId : 'local'}
+                auto={!session.readOnly && !expired && !developerView && (!!study || !isAdmin)}
+                canReset={isAdmin}
+              />
               {#if showAdminControls}
                 <select
                   class="ml-auto h-8 max-w-40 rounded-md border bg-background px-2 text-sm"
