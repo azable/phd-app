@@ -2,6 +2,8 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { APIConnectionTimeoutError, APIUserAbortError } from 'openai';
+
 import { InvalidChatbotResponseError } from '$lib/server/chat-adapters/types';
 import type {
   EventId,
@@ -2824,20 +2826,23 @@ function candidateCorrection(
   return `The previous candidate batch failed validation: ${errorMessage(cause)}. Return one complete corrected batch of up to two candidates. The participant never saw the failed batch or this message: reply only about what they will see, never that something failed or was fixed. Previous candidates: ${JSON.stringify(candidates)}. Failure history: ${JSON.stringify(failureSummaries.map((summary) => summary.slice(0, 2_000)))}`;
 }
 
+// The openai SDK's errors are told apart by class: their `name` is plain 'Error'.
+function requestTimedOut(error: unknown): boolean {
+  return error instanceof APIConnectionTimeoutError;
+}
+
+function requestCancelled(error: unknown): boolean {
+  return (
+    error instanceof APIUserAbortError ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' || error.name === 'StudyPhaseDeadlineError'))
+  );
+}
+
 function generationFailureKind(error: unknown) {
   if (error instanceof Error && error.name === 'OpenAIConfigurationError') return 'configuration';
-  if (
-    error instanceof Error &&
-    (error.name === 'APITimeoutError' || error.name === 'APIConnectionTimeoutError')
-  )
-    return 'timeout';
-  if (
-    error instanceof Error &&
-    (error.name === 'AbortError' ||
-      error.name === 'APIUserAbortError' ||
-      error.name === 'StudyPhaseDeadlineError')
-  )
-    return 'cancelled';
+  if (requestTimedOut(error)) return 'timeout';
+  if (requestCancelled(error)) return 'cancelled';
   if (error instanceof Error && error.name === 'InvalidChatbotResponseError') {
     return 'invalid-response';
   }
@@ -2847,17 +2852,8 @@ function generationFailureKind(error: unknown) {
 function safeErrorMessage(error: unknown) {
   if (error instanceof Error && error.name === 'OpenAIConfigurationError') return error.message;
   if (error instanceof Error && error.name === 'ChatContextOverflowError') return error.message;
-  if (
-    error instanceof Error &&
-    (error.name === 'APITimeoutError' || error.name === 'APIConnectionTimeoutError')
-  )
-    return 'The AI request timed out.';
-  if (
-    error instanceof Error &&
-    (error.name === 'AbortError' ||
-      error.name === 'APIUserAbortError' ||
-      error.name === 'StudyPhaseDeadlineError')
-  ) {
+  if (requestTimedOut(error)) return 'The AI request timed out.';
+  if (requestCancelled(error)) {
     const reason = currentProjectOperationSignal()?.reason;
     return reason instanceof Error
       ? reason.message

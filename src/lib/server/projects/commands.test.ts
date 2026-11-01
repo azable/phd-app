@@ -1837,6 +1837,28 @@ describe('submitProjectFeedback', () => {
     });
   });
 
+  it('tells an AI request that timed out from one cancelled, as the openai SDK throws them', async () => {
+    const { APIConnectionTimeoutError, APIUserAbortError } = await import('openai');
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const failure = async (error: Error) => {
+      mocks.generatePrepared.mockReset().mockRejectedValue(error);
+      const created = await createProject({ title: 'Provider errors' }, serviceDependencies);
+      const result = await submitProjectFeedback(
+        feedbackOptions(created, 'Create a visualization', '12345678-1234-4123-8123-123456789abc'),
+        commandDependencies
+      );
+      return result.appendedEvents.find((event) => event.type === 'ai.generation-failed');
+    };
+
+    expect(await failure(new APIConnectionTimeoutError())).toMatchObject({
+      payload: { failureKind: 'timeout', message: 'The AI request timed out.' }
+    });
+    expect(await failure(new APIUserAbortError())).toMatchObject({
+      payload: { failureKind: 'cancelled' }
+    });
+  });
+
   it('stores the raw provider response when structured output is incomplete', async () => {
     const providerResponse = {
       id: 'response-incomplete',
