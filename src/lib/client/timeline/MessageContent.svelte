@@ -218,11 +218,12 @@
 
   /* Inline code is a pill, tinted from the text colour so it reads on either bubble. Its own line
      height is 1: the mono face would otherwise sit lower on the message's line height and push the
-     line it is on taller than the others. */
+     line it is on taller than the others; raised so its box centres on the words beside it. */
   .message-content :global(:not(pre) > code) {
     font-family: var(--font-mono, ui-monospace, monospace);
     font-size: 0.85em;
     line-height: 1;
+    vertical-align: 0.18em;
     padding: 0.05em 0.4em;
     border-radius: var(--radius-md, 0.375rem);
     border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
