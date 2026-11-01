@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { briefAttributes, briefKeys, intakeKeys, projectBrief, type BriefAttribute } from './brief';
+import {
+  briefAttribute,
+  briefAttributes,
+  briefKeys,
+  intakeKeys,
+  projectBrief,
+  type BriefAttribute
+} from './brief';
 import type { ProjectEvent } from './events';
 
 const families = [
@@ -62,6 +69,24 @@ describe('the brief’s attributes', () => {
     expect(
       (briefAttributes as readonly BriefAttribute[]).find(({ key }) => key === 'cases')
     ).toMatchObject({ bearsOn: 'inputs' });
+  });
+
+  it('asks for the intended learning outcome, tagging its verb and the misconception', () => {
+    const focus = briefAttribute('focus');
+    expect(focus.question).toBe(
+      'To help me focus it, what should students be able to do after seeing this — for example, an intended learning outcome from your subject?'
+    );
+    expect(focus).toMatchObject({ askFirst: true, asked: 'both' });
+    expect(focus.intake).toBeUndefined();
+    const tags = focus.tags ?? {};
+    expect(Object.keys(tags)).toEqual(
+      expect.arrayContaining(['notice', 'trace', 'explain', 'compare', 'apply', 'misconception'])
+    );
+    for (const verb of ['notice', 'trace', 'explain', 'compare', 'apply']) {
+      const steered = Object.keys(tags[verb].families ?? {});
+      expect(steered.length).toBeGreaterThan(0);
+      for (const family of steered) expect(focus.bearsOn).toContain(family);
+    }
   });
 });
 

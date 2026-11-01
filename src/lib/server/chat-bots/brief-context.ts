@@ -230,7 +230,7 @@ export function briefContext(
       ranked.push({
         key: item.key,
         rank: attribute.askFirst ? 'first' : attribute.later ? 'later' : 'unknown',
-        // Those asked first go in the attributes' order: who it is for before the takeaway.
+        // Those asked first go in the attributes' order: who it is for before the outcome.
         worth: attribute.askFirst
           ? -briefKeys.indexOf(item.key)
           : Math.max(0, ...bearing.map(({ worth }) => worth))

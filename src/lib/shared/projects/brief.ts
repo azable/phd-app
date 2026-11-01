@@ -110,20 +110,34 @@ export const briefAttributes = [
     }
   },
   {
+    // The intended learning outcome: what students should be able to do after seeing it, in the
+    // educator's words, as their subject outline may state it, and the misconception it targets.
     key: 'focus',
     question:
-      'What should a learner take away, even if they only half follow it, and is there a misconception it should tackle?',
-    why: 'What is marked, and where it pauses, follows the key takeaway and what learners get wrong.',
-    bearsOn: ['views', 'shown', 'arrangement', 'colour'],
+      'To help me focus it, what should students be able to do after seeing this — for example, an intended learning outcome from your subject?',
+    why: 'What students should be able to do decides what is marked, where it pauses and what it says; what they get wrong, the step it must show.',
+    bearsOn: ['views', 'shown', 'arrangement', 'pacing', 'colour'],
     asked: 'both',
     askFirst: true,
+    // The outcome's verb, after the verbs intended learning outcomes use, ordered by the SOLO
+    // taxonomy (Biggs and Tang, Teaching for Quality Learning at University), each steering the
+    // families its design bears on.
     tags: {
+      // Recognise a pattern: mark it, and pause only at the key steps.
+      notice: { families: { arrangement: 1.3, views: 1.2, colour: 1.2, pacing: 1.2 } },
+      // Follow it step by step: pause at every step, its state always visible, a what-next moment.
+      trace: { families: { pacing: 1.5, shown: 1.4 } },
+      // Say why each step happens: captions that say why.
+      explain: { families: { shown: 1.4, views: 1.1 } },
+      // Set it against another way: the same input both ways, a version each for now.
+      compare: { families: { views: 1.3, arrangement: 1.2 } },
+      // Use it: the result it produces, and an edge case.
+      apply: { families: { shown: 1.3 } },
+      // What stands out: each comparison the algorithm makes.
       comparisons: {
         matching: [{ pattern: comparisonMarks, weight: 2.5 }],
         families: { lettering: 0.8 }
       },
-      pattern: { families: { arrangement: 1.4, views: 1.2, pacing: 0.8 } },
-      result: { families: { shown: 1.3 } },
       // The step where learners go wrong has to show, and pause.
       misconception: { families: { shown: 1.2, pacing: 1.3 } }
     }
@@ -131,8 +145,8 @@ export const briefAttributes = [
   {
     key: 'vocabulary',
     question:
-      'Are there words or notation your course uses for this, or avoids, such as `i` or `A[i]` for a position?',
-    why: 'Labels, captions and the listing should speak as the course does.',
+      'Are there words or notation your subject uses for this, or avoids, such as `i` or `A[i]` for a position?',
+    why: 'Labels, captions and the listing should speak as the subject does.',
     bearsOn: ['views'],
     asked: 'both',
     tags: {

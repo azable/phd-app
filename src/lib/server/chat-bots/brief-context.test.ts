@@ -49,6 +49,31 @@ describe('the brief steering the preference summary', () => {
     expect(ranked.indexOf('Compared.fill')).toBeLessThan(ranked.indexOf('Cell.font'));
   });
 
+  it('steers by the intended learning outcome’s verb', () => {
+    const outcome = (verb: string) =>
+      briefSteering(
+        brief({
+          focus: {
+            status: 'inferred',
+            value: 'trace insertion sort on a small list',
+            source: 'Students will be able to trace insertion sort on a small list',
+            tags: [verb]
+          }
+        })
+      );
+    expect(outcome('trace').weight('pause@insert.swap')).toBeGreaterThan(1);
+    expect(outcome('apply').weight('pause@insert.swap')).toBe(1);
+    expect(outcome('notice').weight('Cell.fill')).toBeGreaterThan(1);
+    expect(outcome('explain').weight('Cell.font')).toBe(
+      briefSteering(brief({})).weight('Cell.font')
+    );
+    const focus = briefContext(brief({}), []).attributes.find(({ key }) => key === 'focus');
+    expect(focus?.question).toMatch(/what should students be able to do after seeing this/u);
+    expect(focus?.offeredTags).toEqual(
+      expect.arrayContaining(['notice', 'trace', 'explain', 'compare', 'apply', 'misconception'])
+    );
+  });
+
   it('multiplies every value’s weights', () => {
     const steering = briefSteering(
       brief({

@@ -145,13 +145,15 @@ views or arrangement), goes in the assistant's context as `preferences`, and so
 into each request's recorded prompt. Beside it goes the design brief, `brief`:
 the attributes of what the participant is trying to achieve, defined in
 [`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first, then
-those marked `askFirst`, who it is for and the key takeaway, the first still
-unknown asked by the reply with the first version and the other with a later
-comparison or change, one question in words between things shown; those marked
-`later`, as low vision or printing in grey, asked once, late; and an `assumed`
-default, as tone's restrained look, steering while unknown; and how the
-participant likes to work, `questions` (questions first, a draft first or fewer
-questions) and `lead` (suggest alternatives, direct it, or a mix), whose
+those marked `askFirst`, who it is for and the intended learning outcome, what
+students should be able to do after seeing it, its verb tagged after those of
+intended learning outcomes (notice, trace, explain, compare, apply) to steer,
+the first still unknown asked by the reply with the first version and the other
+with a later comparison or change, one question in words between things shown;
+those marked `later`, as low vision or printing in grey, asked once, late; and
+an `assumed` default, as tone's restrained look, steering while unknown; and how
+the participant likes to work, `questions` (questions first, a draft first or
+fewer questions) and `lead` (suggest alternatives, direct it, or a mix), whose
 defaults and steering the context gives as `working`, `lead` asked with the
 first alternatives offered), each unknown, inferred or confirmed, from intake's
 answers and the `brief` each assistant decision returns, recorded on its
