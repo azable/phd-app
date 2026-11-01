@@ -15,6 +15,10 @@ import {
 import { visualizationParticipantIntake } from '$lib/server/chat-bots/participant-intake';
 import * as v from 'valibot';
 import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
+import {
+  maximumSuggestions,
+  suggestionSchema
+} from '$lib/shared/projects/events/assistant-responded';
 
 import assistant from './assistant.md?raw';
 import guide from './README.md?raw';
@@ -99,20 +103,43 @@ export default {
       properties: {
         reply: retainedMessageContentJsonSchema,
         decision: sourceDecisionJsonSchema,
-        recovery: recoveryExplanationJsonSchema
+        recovery: recoveryExplanationJsonSchema,
+        suggestions: {
+          type: 'array',
+          maxItems: maximumSuggestions,
+          items: { type: 'string', minLength: 1, maxLength: 120 }
+        }
       },
-      required: ['reply', 'decision', 'recovery']
+      required: ['reply', 'decision', 'recovery', 'suggestions']
     }
   },
   parseOutput(value) {
-    const output = value as { reply?: unknown; decision?: unknown; recovery?: unknown };
+    const output = value as {
+      reply?: unknown;
+      decision?: unknown;
+      recovery?: unknown;
+      suggestions?: unknown;
+    };
     const decision = v.safeParse(sourceDecisionSchema, output?.decision);
     if (!decision.success) throw new Error('The chatbot returned an invalid structured response.');
     const recovery = parseRecoveryExplanation(output.recovery);
+    const suggestions = offeredSuggestions(output.suggestions);
     return {
       reply: v.parse(generatedMessageContentSchema, output.reply),
       decision: decision.output,
-      ...(recovery ? { recovery } : {})
+      ...(recovery ? { recovery } : {}),
+      ...(suggestions.length ? { suggestions } : {})
     };
   }
 } satisfies ChatBotConfig<AiProjectContext>;
+
+/** The suggestions a reply offers: each a non-blank phrase, at most maximumSuggestions, the rest dropped. */
+function offeredSuggestions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item) => {
+      const parsed = v.safeParse(suggestionSchema, item);
+      return parsed.success ? [parsed.output] : [];
+    })
+    .slice(0, maximumSuggestions);
+}

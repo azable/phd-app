@@ -10,6 +10,8 @@ export type AvailablePresentation = {
   eventId: number;
   presentationId: string;
   scenarioKey: string;
+  operationId: string;
+  displaySetId?: string;
 };
 
 /** Current state of a configured ahead-of-time presentation buffer. */
@@ -51,7 +53,9 @@ export function presentationBufferState(
         {
           eventId: event.id,
           presentationId: presentation.presentationId,
-          scenarioKey: presentationScenarioKey(presentation)
+          scenarioKey: presentationScenarioKey(presentation),
+          operationId: event.operationId,
+          ...(event.payload.displaySetId ? { displaySetId: event.payload.displaySetId } : {})
         }
       ];
     }
@@ -79,6 +83,24 @@ export function presentationBufferState(
     consumedPresentationIds,
     deficit
   };
+}
+
+/**
+ * The presentations waiting behind a shown one: those its operation presented in later display
+ * sets, not yet consumed, as a vary or resample with a count queues them. New pair shows the next.
+ */
+export function waitingBehind(
+  state: PresentationBufferState,
+  presentationId: string
+): AvailablePresentation[] {
+  const shown = state.available.find((entry) => entry.presentationId === presentationId);
+  if (!shown) return [];
+  return state.available.filter(
+    (entry) =>
+      entry.operationId === shown.operationId &&
+      entry.eventId > shown.eventId &&
+      entry.displaySetId !== shown.displaySetId
+  );
 }
 
 function activeSourceSha256(document: ProjectDocument): string | undefined {

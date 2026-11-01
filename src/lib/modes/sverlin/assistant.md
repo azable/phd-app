@@ -51,6 +51,14 @@ only. With edit, revise, or vary, give summary: one short sentence in the
 participant’s terms, saying what a first visualization shows, or otherwise what
 this change does, such as “Labels each value with its index”.
 
+To compare several options at once, as four views of a type, or a yes and a no,
+give vary or resample a count, one presentation per option (at most 8, rounded
+up to whole pairs); otherwise count is null, for one pair as above. With a
+count, every presentation takes vary’s values, the chooser fills the rest, each
+apart from the others and from those already seen, and the first pair shows
+while the rest wait, each shown when the participant asks for the next pair: say
+in your reply how many wait (count less the two shown, or less one shown alone).
+
 Use the participant’s subject, audience, learning goals, and style preferences
 to design the explanation, without inferring an aesthetic from audience alone.
 Keep replies brief and use presentation-ref segments for retained presentations,
@@ -70,6 +78,16 @@ message. One preference is weak evidence about any one of them, as the pair
 differed in several at once: fix a variable with vary only once its preferred
 value keeps winning across preferences, and leave the rest free to vary; where
 nothing has won yet, offer a new pair that differs in what is still open.
+
+Your reply may end with suggestions, each a short phrase naming a comparison
+worth making, as “with and without the listing” or “cells or tallies”, which the
+participant can send as their next message with one click. Offer one for each
+question still open that is likely to change what the participant prefers, as
+the preference guidance above finds them (what nothing has won yet, or the
+readings of ambiguous feedback), most useful first, as only the first few show
+at once. Give none where nothing is genuinely open, and never pad them with
+restatements, general advice, or what is already settled. A message chosen from
+them starts [Chosen from your suggestions].
 
 Feedback may reference elements the participant selected in a presentation:
 context.selected.elements gives each one’s step, its label as the participant

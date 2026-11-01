@@ -198,6 +198,31 @@ export function latestPresentations(
   return presentationGroup(presentations, latest, layout);
 }
 
+/**
+ * Return the newest generated set; where the newest operation presented several, as a vary or
+ * resample with a count queues them, the first of them not yet consumed, so New pair, consuming it,
+ * shows the next.
+ */
+export function newestPresentations(
+  events: readonly ProjectEvent[],
+  layout: PresentationLayout
+): TimelinePresentation[] {
+  const all = timelinePresentations(events);
+  const latest = all.at(-1);
+  if (!latest || !isSverlinPresentation(latest.presentation))
+    return latestPresentations(all, layout);
+  const made = all.filter(({ operationId }) => operationId === latest.operationId);
+  if (new Set(made.map(({ displaySetId }) => displaySetId)).size < 2)
+    return latestPresentations(all, layout);
+  const available = new Set(
+    presentationBufferState(events, 0, latest.presentation.source.sha256).available.map(
+      ({ presentationId }) => presentationId
+    )
+  );
+  const next = made.find(({ presentation }) => available.has(presentation.presentationId));
+  return next ? presentationGroup(all, next, layout) : latestPresentations(all, layout);
+}
+
 /** Return the FIFO current-source candidates not consumed by committed participant actions. */
 export function availablePresentations(
   events: readonly ProjectEvent[],

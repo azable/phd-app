@@ -640,6 +640,9 @@ async function executeProjectCommand(options: {
             focus: options.command.focus,
             presentationCount: options.command.presentationCount,
             ...(options.command.from ? { from: options.command.from } : {}),
+            ...(options.command.fromSuggestion
+              ? { fromSuggestion: options.command.fromSuggestion }
+              : {}),
             ...(options.deadlineAt === undefined
               ? {}
               : { deadlineAt: new Date(options.deadlineAt).toISOString() })

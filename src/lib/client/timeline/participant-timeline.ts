@@ -21,6 +21,8 @@ export type ParticipantTimelineItem =
       actor: 'user' | 'assistant';
       content: MessageContent;
       eventId: number;
+      /** Comparisons the reply suggests, on the newest reply while nothing has answered it. */
+      suggestions?: string[];
     }
   | { id: string; kind: 'presentation'; value: TimelinePresentation }
   | {
@@ -74,6 +76,7 @@ export function participantTimeline(
     ({ presentation }) => presentation.presentationId
   );
   const versions = sourceVersions(events);
+  const suggesting = currentSuggestions(events);
   const variants = Map.groupBy(
     [...presentations.values()].filter(({ presentation }) => isSverlinPresentation(presentation)),
     ({ presentation }) => (presentation as { source: { sha256: string } }).source.sha256
@@ -119,13 +122,16 @@ export function participantTimeline(
             items.push({ id: `load-${event.id}`, kind: 'load', event });
       for (const event of related) {
         if (event.type === 'assistant.responded') {
+          const item = messageItem(
+            `assistant-${event.id}`,
+            'assistant',
+            structureKnownPresentationReferences(event.payload.content, presentationIds),
+            event.id
+          );
           items.push(
-            messageItem(
-              `assistant-${event.id}`,
-              'assistant',
-              structureKnownPresentationReferences(event.payload.content, presentationIds),
-              event.id
-            )
+            suggesting?.eventId === event.id
+              ? { ...item, suggestions: suggesting.suggestions }
+              : item
           );
         }
       }
@@ -202,6 +208,21 @@ export function participantTimeline(
       };
   }
   return items;
+}
+
+/** The newest reply's suggestions, while no message or preference has come after it. */
+function currentSuggestions(
+  events: readonly ProjectEvent[]
+): { eventId: number; suggestions: string[] } | undefined {
+  const reply = events.findLast(
+    (event) =>
+      event.type === 'assistant.responded' ||
+      event.type === 'feedback.submitted' ||
+      event.type === 'visualization.preference-recorded'
+  );
+  return reply?.type === 'assistant.responded' && reply.payload.suggestions
+    ? { eventId: reply.id, suggestions: reply.payload.suggestions }
+    : undefined;
 }
 
 /** The source of an operation's last build that failed on its code, and who wrote it. */

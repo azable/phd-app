@@ -14,6 +14,7 @@ import { PresentationSelection } from './presentation-selection.svelte';
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const setOne = '12345678-1234-4123-8123-123456789abd';
 const setTwo = '12345678-1234-4123-8123-123456789abe';
+const laterOperationId = '12345678-1234-4123-8123-123456789abf';
 const presentationIds = [
   '12345678-1234-4123-8123-123456789ac1',
   '12345678-1234-4123-8123-123456789ac2',
@@ -190,14 +191,37 @@ describe('presentation history', () => {
         .map(({ presentation }) => presentation.presentationId)
     ).toEqual(presentationIds.slice(2));
   });
+
+  it('shows the first of the sets one operation queued until New pair consumes it', () => {
+    const queued = comparisonEvents().map((event) => ({ ...event, operationId }));
+    const shown = (events: ProjectEvent[]) =>
+      new PresentationSelection()
+        .selected(events, 'comparison')
+        .map(({ presentation }) => presentation.presentationId);
+
+    expect(shown(queued)).toEqual(presentationIds.slice(0, 2));
+    expect(
+      shown([
+        ...queued,
+        {
+          id: 5,
+          type: 'visualization.candidates-advanced',
+          actor: { kind: 'user' },
+          operationId: laterOperationId,
+          createdAt: '2026-08-30T00:00:05.000Z',
+          payload: { presentations: presentationIds.slice(0, 2), reason: 'next' }
+        }
+      ])
+    ).toEqual(presentationIds.slice(2));
+  });
 });
 
 function comparisonEvents(): ProjectEvent[] {
   return [
     presentationEvent(1, setOne, 0, presentationIds[0], 1),
     presentationEvent(2, setOne, 1, presentationIds[1], 2),
-    presentationEvent(3, setTwo, 0, presentationIds[2], 3),
-    presentationEvent(4, setTwo, 1, presentationIds[3], 4)
+    presentationEvent(3, setTwo, 0, presentationIds[2], 3, laterOperationId),
+    presentationEvent(4, setTwo, 1, presentationIds[3], 4, laterOperationId)
   ];
 }
 
@@ -206,13 +230,14 @@ function presentationEvent(
   displaySetId: string,
   slot: 0 | 1,
   presentationId: string,
-  seed: number
+  seed: number,
+  presentedBy = operationId
 ): ProjectEventOf<'visualization.presented'> {
   return {
     id,
     type: 'visualization.presented',
     actor: { kind: 'system' },
-    operationId,
+    operationId: presentedBy,
     createdAt: `2026-08-30T00:00:0${id}.000Z`,
     payload: {
       displaySetId,

@@ -45,6 +45,22 @@ describe('participant Timeline projection', () => {
     });
   });
 
+  it('offers the newest reply’s suggestions only until something answers it', () => {
+    const suggested = events().map((event) =>
+      event.type === 'assistant.responded'
+        ? { ...event, payload: { ...event.payload, suggestions: ['cells or tallies'] } }
+        : event
+    );
+    const reply = (values: ProjectEvent[]) =>
+      participantTimeline(values).find(
+        (item) => item.kind === 'message' && item.actor === 'assistant'
+      );
+
+    expect(reply(suggested.slice(0, -1))).toMatchObject({ suggestions: ['cells or tallies'] });
+    // The preference that follows answers it.
+    expect(reply(suggested)).not.toHaveProperty('suggestions');
+  });
+
   it('shows a variant where it was made, after the turn that first showed its source', () => {
     const later = '12345678-1234-4123-8123-123456789ac3';
     const values = events();

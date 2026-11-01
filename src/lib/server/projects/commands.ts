@@ -83,6 +83,7 @@ import {
   defaultProjectServiceDependencies,
   draftEvent,
   freshPresentationSeeds,
+  queueBuiltPresentations,
   randomVariantRequests,
   type ProjectServiceDependencies,
   type RecordedBuild,
@@ -97,6 +98,7 @@ import {
   randomChooser,
   type ChooserId,
   type DesignSource,
+  type VariantChoice,
   type VariantChooser
 } from './choosers';
 import { projectChooserId } from './chooser-config';
@@ -311,6 +313,8 @@ export function queueProjectFeedback(
     presentationCount: 1 | 2;
     /** The candidate the participant is viewing. */
     from?: string;
+    /** The assistant reply whose suggestion the message sends. */
+    fromSuggestion?: EventId;
     deadlineAt?: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -319,6 +323,14 @@ export function queueProjectFeedback(
     assertCurrentProjectOperationActive();
     const before = await dependencies.repository.load(options.projectId);
     assertAcceptedInteraction(before, options.operationId, 'feedback');
+    const suggested = options.fromSuggestion
+      ? before.events[options.fromSuggestion - 1]
+      : undefined;
+    if (
+      options.fromSuggestion &&
+      (suggested?.type !== 'assistant.responded' || !suggested.payload.suggestions)
+    )
+      throw new Error('The message names a reply that made no suggestions.');
     const focus = validateFocus(before, options.focus);
     const content = await validateMessageContent(before, options.content);
     // The assistant revises the source of the candidate the participant is viewing.
@@ -342,7 +354,8 @@ export function queueProjectFeedback(
             content,
             focus,
             presentationCount: options.presentationCount,
-            ...(options.from ? { viewing: options.from } : {})
+            ...(options.from ? { viewing: options.from } : {}),
+            ...(options.fromSuggestion ? { fromSuggestion: options.fromSuggestion } : {})
           }
         }),
         draftEvent({
@@ -695,7 +708,7 @@ async function handleParticipantIntake(
       operationId,
       dependencies,
       [interaction.id],
-      next.id
+      { intakeStep: next.id }
     );
   }
   return { document: current, author: activeParticipantIntakeStep(current) === undefined };
@@ -786,7 +799,7 @@ async function runSverlinAssistantTurn(
     viewedPresentation(document, contextSelection.interactionEventIds ?? [])
   );
   const viewed = Object.keys(viewedVariant).length ? viewedVariant : undefined;
-  let seeds: readonly number[] | undefined;
+  let seeds: number[] = [];
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
 
@@ -825,20 +838,31 @@ async function runSverlinAssistantTurn(
           assistantBotId(generation.generationEvent),
           operationId,
           dependencies,
-          inReplyTo
+          inReplyTo,
+          { suggestions: generation.result.suggestions }
         );
       }
 
       // The source each decision asks to build, if any. Edits apply to the source being revised:
       // the failed candidate when repairing it.
       const { decision } = generation.result;
+      // With a count, that many presentations, in whole sets: the first shows and the rest wait.
+      const queued =
+        'count' in decision && decision.count
+          ? Math.ceil(decision.count / presentationCount) * presentationCount
+          : undefined;
       let candidate: string | undefined;
-      let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] } = {
+      let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
         base: viewed
       };
       switch (decision.action) {
         case 'respond':
+          break;
         case 'resample':
+          if (queued) {
+            candidate = entrySource(current);
+            variant = { base: viewed, randomise: true };
+          }
           break;
         case 'revise':
           candidate = decision.source;
@@ -939,10 +963,19 @@ async function runSverlinAssistantTurn(
         return { document: current, done: false };
       }
 
-      seeds ??= freshPresentationSeeds(presentationCount);
+      // Every attempt builds the same seeds, more of them when a decision asks for more.
+      const size = queued ?? presentationCount;
+      if (seeds.length < size)
+        seeds = [...seeds, ...freshPresentationSeeds(size - seeds.length, seeds)];
+      const batchSeeds = seeds.slice(0, size);
       const randomised = variant.randomise;
-      const requests = basedRequests(seeds, variant.base, variant.chosen).map((request, index) =>
-        index === 0 && randomised?.length
+      const requests = basedRequests(
+        batchSeeds,
+        variant.base,
+        variant.chosen,
+        randomised === true
+      ).map((request, index) =>
+        index === 0 && Array.isArray(randomised) && randomised.length
           ? { ...request, variant: { ...request.variant, randomise: randomised } }
           : request
       );
@@ -952,7 +985,8 @@ async function runSverlinAssistantTurn(
       );
       current = built.document;
       if (batchSucceeded(built.recorded)) {
-        // A new source's presentations show the variants the chooser picks from its design space.
+        // A new source's presentations, and those a decision with a count queues, show the
+        // variants the chooser picks from its design space; the first build stands if it fails.
         const shown =
           decision.action === 'revise' || decision.action === 'edit'
             ? await chosenBuild(
@@ -961,13 +995,30 @@ async function runSverlinAssistantTurn(
                   recorded: built.recorded,
                   candidate,
                   summary: decision.summary,
-                  seeds,
+                  seeds: batchSeeds,
                   operationId,
                   attempt
                 },
                 dependencies
               )
-            : { document: current, recorded: built.recorded };
+            : queued
+              ? await chosenBuild(
+                  {
+                    document: current,
+                    recorded: built.recorded,
+                    candidate,
+                    ...('summary' in decision ? { summary: decision.summary } : {}),
+                    seeds: batchSeeds,
+                    operationId,
+                    attempt,
+                    asItIs: {
+                      base: { ...variant.base, ...variant.chosen },
+                      fixed: variant.chosen ?? {}
+                    }
+                  },
+                  dependencies
+                )
+              : { document: current, recorded: built.recorded };
         current = shown.document;
         assertCurrentProjectOperationActive();
         return {
@@ -981,7 +1032,8 @@ async function runSverlinAssistantTurn(
               operationId,
               recovery: generation.result.recovery,
               recoveryReply: generation.result.reply,
-              inReplyTo
+              inReplyTo,
+              ...(queued ? { setSize: presentationCount } : {})
             },
             dependencies
           ),
@@ -1260,6 +1312,7 @@ async function runSverlinGeneration(
         reply: result.reply,
         decision: result.decision,
         recovery: result.recovery ?? null,
+        suggestions: result.suggestions ?? [],
         generation: result.generation
       })
     },
@@ -1478,6 +1531,11 @@ async function chosenBuild(
     seeds: readonly number[];
     operationId: string;
     attempt: number;
+    /**
+     * More variants of the source as it is, as a vary or resample with a count asks: from the
+     * viewed variant with the values the assistant fixes, which every variant keeps.
+     */
+    asItIs?: { base?: DesignValues; fixed: DesignValues };
   },
   dependencies: ProjectCommandDependencies
 ): Promise<{ document: ProjectDocument; recorded: RecordedBuildBatch }> {
@@ -1487,27 +1545,47 @@ async function chosenBuild(
   const chooser = await projectChooser(options.document.projectId, dependencies);
   // With the random draw, the first build already keeps what was viewed and draws what is new.
   if (chooser.id === 'random' || !bundle?.variant) return firstBuild;
+  const asItIs = options.asItIs;
+  const viewed = asItIs?.base && Object.keys(asItIs.base).length ? asItIs.base : undefined;
+  const seen = asItIs
+    ? differences(
+        sourcePresentations(options.document, sourceSha256(options.candidate))
+          .slice(-recentlySeen)
+          .reverse()
+          .flatMap(({ variant }) => (variant ? [variant] : [])),
+        viewed
+      )
+    : [];
   const chosen = await chooseVariants(chooser, {
     document: options.document,
-    purpose: 'new-source',
+    purpose: asItIs ? 'resample' : 'new-source',
     source: options.candidate,
     ...(options.summary ? { summary: options.summary } : {}),
     count: options.seeds.length,
-    design: bundle,
-    seen: [],
-    settled: settledValues(options.document.events),
+    design: viewed ? { ...bundle, variant: { ...bundle.variant, ...viewed } } : bundle,
+    seen,
+    settled: { ...settledValues(options.document.events), ...asItIs?.fixed },
     operationId: options.operationId,
     attempt: options.attempt
   });
   if (chosen.chooser === 'random') return { ...firstBuild, document: chosen.document };
   // The first build's values kept from the viewed variant, not those it took from the starter, so
   // the rebuild's starter values are still recorded as the starter's.
-  const base = bundle.origins
-    ? Object.fromEntries(
-        Object.entries(bundle.variant).filter(([key]) => bundle.origins?.[key] !== 'starter')
+  const base = asItIs
+    ? viewed
+    : bundle.origins
+      ? Object.fromEntries(
+          Object.entries(bundle.variant).filter(([key]) => bundle.origins?.[key] !== 'starter')
+        )
+      : bundle.variant;
+  const choices = asItIs
+    ? distinctChoices(
+        chosen.choices.map((choice) => keeping(choice, asItIs.fixed)),
+        base,
+        seen
       )
-    : bundle.variant;
-  const requests = chosenRequests(options.seeds, designVariables(bundle), base, chosen.choices);
+    : chosen.choices;
+  const requests = chosenRequests(options.seeds, designVariables(bundle), base, choices);
   const rebuilt = await buildCandidateBatch(
     {
       document: chosen.document,
@@ -1521,6 +1599,43 @@ async function chosenBuild(
   return batchSucceeded(rebuilt.recorded)
     ? { document: rebuilt.document, recorded: rebuilt.recorded }
     : { document: rebuilt.document, recorded: options.recorded };
+}
+
+/** A choice with the values the assistant fixed, which it neither changes nor draws afresh. */
+function keeping(choice: VariantChoice, fixed: DesignValues): VariantChoice {
+  const randomise =
+    choice.randomise === true || choice.randomise === undefined
+      ? choice.randomise
+      : choice.randomise.filter((key) => !(key in fixed));
+  return { chosen: { ...choice.chosen, ...fixed }, ...(randomise ? { randomise } : {}) };
+}
+
+/**
+ * Choices apart from each other and from the variants seen: one that draws nothing afresh and sets
+ * no value apart from the base, or the same values as an earlier choice or a seen variant, draws
+ * the rest at random instead.
+ */
+function distinctChoices(
+  choices: readonly VariantChoice[],
+  base: DesignValues | undefined,
+  seen: readonly DesignValues[]
+): VariantChoice[] {
+  const key = (values: DesignValues) =>
+    JSON.stringify(
+      Object.entries(values)
+        .filter(([variable, value]) => base?.[variable] !== value)
+        .sort(([left], [right]) => left.localeCompare(right))
+    );
+  const taken = new Set([key({}), ...seen.map(key)]);
+  return choices.map((choice) => {
+    const draws = choice.randomise === true || !!choice.randomise?.length;
+    const values = key(choice.chosen);
+    if (draws || !taken.has(values)) {
+      taken.add(values);
+      return choice;
+    }
+    return { ...choice, randomise: true };
+  });
 }
 
 /** The entry artifact's source in a project's newest state. */
@@ -1541,6 +1656,8 @@ async function acceptSverlinCandidate(
     recovery?: RecoveryExplanation;
     recoveryReply: GeneratedMessageContent;
     inReplyTo: readonly EventId[];
+    /** Presentations shown at once, when the batch is queued (queueBuiltPresentations). */
+    setSize?: 1 | 2;
   },
   dependencies: ProjectCommandDependencies
 ) {
@@ -1571,11 +1688,18 @@ async function acceptSverlinCandidate(
         ],
     dependencies.projectService
   );
-  document = await activateBuiltPresentations(
-    { ...options.recorded, document },
-    dependencies.projectService,
-    options.generationEvent.actor
-  );
+  document = options.setSize
+    ? await queueBuiltPresentations(
+        { ...options.recorded, document },
+        options.setSize,
+        dependencies.projectService,
+        options.generationEvent.actor
+      )
+    : await activateBuiltPresentations(
+        { ...options.recorded, document },
+        dependencies.projectService,
+        options.generationEvent.actor
+      );
   if (!options.recovery) return document;
   return appendAssistantResponse(
     document,
@@ -1784,7 +1908,10 @@ function appendAssistantResponse(
   operationId: string,
   dependencies: ProjectCommandDependencies,
   inReplyTo: readonly EventId[] = [],
-  intakeStep?: ParticipantIntakeStepId
+  {
+    intakeStep,
+    suggestions
+  }: { intakeStep?: ParticipantIntakeStepId; suggestions?: readonly string[] } = {}
 ) {
   return appendProjectEvents(
     document,
@@ -1796,7 +1923,8 @@ function appendAssistantResponse(
         payload: {
           content: typeof content === 'string' ? markdownMessage(content) : content,
           ...(inReplyTo.length > 0 ? { inReplyTo: [...inReplyTo] } : {}),
-          ...(intakeStep ? { intakeStep } : {})
+          ...(intakeStep ? { intakeStep } : {}),
+          ...(suggestions?.length ? { suggestions: [...suggestions] } : {})
         }
       })
     ],

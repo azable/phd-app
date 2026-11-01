@@ -41,6 +41,8 @@
     onChooseFailure?: (
       failure: { eventId: number; source: string; by: 'assistant' | 'save' } | undefined
     ) => void;
+    /** Send a reply's suggestion as the participant's message, or undefined where none can be sent. */
+    onSuggestion?: (suggestion: string, replyEventId: number) => void;
   };
 
   let {
@@ -57,7 +59,8 @@
     chosenRequest,
     onChooseRequest = () => {},
     chosenFailure,
-    onChooseFailure = () => {}
+    onChooseFailure = () => {},
+    onSuggestion
   }: Props = $props();
   let viewport = $state<HTMLElement | null>(null);
   let timelineEnd = $state<HTMLElement | null>(null);
@@ -119,6 +122,7 @@
         {onChooseRequest}
         {chosenFailure}
         {onChooseFailure}
+        {onSuggestion}
       />
       <li class="h-px" aria-hidden="true"><span bind:this={timelineEnd}></span></li>
     </ol>

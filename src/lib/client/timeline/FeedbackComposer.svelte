@@ -74,21 +74,33 @@
     insertReferences(selectionReferences(selection));
   }
 
-  async function submit(event: SubmitEvent) {
-    event.preventDefault();
-    if (!editor || !session.atHead || session.pending || session.readOnly) return;
-    const editorContent = serializeEditor();
-    if (editorContent.length === 0) return;
+  /** Send a reply's suggestion as the participant's message, as typed one is, leaving the draft. */
+  export async function sendSuggestion(suggestion: string, replyEventId: number): Promise<void> {
+    if (!(await send([{ type: 'markdown', text: suggestion }], replyEventId))) return;
+    session.focusedEvents = [];
+    onSubmitted();
+  }
+
+  async function send(editorContent: MessageContent, fromSuggestion?: number): Promise<boolean> {
+    if (!session.atHead || session.pending || session.readOnly) return false;
     const content = feedbackSubmissionContent(editorContent, automaticContext);
     const from = base ?? baseCandidate(presentations);
-    const succeeded = await session.runCommand({
+    return session.runCommand({
       type: 'feedback',
       content,
       focus: session.focusedEvents,
       presentationCount,
-      ...(from ? { from } : {})
+      ...(from ? { from } : {}),
+      ...(fromSuggestion ? { fromSuggestion } : {})
     });
-    if (succeeded) {
+  }
+
+  async function submit(event: SubmitEvent) {
+    event.preventDefault();
+    if (!editor) return;
+    const editorContent = serializeEditor();
+    if (editorContent.length === 0) return;
+    if (await send(editorContent)) {
       editorRevision += 1;
       hasContent = false;
       hasExplicitReferences = false;

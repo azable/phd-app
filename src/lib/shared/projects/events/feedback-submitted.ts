@@ -16,6 +16,8 @@ export const feedbackSubmittedEventSchema = v.object({
     focus: v.array(positiveSchema),
     presentationCount: v.optional(v.picklist([1, 2])),
     /** The presentation the participant was viewing, whose variant the turn builds on. */
-    viewing: v.optional(presentationIdSchema)
+    viewing: v.optional(presentationIdSchema),
+    /** The assistant reply whose suggestion the participant sent, by its event id. */
+    fromSuggestion: v.optional(positiveSchema)
   })
 });

@@ -291,3 +291,44 @@ describe('design variables in the AI context', () => {
     expect(design.options.layout).toEqual(['column', 'row']);
   });
 });
+
+describe('suggestions in the conversation', () => {
+  it('gives the assistant its earlier suggestions and marks a message chosen from them', () => {
+    const value = document();
+    const at = value.events.length;
+    value.events.push(
+      {
+        id: at + 1,
+        type: 'assistant.responded',
+        operationId,
+        actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+        createdAt: '2026-01-01T00:00:08.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Which reads better?' }],
+          suggestions: ['cells or tallies', 'with and without the listing']
+        }
+      },
+      {
+        id: at + 2,
+        type: 'feedback.submitted',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:09.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'cells or tallies' }],
+          focus: [],
+          fromSuggestion: at + 1
+        }
+      }
+    );
+
+    expect(projectConversationMessages(value.events).slice(-2)).toEqual([
+      {
+        role: 'assistant',
+        content:
+          'Which reads better?\n\n[Suggested comparisons, offered as buttons: cells or tallies; with and without the listing]'
+      },
+      { role: 'user', content: '[Chosen from your suggestions] cells or tallies' }
+    ]);
+  });
+});

@@ -42,7 +42,7 @@ import {
   presentationVariant
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
-import { presentationBufferState } from '$lib/shared/projects/presentation-buffer';
+import { presentationBufferState, waitingBehind } from '$lib/shared/projects/presentation-buffer';
 import { activeProjectOperation } from '$lib/shared/projects/operations';
 import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
 import { assistantIntroduction } from '$lib/server/chat-bots/registry';
@@ -273,6 +273,33 @@ export function buildProjectPresentations(
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
     const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
+    // Variants the assistant queued behind the shown set come next: consuming it shows them.
+    if (!('seed' in options) && options.from) {
+      const buffer = presentationBufferState(before, 0);
+      const shown = buffer.available.find(({ presentationId }) => presentationId === options.from);
+      if (shown && waitingBehind(buffer, shown.presentationId).length) {
+        const set = buffer.available.filter(
+          (entry) =>
+            entry === shown || (!!shown.displaySetId && entry.displaySetId === shown.displaySetId)
+        );
+        const document = await appendProjectEvents(
+          before,
+          [
+            draftEvent({
+              type: 'visualization.candidates-advanced',
+              actor: { kind: 'user' },
+              operationId: options.operationId,
+              payload: {
+                presentations: set.map(({ presentationId }) => presentationId),
+                reason: 'next'
+              }
+            })
+          ],
+          dependencies
+        );
+        return commandResult(before, document);
+      }
+    }
     const based = options.from
       ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
       : before;
@@ -1129,6 +1156,46 @@ export async function activateBuiltPresentations(
   );
 }
 
+/**
+ * Present a successful batch as display sets of setSize, in order, after consuming what the buffer
+ * of the current source still holds: the first set shows, and the rest wait in the buffer behind
+ * it, each shown once the one before is consumed (Next pair, New pair, or a preference).
+ */
+export async function queueBuiltPresentations(
+  recorded: RecordedBuildBatch,
+  setSize: 1 | 2,
+  dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies,
+  actor: NewProjectEvent<'visualization.presented'>['actor'] = { kind: 'system' }
+): Promise<ProjectDocument> {
+  const operationId = recorded.builds[0]?.operationId;
+  if (!operationId) throw new Error('Only a complete successful build batch can be presented.');
+  const waiting = presentationBufferState(recorded.document, 0).available;
+  let document = await appendProjectEvents(
+    recorded.document,
+    Array.from({ length: Math.ceil(waiting.length / 2) }, (_, index) =>
+      draftEvent({
+        type: 'visualization.candidates-advanced',
+        actor: { kind: 'system' },
+        operationId,
+        payload: {
+          presentations: waiting
+            .slice(index * 2, index * 2 + 2)
+            .map(({ presentationId }) => presentationId),
+          reason: 'agent-request'
+        }
+      })
+    ),
+    dependencies
+  );
+  for (let start = 0; start < recorded.builds.length; start += setSize)
+    document = await activateBuiltPresentations(
+      { document, builds: recorded.builds.slice(start, start + setSize) },
+      dependencies,
+      actor
+    );
+  return document;
+}
+
 function artifactVersionEvent(options: {
   operationId: string;
   origin: ArtifactVersionOrigin;
@@ -1155,7 +1222,7 @@ function artifactVersionEvent(options: {
 }
 
 /** Choose distinct positive seeds for one server-owned presentation generation. */
-export function freshPresentationSeeds(count: 1 | 2, excluded: readonly number[] = []): number[] {
+export function freshPresentationSeeds(count: number, excluded: readonly number[] = []): number[] {
   const blocked = new Set(excluded);
   const seeds: number[] = [];
   while (seeds.length < count) {

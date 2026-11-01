@@ -84,7 +84,18 @@ if choosing fails; after a manual change the first presentation keeps the viewed
 variant's values and the second is randomised; refills of the presentation
 buffer stay random, as most are never shown; the assistant's `vary` decision
 sets values without changing the source
-([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). Every
+([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
+`count` (at most 8, in whole pairs), a `vary` or `resample` makes that many, the
+chooser filling each around the values the `vary` sets, and queues them in the
+presentation buffer: what it held is consumed, the first pair shows, and each
+Next pair, or New pair in dev mode, consumes the shown pair to show the next
+(`queueBuiltPresentations`, `waitingBehind` in
+[`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). The
+assistant's reply may carry suggestions, comparisons worth making, stored on its
+`assistant.responded` event and shown under the newest reply as buttons until a
+message or preference answers it (three, the rest behind More); a click sends
+one as the participant's message, its `feedback.submitted` naming the reply in
+`fromSuggestion`, and the assistant sees both in its conversation. Every
 presentation currently shows every master step. Every array and object is made
 by a collection or record type the domain block defines, and each step records
 the domain type of every value by path beside its plain values. Every view is

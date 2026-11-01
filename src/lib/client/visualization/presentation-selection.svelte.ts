@@ -6,7 +6,7 @@ import { isSverlinPresentation, type PresentationLayout } from '$lib/shared/pres
 import {
   availablePresentations,
   compatibleSverlinPair,
-  latestPresentations,
+  newestPresentations,
   presentationsById,
   timelinePresentations,
   type TimelinePresentation
@@ -92,7 +92,7 @@ export class PresentationSelection {
   ): TimelinePresentation[] {
     return this.buffered
       ? availablePresentations(events, layout)
-      : latestPresentations(all, layout);
+      : newestPresentations(events, layout);
   }
 
   /** In single view, Shift adds a compatible second variant and switches to comparison. */

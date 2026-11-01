@@ -631,6 +631,10 @@
                     sourceLinks.show(failure.source, diagnosticRanges(failure.source, problems));
                   }
                 }}
+                onSuggestion={!expired && !session.readOnly
+                  ? (suggestion, replyEventId) =>
+                      feedbackComposer?.sendSuggestion(suggestion, replyEventId)
+                  : undefined}
               />
               {#if !expired && !session.readOnly}
                 <FeedbackComposer

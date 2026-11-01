@@ -19,17 +19,42 @@ const summary = v.pipe(
   )
 );
 
+/** The most presentations one vary or resample makes: four pairs. */
+export const maximumVariants = 8;
+
+/**
+ * How many presentations to make, filled by the project's chooser; the first pair shows and the rest
+ * wait for New pair. Optional (null in the strict response) for one pair as before.
+ */
+const count = v.optional(
+  v.nullable(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(2),
+      v.maxValue(maximumVariants),
+      v.description(
+        'How many presentations to make, one per option compared (four views of a type, 4; a yes or no, 2), or null for one pair as before. The first pair shows; the rest wait for New pair.'
+      )
+    )
+  )
+);
+
 /** Every decision, by its action. */
 export const sourceDecisions = {
   /** A reply alone: the source and its presentations stay as they are. */
   respond: v.strictObject({ action: v.literal('respond') }),
 
-  /** New presentations of the source as it is, every value randomised. */
-  resample: v.strictObject({ action: v.literal('resample') }),
+  /**
+   * New presentations of the source as it is: the next pair, every value randomised, or with a
+   * count, that many the chooser fills.
+   */
+  resample: v.strictObject({ action: v.literal('resample'), count }),
 
   /**
    * New presentations of the source as it is, with values for some of its variables: the rest keep
-   * the viewed variant's values in the first presentation, except those to randomise.
+   * the viewed variant's values in the first presentation, except those to randomise; with a count,
+   * every presentation takes the values and the chooser fills the rest.
    */
   vary: v.strictObject({
     action: v.literal('vary'),
@@ -52,6 +77,7 @@ export const sourceDecisions = {
       v.array(v.string()),
       v.description('Variables, by key, to give fresh random values.')
     ),
+    count,
     summary
   }),
 
@@ -98,7 +124,19 @@ export type SourceDecisionOf<Action extends SourceDecision['action']> = Extract<
  * The decisions as JSON Schema, for the response format sent to the model. Checks JSON Schema
  * cannot state, such as trimming, are left to the parser.
  */
-export const sourceDecisionJsonSchema = toJsonSchema(sourceDecisionSchema, {
-  errorMode: 'ignore',
-  target: 'draft-07'
-}) as Record<string, unknown>;
+export const sourceDecisionJsonSchema = everyPropertyRequired(
+  toJsonSchema(sourceDecisionSchema, { errorMode: 'ignore', target: 'draft-07' })
+) as Record<string, unknown>;
+
+/** Strict structured outputs require every property, so an optional one is sent as null. */
+function everyPropertyRequired(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(everyPropertyRequired);
+  if (!schema || typeof schema !== 'object') return schema;
+  const object: Record<string, unknown> = Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [key, everyPropertyRequired(value)])
+  );
+  const properties = object.properties;
+  return object.type === 'object' && properties && typeof properties === 'object'
+    ? { ...object, required: Object.keys(properties) }
+    : object;
+}

@@ -83,6 +83,8 @@ describe('single-component Svelte assistant', () => {
         recovery: null
       });
     expect(parse({ action: 'resample' })).toMatchObject({ decision: { action: 'resample' } });
+    expect(parse({ action: 'resample', count: 4 })).toMatchObject({ decision: { count: 4 } });
+    expect(parse({ action: 'resample', count: null })).toMatchObject({ decision: { count: null } });
     expect(
       parse({
         action: 'vary',
@@ -108,9 +110,38 @@ describe('single-component Svelte assistant', () => {
       { action: 'respond', source: '<h1>Hello</h1>' },
       { action: 'revise', source: ' ', summary: 'Nothing' },
       { action: 'edit', edits: [], summary: 'Nothing' },
+      { action: 'resample', count: 9 },
+      { action: 'resample', count: 2.5 },
       { action: 'rewrite' }
     ])
       expect(() => parse(invalid)).toThrow(/invalid structured response/i);
+  });
+
+  it('requires every decision field in the strict response, a count as null when not wanted', () => {
+    const decision = (aiAssistant.responseFormat.schema as { properties: { decision: unknown } })
+      .properties.decision as {
+      oneOf: { properties: Record<string, unknown>; required: string[] }[];
+    };
+    for (const option of decision.oneOf)
+      expect(option.required.toSorted()).toEqual(Object.keys(option.properties).toSorted());
+    expect(decision.oneOf.find(({ properties }) => 'count' in properties)).toBeDefined();
+  });
+
+  it('keeps at most twelve non-blank suggestions', () => {
+    const parse = (suggestions: unknown) =>
+      aiAssistant.parseOutput({
+        reply: [{ type: 'markdown', text: 'Done.' }],
+        decision: { action: 'respond' },
+        recovery: null,
+        suggestions
+      });
+    expect(parse([])).not.toHaveProperty('suggestions');
+    expect(parse([' cells or tallies ', '  ', 'with the listing'])).toMatchObject({
+      suggestions: ['cells or tallies', 'with the listing']
+    });
+    expect(
+      parse(Array.from({ length: 14 }, (_, index) => `option ${index}`)).suggestions
+    ).toHaveLength(12);
   });
 
   it('rejects unsupported message content in assistant discussion', () => {
