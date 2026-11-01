@@ -64,13 +64,10 @@
   let loaded = $state(false);
   // Whether the page shows its first step: it lays every step out before showing any.
   let ready = $state(false);
-  // Whether the page can describe its steps as scene data; pages built before it could never say so.
-  let describes = $state(false);
   $effect(() => {
     void document;
     loaded = false;
     ready = false;
-    describes = false;
   });
 
   // Requests for the page's scene, answered by the page with the request's id.
@@ -98,10 +95,6 @@
   function describeScene(): Promise<SverlinScene> {
     const page = iframe?.contentWindow;
     if (!page || !loaded) return Promise.reject(new Error('The visualization has not loaded yet.'));
-    if (!describes)
-      return Promise.reject(
-        new Error('This visualization was built before scene export. Build it again to export it.')
-      );
     const request = crypto.randomUUID();
     const { presentationId, seed, labels, variant } = presentation;
     return new Promise<SverlinScene>((resolve, reject) => {
@@ -252,8 +245,6 @@
       if (!iframe || event.source !== iframe.contentWindow) return;
       const data = event.data as {
         type?: unknown;
-        reportsReady?: unknown;
-        describes?: unknown;
         request?: unknown;
       } & Partial<Record<keyof CanvasView, unknown>>;
       if (data?.type === 'sverlin:scene') {
@@ -293,16 +284,8 @@
       }
       if (data?.type === 'sverlin:loaded') {
         loaded = true;
-        describes = data.describes === true;
         loadedAt = sinceLoad();
         frameAtLoad = frameBox();
-        // Presentations built before pages reported readiness never say so; stop waiting for them.
-        // Newer pages always report it, however long laying out their steps takes.
-        if (data.reportsReady === true) return;
-        const waiting = document;
-        setTimeout(() => {
-          if (document === waiting) ready = true;
-        }, 4000);
         return;
       }
       if (data?.type === 'sverlin:ready') {

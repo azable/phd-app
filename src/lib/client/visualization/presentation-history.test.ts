@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
+import type { DesignValues } from '$lib/shared/presentations';
 
 import {
   availablePresentations,
@@ -312,7 +313,7 @@ function scenarioPresentationEvent(
 describe('candidate identifiers', () => {
   const candidate = (
     seed: number,
-    parameters: Record<string, unknown>,
+    variant: DesignValues,
     source = 'source',
     sha256 = 'a'.repeat(64)
   ) => {
@@ -320,19 +321,19 @@ describe('candidate identifiers', () => {
     if (presentation.format !== 'browser-bundle-v1') throw new Error('Expected a Sverlin bundle.');
     return candidateId({
       ...presentation,
-      parameters,
+      variant,
       source: { ...presentation.source, text: source, sha256 }
     });
   };
 
   it('names the source by its hash and the values its random variables took, not the seed', () => {
-    const drawn = { Int: 'IntCard', __defaults: { gap: 'small', font: 'serif' } };
+    const drawn = { 'views.Int': 'IntCard', 'IntCard.gap': 8, 'IntCard.font': 'serif' };
     const first = candidate(1, drawn);
     expect(first.source).toBe('aaaaaa');
-    expect(candidate(2, { __defaults: { font: 'serif', gap: 'small' }, Int: 'IntCard' })).toEqual(
-      first
-    );
-    expect(candidate(1, { ...drawn, Int: 'IntCell' }).values).not.toBe(first.values);
+    expect(
+      candidate(2, { 'IntCard.font': 'serif', 'IntCard.gap': 8, 'views.Int': 'IntCard' })
+    ).toEqual(first);
+    expect(candidate(1, { ...drawn, 'views.Int': 'IntCell' }).values).not.toBe(first.values);
     expect(candidate(1, drawn, 'source', 'b'.repeat(64)).source).toBe('bbbbbb');
   });
 

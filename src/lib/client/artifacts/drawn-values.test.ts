@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
-import type { DesignDraw } from '$lib/shared/presentations';
-
 import {
-  drawnMarkers,
   pauseGhosts,
   drawnValues,
   ghostRowAt,
@@ -16,80 +13,25 @@ import {
   tagGhosts,
   unchosenLayouts,
   unchosenViews,
-  valueText,
   viewMarkers
 } from './drawn-values';
 import { setRevealed, setRevealedKeys } from './source-reveal';
 
-const doc = 'const accent = pick(["red", "blue"]); const size = real(1, 2);';
-const at = (text: string) => ({ start: doc.indexOf(text), end: doc.indexOf(text) + text.length });
-const accent = (value: string): DesignDraw => ({
-  key: 'accent',
-  call: 'pick',
-  args: [['red', 'blue']],
-  value,
-  ...at('pick(["red", "blue"])')
-});
-const size: DesignDraw = {
-  key: 'size',
-  call: 'real',
-  args: [1, 2],
-  value: 1.23456,
-  ...at('real(1, 2)')
-};
-
 describe('drawn value markers', () => {
-  it('gives each draw call the value every shown presentation drew, and whether they differ', () => {
-    const state = EditorState.create({ doc });
-    const markers = drawnMarkers(state, [
-      { label: 'top', seed: 1, draws: [accent('red'), size] },
-      { label: 'bottom', seed: 2, draws: [accent('blue'), size] }
-    ]);
-    expect(
-      markers.map(({ from, to, differs }) => ({ text: doc.slice(from, to), differs }))
-    ).toEqual([
-      { text: 'pick(["red", "blue"])', differs: true },
-      { text: 'real(1, 2)', differs: false }
-    ]);
-    expect(markers[0].values.map(({ label, text }) => `${label} ${text}`)).toEqual([
-      'top "red"',
-      'bottom "blue"'
-    ]);
-  });
-
-  it('says how each value came about', () => {
-    const markers = drawnMarkers(EditorState.create({ doc }), [
-      {
-        seed: 7,
-        draws: [
-          { ...accent('red'), origin: 'chosen' },
-          { ...size, origin: 'kept' }
-        ]
-      },
-      { seed: 8, draws: [accent('blue'), size] }
-    ]);
-    expect(markers.flatMap(({ values }) => values.map(({ title }) => title))).toEqual([
-      'accent = "red", chosen',
-      'accent = "blue", drawn by seed 8',
-      'size = 1.23456, kept from the viewed variant',
-      'size = 1.23456, drawn by seed 8'
-    ]);
-  });
-
-  it('drops the markers of calls a replaced document no longer has', () => {
-    const marked = EditorState.create({ doc, extensions: [drawnValues] }).update({
-      effects: setDrawnValues.of({ presentations: [{ seed: 1, draws: [accent('red'), size] }] })
+  it('drops the markers of renders a replaced document no longer has', () => {
+    const marked = EditorState.create({
+      doc: '<Node>{@render Int(target)}</Node>',
+      extensions: [drawnValues]
+    }).update({
+      effects: setDrawnValues.of({
+        presentations: [{ seed: 1, variant: { 'views.Int': 'IntCell' } }]
+      })
     }).state;
     expect(() =>
       marked.update({
         changes: { from: 0, to: marked.doc.length, insert: '@done[let n = Int(0);]' }
       })
     ).not.toThrow();
-  });
-
-  it('skips draws that do not fit the document', () => {
-    const state = EditorState.create({ doc: 'const accent = 1;' });
-    expect(drawnMarkers(state, [{ seed: 1, draws: [accent('red'), size] }])).toEqual([]);
   });
 
   it('sums up a tag’s ghost props in its chip, naming those a pair drew differently', () => {
@@ -103,12 +45,6 @@ describe('drawn value markers', () => {
       'Here[current] · fill differs'
     );
     expect(ghostSummary([prop('fill')], ['Here[a]', 'Here[b]', 'Here[c]'])).toBe('Here[a] +2');
-  });
-
-  it('shortens reals and long values', () => {
-    expect(valueText(1.23456)).toBe('1.23');
-    expect(valueText(3)).toBe('3');
-    expect(valueText('x'.repeat(40))).toHaveLength(32);
   });
 
   describe('views no presentation drew', () => {
@@ -130,8 +66,8 @@ describe('drawn value markers', () => {
     it('greys out each view of a type no shown presentation chose', () => {
       expect(
         greyed(views, [
-          { label: 'top', seed: 1, draws: [], views: options, variant: showing('IntDots') },
-          { label: 'bottom', seed: 2, draws: [], views: options, variant: showing('IntCell') }
+          { label: 'top', seed: 1, views: options, variant: showing('IntDots') },
+          { label: 'bottom', seed: 2, views: options, variant: showing('IntCell') }
         ])
       ).toEqual([
         { view: 'IntTally', whole: true, title: 'Not drawn: views.Int is IntDots and IntCell' }
@@ -143,7 +79,6 @@ describe('drawn value markers', () => {
         greyed(views, [
           {
             seed: 1,
-            draws: [],
             views: options,
             variant: { ...showing('IntDots'), 'views.Int@target': 'IntTally' }
           }
@@ -153,9 +88,9 @@ describe('drawn value markers', () => {
 
     it('keeps views rendered directly', () => {
       const direct = `${views}\n{@render IntTally(target)}`;
-      expect(
-        greyed(direct, [{ seed: 1, draws: [], views: options, variant: showing('IntDots') }])
-      ).toEqual([{ view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }]);
+      expect(greyed(direct, [{ seed: 1, views: options, variant: showing('IntDots') }])).toEqual([
+        { view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }
+      ]);
     });
 
     it('greys out a node every shown presentation left out, from its tag to its closing tag', () => {
@@ -166,31 +101,23 @@ describe('drawn value markers', () => {
         leftOutNodes(doc, presentations).map(({ from, to }) => markup.slice(from, to));
       expect(
         left([
-          { seed: 1, draws: [], leftOut: ['2:15', '2:25'] },
-          { seed: 2, draws: [], leftOut: ['2:15'] }
+          { seed: 1, leftOut: ['2:15', '2:25'] },
+          { seed: 2, leftOut: ['2:15'] }
         ])
       ).toEqual(['<Node>key <Node>{x}</Node></Node>']);
       // One presentation drawing it, or one that recorded nothing, greys nothing.
       expect(
         left([
-          { seed: 1, draws: [], leftOut: ['2:15'] },
-          { seed: 2, draws: [], leftOut: [] }
+          { seed: 1, leftOut: ['2:15'] },
+          { seed: 2, leftOut: [] }
         ])
       ).toEqual([]);
-      expect(
-        left([
-          { seed: 1, draws: [], leftOut: ['2:15'] },
-          { seed: 2, draws: [] }
-        ])
-      ).toEqual([]);
+      expect(left([{ seed: 1, leftOut: ['2:15'] }, { seed: 2 }])).toEqual([]);
     });
 
     it('leaves views be beside a presentation that recorded no variant', () => {
       expect(
-        greyed(views, [
-          { seed: 1, draws: [], views: options, variant: showing('IntDots') },
-          { seed: 2, draws: [] }
-        ])
+        greyed(views, [{ seed: 1, views: options, variant: showing('IntDots') }, { seed: 2 }])
       ).toEqual([]);
     });
   });
@@ -210,7 +137,6 @@ describe('variant markers', () => {
     {
       label: 'top',
       seed: 1,
-      draws: [],
       variant: variant('amber-100'),
       origins: { 'Here.Pointed.fill': 'starter' },
       kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
@@ -218,7 +144,6 @@ describe('variant markers', () => {
     {
       label: 'bottom',
       seed: 2,
-      draws: [],
       variant: variant('blue-100'),
       origins: { 'Here.Pointed.fill': 'random' },
       kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
@@ -271,7 +196,6 @@ describe('variant markers', () => {
     const shown = [
       {
         seed: 1,
-        draws: [],
         variant: { layout: 'Side', 'Side.ratio': '16:9', 'Side.gap': 1, 'Stacked.ratio': '4:3' },
         kinds: { '2:3': ['Side'], '5:3': ['Stacked'] }
       }
@@ -393,7 +317,6 @@ describe('place values', () => {
   };
   const presentation = {
     seed: 1,
-    draws: [],
     variant,
     views: { Int: ['IntCell'], Index: ['IndexText'] },
     pointers: { Index: ['Highlight', 'Arrow'] },

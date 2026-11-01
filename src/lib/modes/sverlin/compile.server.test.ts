@@ -715,7 +715,7 @@ describe('single-component Svelte compilation', () => {
 describe('pointers', () => {
   /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
   const view = (parts: string, renders = '') =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">let i = Position(0);</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}${parts}{#layout Main}<Node>{@render Values(values)}\n${renders}</Node>{/layout}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">let i = Position(0);</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}${parts}{#layout Main}<Node>{@render Values(values)}${renders}</Node>{/layout}`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
@@ -1184,7 +1184,7 @@ describe('views of what a step computed', () => {
       chosen: {
         'pause@sweep': 'off',
         'pause@sweep.pair': 'off',
-        'pause@sweep.pair.test': false
+        'pause@sweep.pair.test': 'off'
       }
     });
     expect(paced.labels).toHaveLength(7);
@@ -1462,28 +1462,6 @@ describe('pauses at labels', () => {
       expect(apart['listing.lit@insert.swap.to.fill']).toBe('red-200');
     });
 
-    it('reads a variant saved with two levels as the current level’s look', () => {
-      const { design } = prepareSvelteComponent(insertion);
-      const { values } = buildVariant(
-        design.space,
-        design.starter,
-        {
-          base: {
-            'listing.current.fill': 'sky-200',
-            'listing.current.radius': 999,
-            'listing.earlier.fill': 'neutral-100',
-            'listing.current@insert.swap.to.fill': 'red-200'
-          }
-        },
-        1,
-        design.fallbacks
-      );
-      expect(values['listing.lit.fill']).toBe('sky-200');
-      expect(values['listing.lit.radius']).toBe(999);
-      expect(values['listing.lit@insert.swap.to.fill']).toBe('red-200');
-      expect(values).not.toHaveProperty('listing.earlier.fill');
-    });
-
     it('hands the page each region by its label’s full name', async () => {
       const prepared = prepareSvelteComponent(insertion);
       expect(prepared.listings?.code.regions.map(({ label }) => label)).toEqual([
@@ -1690,41 +1668,10 @@ describe('pauses accumulate', () => {
     );
   });
 
-  it('read a pause saved as true or false as switched on in its first way, or off', async () => {
-    const saved = await bundlePresentation(insertion, 1, {
-      chosen: { 'pause@insert.compare.left': true, 'pause@insert.compare': false }
-    });
-    const named = await bundlePresentation(insertion, 1, {
-      chosen: { 'pause@insert.compare.left': 'on', 'pause@insert.compare': 'off' }
-    });
-    expect(saved.masterSteps).toEqual(named.masterSteps);
-    const { values, origins } = buildVariant(
-      insertion.design.space,
-      insertion.design.starter,
-      { base: { 'pause@insert': true, 'pause@insert.swap': false } },
-      1
-    );
-    expect(values['pause@insert']).toBe('accumulate');
-    expect(values['pause@insert.swap']).toBe('off');
-    expect(origins['pause@insert']).toBe('kept');
-  });
-
-  it('keys a label’s place by its full name, taking a saved short key for it', () => {
-    const { space, starter, fallbacks } = insertion.design;
+  it('keys a label’s place by its full name only', () => {
+    const { space, starter } = insertion.design;
     expect(space['Highlight.Pointed@insert.compare.left.fill']).toBeDefined();
     expect(space['Highlight.Pointed@left.fill']).toBeUndefined();
-    const base = {
-      'Highlight.Pointed@left.fill': 'sky-100',
-      'Highlight.Pointed@to.fill': 'red-100'
-    };
-    const { values, origins } = buildVariant(space, starter, { base }, 1, fallbacks);
-    expect(values['Highlight.Pointed@insert.compare.left.fill']).toBe('sky-100');
-    expect(origins['Highlight.Pointed@insert.compare.left.fill']).toBe('kept');
-    expect(values['Highlight.Pointed@insert.swap.to.fill']).toBe('red-100');
-    expect(values['Highlight.Pointed@insert.compare.right.fill']).toBe(
-      values['Highlight.Pointed.fill']
-    );
-    // A chosen value names the place by its full name only.
     const chosen = { 'Highlight.Pointed@left.fill': 'sky-100' };
     expect(() => buildVariant(space, starter, { chosen }, 1)).toThrow();
   });

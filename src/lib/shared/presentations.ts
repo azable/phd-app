@@ -55,20 +55,6 @@ export const htmlFramesPresentationSchema = v.strictObject({
   generationEventId: v.optional(positiveSchema)
 });
 
-/**
- * One declaration in a presentation's design block, and the value it took: kept to read
- * presentations built while sources had design blocks.
- */
-export const designDrawSchema = v.strictObject({
-  key: v.string(),
-  call: v.picklist(['pick', 'int', 'real', 'chance']),
-  args: v.array(v.unknown()),
-  value: v.unknown(),
-  origin: v.optional(v.picklist(['chosen', 'kept'])),
-  start: naturalSchema,
-  end: naturalSchema
-});
-
 /** A value a variable of a design space takes. */
 export const designValueSchema = v.union([
   v.pipe(v.string(), v.maxLength(200)),
@@ -95,7 +81,7 @@ export const variantRequestSchema = v.strictObject({
 });
 export type VariantRequest = v.InferOutput<typeof variantRequestSchema>;
 
-/** A presentation's variant, by key; empty for one built before variants were recorded. */
+/** A presentation's variant, by key; empty for one with no design space. */
 export function presentationVariant(
   presentation: RenderablePresentation | undefined
 ): DesignValues {
@@ -139,9 +125,6 @@ export const browserBundlePresentationSchema = v.strictObject({
   renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
-  /** Design values and draws of a presentation built while sources had design blocks. */
-  parameters: v.optional(v.record(v.string(), v.unknown())),
-  draws: v.optional(v.array(designDrawSchema)),
   generationEventId: v.optional(positiveSchema)
 });
 
@@ -152,7 +135,6 @@ export const renderablePresentationSchema = v.variant('format', [
 ]);
 
 export type VisualizationMode = v.InferOutput<typeof visualizationModeSchema>;
-export type DesignDraw = v.InferOutput<typeof designDrawSchema>;
 export type PresentationLayout = v.InferOutput<typeof presentationLayoutSchema>;
 export type WorkspaceView = v.InferOutput<typeof workspaceViewSchema>;
 export type HtmlFrame = v.InferOutput<typeof htmlFrameSchema>;
@@ -175,7 +157,7 @@ export function presentationStepLabels(presentation: RenderablePresentation): st
 
 /**
  * A Sverlin step's name, the same however its steps pause: a label's full name and which run of it
- * the step ends, as @insert.swap#1, or start or end. Older presentations label steps "Step n".
+ * the step ends, as @insert.swap#1, or start or end.
  */
 export const stepNameSchema = v.pipe(
   v.string(),

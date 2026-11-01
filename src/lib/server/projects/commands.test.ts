@@ -501,28 +501,6 @@ describe('participant intake', () => {
       result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
     ).toHaveLength(2);
   });
-
-  it('finishes an intake begun with questions no longer asked on its next answer', async () => {
-    const { createProject } = await import('./service');
-    const { submitProjectFeedback } = await import('./commands');
-    const created = await createProject({ title: 'Earlier intake' }, serviceDependencies);
-    const document = await withActiveIntake(created, 'audience');
-    mocks.preparePrompt.mockImplementation(async () => generationPrompt('initial'));
-    mocks.generatePrepared.mockResolvedValue(generation('valid earlier source', 'Starting now.'));
-
-    const result = await submitProjectFeedback(
-      feedbackOptions(document, 'First-year students', '12345678-1234-4123-8123-123456789a02'),
-      commandDependencies
-    );
-
-    expect(result.appendedEvents).toContainEqual(
-      expect.objectContaining({
-        type: 'assistant.intake-completed',
-        payload: expect.objectContaining({ outcome: 'answered' })
-      })
-    );
-    expect(result.appendedEvents.some(({ type }) => type === 'visualization.presented')).toBe(true);
-  });
 });
 
 describe('presentation buffer refill', () => {
@@ -758,7 +736,7 @@ describe('submitProjectFeedback', () => {
     );
     const feedbackOperationId = crypto.randomUUID();
     const assistantOperationId = crypto.randomUUID();
-    const withStyle = await serviceDependencies.repository.append(
+    const withQuestion = await serviceDependencies.repository.append(
       created.projectId,
       projectHead(created).id,
       [
@@ -767,11 +745,11 @@ describe('submitProjectFeedback', () => {
           actor: { kind: 'assistant', botId: 'html-assistant' },
           operationId: feedbackOperationId,
           createdAt: new Date().toISOString(),
-          payload: { content: markdownMessage('Which visual style?'), intakeStep: 'style' }
+          payload: { content: markdownMessage('Which algorithm?'), intakeStep: 'algorithm' }
         }
       ]
     );
-    const head = projectHead(withStyle.document).id;
+    const head = projectHead(withQuestion.document).id;
     await serviceDependencies.repository.append(created.projectId, head, [
       {
         type: 'feedback.submitted',
@@ -2228,7 +2206,7 @@ function generationPrompt(purpose: 'initial' | 'repair' | 'fallback') {
 
 async function withActiveIntake(
   document: ProjectDocument,
-  intakeStep: 'algorithm' | 'audience' | 'style'
+  intakeStep: 'algorithm'
 ): Promise<ProjectDocument> {
   const appended = await serviceDependencies.repository.append(
     document.projectId,

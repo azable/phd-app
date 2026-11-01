@@ -187,9 +187,7 @@ their `variant`, where each value came from (`origins`), each type's views, and
 the kinds each tag can be, which the source editor shows as a chip in each tag
 that opens its kind's values in each visible presentation, flagging those a pair
 has differently, after each render of a type the view each visible presentation
-draws it with, and in the first top-level node's chip the page frame;
-presentations built while sources had design blocks keep their `parameters` and
-`draws`, which the source editor marks beside each call
+draws it with, and in the first top-level node's chip the page frame
 ([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Views of a type
 no visible presentation chose are greyed out. Comparisons align by master step,
 showing the previous step on the side that omits one.

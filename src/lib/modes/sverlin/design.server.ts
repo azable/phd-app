@@ -226,30 +226,14 @@ export function listingRegionFallbacks(
   );
 }
 
-/**
- * A saved key of a listing written when its lit text had two levels: the current level's as the lit
- * look's, as listing.current.fill as listing.lit.fill; the earlier level's as none, dropped; any
- * other key as it is.
- */
-function litListingKey(key: string): string | undefined {
-  if (key.startsWith('listing.earlier.') || key.startsWith('listing.earlier@')) return undefined;
-  if (key.startsWith('listing.current.') || key.startsWith('listing.current@'))
-    return `listing.lit${key.slice('listing.current'.length)}`;
-  return key;
-}
-
 /** The pauses a source starts with: every label on, for the chooser to thin. */
 export function starterPauses(labels: readonly string[]): Record<string, DesignValue> {
   return Object.fromEntries(labels.map((label) => [`pause@${label}`, 'on']));
 }
 
-/**
- * A pause@ value as saved before pauses had three ways: true, switched on (its first option), and
- * false, off; accumulating at a label with no labels inside it as on; any other value as it is.
- */
+/** A pause@ value, accumulating at a label with no labels inside it as on; any other as it is. */
 function asPause(space: DesignSpace, key: string, value: unknown): unknown {
   if (!key.startsWith('pause@') || !Object.hasOwn(space, key)) return value;
-  if (typeof value === 'boolean') return value ? space[key][0] : 'off';
   return value === 'accumulate' && !space[key].includes(value) ? 'on' : value;
 }
 
@@ -412,12 +396,7 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  const base: Record<string, unknown> = Object.fromEntries(
-    Object.entries(request.base ?? {}).flatMap(([key, saved]) => {
-      const lit = litListingKey(key);
-      return lit === undefined ? [] : [[fullPlaceKey(space, lit), saved]];
-    })
-  );
+  const base = request.base ?? {};
   for (const [key, saved] of Object.entries(base)) {
     const value = asPause(space, key, saved);
     if (fits(space, key, value)) {
@@ -451,21 +430,6 @@ export function buildVariant(
     origins[key] = origins[fallback];
   }
   return { values, origins };
-}
-
-/**
- * A saved key written before places of labels took full names, as Highlight.Pointed@left.fill, as
- * the one variable of the space it stands for, Highlight.Pointed@insert.compare.left.fill; any other
- * key as it is.
- */
-function fullPlaceKey(space: DesignSpace, key: string): string {
-  const at = key.indexOf('@');
-  if (at < 0 || Object.hasOwn(space, key)) return key;
-  const [head, place] = [key.slice(0, at + 1), key.slice(at + 1)];
-  const standing = Object.keys(space).filter(
-    (other) => other.startsWith(head) && other.endsWith(`.${place}`)
-  );
-  return standing.length === 1 ? standing[0] : key;
 }
 
 /**

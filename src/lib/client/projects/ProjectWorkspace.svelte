@@ -263,7 +263,6 @@
               presentationId: presentation.presentationId,
               candidate: candidateId(presentation),
               seed: presentation.seed,
-              draws: presentation.draws ?? [],
               ...(presentation.variant ? { variant: presentation.variant } : {}),
               ...(presentation.views ? { views: presentation.views } : {}),
               ...(presentation.pointers ? { pointers: presentation.pointers } : {}),
@@ -271,7 +270,6 @@
               ...(presentation.renders ? { renders: presentation.renders } : {}),
               ...(presentation.leftOut ? { leftOut: presentation.leftOut } : {}),
               ...(presentation.origins ? { origins: presentation.origins } : {}),
-              unrecorded: presentation.variant === undefined && presentation.draws === undefined,
               ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
             }
           ]

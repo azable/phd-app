@@ -56,6 +56,5 @@ export function nextParticipantIntakeStep(
   id: ParticipantIntakeStepId
 ): ParticipantIntakeStep | undefined {
   const index = visualizationParticipantIntake.findIndex((candidate) => candidate.id === id);
-  // A step no longer asked, from a project begun with an earlier intake, has nothing after it.
-  return index < 0 ? undefined : visualizationParticipantIntake[index + 1];
+  return visualizationParticipantIntake[index + 1];
 }

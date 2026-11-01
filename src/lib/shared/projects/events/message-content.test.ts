@@ -100,13 +100,14 @@ describe('element references', () => {
         messageContentSegmentSchema,
         layout([
           { node: '50:1', seed: 606668785, form: 'snake', curve: 'curved' },
-          { node: 'frame', seed: 3 }
+          { node: '40:1', seed: 3 }
         ])
       )
     ).toBe(true);
     for (const bad of [
       [{ node: '50:1', seed: 1, form: 'spiral' }],
       [{ node: 'body', seed: 1 }],
+      [{ node: 'frame', seed: 1 }],
       [{ node: '50:1', seed: 1.5 }]
     ])
       expect(v.is(messageContentSegmentSchema, layout(bad))).toBe(false);

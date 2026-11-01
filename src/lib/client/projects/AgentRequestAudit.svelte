@@ -179,8 +179,7 @@
                 <pre class="bg-green-500/10 px-3 py-2 whitespace-pre-wrap">{edit.replace}</pre>
               </div>
             {/each}
-            {@const rewritten =
-              decision.decision?.source ?? decision.decision?.sourceArtifactContent}
+            {@const rewritten = decision.decision?.source}
             {#if rewritten}
               <div>
                 <h3 class="mb-1 text-xs font-medium text-muted-foreground uppercase">

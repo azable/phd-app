@@ -741,8 +741,7 @@ The design space is every variable of a component's look, found in its markup:
 - `pause@insert.swap.to`, for each label, by its full name, never a shorter
   ending, so a label added later changes no saved variant: `"accumulate"`,
   `"on"`, or `"off"`, one with no labels inside it only `"on"` or `"off"` (see
-  Steps). A variant saved with `true` reads as its first option, `false` as
-  `"off"`.
+  Steps).
 - `layout`, the layout shown: every layout the source declares, never `none`
   (see View).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and

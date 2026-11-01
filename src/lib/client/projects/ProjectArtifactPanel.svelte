@@ -43,8 +43,6 @@
       presentationId?: string;
       /** Its identifier, `<source>/<values>`. */
       candidate?: CandidateId;
-      /** Built before draws were kept, so its draws are not known. */
-      unrecorded?: boolean;
     })[];
     /** Called once a save has built its new candidate, so the stage can show it. */
     onSaved?: () => void;
@@ -154,14 +152,10 @@
   const markedSource = $derived(editMode === 'editing' ? draftBase : baseSource);
   const drawn = $derived(drawnSources.filter(({ source }) => source === markedSource));
   // Why a visible presentation's draws are not marked: it was built from another version of the
-  // source, or before draws were kept.
+  // source.
   const unmarkedNotice = $derived.by(() => {
     if (chosen || failed) return undefined;
-    const otherSource = drawnSources.filter((presentation) => !drawn.includes(presentation));
-    const unrecorded = drawn.filter((presentation) => presentation.unrecorded);
-    const [unmarked, reason, remedy] = otherSource.length
-      ? [otherSource, 'from another version of the source', '']
-      : [unrecorded, 'before drawn values were recorded', ' Resample to see drawn values.'];
+    const unmarked = drawnSources.filter((presentation) => !drawn.includes(presentation));
     if (!unmarked.length) return undefined;
     const subject =
       unmarked.length > 1
@@ -169,7 +163,7 @@
         : unmarked[0].label
           ? `The ${unmarked[0].label} presentation was`
           : 'This presentation was';
-    return `${subject} built ${reason}, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.${remedy}`;
+    return `${subject} built from another version of the source, so the source does not mark what ${unmarked.length > 1 ? 'they' : 'it'} drew.`;
   });
   // The shown presentations' variants as JSON, keys in order, one object per presentation of a pair.
   const variantJson = $derived.by(() => {

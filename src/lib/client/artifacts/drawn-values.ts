@@ -7,9 +7,7 @@
  * a place, as {@render Index(@left)}, a chip opening that place's own values. A layout's root's chip
  * holds its frame. After each label's mark in the algorithm, where its steps pause. Views of a type
  * and layouts that no shown presentation's variant chose are greyed out, and so are nodes every
- * shown presentation left out (see left-out.ts). A presentation built
- * while sources had design blocks also marks each draw call with the value each shown presentation
- * drew there.
+ * shown presentation left out (see left-out.ts).
  *
  * @packageDocumentation
  */
@@ -23,7 +21,7 @@ import {
   listingOptions,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
-import type { DesignDraw, DesignValues } from '$lib/shared/presentations';
+import type { DesignValues } from '$lib/shared/presentations';
 
 /** One prop of a tag, its kind's variable, and the value each visible presentation gave it. */
 export type GhostProp = {
@@ -60,10 +58,8 @@ export type DrawnPresentation = {
   kinds?: Readonly<Record<string, readonly string[]>>;
   /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
   renders?: Readonly<Record<string, string>>;
-  /** The <Node> tags it left out, by their line:column; none recorded by older presentations. */
+  /** The <Node> tags it left out, by their line:column. */
   leftOut?: readonly string[];
-  /** The draws of a presentation built while sources had design blocks; none for others. */
-  draws: readonly DesignDraw[];
 };
 
 /** Replace the shown presentations' drawn values. */
@@ -71,7 +67,7 @@ export const setDrawnValues = StateEffect.define<{
   presentations: readonly DrawnPresentation[];
 }>();
 
-/** What each shown presentation drew at one design-block draw call, from `from` to `to`. */
+/** What each shown presentation drew at one render of a type, from `from` to `to`. */
 export type DrawnMarker = {
   from: number;
   to: number;
@@ -186,7 +182,7 @@ export function unchosenLayouts(
 
 /**
  * The <Node> tags every shown presentation left out, each from its opening tag to the end of its
- * closing one. Where a presentation recorded none, as older ones, nothing is left out.
+ * closing one. Where a presentation recorded none, nothing is left out.
  */
 export function leftOutNodes(
   state: EditorState,
@@ -245,43 +241,6 @@ function snippetBlocks(doc: string): Map<string, { from: number; to: number }> {
     }
   }
   return blocks;
-}
-
-/** How a draw's value came about, for its hover text. */
-const drawSource = {
-  chosen: () => 'chosen',
-  kept: () => 'kept from the viewed variant',
-  random: (seed: number) => `drawn by seed ${seed}`
-};
-
-/** One marker per draw call in the document, skipping spans it does not hold. */
-export function drawnMarkers(
-  state: EditorState,
-  presentations: readonly DrawnPresentation[]
-): DrawnMarker[] {
-  const markers = new Map<number, DrawnMarker & { compared: Set<string> }>();
-  for (const { label, seed, draws } of presentations)
-    for (const draw of draws) {
-      if (draw.start >= draw.end || draw.end > state.doc.length) continue;
-      const marker = markers.get(draw.start) ?? {
-        from: draw.start,
-        to: draw.end,
-        values: [],
-        differs: false,
-        compared: new Set<string>()
-      };
-      marker.values.push({
-        label,
-        text: valueText(draw.value),
-        title: `${draw.key} = ${JSON.stringify(draw.value)}, ${drawSource[draw.origin ?? 'random'](seed)}`
-      });
-      marker.compared.add(JSON.stringify(draw.value));
-      marker.differs = marker.compared.size > 1;
-      markers.set(draw.start, marker);
-    }
-  return [...markers.values()]
-    .map(({ compared: _compared, ...marker }) => marker)
-    .sort((a, b) => a.from - b.from);
 }
 
 /** Where a value of a presentation's variant came from, for its hover text. */
@@ -612,14 +571,6 @@ function closingAt(state: EditorState, line: number, column: number): number | u
   return at;
 }
 
-/** A short form of a drawn value: reals to two decimals, long values cut. */
-export function valueText(value: unknown): string {
-  if (typeof value === 'number' && !Number.isInteger(value))
-    return String(Number(value.toFixed(2)));
-  const text = JSON.stringify(value) ?? String(value);
-  return text.length > 32 ? `${text.slice(0, 31)}…` : text;
-}
-
 class DrawnValuesWidget extends WidgetType {
   constructor(
     private readonly marker: DrawnMarker,
@@ -931,10 +882,7 @@ const drawnField = StateField.define<DrawnState>({
           ...pauseGhosts(transaction.state, effect.value.presentations)
         ].sort((a, b) => a.at - b.at);
         next = {
-          markers: [
-            ...drawnMarkers(transaction.state, effect.value.presentations),
-            ...viewMarkers(transaction.state, effect.value.presentations)
-          ].sort((a, b) => a.from - b.from),
+          markers: viewMarkers(transaction.state, effect.value.presentations),
           ghosts,
           // A tag stays open as the shown presentations or their steps change.
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),

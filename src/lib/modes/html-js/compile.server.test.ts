@@ -24,7 +24,7 @@ describe('HTML/JS packaging', () => {
     expect(result.html).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(result.html).toContain('<line x1="0" y1="0" x2="5" y2="5" stroke="black"></line>');
     expect(result.html).toContain('<text x="1" y="9">A</text>');
-    // A source written before steps existed has the one step it always had.
+    // A source without steps, as the starter, has the one step "Start".
     const earlier = await compileHtmlJs({ format: 'html-js-v1', html: '<p>A</p>', javascript: '' });
     expect(earlier.steps).toEqual(['Start']);
     await expect(

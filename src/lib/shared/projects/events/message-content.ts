@@ -39,12 +39,12 @@ export const elementLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v
 const layoutFormSchema = v.picklist(['natural', 'line', 'snake', 'wave', 'arc', 'scatter']);
 
 /**
- * A free layout around a selected element: the node it belongs to (an element id, or 'frame' for
- * the page), the kind whose variables hold its look, that kind's layout seed, and the form,
- * direction and curve it drew, so feedback can keep it by setting those variables.
+ * A free layout around a selected element: the node it belongs to, by its element id, the kind
+ * whose variables hold its look, that kind's layout seed, and the form, direction and curve it
+ * drew, so feedback can keep it by setting those variables.
  */
 export const elementLayoutSchema = v.strictObject({
-  node: v.union([v.literal('frame'), elementIdSchema]),
+  node: elementIdSchema,
   kind: v.optional(v.pipe(v.string(), v.maxLength(200))),
   seed: v.pipe(v.number(), v.safeInteger()),
   form: v.optional(layoutFormSchema),

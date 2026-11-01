@@ -26,7 +26,7 @@
     ariaLabel?: string;
     /** Tags to highlight, such as those behind elements selected in a presentation. */
     highlights?: readonly SourceHighlight[];
-    /** What the shown presentations drew: their variants, and the draws of ones built from design blocks. */
+    /** What the shown presentations drew: their variants. */
     drawn?: readonly DrawnPresentation[];
     /** The source the drawn values were made in. */
     drawnSource?: string;

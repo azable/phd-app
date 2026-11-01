@@ -608,14 +608,21 @@ export function valueUses(
 /** Text to insert into the view's source at a position in it, replacing `remove` characters there. */
 export type Insertion = { at: number; text: string; remove?: number };
 
-/** The view's source with insertions made, each at its position in the original source. */
+/**
+ * The view's source with insertions made, each at its position in the original source. The texts
+ * at one position read in the order given, as a slot closing before the next one opens, and what
+ * is removed there is only the original source, never a text inserted at the same position, as a
+ * pointer render removed right after the slot closing around the render before it.
+ */
 export function withInsertions(source: string, insertions: readonly Insertion[]): string {
-  // From the end, so earlier positions hold; at one position, the last given first, so they read
-  // in the order given, as a slot closing before the next one opens.
-  const ordered = insertions.map((insertion, order) => ({ ...insertion, order }));
-  ordered.sort((a, b) => b.at - a.at || b.order - a.order);
+  const byPosition = new Map<number, { text: string; remove: number }>();
+  for (const { at, text, remove = 0 } of insertions) {
+    const there = byPosition.get(at) ?? { text: '', remove: 0 };
+    byPosition.set(at, { text: there.text + text, remove: Math.max(there.remove, remove) });
+  }
+  // From the end, so earlier positions hold.
   let result = source;
-  for (const { at, text, remove = 0 } of ordered)
+  for (const [at, { text, remove }] of [...byPosition].sort(([a], [b]) => b - a))
     result = `${result.slice(0, at)}${text}${result.slice(at + remove)}`;
   return result;
 }

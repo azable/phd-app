@@ -42,6 +42,33 @@ describe('pointers', () => {
     });
   });
 
+  it('leave the slot of a render written right beside them whole, either side', () => {
+    const slottedWithout = (view: string) => {
+      const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+      const { removals } = pointerCalls(
+        ast.html,
+        view,
+        new Set(['i', 'target']),
+        new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]])
+      );
+      const slots = slotInsertions(
+        ast.html,
+        view,
+        new Set(['i', 'target']),
+        new Set(['Int']),
+        new Set(),
+        new Set(),
+        new Set(),
+        new Map(),
+        removals
+      );
+      return unsited(withInsertions(view, [...removals, ...slots]));
+    };
+    const slot = '<SverlinSlot path="target">{@render Int(target)}</SverlinSlot>';
+    expect(slottedWithout('{@render Int(target)}{@render Arrow(i)}')).toBe(slot);
+    expect(slottedWithout('{@render Arrow(i)}{@render Int(target)}')).toBe(slot);
+  });
+
   it('are rendered at the top of the view, with a position from the state', () => {
     const messages = (view: string) => hoisted(view).problems.map(({ message }) => message);
     expect(messages('{#each edges as edge}{@render Arrow(i)}{/each}')[0]).toMatch(

@@ -129,7 +129,7 @@ export function candidateId(presentation: RenderablePresentation): CandidateId {
   const { source, hue } = sourceId(hash);
   if (presentation.format !== 'browser-bundle-v1')
     return { source, hue, values: friendlyName(fnv(presentation.presentationId)) };
-  const values = JSON.stringify(sorted(presentation.variant ?? presentation.parameters ?? {}));
+  const values = JSON.stringify(sorted(presentation.variant ?? {}));
   return { source, hue, values: friendlyName(fnv(values)) };
 }
 

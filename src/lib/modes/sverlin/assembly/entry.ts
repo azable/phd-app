@@ -486,10 +486,9 @@ addEventListener('message', (event: MessageEvent) => {
   if (recorded && afterOf(step) !== (pending ?? current)?.step) showStep(step);
 });
 
-// The page says it will report when its first step is shown, however long laying out every step
-// takes, so the app keeps its loader up until then, and that it can describe its steps as scenes.
-if (window.parent !== window)
-  window.parent.postMessage({ type: 'sverlin:loaded', reportsReady: true, describes: true }, '*');
+// The page says it has loaded; it reports when its first step is shown, however long laying out
+// every step takes, so the app keeps its loader up until then.
+if (window.parent !== window) window.parent.postMessage({ type: 'sverlin:loaded' }, '*');
 void recording.then(() => {
   recorded = true;
   showStep(requested);
