@@ -29,7 +29,9 @@ export async function buildBatch(
     throwIfAborted(signal);
     try {
       // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts).
-      const bundle = await bundlePresentation(prepared, seed, variant, { serverLayout: true });
+      const bundle = await bundlePresentation(prepared, seed, variant, {
+        serverLayout: serverLayoutEnabled()
+      });
       logLayout(seed, bundle.layout);
       results.push({
         ok: true,
@@ -72,6 +74,11 @@ function logLayout(seed: number, layout: SvelteBundle['layout']): void {
     );
   else
     console.warn(`[sverlin] seed ${seed} left to the page to lay out: ${layout.failure}${errors}`);
+}
+
+/** Whether builds lay every step out on the server; tests of commands, which never read the layout, turn it off. */
+function serverLayoutEnabled(): boolean {
+  return process.env.SVERLIN_SERVER_LAYOUT !== 'off';
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

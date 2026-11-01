@@ -14,6 +14,9 @@ import { MemoryProjectRepository } from './memory-repository.test-support';
 import { runWithProjectOperationSignal } from './operation-context';
 import type { ProjectServiceDependencies } from './service';
 
+// These tests read commands and events, never the layout, so builds skip laying out on the server.
+process.env.SVERLIN_SERVER_LAYOUT = 'off';
+
 const mocks = vi.hoisted(() => ({
   attemptProfiles: [
     {
@@ -2629,8 +2632,7 @@ describe('assistant edits', () => {
   });
 });
 
-// Its tests build real presentations, several through the chooser: slower on CI than 5 s.
-describe('several variants from chat', { timeout: 30_000 }, () => {
+describe('several variants from chat', () => {
   const chooser = (generatePrepared: ReturnType<typeof vi.fn>) =>
     ({
       preparePrompt: async (request: { project: unknown }) => ({

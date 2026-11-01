@@ -46,6 +46,9 @@ export default defineConfig({
           environment: 'node',
           // isolated-vm, which lays presentations out on the server, needs Node's snapshot off.
           execArgv: ['--no-node-snapshot'],
+          // Tests that build real presentations take seconds on CI's slower machines; none should
+          // fail on time alone.
+          testTimeout: 30_000,
           include: ['src/**/*.{test,spec}.{js,ts}'],
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }
