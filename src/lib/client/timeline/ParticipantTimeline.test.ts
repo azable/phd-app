@@ -109,13 +109,13 @@ describe('participant timeline', () => {
     expect(body.match(/<article/g)).toHaveLength(1);
   });
 
-  it('ticks both sides when either is fine, and neither when unsure', () => {
+  it('ticks both sides when either is fine, and marks both unsure in the same place', () => {
     const tie = timeline(comparison(['tie']));
     expect(tie.match(/Your choice:/g)).toHaveLength(2);
     expect(tie).not.toContain('Not chosen:');
     const unsure = timeline(comparison(['skip']));
     expect(unsure).not.toMatch(/Your choice:|Not chosen:/);
-    expect(unsure).toMatch(/title="You were unsure"[^>]*>.*unsure<\/span>/su);
+    expect(unsure.match(/Unsure:/g)).toHaveLength(2);
   });
 
   it('renders questions and side labels as inline Markdown, with no blocks in a button', () => {
