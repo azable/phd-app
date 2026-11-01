@@ -6,6 +6,7 @@
  * Every region needs a label, and every label a region, as each label is a place the page can
  * pause. A node without a label of its own takes that of the nearest labelled node around it, and
  * lights the line of that region's own text its statement shows where they pair up (see markOf).
+ * Its tokens, marked $name[…], name places the view renders (see places.server.ts).
  */
 
 import type { AnyNode, BlockStatement } from 'acorn';
@@ -18,6 +19,12 @@ import type { Listing, Mark } from './listing';
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
 export type Region = { label: string; start: number; end: number; at: number };
 
+/**
+ * A token of a listing's text, marked $name[…]: a reference to the place the view renders at @name
+ * (see Place), at its span in the text as shown and in the block.
+ */
+export type Token = { place: string; start: number; end: number; at: number };
+
 /** A problem with a listing: in its block's body, or in the algorithm's, at an offset there. */
 export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; at: number };
 
@@ -26,20 +33,23 @@ export type RegionMap = { label: string; text: string; sources: { text: string; 
 
 const regionOpen = /^@([A-Za-z_$][\w$]*)\[/u;
 const dottedOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\[/u;
+const tokenOpen = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u;
 /**
- * The text a listing shows, without its region marks and the indentation its lines share, and its
- * regions, each named with the names of those around it. A [ not opening a region, as in A[i], is
- * text, closed by the ] that matches it.
+ * The text a listing shows, without its region and token marks and the indentation its lines
+ * share; its regions, each named with the names of those around it; and its tokens, which nest with
+ * regions either way, a region inside a token keeping its prefix. A [ not opening a region or a
+ * token, as in A[i], is text, closed by the ] that matches it.
  */
 export function readRegions(body: string): {
   text: string;
   regions: Region[];
+  tokens: Token[];
   problems: MappingProblem[];
 } {
   const lines = body.split('\n');
   const first = lines.findIndex((line) => line.trim());
   const last = lines.findLastIndex((line) => line.trim());
-  if (first < 0) return { text: '', regions: [], problems: [] };
+  if (first < 0) return { text: '', regions: [], tokens: [], problems: [] };
   const kept = lines.slice(first, last + 1);
   const indent = Math.min(
     ...kept.filter((line) => line.trim()).map((line) => line.length - line.trimStart().length)
@@ -57,10 +67,39 @@ export function readRegions(body: string): {
   const source = characters.map(({ character }) => character).join('');
   let text = '';
   const regions: Region[] = [];
+  const tokens: Token[] = [];
   const problems: MappingProblem[] = [];
-  const open: ({ label: string; start: number; at: number } | 'plain')[] = [];
-  const prefix = () => open.flatMap((region) => (region === 'plain' ? [] : [region.label])).at(-1);
+  type Opened =
+    | { label: string; start: number; at: number }
+    | { place: string; start: number; at: number; inside: boolean }
+    | 'plain';
+  const open: Opened[] = [];
+  const prefix = () =>
+    open
+      .flatMap((region) => (region !== 'plain' && 'label' in region ? [region.label] : []))
+      .at(-1);
   for (let index = 0; index < source.length; index++) {
+    const token = source[index] === '$' ? tokenOpen.exec(source.slice(index)) : null;
+    if (token) {
+      const outer = open.find(
+        (entry): entry is Extract<Opened, { place: string }> =>
+          entry !== 'plain' && 'place' in entry
+      );
+      if (outer)
+        problems.push({
+          message: `The token $${token[1]}[ is inside the token $${outer.place.slice(1)}[…]: a token names one place, so write tokens side by side, as $i[i] and $j[j], never one inside another.`,
+          block: 'listing',
+          at: characters[index].at
+        });
+      open.push({
+        place: `@${token[1]}`,
+        start: text.length,
+        at: characters[index].at,
+        inside: Boolean(outer)
+      });
+      index += token[0].length - 1;
+      continue;
+    }
     const opening = source[index] === '@' ? regionOpen.exec(source.slice(index)) : null;
     const dotted = source[index] === '@' ? dottedOpen.exec(source.slice(index)) : null;
     if (dotted) {
@@ -84,6 +123,16 @@ export function readRegions(body: string): {
     if (source[index] === '[') open.push('plain');
     if (source[index] === ']' && open.length) {
       const closing = open.pop();
+      if (closing && closing !== 'plain' && 'place' in closing) {
+        if (!closing.inside)
+          tokens.push({
+            place: closing.place,
+            start: closing.start,
+            end: text.length,
+            at: closing.at
+          });
+        continue;
+      }
       if (closing !== 'plain' && closing) {
         regions.push({
           label: closing.label,
@@ -97,7 +146,13 @@ export function readRegions(body: string): {
     text += source[index];
   }
   for (const unclosed of open)
-    if (unclosed !== 'plain')
+    if (unclosed !== 'plain' && 'place' in unclosed)
+      problems.push({
+        message: `The token $${unclosed.place.slice(1)}[ is never closed with ].`,
+        block: 'listing',
+        at: unclosed.at
+      });
+    else if (unclosed !== 'plain')
       problems.push({
         message: `The region @${unclosed.label.split('.').at(-1)}[ is never closed with ].`,
         block: 'listing',
@@ -107,6 +162,7 @@ export function readRegions(body: string): {
   return {
     text,
     regions: regions.sort((a, b) => a.start - b.start || b.end - a.end || a.at - b.at),
+    tokens: tokens.sort((a, b) => a.start - b.start),
     problems
   };
 }
@@ -188,13 +244,13 @@ function ownLines(
 
 /**
  * A mapped listing: its text, marked for each node with a label by the regions with that label, and
- * the problems with its labels; also what each region is mapped to.
+ * the problems with its labels; also what each region is mapped to, and its tokens (see Token).
  */
 export function mappedListing(
   block: { body: string },
   algorithm: { root: BlockStatement; labels: readonly Label[]; code: string }
-): { listing: Listing; problems: MappingProblem[]; maps: RegionMap[] } {
-  const { text, regions, problems } = readRegions(block.body);
+): { listing: Listing; problems: MappingProblem[]; maps: RegionMap[]; tokens: Token[] } {
+  const { text, regions, tokens, problems } = readRegions(block.body);
   const { root, labels, code } = algorithm;
   const own = new Map<AnyNode, string[]>();
   for (const { full, nodes } of labels)
@@ -272,9 +328,13 @@ export function mappedListing(
     listing: {
       text,
       marks,
-      regions: regions.map(({ label, start, end }) => ({ label, start, end }))
+      regions: regions.map(({ label, start, end }) => ({ label, start, end })),
+      ...(tokens.length
+        ? { tokens: tokens.map(({ place, start, end }) => ({ place, start, end })) }
+        : {})
     },
     problems,
-    maps
+    maps,
+    tokens
   };
 }

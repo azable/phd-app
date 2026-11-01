@@ -19,10 +19,15 @@ export type Mark = {
 /**
  * A listing's text and its marks, and its regions, by their labels' full names, so a lit region can
  * leave out the regions inside it that did not run (see light.server.ts) and the page can paint each
- * region as its place says.
+ * region as its place says; and its tokens, each a reference to the place the view renders at its
+ * name, which lights with the place (see places.server.ts).
  */
 export type Listing = {
   text: string;
   marks: readonly Mark[];
   regions?: readonly { label: string; start: number; end: number }[];
+  tokens?: readonly PlaceToken[];
 };
+
+/** A token of a listing's text: the place it names, as @mid, and its span in the text. */
+export type PlaceToken = { place: string; start: number; end: number };
