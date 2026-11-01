@@ -40,7 +40,12 @@ const props = new Set([
   'gap',
   'align',
   'justify',
-  'overflow'
+  'overflow',
+  'shadow',
+  'glow',
+  'fillStyle',
+  'decoration',
+  'case'
 ]);
 
 const name = String.raw`[A-Za-z_$][\w$]*`;

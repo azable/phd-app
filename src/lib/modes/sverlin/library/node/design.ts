@@ -80,6 +80,86 @@ export function strokeStyleCss(name: unknown): 'dashed' | 'dotted' | undefined {
   return name === 'dashed' || name === 'dotted' ? name : undefined;
 }
 
+/**
+ * A box's shadow, which only paints: its offset and blur in pixels, and how much of black it is,
+ * hard's being a solid block in the box's stroke colour, or its text's without one.
+ */
+export const shadows = {
+  soft: { x: 0, y: 1, blur: 4, alpha: 0.2 },
+  lifted: { x: 0, y: 4, blur: 12, alpha: 0.3 },
+  hard: { x: 3, y: 3, blur: 0, alpha: 1 }
+} as const;
+export type Shadow = keyof typeof shadows;
+
+/** A glow: a halo round the box in its stroke colour, or its fill's without one. */
+export const glowHalo = { blur: 8, spread: 2, alpha: 0.6 } as const;
+
+/** Lines over a hatched fill, over the fill's colour. */
+export const fillPatterns = {
+  hatch: { angle: 45, line: 1.5, spacing: 6, alpha: 0.15 }
+} as const;
+
+const shadowOf = (name: unknown): Shadow | undefined =>
+  typeof name === 'string' && Object.hasOwn(shadows, name) ? (name as Shadow) : undefined;
+const translucent = (css: string, alpha: number) =>
+  `color-mix(in srgb, ${css} ${alpha * 100}%, transparent)`;
+
+/**
+ * The paint round a box, as the box drawn has: its shadow, if drawn, and its glow, if on. Neither
+ * shows on a node that draws no box, nor takes room.
+ */
+export function boxEffects(
+  shadow: unknown,
+  glow: unknown,
+  { stroke, fill, text }: { stroke?: string; fill?: string; text?: string }
+): { shadow?: Shadow; glow?: string; css?: string } {
+  if (stroke === undefined && fill === undefined) return {};
+  const drawn = shadowOf(shadow);
+  const halo = glow === 'on' ? (stroke ?? fill) : undefined;
+  const layers: string[] = [];
+  if (drawn) {
+    const { x, y, blur, alpha } = shadows[drawn];
+    const ink = drawn === 'hard' ? (stroke ?? text ?? '#000000') : `rgb(0 0 0 / ${alpha})`;
+    layers.push(`${x}px ${y}px ${blur}px ${ink}`);
+  }
+  if (halo)
+    layers.push(`0 0 ${glowHalo.blur}px ${glowHalo.spread}px ${translucent(halo, glowHalo.alpha)}`);
+  return {
+    ...(drawn ? { shadow: drawn } : {}),
+    ...(halo ? { glow: halo } : {}),
+    ...(layers.length ? { css: layers.join(', ') } : {})
+  };
+}
+
+/** A drawn fill's style, as the image over its colour, or undefined for solid. */
+export function fillStyleCss(name: unknown): { style: 'hatched'; css: string } | undefined {
+  if (name === 'hatched') {
+    const { angle, line, spacing, alpha } = fillPatterns.hatch;
+    return {
+      style: name,
+      css: `repeating-linear-gradient(${angle}deg, rgb(0 0 0 / ${alpha}) 0 ${line}px, transparent ${line}px ${spacing}px)`
+    };
+  }
+  return undefined;
+}
+
+/** A text decoration's line, or undefined for none. */
+export function decorationCss(name: unknown): 'underline' | 'line-through' | undefined {
+  return name === 'underline' ? 'underline' : name === 'strike' ? 'line-through' : undefined;
+}
+
+/**
+ * A case as CSS, set on every node with one, so a node's own case, normal included, holds over its
+ * parent's; undefined where the variant gives none.
+ */
+export function caseCss(
+  name: unknown
+): { transform: 'none' | 'uppercase'; caps: 'normal' | 'small-caps' } | undefined {
+  if (name === 'uppercase') return { transform: 'uppercase', caps: 'normal' };
+  if (name === 'small-caps') return { transform: 'none', caps: 'small-caps' };
+  return name === 'normal' ? { transform: 'none', caps: 'normal' } : undefined;
+}
+
 /** A link's dashes and gaps by its stroke style, in the units of a curve 1.5 wide, its dots round. */
 export const linkDashes = { dashed: [6, 4], dotted: [0, 4] } as const;
 
@@ -93,9 +173,9 @@ const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
  * Each prop's options: lengths in em, except size in rem and radius, strokeWidth and headSize in
- * pixels; a free layout's form, the way it runs, its arrows' curve, and the seed its spacing and
- * nudges are drawn from; and how a link runs, as its layout's arrows or its own way, and the heads
- * at its ends.
+ * pixels; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
+ * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
+ * how a link runs, as its layout's arrows or its own way, and the heads at its ends.
  */
 export const propOptions = {
   shown: [true, false],
@@ -115,6 +195,11 @@ export const propOptions = {
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
   overflow: ['shown', 'hidden', 'included', 'excluded'],
+  shadow: ['none', 'soft', 'lifted', 'hard'],
+  glow: ['none', 'on'],
+  fillStyle: ['solid', 'hatched'],
+  decoration: ['none', 'underline', 'strike'],
+  case: ['normal', 'uppercase', 'small-caps'],
   form: forms,
   direction: directions,
   curve: ['straight', 'curved'],
@@ -207,7 +292,12 @@ const nodeProps: readonly DesignProp[] = [
   'weight',
   'padding',
   'radius',
-  'minSize'
+  'minSize',
+  'shadow',
+  'glow',
+  'fillStyle',
+  'decoration',
+  'case'
 ];
 
 /** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
@@ -253,7 +343,11 @@ export const paintProps: ReadonlySet<string> = new Set([
   'stroke',
   'strokeStyle',
   'opacity',
-  'color'
+  'color',
+  'shadow',
+  'glow',
+  'fillStyle',
+  'decoration'
 ]);
 
 /** The props a place sets for the kinds of the view it draws, those that tell one render apart. */
@@ -299,6 +393,15 @@ export function kindKey(view: string, part?: 'Pointed' | 'Link'): string {
 /** A variant: each variable's value, by key, as Compared.Pointed.fill or views.Int. */
 export type DesignValues = Readonly<Record<string, string | number | boolean>>;
 
+/** The starter's box and text styling, every kind of node's: today's look. */
+const plainStyle = {
+  shadow: 'none',
+  glow: 'none',
+  fillStyle: 'solid',
+  decoration: 'none',
+  case: 'normal'
+} satisfies Partial<Record<DesignProp, string>>;
+
 /** The starter's value for each prop of a kind: plain containers and text, framed values and pointers. */
 export const starterLooks: Record<KindRole, Record<string, string | number | boolean>> = {
   container: {
@@ -315,6 +418,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     padding: 0,
     radius: 0,
     minSize: 0,
+    ...plainStyle,
     gap: 0.5,
     align: 'center',
     justify: 'start',
@@ -333,7 +437,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'bold',
     padding: 0.375,
     radius: 8,
-    minSize: 2.5
+    minSize: 2.5,
+    ...plainStyle
   },
   text: {
     shown: true,
@@ -348,7 +453,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'normal',
     padding: 0,
     radius: 0,
-    minSize: 0
+    minSize: 0,
+    ...plainStyle
   },
   pointed: {
     fill: 'amber-100',
@@ -363,6 +469,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     padding: 0.375,
     radius: 8,
     minSize: 2.5,
+    ...plainStyle,
     overflow: 'shown'
   },
   link: {

@@ -170,6 +170,21 @@ describe('variants', () => {
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
 
+  it('gives every kind of node the style props, drawn at random but for decoration', () => {
+    expect(space['IntCell.shadow']).toEqual(['none', 'soft', 'lifted', 'hard']);
+    expect(space['Highlight.Pointed.case']).toEqual(['normal', 'uppercase', 'small-caps']);
+    expect(starter['Row.fillStyle']).toBe('solid');
+    expect(() => buildVariant(space, starter, { chosen: { 'IntCell.glow': 'bright' } }, 1)).toThrow(
+      'IntCell.glow cannot be "bright"'
+    );
+    const variants = Array.from(
+      { length: 8 },
+      (_, seed) => buildVariant(space, starter, { randomise: true }, seed + 1).values
+    );
+    for (const values of variants) expect(values['Title.decoration']).toBe('none');
+    expect(new Set(variants.map((values) => values['IntCell.shadow'])).size).toBeGreaterThan(1);
+  });
+
   it('randomises only the variables named', () => {
     const { values, origins } = buildVariant(
       space,

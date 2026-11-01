@@ -4,15 +4,20 @@
  * page drew it in (see ../fonts), embedded in the PDF, each character in the first face of its font
  * list that has it, as the page falls back, and in DejaVu when none of them has it, where the page
  * went on to a font of its machine. Each line is centred on where the page put it, and narrowed if
- * it is set wider, as jsPDF does not kern.
+ * it is set wider, as jsPDF does not kern; its case is set as the page draws it, small capitals at
+ * 0.7 of the size, and its decoration is a line under or through it. PDF has no blur, so a box's
+ * shadow is an offset copy of its shape behind it (soft and lifted a light fill, hard a solid
+ * block), and its glow a larger, faint copy; a hatched fill is drawn as lines over it, kept inside
+ * the box.
  */
 
 import { GState, jsPDF } from 'jspdf';
 
 import manifest from '../fonts/faces.json';
-import type { SceneHead, SceneLink, SceneNode, SceneText } from '../library';
+import type { SceneBox, SceneHead, SceneLink, SceneNode, SceneText } from '../library';
 import { pageFont } from '../library/fonts';
-import { linkDashes } from '../library/node/design';
+import { casedRuns, smallCapsScale } from '../library/model/text-case';
+import { fillPatterns, glowHalo, linkDashes, shadows } from '../library/node/design';
 import { headDrawing } from '../library/node/heads';
 import type { SverlinScene } from '../scene';
 
@@ -194,18 +199,23 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
 
   /**
    * Text centred on a point, its line's height centred there by its first face's ascent and
-   * descent, as the page measured them, and narrowed to fit a width if it is wider.
+   * descent, as the page measured them, and narrowed to fit a width if it is wider; where it went,
+   * in points, for a line along it.
    */
   function drawText(
-    run: Pick<SceneText, 'text' | 'font' | 'fontSize' | 'fontWeight'>,
+    run: Pick<SceneText, 'text' | 'font' | 'fontSize' | 'fontWeight' | 'case'>,
     centre: { x: number; y: number },
     { fit }: { fit?: number } = {}
-  ) {
+  ): { left: number; right: number; baseline: number } {
     const files = faceFiles(run.font, run.fontWeight).filter((file) => faces.has(file));
-    doc.setFontSize(px(run.fontSize));
-    const pieces = fallbackRuns(run.text, files, has).map((piece) => {
-      doc.setFont(fontName(piece.face), 'normal');
-      return { ...piece, width: doc.getTextWidth(piece.text) };
+    // Small capitals at their share of the size, unrounded, as the run's size is already scaled.
+    const pieces = casedRuns(run.text, run.case).flatMap(({ text, small }) => {
+      const size = px(small ? run.fontSize * smallCapsScale : run.fontSize);
+      doc.setFontSize(size);
+      return fallbackRuns(text, files, has).map((piece) => {
+        doc.setFont(fontName(piece.face), 'normal');
+        return { ...piece, size, width: doc.getTextWidth(piece.text) };
+      });
     });
     const measured = pieces.reduce((sum, { width }) => sum + width, 0);
     const scale = fit && measured > px(fit) ? px(fit) / measured : 1;
@@ -214,32 +224,104 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     const ascent = Math.round((hhea.ascender * run.fontSize) / head.unitsPerEm);
     const descent = Math.round((-hhea.decender * run.fontSize) / head.unitsPerEm);
     const baseline = px(centre.y + (ascent - descent) / 2);
-    let x = px(centre.x) - (measured * scale) / 2;
+    const left = px(centre.x) - (measured * scale) / 2;
+    let x = left;
     for (const piece of pieces) {
       doc.setFont(fontName(piece.face), 'normal');
+      doc.setFontSize(piece.size);
       doc.text(piece.text, x, baseline, scale < 1 ? { horizontalScale: scale } : {});
       x += piece.width * scale;
     }
+    return { left, right: x, baseline };
+  }
+
+  /** A box's outline as a path, filled, stroked, or left to clip by (null). */
+  function boxPath(box: SceneBox, radius: number, style: 'F' | 'S' | null) {
+    if (radius)
+      doc.roundedRect(
+        px(box.x),
+        px(box.y),
+        px(box.width),
+        px(box.height),
+        px(radius),
+        px(radius),
+        style
+      );
+    else doc.rect(px(box.x), px(box.y), px(box.width), px(box.height), style);
+  }
+
+  /** Fill a box's shape in a colour, at an opacity times the colour's alpha and a share. */
+  function fillBox(box: SceneBox, radius: number, css: string, opacity: number, share = 1) {
+    const [r, g, b, a] = resources.colour(css);
+    setOpacity(opacity * a * share);
+    doc.setFillColor(r, g, b);
+    boxPath(box, radius, 'F');
+  }
+
+  /** The glow and shadow behind a box, as it is drawn on the page round it. */
+  function drawEffects(node: SceneNode, opacity: number) {
+    const { box, look } = node;
+    const radius = look.radius ?? 0;
+    if (look.glow) {
+      const reach = glowHalo.spread + glowHalo.blur / 2;
+      const halo = {
+        x: box.x - reach,
+        y: box.y - reach,
+        width: box.width + 2 * reach,
+        height: box.height + 2 * reach
+      };
+      fillBox(halo, radius + reach, look.glow, opacity, glowHalo.alpha / 2);
+    }
+    if (look.shadow) {
+      const { x, y, alpha } = shadows[look.shadow];
+      const behind = { ...box, x: box.x + x, y: box.y + y };
+      if (look.shadow === 'hard') fillBox(behind, radius, look.stroke ?? look.color, opacity);
+      else fillBox(behind, radius, 'black', opacity, alpha);
+    }
+  }
+
+  /** A hatched fill's lines over it, inside the box. */
+  function drawFillStyle(node: SceneNode, opacity: number) {
+    const { box, look } = node;
+    if (look.fillStyle !== 'hatched') return;
+    doc.saveGraphicsState();
+    boxPath(box, look.radius ?? 0, null);
+    doc.clip();
+    doc.discardPath();
+    const { line, spacing, alpha } = fillPatterns.hatch;
+    const [r, g, b] = resources.colour('black');
+    setOpacity(opacity * alpha);
+    doc.setDrawColor(r, g, b);
+    doc.setLineWidth(px(line));
+    // Lines from top left to bottom right, as the page's stripes at 45 degrees, spacing apart.
+    const step = spacing * Math.SQRT2;
+    for (let start = box.x - box.height; start < box.x + box.width; start += step)
+      doc.line(px(start), px(box.y), px(start + box.height), px(box.y + box.height));
+    doc.restoreGraphicsState();
+  }
+
+  /** A line under or through a run of text, in its colour, as thick as the page's would be. */
+  function drawDecoration(
+    run: SceneText,
+    { left, right, baseline }: { left: number; right: number; baseline: number }
+  ) {
+    if (!run.decoration) return;
+    const [r, g, b] = resources.colour(run.color);
+    doc.setDrawColor(r, g, b);
+    doc.setLineWidth(px(Math.max(1, run.fontSize / 16)));
+    // About where fonts put their underline, and the middle of a lower-case letter.
+    const y =
+      baseline + px(run.decoration === 'underline' ? run.fontSize * 0.1 : -run.fontSize * 0.27);
+    doc.line(left, y, right, y);
   }
 
   function drawNode(node: SceneNode, opacity: number) {
     const { box, look } = node;
     const radius = look.radius ?? 0;
+    drawEffects(node, opacity);
     if (look.fill) {
-      const [r, g, b, a] = resources.colour(look.fill);
-      setOpacity(opacity * a);
-      doc.setFillColor(r, g, b);
-      if (radius)
-        doc.roundedRect(
-          px(box.x),
-          px(box.y),
-          px(box.width),
-          px(box.height),
-          px(radius),
-          px(radius),
-          'F'
-        );
-      else doc.rect(px(box.x), px(box.y), px(box.width), px(box.height), 'F');
+      fillBox(box, radius, look.fill, opacity);
+      drawFillStyle(node, opacity);
     }
     if (look.stroke && look.strokeWidth) {
       // A CSS border lies inside the box, and a PDF stroke on both sides of its path.
@@ -267,7 +349,7 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       setOpacity(opacity * a);
       doc.setTextColor(r, g, b);
       const centre = { x: run.box.x + run.box.width / 2, y: run.box.y + run.box.height / 2 };
-      drawText(run, centre, { fit: run.box.width });
+      drawDecoration(run, drawText(run, centre, { fit: run.box.width }));
     }
   }
 

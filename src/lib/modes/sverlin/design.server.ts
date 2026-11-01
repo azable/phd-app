@@ -444,7 +444,8 @@ function propOf(key: string): string {
 
 /**
  * Props a random variant leaves as they were: what is shown, how things line up, the frame, where
- * the steps pause, and a listing's language.
+ * the steps pause, a listing's language, and a text's decoration, as a line through it can mean it
+ * is gone.
  */
 const kept = new Set<string>([
   'language',
@@ -454,7 +455,8 @@ const kept = new Set<string>([
   'justify',
   'strokeStyle',
   'minSize',
-  'overflow'
+  'overflow',
+  'decoration'
 ]);
 const colourProps = new Set<string>(['fill', 'stroke', 'color']);
 const lengthProps = new Set<string>(['strokeWidth', 'size', 'padding', 'radius', 'gap']);

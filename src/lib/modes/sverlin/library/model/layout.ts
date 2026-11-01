@@ -9,6 +9,7 @@
 
 import type { Rule } from './css';
 import { lookOf, type Length, type Look, type Styled, type Styler } from './look';
+import { casedRuns, caseOf, smallCapsSize } from './text-case';
 import { isElement, type ModelElement } from './tree';
 
 /** Text widths and font metrics, as the page's canvas gives them (see text.ts). */
@@ -473,7 +474,20 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     const top = -(ascent + Math.floor(halved(height - (ascent + descent))));
     return { top, bottom: height + top };
   };
-  const textWidth = (text: string, look: Look) => advance(measure.width(text, fontOf(look)));
+  // A text's advance in its case: its runs' widths summed, as the browser shapes each alone, and
+  // rounded once (see text-case.ts).
+  const textWidth = (text: string, look: Look) =>
+    advance(
+      casedRuns(text, caseOf(look.textTransform, look.fontVariantCaps)).reduce(
+        (sum, run) =>
+          sum +
+          measure.width(
+            run.text,
+            fontOf(run.small ? { ...look, fontSize: smallCapsSize(look.fontSize) } : look)
+          ),
+        0
+      )
+    );
 
   /** One line of inline content: its width, its height, and where the boxes in it sit. */
   function inline(look: Look, items: readonly Item[], width?: number): Content {

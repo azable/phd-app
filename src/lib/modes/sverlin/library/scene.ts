@@ -6,7 +6,8 @@
  */
 
 import { linkSpecOf } from './node/arrange';
-import { strokeStyleCss } from './node/design';
+import { shadows, strokeStyleCss, type Shadow } from './node/design';
+import { caseOf, type TextCase } from './model/text-case';
 import { headShapes, headTrim, type HeadShape } from './node/heads';
 import type { Layout } from './node/props';
 import { screenScale } from './node/unscaled';
@@ -30,6 +31,14 @@ export type SceneLook = {
   fontWeight: number;
   /** Its own opacity, below 1; a nested node's multiplies with its parents'. */
   opacity?: number;
+  /**
+   * Paint round its box, which takes no room: its shadow (see shadows in node/design.ts), hard's in
+   * its stroke colour or else its text's, and its glow's colour, its stroke's or else its fill's.
+   */
+  shadow?: Shadow;
+  glow?: string;
+  /** Its fill's style, where it is not solid. */
+  fillStyle?: 'hatched';
 };
 
 export type SceneNode = {
@@ -66,6 +75,9 @@ export type SceneText = {
   font: string;
   fontSize: number;
   fontWeight: number;
+  /** A line under or through it; `text` is as written, and `case` says how it is drawn. */
+  decoration?: 'underline' | 'strike';
+  case?: TextCase;
 };
 
 export type SceneLink = {
@@ -220,7 +232,19 @@ function describeNode(
     font: style.fontFamily,
     fontSize: length(style.fontSize),
     fontWeight: Number(style.fontWeight) || 400,
-    ...(opacity < 1 ? { opacity } : {})
+    ...(opacity < 1 ? { opacity } : {}),
+    ...(dataset.svShadow && Object.hasOwn(shadows, dataset.svShadow)
+      ? { shadow: dataset.svShadow as Shadow }
+      : {}),
+    ...(dataset.svGlow
+      ? {
+          glow:
+            strokeWidth && !transparent(style.borderTopColor)
+              ? style.borderTopColor
+              : style.backgroundColor
+        }
+      : {}),
+    ...(dataset.svFillStyle === 'hatched' ? { fillStyle: dataset.svFillStyle } : {})
   };
   const shown = element.querySelector(':scope > .value');
   const unit = shown?.querySelector('.unit')?.textContent ?? undefined;
@@ -290,17 +314,24 @@ function textRuns(
   scale: number
 ): SceneText[] {
   const runs: SceneText[] = [];
+  // The node's decoration lines all its own text, its value's unit too, as the page propagates it.
+  const marked = element.dataset.svDecoration;
+  const decoration: SceneText['decoration'] =
+    marked === 'underline' || marked === 'strike' ? marked : undefined;
   const range = document.createRange();
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const holder = node.parentElement;
     if (!ownedBy(holder, element) || holder.closest('svg')) continue;
     const style = getComputedStyle(holder);
+    const textCase = caseOf(style.textTransform, style.fontVariantCaps);
     const looks = {
       color: style.color,
       font: style.fontFamily,
       fontSize: round((parseFloat(style.fontSize) || 0) * scale),
-      fontWeight: Number(style.fontWeight) || 400
+      fontWeight: Number(style.fontWeight) || 400,
+      ...(decoration ? { decoration } : {}),
+      ...(textCase ? { case: textCase } : {})
     };
     let line:
       | { words: string[]; left: number; top: number; right: number; bottom: number }

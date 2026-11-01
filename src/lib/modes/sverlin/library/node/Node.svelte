@@ -52,7 +52,17 @@
     wrappedContext,
     type Pointer
   } from '../type-context';
-  import { colourCss, lookUp, paintProps, placedKind, strokeStyleCss } from './design';
+  import {
+    boxEffects,
+    caseCss,
+    colourCss,
+    decorationCss,
+    fillStyleCss,
+    lookUp,
+    paintProps,
+    placedKind,
+    strokeStyleCss
+  } from './design';
   import { fontClass } from '../fonts';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
@@ -284,6 +294,21 @@
   const borderWidth = $derived(
     strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
   );
+  const fillColour = $derived(colourCss(look('fill')));
+  const textColour = $derived(colourCss(look('color')));
+  // Its shadow and glow, round the box it draws at this step, and its fill's style over its fill.
+  const effects = $derived(
+    boxEffects(look('shadow'), look('glow'), {
+      stroke: borderWidth > 0 ? strokeColour : undefined,
+      fill: fillColour,
+      text: textColour
+    })
+  );
+  const fillStyle = $derived(fillColour ? fillStyleCss(look('fillStyle')) : undefined);
+  // Its own text's line: the value's or the text it writes, never its child nodes', and its case,
+  // which its child nodes inherit unless they set their own.
+  const decoration = $derived(decorationCss(look('decoration')));
+  const textCase = $derived(caseCss(look('case')));
   // Whether its own look draws a box, a stroke or a fill, whatever a pointer at it paints at a step:
   // an arrow to an element whose node draws none meets the boxes inside it that do (see visible.ts).
   const framed = $derived.by(() => {
@@ -382,12 +407,21 @@
       data-sv-stroke={look('stroke')}
       data-sv-color={look('color')}
       data-sv-framed={framed ? 'true' : undefined}
+      data-sv-shadow={effects.shadow}
+      data-sv-glow={effects.glow ? 'on' : undefined}
+      data-sv-fill-style={fillStyle?.style}
+      data-sv-decoration={decoration ? look('decoration') : undefined}
       class:cell={(!arrangement && !children && !__text) || __field}
       class:text={__text}
       style:font-size={measured('size', 'rem')}
       style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
-      style:color={colourCss(look('color'))}
-      style:background-color={colourCss(look('fill'))}
+      style:color={textColour}
+      style:background-color={fillColour}
+      style:background-image={fillStyle?.css}
+      style:box-shadow={effects.css}
+      style:text-transform={textCase?.transform}
+      style:font-variant-caps={textCase?.caps}
+      style:text-decoration-line={__text ? decoration : undefined}
       style:border-color={strokeColour}
       style:border-style={strokeStyleCss(look('strokeStyle'))}
       style:border-width={`${borderWidth}px`}
@@ -445,7 +479,7 @@
         {@render children()}
       {:else if value !== undefined}
         <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
-        <span class="value"
+        <span class="value" style:text-decoration-line={decoration}
           >{value === null ? '∅' : String(value)}{#if unit}<span class="unit">{unit}</span
             >{/if}</span
         >
@@ -489,6 +523,9 @@
     color: var(--sv-muted);
     font-size: 0.6em;
     font-weight: 400;
+    /* A unit keeps its own case, as ms or MB. */
+    text-transform: none;
+    font-variant-caps: normal;
   }
   .items {
     display: flex;

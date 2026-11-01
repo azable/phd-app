@@ -2,7 +2,8 @@
  * Whether a step's picture is sound, from its scene data (see scene.ts): no two nodes overlap
  * unless one holds the other, no text runs out of its node, nothing lies outside the frame, and
  * every link reaches a node at each end. Layouts may change with how they are worked out; these
- * are what must hold whatever the layout.
+ * are what must hold whatever the layout. Only boxes count: a node's shadow or glow paints past its
+ * box, takes no room and may fall on what is beside it, so it is neither overlap nor overflow.
  */
 
 import type { SceneBox, SceneFrame, ScenePoint, SceneStep } from './scene';

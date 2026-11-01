@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { serverMeasure } from './fonts/measure.server';
 import { geometryFor, type Geometry } from './library/geometry';
+import { parseSheet } from './library/model/css';
+import { layOut } from './library/model/layout';
+import type { ModelElement } from './library/model/tree';
+import { fontList } from './library/fonts';
 import { layOutOnServer } from './layout.server';
 
 /** A server bundle whose layout answers with what it is given, as geometry would come back. */
@@ -60,6 +64,29 @@ describe('laying out on the server', () => {
     expect(again.layout?.cached).toBe(true);
     expect(again.javascript).toBe(first.javascript);
   }, 60_000);
+
+  it('lays a node out in its case, wider uppercase, alike at the starter', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
+    const prepared = prepareSvelteComponent(source);
+    const geometryOf = async (chosen: Record<string, string>) => {
+      const { javascript } = await bundlePresentation(
+        prepared,
+        1,
+        { chosen },
+        { serverLayout: true }
+      );
+      const prefix = 'window.__sverlinGeometry=';
+      expect(javascript.startsWith(prefix)).toBe(true);
+      return JSON.parse(javascript.slice(prefix.length, javascript.indexOf(';\n'))) as Geometry[];
+    };
+    const reservedWidth = (geometries: Geometry[]) =>
+      geometries[0].reserved.reduce((sum, [, { width }]) => sum + width, 0);
+    const starter = await geometryOf({});
+    expect(await geometryOf({ 'Bounds.case': 'normal' })).toEqual(starter);
+    expect(reservedWidth(await geometryOf({ 'Bounds.case': 'uppercase' }))).toBeGreaterThan(
+      reservedWidth(starter)
+    );
+  }, 60_000);
 });
 
 describe('text measured on the server', () => {
@@ -72,6 +99,37 @@ describe('text measured on the server', () => {
     expect(measure.missing.size).toBe(0);
     measure.width('🙂', sans);
     expect([...measure.missing]).toEqual(['🙂']);
+  });
+
+  it('measures a case through the layout model as the page draws it', () => {
+    const measure = serverMeasure();
+    const family = fontList('sans');
+    const font = (size: number) => `normal 700 ${size}px ${family}`;
+    const advance = (width: number) => Math.ceil(width * 64 - 1e-6) / 64;
+    const widthIn = (style: Record<string, string>) => {
+      const text: ModelElement = { tag: 'span', attributes: {}, style: {}, children: ['Lo, hi'] };
+      const root: ModelElement = {
+        tag: 'div',
+        attributes: {},
+        style: { 'font-family': family, 'font-weight': '700', 'font-size': '20px', ...style },
+        children: [text]
+      };
+      return layOut(root, { rules: parseSheet(''), measure }).boxes.get(text)?.width;
+    };
+    expect(widthIn({})).toBe(advance(measure.width('Lo, hi', font(20))));
+    expect(widthIn({ 'text-transform': 'uppercase' })).toBe(
+      advance(measure.width('LO, HI', font(20)))
+    );
+    // Synthesized small caps: the capitals and punctuation at 20px, the rest uppercased at 14px.
+    expect(widthIn({ 'font-variant-caps': 'small-caps' })).toBe(
+      advance(
+        measure.width('L', font(20)) +
+          measure.width('O', font(14)) +
+          measure.width(', ', font(20)) +
+          measure.width('HI', font(14))
+      )
+    );
+    expect(widthIn({ 'text-transform': 'uppercase' })).toBeGreaterThan(widthIn({}) as number);
   });
 
   it('takes the bold face from 600 and a size in whole 64ths of a pixel', () => {

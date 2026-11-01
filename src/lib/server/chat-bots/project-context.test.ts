@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
 import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
 import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
+import { propOptions } from '$lib/modes/sverlin/library/node/design';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
@@ -290,6 +291,17 @@ describe('design variables in the AI context', () => {
     expect(options('layout')).toEqual(['Side', 'Stacked']);
     expect(options('Side.ratio')).toBe('ratio');
     expect(design.options.ratio).toContain('4:3');
+  });
+
+  it('offers the style props exactly their options', () => {
+    const { starter } = prepareSvelteComponent(bfs).design;
+    const design = designVariables({ variant: starter });
+    for (const prop of ['shadow', 'glow', 'fillStyle', 'decoration', 'case'] as const) {
+      expect(design.options[prop]).toEqual(propOptions[prop]);
+      const variables = design.variables.filter(({ variable }) => variable.endsWith(`.${prop}`));
+      expect(variables.length).toBeGreaterThan(0);
+      for (const { options } of variables) expect(options).toBe(prop);
+    }
   });
 
   it('offers each free layout exactly the forms and directions its design takes', () => {

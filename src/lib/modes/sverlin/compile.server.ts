@@ -2092,7 +2092,12 @@ const designProps = new Set([
   'radius',
   'strokeWidth',
   'minSize',
-  'strokeStyle'
+  'strokeStyle',
+  'shadow',
+  'glow',
+  'fillStyle',
+  'decoration',
+  'case'
 ]);
 
 /**

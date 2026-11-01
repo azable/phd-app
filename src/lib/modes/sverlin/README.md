@@ -142,8 +142,8 @@ written in the view so the label is a kind of its own.
 - `<Pointed>` takes no props and is written in the pointer view itself, not a
   snippet inside it. Where the pointer is, the element is drawn in the pointer's
   kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke, opacity,
-  text colour) shows only there, the rest of its look in every slot, so every
-  slot keeps one size.
+  text colour, shadow, glow, fill style, decoration) shows only there, the rest
+  of its look in every slot, so every slot keeps one size.
 - Render a pointer in a layout's root itself, outside other nodes, snippets, and
   blocks other than `{#if}`, with a position from the state: a variable
   (`{@render Index(i)}`), an element, a field (`{@render Index(edges[e].to)}`),
@@ -792,6 +792,15 @@ Every kind of node has these props, each with a fixed set of options:
 - `padding`: 0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em; `radius`: 0, 2,
   4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`, the least width
   and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.
+- `shadow`: none, soft (a faint blur below), lifted (deeper and further down,
+  raised off the page), or hard (a crisp block down and to the right, in its
+  stroke colour or else its text's, a flat graphic look); `glow`: none or on, a
+  halo in its stroke colour or else its fill's; `fillStyle`: solid or hatched
+  (diagonal lines over the fill). These paint round or over the box a node
+  draws, so only where it draws a fill or stroke, and take no room.
+- `decoration`: none, underline, or strike, a line under or through its own
+  text, not its child nodes'; `case`: normal, uppercase, or small-caps (lower
+  case as small capitals) for its own text, a value's unit keeping its own.
 
 A kind arranging its children, with a `layout`, a collection, or links, also has
 `gap` (as `padding`), `align` (start, center, or end, across) and `justify`

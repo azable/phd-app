@@ -28,6 +28,10 @@ export type Look = {
   fontWeight: string;
   fontSize: number;
   fontFamily: string;
+  /** How text is cased before it is shaped (see text-case.ts): none or uppercase. */
+  textTransform: string;
+  /** Normal, or small-caps, drawn as the browser synthesizes them (see text-case.ts). */
+  fontVariantCaps: string;
   /** Pixels, or 'normal', from the font. */
   lineHeight: number | 'normal';
   whiteSpace: string;
@@ -53,6 +57,8 @@ type Inherited = {
   fontWeight: string;
   fontSize: number;
   fontFamily: string;
+  textTransform: string;
+  fontVariantCaps: string;
   lineHeight: { number: number } | { px: number } | 'normal';
   whiteSpace: string;
   tabSize: number;
@@ -67,6 +73,8 @@ const initial: Inherited = {
   fontWeight: '400',
   fontSize: rootFontSize,
   fontFamily: 'sans-serif',
+  textTransform: 'none',
+  fontVariantCaps: 'normal',
   lineHeight: 'normal',
   whiteSpace: 'normal',
   tabSize: 8,
@@ -167,7 +175,7 @@ function longhands(property: string, value: string): [string, string][] {
 
 /** Properties that lay nothing out, which the model leaves alone. */
 const unlaid =
-  /^(color|background(-color)?|border-(top-|right-|bottom-|left-)?color|border(-\w+)?-radius|opacity|visibility|outline(-\w+)?|cursor|pointer-events|user-select|-webkit-user-select|touch-action|z-index|transform-origin|fill|stroke(-\w+)?|transition.*|animation.*|--.*|overflow(-[xy])?)$/u;
+  /^(color|background(-color|-image)?|box-shadow|text-decoration(-\w+)?|border-(top-|right-|bottom-|left-)?color|border(-\w+)?-radius|opacity|visibility|outline(-\w+)?|cursor|pointer-events|user-select|-webkit-user-select|touch-action|z-index|transform-origin|fill|stroke(-\w+)?|transition.*|animation.*|--.*|overflow(-[xy])?)$/u;
 
 type Units = { em: number; percent?: never };
 
@@ -344,6 +352,8 @@ export function lookOf(
             : weightText,
     fontSize,
     fontFamily: get('font-family') ?? from.fontFamily,
+    textTransform: get('text-transform') ?? from.textTransform,
+    fontVariantCaps: get('font-variant-caps') ?? from.fontVariantCaps,
     lineHeight,
     whiteSpace: get('white-space') ?? from.whiteSpace,
     tabSize: get('tab-size') === undefined ? from.tabSize : parseFloat(get('tab-size') as string),
@@ -396,6 +406,8 @@ export function lookOf(
     fontWeight: inherited.fontWeight,
     fontSize,
     fontFamily: inherited.fontFamily,
+    textTransform: inherited.textTransform,
+    fontVariantCaps: inherited.fontVariantCaps,
     lineHeight:
       lineHeight === 'normal'
         ? 'normal'

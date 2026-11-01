@@ -40,10 +40,11 @@ everything else keeps its starting value. Choose values that go together, such
 as text that reads on its fill and spacing that suits the corners, and give one
 meaning one look across the kinds that show it, such as every current element’s
 fill. Make a new kind look like what it is: a pointer or a highlight stands out,
-a caption is quieter than a title. Where views of one type say different things,
-as pointer views captioned i and j, they are not looks: choose each place’s view
-by what it says, as pointers.Position@j for the one captioned j, and never draw
-them at random.
+a caption is quieter than a title. A decoration says something, as a strike a
+value that is gone: use one only where it does. Where views of one type say
+different things, as pointer views captioned i and j, they are not looks: choose
+each place’s view by what it says, as pointers.Position@j for the one captioned
+j, and never draw them at random.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go. project.runs gives each label’s runs and how many change
@@ -62,14 +63,15 @@ name the values each pair differed in, so keep a value that keeps winning.
 Everything else is open, and yours to explore across the conversation: views,
 the layout shown (`layout`, as the parts side by side or stacked, each layout
 with its own frame, whose ratio stays 16:9 unless the participant asks for
-another shape), colours, shapes, spacing, a free layout’s form, pacing, and what
-is shown at all (a listing or none, as listing.language none; a type’s view or
-none; a kind’s shown false), so some designs show an element others leave out,
-keeping shown what the participant asked for, and the participant sees real
-alternatives rather than one design repeated. A pair is also a question, so
-choose it to learn the most from the participant’s answer: from the conversation
-and earlier preferences, judge which open choices are still uncertain and likely
-to matter to them, as a listing or none, or coarse or fine steps, and make the
-two variants differ in those few and stay alike elsewhere, so their preference
-says which they prefer. Do not contrast what earlier preferences have settled or
-what they have shown they do not mind; move on to other choices in later pairs.
+another shape), colours, shapes, spacing, shadows, glows, fill styles, text
+case, a free layout’s form, pacing, and what is shown at all (a listing or none,
+as listing.language none; a type’s view or none; a kind’s shown false), so some
+designs show an element others leave out, keeping shown what the participant
+asked for, and the participant sees real alternatives rather than one design
+repeated. A pair is also a question, so choose it to learn the most from the
+participant’s answer: from the conversation and earlier preferences, judge which
+open choices are still uncertain and likely to matter to them, as a listing or
+none, or coarse or fine steps, and make the two variants differ in those few and
+stay alike elsewhere, so their preference says which they prefer. Do not
+contrast what earlier preferences have settled or what they have shown they do
+not mind; move on to other choices in later pairs.

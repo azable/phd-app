@@ -6,6 +6,7 @@
 import * as v from 'valibot';
 
 import type { SceneFrame, SceneStep } from './library';
+import { shadows } from './library/node/design';
 import { headShapes } from './library/node/heads';
 
 // A view draws at most a few nodes per value the algorithm keeps, and a trace holds at most 200,000
@@ -32,7 +33,9 @@ const sceneTextSchema = v.strictObject({
   color: colour,
   font,
   fontSize: length,
-  fontWeight
+  fontWeight,
+  decoration: v.optional(v.picklist(['underline', 'strike'])),
+  case: v.optional(v.picklist(['uppercase', 'small-caps']))
 });
 
 const sceneNodeSchema = v.strictObject({
@@ -58,7 +61,10 @@ const sceneNodeSchema = v.strictObject({
     font,
     fontSize: length,
     fontWeight,
-    opacity: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(1)))
+    opacity: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(1))),
+    shadow: v.optional(v.picklist(Object.keys(shadows) as (keyof typeof shadows)[])),
+    glow: v.optional(colour),
+    fillStyle: v.optional(v.picklist(['hatched']))
   }),
   colours: v.optional(
     v.strictObject({
