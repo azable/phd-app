@@ -142,15 +142,14 @@ export const briefAttributes = [
   {
     key: 'setting',
     question:
-      'Will it be explained in a lecture, stepped through by students alone, revised from, or explored by students with inputs of their own?',
-    why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan; exploring, it must take other inputs.',
+      'Will it be explained in a lecture, stepped through by students alone, or revised from?',
+    why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan.',
     bearsOn: ['lettering', 'shown', 'pacing'],
     asked: 'words',
     tags: {
       lecture: { families: { lettering: 1.4, shape: 1.1 } },
       alone: { families: { shown: 1.3, pacing: 1.3 } },
-      revision: { families: { shown: 1.2, pacing: 0.7 } },
-      explore: { families: { shown: 1.2 } }
+      revision: { families: { shown: 1.2, pacing: 0.7 } }
     }
   },
   {

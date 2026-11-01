@@ -246,7 +246,8 @@ words and notation the course uses or avoids: use them in labels, captions, the
 listing and your replies, and never a term the participant rejects; ask it once
 something is labelled. tone is academic and restrained (assumed) or bolder:
 restrained is plain fonts, few colours, one accent, no decoration, never a
-generic, flashy look. setting explore means students try inputs of their own.
+generic, flashy look. Each visualisation runs on one fixed example for now: if
+students are to try inputs of their own, say so plainly and set setting alone.
 use says where it will be shown (live slides, lecture notes, TikZ, a page
 students open): slides need large lettering. Whatever the brief, colours are
 safe for colour blindness: never tell things apart by hue alone, as red against
