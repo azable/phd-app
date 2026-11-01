@@ -24,6 +24,7 @@ const domain = interpretDomain(`
   const Tail = unop((c: Edges) => Edges(c.slice(1)));
   const Enqueue = binop((c: Queue, x: Vertex) => Queue([...c, x]));
   const Prepend = binop((c: Queue, x: Vertex) => Queue([x, ...c]));
+  const AddUnique = binop((c: Queue, x: Vertex) => Queue(c.includes(x) ? c : [...c, x]));
 `);
 
 /** Run an algorithm with the test domain from an input block, and return its last step. */
@@ -179,6 +180,20 @@ describe('values made by collection and record types', () => {
     ['plain objects', 'const e = { from: Vertex(1) };', /Objects are made by a record type/]
   ])('rejects %s', (_name, statement, message) => {
     expect(() => last(`${statement}`)).toThrow(message);
+  });
+
+  it('takes a literal in either branch of a conditional given to a type', () => {
+    expect(last('let q = Queue([1]); q = AddUnique(q, 1); q = AddUnique(q, 2);').state.q).toEqual([
+      1, 2
+    ]);
+    expect(() => last('const q = Vertex(1) === 1 ? [Vertex(1)] : Queue([]);')).toThrow(
+      /Arrays are made by a collection type/
+    );
+    expect(() =>
+      interpretDomain(
+        'const V = type([0, 1]); const Q = collection(V); const Add = binop((q: Q, v: V) => q.includes(v) ? q : Q([...q, v]));'
+      )
+    ).toThrow(/wrap the whole conditional/);
   });
 
   it('converts what is pushed or assigned into a collection to its element type', () => {

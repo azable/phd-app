@@ -223,6 +223,15 @@ export function checkSubset(
         child = ancestor;
         continue;
       }
+      // Either branch of a conditional is given to what the conditional is given to, as in
+      // Queue(q.includes(v) ? q : [...q, v]).
+      if (
+        ancestor.type === 'ConditionalExpression' &&
+        (ancestor.consequent === child || ancestor.alternate === child)
+      ) {
+        child = ancestor;
+        continue;
+      }
       if (ancestor.type === 'CallExpression') {
         if (!(ancestor.arguments as AnyNode[]).includes(child)) return false;
         const callee = ancestor.callee;

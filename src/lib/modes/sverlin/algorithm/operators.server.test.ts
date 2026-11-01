@@ -417,6 +417,13 @@ describe('structural operators', () => {
     ).toThrow(
       'Start builds an Edge with a new field, Index(0); an operator building a record only rearranges its operands. Pass it in as an operand.'
     );
+    expect(
+      declares(
+        'const Link = binop((es: Edges, i: Index) => Edges([...es, Edge({ from: i, to: i })]));'
+      )
+    ).toThrow(
+      'Make each Edge with an operator of its own, and pass it in as an operand: binop((v: Edges, x: Edge) => Edges([...v, x])), applied as Push(v, MakeEdge(…)).'
+    );
   });
 });
 

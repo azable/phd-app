@@ -336,7 +336,9 @@ export function interpretDomain(body: string): DomainRegistry {
     if (!result || (!Object.hasOwn(atoms, result) && !Object.hasOwn(structures, result)))
       fail(
         body,
-        `${name} gives a typed value: wrap what it computes in a type defined above, as in ${example}.`
+        body.type === 'ConditionalExpression'
+          ? `${name} gives a typed value: wrap the whole conditional in the type it gives, as in binop((q: Queue, v: Vertex) => Queue(q.includes(v) ? q : [...q, v])).`
+          : `${name} gives a typed value: wrap what it computes in a type defined above, as in ${example}.`
       );
     // The function reads its operands and Math only, and makes values of the types above.
     const visit = (node: unknown, parent?: AnyNode): void => {
@@ -427,6 +429,20 @@ export function interpretDomain(body: string): DomainRegistry {
             ? `${lead} Pass it in as an operand, as binop((v: ${result}, x: ${type ?? 'Int'}) => ${result}([x, ...v])).`
             : `${lead} Pass it in as an operand.`
         );
+      // A record or collection made here, as Item({ v, c: 0 }): its own operator makes it.
+      const made =
+        node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        Object.hasOwn(structures, node.callee.name)
+          ? node.callee.name
+          : undefined;
+      if (made)
+        return fail(
+          node,
+          what === 'collection'
+            ? `${lead} Make each ${made} with an operator of its own, and pass it in as an operand: binop((v: ${result}, x: ${made}) => ${result}([...v, x])), applied as Push(v, Make${made}(…)).`
+            : `${lead} Make the ${made} with an operator of its own, and pass it in as an operand.`
+        );
       return fail(
         node,
         what === 'collection'
@@ -438,15 +454,24 @@ export function interpretDomain(body: string): DomainRegistry {
     if (!argument || rest.length) return;
     if (what === 'collection') {
       const element = (structure as { element: string }).element;
-      if (part(argument) || slice(argument)) return;
-      if (argument.type !== 'ArrayExpression') return refuse(argument, element);
-      for (const item of argument.elements) {
-        if (!item) continue;
-        if (item.type === 'SpreadElement') {
-          const spread = item.argument as AnyNode;
-          if (!part(spread) && !slice(spread)) refuse(spread, element);
-        } else if (!part(item as AnyNode)) refuse(item as AnyNode, element);
-      }
+      // Each branch of a conditional is what it builds, as c.includes(x) ? c : [...c, x].
+      const rearranged = (node: AnyNode): void => {
+        if (node.type === 'ConditionalExpression') {
+          rearranged(node.consequent as AnyNode);
+          rearranged(node.alternate as AnyNode);
+          return;
+        }
+        if (part(node) || slice(node)) return;
+        if (node.type !== 'ArrayExpression') return refuse(node, element);
+        for (const item of node.elements) {
+          if (!item) continue;
+          if (item.type === 'SpreadElement') {
+            const spread = item.argument as AnyNode;
+            if (!part(spread) && !slice(spread)) refuse(spread, element);
+          } else if (!part(item as AnyNode)) refuse(item as AnyNode, element);
+        }
+      };
+      rearranged(argument);
       return;
     }
     const fields = (structure as { fields: Readonly<Record<string, string>> }).fields;

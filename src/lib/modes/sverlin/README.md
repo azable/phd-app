@@ -577,6 +577,9 @@ const Equal = binop((a: Int, b: Int) => Flag(a === b));
   computed or literal, is refused: compute it with a value operator and write
   it, `values[p] = Inc(values[p])`, or pass it in. A collection filled at run
   time is built in a loop, `for (const v of vertices) dist = Append(dist, u);`.
+  Each branch of a conditional inside the type is held to the same, as
+  `Queue(q.includes(v) ? q : [...q, v])`, the type wrapping the whole
+  conditional.
 - An operator is one action a learner takes as one (compare, add, take the next
   position, append), never a loop or a library algorithm, so
   `[...a, ...b].sort(…)` is refused and merging is written in the algorithm. Its
