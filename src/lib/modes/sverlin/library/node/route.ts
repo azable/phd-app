@@ -285,6 +285,60 @@ function exitPoint(box: Box, toward: Point): Point {
   return { x: cx + dx * Math.min(scale, 1), y: cy + dy * Math.min(scale, 1) };
 }
 
+/**
+ * A curve drawn by curvePath carried on from one end, along the way it leaves there, to the nearest
+ * of the boxes drawn at its node, stopping `trim` short for a head; undefined where it already
+ * meets one or the way back meets none. A layout solved over every step leaves an arrow at the edge
+ * of the room its node keeps for content shown only at some steps, such as a pointer's label under
+ * a vertex; where that content is hidden, the arrow then reaches what is drawn.
+ */
+export function reachDrawn(
+  path: string,
+  end: 'start' | 'end',
+  drawn: readonly Box[],
+  trim: number
+): { path: string; point: Point } | undefined {
+  const numbers = path.match(
+    /^M(-?[\d.]+),(-?[\d.]+) C(-?[\d.]+),(-?[\d.]+) (-?[\d.]+),(-?[\d.]+) (-?[\d.]+),(-?[\d.]+)$/u
+  );
+  if (!numbers) return undefined;
+  const values = numbers.slice(1).map(Number);
+  const curve = [0, 2, 4, 6].map((i) => ({ x: values[i], y: values[i + 1] }));
+  if (end === 'end') curve.reverse();
+  const [at, ahead] = [
+    curve[0],
+    curve.slice(1).find(({ x, y }) => x !== curve[0].x || y !== curve[0].y)
+  ];
+  if (!ahead) return undefined;
+  const length = Math.hypot(ahead.x - at.x, ahead.y - at.y);
+  const back = { x: (at.x - ahead.x) / length, y: (at.y - ahead.y) / length };
+  // How far back the way it leaves first enters a box drawn there.
+  const entries = drawn.flatMap((box) => {
+    let [near, far] = [0, Infinity];
+    for (const [origin, step, low, high] of [
+      [at.x, back.x, box.left, box.right],
+      [at.y, back.y, box.top, box.bottom]
+    ]) {
+      if (step === 0) {
+        if (origin < low || origin > high) return [];
+        continue;
+      }
+      const [t1, t2] = [(low - origin) / step, (high - origin) / step].sort((a, b) => a - b);
+      [near, far] = [Math.max(near, t1), Math.min(far, t2)];
+    }
+    return near <= far ? [near] : [];
+  });
+  if (!entries.length) return undefined;
+  const reach = Math.min(...entries) - trim;
+  // Within a pixel, it meets it already.
+  if (reach < 1) return undefined;
+  const point = { x: at.x + back.x * reach, y: at.y + back.y * reach };
+  const reached = [point, ...curve.slice(1)];
+  if (end === 'end') reached.reverse();
+  const [p0, p1, p2, p3] = reached.map(({ x, y }) => `${round(x)},${round(y)}`);
+  return { path: `M${p0} C${p1} ${p2} ${p3}`, point };
+}
+
 /** The node around an arrow's end, when the end is a box inside it, and the node's other content. */
 export type Surround = { outer: Box; parts: readonly Box[] };
 

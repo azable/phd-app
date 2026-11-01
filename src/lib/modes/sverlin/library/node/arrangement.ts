@@ -16,9 +16,11 @@ import {
   type LinkSpec
 } from './arrange';
 import type { Direction, Form } from './forms';
+import { headTrim } from './heads';
 import type { LineStyle } from './LinkLines.svelte';
 import { labelsIn, markerLook } from './markers';
 import type { Spacing } from './props';
+import { reachDrawn } from './route';
 import { closest, contains, descendants, hasClass, type Reader } from './reader';
 import type { SpanInput } from './span';
 import { seenParts, unionOf } from './visible';
@@ -59,6 +61,8 @@ export type ArrangementInput<E> = {
   styles: Record<string, LineStyle>;
   anchors: Record<string, Anchor>;
   parts: Anchor[];
+  /** What each child draws at this step, as its parts not hidden and the boxes painted round them. */
+  visible: Anchor[];
 };
 
 /**
@@ -151,6 +155,7 @@ export function arrangementInput<E>(
   // Links attach to the node drawing the element they name.
   const anchors: Record<string, Anchor> = {};
   const parts: Anchor[] = [];
+  const visible: Anchor[] = [];
   // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
   // item stands for it, so a link given its position still meets it.
   const items: Record<string, Anchor> = {};
@@ -208,6 +213,19 @@ export function arrangementInput<E>(
     // The content inside a child, which arrows bend round: its innermost nodes.
     for (const inner of nodes)
       if (!read.children(inner).some((child) => hasNode(read, child))) parts.push(anchor(inner));
+    // What it draws at this step, which arrows reach: that content where it is not hidden, and the
+    // boxes painted around it, as a pointer's fill round the vertex it is at.
+    const paints = (node: E) =>
+      ['data-sv-fill', 'data-sv-stroke'].some((name) => {
+        const value = attribute(node, name);
+        return value !== undefined && value !== 'none';
+      });
+    for (const inner of [element, ...nodes])
+      if (
+        attribute(inner, 'data-sv-hidden') !== 'true' &&
+        (paints(inner) || !read.children(inner).some((child) => hasNode(read, child)))
+      )
+        visible.push(anchor(inner));
     // A link from inside the child starts at the node holding it.
     for (const marker of markers) {
       const key = origin(marker);
@@ -234,7 +252,8 @@ export function arrangementInput<E>(
     labels,
     styles,
     anchors,
-    parts
+    parts,
+    visible
   };
 }
 
@@ -249,33 +268,75 @@ export function arrangeChildren<E>(
   props: ArrangementProps,
   memory: LayoutMemory | undefined
 ): Arrangement<E> {
-  const { input, elements, labels, styles, anchors, parts } = arrangementInput(read, host, props);
+  const { input, elements, labels, styles, anchors, parts, visible } = arrangementInput(
+    read,
+    host,
+    props
+  );
   const { boxes, options, seed } = input;
   // Links this step draws, by their components' ids.
-  const present = new Set(options.links?.map((link) => linkSpecOf(link)?.id));
-  const drawn = (edge: ArrangeEdge) => edge.id !== undefined && present.has(edge.id);
+  const specs = new Map(
+    (options.links ?? []).flatMap((link) => {
+      const spec = linkSpecOf(link);
+      return spec?.id ? [[spec.id, spec] as const] : [];
+    })
+  );
+  const drawn = (edge: ArrangeEdge) => edge.id !== undefined && specs.has(edge.id);
+  // Each arrow drawn reaches what its ends' nodes draw at this step (see reachDrawn).
+  const reaching = (
+    edges: readonly ArrangeEdge[],
+    placements: readonly { x: number; y: number }[]
+  ) =>
+    edges.filter(drawn).map((edge) => {
+      const spec = specs.get(edge.id as string) as LinkSpec;
+      const drawnAt = (key: string) => {
+        const anchor = anchors[key];
+        if (!anchor) return [];
+        const { x, y } = placements[anchor.box];
+        return [anchor, ...visible.filter((part) => part.box === anchor.box)].map((box) => ({
+          left: x + box.x,
+          top: y + box.y,
+          right: x + box.x + box.width,
+          bottom: y + box.y + box.height
+        }));
+      };
+      const trim = headTrim(edge.head?.shape, edge.head?.size ?? 0);
+      let reached = edge;
+      const start = reachDrawn(
+        reached.path,
+        'start',
+        drawnAt(spec.start ?? spec.from),
+        edge.heads.start ? trim : 0
+      );
+      if (start) reached = { ...reached, path: start.path, x1: start.point.x, y1: start.point.y };
+      const end = reachDrawn(reached.path, 'end', drawnAt(spec.to), edge.heads.end ? trim : 0);
+      if (end) reached = { ...reached, path: end.path, x2: end.point.x, y2: end.point.y };
+      return reached;
+    });
   // Children go where the solution over every step put them, and only this step's links are
   // drawn. A child the solution does not know, such as before it is made, is laid out here alone.
   const span = memory?.scopes.get(props.scope)?.span;
-  if (span && boxes.every(({ key }) => span.positions[key]))
+  if (span && boxes.every(({ key }) => span.positions[key])) {
+    const placements = boxes.map(({ key }) => span.positions[key]);
     return {
       elements,
-      placements: boxes.map(({ key }) => span.positions[key]),
+      placements,
       width: span.width,
       height: span.height,
-      edges: span.edges.filter(drawn),
+      edges: reaching(span.edges, placements),
       choices: span.choices,
       styles,
       labels,
       problems: []
     };
+  }
   const solved = arrangeOnce(seed, boxes, { ...options, anchors, parts });
   return {
     elements,
     placements: solved.placements,
     width: solved.width,
     height: solved.height,
-    edges: solved.edges.filter(drawn),
+    edges: reaching(solved.edges, solved.placements),
     choices: solved.choices,
     styles,
     labels,

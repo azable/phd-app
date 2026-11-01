@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { headTrim } from './heads';
-import { curvePath, labelPoint, wirePath, type Box } from './route';
+import { curvePath, labelPoint, reachDrawn, wirePath, type Box } from './route';
 import { routeWires } from './wires';
 
 const point = (x: number, y: number) => ({ x, y });
@@ -179,5 +179,35 @@ describe('where a label goes', () => {
     const placed = labelPoint(line, point(50, 0), label, [box(-10, 0, 110, 0)]);
     expect(Math.abs(placed.y)).toBeGreaterThanOrEqual(5);
     expect(placed.x).toBe(50);
+  });
+});
+
+describe('an arrow reaching what its node draws', () => {
+  // A vertex's name cell and the caption under it, in a node keeping room below for a label shown
+  // only at some steps; the arrow was routed from the bottom of that room.
+  const name: Box = { left: 20, top: 0, right: 70, bottom: 50 };
+  const caption: Box = { left: 10, top: 50, right: 80, bottom: 74 };
+  const label: Box = { left: 15, top: 90, right: 75, bottom: 114 };
+  const down = 'M45,180 C45,220 45,260 45,300';
+
+  it('carries on back along the way it leaves to the nearest box drawn', () => {
+    expect(reachDrawn(down, 'start', [name, caption], 0)).toEqual({
+      path: 'M45,74 C45,220 45,260 45,300',
+      point: point(45, 74)
+    });
+    expect(reachDrawn(down, 'start', [name, caption, label], 0)?.point).toEqual(point(45, 114));
+    // A slanting arrow keeps its slant.
+    const slant = reachDrawn('M60,180 C70,220 80,260 90,300', 'start', [name, caption], 0);
+    expect(slant?.point.y).toBeCloseTo(74, 5);
+    expect(slant?.point.x).toBeCloseTo(60 - (180 - 74) / 4, 5);
+  });
+
+  it('stops short for a head, and is left as it is where it meets a box or none lies back', () => {
+    const up = 'M45,300 C45,260 45,220 45,180';
+    expect(reachDrawn(up, 'end', [name, caption], 9)?.point).toEqual(point(45, 83));
+    expect(reachDrawn('M45,50 C45,100 45,200 45,300', 'start', [name, caption], 0)).toBeUndefined();
+    expect(reachDrawn('M45,83 C45,100 45,200 45,300', 'start', [name, caption], 9)).toBeUndefined();
+    expect(reachDrawn('M150,180 C150,220 150,260 150,300', 'start', [name], 0)).toBeUndefined();
+    expect(reachDrawn('M45,180 L45,300', 'start', [name], 0)).toBeUndefined();
   });
 });

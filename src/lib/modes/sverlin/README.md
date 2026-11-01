@@ -1164,7 +1164,9 @@ prop, as `Arrow.Link` for a link in `Arrow`.
   stroke or fill of its own is met at the bordered or filled boxes inside it, as
   a vertex's name cell rather than the column holding it and its caption, unless
   reaching them would cross that other content: an arrow down from a vertex with
-  captions under it leaves below them, in line with its name cell.
+  captions under it leaves just below what is drawn under it at that step, its
+  captions or a pointer's label, in line with its name cell, not below room kept
+  for a label shown only at other steps.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
