@@ -720,7 +720,10 @@ part of another condition, and never reads the label's value (`{#if @label}` is
 refused); no `{:else}`. Branches that take turns share one place, as large as
 the largest, `{#if when(@a)}…{:else if when(@b)}…{/if}`, as in bubble sort
 above; a chain whose branches would show at one step, as a label and one inside
-it, is refused.
+it, is refused. Text that changes from step to step in one place, as a status
+line saying what each step does, is one chain: separate `{#if when(…)}` blocks
+each keep their own room, so their texts stack down the page instead of
+replacing one another.
 
 What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
 the label has given up to this step, and `applied(Equal, @check)`, every
