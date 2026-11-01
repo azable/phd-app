@@ -13,6 +13,7 @@ import {
 } from '$lib/server/participants';
 import { projectRepository } from '$lib/server/projects/repository';
 import {
+  purgeAllProjects,
   purgeParticipantResearchData,
   purgeStudyResearchData
 } from '$lib/server/research-data-lifecycle';
@@ -212,6 +213,18 @@ export const actions: Actions = {
       return { studyPurged: true, participantsPurged };
     } catch (cause) {
       return fail(409, { error: cause instanceof Error ? cause.message : 'Study purge failed.' });
+    }
+  },
+  purgeProjects: async ({ locals, request }) => {
+    requireAdmin(locals);
+    try {
+      const form = await request.formData();
+      const projectsPurged = await purgeAllProjects(String(form.get('confirmation') ?? ''));
+      return { projectsPurged };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error ? cause.message : 'Deleting the projects failed.'
+      });
     }
   }
 };

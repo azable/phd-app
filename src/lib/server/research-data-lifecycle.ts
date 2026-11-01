@@ -40,6 +40,22 @@ export async function purgeStudyResearchData(headers: Headers): Promise<number> 
   return participants.length;
 }
 
+/** What an administrator types to delete every project. */
+export const allProjectsPurgeConfirmation = 'DELETE ALL PROJECTS';
+
+/**
+ * Delete every project, whoever owns it, with its events and interaction sessions (cascaded);
+ * accounts and study runs stay, a study phase run losing only its project.
+ */
+export async function purgeAllProjects(confirmation: string): Promise<number> {
+  if (confirmation !== allProjectsPurgeConfirmation) {
+    throw new Error(`Enter ${allProjectsPurgeConfirmation} to confirm deleting every project.`);
+  }
+  await assertNoActiveProjectOperations();
+  const deleted = await database().delete(schema.projects).returning({ id: schema.projects.id });
+  return deleted.length;
+}
+
 export function participantPurgeConfirmation(participantId: string): string {
   return `DELETE ${participantId}`;
 }

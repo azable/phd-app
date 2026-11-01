@@ -32,6 +32,7 @@
   const participants = $derived(selectPollSnapshot(data.participants, polledParticipants));
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   let purgingStudy = $state(false);
+  let purgingProjects = $state(false);
 
   // Five seconds keeps researcher-visible progress near-live without a persistent connection or
   // issuing a database query for every countdown tick.
@@ -90,6 +91,17 @@
     };
   };
 
+  const purgeProjects: SubmitFunction = () => {
+    purgingProjects = true;
+    return async ({ update }) => {
+      try {
+        await update();
+      } finally {
+        purgingProjects = false;
+      }
+    };
+  };
+
   onMount(() => {
     startPolling();
     return stopPolling;
@@ -121,6 +133,11 @@
   {#if form?.studyPurged}<Alert.Root
       ><Alert.Title>Study data deleted</Alert.Title><Alert.Description
         >Deleted live study data for {form.participantsPurged} participants.</Alert.Description
+      ></Alert.Root
+    >{/if}
+  {#if form?.projectsPurged !== undefined}<Alert.Root
+      ><Alert.Title>Projects deleted</Alert.Title><Alert.Description
+        >Deleted {form.projectsPurged} projects.</Alert.Description
       ></Alert.Root
     >{/if}
   {#if form?.giftCardUpdated}<Alert.Root><Alert.Title>Gift card updated</Alert.Title></Alert.Root
@@ -304,6 +321,42 @@
         aria-label={purgingStudy ? 'Deleting study data' : undefined}
       >
         {#if purgingStudy}<Spinner data-icon="inline-start" />Deleting…{:else}Delete study data{/if}
+      </Button>
+    </form>
+  </section>
+
+  <section class="flex flex-col gap-4 rounded-lg border border-destructive/50 p-5">
+    <div>
+      <h2 class="text-xl font-medium">Delete all projects</h2>
+      <p class="text-sm text-muted-foreground">
+        Deletes every project, administrators' included, with its events and interaction sessions.
+        Accounts and study runs stay. Export first if anything should be kept.
+      </p>
+    </div>
+    <form
+      method="POST"
+      action="?/purgeProjects"
+      use:enhance={purgeProjects}
+      class="flex max-w-xl items-end gap-3"
+    >
+      <Field.Field class="flex-1">
+        <Field.FieldLabel for="projects-confirmation">Enter DELETE ALL PROJECTS</Field.FieldLabel>
+        <Input
+          id="projects-confirmation"
+          name="confirmation"
+          required
+          autocomplete="off"
+          disabled={purgingProjects}
+        />
+      </Field.Field>
+      <Button
+        type="submit"
+        variant="destructive"
+        disabled={purgingProjects}
+        aria-busy={purgingProjects}
+        aria-label={purgingProjects ? 'Deleting projects' : undefined}
+      >
+        {#if purgingProjects}<Spinner data-icon="inline-start" />Deleting…{:else}Delete all projects{/if}
       </Button>
     </form>
   </section>
