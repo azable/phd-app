@@ -2,6 +2,7 @@
 
 import * as v from 'valibot';
 
+import { briefAttribute, intakeKeys } from '$lib/shared/projects/brief';
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
 
 import type { ChatBotConfig } from './types';
@@ -11,10 +12,14 @@ export type ParticipantIntakeStep = {
   question: string;
 };
 
-/** The participant-facing intake shared by visualization modes. */
-export const visualizationParticipantIntake = [
-  { id: 'algorithm', question: 'What algorithm would you like to visualise?' }
-] as const satisfies readonly [ParticipantIntakeStep, ...ParticipantIntakeStep[]];
+/**
+ * The participant-facing intake shared by visualization modes: the brief's first attributes, whose
+ * answers the brief records as confirmed (see shared/projects/brief.ts).
+ */
+export const visualizationParticipantIntake = intakeKeys.map((key) => ({
+  id: key,
+  question: briefAttribute(key).question
+})) as [ParticipantIntakeStep, ...ParticipantIntakeStep[]];
 
 export type ParticipantIntakeClassifierOutput = { decision: 'continue' | 'exit' };
 

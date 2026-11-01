@@ -4,6 +4,7 @@ import * as v from 'valibot';
 
 import { presentationIdSchema } from '$lib/shared/presentations';
 
+import { briefEntrySchema } from '../brief';
 import { elementIdSchema, messageContentSchema } from './message-content';
 import { participantIntakeStepSchema } from './assistant-intake';
 import { eventEnvelope, positiveSchema } from './values';
@@ -28,6 +29,8 @@ export const assistantRespondedEventSchema = v.object({
         example: v.optional(v.literal(true)),
         elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
       })
-    )
+    ),
+    /** Attributes of the design brief its decision set (see shared/projects/brief.ts). */
+    brief: v.optional(v.array(briefEntrySchema))
   })
 });

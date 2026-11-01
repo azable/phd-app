@@ -2901,6 +2901,53 @@ describe('several variants from chat', () => {
     expect(presented(result.appendedEvents)).toEqual([]);
   });
 
+  it('records the brief a decision sets with its reply, and keeps what it rules out of comparisons', async () => {
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const document = await createProject(
+      { title: 'Grey', creation: { templateId: 'linear-search' }, presentationCount: 2 },
+      serviceDependencies
+    );
+    const brief = [
+      {
+        key: 'constraints',
+        value: 'printed in grey',
+        status: 'confirmed',
+        source: 'it gets printed in grey',
+        tags: ['greyscale']
+      }
+    ];
+    mocks.generatePrepared
+      .mockReset()
+      .mockResolvedValueOnce({
+        ...generation(undefined, 'Two questions.'),
+        decision: {
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: [marks],
+          summary: 'Asks about the marks'
+        },
+        brief
+      })
+      .mockResolvedValueOnce(generation(undefined, 'Sorry.'));
+
+    const result = await submitProjectFeedback(
+      feedbackOptions(document, 'It gets printed in grey.', '94345678-1234-4123-8123-123456789abc'),
+      commandDependencies
+    );
+
+    const reply = result.appendedEvents.find(({ type }) => type === 'assistant.responded');
+    expect(reply?.payload).toMatchObject({ brief });
+    const rejected = result.appendedEvents.find(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected?.payload).toMatchObject({
+      rejected: 'comparisons',
+      problems: [expect.stringContaining('it must print in grey')]
+    });
+    expect(presented(result.appendedEvents)).toEqual([]);
+  });
+
   const caption = [
     {
       find: '{#layout Main}',

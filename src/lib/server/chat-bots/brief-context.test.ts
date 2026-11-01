@@ -1,0 +1,132 @@
+import { describe, expect, it } from 'vitest';
+
+import { briefKeys, type BriefItem, type BriefKey } from '$lib/shared/projects/brief';
+
+import { briefContext, briefSteering } from './brief-context';
+import { openChoices, preferenceSummary } from './preference-summary';
+import type { AiDesign } from './project-context';
+
+const design: AiDesign = {
+  options: { fill: ['none', 'white', 'amber-200', 'sky-200'], font: ['sans', 'serif', 'mono'] },
+  variables: [
+    { variable: 'Compared.fill', options: 'fill', value: 'white' },
+    { variable: 'Cell.fill', options: 'fill', value: 'white' },
+    { variable: 'Cell.font', options: 'font', value: 'sans' },
+    { variable: 'pause@insert.swap', options: ['on', 'off'], value: 'on' },
+    { variable: 'listing.language', options: ['python', 'pseudo'], value: 'pseudo' }
+  ]
+};
+
+/** A brief with the given attributes set, the rest unknown. */
+function brief(
+  set: Partial<Record<BriefKey, Omit<Extract<BriefItem, { value: string }>, 'key' | 'eventId'>>>
+) {
+  return briefKeys.map((key): BriefItem => {
+    const item = set[key];
+    return item ? { key, eventId: 1, ...item } : { key, status: 'unknown' };
+  });
+}
+
+const askNext = (items: BriefItem[]) =>
+  preferenceSummary([], design, briefSteering(items))!.askNext.flatMap(
+    ({ variables }) => variables
+  );
+
+describe('the brief steering the preference summary', () => {
+  it('ranks how comparisons are marked above fonts when the focus is comparisons', () => {
+    expect(askNext(brief({})).indexOf('Cell.font')).toBeLessThan(
+      askNext(brief({})).indexOf('Compared.fill')
+    );
+    const focused = brief({
+      focus: { status: 'inferred', value: 'each comparison', tags: ['comparisons'] }
+    });
+    const steering = briefSteering(focused);
+    expect(steering.weight('Compared.fill')).toBeGreaterThan(1);
+    expect(steering.weight('Cell.font')).toBeLessThan(1);
+    expect(steering.weight('Cell.fill')).toBe(1);
+    const ranked = askNext(focused);
+    expect(ranked.indexOf('Compared.fill')).toBeLessThan(ranked.indexOf('Cell.font'));
+  });
+
+  it('multiplies every value’s weights', () => {
+    const steering = briefSteering(
+      brief({
+        detail: { status: 'confirmed', value: 'only key steps', tags: ['key-steps'] },
+        setting: { status: 'inferred', value: 'revising', tags: ['revision'] }
+      })
+    );
+    expect(steering.weight('pause@insert.swap')).toBeCloseTo(1.6 * 0.7);
+  });
+
+  it('keeps colours out of what is worth asking and of comparisons when it prints in grey', () => {
+    const grey = brief({
+      constraints: { status: 'confirmed', value: 'printed in grey', tags: ['greyscale'] }
+    });
+    const steering = briefSteering(grey);
+    expect(steering.excluded('Cell.fill')).toBe('it must print in grey');
+    expect(steering.excluded('Cell.font')).toBeUndefined();
+    const summary = preferenceSummary([], design, steering)!;
+    expect(summary.askNext.map(({ family }) => family)).not.toContain('colour');
+    expect(summary.unexplored.map(({ family }) => family)).not.toContain('colour');
+    expect(
+      briefSteering(
+        brief({ constraints: { status: 'inferred', value: 'no code', tags: ['no-listing'] } })
+      ).excluded('listing.language')
+    ).toBe('it has no code listing');
+  });
+});
+
+describe('the brief in the assistant’s context', () => {
+  const open = openChoices([], design);
+
+  it('marks unknown attributes bearing on open choices to ask, the subject first', () => {
+    const context = briefContext(brief({}), open);
+    const byKey = Object.fromEntries(context.attributes.map((item) => [item.key, item]));
+    expect(byKey.algorithm).toMatchObject({ status: 'unknown', prompt: 'ask' });
+    expect(byKey.constraints).toMatchObject({ prompt: 'ask', decides: ['colour', 'views'] });
+    expect(byKey.tone.decides).toEqual(['lettering', 'colour']);
+    // Edge cases are asked once the first version is settled, as assistant.md says.
+    expect(byKey.cases).not.toHaveProperty('prompt');
+    expect(context.askFirst[0]).toBe('algorithm');
+    expect(context.askFirst).toHaveLength(3);
+    expect(context.avoid).toEqual([]);
+  });
+
+  it('asks nothing of an attribute whose choices are all decided or excluded', () => {
+    const context = briefContext(
+      brief({ algorithm: { status: 'confirmed', value: 'insertion sort' } }),
+      []
+    );
+    expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([]);
+    expect(context.askFirst).toEqual([]);
+  });
+
+  it('marks an inferred value that steers open choices to confirm, after unknowns', () => {
+    const context = briefContext(
+      brief({
+        algorithm: { status: 'confirmed', value: 'insertion sort' },
+        constraints: {
+          status: 'inferred',
+          value: 'printed handouts',
+          source: 'for the printed handouts',
+          tags: ['greyscale']
+        },
+        tone: { status: 'inferred', value: 'serious', tags: [] }
+      }),
+      open
+    );
+    const byKey = Object.fromEntries(context.attributes.map((item) => [item.key, item]));
+    expect(byKey.constraints).toMatchObject({
+      status: 'inferred',
+      value: 'printed handouts',
+      source: 'for the printed handouts',
+      prompt: 'confirm',
+      decides: ['colour']
+    });
+    // Inferred, but naming nothing that steers.
+    expect(byKey.tone).not.toHaveProperty('prompt');
+    // Unknowns bearing on open choices come first.
+    expect(context.askFirst).not.toContain('constraints');
+    expect(context.avoid).toEqual(['colours: it must print in grey']);
+  });
+});

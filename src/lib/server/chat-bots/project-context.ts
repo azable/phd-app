@@ -46,7 +46,10 @@ import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
-import { preferenceSummary, type AiPreferences } from './preference-summary';
+import { projectBrief } from '$lib/shared/projects/brief';
+
+import { briefContext, briefSteering, type AiBrief } from './brief-context';
+import { openChoices, preferenceSummary, type AiPreferences } from './preference-summary';
 
 /** Compact, body-free entry that lets the AI identify one retained event. */
 export type AiTimelineEntry = {
@@ -236,6 +239,12 @@ export type AiProjectContext = {
    * system believed when the assistant asked.
    */
   preferences?: AiPreferences;
+  /**
+   * The design brief (brief-context.ts): what the participant is trying to achieve, each attribute
+   * unknown, inferred or confirmed, which are worth asking or confirming now, and what it keeps out
+   * of comparisons. It weights preferences' askNext.
+   */
+  brief: AiBrief;
   timelineWindow: {
     totalEventCount: number;
     omittedEventCount: number;
@@ -510,7 +519,8 @@ export function projectAiContext(
   const timelineEvents = events.slice(-recentTimelineEventLimit);
   const waiting = waitingComparisons(document).map(({ question }) => question);
   const design = designVariables(viewedPresentation(document, selection.interactionEventIds ?? []));
-  const preferences = preferenceSummary(document.events, design);
+  const brief = projectBrief(document.events);
+  const preferences = preferenceSummary(document.events, design, briefSteering(brief));
 
   return {
     projectId: document.projectId,
@@ -523,6 +533,7 @@ export function projectAiContext(
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),
     ...(preferences ? { preferences } : {}),
+    brief: briefContext(brief, openChoices(document.events, design)),
     timelineWindow: {
       totalEventCount: events.length,
       omittedEventCount: events.length - timelineEvents.length

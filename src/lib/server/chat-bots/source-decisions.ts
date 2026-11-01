@@ -8,6 +8,15 @@
 import { toJsonSchema } from '@valibot/to-json-schema';
 import * as v from 'valibot';
 
+import {
+  briefKeys,
+  briefStatusSchema,
+  briefTags,
+  knownTags,
+  maximumBriefText,
+  type BriefEntry
+} from '$lib/shared/projects/brief';
+
 /** What a first source shows, or what a change does: one short sentence. */
 const summary = v.pipe(
   v.string(),
@@ -260,3 +269,66 @@ function everyPropertyRequired(schema: unknown): unknown {
     ? { ...object, required: Object.keys(properties) }
     : object;
 }
+
+/** The most attributes one decision sets: every attribute of the brief. */
+const maximumBriefEntries = briefKeys.length;
+
+/**
+ * Attributes of the design brief (shared/projects/brief.ts) this turn learned or the participant
+ * confirmed or corrected, returned beside the decision; only those that changed, or null.
+ */
+export const briefUpdateSchema = v.nullable(
+  v.pipe(
+    v.array(
+      v.strictObject({
+        key: v.pipe(v.picklist(briefKeys), v.description('The attribute, from project.brief.')),
+        value: v.pipe(
+          v.string(),
+          v.trim(),
+          v.maxLength(maximumBriefText),
+          v.description(
+            'What it is, briefly, in the participant’s terms, as “first-year students, new to sorting”; empty for unknown.'
+          )
+        ),
+        status: v.pipe(
+          briefStatusSchema,
+          v.description(
+            'inferred, from what the participant wrote or the request; confirmed, the participant said so or agreed; unknown, to forget it.'
+          )
+        ),
+        source: v.pipe(
+          v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(maximumBriefText))),
+          v.description('The participant’s words it came from, quoted, or null.')
+        ),
+        tags: v.pipe(
+          v.array(v.picklist(briefTags)),
+          v.description(
+            'The values from this attribute’s offeredTags in project.brief that apply, as ["greyscale"] for constraints; others are ignored.'
+          )
+        )
+      })
+    ),
+    v.maxLength(maximumBriefEntries)
+  )
+);
+
+/** The brief entries a decision sets, as recorded: each with only the tags its attribute names. */
+export function recordedBrief(
+  update: v.InferOutput<typeof briefUpdateSchema> | undefined
+): BriefEntry[] {
+  return (update ?? []).map(({ key, value, status, source, tags }) => {
+    const named = knownTags(key, tags);
+    return {
+      key,
+      value,
+      status,
+      ...(source ? { source } : {}),
+      ...(named.length ? { tags: named } : {})
+    };
+  });
+}
+
+/** The brief update as JSON Schema, for the response format sent to the model. */
+export const briefUpdateJsonSchema = everyPropertyRequired(
+  toJsonSchema(briefUpdateSchema, { errorMode: 'ignore', target: 'draft-07' })
+) as Record<string, unknown>;

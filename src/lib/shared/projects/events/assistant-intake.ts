@@ -2,10 +2,11 @@
 
 import * as v from 'valibot';
 
+import { intakeKeys } from '../brief';
 import { eventEnvelope, positiveSchema } from './values';
 
-/** Stable identifiers for the participant-intake questions. */
-export const participantIntakeStepSchema = v.picklist(['algorithm']);
+/** Intake's questions: the brief's first attributes (see shared/projects/brief.ts). */
+export const participantIntakeStepSchema = v.picklist(intakeKeys);
 
 export type ParticipantIntakeStepId = v.InferOutput<typeof participantIntakeStepSchema>;
 

@@ -160,6 +160,50 @@ describe('single-component Svelte assistant', () => {
       expect(() => parse(invalid)).toThrow(/invalid structured response/i);
   });
 
+  it('asks for the brief beside the decision and records only the tags each attribute names', () => {
+    const schema = aiAssistant.responseFormat.schema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.required).toContain('brief');
+    const parse = (brief: unknown) =>
+      aiAssistant.parseOutput({
+        reply: [{ type: 'markdown', text: 'Done.' }],
+        decision: { action: 'respond', question: null },
+        brief,
+        recovery: null
+      });
+    expect(
+      parse([
+        {
+          key: 'constraints',
+          value: ' printed in grey ',
+          status: 'inferred',
+          source: 'for the handouts',
+          tags: ['greyscale', 'playful']
+        },
+        { key: 'tone', value: '', status: 'unknown', source: null, tags: [] }
+      ]).brief
+    ).toEqual([
+      {
+        key: 'constraints',
+        value: 'printed in grey',
+        status: 'inferred',
+        source: 'for the handouts',
+        tags: ['greyscale']
+      },
+      { key: 'tone', value: '', status: 'unknown' }
+    ]);
+    expect(parse(null)).not.toHaveProperty('brief');
+    // A brief that does not parse is left out; the decision stands.
+    expect(
+      parse([{ key: 'mood', value: 'x', status: 'inferred', source: null, tags: [] }])
+    ).toMatchObject({ decision: { action: 'respond' } });
+    expect(
+      parse([{ key: 'mood', value: 'x', status: 'inferred', source: null, tags: [] }])
+    ).not.toHaveProperty('brief');
+  });
+
   it('rejects unsupported message content in assistant discussion', () => {
     expect(() =>
       aiAssistant.parseOutput({

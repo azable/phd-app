@@ -12,6 +12,7 @@ import { presentationIdSchema } from '$lib/shared/presentations';
 import { textSchema } from '$lib/shared/projects/events/values';
 
 import type { SourceDecision } from './source-decisions';
+import type { BriefEntry } from '$lib/shared/projects/brief';
 
 /** User or assistant message retained as conversational context. */
 export type ConversationMessage = {
@@ -170,10 +171,14 @@ export type ChatResponseFormat = {
   strict?: boolean;
 };
 
-/** What an assistant that authors a source returns: its reply, and its decision (see source-decisions.ts). */
+/**
+ * What an assistant that authors a source returns: its reply, its decision (see source-decisions.ts),
+ * and the attributes of the design brief it set.
+ */
 export type SourceArtifactChatOutput = {
   reply: GeneratedMessageContent;
   decision: SourceDecision;
+  brief?: BriefEntry[];
   recovery?: RecoveryExplanation;
 };
 

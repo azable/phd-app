@@ -125,12 +125,21 @@ summary
 ([`preference-summary.ts`](src/lib/server/chat-bots/preference-summary.ts)),
 each touched choice's likeliest option, what is most worth asking and what was
 never compared, goes in the assistant's context as `preferences`, and so into
-each request's recorded prompt. The assistant may also ask one `question` at a
-time, in words or about a presentation (one shown, or the first its decision
-makes, with elements to highlight), answered by the participant's next message,
-which records the question it answers (`feedback.submitted` `answers`); the chat
-shows each question with its answer underneath, and each comparison pair its
-question and answer as a caption
+each request's recorded prompt. Beside it goes the design brief, `brief`: the
+attributes of what the participant is trying to achieve, defined in
+[`brief.ts`](src/lib/shared/projects/brief.ts) (intake's questions first), each
+unknown, inferred or confirmed, from intake's answers and the `brief` each
+assistant decision returns, recorded on its `assistant.responded`; which are
+worth asking or confirming now
+([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
+brief keeps out of comparisons, as colour where it must print in grey, which a
+comparison varying it is sent back to the assistant for. The brief's values
+weight the summary's ranking of what is worth asking. The assistant may also ask
+one `question` at a time, in words or about a presentation (one shown, or the
+first its decision makes, with elements to highlight), answered by the
+participant's next message, which records the question it answers
+(`feedback.submitted` `answers`); the chat shows each question with its answer
+underneath, and each comparison pair its question and answer as a caption
 ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with an
 option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side the variant guard would change is recorded as rejected

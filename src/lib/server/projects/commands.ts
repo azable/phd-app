@@ -72,6 +72,8 @@ import type {
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
 import { openQuestion } from '$lib/shared/projects/questions';
+import { projectBrief, type BriefEntry } from '$lib/shared/projects/brief';
+import { briefSteering, type BriefSteering } from '$lib/server/chat-bots/brief-context';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
@@ -880,7 +882,7 @@ async function runSverlinAssistantTurn(
 
       if (attempt === 1) {
         // A blank reply to a change says what the change does instead.
-        const { reply, decision } = generation.result;
+        const { reply, decision, brief } = generation.result;
         const summary = 'summary' in decision ? decision.summary : undefined;
         const question = recordedQuestion(
           current,
@@ -898,7 +900,7 @@ async function runSverlinAssistantTurn(
           operationId,
           dependencies,
           inReplyTo,
-          question ? { question } : {}
+          { ...(question ? { question } : {}), ...(brief ? { brief } : {}) }
         );
       }
 
@@ -993,7 +995,8 @@ async function runSverlinAssistantTurn(
             designVariables(
               viewedPresentation(current, contextSelection.interactionEventIds ?? [])
             ),
-            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} }
+            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
+            briefSteering(projectBrief(current.events))
           );
           if (problems.length) return reject('comparisons', problems, candidate);
           checked = true;
@@ -1080,11 +1083,12 @@ async function runSverlinAssistantTurn(
       if (batchSucceeded(built.recorded)) {
         const [first] = built.recorded.builds;
         if (pairs && !checked && first?.result.ok) {
-          const problems = comparisonProblems(pairs, designVariables(first.result.bundle), {
-            tree: pictureTree(candidate),
-            base: { ...viewed, ...variant.chosen },
-            settled: {}
-          });
+          const problems = comparisonProblems(
+            pairs,
+            designVariables(first.result.bundle),
+            { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
+            briefSteering(projectBrief(current.events))
+          );
           if (problems.length) return reject('comparisons', problems, candidate);
         }
         // A new source's presentations, and those a decision with a count queues, show the
@@ -1433,6 +1437,7 @@ async function runSverlinGeneration(
       fallbackResponse: (result) => ({
         reply: result.reply,
         decision: result.decision,
+        brief: result.brief ?? null,
         recovery: result.recovery ?? null,
         generation: result.generation
       })
@@ -1753,9 +1758,15 @@ function designValues(values: readonly { variable: string; value: string | numbe
 
 /**
  * What keeps a vary's comparisons from being built as given: a value its variable does not offer,
- * two sides alike, or a side the variant guard would change (hiding too much, or a top-level part).
+ * two sides alike, a side the variant guard would change (hiding too much, or a top-level part), or
+ * a choice the brief keeps out of comparisons (a colour where it must print in grey).
  */
-function comparisonProblems(pairs: Comparisons, design: AiDesign, guard: GuardContext): string[] {
+function comparisonProblems(
+  pairs: Comparisons,
+  design: AiDesign,
+  guard: GuardContext,
+  brief: BriefSteering
+): string[] {
   return pairs.flatMap(({ question, left, right }, index) => {
     const name = `Comparison ${index + 1} (“${question}”)`;
     const problems = [...left.values, ...right.values].flatMap(({ variable, value }) =>
@@ -1764,6 +1775,11 @@ function comparisonProblems(pairs: Comparisons, design: AiDesign, guard: GuardCo
         : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
     );
     const sides = [designValues(left.values), designValues(right.values)];
+    for (const variable of Object.keys({ ...sides[0], ...sides[1] })) {
+      const excluded = brief.excluded(variable);
+      if (excluded)
+        problems.push(`${name}: ${variable} is kept out of comparisons by the brief: ${excluded}.`);
+    }
     const differ = Object.keys({ ...sides[0], ...sides[1] }).some(
       (variable) =>
         (sides[0][variable] ?? guard.base[variable]) !==
@@ -2231,8 +2247,13 @@ function appendAssistantResponse(
   inReplyTo: readonly EventId[] = [],
   {
     intakeStep,
-    question
-  }: { intakeStep?: ParticipantIntakeStepId; question?: AssistantQuestion } = {}
+    question,
+    brief
+  }: {
+    intakeStep?: ParticipantIntakeStepId;
+    question?: AssistantQuestion;
+    brief?: BriefEntry[];
+  } = {}
 ) {
   return appendProjectEvents(
     document,
@@ -2245,7 +2266,8 @@ function appendAssistantResponse(
           content: typeof content === 'string' ? markdownMessage(content) : content,
           ...(inReplyTo.length > 0 ? { inReplyTo: [...inReplyTo] } : {}),
           ...(intakeStep ? { intakeStep } : {}),
-          ...(question ? { question } : {})
+          ...(question ? { question } : {}),
+          ...(brief?.length ? { brief } : {})
         }
       })
     ],

@@ -6,27 +6,19 @@
  * context whatever the design's size.
  */
 
+import type { ChoiceFamily } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
-import { choiceStates, preferenceEvidence } from '$lib/server/projects/preference-model';
+import {
+  choiceStates,
+  preferenceEvidence,
+  type ChoiceState,
+  type PreferenceEvidence
+} from '$lib/server/projects/preference-model';
 
+import type { BriefSteering } from './brief-context';
 import type { AiDesign } from './project-context';
 
 type DesignValue = string | number | boolean;
-
-/**
- * The families choices are explored by, the ones that change the picture most first: the views
- * drawn (views, pointers, the listing shown), what is shown, the arrangement (layouts, forms,
- * directions), pacing, shape, lettering, and colour.
- */
-export type ChoiceFamily =
-  | 'views'
-  | 'shown'
-  | 'arrangement'
-  | 'pacing'
-  | 'shape'
-  | 'lettering'
-  | 'colour'
-  | 'spacing';
 
 /**
  * A choice's family and how much it changes the picture, from 0 to 1: views, pointers, what is
@@ -116,30 +108,84 @@ const variablesPerGroup = 4;
 
 const rounded = (value: number) => Math.round(value * 100) / 100;
 
-/** The model's summary over a design's choices, or undefined where the design has none. */
-export function preferenceSummary(
-  events: readonly ProjectEvent[],
-  design: AiDesign
-): AiPreferences | undefined {
-  const choices = design.variables.flatMap(({ variable, options }) => {
-    const listed = typeof options === 'string' ? (design.options[options] ?? []) : options;
-    return listed.length > 1 && !unasked(variable) ? [{ variable, options: listed }] : [];
-  });
-  if (!choices.length) return undefined;
+/** A choice of the design worth asking about, and where the answers have left it. */
+type Standing = {
+  variable: string;
+  options: readonly DesignValue[];
+  family: ChoiceFamily;
+  impact: number;
+  state?: ChoiceState;
+};
+
+type Standings = { evidence: PreferenceEvidence; choices: Standing[]; eventCount: number };
+
+/**
+ * Standings by events and design, so the summary and openChoices fit the model once per context; an
+ * events array appended to since is fitted again.
+ */
+const fitted = new WeakMap<readonly ProjectEvent[], WeakMap<AiDesign, Standings>>();
+
+function standings(events: readonly ProjectEvent[], design: AiDesign): Standings {
+  const known = fitted.get(events)?.get(design);
+  if (known?.eventCount === events.length) return known;
   const evidence = preferenceEvidence(events);
   const states = choiceStates(evidence);
+  const choices = design.variables.flatMap(({ variable, options }): Standing[] => {
+    const listed = typeof options === 'string' ? (design.options[options] ?? []) : options;
+    if (listed.length < 2 || unasked(variable)) return [];
+    const state = states.get(variable);
+    return [{ variable, options: listed, ...choiceFamily(variable), ...(state ? { state } : {}) }];
+  });
+  const result = { evidence, choices, eventCount: events.length };
+  fitted.set(events, (fitted.get(events) ?? new WeakMap()).set(design, result));
+  return result;
+}
+
+/** How much a choice still open is worth asking: uncertainty weighted by how much it changes. */
+const openWorth = ({ options, impact, state }: Standing) =>
+  !state
+    ? impact * (1 - 1 / options.length)
+    : state.state === 'open'
+      ? impact * (1 - (state.probability ?? 0.5))
+      : undefined;
+
+/** The choices still open, each with how much asking it is worth, before the brief weighs them. */
+export function openChoices(
+  events: readonly ProjectEvent[],
+  design: AiDesign
+): { variable: string; family: ChoiceFamily; worth: number }[] {
+  return standings(events, design).choices.flatMap((choice) => {
+    const worth = openWorth(choice);
+    return worth === undefined ? [] : [{ variable: choice.variable, family: choice.family, worth }];
+  });
+}
+
+/**
+ * The model's summary over a design's choices, or undefined where the design has none. The brief's
+ * steering, where given, weights what is worth asking and leaves out what it keeps out of
+ * comparisons.
+ */
+export function preferenceSummary(
+  events: readonly ProjectEvent[],
+  design: AiDesign,
+  steering?: BriefSteering
+): AiPreferences | undefined {
+  const { evidence, choices } = standings(events, design);
+  if (!choices.length) return undefined;
   const answered = new Set(
     evidence.duels.filter(({ weight }) => weight === 1).map(({ eventId }) => eventId)
   );
   const touched: (AiChoice & { impact: number })[] = [];
   const open: { variable: string; family: ChoiceFamily; worth: number }[] = [];
   const unexplored = new Map<ChoiceFamily, { variable: string; impact: number }[]>();
-  for (const { variable, options } of choices) {
-    const { family, impact } = choiceFamily(variable);
-    const state = states.get(variable);
+  for (const choice of choices) {
+    const { variable, options, family, impact, state } = choice;
+    const kept = !steering?.excluded(variable);
+    const worth = openWorth(choice);
+    if (kept && worth !== undefined)
+      open.push({ variable, family, worth: worth * (steering?.weight(variable) ?? 1) });
     if (!state) {
-      unexplored.set(family, [...(unexplored.get(family) ?? []), { variable, impact }]);
-      open.push({ variable, family, worth: impact * (1 - 1 / options.length) });
+      if (kept) unexplored.set(family, [...(unexplored.get(family) ?? []), { variable, impact }]);
       continue;
     }
     const compared = state.compared.filter((value) => options.includes(value)).length;
@@ -154,8 +200,6 @@ export function preferenceSummary(
       unexplored: Math.max(0, options.length - compared),
       impact
     });
-    if (state.state === 'open')
-      open.push({ variable, family, worth: impact * (1 - (state.probability ?? 0.5)) });
   }
   // Colours are asked as a group (warm or cool highlights), not one variable at a time.
   const colours = open.filter(({ family }) => family === 'colour');

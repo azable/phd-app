@@ -1,0 +1,264 @@
+/**
+ * The design brief: what the participant is trying to achieve, as attributes (who it is for, where
+ * it is used, what a learner should notice, ...), each unknown, inferred from what they wrote, or
+ * confirmed by them. The attributes are defined here, in one place, each with the question asked
+ * in the participant's words, why it matters, and the design choices it bears on; each value it
+ * names (a tag) says how it steers which choices are worth asking and which are kept out of
+ * comparisons (see brief-context.ts). Read from the events: intake's answers, and the brief each
+ * assistant decision sets (assistant.responded `brief`).
+ */
+
+import * as v from 'valibot';
+
+import type { ProjectEvent } from './events';
+import { plainMessageText } from './events/message-content';
+
+/**
+ * The families design choices are explored by, the ones that change the picture most first: the
+ * views drawn (views, pointers, the listing shown), what is shown, the arrangement (layouts, forms,
+ * directions), pacing, shape, lettering, and colour.
+ */
+export type ChoiceFamily =
+  | 'views'
+  | 'shown'
+  | 'arrangement'
+  | 'pacing'
+  | 'shape'
+  | 'lettering'
+  | 'colour'
+  | 'spacing';
+
+/**
+ * How one value of an attribute steers: multipliers on the worth of asking each family's choices,
+ * and on choices whose variable matches a pattern; and choices it keeps out of comparisons.
+ */
+export type BriefSteer = {
+  families?: Partial<Record<ChoiceFamily, number>>;
+  matching?: { pattern: RegExp; weight: number }[];
+  excludes?: { what: string; families?: ChoiceFamily[]; pattern?: RegExp; reason: string };
+};
+
+export type BriefAttribute = {
+  key: string;
+  /** The question, in the participant's words. */
+  question: string;
+  why: string;
+  /** The design choices it bears on, or the inputs a source is run on (Stage 4). */
+  bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject';
+  /** Asked by intake, before the first version. */
+  intake?: true;
+  /** Values the assistant can name it by, each with how it steers. */
+  tags?: Record<string, BriefSteer>;
+};
+
+/** Variables for how a step's comparison is marked: pointers, and kinds or labels naming one. */
+const comparisonMarks = /^pointers\.|\.Pointed\.|compar/i;
+
+/**
+ * The attributes, in the order they are asked. Intake's questions come first. A first guess, to
+ * check against what Study 1's participants asked for and cared about (plan, Stage 3s).
+ */
+export const briefAttributes = [
+  {
+    key: 'algorithm',
+    question: 'What algorithm would you like to visualise?',
+    why: 'Everything drawn follows from the algorithm and its steps.',
+    bearsOn: 'subject',
+    intake: true
+  },
+  {
+    key: 'audience',
+    question: 'Who is it for, and what do they already know?',
+    why: 'Newcomers need more shown and slower steps; those who know the basics, less.',
+    bearsOn: ['shown', 'pacing', 'views'],
+    tags: {
+      novice: { families: { shown: 1.3, pacing: 1.2 } },
+      experienced: { families: { pacing: 0.8 } }
+    }
+  },
+  {
+    key: 'setting',
+    question:
+      'Will it be explained in a lecture, stepped through by a learner alone, or revised from?',
+    why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan.',
+    bearsOn: ['lettering', 'shown', 'pacing'],
+    tags: {
+      lecture: { families: { lettering: 1.4, shape: 1.1 } },
+      alone: { families: { shown: 1.3, pacing: 1.3 } },
+      revision: { families: { shown: 1.2, pacing: 0.7 } }
+    }
+  },
+  {
+    key: 'focus',
+    question:
+      'What should a learner notice first: each comparison, the overall pattern, or where it ends up?',
+    why: 'What is marked and how follows what a learner should notice.',
+    bearsOn: ['views', 'shown', 'arrangement', 'colour'],
+    tags: {
+      comparisons: {
+        matching: [{ pattern: comparisonMarks, weight: 2.5 }],
+        families: { lettering: 0.8 }
+      },
+      pattern: { families: { arrangement: 1.4, views: 1.2, pacing: 0.8 } },
+      result: { families: { shown: 1.3 } }
+    }
+  },
+  {
+    key: 'detail',
+    question: 'Should it show every step, or only the steps that matter?',
+    why: 'It decides where the steps pause.',
+    bearsOn: ['pacing'],
+    tags: {
+      'every-step': { families: { pacing: 1.2 } },
+      'key-steps': { families: { pacing: 1.6 } }
+    }
+  },
+  {
+    key: 'constraints',
+    question:
+      'Is there anything to keep or avoid, such as colour blindness, printing in grey, or no code listing?',
+    why: 'A constraint rules options out before any are compared.',
+    bearsOn: ['colour', 'views'],
+    tags: {
+      greyscale: {
+        excludes: { what: 'colours', families: ['colour'], reason: 'it must print in grey' }
+      },
+      'colour-blind': {},
+      'no-listing': {
+        excludes: { what: 'the listing', pattern: /^listing\./, reason: 'it has no code listing' }
+      }
+    }
+  },
+  {
+    key: 'tone',
+    question: 'Should it look plain or playful?',
+    why: 'Tone shows in fonts, colours and shapes.',
+    bearsOn: ['lettering', 'colour', 'shape'],
+    tags: {
+      plain: { families: { lettering: 0.8, shape: 0.8 } },
+      playful: { families: { lettering: 1.4, colour: 1.4, shape: 1.4 } }
+    }
+  },
+  {
+    key: 'cases',
+    question:
+      'Only the usual case, or edge cases too, such as a target that is absent or duplicates?',
+    why: 'Edge cases are inputs of their own, worth seeing only where the algorithm has them.',
+    bearsOn: 'inputs',
+    tags: { usual: {}, edge: {} }
+  }
+] as const satisfies readonly BriefAttribute[];
+
+export type BriefKey = (typeof briefAttributes)[number]['key'];
+
+export const briefKeys = briefAttributes.map(({ key }) => key) as [BriefKey, ...BriefKey[]];
+
+/** The attributes intake asks, in order. */
+export const intakeKeys = briefAttributes
+  .filter((attribute: BriefAttribute) => attribute.intake)
+  .map(({ key }) => key) as [BriefKey, ...BriefKey[]];
+
+export function briefAttribute(key: BriefKey): BriefAttribute {
+  return briefAttributes.find((attribute) => attribute.key === key)!;
+}
+
+/** Every tag any attribute names. */
+export const briefTags = [
+  ...new Set(
+    briefAttributes.flatMap((attribute: BriefAttribute) => Object.keys(attribute.tags ?? {}))
+  )
+] as [string, ...string[]];
+
+/** Where a value came from: the participant's words, inferred or confirmed, or set back to unknown. */
+export const briefStatusSchema = v.picklist(['inferred', 'confirmed', 'unknown']);
+
+/** The most characters of a value or the words it came from. */
+export const maximumBriefText = 200;
+
+/** One attribute as the assistant's decision sets it. */
+export const briefEntrySchema = v.object({
+  key: v.picklist(briefKeys),
+  value: v.pipe(v.string(), v.maxLength(maximumBriefText)),
+  status: briefStatusSchema,
+  /** The participant's words it came from. */
+  source: v.optional(v.pipe(v.string(), v.maxLength(maximumBriefText))),
+  /** Values from the attribute's tags it names. */
+  tags: v.optional(v.array(v.string()))
+});
+
+export type BriefEntry = v.InferOutput<typeof briefEntrySchema>;
+
+/** One attribute as the brief has it now. */
+export type BriefItem =
+  | { key: BriefKey; status: 'unknown' }
+  | {
+      key: BriefKey;
+      status: 'inferred' | 'confirmed';
+      value: string;
+      source?: string;
+      tags?: string[];
+      /** The event that set it. */
+      eventId: number;
+    };
+
+/** An entry's tags, keeping only those its attribute names. */
+export function knownTags(key: BriefKey, tags: readonly string[] = []): string[] {
+  const named = (briefAttribute(key).tags ?? {}) as Record<string, BriefSteer>;
+  return [...new Set(tags)].filter((tag) => Object.hasOwn(named, tag));
+}
+
+const clipped = (text: string) =>
+  text.length > maximumBriefText ? `${text.slice(0, maximumBriefText - 1)}…` : text;
+
+/**
+ * The brief, every attribute in order: intake's answers confirmed in the participant's words, then
+ * each entry an assistant decision set, the latest for each attribute standing.
+ */
+export function projectBrief(events: readonly ProjectEvent[]): BriefItem[] {
+  const items = new Map<BriefKey, BriefItem>(
+    briefKeys.map((key) => [key, { key, status: 'unknown' }])
+  );
+  // Intake's answer is the participant's next message after its question, unless they left intake.
+  let asking: BriefKey | undefined;
+  const intakeAnswers = new Map<number, BriefKey>();
+  for (const event of events) {
+    if (event.type === 'assistant.responded') {
+      asking = event.payload.intakeStep;
+      for (const { key, value, status, source, tags } of event.payload.brief ?? []) {
+        const named = knownTags(key, tags);
+        items.set(
+          key,
+          status === 'unknown'
+            ? { key, status }
+            : {
+                key,
+                status,
+                value,
+                ...(source ? { source } : {}),
+                ...(named.length ? { tags: named } : {}),
+                eventId: event.id
+              }
+        );
+      }
+    } else if (event.type === 'feedback.submitted' && asking) {
+      const text = plainMessageText(event.payload.content).trim();
+      if (text) {
+        items.set(asking, {
+          key: asking,
+          status: 'confirmed',
+          value: clipped(text),
+          source: clipped(text),
+          eventId: event.id
+        });
+        intakeAnswers.set(event.id, asking);
+      }
+      asking = undefined;
+    } else if (event.type === 'assistant.intake-completed' && event.payload.outcome === 'waived') {
+      const key = intakeAnswers.get(event.payload.interactionEventId);
+      const item = key && items.get(key);
+      if (key && item?.status !== 'unknown' && item?.eventId === event.payload.interactionEventId)
+        items.set(key, { key, status: 'unknown' });
+    }
+  }
+  return [...items.values()];
+}

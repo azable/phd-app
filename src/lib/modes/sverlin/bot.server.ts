@@ -9,6 +9,9 @@ import {
 } from '$lib/server/chat-bots/types';
 import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
 import {
+  briefUpdateJsonSchema,
+  briefUpdateSchema,
+  recordedBrief,
   sourceDecisionJsonSchema,
   sourceDecisionSchema
 } from '$lib/server/chat-bots/source-decisions';
@@ -99,19 +102,29 @@ export default {
       properties: {
         reply: retainedMessageContentJsonSchema,
         decision: sourceDecisionJsonSchema,
+        brief: briefUpdateJsonSchema,
         recovery: recoveryExplanationJsonSchema
       },
-      required: ['reply', 'decision', 'recovery']
+      required: ['reply', 'decision', 'brief', 'recovery']
     }
   },
   parseOutput(value) {
-    const output = value as { reply?: unknown; decision?: unknown; recovery?: unknown };
+    const output = value as {
+      reply?: unknown;
+      decision?: unknown;
+      brief?: unknown;
+      recovery?: unknown;
+    };
     const decision = v.safeParse(sourceDecisionSchema, output?.decision);
     if (!decision.success) throw new Error('The chatbot returned an invalid structured response.');
     const recovery = parseRecoveryExplanation(output.recovery);
+    // A brief that does not parse is left out rather than costing the turn a repair.
+    const brief = v.safeParse(briefUpdateSchema, output.brief);
+    const entries = brief.success ? recordedBrief(brief.output) : [];
     return {
       reply: v.parse(generatedMessageContentSchema, output.reply),
       decision: decision.output,
+      ...(entries.length ? { brief: entries } : {}),
       ...(recovery ? { recovery } : {})
     };
   }

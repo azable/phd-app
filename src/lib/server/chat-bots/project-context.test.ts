@@ -475,4 +475,72 @@ describe('comparisons in the conversation', () => {
       }
     ]);
   });
+
+  it('gives the brief beside the model’s summary, intake’s answer in it, steering the summary', () => {
+    const value = document();
+    const ids: [string, string] = [
+      '12345678-1234-4123-8123-123456789ac1',
+      '12345678-1234-4123-8123-123456789ac2'
+    ];
+    const at = value.events.length;
+    value.events.push(
+      {
+        id: at + 1,
+        type: 'assistant.responded',
+        operationId,
+        actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+        createdAt: '2026-01-01T00:00:04.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'What algorithm would you like to visualise?' }],
+          intakeStep: 'algorithm'
+        }
+      },
+      {
+        id: at + 2,
+        type: 'feedback.submitted',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:05.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Bubble sort for printed handouts' }],
+          focus: []
+        }
+      },
+      {
+        id: at + 3,
+        type: 'assistant.responded',
+        operationId,
+        actor: { kind: 'assistant', botId: 'sverlin-assistant' },
+        createdAt: '2026-01-01T00:00:06.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Here it is.' }],
+          brief: [
+            {
+              key: 'constraints',
+              value: 'printed in grey',
+              status: 'inferred',
+              source: 'printed handouts',
+              tags: ['greyscale']
+            }
+          ]
+        }
+      }
+    );
+    pair(value, ids, '12345678-1234-4123-8123-123456789abd');
+    const context = projectAiContext(value, { eventIds: [], interactionEventIds: [] });
+    expect(context.brief.attributes[0]).toMatchObject({
+      key: 'algorithm',
+      status: 'confirmed',
+      value: 'Bubble sort for printed handouts'
+    });
+    expect(context.brief.attributes.find(({ key }) => key === 'constraints')).toMatchObject({
+      status: 'inferred',
+      source: 'printed handouts',
+      prompt: 'confirm',
+      decides: ['colour']
+    });
+    expect(context.brief.avoid).toEqual(['colours: it must print in grey']);
+    // The fill, a colour, is no longer offered as unexplored.
+    expect(context.preferences?.unexplored.map(({ family }) => family)).not.toContain('colour');
+  });
 });
