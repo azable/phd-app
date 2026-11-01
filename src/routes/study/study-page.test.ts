@@ -1,8 +1,11 @@
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import StudyPage from './+page.svelte';
 import { actions } from './+page.server';
+
+const study = vi.hoisted(() => ({ continueParticipantStudy: vi.fn() }));
+vi.mock('$lib/server/study', () => study);
 
 const completionState = {
   studyId: 'main-study',
@@ -75,5 +78,27 @@ describe('study progression actions', () => {
     });
 
     expect(body).toContain('action="/study?/continue"');
+    expect(body).toContain('name="phaseId" value="welcome"');
+  });
+
+  it('continues only from the phase posted, then redirects so a reload sends nothing', async () => {
+    study.continueParticipantStudy.mockResolvedValue({
+      ...completionState,
+      phase: { id: 'between-tasks', kind: 'instruction' }
+    });
+    const body = new FormData();
+    body.set('phaseId', 'task-one');
+    const event = {
+      locals: { principal: { kind: 'participant', user: { id: 'participant' } } },
+      request: new Request('http://localhost/study?/continue', { method: 'POST', body })
+    };
+
+    await expect(actions.continue(event as never)).rejects.toMatchObject({
+      status: 303,
+      location: '/study'
+    });
+    expect(study.continueParticipantStudy).toHaveBeenCalledWith('participant', {
+      phaseId: 'task-one'
+    });
   });
 });

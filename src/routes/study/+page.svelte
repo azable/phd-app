@@ -75,6 +75,7 @@
           action={`${resolve('/study')}?/continue`}
           onsubmit={() => (continuing = true)}
         >
+          <input type="hidden" name="phaseId" value={phase.id} />
           <Button
             type="submit"
             disabled={continuing}

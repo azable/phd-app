@@ -168,6 +168,43 @@ it.skipIf(!enabled)(
   }
 );
 
+it.skipIf(!enabled)(
+  'advances only from the phase continued from, so a repeated request skips none',
+  async () => {
+    const userId = `study-user-${randomUUID()}`;
+    users.push(userId);
+    await database()
+      .insert(schema.user)
+      .values({
+        id: userId,
+        name: userId,
+        email: `${userId}@sverlin.invalid`,
+        emailVerified: true,
+        username: userId,
+        role: 'user'
+      });
+    const [run] = await database()
+      .insert(schema.studyRuns)
+      .values({
+        kind: 'participant',
+        ownerUserId: userId,
+        studyId: mainStudy.id,
+        studyVersion: mainStudy.version,
+        armId: 'sverlin-first'
+      })
+      .returning({ id: schema.studyRuns.id });
+    if (!run) throw new Error('Test study run was not created.');
+    await database().insert(schema.studyEnrollments).values({ userId, runId: run.id });
+
+    const stale = await continueParticipantStudy(userId, { phaseId: 'between-tasks' });
+    const early = await continueParticipantStudy(userId, { early: true });
+
+    expect(stale.phase.id).toBe('welcome');
+    expect(early.phase.id).toBe('welcome');
+  },
+  30_000
+);
+
 it.skipIf(!enabled)('reveals a configured gift card only at completion', async () => {
   const userId = `gift-user-${randomUUID()}`;
   users.push(userId);

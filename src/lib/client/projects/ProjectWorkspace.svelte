@@ -538,6 +538,7 @@
                       action={`${resolve('/study')}?/early`}
                       onsubmit={() => (studyAdvancing = true)}
                     >
+                      <input type="hidden" name="phaseId" value={study.phaseId} />
                       <Button
                         type="submit"
                         disabled={studyAdvancing}
@@ -816,6 +817,6 @@
     </div>
   {/if}
   {#if study && shouldShowPhaseExpiredDialog(isAdmin, study.context)}
-    <PhaseExpiredDialog open={expired} context={study.context} />
+    <PhaseExpiredDialog open={expired} context={study.context} phaseId={study.phaseId} />
   {/if}
 </div>

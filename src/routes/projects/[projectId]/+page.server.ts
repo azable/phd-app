@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
         phaseId: flowPhase.phase.id,
         title: flowPhase.phase.instructions.title,
         prompt: flowPhase.phase.instructions.prompt,
-        expired: flowPhase.status === 'ready-to-continue',
+        expired: flowPhase.status === 'ready-to-continue' || flowPhase.status === 'completed',
         layout: flowPhase.phase.condition.workspace.layout,
         presentationBufferTarget: flowPhase.phase.condition.presentationBufferTarget
       };

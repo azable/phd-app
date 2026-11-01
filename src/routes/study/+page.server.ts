@@ -27,28 +27,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-  continue: async ({ locals }) => {
+  continue: async ({ locals, request }) => {
     const principal = requirePrincipal(locals);
     if (principal.kind === 'admin') redirect(303, '/');
+    const phaseId = (await request.formData()).get('phaseId');
     let state;
     try {
-      state = await continueParticipantStudy(principal.user.id);
+      state = await continueParticipantStudy(principal.user.id, {
+        ...(typeof phaseId === 'string' ? { phaseId } : {})
+      });
     } catch (cause) {
       return fail(409, {
         error: cause instanceof Error ? cause.message : 'The study could not continue.'
       });
     }
-    if (state.phase.kind === 'task' && state.projectId) {
-      redirect(303, `/projects/${state.projectId}`);
-    }
-    return { continued: true };
+    // A redirect, so reloading the page shows the phase rather than sending the form again.
+    redirect(
+      303,
+      state.phase.kind === 'task' && state.projectId ? `/projects/${state.projectId}` : '/study'
+    );
   },
-  early: async ({ locals }) => {
+  early: async ({ locals, request }) => {
     const principal = requirePrincipal(locals);
     if (principal.kind === 'admin') redirect(303, '/');
+    const phaseId = (await request.formData()).get('phaseId');
     let destination: string;
     try {
-      const state = await continueParticipantStudy(principal.user.id, { early: true });
+      const state = await continueParticipantStudy(principal.user.id, {
+        early: true,
+        ...(typeof phaseId === 'string' ? { phaseId } : {})
+      });
       destination =
         state.phase.kind === 'task' && state.projectId ? `/projects/${state.projectId}` : '/study';
     } catch (cause) {

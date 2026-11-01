@@ -176,13 +176,22 @@ export async function participantCompletionGiftCardUrl(
   return row?.completedAt ? (row.giftCardUrl ?? undefined) : undefined;
 }
 
-/** Advance normally, or explicitly finish an allowed timed task early. */
+/**
+ * Advance normally, or explicitly finish an allowed timed task early. Given the phase the
+ * participant continued from, advance only while it is still the current one, so a repeated or
+ * resent request never skips the phase that followed it.
+ */
 export async function continueParticipantStudy(
   userId: string,
-  options: { early?: boolean } = {}
+  options: { early?: boolean; phaseId?: string } = {}
 ): Promise<StudyRunState> {
   const state = await participantStudyState(userId);
-  return advanceStudyRun(state.runId, userId, options.early ? 'participant-early' : 'continue');
+  return advanceStudyRun(
+    state.runId,
+    userId,
+    options.early ? 'participant-early' : 'continue',
+    options.phaseId
+  );
 }
 
 /** Create a durable admin-owned preview for a complete flow or one isolated phase. */
@@ -381,7 +390,8 @@ export class StudyReadOnlyError extends Error {
 async function advanceStudyRun(
   runId: string,
   ownerUserId: string,
-  action: 'continue' | 'participant-early' | 'admin-forced'
+  action: 'continue' | 'participant-early' | 'admin-forced',
+  fromPhaseId?: string
 ): Promise<StudyRunState> {
   return withStudyRunLock(runId, async () => {
     const state = await loadStudyRunState(runId);
@@ -390,6 +400,9 @@ async function advanceStudyRun(
     if (action === 'admin-forced' && run.kind !== 'preview') throw new StudyReadOnlyError();
     if (action !== 'admin-forced' && run.kind !== 'participant') throw new StudyReadOnlyError();
     if (state.completed || state.phase.kind === 'completion') return state;
+    if (fromPhaseId !== undefined && fromPhaseId !== state.phase.id) return state;
+    // Only a task finishes early; a repeated request after it ends leaves the next phase alone.
+    if (action === 'participant-early' && state.phase.kind !== 'task') return state;
 
     if (state.phase.kind === 'task' && action !== 'admin-forced') {
       if (action === 'participant-early') {

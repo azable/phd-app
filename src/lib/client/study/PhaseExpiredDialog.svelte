@@ -8,8 +8,10 @@
   type Props = {
     open: boolean;
     context?: 'participant' | 'admin-preview';
+    /** The phase that ended, so continuing advances from it at most once. */
+    phaseId?: string;
   };
-  let { open, context = 'participant' }: Props = $props();
+  let { open, context = 'participant', phaseId }: Props = $props();
   let advancing = $state(false);
 </script>
 
@@ -42,6 +44,7 @@
           action={`${resolve('/study')}?/continue`}
           onsubmit={() => (advancing = true)}
         >
+          {#if phaseId}<input type="hidden" name="phaseId" value={phaseId} />{/if}
           <Button
             type="submit"
             disabled={advancing}
