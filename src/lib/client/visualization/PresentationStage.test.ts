@@ -114,6 +114,23 @@ describe('presentation stage between comparisons', () => {
   });
 });
 
+describe('presentation stage before a project’s first version', () => {
+  it('covers the blank starter with a loader while the assistant works', () => {
+    const body = stage([...blankProject(), requested(4)], false);
+    expect(body).toContain('Making a first version…');
+    expect(body).not.toContain('Thinking…');
+    // The starter stays laid out beneath, out of reach.
+    expect(body).toContain('data-replay-region="candidate-1"');
+    expect(body).toMatch(/<div[^>]*\sinert[\s=>]/u);
+  });
+
+  it('shows the starter itself while nothing is at work', () => {
+    const body = stage(blankProject(), false);
+    expect(body).not.toContain('Making a first version…');
+    expect(body).not.toMatch(/<div[^>]*\sinert[\s=>]/u);
+  });
+});
+
 describe('presentation stage showing a comparison from the timeline', () => {
   it('shows an answered pair side by side with its question, marking the side chosen', () => {
     const body = stage([...askedPair(), answered(3, { preferred: ids[1] })], false, true);
@@ -279,6 +296,53 @@ function askedPair(labels = ['Start', 'Result'], differsAt?: number[]): ProjectE
       }
     }
   }));
+}
+
+/** A blank project showing its starter, built from the source it was created with. */
+function blankProject(): ProjectEvent[] {
+  const [shown] = askedPair();
+  if (shown.type !== 'visualization.presented') throw new Error('Expected a presentation.');
+  return [
+    {
+      id: 1,
+      type: 'project.created',
+      actor: { kind: 'user' },
+      operationId,
+      createdAt: '2026-11-01T00:00:01.000Z',
+      payload: {
+        title: 'Test',
+        entryArtifactId: 'main',
+        assistantId: 'sverlin-assistant',
+        creation: { templateId: 'blank' }
+      }
+    },
+    {
+      id: 2,
+      type: 'artifact.version-created',
+      actor: { kind: 'system' },
+      operationId,
+      createdAt: '2026-11-01T00:00:02.000Z',
+      payload: {
+        origin: { kind: 'initial' },
+        changes: [
+          {
+            operation: 'upsert',
+            artifact: {
+              artifactId: 'main',
+              path: 'View.svelte',
+              language: 'svelte',
+              content: { text: 'source', sha256: 'a'.repeat(64), mediaType: 'text/x-svelte' }
+            }
+          }
+        ]
+      }
+    },
+    {
+      ...shown,
+      id: 3,
+      payload: { displaySetId, slot: 0, presentation: shown.payload.presentation }
+    }
+  ];
 }
 
 function requested(id: number): ProjectEvent {

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent, ProjectOperationKind } from '$lib/shared/projects/events';
 
-import { stageActivity } from './stage-activity';
+import type { RenderablePresentation } from '$lib/shared/presentations';
+
+import { blankStarter, stageActivity } from './stage-activity';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const shown = 'a'.repeat(64);
@@ -76,6 +78,63 @@ describe('stage activity', () => {
     );
   });
 });
+
+describe('blank starter', () => {
+  const starter = {
+    format: 'browser-bundle-v1',
+    source: { sha256: shown }
+  } as RenderablePresentation;
+
+  it('is the source a blank project was created with', () => {
+    expect(blankStarter(project('blank', shown), starter)).toBe(true);
+  });
+
+  it('is not a later version, nor the source a template starts from', () => {
+    const later = { format: 'browser-bundle-v1', source: { sha256: changed } };
+    expect(blankStarter(project('blank', shown), later as RenderablePresentation)).toBe(false);
+    expect(blankStarter(project('linear-search', shown), starter)).toBe(false);
+  });
+});
+
+/** A project's creation and its first source. */
+function project(templateId: string, sha256: string): ProjectEvent[] {
+  return [
+    {
+      id: 1,
+      type: 'project.created',
+      actor: { kind: 'user' },
+      operationId,
+      createdAt: at(1),
+      payload: {
+        title: 'Test',
+        entryArtifactId: 'main',
+        assistantId: 'sverlin-assistant',
+        creation: { templateId }
+      }
+    },
+    {
+      id: 2,
+      type: 'artifact.version-created',
+      actor: { kind: 'system' },
+      operationId,
+      createdAt: at(2),
+      payload: {
+        origin: { kind: 'initial' },
+        changes: [
+          {
+            operation: 'upsert',
+            artifact: {
+              artifactId: 'main',
+              path: 'View.svelte',
+              language: 'svelte',
+              content: { text: 'starter', sha256, mediaType: 'text/x-svelte' }
+            }
+          }
+        ]
+      }
+    }
+  ] as ProjectEvent[];
+}
 
 function at(id: number): string {
   return `2026-11-01T00:00:0${id}.000Z`;

@@ -2,6 +2,7 @@
 
 import type { ProjectEvent, ProjectOperationKind } from '$lib/shared/projects/events';
 import { pendingAssistantTurnRequests, projectOperations } from '$lib/shared/projects/operations';
+import type { RenderablePresentation } from '$lib/shared/presentations';
 
 export type StageActivity = {
   label: string;
@@ -70,6 +71,28 @@ function operationActivity(
     default:
       return undefined;
   }
+}
+
+/**
+ * Whether a presentation shows a blank project's starter (“Start your visualization”), built from
+ * the source the project was created with: a stand-in until its first version, not a version.
+ */
+export function blankStarter(
+  events: readonly ProjectEvent[],
+  presentation: RenderablePresentation
+): boolean {
+  const created = events.find((event) => event.type === 'project.created');
+  if (created?.type !== 'project.created' || created.payload.creation.templateId !== 'blank')
+    return false;
+  const initial = events.find(
+    (event) => event.type === 'artifact.version-created' && event.payload.origin.kind === 'initial'
+  );
+  if (initial?.type !== 'artifact.version-created') return false;
+  const shown =
+    presentation.format === 'browser-bundle-v1' ? presentation.source : presentation.authored;
+  return initial.payload.changes.some(
+    (change) => change.operation === 'upsert' && change.artifact.content.sha256 === shown.sha256
+  );
 }
 
 function building(build: ProjectEvent | undefined): StageActivity {

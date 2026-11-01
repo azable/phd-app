@@ -35,7 +35,7 @@
   } from './presentation-playback.svelte';
   import { comparisonProgress, pairQuestion, timelinePresentations } from './presentation-history';
   import PresentationViewport from './PresentationViewport.svelte';
-  import { stageActivity } from './stage-activity';
+  import { blankStarter, stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
 
@@ -136,9 +136,16 @@
     const source = shown?.format === 'browser-bundle-v1' ? shown.source : shown?.authored;
     return stageActivity(session.events, source?.sha256, session.pending ?? undefined);
   });
+  // A blank project's starter stands in for its first version; a loader covers it while the
+  // assistant, or any operation, works on that version.
+  const makingFirst = $derived(
+    (session.assistantResponding || !!activity) &&
+      visible.length > 0 &&
+      visible.every(({ presentation }) => blankStarter(session.events, presentation))
+  );
   // What the stage says it is doing, and how it dims the version it shows meanwhile.
   const status = $derived(
-    awaiting === 'updating' ? 'Updating…' : awaiting ? undefined : activity?.label
+    awaiting === 'updating' ? 'Updating…' : awaiting || makingFirst ? undefined : activity?.label
   );
   const dimmed = $derived<'answered' | 'replaced' | undefined>(
     awaiting === 'updating' ? 'answered' : activity?.replacing ? 'replaced' : undefined
@@ -492,6 +499,17 @@
               </p>
             {/if}
           </div>
+          {#if makingFirst}
+            <!-- Over the starter, which stays laid out beneath so nothing moves when it lifts. -->
+            <div class="absolute inset-0 z-20 flex bg-background">
+              <Empty.Root class="border-0" aria-live="polite">
+                <Empty.Header>
+                  <Empty.Media><Spinner /></Empty.Media>
+                  <Empty.Title>Making a first version…</Empty.Title>
+                </Empty.Header>
+              </Empty.Root>
+            </div>
+          {/if}
           {#if selected && !session.readOnly}
             <Button
               size="xs"
@@ -545,6 +563,7 @@
           <!-- Dimmed while an operation replaces it, so it reads as the old version, and greyed while
             the assistant replies to the pair. -->
           <div
+            inert={makingFirst}
             class={[
               'flex min-h-0 min-w-0 flex-1 transition-[opacity,filter]',
               dimmed === 'replaced' && 'opacity-60',
