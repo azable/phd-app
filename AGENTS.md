@@ -29,6 +29,8 @@ attempt navigation.
   named heading or symbol to a drifting line anchor. Keep behavior claims close
   to their source of truth and distinguish established behavior from
   recommendations or assumptions.
+- Check the code, data or source before stating a fact about it, and say when a
+  claim is unchecked; verify a subagent's factual claims before relaying them.
 - During guided external-service setup, account for every warning or error as
   blocking, actionable, or harmless before the next step. Verify external state
   with a read-only check when possible.
