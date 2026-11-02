@@ -513,15 +513,26 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
       width: frame.width.px - frame.border[1] - frame.border[3] - 2 * frame.padding[3],
       height: frame.height.px - frame.border[0] - frame.border[2] - 2 * frame.padding[0]
     };
+    const sizeOf = (child: ModelElement) =>
+      model.leastOf(at, child) ?? model.arrangedSize(at, child) ?? model.sizeAlone(at, child);
     const content = flowExtent(
-      elementsOf(at.flow).map(
-        (child) =>
-          model.leastOf(at, child) ?? model.arrangedSize(at, child) ?? model.sizeAlone(at, child)
-      ),
+      elementsOf(at.flow).map(sizeOf),
       at.styled.get(at.flow)?.look.rowGap ?? 0,
       at.flow.style['flex-direction'] === 'row'
     );
     memory.fits.set(step, neededFit(insideFrame, content));
+    if (memory.extents) {
+      // The parts of the layout's root node, or of the frame where it holds more than one.
+      const roots = elementsOf(at.flow);
+      const holder = roots.length === 1 ? roots[0] : at.flow;
+      memory.extents.set(step, {
+        frame: { width: frame.width.px, height: frame.height.px },
+        inside: insideFrame,
+        content,
+        parts: elementsOf(holder).map(sizeOf),
+        row: (at.styled.get(holder)?.look.flexDirection ?? holder.style['flex-direction']) === 'row'
+      });
+    }
   }
 
   const keysOf = (prefix: string) => [...instances.keys()].filter((key) => key.startsWith(prefix));

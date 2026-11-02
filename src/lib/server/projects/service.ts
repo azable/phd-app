@@ -1140,10 +1140,10 @@ export async function activateBuiltPresentations(
       presentationId: randomUUID(),
       format: 'browser-bundle-v1',
       mode: bundle.mode,
-      // Presentations of one master trace share a signature even when they keep different steps.
-      stepSignature: bundle.masterSignature ?? stepSignature(bundle.labels),
+      // Presentations of one source share its steps and signature however they are paced.
+      stepSignature: bundle.stepSignature ?? stepSignature(bundle.labels),
       labels: bundle.labels,
-      ...(bundle.masterSteps ? { masterSteps: bundle.masterSteps } : {}),
+      ...(bundle.steps ? { steps: bundle.steps } : {}),
       ...(bundle.variant ? { variant: bundle.variant } : {}),
       ...(bundle.origins ? { origins: bundle.origins } : {}),
       ...(bundle.views ? { views: bundle.views } : {}),
@@ -1154,6 +1154,7 @@ export async function activateBuiltPresentations(
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
       ...(bundle.renders ? { renders: bundle.renders } : {}),
       ...(bundle.leftOut ? { leftOut: bundle.leftOut } : {}),
+      ...(bundle.readability ? { readability: bundle.readability } : {}),
       seed: item.seed,
       source: item.source,
       html: recordText(bundle.html, 'text/html'),

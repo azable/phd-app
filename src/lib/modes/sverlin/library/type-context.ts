@@ -6,6 +6,7 @@
 import { getContext, setContext, type Snippet } from 'svelte';
 
 import { placedKind, type DesignValues, type Place } from './node/design';
+import type { ShownFrame } from './fit';
 import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
 import type { ListingPlaces } from './steps';
@@ -204,11 +205,27 @@ export type LayoutMemory = {
   components: Map<string, { width: number; height: number }>;
   /** Each arrangement's contents at every step, and its solution over all of them, by scope. */
   scopes: Map<string, { inputs: Map<number, SpanInput>; span?: SpanLayout }>;
-  /** The root's fit at each step. */
+  /** The root's fit at each step, as laid out on the server. */
   fits: Map<number, number>;
+  /** The frame every step shows in, and the fit it shows at, given by the server (see ./fit.ts). */
+  frame?: ShownFrame;
+  /**
+   * Where asked for, as on the server: the frame, its inside and the root's content at each step,
+   * which the fit is worked out from, for how large the picture draws (see
+   * ../readability.server.ts).
+   */
+  extents?: Map<number, FrameExtent>;
   /** The pairs of links drawn as one two-way line at every step (see node/lines.ts). */
   lines: Set<string>;
 };
+
+type Size = { width: number; height: number };
+
+/**
+ * A step's frame, the space inside its border and padding, and its root's content, unscaled; and
+ * the root's parts, side by side in a row or one above another.
+ */
+export type FrameExtent = { frame: Size; inside: Size; content: Size; parts: Size[]; row: boolean };
 
 export function layoutMemoryContext(): LayoutMemory | undefined {
   return getContext<LayoutMemory | undefined>('sverlin:layout-memory');

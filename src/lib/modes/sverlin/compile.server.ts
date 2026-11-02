@@ -125,7 +125,9 @@ import { packStates } from './library/trace-pack';
 import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
-import { layOutOnServer } from './layout.server';
+import { layOutOnServer, layoutFailureMessage } from './layout.server';
+import { readabilityOf } from './readability.server';
+import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
@@ -184,10 +186,9 @@ export type SvelteBundle = {
   javascript: string;
   /** The name of each step this presentation keeps (see MasterStep), the same in every pacing. */
   labels: string[];
-  /** Identity of the master trace, from its recorded states, shared by all presentations of the source. */
-  masterSignature: string;
-  /** Master step index of each kept step. */
-  masterSteps: number[];
+  /** Every step the source can show, by name, and its identity (see PreparedComponent.steps). */
+  steps: string[][];
+  stepSignature: string;
   /** The presentation's variant: every variable's value, by key. */
   variant: Record<string, DesignValue>;
   /** Where each value came from. */
@@ -195,24 +196,17 @@ export type SvelteBundle = {
   /** The <Node> tags it leaves out, by their line:column. */
   leftOut: string[];
   /**
-   * With layout on the server asked for: whether the page is given every step's layout, how long
-   * working it out took, and, where it is not, why, and what each step draws (see
-   * layout.server.ts).
+   * Every step laid out on the server, which the page is given: how long working it out took, the
+   * steps the view failed to draw, and what each step draws (see layout.server.ts).
    */
-  layout?: {
-    server: boolean;
+  layout: {
     ms: number;
     cached: boolean;
-    failure?: string;
     errors: string[];
     drawn?: string[];
+    /** How large it draws on a typical stage (see readability.server.ts). */
+    readability?: Readability;
   };
-};
-
-/** How a presentation is bundled. */
-export type BundleOptions = {
-  /** Lay every step out on the server and give the page the layout with its bundle. */
-  serverLayout?: boolean;
 };
 
 type Block = { body: string; offset: number };
@@ -240,7 +234,13 @@ export type PreparedComponent = {
    * each step lights in each listing. Made once per way of pausing.
    */
   paced: (pauses: Pauses | ReadonlySet<string>) => PacedSteps;
-  /** The source's identity, shared by its presentations however their steps are paced. */
+  /**
+   * Every step the source can show, in run order, each by every name it has (see MasterStep.names):
+   * the master's, with the end, which a variant pausing at fewer labels may keep where the master
+   * does not. Every variant's steps are some of these, by name, which is how they line up.
+   */
+  steps: string[][];
+  /** The source's identity, from its steps, shared by its presentations however they are paced. */
   signature: string;
   atoms: AtomRegistry;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
@@ -455,6 +455,15 @@ function paced(
     traceAlgorithm(body, input, domain, pacing, keep)
   );
   return { ...run, steps: [run.opening, ...run.steps] };
+}
+
+/**
+ * Every step a source can show, from the master's (see PreparedComponent.steps): a variant pausing
+ * at fewer labels ends on a step of its own where its last step differs from the master's.
+ */
+function sourceSteps(master: readonly MasterStep[]): string[][] {
+  const steps = master.map(({ name, names }, index) => names ?? [name ?? `Step ${index + 1}`]);
+  return steps.at(-1)?.includes('end') ? steps : [...steps, ['end']];
 }
 
 /** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
@@ -1114,6 +1123,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const keep = { labels: new Set(Object.values(labelled).map(({ label }) => label)) };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
+    const steps = sourceSteps(master);
     const runs = labelRuns(master, {
       state: new Set(
         [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
@@ -1556,12 +1566,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       ownListings,
       pauses: { labels: labelNames, leaves: [...leaves], runs },
       paced: pacedSteps,
-      // Steps line up by their moments, so the identity tells presentations aligned that way from
-      // those that number steps by their place.
-      signature: stepSignature([
-        'moments',
-        ...master.map(({ state, types, targets }) => JSON.stringify({ state, types, targets }))
-      ]),
+      steps,
+      signature: stepSignature(steps.map((names) => names.join(' '))),
       atoms,
       components: probes,
       design: {
@@ -1682,8 +1688,7 @@ function standInsFor(
 export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
-  request: VariantRequest = {},
-  options: BundleOptions = {}
+  request: VariantRequest = {}
 ): Promise<SvelteBundle> {
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
@@ -1714,10 +1719,9 @@ export async function bundlePresentation(
       pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
     )
   ]);
-  // The steps paced as the variant pauses, each placed by its moment.
+  // The steps paced as the variant pauses.
   const paced = prepared.paced(pausesOf(prepared.pauses, values));
   const master = paced.steps;
-  const moments = master.map(({ moment }, index) => moment ?? index);
   // The page shows each step as two states, before its code and after it (see phasesOf). Each
   // carries its atomic types, the page frame, and the variant for the view, under keys no variable
   // can use; a variable out of scope at one stands in hidden (__absent).
@@ -1842,8 +1846,7 @@ export async function bundlePresentation(
       components: prepared.components,
       placements: paced.placements,
       listing
-    }),
-    options.serverLayout === true
+    })
   );
   const output = result.outputFiles.find(({ path }) => path.endsWith('entry.js')) as OutputFile;
   if (output.contents.byteLength > maximumBundleBytes) {
@@ -1852,28 +1855,37 @@ export async function bundlePresentation(
       `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; the variant pausing at fewer labels gives fewer steps.`
     );
   }
-  let javascript = output.text;
-  let layout: SvelteBundle['layout'];
-  const layoutBundle = result.outputFiles.find(({ path }) => path.endsWith('layout.js'));
-  if (layoutBundle) {
-    const { geometries, ...laid } = await layOutOnServer(layoutBundle.text);
-    // The page reads the layout before its own code runs; one too large to give leaves it to the page.
-    const given =
-      geometries && `window.__sverlinGeometry=${JSON.stringify(geometries)};\n${javascript}`;
-    const fits = given !== undefined && Buffer.byteLength(given) <= maximumBundleBytes;
-    if (fits) javascript = given;
-    layout = {
-      ...laid,
-      server: fits,
-      ...(given && !fits ? { failure: 'its layout would take the bundle over the limit' } : {})
-    };
+  // Every step laid out on the server, which the page draws with as given: one the server cannot
+  // lay out, or whose layout would take the bundle over its limit, cannot be shown.
+  const layoutBundle = result.outputFiles.find(({ path }) =>
+    path.endsWith('layout.js')
+  ) as OutputFile;
+  const { geometries, size, failure, ...laid } = await layOutOnServer(layoutBundle.text);
+  // The page reads the layout before its own code runs.
+  const javascript =
+    geometries && `window.__sverlinGeometry=${JSON.stringify(geometries)};\n${output.text}`;
+  const unfit =
+    failure ??
+    (javascript && Buffer.byteLength(javascript) > maximumBundleBytes
+      ? 'its layout would take the bundle over the limit'
+      : undefined);
+  if (!javascript || unfit) {
+    const errors = laid.errors.length ? `; the view failed at ${laid.errors.join('; ')}` : '';
+    console.warn(`[sverlin] seed ${seed} not laid out on the server: ${unfit}${errors}`);
+    throw new InvalidSvelteSourceError(layoutFailureMessage(unfit, laid.errors), {
+      code: 'layout_failed'
+    });
   }
+  const layout: SvelteBundle['layout'] = {
+    ...laid,
+    ...(size ? { readability: readabilityOf(size, frame.ratio) } : {})
+  };
   return {
     javascript,
-    ...(layout ? { layout } : {}),
+    layout,
     labels: master.map(({ name }, index) => name ?? `Step ${index + 1}`),
-    masterSignature: prepared.signature,
-    masterSteps: moments,
+    steps: prepared.steps,
+    stepSignature: prepared.signature,
     variant: values,
     origins: variant.origins,
     leftOut: leftOut.nodes
@@ -2708,11 +2720,10 @@ async function bundle(
   serverComponent: string,
   states: string,
   atoms: string,
-  components: string,
-  layout: boolean
+  components: string
 ) {
   try {
-    return await bundleComponent(component, serverComponent, states, atoms, components, layout);
+    return await bundleComponent(component, serverComponent, states, atoms, components);
   } catch (cause) {
     // Failures located in the authored component, such as a blocked require(), are source errors.
     const authored = (cause as Partial<BuildFailure>).errors?.find((error) =>
@@ -2732,8 +2743,6 @@ const allowedImports: Record<string, (path: string) => boolean> = {
     runtime(path) ||
     [
       'virtual:component',
-      'virtual:component-server',
-      'virtual:library-server',
       'virtual:trace',
       'virtual:atoms',
       'virtual:components',
@@ -2789,8 +2798,6 @@ function sandboxModules(
           return { path: 'Main.svelte', namespace: 'component' };
         if (args.path === 'virtual:component-server')
           return { path: 'Main.svelte', namespace: 'component-server' };
-        if (args.path === 'virtual:library-server')
-          return { path: 'index.ts', namespace: 'library-server' };
         const server = args.namespace.endsWith('-server') || args.namespace === 'layout';
         if (server && args.path === 'svelte') return { path: svelteServerIndex };
         if (server && args.path === 'sverlin')
@@ -2871,19 +2878,18 @@ function sandboxModules(
 }
 
 /**
- * The page's bundle, and with `layout` the server's too, which lays every step out (see
- * layout.server.ts): the same steps, view and library, compiled to render strings.
+ * The page's bundle, and the server's, which lays every step out (see layout.server.ts): the same
+ * steps, view and library, compiled to render strings.
  */
 function bundleComponent(
   component: string,
   serverComponent: string,
   states: string,
   atoms: string,
-  components: string,
-  layout: boolean
+  components: string
 ) {
   return build({
-    entryPoints: layout ? ['virtual:entry', 'virtual:layout'] : ['virtual:entry'],
+    entryPoints: ['virtual:entry', 'virtual:layout'],
     outdir: 'out',
     entryNames: '[name]',
     plugins: [sandboxModules(component, serverComponent, states, atoms, components)],

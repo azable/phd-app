@@ -129,6 +129,14 @@ collection in a node around it, not beside the `{#each}`. Every view is measured
 with every value its type allows, so its box keeps one size and nothing moves
 between steps.
 
+An item's track is as large as the largest any item reaches at any step, so what
+makes one item large makes every item large: in a collection of groups, the
+group holding the whole input gives each one-value group room for all of it, and
+the picture grows with the number of items times the largest. Keep the items
+alike in size: draw a group that grows, or a list inside each item, only where
+it is small, show one level or part at a time rather than every one at once, and
+keep a varying count of values in one collection of its own.
+
 ## Pointers
 
 A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a

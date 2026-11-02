@@ -60,8 +60,3 @@ declare module 'virtual:component-server' {
   const Main: Component<Record<string, unknown>>;
   export default Main;
 }
-
-/** The library compiled to render strings. */
-declare module 'virtual:library-server' {
-  export * from 'sverlin';
-}

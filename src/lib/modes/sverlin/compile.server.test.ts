@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { stepPlaces } from '$lib/shared/presentations';
+
 import type { MasterStep, PauseMode } from './algorithm/interpret.server';
 import {
   bundlePresentation,
@@ -70,7 +72,7 @@ describe('single-component Svelte compilation', () => {
       )
     );
     for (const bundle of bundles) {
-      expect(bundle.masterSignature).toBe(bundles[0].masterSignature);
+      expect(bundle.stepSignature).toBe(bundles[0].stepSignature);
       expect(bundle.labels).toEqual([
         'start',
         '@check#1',
@@ -79,7 +81,7 @@ describe('single-component Svelte compilation', () => {
         '@check#4',
         'end'
       ]);
-      expect(bundle.masterSteps).toEqual(prepared.master.map(({ moment }) => moment));
+      expect(bundle.steps).toEqual(bundle.labels.map((label) => [label]));
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
       new Set(['IntCell', 'IntTally'])
@@ -687,11 +689,11 @@ describe('single-component Svelte compilation', () => {
     ).rejects.toMatchObject({ line: 3, column: 2 });
   });
 
-  it('identifies the master trace by its recorded states, whatever the view', async () => {
+  it('identifies the source by its steps, whatever the view and input', async () => {
     const source = (values: string, view: string) =>
       `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>{#snippet V()}${view}{/snippet}{#layout Main}<Node>{@render V()}</Node>{/layout}`;
     const signature = async (values: string, view: string) =>
-      (await compileSvelteComponent(source(values, view))).masterSignature;
+      (await compileSvelteComponent(source(values, view))).stepSignature;
     const first = await signature('[1, 2]', '<Node>{#each values as v}{v}{/each}</Node>');
     expect(
       await signature(
@@ -699,7 +701,7 @@ describe('single-component Svelte compilation', () => {
         '<Node layout="column">{#each values as v}<Node>{v}</Node>{/each}</Node>'
       )
     ).toBe(first);
-    expect(await signature('[2, 1]', '<Node>{#each values as v}{v}{/each}</Node>')).not.toBe(first);
+    expect(await signature('[2, 1]', '<Node>{#each values as v}{v}{/each}</Node>')).toBe(first);
   });
 
   it('retains line and column for assistant source repair', async () => {
@@ -1188,7 +1190,7 @@ describe('views of what a step computed', () => {
       }
     });
     expect(paced.labels).toHaveLength(7);
-    expect(paced.masterSignature).toBe((await bundlePresentation(prepared, 1)).masterSignature);
+    expect(paced.stepSignature).toBe((await bundlePresentation(prepared, 1)).stepSignature);
   });
 
   it('reject an operator rendered with a value, inside a view, or at no label', () => {
@@ -1409,10 +1411,12 @@ describe('pauses at labels', () => {
         'pause@insert.swap.to': 'on'
       }
     });
-    expect(apart.masterSignature).toBe(coarse.masterSignature);
+    expect(apart.stepSignature).toBe(coarse.stepSignature);
     expect(apart.labels.length).toBeGreaterThan(coarse.labels.length);
-    // Every step of the coarse presentation falls on one of the fine one's.
-    expect(coarse.masterSteps.every((moment) => apart.masterSteps.includes(moment))).toBe(true);
+    // Both are some of the source's steps, in order, by name.
+    expect(apart.steps).toEqual(coarse.steps);
+    expect(stepPlaces(coarse.steps, coarse.labels)).toBeDefined();
+    expect(stepPlaces(apart.steps, apart.labels)).toBeDefined();
   });
 
   it('names a pause by the label’s full name, refusing its short ending', async () => {

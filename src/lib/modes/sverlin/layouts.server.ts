@@ -91,7 +91,8 @@ function rewritten(text: string): { text: string; problems: Problem[] } {
           'This {/layout} closes no layout: open each layout with {#layout Name} before its root <Node>, or remove the extra {/layout}.',
         start
       });
-    const closed = wellClosed.exec(line);
+    // A close written with an HTML tag's >, as {/layout>, is a slip taken as meant.
+    const closed = wellClosed.exec(line) ?? /^\{\/layout[ \t]*>/u.exec(line);
     if (closed) replace(start, closed[0], '{/if}');
     else
       problems.push({

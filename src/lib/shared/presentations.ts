@@ -2,13 +2,9 @@
 
 import * as v from 'valibot';
 import { modeCatalog } from '$lib/modes/catalog';
+import { readabilitySchema } from '$lib/shared/readability';
 
-import {
-  naturalSchema,
-  positiveSchema,
-  recordedTextSchema,
-  textSchema
-} from './projects/events/values';
+import { positiveSchema, recordedTextSchema, textSchema } from './projects/events/values';
 
 /** Modes available to projects and study conditions. */
 export const visualizationModeSchema = v.picklist(
@@ -99,16 +95,11 @@ export const browserBundlePresentationSchema = v.strictObject({
   source: recordedTextSchema,
   html: recordedTextSchema,
   javascript: recordedTextSchema,
-  /** Master trace index of each label, ascending; absent when steps are not aligned. */
-  masterSteps: v.optional(
-    v.pipe(
-      v.array(naturalSchema),
-      v.check(
-        (steps) => steps.every((step, index) => index === 0 || step > steps[index - 1]),
-        'Master steps must be strictly increasing.'
-      )
-    )
-  ),
+  /**
+   * Every step its source can show, in order, each by every name it has, which its labels are some
+   * of (see alignPresentationFrames); absent for a mode whose versions are never shown together.
+   */
+  steps: v.optional(v.pipe(v.array(v.pipe(v.array(textSchema), v.minLength(1))), v.minLength(1))),
   /** Its variant: every variable of the source's design space, by key. */
   variant: v.optional(designValuesSchema),
   /** Where each of the variant's values came from. */
@@ -125,6 +116,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
+  /** How large it draws on a typical stage, where the server laid it out. */
+  readability: v.optional(readabilitySchema),
   generationEventId: v.optional(positiveSchema)
 });
 
@@ -188,48 +181,82 @@ export type AlignedFrame = {
 };
 
 /**
- * Align presentations for playback. Presentations of one master trace (same step signature,
- * each keeping a subset of master steps) align by master step, holding their previous step
- * where they omit one. Others align by position, up to the shortest.
+ * Align presentations for playback. One plays its own steps. Several must come from one source,
+ * sharing its steps (see BrowserBundlePresentation.steps): each step shows where its name falls among
+ * them, and a presentation that omits a step holds its previous one.
  */
 export function alignPresentationFrames(
   presentations: readonly RenderablePresentation[]
 ): AlignedFrame[] {
   const labels = presentations.map(presentationStepLabels);
-  const masters = presentations.map((presentation, index) =>
-    presentation.format === 'browser-bundle-v1' &&
-    presentation.masterSteps?.length === labels[index].length &&
-    presentation.stepSignature === presentations[0].stepSignature
-      ? presentation.masterSteps
-      : undefined
-  );
-  if (presentations.length > 1 && masters.every((steps) => steps !== undefined)) {
-    const union = [...new Set(masters.flat())].toSorted((left, right) => left - right);
-    return union.map((master) => {
-      const localSteps: Record<string, number> = {};
-      const held: string[] = [];
-      let label = '';
-      presentations.forEach(({ presentationId }, index) => {
-        const steps = masters[index] as number[];
-        const local = Math.max(
-          steps.findLastIndex((step) => step <= master),
-          0
-        );
-        localSteps[presentationId] = local;
-        if (steps[local] === master) label ||= labels[index][local];
-        else held.push(presentationId);
-      });
-      return { label, localSteps, held };
-    });
+  if (presentations.length === 1) {
+    const [{ presentationId }] = presentations;
+    return labels[0].map((label, step) => ({
+      label,
+      localSteps: { [presentationId]: step },
+      held: []
+    }));
   }
-  const stepCount = Math.min(...labels.map((steps) => steps.length));
-  return Array.from({ length: Number.isFinite(stepCount) ? stepCount : 0 }, (_, step) => ({
-    label: labels[0][step] ?? `Step ${step + 1}`,
-    localSteps: Object.fromEntries(
-      presentations.map(({ presentationId }) => [presentationId, step])
-    ),
-    held: []
-  }));
+  const places = presentations.map((presentation, index) =>
+    sourcePlaces(presentation, labels[index], presentations[0].stepSignature)
+  );
+  const shared = [...new Set(places.flat())].toSorted((left, right) => left - right);
+  return shared.map((place) => {
+    const localSteps: Record<string, number> = {};
+    const held: string[] = [];
+    let label = '';
+    presentations.forEach(({ presentationId }, index) => {
+      const own = places[index];
+      const local = Math.max(
+        own.findLastIndex((at) => at <= place),
+        0
+      );
+      localSteps[presentationId] = local;
+      if (own[local] === place) label ||= labels[index][local];
+      else held.push(presentationId);
+    });
+    return { label, localSteps, held };
+  });
+}
+
+/**
+ * Where each of a presentation's steps falls among its source's steps, by name; an error for one
+ * without them, from another source, or with a step they do not name in order.
+ */
+function sourcePlaces(
+  presentation: RenderablePresentation,
+  labels: readonly string[],
+  signature: string
+): number[] {
+  if (
+    presentation.format !== 'browser-bundle-v1' ||
+    !presentation.steps ||
+    presentation.stepSignature !== signature
+  )
+    throw new Error('Presentations shown together must come from one source and share its steps.');
+  const places = stepPlaces(presentation.steps, labels);
+  if (!places)
+    throw new Error(
+      `Presentation ${presentation.presentationId}'s steps are not its source's steps in order.`
+    );
+  return places;
+}
+
+/**
+ * Where each step named falls among a source's steps (see BrowserBundlePresentation.steps), a step
+ * with several names under any of them; none where one is not among them, or not in order.
+ */
+export function stepPlaces(
+  steps: readonly (readonly string[])[],
+  labels: readonly string[]
+): number[] | undefined {
+  const placeOf = new Map(
+    steps.flatMap((names, place) => names.map((name): [string, number] => [name, place]))
+  );
+  const places = labels.map((label) => placeOf.get(label) ?? -1);
+  return places.every((place, index) => place >= 0 && (index === 0 || place > places[index - 1]))
+    ? places
+    : undefined;
 }
 
 /** Whether this mode supports seeded side-by-side comparison. */

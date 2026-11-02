@@ -2,19 +2,21 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import { buildBatch } from './build.server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { serverMeasure } from './fonts/measure.server';
-import { geometryFor, type Geometry } from './library/geometry';
+import { geometryFor, geometryVersion, type Geometry } from './library/geometry';
 import { parseSheet } from './library/model/css';
 import { layOut } from './library/model/layout';
 import type { ModelElement } from './library/model/tree';
 import { fontList } from './library/fonts';
 import { layOutOnServer } from './layout.server';
 import { differingSteps } from '$lib/shared/differing-steps';
+import { smallestReadableText } from '$lib/shared/readability';
 
 /** A server bundle whose layout answers with what it is given, as geometry would come back. */
 const answering = (body: string) =>
-  `globalThis.__sverlinLayOut = async (fonts, devicePixelRatio) => JSON.stringify((() => { ${body} })());`;
+  `globalThis.__sverlinLayOut = async (devicePixelRatio) => JSON.stringify((() => { ${body} })());`;
 
 describe('laying out on the server', () => {
   it('runs the presentation with nothing of Node in reach', async () => {
@@ -45,7 +47,7 @@ describe('laying out on the server', () => {
     expect(hungry.failure).toMatch(/memory|disposed/iu);
   }, 120_000);
 
-  it('leaves to the page a text no embedded font draws', async () => {
+  it('reports a text no embedded font draws', async () => {
     const { geometries, failure } = await layOutOnServer(
       answering(
         `__sverlinHost.width('a 漢字', "normal 400 16px 'Vis Sans', 'Vis Symbols', system-ui"); return { borders: [] };`
@@ -58,19 +60,51 @@ describe('laying out on the server', () => {
   it('gives every step of a presentation, and keeps it for the next asking', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
-    const first = await bundlePresentation(prepared, 1, {}, { serverLayout: true });
-    expect(first.layout).toMatchObject({ server: true, cached: false, errors: [] });
+    const first = await bundlePresentation(prepared, 1, {});
+    expect(first.layout).toMatchObject({ cached: false, errors: [] });
     expect(first.javascript.startsWith('window.__sverlinGeometry=[')).toBe(true);
-    const again = await bundlePresentation(prepared, 1, {}, { serverLayout: true });
+    const again = await bundlePresentation(prepared, 1, {});
     expect(again.layout?.cached).toBe(true);
     expect(again.javascript).toBe(first.javascript);
+  }, 60_000);
+
+  it('fails the build of a presentation the server cannot lay out, saying what to change', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
+    const [result] = await buildBatch(source.replace('<Node>lo</Node>', '<Node>漢字</Node>'), [
+      { seed: 1 }
+    ]);
+    expect(result).toMatchObject({ ok: false, failureKind: 'source' });
+    expect(result.ok || result.diagnostics[0]).toMatchObject({
+      code: 'layout_failed',
+      message: expect.stringContaining('characters no embedded font has (漢 字)')
+    });
+  }, 60_000);
+
+  it('measures how large it draws on a typical stage', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
+    const prepared = prepareSvelteComponent(source);
+    const { javascript, layout } = await bundlePresentation(prepared, 1);
+    const { readability } = layout;
+    // The frame and fit it is measured at are those the page is given and draws at.
+    const prefix = 'window.__sverlinGeometry=';
+    const [given] = JSON.parse(
+      javascript.slice(prefix.length, javascript.indexOf(';\n'))
+    ) as Geometry[];
+    expect(readability?.frame.height).toBe(given.frame?.height);
+    expect(readability?.scale).toBeCloseTo(
+      (given.frame?.fit ?? 0) * Math.min(928 / 1200, 608 / (given.frame?.height ?? 1))
+    );
+    // Seven cells and two bounds fit the frame at their written size or larger, as most text is 16 px.
+    expect(readability?.scale).toBeGreaterThan(0.5);
+    expect(readability?.text).toBeGreaterThanOrEqual(smallestReadableText);
+    expect(readability?.smallest).toBeLessThanOrEqual(readability?.text ?? 0);
   }, 60_000);
 
   it('describes what each step draws, alike where a value changes nothing seen', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
     const drawnWith = async (seed: number, chosen: Record<string, string | number>) =>
-      (await bundlePresentation(prepared, seed, { chosen }, { serverLayout: true })).layout?.drawn;
+      (await bundlePresentation(prepared, seed, { chosen })).layout.drawn;
     const starter = await drawnWith(1, {});
     expect(starter).toHaveLength(17);
     // Another seed places nothing here; a cell's least size is under what the pointer keeps.
@@ -87,19 +121,14 @@ describe('laying out on the server', () => {
     const prepared = prepareSvelteComponent(source);
     const drawnWith = async (labels: boolean) =>
       (
-        await bundlePresentation(
-          prepared,
-          1,
-          {
-            chosen: {
-              'pointers.Index@lo': 'LowerMark',
-              'pointers.Index@hi': 'UpperMark',
-              'LowerMark.LowerLabel.shown': labels,
-              'UpperMark.UpperLabel.shown': labels
-            }
-          },
-          { serverLayout: true }
-        )
+        await bundlePresentation(prepared, 1, {
+          chosen: {
+            'pointers.Index@lo': 'LowerMark',
+            'pointers.Index@hi': 'UpperMark',
+            'LowerMark.LowerLabel.shown': labels,
+            'UpperMark.UpperLabel.shown': labels
+          }
+        })
       ).layout?.drawn;
     const labelled = await drawnWith(true);
     // Before lo and hi are set, both draw the cells alone, the labelled keeping room for its labels.
@@ -111,12 +140,7 @@ describe('laying out on the server', () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
     const geometryOf = async (chosen: Record<string, string>) => {
-      const { javascript } = await bundlePresentation(
-        prepared,
-        1,
-        { chosen },
-        { serverLayout: true }
-      );
+      const { javascript } = await bundlePresentation(prepared, 1, { chosen });
       const prefix = 'window.__sverlinGeometry=';
       expect(javascript.startsWith(prefix)).toBe(true);
       return JSON.parse(javascript.slice(prefix.length, javascript.indexOf(';\n'))) as Geometry[];
@@ -186,8 +210,7 @@ describe('text measured on the server', () => {
 
 describe('the geometry a page draws with', () => {
   const geometry = (devicePixelRatio: number, borders: number[]): Geometry => ({
-    version: 1,
-    fonts: 'f',
+    version: geometryVersion,
     devicePixelRatio,
     borders,
     reserved: [],
@@ -196,14 +219,15 @@ describe('the geometry a page draws with', () => {
     lines: []
   });
 
-  it('is the one whose borders snap alike at the page’s ratio, in the fonts it draws in', () => {
+  it('is the one whose borders snap alike at the page’s ratio, or else the nearest', () => {
     const given = [geometry(1, [1, 1.5]), geometry(2, [1, 1.5])];
-    expect(geometryFor(given, 'f', 1)?.devicePixelRatio).toBe(1);
-    expect(geometryFor(given, 'f', 2)?.devicePixelRatio).toBe(2);
-    // At 1.25 a border of one pixel draws 0.8 wide, as none was laid out for.
-    expect(geometryFor(given, 'f', 1.25)).toBeUndefined();
-    expect(geometryFor(given, 'other', 1)).toBeUndefined();
-    expect(geometryFor([geometry(1, [1, 2])], 'f', 3)?.devicePixelRatio).toBe(1);
-    expect(geometryFor(undefined, 'f', 1)).toBeUndefined();
+    expect(geometryFor(given, 1)?.devicePixelRatio).toBe(1);
+    expect(geometryFor(given, 2)?.devicePixelRatio).toBe(2);
+    // At 1.25 a border of one pixel draws 0.8 wide, as none was laid out for: 1 is nearest.
+    expect(geometryFor(given, 1.25)?.devicePixelRatio).toBe(1);
+    expect(geometryFor(given, 1.75)?.devicePixelRatio).toBe(2);
+    expect(geometryFor([geometry(1, [1, 2])], 3)?.devicePixelRatio).toBe(1);
+    expect(geometryFor([{ ...geometry(1, []), version: geometryVersion - 1 }], 1)).toBeUndefined();
+    expect(geometryFor(undefined, 1)).toBeUndefined();
   });
 });

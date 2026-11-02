@@ -17,7 +17,7 @@ import { snappedBorder } from './library/model/look';
 export type ServerLayout = {
   /**
    * Every step's layout at each device pixel ratio borders snap differently at, of 1 and 2, as on
-   * most screens; none where the server could not lay the presentation out, and the page then does.
+   * most screens; none where the server could not lay the presentation out, which fails its build.
    */
   geometries?: Geometry[];
   /**
@@ -25,6 +25,8 @@ export type ServerLayout = {
    * none where the server could not lay the presentation out.
    */
   drawn?: string[];
+  /** How large it draws (see readability.server.ts); none where the server could not lay it out. */
+  size?: DrawnSize;
   /** Why it could not. */
   failure?: string;
   /** Steps the view failed to draw, with why. */
@@ -34,10 +36,30 @@ export type ServerLayout = {
   cached: boolean;
 };
 
+type Size = { width: number; height: number };
+
+/**
+ * How large a presentation draws, unscaled: the frame every step shows in and the fit it shows
+ * at, as the page draws them (see Geometry's frame); the largest content of any step; the parts of
+ * the step needing the most room, side by side in a row or one above another; and the text sizes,
+ * the smallest and the median by characters.
+ */
+export type DrawnSize = {
+  frame: Size;
+  fit: number;
+  content: Size;
+  parts: Size[];
+  row: boolean;
+  text: { smallest: number; typical: number };
+};
+
 /** How much memory and time a presentation's layout may take. */
 export type Limits = { memoryMb: number; loadMs: number; layOutMs: number };
 // Loading the presentation's code, and laying out every step at one device pixel ratio: Dijkstra's
-// 97 steps take under a second on a laptop.
+// 97 steps take under a second on a laptop, so the times leave room for a busy server and a slower
+// one. The memory bounds one presentation's markup and layouts, which stay far under it, so one
+// that runs away stops before it takes the web process's own memory. One over a limit fails its
+// build, to be drawn smaller (see build.server.ts).
 const limits: Limits = { memoryMb: 256, loadMs: 10_000, layOutMs: 60_000 };
 
 /**
@@ -108,7 +130,7 @@ async function layOutIsolated(
     const layOut = await global.get('__sverlinLayOut', { reference: true });
     const at = async (devicePixelRatio: number) =>
       JSON.parse(
-        (await layOut.apply(undefined, [fontsVersion, devicePixelRatio], {
+        (await layOut.apply(undefined, [devicePixelRatio], {
           timeout: within.layOutMs,
           result: { promise: true, copy: true }
         })) as string
@@ -116,6 +138,8 @@ async function layOutIsolated(
     const geometries = [await at(1)];
     const drawnJson = await global.get('__sverlinDrawn', { copy: true });
     const drawn = typeof drawnJson === 'string' ? (JSON.parse(drawnJson) as string[]) : undefined;
+    const sizeJson = await global.get('__sverlinSize', { copy: true });
+    const size = typeof sizeJson === 'string' ? (JSON.parse(sizeJson) as DrawnSize) : undefined;
     // Most screens draw at 1 or 2 device pixels a CSS pixel; at 2 a border of half a pixel, or one
     // and a half, keeps its width, where at 1 it snaps to a whole one.
     if (geometries[0].borders.some((width) => snappedBorder(width, 2) !== snappedBorder(width, 1)))
@@ -125,11 +149,29 @@ async function layOutIsolated(
         errors,
         failure: `no embedded font has ${[...measure.missing].slice(0, 10).join(' ')}`
       };
-    return { geometries, ...(drawn ? { drawn } : {}), errors };
+    return { geometries, ...(drawn ? { drawn } : {}), ...(size ? { size } : {}), errors };
   } catch (cause) {
     return { errors, failure: cause instanceof Error ? cause.message : String(cause) };
   } finally {
     // One over its memory is disposed of already.
     if (!isolate.isDisposed) isolate.dispose();
   }
+}
+
+/**
+ * Why the server could not lay a presentation out, as what to change: one too large or slow to lay
+ * out within the limits, or with a layout over the bundle's limit, draws less; one with characters
+ * no embedded font has uses others; and the steps the view failed to draw.
+ */
+export function layoutFailureMessage(
+  failure = 'no layout came back',
+  errors: readonly string[] = []
+): string {
+  const failed = errors.length ? ` The view failed to draw at ${errors.join('; ')}.` : '';
+  const missing = /^no embedded font has (.*)$/u.exec(failure);
+  if (missing)
+    return `The presentation draws characters no embedded font has (${missing[1]}): use other characters, as plain letters, digits and common symbols, or words.${failed}`;
+  if (/time|memory|disposed|limit/iu.test(failure))
+    return `The presentation is too large or slow to lay out (${failure}): draw fewer parts, or fewer steps, as a smaller input or a variant pausing at fewer labels.${failed}`;
+  return `The presentation could not be laid out (${failure}).${failed}`;
 }

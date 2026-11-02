@@ -120,6 +120,11 @@ export type MasterStep = {
    * input as given and `end` for the algorithm's end.
    */
   name?: string;
+  /**
+   * Every name the step has where several labels mark the code whose run it ends, as @scan#2 and
+   * @scan.check#2: a variant pausing at any one of them shows this step under that name.
+   */
+  names?: string[];
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -1401,6 +1406,14 @@ class Interpreter {
     return `@${label}#${this.#ended.get(label) ?? 0}`;
   }
 
+  /** Every name of a step ending a run, one by each label marking its code (see MasterStep). */
+  #namesOf(run: Run): string[] | undefined {
+    const labels = this.#named.get(run.node) ?? [];
+    return labels.length > 1
+      ? labels.map((label) => `@${label}#${this.#ended.get(label) ?? 0}`)
+      : undefined;
+  }
+
   /** How the page pauses at a run's labels: accumulating if any of them does (see PauseMode). */
   #modeOf(run: Run): PauseMode | 'off' {
     const modes = (this.#named.get(run.node) ?? []).map((label) => this.#pauses.get(label));
@@ -1486,6 +1499,7 @@ class Interpreter {
         ? single
         : undefined;
     });
+    const names = ending && this.#namesOf(ending);
     this.#trace.push({
       // Strictly later than the step before, though no event came between them.
       moment: Math.max(this.#log.seen, (this.#trace.at(-1)?.moment ?? -1) + 1),
@@ -1493,6 +1507,7 @@ class Interpreter {
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name: ending ? this.#nameOf(ending) : 'end',
+      ...(names ? { names } : {}),
       ...(inside.length ? { inside } : {}),
       ...after,
       ...logged,

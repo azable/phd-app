@@ -46,3 +46,32 @@ export function fittedHeight(
   const height = Math.ceil(content.height * fit + padding.height);
   return Math.min(Math.max(height, width / shapes.widest), width / shapes.tallest);
 }
+
+/** The frame every step shows in, and the one fit every step is drawn at (see shownFrame). */
+export type ShownFrame = { height: number; fit: number };
+
+/**
+ * The frame every step shows in, from each step's frame as laid out, its inside and its root's
+ * content: as tall as laid out, or, for a frame taking its content's shape (the fit ratio), laid
+ * out at its tallest, as tall as the largest content needs at the fit its width allows; and the
+ * fit the largest content needs in it, so every step has room and the view never zooms between
+ * them. None for a presentation with no step.
+ */
+export function shownFrame(
+  steps: readonly { frame: Size; inside: Size; content: Size }[],
+  takesShape: boolean,
+  shapes: { widest: number; tallest: number }
+): ShownFrame | undefined {
+  if (!steps.length) return undefined;
+  const [{ frame, inside }] = steps;
+  const largest = {
+    width: Math.max(...steps.map(({ content }) => content.width)),
+    height: Math.max(...steps.map(({ content }) => content.height))
+  };
+  const padding = { width: frame.width - inside.width, height: frame.height - inside.height };
+  const height = takesShape ? fittedHeight(frame.width, padding, largest, shapes) : frame.height;
+  return {
+    height,
+    fit: neededFit({ width: inside.width, height: height - padding.height }, largest)
+  };
+}

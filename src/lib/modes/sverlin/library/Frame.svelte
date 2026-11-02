@@ -10,7 +10,7 @@
 <script lang="ts">
   import { flushSync, untrack, type Component } from 'svelte';
 
-  import { fittedHeight, flowExtent, neededFit } from './fit';
+  import { flowExtent } from './fit';
   import { hoverPlaces } from './listing/places';
   import {
     layoutMemoryContext,
@@ -47,9 +47,10 @@
 
   let frameElement = $state<HTMLDivElement>();
   let rootElement = $state<HTMLDivElement>();
-  // An arranged root larger than the frame's inside is scaled down to fit it.
+  // The root is drawn at the fit the server gave, which holds every step's content in the frame's
+  // inside (see shownFrame); laid out on the server, unscaled.
   let rootSize = $state({ width: 0, height: 0 });
-  let fit = $state(1);
+  const fit = memory?.frame?.fit ?? 1;
   // Bumped whenever an arrangement settles, so selection outlines are measured again.
   let layoutRevision = $state(0);
   // The least size of a CSS root, so once scaled it spans the frame's inside and justify can spread.
@@ -74,18 +75,6 @@
         parseFloat(getComputedStyle(block).rowGap) || 0,
         block.style.flexDirection === 'row'
       );
-      // A frame taking its content's shape is as tall as the content at the fit its width allows.
-      if (settings.ratio === 'fit') {
-        const padding = {
-          width: frameElement.clientWidth - inside.width,
-          height: frameElement.clientHeight - inside.height
-        };
-        fittedFrame = fittedHeight(width, padding, content, fitShapes);
-        inside.height = fittedFrame - padding.height;
-      }
-      const needed = neededFit(inside, content);
-      // Every step shows at the smallest fit any step needs, so the view never zooms between them.
-      fit = memory ? Math.min(needed, ...memory.fits.values()) : needed;
       flowLeast = { width: inside.width / fit, height: inside.height / fit };
       rootSize = {
         width: Math.max(content.width, inside.width / fit),
@@ -143,13 +132,13 @@
     return () => observer.disconnect();
   });
   const width = frameWidth;
-  // A frame taking its content's shape starts at its tallest, as its markup is laid out (see
-  // model/reserve.ts), until its content is measured.
-  let fittedFrame = $state<number>();
+  // As tall as the server gave; laid out there, a frame taking its content's shape is at its
+  // tallest (see model/reserve.ts).
   const height = $derived(
-    settings.ratio === 'fit'
-      ? (fittedFrame ?? Math.round(width / fitShapes.tallest))
-      : Math.round(frameWidth / frameRatios[settings.ratio])
+    memory?.frame?.height ??
+      (settings.ratio === 'fit'
+        ? Math.round(width / fitShapes.tallest)
+        : Math.round(frameWidth / frameRatios[settings.ratio]))
   );
 
   // The canvas element's own size, observed directly: the window size and its resize events can lag

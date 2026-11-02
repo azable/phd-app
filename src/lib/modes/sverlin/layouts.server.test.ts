@@ -128,11 +128,6 @@ describe('layouts of the page', () => {
       '{#layout A is never closed: close the opening with }, as {#layout A}.'
     ],
     [
-      'a closing ending with >',
-      '{#layout A}<Node>{@render Board()}</Node>{/layout>',
-      '{/layout> does not close the layout: close the layout with {/layout}.'
-    ],
-    [
       'a closing without its brace',
       '{#layout A}<Node>{@render Board()}</Node>{/layout\n',
       '{/layout does not close the layout: close the layout with {/layout}.'
@@ -174,14 +169,20 @@ describe('layouts of the page', () => {
     }
   });
 
+  it('takes a closing written with >, as {/layout>, as meant', () => {
+    expect(() =>
+      prepareSvelteComponent(withView('{#layout A}<Node>{@render Board()}</Node>{/layout>'))
+    ).not.toThrow();
+  });
+
   it('points at a malformed closing', () => {
-    const source = withView('{#layout A}\n  <Node>{@render Board()}</Node>\n{/layout>');
+    const source = withView('{#layout A}\n  <Node>{@render Board()}</Node>\n{/layout');
     try {
       prepareSvelteComponent(source);
       expect.unreachable();
     } catch (cause) {
       const { line, column } = cause as { line: number; column: number };
-      expect(source.split('\n')[line - 1].slice(column - 1)).toBe('{/layout>');
+      expect(source.split('\n')[line - 1].slice(column - 1)).toBe('{/layout');
     }
   });
 });

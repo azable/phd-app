@@ -15,9 +15,6 @@ import { MemoryProjectRepository } from './memory-repository.test-support';
 import { runWithProjectOperationSignal } from './operation-context';
 import type { ProjectServiceDependencies } from './service';
 
-// These tests read commands and events, never the layout, so builds skip laying out on the server.
-process.env.SVERLIN_SERVER_LAYOUT = 'off';
-
 const mocks = vi.hoisted(() => ({
   attemptProfiles: [
     {
@@ -1315,7 +1312,7 @@ describe('submitProjectFeedback', () => {
         `</Node>${close}`
       ].join('\n');
     const sources = {
-      unclosed: lines('{/layout>'),
+      unclosed: lines('{/layout'),
       twice: lines('{/layout}', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
       unknown: lines('{/layout}', '', '<Node>{@render Missing()}</Node>'),
       rewritten:
@@ -3271,25 +3268,45 @@ describe('several variants from chat', () => {
     left: { label: 'smaller', values: [{ variable: 'IntCell.minSize', value: 1 }] },
     right: { label: 'larger', values: [{ variable: 'IntCell.minSize', value: 2 }] }
   };
-  /** Run with each build laid out on the server, which tells what each step draws. */
-  async function laidOut<T>(run: () => Promise<T>): Promise<T> {
-    process.env.SVERLIN_SERVER_LAYOUT = 'on';
-    try {
-      return await run();
-    } finally {
-      process.env.SVERLIN_SERVER_LAYOUT = 'off';
-    }
-  }
+
+  it('sends a picture too large to read back once, then shows it as built', async () => {
+    const wide = [
+      '<script lang="sverlin"></script>',
+      '{#layout Main}<Node layout="row">',
+      ...Array.from({ length: 150 }, (_, index) => `<Node>cell ${index}</Node>`),
+      '</Node>{/layout}'
+    ].join('\n');
+    const result = await attempts(
+      () => ({
+        ...generation(undefined, 'All of it.'),
+        decision: { action: 'revise', source: wide, summary: 'Every cell' }
+      }),
+      'Too large'
+    );
+
+    const rejected = result.appendedEvents.filter(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected.map(({ payload }) => payload)).toEqual([
+      expect.objectContaining({
+        rejected: 'picture',
+        problems: [expect.stringContaining('The picture is too large to read')]
+      })
+    ]);
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'picture_unreadable' })
+    );
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
+    expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
+      true
+    );
+  });
 
   it('sends back a comparison whose sides draw alike at every step, and records where a pair differs', async () => {
-    const result = await laidOut(() =>
-      attempts(
-        ({ attempt }) =>
-          attempt.number === 1
-            ? vary('Two wait.', { comparisons: [sizes, marks] })
-            : vary('One to answer.', { comparisons: [marks] }),
-        'Drawn alike'
-      )
+    const result = await attempts(
+      ({ attempt }) =>
+        attempt.number === 1
+          ? vary('Two wait.', { comparisons: [sizes, marks] })
+          : vary('One to answer.', { comparisons: [marks] }),
+      'Drawn alike'
     );
 
     expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
@@ -3307,16 +3324,14 @@ describe('several variants from chat', () => {
   });
 
   it('leaves out a comparison drawing alike on the last attempt, showing the next first', async () => {
-    const result = await laidOut(() =>
-      attempts(
-        ({ attempt }) => ({
-          ...vary('Two wait.', { comparisons: [sizes, marks] }),
-          ...(attempt.purpose === 'fallback'
-            ? { recovery: { struggledWith: 'the sizes', simplified: 'the questions' } }
-            : {})
-        }),
-        'Alike to the last'
-      )
+    const result = await attempts(
+      ({ attempt }) => ({
+        ...vary('Two wait.', { comparisons: [sizes, marks] }),
+        ...(attempt.purpose === 'fallback'
+          ? { recovery: { struggledWith: 'the sizes', simplified: 'the questions' } }
+          : {})
+      }),
+      'Alike to the last'
     );
 
     expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
@@ -3330,25 +3345,14 @@ describe('several variants from chat', () => {
   });
 
   it('leaves out a later comparison drawing alike, as one that fails to build', async () => {
-    const result = await laidOut(() =>
-      attempts(() => vary('Two wait.', { comparisons: [marks, sizes] }), 'Later alike')
+    const result = await attempts(
+      () => vary('Two wait.', { comparisons: [marks, sizes] }),
+      'Later alike'
     );
 
     expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
       'Amber or blue marks?',
       'Amber or blue marks?'
-    ]);
-  });
-
-  it('checks nothing drawn where builds are not laid out on the server', async () => {
-    const result = await attempts(
-      () => vary('Two wait.', { comparisons: [sizes] }),
-      'Not laid out'
-    );
-
-    expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
-      undefined,
-      undefined
     ]);
   });
 

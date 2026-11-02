@@ -23,7 +23,10 @@ export const layoutPassSchema = v.strictObject({
   waiting: v.optional(v.boolean()),
   /** For a wait to be shown: whether the page was hidden or had no size yet. */
   waitedFor: v.optional(v.picklist(['size', 'visibility'])),
-  /** For recording: whether every step's layout came from the server or was worked out in the page. */
+  /**
+   * For recording: where every step's layout came from, the server, or, in loads recorded before the
+   * server's became the only layout, the page itself.
+   */
   layout: v.optional(v.picklist(['server', 'page']))
 });
 
@@ -54,7 +57,7 @@ export const presentationLoadTimingSchema = v.strictObject({
   pageMs: v.optional(milliseconds),
   /** When the page said it had loaded, from the viewer starting to load it. */
   loadedMs: v.optional(milliseconds),
-  /** Where every step's layout came from: the server, or the page itself. */
+  /** Where every step's layout came from, as a recording pass says. */
   layout: v.optional(v.picklist(['server', 'page'])),
   measuringMs: milliseconds,
   recordingMs: milliseconds,
@@ -72,7 +75,7 @@ export const presentationLoadTimingSchema = v.strictObject({
   frameAtOutcome: v.optional(frameBoxSchema),
   /** The last pass the page reported, which for a stalled load is where it waits. */
   last: v.optional(layoutPassSchema),
-  /** The page's device pixel ratio, which geometry from the server must match. */
+  /** The page's device pixel ratio, which the geometry it draws with is chosen by. */
   devicePixelRatio: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100))),
   userAgent: v.optional(v.pipe(v.string(), v.maxLength(1_000))),
   /** Measured as soon as the fonts loaded, before laying out; absent if the page never got there. */

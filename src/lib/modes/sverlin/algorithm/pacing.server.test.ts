@@ -180,6 +180,39 @@ describe('pauses at labels', () => {
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
   });
 
+  it('name a step by every label marking its code, each counting its runs however steps pause', () => {
+    const nested = `
+  let n = Int(0);
+  while (Less(n, 2)) @up{
+    @add[@one[n = Up(n);]]
+  }
+`;
+    const names = (pauses?: Pacing['pauses']) =>
+      steps(nested, { pauses }).map(({ name, names }) => names ?? [name]);
+    expect(names()).toEqual([
+      ['@up.add#1', '@up.add.one#1'],
+      ['@up#1'],
+      ['@up.add#2', '@up.add.one#2'],
+      ['@up#2']
+    ]);
+    // Paused at the outer label alone, the same steps take its name and keep their counts.
+    expect(steps(nested, { pauses: pausedAt('up', 'up.add') }).map(({ name }) => name)).toEqual([
+      '@up.add#1',
+      '@up#1',
+      '@up.add#2',
+      '@up#2'
+    ]);
+    // Accumulating or not, the steps are the same.
+    expect(
+      steps(nested, {
+        pauses: new Map([
+          ['up', 'on'],
+          ['up.add.one', 'on']
+        ])
+      }).map(({ name }) => name)
+    ).toEqual(steps(nested, { pauses: pausedAt('up', 'up.add.one') }).map(({ name }) => name));
+  });
+
   it('number every step by its moment, the same however steps are paced', () => {
     const byCount = steps(search, { pauses: pausedAt('start', 'pass.count') });
     const byCheck = steps(search, { shown, pauses: pausedAt('pass.check') });
@@ -190,14 +223,15 @@ describe('pauses at labels', () => {
       .forEach((moment, index) => {
         expect(moment).toBeLessThan(moments(byCheck)[index]);
       });
-    // Presentations paced differently line up by moment, one holding its step where the other has
-    // one of its own.
+    // Presentations paced differently line up by their steps' names among those of every label
+    // paused, one holding its step where the other has one of its own.
+    const every = steps(search, { shown }).map(({ name, names }) => names ?? [name as string]);
     const presentation = (id: string, trace: typeof byCheck) => ({
       presentationId: id,
       format: 'browser-bundle-v1' as const,
       stepSignature: 'one source',
-      labels: trace.map((_, index) => `Step ${index + 1}`),
-      masterSteps: moments(trace)
+      labels: trace.map(({ name }) => name as string),
+      steps: every
     });
     const frames = alignPresentationFrames([
       presentation('counts', byCount),

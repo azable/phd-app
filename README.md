@@ -233,21 +233,29 @@ presentation's code in an isolate with no access to the server, bounded in
 memory and time, and measuring text with HarfBuzz in the fonts every page embeds
 ([`fonts/`](src/lib/modes/sverlin/fonts/README.md)); it gives the page the
 result with its bundle, so the page mounts only the step it shows, and keeps it
-by what it was made from. The page lays out itself, the same way, measuring on a
-canvas, wherever that layout does not hold: the fonts did not load, a text needs
-a character no embedded face has, or the screen's device pixel ratio snaps a
-border to another width. Sizes compose bottom up: a typed component's root keeps
-its component's box, any other node keeps the largest size it reaches at any
-step, laid out with the sizes the nodes inside it keep, so changing content
-never resizes a box, every item of a collection keeps the largest size any of
-them reaches, so items line up even when only some change, and each arrangement
-is solved once over the union of every step, with every child and link that ever
-appears ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)),
-the node holding it sized with it; nodes alike are laid out once. Showing a step
-mounts it and places children where that solution put them, drawing only that
-step's links, at a root fit shared by all steps, so positions are valid across
-the whole animation, so a seed gives the same layout for each step whichever
-step is shown first, and only what changes moves. The page frame is the root
+by what it was made from. The server's layout is the only one: the page draws
+every step with it as given, in the frame and at the scale the server worked out
+([`library/fit.ts`](src/lib/modes/sverlin/library/fit.ts)), whatever fonts its
+browser loaded, and a page given none shows an error instead of laying out
+itself. A presentation the server cannot lay out, as one too large or slow to
+lay out within the isolate's limits or with a character no embedded face has,
+fails its build, and the assistant repairs it like a compile error. The server
+also measures how large each version draws on a typical stage
+([`readability.server.ts`](src/lib/modes/sverlin/readability.server.ts)), from
+that same frame and scale, which the assistant sees with each version and gets
+back once when its text would be too small to read. Sizes compose bottom up: a
+typed component's root keeps its component's box, any other node keeps the
+largest size it reaches at any step, laid out with the sizes the nodes inside it
+keep, so changing content never resizes a box, every item of a collection keeps
+the largest size any of them reaches, so items line up even when only some
+change, and each arrangement is solved once over the union of every step, with
+every child and link that ever appears
+([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)), the node
+holding it sized with it; nodes alike are laid out once. Showing a step mounts
+it and places children where that solution put them, drawing only that step's
+links, at a root fit shared by all steps, so positions are valid across the
+whole animation, so a seed gives the same layout for each step whichever step is
+shown first, and only what changes moves. The page frame is the root
 arrangement, scaled down when it would not fit and up, to 1.6 times, when it
 would leave the frame mostly empty. Participants' selections inside the frame
 reference nodes in feedback: the compiler stamps every `<Node>` with its tag's
@@ -270,15 +278,16 @@ compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as
 `__view`, which with its `tags` gives its kind, and each node draws the
 variant's values for its kind. The compiler injects the library components and
 every input and algorithm value, the view each type rendered by name draws,
-`step`, and `seed` as props. Presentations record their kept `masterSteps`,
-their `variant`, where each value came from (`origins`), each type's views, and
-the kinds each tag can be, which the source editor shows as a chip in each tag
-that opens its kind's values in each visible presentation, flagging those a pair
-has differently, after each render of a type the view each visible presentation
-draws it with, and in the first top-level node's chip the page frame
-([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Views of a type
-no visible presentation chose are greyed out. Comparisons align by master step,
-showing the previous step on the side that omits one.
+`step`, and `seed` as props. Presentations record their source's `steps`, each
+by every name it has, their `variant`, where each value came from (`origins`),
+each type's views, and the kinds each tag can be, which the source editor shows
+as a chip in each tag that opens its kind's values in each visible presentation,
+flagging those a pair has differently, after each render of a type the view each
+visible presentation draws it with, and in the first top-level node's chip the
+page frame ([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)).
+Views of a type no visible presentation chose are greyed out. Comparisons align
+each side's step names among the source's steps, showing the previous step on
+the side that omits one; presentations of two sources are never shown together.
 
 Laying a presentation out, the server also describes what each step draws: each
 element's box, font, paint and text, and each free layout's places and links,

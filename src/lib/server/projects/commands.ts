@@ -25,7 +25,11 @@ import {
   presentationBufferState,
   waitingComparisons
 } from '$lib/shared/projects/presentation-buffer';
-import type { DesignValues, RenderablePresentation } from '$lib/shared/presentations';
+import {
+  stepPlaces,
+  type DesignValues,
+  type RenderablePresentation
+} from '$lib/shared/presentations';
 import {
   isSverlinPresentation,
   presentationMode,
@@ -35,6 +39,7 @@ import {
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { differingSteps } from '$lib/shared/differing-steps';
+import { unreadableProblem } from '$lib/shared/readability';
 import { cutText } from '$lib/shared/text';
 import { interfaceReferenceFor } from '$lib/shared/interface-parts';
 import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
@@ -866,6 +871,8 @@ async function runSverlinAssistantTurn(
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
   const turnBrief = new Map<BriefEntry['key'], BriefEntry>();
+  // Whether a picture too large to read went back to the assistant: it does once, then shows.
+  let unreadableReturned = false;
 
   return runAttemptLadder(
     document,
@@ -941,12 +948,17 @@ async function runSverlinAssistantTurn(
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
-        kind: 'edits' | 'comparisons',
+        kind: 'edits' | 'comparisons' | 'picture',
         problems: string[],
         failedSource: string,
         advice: string[] = []
       ) => {
-        const summary = `Attempt ${attempt}: the ${kind} could not be ${kind === 'edits' ? 'applied' : 'built'}. ${problems.join(' ')}`;
+        const outcome = {
+          edits: 'the edits could not be applied',
+          comparisons: 'the comparisons could not be built',
+          picture: 'the picture drew too large to read'
+        }[kind];
+        const summary = `Attempt ${attempt}: ${outcome}. ${problems.join(' ')}`;
         failureSummaries.push(summary);
         current = await appendProjectEvents(
           current,
@@ -958,7 +970,7 @@ async function runSverlinAssistantTurn(
               payload: {
                 attempt,
                 ...generationReference(current, operationId),
-                ...(kind === 'comparisons' ? { rejected: kind } : {}),
+                ...(kind === 'edits' ? {} : { rejected: kind }),
                 problems
               }
             })
@@ -984,7 +996,11 @@ async function runSverlinAssistantTurn(
           diagnostics: [
             ...problems.map((message) => ({
               severity: 'error' as const,
-              code: kind === 'edits' ? 'edit_not_applied' : 'comparison_not_built',
+              code: {
+                edits: 'edit_not_applied',
+                comparisons: 'comparison_not_built',
+                picture: 'picture_unreadable'
+              }[kind],
               message,
               raw: message
             })),
@@ -1216,6 +1232,24 @@ async function runSverlinAssistantTurn(
             unoffered.map((problem) => `Comparison 1 (“${question}”): ${problem}`),
             candidate
           );
+      }
+      // A picture whose text would be too small to read on a typical stage goes back once, with an
+      // attempt left to show less at once; after that it shows as built.
+      const unreadable =
+        candidate !== undefined &&
+        !unreadableReturned &&
+        attempt < chatbot.config.attemptProfiles.length &&
+        batchSucceeded(built.recorded)
+          ? built.recorded.builds
+              .flatMap(({ result }) =>
+                result.ok && result.bundle.readability ? [result.bundle.readability] : []
+              )
+              .map(unreadableProblem)
+              .find((problem) => problem !== undefined)
+          : undefined;
+      if (unreadable && candidate !== undefined) {
+        unreadableReturned = true;
+        return reject('picture', [unreadable], candidate);
       }
       if (batchSucceeded(built.recorded)) {
         // The assistant is the one author of a new or edited source: its first build stands. Only
@@ -1902,15 +1936,26 @@ function pairQuestion(
 }
 
 /**
- * The steps at which a pair's two builds draw differently, from what the server laid out (see
- * ModeBuildResult's drawn); unknown where either was not laid out there, as with server layout
- * off, or the two keep different steps.
+ * The steps, by the left side's, at which a pair's two builds draw differently, from what the server
+ * laid out (see ModeBuildResult's drawn), matched by where each falls among the source's steps.
+ * Sides pausing differently compare at the steps both show; where those all draw alike, the sides
+ * still differ at the steps one alone shows, so that is left unknown rather than told as alike.
+ * Unknown too where either was not laid out, or they are of two sources.
  */
 function pairDifferences(builds: readonly RecordedBuild[]): number[] | undefined {
   const [left, right] = builds.map(({ result }) => (result.ok ? result.bundle : undefined));
-  if (!left || !right || JSON.stringify(left.masterSteps) !== JSON.stringify(right.masterSteps))
-    return undefined;
-  return differingSteps(left.drawn, right.drawn);
+  if (!left?.steps || !right?.drawn || left.stepSignature !== right.stepSignature) return undefined;
+  if (JSON.stringify(left.labels) === JSON.stringify(right.labels))
+    return differingSteps(left.drawn, right.drawn);
+  const [leftPlaces, rightPlaces] = [left, right].map(({ labels }) =>
+    stepPlaces(left.steps ?? [], labels)
+  );
+  if (!left.drawn || !leftPlaces || !rightPlaces) return undefined;
+  const rightDrawn = new Map(rightPlaces.map((place, step) => [place, right.drawn?.[step]]));
+  const differs = leftPlaces.flatMap((place, step) =>
+    rightDrawn.has(place) && rightDrawn.get(place) !== left.drawn?.[step] ? [step] : []
+  );
+  return differs.length ? differs : undefined;
 }
 
 /** Why a comparison whose two sides draw the same picture at every step cannot be asked. */

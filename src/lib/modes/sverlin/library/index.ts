@@ -15,13 +15,13 @@ export { themeCss } from './theme';
 export { pageAncestors, pageCss } from './page';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
 export { kindKey, type DesignValues } from './node/design';
-export type { LayoutMemory } from './type-context';
+export type { FrameExtent, LayoutMemory } from './type-context';
 export { provideEnds, providePointers } from './type-context';
 export { linePairs } from './node/lines';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';
 export { arrangementLayout, describeFrame, describeStep } from './scene';
-export { ancestorsOf, checkLayout, type LayoutCheck } from './model/check';
+export { checkLayout, type LayoutCheck } from './model/check';
 export { parseSheet, type Rule } from './model/css';
 export { styler } from './model/look';
 export { readMarkup } from './model/markup';
@@ -33,8 +33,7 @@ export {
   type Drawing,
   type Reservation
 } from './model/reserve';
-export { canvasMeasure } from './model/text';
-export { treeOf, type ModelElement } from './model/tree';
+export type { ModelElement } from './model/tree';
 export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,
@@ -60,3 +59,5 @@ export {
 } from './steps';
 export { recordLayouts, type Sizing } from './record';
 export { applyGeometry, geometryFor, geometryOf, geometryVersion, type Geometry } from './geometry';
+export { shownFrame, type ShownFrame } from './fit';
+export { fitShapes } from './node/scales';

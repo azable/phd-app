@@ -83,8 +83,8 @@ describe('Svelte-backed project lifecycle', () => {
     if (left.format !== 'browser-bundle-v1' || right.format !== 'browser-bundle-v1') return;
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
-    expect(left.masterSteps).toEqual(right.masterSteps);
-    expect(left.masterSteps).toHaveLength(6);
+    expect(left.steps).toEqual(right.steps);
+    expect(left.steps).toHaveLength(6);
     // The first is the starter; the second is randomised from it.
     expect(left.variant?.['views.Int']).toBe('IntCell');
     expect(left.origins?.['IntCell.fill']).toBe('starter');

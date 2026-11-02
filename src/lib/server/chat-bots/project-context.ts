@@ -46,6 +46,7 @@ type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { stepRuns } from '$lib/shared/differing-steps';
+import { readabilityText } from '$lib/shared/readability';
 import { interfacePartsFor, type InterfacePartId } from '$lib/shared/interface-parts';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
@@ -124,6 +125,8 @@ export type AiPresentationSummary = {
   seed?: number;
   sourceSha256: string;
   contentSha256: string;
+  /** How large it draws on a typical stage, where the server laid it out. */
+  readability?: string;
 };
 
 /** Full details resolved for an event explicitly selected by the user. */
@@ -872,7 +875,10 @@ function presentationSummary(
     presentationId: presentation.presentationId,
     ...(scripted ? { seed: presentation.seed } : {}),
     sourceSha256: (scripted ? presentation.source : presentation.authored).sha256,
-    contentSha256: (scripted ? presentation.javascript : presentation.rendered).sha256
+    contentSha256: (scripted ? presentation.javascript : presentation.rendered).sha256,
+    ...(scripted && presentation.readability
+      ? { readability: readabilityText(presentation.readability) }
+      : {})
   };
 }
 

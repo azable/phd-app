@@ -29,9 +29,7 @@ export async function buildBatch(
     throwIfAborted(signal);
     try {
       // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts).
-      const bundle = await bundlePresentation(prepared, seed, variant, {
-        serverLayout: serverLayoutEnabled()
-      });
+      const bundle = await bundlePresentation(prepared, seed, variant);
       logLayout(seed, bundle.layout);
       results.push({
         ok: true,
@@ -42,8 +40,8 @@ export async function buildBatch(
           html: '',
           javascript: bundle.javascript,
           labels: bundle.labels,
-          masterSignature: bundle.masterSignature,
-          masterSteps: bundle.masterSteps,
+          steps: bundle.steps,
+          stepSignature: bundle.stepSignature,
           variant: bundle.variant,
           origins: bundle.origins,
           views: prepared.design.views,
@@ -54,7 +52,8 @@ export async function buildBatch(
           leftOut: bundle.leftOut,
           runs: prepared.pauses.runs,
           structures: prepared.design.structures,
-          ...(bundle.layout?.drawn ? { drawn: bundle.layout.drawn } : {})
+          ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),
+          ...(bundle.layout.readability ? { readability: bundle.layout.readability } : {})
         }
       });
     } catch (cause) {
@@ -65,21 +64,12 @@ export async function buildBatch(
   return results;
 }
 
-/** Where the server could not lay a presentation out, and why, as the page then lays it out. */
+/** How long the server took to lay a presentation out, and the steps the view failed to draw. */
 function logLayout(seed: number, layout: SvelteBundle['layout']): void {
-  if (!layout) return;
   const errors = layout.errors.length ? `; the view failed at ${layout.errors.join('; ')}` : '';
-  if (layout.server)
-    console.info(
-      `[sverlin] seed ${seed} laid out on the server in ${layout.ms} ms${layout.cached ? ' (kept)' : ''}${errors}`
-    );
-  else
-    console.warn(`[sverlin] seed ${seed} left to the page to lay out: ${layout.failure}${errors}`);
-}
-
-/** Whether builds lay every step out on the server; tests of commands, which never read the layout, turn it off. */
-function serverLayoutEnabled(): boolean {
-  return process.env.SVERLIN_SERVER_LAYOUT !== 'off';
+  console.info(
+    `[sverlin] seed ${seed} laid out on the server in ${layout.ms} ms${layout.cached ? ' (kept)' : ''}${errors}`
+  );
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

@@ -28,13 +28,24 @@ copied exactly from project.base, whitespace included, that occurs in it once
 apply in order. Use revise, with the complete replacement source, only for a
 first visualization or a change to most of it. Change the source only for what
 is drawn, as a new node, snippet, or view, or the algorithm, writing each design
-as the guide’s Declare what varies describes; revise only what the feedback asks
-for, and leave every snippet it does not address as it was. A change to the
-source shows as one version, with the viewed variant’s values for the variables
-it still has and the starter’s plain look for any new ones, unless edit or
-revise gives values of its own, as vary does. Keep the source’s lines short,
-seldom over 80 characters unless a line cannot break, so the participant can
-read it in the source panel.
+as the guide’s Declare what varies describes; A targeted request, as “make the
+pointer red” or “add the index”, changes only what it names: leave every snippet
+it does not address as it was. A request about scope or focus, as “simpler”,
+“fewer steps”, “just the main idea”, “too busy” or “too big”, is about the whole
+picture: decide what the picture must show for it and for the brief’s focus, and
+remove or merge the rest rather than adding to it, with revise where that
+changes most of the source. Keep the picture to one main structure and only the
+supporting parts the focus needs: add a second view of the same thing, a running
+explanation or a summary panel only when asked, or after comparing it. Where
+cutting it down has more than one fair reading, as the whole tree at once
+against one level at a time, compare them rather than choosing. Each active
+presentation’s readability says how large it shows on a typical stage; one whose
+text would be too small to read comes back to you once, to show less at once. A
+change to the source shows as one version, with the viewed variant’s values for
+the variables it still has and the starter’s plain look for any new ones, unless
+edit or revise gives values of its own, as vary does. Keep the source’s lines
+short, seldom over 80 characters unless a line cannot break, so the participant
+can read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: every new label
 pauses, "on", the finest the steps go, unless edit's or revise's values set its

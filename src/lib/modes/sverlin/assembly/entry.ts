@@ -2,15 +2,12 @@
 // with the state recorded for a step. The sandbox document injects the
 // first step; later steps arrive as messages from the app and are shown without reloading the page.
 // Nodes find the atomic types of their values, and each type's parent and unit, through the
-// 'sverlin:types' context. Every step's layout comes from the server where it gave one for the
-// fonts the page draws in (see layout.ts), and is otherwise worked out here (see library/record.ts).
+// 'sverlin:types' context. Every step's layout comes from the server (see layout.ts), and the page
+// draws with it as given.
 
 import { mount, unmount, type Component } from 'svelte';
-import { render } from 'svelte/server';
 import {
-  ancestorsOf,
   applyGeometry,
-  canvasMeasure,
   checkLayout,
   describeFrame,
   describeStep,
@@ -18,11 +15,8 @@ import {
   emptyLayouts,
   finishMotion,
   geometryFor,
-  geometryOf,
   leaveLayer,
-  recordLayouts,
   stepsOf,
-  treeOf,
   Frame,
   pageCss,
   unpackStates,
@@ -34,10 +28,8 @@ import {
   type SceneStep
 } from 'sverlin';
 import Main from 'virtual:component';
-import MainServer from 'virtual:component-server';
-import { Frame as FrameServer } from 'virtual:library-server';
 import atoms from 'virtual:atoms';
-import { components, listing, placements } from 'virtual:components';
+import { listing } from 'virtual:components';
 import packed from 'virtual:trace';
 
 const steps = stepsOf(unpackStates(packed), atoms, listing);
@@ -58,13 +50,7 @@ const playback = window as typeof window & {
    * differently at, which the bundle sets before this runs.
    */
   __sverlinGeometry?: Geometry[];
-  /** Where every step's layout came from, for whoever looks on, as the tests do. */
-  __sverlinLayout?: Layout;
-  /** Every step's layout as the page worked it out, for whoever compares it with the server's. */
-  __sverlinPageGeometry?: Geometry;
 };
-/** Where every step's layout came from: the server's geometry, or worked out in the page. */
-type Layout = 'server' | 'page';
 // Step k is states 2k and 2k + 1 (see library/steps.ts); the page rests on a step's after.
 const clampStep = (step: number) => Math.min(Math.max(step, 0), stepCount - 1);
 const afterOf = (step: number) => 2 * step + 1;
@@ -91,7 +77,7 @@ type Timing = {
   changes?: number;
   waiting?: boolean;
   waitedFor?: 'size' | 'visibility';
-  layout?: Layout;
+  layout?: 'server';
 };
 const pageStarted = performance.now();
 function reportTiming(timing: Timing) {
@@ -312,8 +298,8 @@ async function whenShown() {
 }
 
 /**
- * The embedded fonts every text is drawn in, loaded before anything is measured, so text is
- * measured and drawn in them and never in a font the page falls back to while they load; whether
+ * The embedded fonts every text is drawn in, which the server measured it in, loaded before any
+ * step is drawn, so text is never drawn in a font the page falls back to while they load; whether
  * every one loaded. The sandbox document declares them (see ../fonts).
  */
 async function loadFonts(): Promise<boolean> {
@@ -328,7 +314,7 @@ async function loadFonts(): Promise<boolean> {
   );
   return faces.length > 0 && loaded.every(Boolean);
 }
-/** The embedded fonts' version, as the sandbox document names it, which geometry must match. */
+/** The embedded fonts' version, as the sandbox document names it. */
 const fonts = document.querySelector<HTMLMetaElement>('meta[name="sverlin-fonts"]')?.content;
 
 /**
@@ -361,64 +347,22 @@ function reportFontWidths(loaded: boolean) {
 }
 
 /**
- * Work out every step's layout before any is shown, without mounting any (see library/record.ts).
- * Laying out gives the page back for a moment between its parts, so a long presentation never
- * holds its page up for long.
- */
-async function recordSteps() {
-  let started = performance.now();
-  const borders = new Set<number>();
-  const reservation = await recordLayouts({
-    steps,
-    layouts,
-    sizing: { components, placements },
-    render: ({ props, settings, context }) =>
-      render(FrameServer, { props: { view: MainServer, props, settings }, context }),
-    measure: canvasMeasure(),
-    sheet: theme.textContent ?? '',
-    devicePixelRatio: window.devicePixelRatio,
-    borders,
-    ancestors: [...ancestorsOf(root), { ...treeOf(root, false), children: [] }],
-    report: reportError,
-    pause: () => new Promise<void>((resume) => setTimeout(resume)),
-    timed: (phase) => {
-      reportTiming({ phase, ms: Math.round(performance.now() - started), layout: 'page' });
-      started = performance.now();
-    }
-  });
-  playback.__sverlinReservation = reservation;
-  playback.__sverlinPageGeometry = geometryOf(
-    layouts,
-    { fonts: fonts ?? '', devicePixelRatio: window.devicePixelRatio, borders },
-    reservation
-  );
-}
-
-/**
- * Every step's layout: the server's, given with the bundle, where it was measured in the fonts this
- * page loaded; otherwise, as when the fonts failed to load or the server could not lay the
- * presentation out, worked out here.
+ * Every step's layout, as the server worked it out and gave it with the bundle (see layout.ts),
+ * drawn with as given: in the embedded fonts once they load, or, where they fail, in the fonts the
+ * page falls back to, which its fonts report says. A bundle with no layout cannot be shown.
  */
 async function layOut() {
   const started = performance.now();
-  const loaded = await loadFonts();
-  reportFontWidths(loaded);
-  const given = loaded
-    ? geometryFor(playback.__sverlinGeometry, fonts, window.devicePixelRatio)
-    : undefined;
-  if (given) {
-    applyGeometry(layouts, given);
-    playback.__sverlinReservation = given.reservation;
-    playback.__sverlinLayout = 'server';
-    reportTiming({
-      phase: 'recording',
-      ms: Math.round(performance.now() - started),
-      layout: 'server'
-    });
-    return;
-  }
-  playback.__sverlinLayout = 'page';
-  await recordSteps();
+  reportFontWidths(await loadFonts());
+  const given = geometryFor(playback.__sverlinGeometry, window.devicePixelRatio);
+  if (!given) throw new Error('This visualization came without its layout, so it cannot be shown.');
+  applyGeometry(layouts, given);
+  playback.__sverlinReservation = given.reservation;
+  reportTiming({
+    phase: 'recording',
+    ms: Math.round(performance.now() - started),
+    layout: 'server'
+  });
 }
 
 /**
@@ -452,8 +396,7 @@ async function describeSteps(
 let ready = false;
 let requested = clampStep(playback.__sverlinStep ?? 0);
 let recorded = false;
-// Laying out that fails says why, and the steps are still shown, laid out as they come.
-const recording = layOut().catch((cause: unknown) => reportError(cause));
+const recording = layOut();
 
 // The app sends each new step, with the selection to show in it; the page and its layout engine
 // stay loaded, and the canvas view carries over. It can also ask for every step as scene data.
@@ -489,7 +432,17 @@ addEventListener('message', (event: MessageEvent) => {
 // The page says it has loaded; it reports when its first step is shown, however long laying out
 // every step takes, so the app keeps its loader up until then.
 if (window.parent !== window) window.parent.postMessage({ type: 'sverlin:loaded' }, '*');
-void recording.then(() => {
-  recorded = true;
-  showStep(requested);
-});
+// A page without its layout says why instead of showing any step.
+recording.then(
+  () => {
+    recorded = true;
+    showStep(requested);
+  },
+  (cause: unknown) => {
+    reportError(cause);
+    const notice = document.createElement('p');
+    notice.className = 'sv-error';
+    notice.textContent = errorText(cause);
+    root.append(notice);
+  }
+);

@@ -9,6 +9,7 @@ import type {
   VariantRequest
 } from '$lib/shared/presentations';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
+import type { Readability } from '$lib/shared/readability';
 
 export type PresentationBuilder = (
   source: string,
@@ -26,9 +27,10 @@ export type ModeBuildResult =
         html: string;
         javascript: string;
         labels: string[];
-        // Aligned modes: the master trace's identity and the master index of each kept step.
-        masterSignature?: string;
-        masterSteps?: number[];
+        // Aligned modes: every step the source can show, each by all its names, which the steps
+        // kept are some of, and their identity.
+        steps?: string[][];
+        stepSignature?: string;
         // Modes with a design space: the variant, where each value came from, and each type's views.
         variant?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
@@ -50,6 +52,8 @@ export type ModeBuildResult =
         // What each step draws, laid out on the server, as a key alike for steps drawing the same
         // picture, so two presentations can be compared step by step; none where it was not.
         drawn?: string[];
+        // How large it draws on a typical stage, laid out on the server; none where it was not.
+        readability?: Readability;
       };
     }
   | {

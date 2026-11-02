@@ -1,8 +1,9 @@
 /**
- * Every step's layout worked out on the server (see layout.server.ts) against the page's own (see
- * library/record.ts), drawn in a real browser: every fixture's every step drawn with the server's
- * layout as with the page's, and the page laying out itself wherever the server's does not hold.
- * Run with `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
+ * Every step's layout worked out on the server (see layout.server.ts), drawn in a real browser: every
+ * fixture's every step drawn soundly with it, in the frame and at the fit the server gave, whatever
+ * the page's fonts or device pixel ratio, and a page given none saying so. How near the layout model
+ * is to the browser's own layout is layout-model.browser.test.ts's. Run with `pnpm run
+ * test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
 import { chromium, type Browser } from 'playwright-core';
@@ -12,7 +13,7 @@ import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { embeddedFontsHead } from './fonts';
 import manifest from './fonts/faces.json';
-import type { SceneFrame, SceneStep } from './library';
+import type { Geometry, SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
 import type { VariantRequest } from './design.server';
 
@@ -33,9 +34,9 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-type Drawn = { layout: string; frame: SceneFrame; steps: SceneStep[] };
+type Drawn = { frame: SceneFrame; steps: SceneStep[] };
 
-/** Every step of a presentation as the page draws it, and where its layout came from. */
+/** Every step of a presentation as the page draws it. */
 async function drawn(
   javascript: string,
   { fonts = true, deviceScaleFactor = 1 } = {}
@@ -60,11 +61,6 @@ async function drawn(
   await page.waitForFunction(() => (window as { ready?: boolean }).ready, null, {
     timeout: 60_000
   });
-  const layout = await page.evaluate(
-    () =>
-      (document.querySelector('iframe')!.contentWindow as Window & { __sverlinLayout?: string })
-        .__sverlinLayout ?? ''
-  );
   await page.evaluate(() =>
     document
       .querySelector('iframe')
@@ -77,53 +73,31 @@ async function drawn(
     () => (window as unknown as { scene: { frame: SceneFrame; steps: SceneStep[] } }).scene
   );
   await page.close();
-  return { layout, ...scene };
+  return scene;
 }
 
-/** The furthest any node's box is from where the other drawing put it. */
-function furthest(a: SceneStep[], b: SceneStep[]): number {
-  let most = 0;
-  a.forEach((step, k) => {
-    const other = new Map(b[k].nodes.map((node) => [node.id, node.box]));
-    for (const { id, box } of step.nodes) {
-      const at = other.get(id);
-      if (!at) {
-        most = Infinity;
-        continue;
-      }
-      most = Math.max(
-        most,
-        Math.abs(box.x - at.x),
-        Math.abs(box.y - at.y),
-        Math.abs(box.width - at.width),
-        Math.abs(box.height - at.height)
-      );
-    }
-  });
-  return most;
+/** The geometry a bundle gives its page (see compile.server.ts). */
+function geometriesOf(javascript: string): Geometry[] {
+  const prefix = 'window.__sverlinGeometry=';
+  expect(javascript.startsWith(prefix)).toBe(true);
+  return JSON.parse(javascript.slice(prefix.length, javascript.indexOf(';\n'))) as Geometry[];
 }
 
-/** A presentation drawn with the server's layout as with the page's own, step by step. */
-async function drawsAlike(source: string, request: VariantRequest = {}): Promise<Drawn> {
-  const prepared = prepareSvelteComponent(source);
-  const own = await drawn((await bundlePresentation(prepared, 1, request)).javascript);
-  const server = await bundlePresentation(prepared, 1, request, { serverLayout: true });
-  expect(server.layout).toMatchObject({ server: true, errors: [] });
-  const given = await drawn(server.javascript);
-  expect([own.layout, given.layout]).toEqual(['page', 'server']);
-  expect(given.steps).toHaveLength(own.steps.length);
-  // The same sizes and places: a scene's numbers come from the page's own layout of each.
-  expect(furthest(given.steps, own.steps)).toBeLessThan(0.01);
+/** A presentation drawn soundly with the server's layout, in the frame the server gave. */
+async function drawsAsGiven(source: string, request: VariantRequest = {}): Promise<Drawn> {
+  const built = await bundlePresentation(prepareSvelteComponent(source), 1, request);
+  expect(built.layout.errors).toEqual([]);
+  const given = await drawn(built.javascript);
+  expect(given.steps).toHaveLength(built.labels.length);
+  expect(given.frame.height).toBe(Math.round(geometriesOf(built.javascript)[0].frame!.height));
   expect(given.steps.flatMap((step) => unsound(given.frame, step))).toEqual([]);
   return given;
 }
 
 for (const [path, source] of Object.entries(fixtures)) {
   const name = path.replace(/^.*\/(.*)\.sverlin$/u, '$1');
-  it.skipIf(!enabled)(
-    `draws ${name} with the server's layout as with its own`,
-    { timeout: 300_000 },
-    () => drawsAlike(source)
+  it.skipIf(!enabled)(`draws ${name} with the server's layout`, { timeout: 300_000 }, () =>
+    drawsAsGiven(source)
   );
 }
 
@@ -131,7 +105,7 @@ for (const [path, source] of Object.entries(fixtures)) {
 // the face lacks it.
 for (const { value: font, family } of manifest.fonts) {
   it.skipIf(!enabled)(
-    `draws every text in the ${font} font with the server's layout as with its own`,
+    `draws every text in the ${font} font with the server's layout`,
     { timeout: 300_000 },
     async () => {
       const source = fixtures['./fixtures/dijkstra-fields.sverlin'];
@@ -143,7 +117,7 @@ for (const { value: font, family } of manifest.fonts) {
         ...fonts.map((key) => [key, font]),
         ...weights.map((key, k) => [key, k % 2 ? 'normal' : 'bold'])
       ]);
-      const given = await drawsAlike(source, { chosen });
+      const given = await drawsAsGiven(source, { chosen });
       const faces = new Set(
         given.steps.flatMap((step) =>
           step.nodes.flatMap((node) =>
@@ -160,24 +134,33 @@ for (const { value: font, family } of manifest.fonts) {
 }
 
 it.skipIf(!enabled)(
-  "lays out itself where the server's layout does not hold",
+  "draws with the server's layout whatever the page's fonts and ratio, and says when it has none",
   { timeout: 300_000 },
   async () => {
-    const source = fixtures['./fixtures/bfs-cards.sverlin'];
     const { javascript } = await bundlePresentation(
-      prepareSvelteComponent(source),
-      1,
-      {},
-      {
-        serverLayout: true
-      }
+      prepareSvelteComponent(fixtures['./fixtures/bfs-cards.sverlin']),
+      1
     );
-    // Without the embedded fonts, text is drawn in the machine's own.
-    expect((await drawn(javascript, { fonts: false })).layout).toBe('page');
-    // At 1.25 device pixels a CSS pixel, a border of one pixel draws 0.8 wide.
-    expect((await drawn(javascript, { deviceScaleFactor: 1.25 })).layout).toBe('page');
-    // At 2, borders of half a pixel keep their width: the server laid that out too.
-    expect((await drawn(javascript, { deviceScaleFactor: 2 })).layout).toBe('server');
+    const server = await drawn(javascript);
+    // Without the embedded fonts, text is drawn in the machine's own, in the server's boxes; at
+    // 1.25 device pixels a CSS pixel, with the geometry laid out at the nearest ratio.
+    for (const options of [
+      { fonts: false },
+      { deviceScaleFactor: 1.25 },
+      { deviceScaleFactor: 2 }
+    ]) {
+      const other = await drawn(javascript, options);
+      expect(other.frame).toEqual(server.frame);
+      expect(other.steps).toHaveLength(server.steps.length);
+    }
+    const page = await browser!.newPage();
+    await page.setContent(
+      sandboxDocument('', javascript.slice(javascript.indexOf(';\n') + 2), 0, 1)
+    );
+    await expect
+      .poll(() => page.textContent('.sv-error').catch(() => null))
+      .toContain('came without its layout');
+    await page.close();
   }
 );
 
@@ -190,10 +173,10 @@ it.skipIf(!enabled)(
     const line = source.split('\n').findIndex((text) => text.includes('<Node>{@render Title()}'));
     const holds = (steps: SceneStep[]) =>
       steps.some((step) => step.nodes.some((node) => node.id.startsWith(`${line + 1}:`)));
-    const side = await drawsAlike(source, { chosen: { layout: 'Side', 'Side.ratio': '4:3' } });
+    const side = await drawsAsGiven(source, { chosen: { layout: 'Side', 'Side.ratio': '4:3' } });
     expect(side.frame.width / side.frame.height).toBeCloseTo(4 / 3, 2);
     expect(holds(side.steps)).toBe(true);
-    const stacked = await drawsAlike(source, { chosen: { 'Side.ratio': '4:3' } });
+    const stacked = await drawsAsGiven(source, { chosen: { 'Side.ratio': '4:3' } });
     expect(stacked.frame.width / stacked.frame.height).toBeCloseTo(16 / 9, 2);
     expect(holds(stacked.steps)).toBe(false);
   }

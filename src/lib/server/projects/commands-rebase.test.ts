@@ -10,9 +10,6 @@ import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection'
 import type { ProjectCommandDependencies } from './commands';
 import { MemoryProjectRepository } from './memory-repository.test-support';
 
-// These tests read commands and events, never the layout, so builds skip laying out on the server.
-process.env.SVERLIN_SERVER_LAYOUT = 'off';
-
 const mocks = vi.hoisted(() => ({ generatePrepared: vi.fn() }));
 
 vi.mock('$lib/server/chat-bots/registry', () => {

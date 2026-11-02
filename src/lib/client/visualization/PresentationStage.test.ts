@@ -339,6 +339,7 @@ function askedPair(labels = ['Start', 'Result'], differsAt?: number[]): ProjectE
         mode: 'sverlin',
         stepSignature: 'shared-steps',
         labels,
+        steps: labels.map((label) => [label]),
         seed: id,
         source: { text: 'source', sha256: 'a'.repeat(64), mediaType: 'text/x-svelte' },
         html: { text: '', sha256: '0'.repeat(64), mediaType: 'text/html' },
