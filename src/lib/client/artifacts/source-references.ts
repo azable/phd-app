@@ -32,7 +32,7 @@ const props = new Set([
   'strokeStyle',
   'opacity',
   'font',
-  'size',
+  'textSize',
   'weight',
   'padding',
   'radius',

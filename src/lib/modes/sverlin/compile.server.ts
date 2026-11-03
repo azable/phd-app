@@ -2513,7 +2513,7 @@ const designProps = new Set([
   'opacity',
   'color',
   'font',
-  'size',
+  'textSize',
   'weight',
   'padding',
   'gap',
@@ -2559,13 +2559,15 @@ function checkProps(
                 ? `<Link> takes no directed: a link is an arrow from its from to its to, and its direction follows from the data. Where the same <Link> joins two elements both ways at the same steps, as neighbour lists naming each edge from both its ends, the pair is one two-way line, with its kind's head at both ends.`
                 : component === 'Link' && attribute.name === 'label'
                   ? `<Link> takes no label: write its label as its children, drawn at its middle, as <Link from={u} to={v}>{cost}</Link>, or text, as <Link from={u} to={v}>next</Link>.`
-                  : component === 'Link' && linkLooks.has(attribute.name)
-                    ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
-                    : designProps.has(attribute.name)
-                      ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
-                      : named.length
-                        ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
-                        : `<${component}> takes no props.`,
+                  : attribute.name === 'size'
+                    ? `<${component}> takes no size: its text's size is textSize, in pixels, a look the design gives every kind of node, not the markup, as the variable ${kind}.textSize.`
+                    : component === 'Link' && linkLooks.has(attribute.name)
+                      ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
+                      : designProps.has(attribute.name)
+                        ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
+                        : named.length
+                          ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
+                          : `<${component}> takes no props.`,
           { code: 'unknown_prop', ...at }
         )
       );

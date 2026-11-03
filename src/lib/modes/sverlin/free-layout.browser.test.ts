@@ -30,8 +30,8 @@ const arcs = {
   'Graph.form': 'line',
   'Graph.curve': 'curved',
   'Graph.layoutSeed': 4,
-  'Graph.size': 1.5,
-  'Board.size': 1.5,
+  'Graph.textSize': 24,
+  'Board.textSize': 24,
   'Graph.Link.head': 'diamond',
   'Graph.Link.headSize': 6
 };

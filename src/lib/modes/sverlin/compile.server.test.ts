@@ -159,7 +159,8 @@ describe('single-component Svelte compilation', () => {
       line: 2,
       message: expect.stringContaining('<Node> fill is a look')
     });
-    await expect(view('<Node size={1}>x</Node>')).rejects.toThrow('size is a look');
+    await expect(view('<Node textSize={16}>x</Node>')).rejects.toThrow('textSize is a look');
+    await expect(view('<Node size={1}>x</Node>')).rejects.toThrow("its text's size is textSize");
     await expect(
       view('<Node layout="free"><Node>a</Node><Link from={0} to={1} stroke="red" /></Node>')
     ).rejects.toThrow('<Link> stroke is a look');
@@ -667,15 +668,15 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     const built = await bundlePresentation(prepared, 3, {
       chosen: { 'One.radius': 999 },
       // Removed and unfit base values are the starter's instead.
-      base: { 'One.fill': 'blue-100', 'One.size': 9, 'gone.width': 2 }
+      base: { 'One.fill': 'blue-100', 'One.textSize': 9, 'gone.width': 2 }
     });
     expect(built.variant).toMatchObject({ 'One.radius': 999, 'One.fill': 'blue-100' });
-    expect(built.variant['One.size']).toBe(prepared.design.starter['One.size']);
+    expect(built.variant['One.textSize']).toBe(prepared.design.starter['One.textSize']);
     expect(built.variant).not.toHaveProperty('gone.width');
     expect(built.origins).toMatchObject({
       'One.radius': 'chosen',
       'One.fill': 'kept',
-      'One.size': 'starter'
+      'One.textSize': 'starter'
     });
     await expect(
       bundlePresentation(prepared, 3, { chosen: { 'One.radius': 3 } })

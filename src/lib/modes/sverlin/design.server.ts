@@ -479,7 +479,7 @@ const kept = new Set<string>([
   'decoration'
 ]);
 const colourProps = new Set<string>(['fill', 'stroke', 'color']);
-const lengthProps = new Set<string>(['strokeWidth', 'size', 'padding', 'radius', 'gap']);
+const lengthProps = new Set<string>(['strokeWidth', 'textSize', 'padding', 'radius', 'gap']);
 
 /**
  * A fresh value for every variable, keeping the variant's equalities: variables of one prop that

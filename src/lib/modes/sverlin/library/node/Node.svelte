@@ -457,7 +457,7 @@
       data-sv-place={places.length ? places.join(' ') : undefined}
       class:cell={(!arrangement && !children && !__text) || __field}
       class:text={__text}
-      style:font-size={measured('size', 'rem')}
+      style:font-size={measured('textSize', 'px')}
       style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
       style:color={textColour}
       style:background-color={fillColour}

@@ -172,7 +172,7 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
 const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
- * Each prop's options: lengths in em, except size in rem and radius, strokeWidth and headSize in
+ * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
  * pixels; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
  * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
  * how a link runs, as its layout's arrows or its own way, and the heads at its ends.
@@ -185,7 +185,7 @@ export const propOptions = {
   opacity: [0.25, 0.5, 0.75, 1],
   color: colours,
   font: fontValues,
-  size: [0.75, 0.875, 1, 1.125, 1.25, 1.5, 2],
+  textSize: [12, 14, 16, 18, 20, 24, 30, 36, 48],
   weight: ['normal', 'bold'],
   padding: spacing,
   radius: [0, 2, 4, 6, 8, 12, 999],
@@ -297,7 +297,7 @@ const nodeProps: readonly DesignProp[] = [
   'opacity',
   'color',
   'font',
-  'size',
+  'textSize',
   'weight',
   'padding',
   'radius',
@@ -422,7 +422,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     opacity: 1,
     color: 'neutral-900',
     font: fontValues[0],
-    size: 1,
+    textSize: 16,
     weight: 'normal',
     padding: 0,
     radius: 0,
@@ -442,7 +442,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     opacity: 1,
     color: 'neutral-900',
     font: fontValues[0],
-    size: 1.25,
+    textSize: 20,
     weight: 'bold',
     padding: 0.375,
     radius: 8,
@@ -458,7 +458,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     opacity: 1,
     color: 'neutral-600',
     font: fontValues[0],
-    size: 1,
+    textSize: 16,
     weight: 'normal',
     padding: 0,
     radius: 0,
@@ -473,7 +473,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     opacity: 1,
     color: 'neutral-900',
     font: fontValues[0],
-    size: 1.25,
+    textSize: 20,
     weight: 'bold',
     padding: 0.375,
     radius: 8,

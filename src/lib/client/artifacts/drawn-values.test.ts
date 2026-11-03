@@ -130,8 +130,8 @@ describe('variant markers', () => {
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
     'Here.Pointed.fill': fill,
-    'Here.Pointed.size': 1,
-    'Title.size': 1.5
+    'Here.Pointed.textSize': 16,
+    'Title.textSize': 24
   });
   const presentations = [
     {
@@ -156,7 +156,7 @@ describe('variant markers', () => {
     const [pointer, title] = ghosts;
     expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
       ['fill', true],
-      ['size', false]
+      ['textSize', false]
     ]);
     expect(pointer.props[0].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
       [
@@ -164,7 +164,7 @@ describe('variant markers', () => {
         ['blue-100', 'Here.Pointed.fill = blue-100, randomised', true]
       ]
     );
-    expect(title.props.map(({ name }) => name)).toEqual(['size']);
+    expect(title.props.map(({ name }) => name)).toEqual(['textSize']);
   });
 
   it("gives a <Listing /> its language, its lit look, then its regions' paint", () => {

@@ -496,7 +496,7 @@ describe('comparisons in the conversation', () => {
             source: recorded('<h1>Hello</h1>', 'text/x-svelte'),
             html: recorded('', 'text/html'),
             javascript: recorded('', 'text/javascript'),
-            variant: { 'Marker.size': slot ? 1.5 : 1.25 }
+            variant: { 'Marker.textSize': slot ? 24 : 20 }
           }
         }
       });

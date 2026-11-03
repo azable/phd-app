@@ -53,7 +53,7 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
     case 'minSize':
       return { family: 'shape', impact: 0.25 };
     case 'font':
-    case 'size':
+    case 'textSize':
     case 'weight':
       return { family: 'lettering', impact: 0.25 };
     case 'fill':
