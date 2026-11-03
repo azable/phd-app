@@ -60,28 +60,28 @@
   }
 </script>
 
-{#snippet NameText(value: Name)}<Node value={value} />{/snippet}
-{#snippet IntCell(value: Int)}<Node value={value} />{/snippet}
-{#snippet WeightText(value: Weight)}<Node value={value} />{/snippet}
-{#snippet FlagWord(value: Flag)}<Node>{value ? 'done' : 'open'}</Node>{/snippet}
-{#snippet IndexText(value: VertexIndex)}<Node value={value} />{/snippet}
-{#snippet CurrentMark(value: VertexIndex)}<Pointed />{/snippet}
-{#snippet EdgeMark(value: EdgeIndex)}<Pointed />{/snippet}
+{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet WeightText(this: Weight)}<Node value={this} />{/snippet}
+{#snippet FlagWord(this: Flag)}<Node>{this ? 'done' : 'open'}</Node>{/snippet}
+{#snippet IndexText(this: VertexIndex)}<Node value={this} />{/snippet}
+{#snippet CurrentMark(this: VertexIndex)}<Pointed />{/snippet}
+{#snippet EdgeMark(this: EdgeIndex)}<Pointed />{/snippet}
 
-{#snippet VertexCard(value: Vertex)}
+{#snippet VertexCard(this: Vertex)}
   <Node layout="column">
-    {value.name}
-    <Node>distance {value.distance}</Node>
-    {value.done}
+    {this.name}
+    <Node>distance {this.distance}</Node>
+    {this.done}
   </Node>
 {/snippet}
 
-{#snippet EdgeLink(value: Edge)}
-  <Link from={value.from} to={value.to}>{value.weight}</Link>
+{#snippet EdgeLink(this: Edge)}
+  <Link from={this.from} to={this.to}>{this.weight}</Link>
 {/snippet}
 
-{#snippet LessQuestion(c: @round.visit.edge.relax.check)}
-  <Node>candidate {c.left} &lt; current distance {c.right}: {c.value}</Node>
+{#snippet LessQuestion(this: @round.visit.edge.relax.check)}
+  <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
 {/snippet}
 
 {#snippet Graph()}

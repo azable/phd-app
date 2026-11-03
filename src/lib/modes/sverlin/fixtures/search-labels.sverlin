@@ -20,15 +20,15 @@
   }
 </script>
 
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet IndexNumber(p: Index)}<Node value={p} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet IndexNumber(this: Index)}<Node value={this} />{/snippet}
 
-{#snippet LowerMark(p: Index)}
+{#snippet LowerMark(this: Index)}
   {#snippet LowerLabel()}<Node>lo</Node>{/snippet}
   <Node layout="column"><Pointed />{@render LowerLabel()}</Node>
 {/snippet}
 
-{#snippet UpperMark(p: Index)}
+{#snippet UpperMark(this: Index)}
   {#snippet UpperLabel()}<Node>hi</Node>{/snippet}
   <Node layout="column"><Pointed />{@render UpperLabel()}</Node>
 {/snippet}

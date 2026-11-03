@@ -37,15 +37,15 @@
   }
 </script>
 
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet EndMark(value: Name)}<Node>∅</Node>{/snippet}
-{#snippet NextLink(value: NodeRef)}<Link to={value} />{/snippet}
-{#snippet TreeCard(node: TreeNode)}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet EndMark(this: Name)}<Node>∅</Node>{/snippet}
+{#snippet NextLink(this: NodeRef)}<Link to={this} />{/snippet}
+{#snippet TreeCard(this: TreeNode)}
   <Node layout="column">
-    <Node>{node.key}</Node>
+    <Node>{this.key}</Node>
     <Node layout="row">
-      <Node layout="row"><Node>L</Node>{node.left}</Node>
-      <Node layout="row"><Node>R</Node>{node.right}</Node>
+      <Node layout="row"><Node>L</Node>{this.left}</Node>
+      <Node layout="row"><Node>R</Node>{this.right}</Node>
     </Node>
   </Node>
 {/snippet}

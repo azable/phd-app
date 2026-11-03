@@ -18,7 +18,7 @@ const source = `<script domain>
     @put[values[i] = v;]
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Title()}<Node>Pass</Node>{/snippet}
 {#snippet Picked()}<Node>picked {v}</Node>{/snippet}
 {#snippet Both()}<Node>{v} and {values[0]}</Node>{/snippet}
@@ -107,7 +107,7 @@ describe('left out', () => {
     expect(notShown.renders).toEqual(expected.renders);
     // The view's own node is left out by its kind, and the title, holding no render, stays.
     expect(notShown.nodes).toEqual(
-      expect.arrayContaining([...expected.nodes, site('<Node {value} />')])
+      expect.arrayContaining([...expected.nodes, site('<Node value={this} />')])
     );
     expect(notShown.nodes).not.toContain(node('Title'));
   });

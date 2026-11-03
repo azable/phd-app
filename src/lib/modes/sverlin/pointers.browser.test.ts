@@ -37,9 +37,9 @@ it.skipIf(!enabled)(
   const i = Index(1);
   const j = Index(0);
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet First(p: Index)}<Pointed />{/snippet}
-{#snippet Second(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet First(this: Index)}<Pointed />{/snippet}
+{#snippet Second(this: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
@@ -98,9 +98,9 @@ it.skipIf(!enabled)(
 <script algorithm>
   const i = Index(2);
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet At()}<Node>at {i}</Node>{/snippet}
 
@@ -158,8 +158,8 @@ it.skipIf(!enabled)(
   const i = Index(1);
   const j = Index(0);
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
@@ -213,8 +213,8 @@ it.skipIf(!enabled)(
 <script algorithm>
   const key = Int(3);
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet IntTally(this: Int)}<Node>{'•'.repeat(this)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Key()}<Node>key {key}</Node>{/snippet}
 

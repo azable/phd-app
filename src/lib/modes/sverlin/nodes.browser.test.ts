@@ -34,11 +34,11 @@ const list = (algorithm: string) => `<script domain>
     NodeRef(ListNode({ name: 'B', next: NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
 </script>
 <script algorithm>${algorithm}</script>
-{#snippet NameCell(value: Name)}<Node {value} />{/snippet}
-{#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
-{#snippet NodeBox(n: ListNode)}
-  {#snippet NextField()}<Node><Link to={n.next} /></Node>{/snippet}
-  <Node layout="row">{n.name}{@render NextField()}</Node>
+{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
+{#snippet EndMark(this: End)}<Node>∅</Node>{/snippet}
+{#snippet NodeBox(this: ListNode)}
+  {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
+  <Node layout="row">{this.name}{@render NextField()}</Node>
 {/snippet}
 {#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>{/snippet}
 

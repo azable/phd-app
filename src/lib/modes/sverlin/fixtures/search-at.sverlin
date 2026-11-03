@@ -20,11 +20,11 @@
   }
 </script>
 
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 
-{#snippet IndexNumber(p: Index)}<Node value={p} />{/snippet}
-{#snippet IndexValue(p: Index)}{at(p)}{/snippet}
-{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+{#snippet IndexNumber(this: Index)}<Node value={this} />{/snippet}
+{#snippet IndexValue(this: Index)}{at(this)}{/snippet}
+{#snippet Arrow(this: Index)}<Pointed />{/snippet}
 
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Bounds()}

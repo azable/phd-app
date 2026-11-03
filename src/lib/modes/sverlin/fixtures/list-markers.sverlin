@@ -41,27 +41,27 @@ while @more[cur ≠ ∅]
 @finish[return prev]
 </script>
 
-{#snippet NameCell(value: Name)}
-  <Node {value} />
+{#snippet NameCell(this: Name)}
+  <Node value={this} />
 {/snippet}
 
-{#snippet EndMark(value: End)}
+{#snippet EndMark(this: End)}
   <Node>∅</Node>
 {/snippet}
 
-{#snippet NodeBox(node: ListNode)}
+{#snippet NodeBox(this: ListNode)}
   {#snippet NextField()}
-    <Node><Link to={node.next} /></Node>
+    <Node><Link to={this.next} /></Node>
   {/snippet}
   <Node layout="row">
-    {node.name}
+    {this.name}
     {@render NextField()}
   </Node>
 {/snippet}
 
-{#snippet Marker(pointer: NodeRef)}
+{#snippet Marker(this: NodeRef)}
   {#snippet PointerLabel()}
-    <Node>{pointer === prev ? 'prev' : pointer === cur ? 'cur' : 'next'}</Node>
+    <Node>{this === prev ? 'prev' : this === cur ? 'cur' : 'next'}</Node>
   {/snippet}
   <Node layout="column">
     <Pointed />

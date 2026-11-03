@@ -39,17 +39,17 @@
   }
 </script>
 
-{#snippet NameText(value: Name)}<Node {value} />{/snippet}
-{#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
-{#snippet VertexCard(vertex: Vertex)}
+{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
+{#snippet SeenWord(this: Seen)}<Node>{this ? 'seen' : 'unseen'}</Node>{/snippet}
+{#snippet VertexCard(this: Vertex)}
   <Node layout="column">
-    {vertex.name}
-    {vertex.seen}
+    {this.name}
+    {this.seen}
   </Node>
 {/snippet}
-{#snippet VertexName(p: VertexRef)}{at(p).name}{/snippet}
-{#snippet QueueItems(items: Queue)}
-  <Node>{#each items as item}{item}{/each}</Node>
+{#snippet VertexName(this: VertexRef)}{at(this).name}{/snippet}
+{#snippet QueueItems(this: Queue)}
+  <Node>{#each this as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet Title()}<Node>Breadth-first search from A, on an undirected graph</Node>{/snippet}

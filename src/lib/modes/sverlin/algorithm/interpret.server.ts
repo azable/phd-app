@@ -34,13 +34,7 @@ import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './e
 import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { readLabels, type Label, type LabelProblem } from './labels.server';
 import { parseBlock, spanOf } from './parse.server';
-import {
-  changingMethods,
-  rawOperation,
-  hiddenProblem,
-  unwrappedNumber,
-  type RawContext
-} from './raw.server';
+import { rawOperation, hiddenProblem, unwrappedNumber, type RawContext } from './raw.server';
 import {
   heapKey,
   heapRecords,
@@ -493,8 +487,6 @@ class Interpreter {
   #inOperator = 0;
   /** The collections and records operators computed, written into a place in place (see #store). */
   readonly #computed = new WeakSet<object>();
-  /** The collections and records the running operators were given, which they may not change. */
-  readonly #given: Set<object>[] = [];
   /** What a raw operation's problem names: the block's code, and the domain's types. */
   readonly #raw: RawContext;
   /** The algorithm's functions by name, and each parameter's type, fixed by the first call. */
@@ -2202,7 +2194,7 @@ class Interpreter {
     if (callee.type !== 'MemberExpression' || callee.computed || node.optional)
       this.#fail(
         node,
-        'Only the algorithm’s functions, the domain’s types and operators, and collection methods can be called.'
+        'Only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on a collection can be called.'
       );
     const object = this.#expression(callee.object as Expression, scope);
     const name = (callee.property as { name: string }).name;
@@ -2212,11 +2204,6 @@ class Interpreter {
       return this.#expression(argument, scope);
     });
     this.#rawCheck(node, [object, ...args]);
-    if (changingMethods.has(name) && this.#given.at(-1)?.has(object as object) && this.#inOperator)
-      this.#fail(
-        node,
-        `An operator computes a new value and changes nothing: write the new collection, as [...c, x] or c.slice(1), not ${targetName(callee.object as Expression)}.${name}().`
-      );
     if (object === mathMarker) {
       const fn = mathFunctions[name];
       if (!fn) this.#fail(callee, `Math.${name} is not available.`);

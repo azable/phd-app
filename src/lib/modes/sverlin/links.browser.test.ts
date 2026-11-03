@@ -46,7 +46,7 @@ const insertion = `<script domain>
     }
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Cells()}
   <Node layout="row">
     {#each values as v}{v}{/each}
@@ -179,7 +179,7 @@ const traded = insertion
   )
   .replace(
     '{#snippet Cells()}',
-    '{#snippet Trade(s: Swap)}<Link from={s.at.a} to={s.at.b} />{/snippet}\n{#snippet Cells()}'
+    '{#snippet Trade(this: Swap)}<Link from={this.at.a} to={this.at.b} />{/snippet}\n{#snippet Cells()}'
   );
 
 it.skipIf(!enabled)(

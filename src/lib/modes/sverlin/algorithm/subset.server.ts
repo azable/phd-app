@@ -81,7 +81,7 @@ export function checkSubset(
         )
           reject(
             node,
-            `An operator is one primitive step; ${node.callee.property.name} is an algorithm, so write it out in the algorithm block.`
+            `${node.callee.property.name}() is not available: a step is one action, so write its work out in the algorithm block, as a labelled loop.`
           );
         break;
       case 'ArrowFunctionExpression':
@@ -92,21 +92,17 @@ export function checkSubset(
           (parent.callee.name === 'binop' || parent.callee.name === 'unop') &&
           parent.arguments.at(-1) === node
         ) {
-          if (node.body.type === 'BlockStatement')
-            reject(
-              node.body,
-              'An operator’s function is one expression, without braces, as in binop((a: Int, b: Int) => Flag(a > b)).'
-            );
+          // The domain refuses operators, with advice to compute in the algorithm.
           break;
         }
         if (inOperator)
           reject(
             node,
-            'An operator is one primitive step, and a function inside it, as for sort, map, or filter, makes it an algorithm: write that out in the algorithm block.'
+            'A function inside a computation, as for sort, map, or filter, hides a loop: write that loop out in the algorithm block.'
           );
         reject(
           node,
-          'Arrow functions are only an operator’s function, in binop(...) or unop(...) in the domain block; declare function name(...) { … } at the top level of the algorithm block.'
+          'Arrow functions are not available; declare function name(...) { … } at the top level of the algorithm block.'
         );
         break;
       case 'FunctionDeclaration': {
@@ -261,15 +257,14 @@ export function checkSubset(
       if (kind !== 'domain')
         reject(node, `${name}() defines a type and belongs in the domain block.`);
     } else if (operators.has(name)) {
-      if (kind !== 'algorithm')
-        reject(node, `${name}(...) is an operator, which the algorithm applies.`);
+      if (kind !== 'algorithm') reject(node, `${name}(...) is not available here.`);
     } else if (constructors.has(name)) {
       if (kind !== 'input' && kind !== 'algorithm')
         reject(node, `${name}(...) creates a typed value in the input or algorithm block.`);
     } else {
       reject(
         node,
-        `${name}() is not available; only the algorithm’s functions, the domain’s types and operators, and collection methods can be called.`
+        `${name}() is not available; only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on a collection can be called.`
       );
     }
   };

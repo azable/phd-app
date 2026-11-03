@@ -25,11 +25,11 @@ const list = `<script domain>
     cur = cur.next;
   }
 </script>
-{#snippet NameCell(value: Name)}<Node {value} />{/snippet}
-{#snippet EndMark(value: End)}<Node>∅</Node>{/snippet}
-{#snippet NodeBox(node: ListNode)}
-  {#snippet NextField()}<Node><Link to={node.next} /></Node>{/snippet}
-  <Node layout="row">{node.name}{@render NextField()}</Node>
+{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
+{#snippet EndMark(this: End)}<Node>∅</Node>{/snippet}
+{#snippet NodeBox(this: ListNode)}
+  {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
+  <Node layout="row">{this.name}{@render NextField()}</Node>
 {/snippet}
 {#snippet Heap()}
   <Node layout="free">{#each all(ListNode) as node}{node}{/each}</Node>
@@ -56,7 +56,7 @@ const ring = `<script domain>
   @first[at = next[at];]
   @second[at = next[at];]
 </script>
-{#snippet NameCell(value: Name)}<Node {value} />{/snippet}
+{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
 {#snippet Ring()}
   <Node layout="free">
     {#each names as name, k}{name}<Link from={k} to={next[k]} />{/each}
@@ -81,7 +81,7 @@ const unlinked = `<script domain>
   @run[let i = Position(0);]
   @move[i = Position(1);]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Cells()}<Node layout="free">{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">

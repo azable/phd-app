@@ -26,7 +26,7 @@ const insertion = `
     values[j] = key;
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}`;
 
 /** A source of the algorithm and its parts, its one layout holding `view`. */
@@ -96,7 +96,7 @@ describe('labels read in the view', () => {
   @a[const x = @v[values[0]];]
   @b[const y = @v[values[1]];]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}`;
     expect(() => prepare('{@v}', twice)).toThrow(
       '@v is not a full name; write its full name, @a.v or @b.v.'
     );
@@ -111,7 +111,7 @@ describe('labels read in the view', () => {
     @put[values[i] = key;]
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}`;
     expect(() => prepare('{@insert.key}', statement)).toThrow(
       '@insert.key labels a statement, which gives no value; label its expression, as const key = @key[values[i]].'
     );
@@ -119,7 +119,7 @@ describe('labels read in the view', () => {
       prepare(
         '{@render Cells()}',
         insertion,
-        '{#snippet Shown(v: Values)}<Node>{@insert.key}</Node>{/snippet}'
+        '{#snippet Shown(this: Values)}<Node>{@insert.key}</Node>{/snippet}'
       )
     ).toThrow('@insert.key is read in a view, which sees only its value');
   });
@@ -132,8 +132,8 @@ describe('labels read in the view', () => {
     if (@cond[seen === target]) break;
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Checked(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet Checked(this: Index)}<Pointed />{/snippet}
 `;
     const prepared = prepare(`{#each runs(@check.at) as p}{p}{/each}`, search);
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);

@@ -132,7 +132,7 @@ it.skipIf(!enabled)(
   let i = Position(0);
   @next[i = Position(1);]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Cells()}
   <Node layout="row">
     {#each values as v, k}{v}<Link from={k} to={partner[k]} />{/each}

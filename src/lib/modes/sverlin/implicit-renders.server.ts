@@ -14,7 +14,7 @@
 import type { DomainRegistry, OperatorType } from './algorithm/structures.server';
 import type { MasterStep } from './algorithm/interpret.server';
 import type { Insertion } from './components.server';
-import type { LabelReference } from './label-values';
+import { viewThis, type LabelReference } from './label-values';
 import type { Label } from './algorithm/labels.server';
 
 type Part = {
@@ -279,17 +279,18 @@ function memberTest(type: string, domain: DomainRegistry): { kind: string; test:
     if (atom.base === 'text' && atom.values?.length)
       return {
         kind: `text:${atom.values.join('|')}`,
-        test: atom.values.map((value) => `value === ${JSON.stringify(value)}`).join(' || ')
+        test: atom.values.map((value) => `${viewThis} === ${JSON.stringify(value)}`).join(' || ')
       };
-    if (atom.base === 'text') return { kind: 'text', test: "typeof value === 'string'" };
-    if (atom.base === 'boolean') return { kind: 'boolean', test: "typeof value === 'boolean'" };
-    return { kind: 'number', test: "typeof value === 'number'" };
+    if (atom.base === 'text') return { kind: 'text', test: `typeof ${viewThis} === 'string'` };
+    if (atom.base === 'boolean')
+      return { kind: 'boolean', test: `typeof ${viewThis} === 'boolean'` };
+    return { kind: 'number', test: `typeof ${viewThis} === 'number'` };
   }
   const structure = domain.structures[type];
   // A reference is held as its place in its record's heap, a number.
-  if (structure?.kind === 'ref') return { kind: 'number', test: "typeof value === 'number'" };
-  if (structure?.kind === 'collection') return { kind: 'list', test: 'Array.isArray(value)' };
-  return { kind: 'object', test: "typeof value === 'object'" };
+  if (structure?.kind === 'ref') return { kind: 'number', test: `typeof ${viewThis} === 'number'` };
+  if (structure?.kind === 'collection') return { kind: 'list', test: `Array.isArray(${viewThis})` };
+  return { kind: 'object', test: `typeof ${viewThis} === 'object'` };
 }
 
 /** The name of the view drawing a union's values through its members' views (see unionViews). */
@@ -297,7 +298,7 @@ export const unionViewName = (union: string): string => `${union}Member`;
 
 /**
  * For each union a value in braces has, a view choosing its member's view by the value at run time,
- * as {#snippet DistMember(value: Dist)}{#if typeof value === 'number'}{@render Steps(value)}…, to
+ * as {#snippet DistMember(this: Dist)}{#if typeof this === 'number'}{@render Steps(this)}…, to
  * add after the view; a problem where two members cannot be told apart.
  */
 export function unionViews(
@@ -325,11 +326,11 @@ export function unionViews(
     const branches = tests
       .map(({ member, test }, index) =>
         index === tests.length - 1
-          ? `{:else}{@render ${member}(value)}`
-          : `{${index ? ':else if' : '#if'} ${test}}{@render ${member}(value)}`
+          ? `{:else}{@render ${member}(${viewThis})}`
+          : `{${index ? ':else if' : '#if'} ${test}}{@render ${member}(${viewThis})}`
       )
       .join('');
-    text += `\n{#snippet ${unionViewName(union)}(value: ${union})}${branches}{/if}{/snippet}`;
+    text += `\n{#snippet ${unionViewName(union)}(${viewThis}: ${union})}${branches}{/if}{/snippet}`;
   }
   return { text, problems };
 }

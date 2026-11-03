@@ -20,8 +20,8 @@ const source = `<script domain>
     }
   }
 </script>
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{#snippet Row(list: Values)}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
+{#snippet Row(this: Values)}
   {#snippet Under()}<Node>i</Node>{/snippet}
 {/snippet}
 <Layout name="Main">
@@ -40,7 +40,7 @@ describe('references in messages', () => {
   it('name a snippet by its declaration, nested ones by their path', () => {
     expect(named('Highlight')).toEqual(['Highlight']);
     expect(named('Row.Under')).toEqual(['Under']);
-    expect(referenceRanges(source, 'Highlight')[0].from).toBe(source.indexOf('Highlight(p'));
+    expect(referenceRanges(source, 'Highlight')[0].from).toBe(source.indexOf('Highlight(this'));
   });
 
   it('name a declaration in a script', () => {
@@ -106,8 +106,8 @@ describe('references in messages', () => {
   });
 
   it('name lines, a line and column, or a run of lines', () => {
-    expect(named('line 12')).toEqual(['{#snippet Highlight(p: Index)}<Pointed />{/snippet}']);
-    expect(named('12:11')).toEqual(['Highlight(p: Index)}<Pointed />{/snippet}']);
+    expect(named('line 12')).toEqual(['{#snippet Highlight(this: Index)}<Pointed />{/snippet}']);
+    expect(named('12:11')).toEqual(['Highlight(this: Index)}<Pointed />{/snippet}']);
     expect(named('lines 18-19')).toEqual(['    {@compare.left}\n    {@compare.right}']);
     expect(named('line 99')).toEqual([]);
   });
@@ -123,9 +123,9 @@ describe('references in messages', () => {
 });
 
 describe('view choices, by what a build records each render reads', () => {
-  const both = `{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+  const both = `{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
+{#snippet Arrow(this: Index)}<Pointed />{/snippet}
 {#snippet At()}<Node>at {@render Index(lo)}</Node>{/snippet}
 {@render At()}
 {@render Index(mid)}
@@ -186,7 +186,7 @@ describe('code in an error message', () => {
       @next[@found[return i]]
 </script>
 <script algorithm>let i = Index(1);</script>
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
 
 <Layout name="Main">
   <Node>
@@ -210,7 +210,7 @@ describe('code in an error message', () => {
         "{@render Highlight(…)} names the view Highlight, but which view draws a value is the variant's: render its type, as {@render Index(…)}, which pointers.Index chooses the view of."
       )
     ).toEqual(['{@render Highlight(…)}']);
-    expect(named('Highlight(…)')).toEqual(['Highlight(p: Index)']);
+    expect(named('Highlight(…)')).toEqual(['Highlight(this: Index)']);
   });
 
   it('finds nothing in a message without code, or code the source does not hold', () => {

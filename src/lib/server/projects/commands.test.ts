@@ -2220,7 +2220,7 @@ describe('submitProjectFeedback', () => {
       type: 'presentation-ref',
       presentationId,
       step: 1,
-      stepName: '@check.equal#1'
+      stepName: '@first#1'
     });
   });
 
@@ -3319,10 +3319,10 @@ describe('several variants from chat', () => {
           'Comparison 1 (“Smaller or larger cells?”): its two sides draw the same at every step: IntCell.minSize changes nothing visible here. Compare a choice that shows, or leave it out.'
       })
     );
-    // The highlight shows from the second step, where the search first checks a cell.
+    // The highlight shows from the second step, where the search first sets its position.
     expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
-      [1, 2, 3, 4, 5],
-      [1, 2, 3, 4, 5]
+      [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9]
     ]);
   });
 

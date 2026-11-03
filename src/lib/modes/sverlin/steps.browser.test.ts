@@ -40,8 +40,8 @@ it.skipIf(!enabled)(
     @write[values[i] = 7;]
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet At()}<Node>at {i}</Node>{/snippet}
 
@@ -133,7 +133,7 @@ it.skipIf(!enabled)(
     @put[values[i] = key;]
   }
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
 {#snippet Title()}<Node>Pass</Node>{/snippet}
 {#snippet Key()}<Node>key {key}</Node>{/snippet}
 {#snippet Cells()}<Node layout="row">{#each values as x}{x}{/each}</Node>{/snippet}

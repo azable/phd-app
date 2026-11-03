@@ -40,6 +40,8 @@ import {
   markLabels,
   momentTarget,
   resolveLabel,
+  viewThis,
+  viewThisValues,
   whenTags,
   written as asWritten
 } from './label-values';
@@ -746,7 +748,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             })
         )
       );
-    const { source: marked, references, heaps } = markLabels(asIfs.source);
+    // A view's this becomes a parameter name of the same length (see label-values.ts).
+    const viewed = viewThisValues(asIfs.source);
+    if (viewed.problems.length)
+      throw InvalidSvelteSourceError.combine(
+        viewed.problems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_name',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
+    const { source: marked, references, heaps } = markLabels(viewed.source);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -976,7 +990,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       if (structure?.kind === 'ref' && structure.heap)
         viewProblems.push(
           new InvalidSvelteSourceError(
-            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(v: ${type})}<Pointed />{/snippet}.`,
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(this: ${type})}<Pointed />{/snippet}.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           )
         );
@@ -1079,8 +1093,8 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     if (wrongRender)
       throw new InvalidSvelteSourceError(
         wrongRender.argued
-          ? `{@render ${wrongRender.name}(…)} draws a value of ${wrongRender.name}, an operator, whose values are its applications: {@render ${wrongRender.name}(@compare)} draws the one made inside the code labelled @compare, and in {#each applied(${wrongRender.name}, @compare) as a}, {@render ${wrongRender.name}(a)} each so far.`
-          : `{@render ${wrongRender.name}(…)} draws an application of ${wrongRender.name} a step makes, which only the root and its parts know: render it there, outside any view.`,
+          ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each runs(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
+          : `{@${labelOfOperator(wrongRender.name)}} draws what a step's code labelled @${labelOfOperator(wrongRender.name)} gave, which only the root and its parts know: write it there, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
     // Each render of an applied operator by its key: the operator's name and the label it is
@@ -1094,7 +1108,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const undrawn = rendered.find(({ name }) => !views[name]?.length);
     if (undrawn)
       throw new InvalidSvelteSourceError(
-        `${undrawn.name} is a type, and nothing draws it: add a view of it, as {#snippet ${undrawn.name}Cell(value: ${undrawn.name})}<Node {value} />{/snippet}.`,
+        `${undrawn.name} is a type, and nothing draws it: add a view of it, as {#snippet ${undrawn.name}Cell(this: ${undrawn.name})}<Node value={this} />{/snippet}.`,
         { code: 'view_component', start: sourcePosition(source, undrawn.start) }
       );
     const unknown = renderedNames(ast.html).find(
@@ -1102,7 +1116,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     if (unknown)
       throw new InvalidSvelteSourceError(
-        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or operator is named: define it, as {#snippet ${unknown.name}(p: Index)}<Pointed />{/snippet} for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
+        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or label is named: define it, as {#snippet ${unknown.name}(this: Index)}<Pointed />{/snippet} for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
         { code: 'view_component', start: sourcePosition(source, unknown.start) }
       );
     // Each type rendered by name chooses among its views: its plain views, where it also has
@@ -1141,7 +1155,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     if (endless)
       throw new InvalidSvelteSourceError(
-        `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(value: ${endless.name})}<Node {value} />{/snippet}.`,
+        `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(this: ${endless.name})}<Node value={this} />{/snippet}.`,
         { code: 'view_component', start: sourcePosition(source, endless.start) }
       );
     // Which view draws a value is a look, the variant's: a value is rendered through its type, and
@@ -1279,7 +1293,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           }
           continue;
         }
-        // A view typed by a label, as (c: @insert.compare), names the label as its type, reading nothing.
+        // A view typed by a label, as (this: @insert.compare), names the label as its type, reading nothing.
         if (
           reference.kind === 'value' &&
           /:\s*$/u.test(marked.slice(Math.max(0, reference.start - 40), reference.start))
@@ -1299,7 +1313,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         }
         if (reference.kind === 'applied') {
           problem(
-            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as {#snippet Ask(c: @check.equal)}…{/snippet} drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
+            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as {#snippet Ask(this: @check.equal)}…{/snippet} drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
           );
           continue;
         }
@@ -1334,7 +1348,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         const names = [...new Set(on.map(({ full }) => `@${full}`))];
         labelProblems.push(
           new InvalidSvelteSourceError(
-            `${name}(…) applies an operator in the view, which only draws what the algorithm computed: ${names.length ? `read ${names.join(' or ')}, a label on an application of ${name}, in the root or a part of the page` : `label an application of ${name} in the algorithm, as @next[${name}(i)], and read that label, by its full name, in the root or a part of the page`}.`,
+            `${name}(…) is called in the view, which only draws what the algorithm computed: ${names.length ? `read ${names.join(' or ')}, a label on an application of ${name}, in the root or a part of the page` : `label an application of ${name} in the algorithm, as @next[${name}(i)], and read that label, by its full name, in the root or a part of the page`}.`,
             { code: 'view_label', start: sourcePosition(source, start) }
           )
         );
@@ -1438,7 +1452,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which no input or algorithm variable, snippet, type, operator, {#each}, or {@const} is named: read one that exists, as its block declares it.`,
+        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), runs(@label) and all(Node); a part of the page or the root also reads input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -3241,7 +3255,7 @@ function renderSites(
         const written = label
           ? asWritten(argument.name ?? '')
           : chain(argument)
-            ? `@${source.slice(argument.start, argument.end)}`
+            ? `@${source.slice(argument.start, argument.end).replaceAll(viewThis, 'this')}`
             : undefined;
         sites.push({
           name,

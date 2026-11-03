@@ -57,7 +57,7 @@ export function written(name: string): string {
     return `applied(${operator}${path ? `, @${path.replaceAll(dot, '.')}` : ''})`;
   }
   if (isHeapKey(name)) return `all(${name.slice(1)})`;
-  return name;
+  return name.replaceAll(viewThis, 'this');
 }
 
 const path = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/u;
@@ -304,4 +304,74 @@ export function resolveLabel(
       problem: `@${found.full} labels a statement, which gives no value; label its expression, as const key = @${found.name}[values[i]].`
     };
   return { label: found };
+}
+
+/** What a view's `this` becomes before Svelte parses it: a name of the same length, so every offset holds. */
+export const viewThis = 'þhis';
+
+/**
+ * A view's value is `this`: `{#snippet Card(this: Vertex)}<Node>{this.name}</Node>{/snippet}`.
+ * JavaScript takes no parameter named this, so each `this` in a typed snippet's parameter and in the
+ * expressions of its markup becomes `þhis`, no longer than written; a `this` read anywhere else, in
+ * a part of the page or the root, is a problem, as only a view has a value.
+ */
+export function viewThisValues(source: string): {
+  source: string;
+  problems: { message: string; start: number }[];
+} {
+  const problems: { message: string; start: number }[] = [];
+  // HTML comments are not markup: they are read as spaces, so nothing in them counts.
+  const scanned = source.replace(/<!--[\s\S]*?-->/gu, (comment) => ' '.repeat(comment.length));
+  // Work on UTF-16 offsets: edits replace `this` with `þhis`, both four code units.
+  let text = source;
+  const replaceAt = (at: number) => {
+    text = text.slice(0, at) + viewThis + text.slice(at + 4);
+  };
+  const typed = /\{#snippet\s+[A-Za-z_$][\w$]*\(\s*this\s*:/gu;
+  const views: { start: number; end: number }[] = [];
+  for (const match of scanned.matchAll(typed)) {
+    const start = match.index ?? 0;
+    replaceAt(start + match[0].lastIndexOf('this'));
+    // The snippet's body runs to its own {/snippet}, nested snippets inside counted.
+    const tags = /\{#snippet\b|\{\/snippet\}/gu;
+    tags.lastIndex = start + match[0].length;
+    let depth = 1;
+    let end = scanned.length;
+    for (const tag of scanned.matchAll(tags)) {
+      if ((tag.index ?? 0) < tags.lastIndex) continue;
+      depth += tag[0] === '{/snippet}' ? -1 : 1;
+      if (!depth) {
+        end = tag.index ?? scanned.length;
+        break;
+      }
+    }
+    views.push({ start: start + match[0].length, end });
+  }
+  // Each `this` inside braces: a view's becomes its value; any other is a problem.
+  const reads = /(?<![\w$.:'"`])this(?![\w$'"`])/gu;
+  let depth = 0;
+  for (let at = 0; at < scanned.length; at++) {
+    const char = scanned[at];
+    if (char === '{') depth++;
+    else if (char === '}') depth = Math.max(0, depth - 1);
+    else if (depth > 0 && char === 't' && scanned.startsWith('this', at)) {
+      reads.lastIndex = at;
+      const read = reads.exec(scanned);
+      if (!read || read.index !== at) continue;
+      if (
+        /\(\s*$/u.test(scanned.slice(Math.max(0, at - 40), at)) &&
+        /^this\s*:/u.test(scanned.slice(at))
+      )
+        continue; // a typed snippet's parameter, rewritten above
+      if (views.some(({ start, end }) => start <= at && at < end)) replaceAt(at);
+      else
+        problems.push({
+          message:
+            'this is the value a view draws, and only a view has one: read it inside a view, as {#snippet Card(this: Vertex)}<Node>{this.name}</Node>{/snippet}, and in a part of the page or the root read the variable itself.',
+          start: at
+        });
+      at += 3;
+    }
+  }
+  return { source: text, problems };
 }

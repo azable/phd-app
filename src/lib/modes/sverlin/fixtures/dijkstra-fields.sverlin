@@ -98,13 +98,13 @@ while @moreRounds[round ≤ number of vertices]
   @nextRound[round = round + 1]
 </script>
 
-{#snippet NameText(value: Name)}<Node value={value} />{/snippet}
-{#snippet DistanceCell(value: Distance)}<Node {value} />{/snippet}
-{#snippet InfinityCell(value: Infinity)}<Node {value} />{/snippet}
-{#snippet WeightText(value: Weight)}<Node value={value} />{/snippet}
-{#snippet NoneMark(value: None)}<Node value="—" />{/snippet}
-{#snippet VisitedWord(value: VisitedFlag)}<Node>{value ? 'settled' : 'unsettled'}</Node>{/snippet}
-{#snippet ScanMark(value: VertexRef)}<Pointed />{/snippet}
+{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
+{#snippet DistanceCell(this: Distance)}<Node value={this} />{/snippet}
+{#snippet InfinityCell(this: Infinity)}<Node value={this} />{/snippet}
+{#snippet WeightText(this: Weight)}<Node value={this} />{/snippet}
+{#snippet NoneMark(this: None)}<Node value="—" />{/snippet}
+{#snippet VisitedWord(this: VisitedFlag)}<Node>{this ? 'settled' : 'unsettled'}</Node>{/snippet}
+{#snippet ScanMark(this: VertexRef)}<Pointed />{/snippet}
 
 {#snippet Title()}
   <Node>Dijkstra’s shortest paths from {vertices[source].name}</Node>

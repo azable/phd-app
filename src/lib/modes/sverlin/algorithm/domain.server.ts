@@ -47,7 +47,7 @@ export function interpretDomain(body: string): DomainRegistry {
       fail(
         node,
         declared.has(node.name)
-          ? `${node.name} is an operator, not a type.`
+          ? `${node.name} is declared in the domain but is not a type.`
           : `Unknown type ${node.name}; define it in the domain block.`
       );
     return node.name;
@@ -78,7 +78,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (kind === 'binop' || kind === 'unop')
         fail(
           declarator as AnyNode,
-          `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as {#snippet Ask(c: @compare)}…{/snippet}.`
+          `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as {#snippet Ask(this: @compare)}…{/snippet}.`
         );
       if (declared.has(name)) fail(declarator as AnyNode, `"${name}" is already defined.`);
       declared.set(name, {

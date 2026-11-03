@@ -2,13 +2,16 @@ import { parse } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 
 import { pointerCalls, slotInsertions, withInsertions } from './components.server';
+import { viewThisValues } from './label-values';
 
 /** Slots without the site each is stamped with, which one test checks on its own. */
 const unsited = (view: string) => view.replaceAll(/ site="\d+:\d+"/gu, '');
 
 /** The view with every call to a view wrapped in the slot of the element it draws. */
 function slotted(view: string, state = ['values', 'target', 'edges', 'vertices']): string {
-  const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+  const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+    filename: 'Main.svelte'
+  });
   const components = new Set(['IntText', 'ValuesRow', 'EdgeRow']);
   return unsited(
     withInsertions(
@@ -20,7 +23,9 @@ function slotted(view: string, state = ['values', 'target', 'edges', 'vertices']
 
 /** The root's pointer calls, and the view without them. */
 function hoisted(view: string) {
-  const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+  const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+    filename: 'Main.svelte'
+  });
   const found = pointerCalls(
     ast.html,
     view,
@@ -44,7 +49,9 @@ describe('pointers', () => {
 
   it('leave the slot of a render written right beside them whole, either side', () => {
     const slottedWithout = (view: string) => {
-      const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+      const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+        filename: 'Main.svelte'
+      });
       const { removals } = pointerCalls(
         ast.html,
         view,
@@ -74,7 +81,7 @@ describe('pointers', () => {
     expect(messages('{#each edges as edge}{@render Arrow(i)}{/each}')[0]).toMatch(
       /at the top of the view/
     );
-    expect(messages('{#snippet V(x: Values)}{@render Arrow(x)}{/snippet}')[0]).toMatch(
+    expect(messages('{#snippet V(this: Values)}{@render Arrow(this)}{/snippet}')[0]).toMatch(
       /at the top of the view/
     );
     expect(messages('{@render Arrow(i + 1)}')[0]).toMatch(/a position from the state/);
@@ -154,13 +161,13 @@ describe('element slots', () => {
   it("passes a component's slot on to the view of its own value", () => {
     expect(
       slotted(
-        '{#snippet ValuesRow(list: Values)}{#each list as v}{@render Int(v)}{/each}{/snippet}{#snippet IntText(value: Int)}{@render Other(value)}{/snippet}'
+        '{#snippet ValuesRow(this: Values)}{#each this as v}{@render Int(v)}{/each}{/snippet}{#snippet IntText(this: Int)}{@render Other(this)}{/snippet}'
       )
     ).toBe(
-      '{#snippet ValuesRow(list: Values)}{#each list as v, __k1}<SverlinSlot of={list} at={__k1}>{@render Int(v)}</SverlinSlot>{/each}{/snippet}{#snippet IntText(value: Int)}{@render Other(value)}{/snippet}'
+      '{#snippet ValuesRow(this: Values)}{#each this as v, __k1}<SverlinSlot of={this} at={__k1}>{@render Int(v)}</SverlinSlot>{/each}{/snippet}{#snippet IntText(this: Int)}{@render Other(this)}{/snippet}'
     );
-    expect(slotted('{#snippet EdgeRow(edge: Edge)}{@render Int(edge)}{/snippet}')).toBe(
-      '{#snippet EdgeRow(edge: Edge)}<SverlinSlot inherit>{@render Int(edge)}</SverlinSlot>{/snippet}'
+    expect(slotted('{#snippet EdgeRow(this: Edge)}{@render Int(this)}{/snippet}')).toBe(
+      '{#snippet EdgeRow(this: Edge)}<SverlinSlot inherit>{@render Int(this)}</SverlinSlot>{/snippet}'
     );
   });
 
@@ -178,7 +185,9 @@ describe('scope', () => {
   it('names the variables out of scope at some step that a view or pointer reads', () => {
     const view =
       '{@render Int(values[i])}{#each row as v}{@render Int(v)}{/each}{@render Int(target)}';
-    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+      filename: 'Main.svelte'
+    });
     const state = new Set(['values', 'i', 'row', 'target']);
     const scoped = new Set(['i', 'row']);
     expect(
@@ -209,7 +218,9 @@ describe('scope', () => {
 describe('sites', () => {
   it('stamps each slot with its render’s line:column and records what it reads', () => {
     const view = '<Node>{@render Int(target)}</Node>\n  {@render Int(values[i])}';
-    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+      filename: 'Main.svelte'
+    });
     const rendered = new Map<number, string[]>();
     const slots = withInsertions(
       view,
@@ -234,7 +245,9 @@ describe('text', () => {
   it('sets views inline in a node that writes text around them', () => {
     const view =
       '<Node>Found {@render Int(target)} here</Node><Node>{@render Int(target)}</Node><Node layout="row">At {@render Int(target)}</Node>';
-    const ast = parse(`${view}<script lang="ts"></script>`, { filename: 'Main.svelte' });
+    const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
+      filename: 'Main.svelte'
+    });
     expect(
       unsited(
         withInsertions(

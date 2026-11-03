@@ -26,8 +26,8 @@ const binarySearch = (listing: string) => `<script domain>
 <script listing="pseudocode">
 ${listing}
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Arrow(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet Arrow(this: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Goal()}<Node>target {target}</Node>{/snippet}
 <Layout name="Main">
@@ -67,8 +67,8 @@ const linearSearch = `<script domain>
   for @setup[i = 0] @guard[to n - 1] @onward[step 1]
     @scan[@check[if @cond[$i[A[i]] = $target[target]] then return $i[i]]]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Mark(p: Index)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet Mark(this: Index)}<Pointed />{/snippet}
 {#snippet Goal()}<Node>target {target}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 <Layout name="Main">
@@ -219,8 +219,8 @@ describe('tokens naming places in a listing', () => {
           @down[j = j - 1]]
       @place[$j[A[j + 1]] = $key[key]]]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Mark(p: Position)}<Pointed />{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet Mark(this: Position)}<Pointed />{/snippet}
 {#snippet Key()}<Node>key {key}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 <Layout name="Stacked">

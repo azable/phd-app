@@ -27,18 +27,18 @@ export const linearSearchSource = `<script domain>
   }
   @run[const found = search(values, target);]
 </script>
-{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet IntTally(value: Int)}
-  {#snippet Tally()}<Node>{'•'.repeat(value)}</Node>{/snippet}
+{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+{#snippet IntTally(this: Int)}
+  {#snippet Tally()}<Node>{'•'.repeat(this)}</Node>{/snippet}
   <Node layout="column">
-    <Node {value} />
+    <Node value={this} />
     {@render Tally()}
   </Node>
 {/snippet}
-{#snippet IndexText(i: Index)}<Node value={i} />{/snippet}
-{#snippet Row(list: Values)}
+{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
+{#snippet Row(this: Values)}
   <Node layout="row">
-    {#each list as value, k}
+    {#each this as value, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
         {value}
@@ -47,10 +47,10 @@ export const linearSearchSource = `<script domain>
     {/each}
   </Node>
 {/snippet}
-{#snippet Highlight(p: Index)}<Pointed />{/snippet}
+{#snippet Highlight(this: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
 {#snippet Caption()}<Node>Find {target} by checking each cell in order.</Node>{/snippet}
-{#snippet Ask(c: @check.equal)}<Node>is {c.left} equal to {c.right}?</Node>{/snippet}
+{#snippet Ask(this: @check.equal)}<Node>is {this.left} equal to {this.right}?</Node>{/snippet}
 {#snippet Checking()}<Node>Checking index {i}: {@check.equal}</Node>{/snippet}
 {#snippet Result()}<Node>Found {target} at index {found}.</Node>{/snippet}
 

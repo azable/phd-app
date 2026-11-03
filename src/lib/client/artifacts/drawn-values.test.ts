@@ -49,9 +49,9 @@ describe('drawn value markers', () => {
 
   describe('views no presentation drew', () => {
     const views = [
-      '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-      '{#snippet IntTally(value: Int)}<Node layout="column"><Node {value} /></Node>{/snippet}',
-      '{#snippet IntDots(value: Int)}<Node>{value}</Node>{/snippet}',
+      '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
+      '{#snippet IntTally(this: Int)}<Node layout="column"><Node value={this} /></Node>{/snippet}',
+      '{#snippet IntDots(this: Int)}<Node>{this}</Node>{/snippet}',
       '{@render Int(target)}'
     ].join('\n');
     const options = { Int: ['IntCell', 'IntTally', 'IntDots'] };
@@ -125,7 +125,7 @@ describe('drawn value markers', () => {
 
 describe('variant markers', () => {
   const source =
-    '{#snippet Here(i: Index)}\n  <Pointed />\n{/snippet}\n{#snippet Title()}<Node>Search</Node>{/snippet}';
+    '{#snippet Here(this: Index)}\n  <Pointed />\n{/snippet}\n{#snippet Title()}<Node>Search</Node>{/snippet}';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
@@ -286,11 +286,11 @@ describe('variant markers', () => {
 
 describe('place values', () => {
   const doc = [
-    '{#snippet Highlight(p: Index)}<Pointed />{/snippet}',
-    '{#snippet Arrow(p: Index)}<Node layout="column"><Pointed /></Node>{/snippet}',
-    '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-    '{#snippet IndexText(p: Index)}<Node value={p} />{/snippet}',
-    '{#snippet Ask(g: Greater)}<Node>{@render Int(g.a)}</Node>{/snippet}',
+    '{#snippet Highlight(this: Index)}<Pointed />{/snippet}',
+    '{#snippet Arrow(this: Index)}<Node layout="column"><Pointed /></Node>{/snippet}',
+    '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
+    '{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}',
+    '{#snippet Ask(this: Greater)}<Node>{@render Int(this.a)}</Node>{/snippet}',
     '{#snippet Top()}<Node>looking at {@render Index(i)}</Node>{/snippet}',
     '{@render Index(@left)}',
     '{@render Index(@right)}',
@@ -307,7 +307,7 @@ describe('place values', () => {
     'Arrow.Pointed@left.fill': 'amber-100',
     'IndexText@i.fill': 'sky-100',
     'IntCell@v.fill': 'white',
-    'Ask.IntCell@g.a.fill': 'green-100',
+    'Ask.IntCell@this.a.fill': 'green-100',
     'Ask.fill': 'none'
   };
   const sites = (text: string) => {
@@ -320,12 +320,12 @@ describe('place values', () => {
     variant,
     views: { Int: ['IntCell'], Index: ['IndexText'] },
     pointers: { Index: ['Highlight', 'Arrow'] },
-    kinds: { [sites('<Node>{@render Int(g.a)}')]: ['Ask'] },
+    kinds: { [sites('<Node>{@render Int(this.a)}')]: ['Ask'] },
     renders: {
       [sites('{@render Index(@left)}')]: 'pointers.Index@left',
       [sites('{@render Index(@right)}')]: 'pointers.Index',
       [sites('{@render Index(i)}')]: 'views.Index',
-      [sites('{@render Int(g.a)}')]: 'views.Int',
+      [sites('{@render Int(this.a)}')]: 'views.Int',
       [sites('{@render Int(v)}')]: 'views.Int'
     }
   };
@@ -346,8 +346,8 @@ describe('place values', () => {
 
   it('names a place in a part by its argument, and one in a typed view after the view', () => {
     expect(rows('{@render Index(i)}')).toEqual([['IndexText.fill', 'IndexText@i.fill', 'sky-100']]);
-    expect(rows('{@render Int(g.a)}')).toEqual([
-      ['IntCell.fill', 'Ask.IntCell@g.a.fill', 'green-100']
+    expect(rows('{@render Int(this.a)}')).toEqual([
+      ['IntCell.fill', 'Ask.IntCell@this.a.fill', 'green-100']
     ]);
     expect(rows('{@render Int(v)}')).toEqual([['IntCell.fill', 'IntCell@v.fill', 'white']]);
   });

@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render Shown()}{n}</Node></Layout>';
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet Shown()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render Shown()}{n}</Node></Layout>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -96,7 +96,7 @@ describe('Svelte-backed project lifecycle', () => {
       Values: ['Row']
     });
     const frames = alignPresentationFrames([left, right]);
-    expect(frames).toHaveLength(6);
+    expect(frames).toHaveLength(10);
     const document = await appendProjectPreference(
       result.document,
       {
