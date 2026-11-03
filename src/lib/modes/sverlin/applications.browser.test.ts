@@ -1,5 +1,5 @@
 /**
- * A step's application of an operator, drawn by {@render Greater(@sweep.pair.test)}, in a real
+ * A step's application of an operator, drawn by {@sweep.pair.test}, in a real
  * browser. Run with `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
@@ -28,13 +28,8 @@ const source = `<script lang="sverlin" domain>
   const Index = index(Values);
 
   // walking the collection
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
 
   // what the algorithm does
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -42,11 +37,11 @@ const source = `<script lang="sverlin" domain>
 </script>
 
 <script lang="sverlin">
-  for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
-    for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
-      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
-        const moved = values[Prev(i)];
-        values[Prev(i)] = values[i];
+  for (let end = values.length; (Index(1) < end); end--) @sweep{
+    for (let i = Index(1); (i < end); i++) @pair{
+      if (@test[(values[i - 1]) > values[i]]) @swap{
+        const moved = values[i - 1];
+        values[i - 1] = values[i];
         values[i] = moved;
       }
     }
@@ -62,7 +57,7 @@ const source = `<script lang="sverlin" domain>
 {#snippet Board()}
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
-    {@render Greater(@sweep.pair.test)}
+    {@sweep.pair.test}
   </Node>
 {/snippet}
 

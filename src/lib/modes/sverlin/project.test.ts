@@ -90,7 +90,7 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.origins?.['IntCell.fill']).toBe('starter');
     expect(right.variant).not.toEqual(left.variant);
     expect(right.views).toEqual({
-      Equal: ['Ask'],
+      ℓcheckˑequal: ['Ask'],
       Int: ['IntCell', 'IntTally'],
       Index: ['IndexText'],
       Values: ['Row']

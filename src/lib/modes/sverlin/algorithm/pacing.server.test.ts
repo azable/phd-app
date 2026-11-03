@@ -9,28 +9,24 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const Up = unop((n: Int) => Int(n + 1));
 `);
 const input = interpretInput('const values = Values([3, 8, 5, 2]); const target = Int(5);', domain);
 const search = `
   @start[let checked = Int(0);]
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @pass{
-    @count[checked = Up(checked);]
-    @check[if (Equal(values[i], target)) break;]
+  for (let i = Index(0); (i < values.length); i++) @pass{
+    @count[checked++;]
+    @check[if (@equal[values[i] === target]) break;]
   }
 `;
-const steps = (body: string, pacing?: Pacing) => traceAlgorithm(body, input, domain, pacing).steps;
+const steps = (body: string, pacing?: Pacing, applications?: ReadonlySet<string>) =>
+  traceAlgorithm(body, input, domain, pacing, applications ? { applications } : {}).steps;
 // Pausing at each label given, accumulating.
 const pausedAt = (...labels: string[]) =>
   new Map(labels.map((label) => [label, 'accumulate' as const]));
 const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
-// A view showing each comparison, rendered at a label around the whole algorithm.
-const shown: Pacing['shown'] = new Map([['Equal', [{ start: 0, end: Infinity }]]]);
+// A view typed by the comparison's label, which keeps its operands and result at each step.
+const shown = new Set(['pass.check.equal']);
+const equal = 'ℓpassˑcheckˑequal';
 
 describe('pauses at labels', () => {
   it('step at the end of each run of a label paused at, from the state before it to the state after', () => {
@@ -47,31 +43,30 @@ describe('pauses at labels', () => {
       [2, 3]
     ]);
     // The events leading up to the code, then its own.
-    expect(trace[1].events?.slice(trace[1].gap).map(({ kind }) => kind)).toEqual([
-      'read',
-      'apply',
-      'write'
-    ]);
+    expect(trace[1].events?.slice(trace[1].gap).map(({ kind }) => kind)).toEqual(['read', 'write']);
   });
 
   it('pause at every label, on, where no pauses are given, whatever the view shows', () => {
     const every = new Map(
-      ['start', 'pass', 'pass.count', 'pass.check'].map((label) => [label, 'on' as const])
+      ['start', 'pass', 'pass.count', 'pass.check', 'pass.check.equal'].map((label) => [
+        label,
+        'on' as const
+      ])
     );
     const trace = steps(search);
     expect(trace.map(({ state, unit }) => [state.checked, unit !== undefined])).toEqual(
       steps(search, { pauses: every }).map(({ state, unit }) => [state.checked, unit !== undefined])
     );
-    expect(steps(search, { shown })).toHaveLength(trace.length);
+    expect(steps(search, {}, shown)).toHaveLength(trace.length);
   });
 
-  it('keep the applications of an operator the view shows at the step that makes them', () => {
-    const trace = steps(search, { shown, pauses: pausedAt('start', 'pass.count', 'pass.check') });
+  it('keep what a labelled expression a view is typed by computed, at the step that computes it', () => {
+    const trace = steps(search, { pauses: pausedAt('start', 'pass.count', 'pass.check') }, shown);
     // The start, then each count and each check; the check finding 5 ends the search.
     expect(
       trace.map(({ state, applied }) => [
         state.checked,
-        applied?.Equal?.map(({ state }) => `${state.a} = ${state.b}`) ?? []
+        applied?.[equal]?.map(({ state }) => `${state.left} = ${state.right}`) ?? []
       ])
     ).toEqual([
       [0, []],
@@ -83,42 +78,35 @@ describe('pauses at labels', () => {
       [3, ['5 = 5']]
     ]);
     const [, , check] = trace;
-    expect(check.events?.slice(check.gap).map(({ kind }) => kind)).toContain('apply');
     expect(check.unit).toBeDefined();
   });
 
   it('pause only at the labels given, the code of those not given joining the next step', () => {
     // Pausing at the checks alone: each count leads up to its check.
-    const checks = steps(search, { shown, pauses: pausedAt('pass.check') });
+    const checks = steps(search, { pauses: pausedAt('pass.check') }, shown);
     expect(checks.map(({ before, state }) => [before?.state.checked, state.checked])).toEqual([
       [1, 1],
       [2, 2],
       [3, 3]
     ]);
-    expect(checks.every(({ applied }) => applied?.Equal?.length === 1)).toBe(true);
+    expect(checks.every(({ applied }) => applied?.[equal]?.length === 1)).toBe(true);
     // Pausing at the pass as well, which ends after each check, adds a step that changes nothing.
-    expect(steps(search, { shown, pauses: pausedAt('pass', 'pass.check') })).toHaveLength(6);
+    expect(steps(search, { pauses: pausedAt('pass', 'pass.check') }, shown)).toHaveLength(6);
     // Pausing nowhere leaves the end alone.
-    expect(steps(search, { shown, pauses: pausedAt() })).toHaveLength(1);
+    expect(steps(search, { pauses: pausedAt() }, shown)).toHaveLength(1);
   });
 
-  it('keep an operator’s applications only inside the label a view is narrowed to', () => {
-    const body = search.replace(
-      '@count[checked = Up(checked);]',
-      '@count[checked = Up(checked);]\n    @keep[const same = @same[Equal(target, target)];]'
-    );
-    const start = body.indexOf('@check[');
-    const narrowed = new Map([['Equal', [{ start, end: body.indexOf('break;]', start) + 7 }]]]);
-    const pauses = pausedAt('pass.keep', 'pass.check');
-    const equals = (shown: Pacing['shown']) =>
-      steps(body, { shown, pauses }).map(({ applied }) => applied?.Equal?.length ?? 0);
-    expect(equals(shown).slice(0, 2)).toEqual([1, 1]);
-    expect(equals(narrowed).slice(0, 2)).toEqual([0, 1]);
+  it('keep only the labelled expressions a view is typed by', () => {
+    const pauses = pausedAt('pass.check');
+    const kept = (applications: ReadonlySet<string>) =>
+      steps(search, { pauses }, applications).map(({ applied }) => applied?.[equal]?.length ?? 0);
+    expect(kept(shown).slice(0, 2)).toEqual([1, 1]);
+    expect(kept(new Set()).slice(0, 2)).toEqual([0, 0]);
   });
 
   it('step at each run of a label whose value the view draws, though it changes nothing', () => {
     const body =
-      'for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @pass{\n  const v = @look[values[i]];\n}';
+      'for (let i = Index(0); (i < values.length); i++) @pass{\n  const v = @look[values[i]];\n}';
     const trace = traceAlgorithm(
       body,
       input,
@@ -132,7 +120,7 @@ describe('pauses at labels', () => {
   });
 
   it('join code outside every label to the next step, leading up to it', () => {
-    const [step] = steps('let n = Up(Int(0));\n@a[n = Up(n);]');
+    const [step] = steps('let n = Int(0) + 1;\n@a[n++;]');
     expect(step.before?.state.n).toBe(1);
     expect(step.state.n).toBe(2);
     expect(step.events?.slice(0, step.gap).map(({ kind }) => kind)).toContain('write');
@@ -141,9 +129,9 @@ describe('pauses at labels', () => {
   it('step once at each pass of a labelled loop', () => {
     const loop = `
       @start[let checked = Int(0);]
-      @loop[for (let i = Index(0); Before(i, Length(values)); i = Next(i)) {
-        checked = Up(checked);
-        if (Equal(values[i], target)) break;
+      @loop[for (let i = Index(0); (i < values.length); i++) {
+        checked++;
+        if ((values[i] === target)) break;
       }]
     `;
     expect(steps(loop).map(({ before, state }) => [before?.state.i, state.checked])).toEqual([
@@ -165,26 +153,23 @@ describe('pauses at labels', () => {
   it('end with a step for what runs after the last step, only where it changes a value in scope', () => {
     // A write after the loop to what the view does not draw is no step of its own, but makes the
     // end one, the loop's exit in it.
-    const after = steps(`${search}\n@more[checked = Up(checked);]`, {
-      shown,
-      pauses: pausedAt('pass.check')
-    });
+    const after = steps(`${search}\n@more[checked++;]`, { pauses: pausedAt('pass.check') }, shown);
     expect(after).toHaveLength(4);
     expect(after.at(-1)?.state).not.toHaveProperty('i');
     expect(after.at(-1)?.state.checked).toBe(4);
     expect(after.at(-1)?.events?.map(({ kind }) => kind)).toEqual(
-      expect.arrayContaining(['exit', 'apply', 'write'])
+      expect.arrayContaining(['exit', 'write'])
     );
     // A loop's last test changes nothing.
-    const counting = '@start[let n = Int(0);]\nwhile (Less(n, 2)) @up{\n  n = Up(n);\n}';
+    const counting = '@start[let n = Int(0);]\nwhile ((n < 2)) @up{\n  n++;\n}';
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
   });
 
   it('refuse two labels on the same code, which could never pause or draw apart', () => {
     const same = `
   let n = Int(0);
-  while (Less(n, 2)) @up{
-    @add[@one[n = Up(n);]]
+  while ((n < 2)) @up{
+    @add[@one[n++;]]
   }
 `;
     expect(() => steps(same)).toThrow(
@@ -196,9 +181,9 @@ describe('pauses at labels', () => {
     const merged = `
   let n = Int(0);
   @outer[
-    @first[n = Up(n); n = Up(n);]
-    while (Less(n, 4)) @take{
-      n = Up(n);
+    @first[n++; n++;]
+    while ((n < 4)) @take{
+      n++;
     }
   ]
 `;
@@ -221,7 +206,7 @@ describe('pauses at labels', () => {
     // Labelled statements in a row each count once, the outer label's end named after it.
     const rows = `
   let n = Int(0);
-  @outer[@first[n = Up(n);] @second[n = Up(n);]]
+  @outer[@first[n++;] @second[n++;]]
 `;
     expect(steps(rows).map(({ name, state }) => [name, state.n])).toEqual([
       ['@outer.first#1', 1],
@@ -233,7 +218,7 @@ describe('pauses at labels', () => {
   it('number a label’s runs in the order they begin, each step named where its run ends', () => {
     const recursive = `
   function count(n) @call{
-    if (Less(n, 2)) @deeper[count(Up(n));]
+    if ((n < 2)) @deeper[count((n + 1));]
   }
   @go[count(Int(0));]
 `;
@@ -252,9 +237,9 @@ describe('pauses at labels', () => {
     const merged = `
   let n = Int(0);
   @outer[
-    @first[n = Up(n);]
-    while (Less(n, 3)) @take{
-      n = Up(n);
+    @first[n++;]
+    while ((n < 3)) @take{
+      n++;
     }
   ]
 `;
@@ -272,7 +257,7 @@ describe('pauses at labels', () => {
 
   it('number every step by its moment, the same however steps are paced', () => {
     const byCount = steps(search, { pauses: pausedAt('start', 'pass.count') });
-    const byCheck = steps(search, { shown, pauses: pausedAt('pass.check') });
+    const byCheck = steps(search, { pauses: pausedAt('pass.check') }, shown);
     const moments = (trace: typeof byCheck) => trace.map(({ moment }) => moment as number);
     // Each count comes before the comparison it leads to.
     moments(byCount)
@@ -282,7 +267,7 @@ describe('pauses at labels', () => {
       });
     // Presentations paced differently line up by their steps' names among those of every label
     // paused, one holding its step where the other has one of its own.
-    const every = steps(search, { shown }).map(({ name }) => name as string);
+    const every = steps(search, {}, shown).map(({ name }) => name as string);
     const presentation = (id: string, trace: typeof byCheck) => ({
       presentationId: id,
       format: 'browser-bundle-v1' as const,
@@ -325,9 +310,9 @@ describe('no code outside a label, in an authored source', () => {
   const names = (body: string) => authored(body).map(({ name }) => name);
   const labelled = `
   @start[let checked = Int(0);]
-  for (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @pass{
-    @count[checked = Up(checked);]
-    @check[if (@found[Equal(values[i], target)]) break;]
+  for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @pass{
+    @count[checked++;]
+    @check[if (@found[values[i] === target]) break;]
   }
 `;
 
@@ -359,8 +344,8 @@ describe('no code outside a label, in an authored source', () => {
   it('ends a loop that runs out with its test, its last value false', () => {
     const counting = `
   @start[let n = Int(0);]
-  for (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @pass{
-    n = Up(n);
+  for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @pass{
+    n++;
   }
 `;
     const trace = traceAlgorithm(counting, input, domain, {}, { labels: new Set(['more']) }, true);
@@ -390,20 +375,20 @@ describe('no code outside a label, in an authored source', () => {
 
   it('refuses a test or a part of a for header without a label of its own', () => {
     expect(() =>
-      authored(labelled.replace('@found[Equal(values[i], target)]', 'Equal(values[i], target)'))
+      authored(labelled.replace('@found[values[i] === target]', '(values[i] === target)'))
     ).toThrow(
       // Inside @check, around the if, the test is still not a label's own code.
-      'The test of if (…), Equal(values[i], target), is in no label of its own, so the decision it makes would not show: label it, as @name[Equal(values[i], target)].'
+      'The test of if (…), values[i] === target, is in no label of its own, so the decision it makes would not show: label it, as @name[values[i] === target].'
     );
-    expect(() => authored(labelled.replace('@next[i = Next(i)]', 'i = Next(i)'))).toThrow(
-      'The update of for (…), i = Next(i), is in no label of its own'
+    expect(() => authored(labelled.replace('@next[i++]', 'i++'))).toThrow(
+      'The update of for (…), i++, is in no label of its own'
     );
     // Conditions joined by && and ||, each a label's own, are enough.
     expect(() =>
       authored(
         labelled.replace(
-          '@found[Equal(values[i], target)]',
-          '@found[Equal(values[i], target)] || @low[Less(values[i], Int(0))]'
+          '@found[values[i] === target]',
+          '@found[values[i] === target] || @low[values[i] < Int(0)]'
         )
       )
     ).not.toThrow();
@@ -411,7 +396,7 @@ describe('no code outside a label, in an authored source', () => {
 
   it('refuses a for … of loop, advising an index loop with its parts labelled', () => {
     expect(() =>
-      authored('@start[let n = Int(0);]\nfor (const v of values) @each{ n = Up(n); }')
+      authored('@start[let n = Int(0);]\nfor (const v of values) @each{ n++; }')
     ).toThrow('for (… of values) walks values in a header no label can split; write an index loop');
   });
 });

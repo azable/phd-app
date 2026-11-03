@@ -26,23 +26,18 @@ const insertion = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (let i = Position(1); (i < values.length); i++) @insert{
     let j = i;
-    while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while ((Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -167,7 +162,7 @@ it.skipIf(!enabled)(
       )
       .replace(
         '<When of="@insert.swap">{@render Caption()}</When>',
-        '<OneOf><When of="@insert.compare">{@render Greater(@insert.compare)}</When><When of="@insert.swap">{@render Caption()}</When></OneOf>'
+        '<OneOf><When of="@insert.compare">{@insert.compare}</When><When of="@insert.swap">{@render Caption()}</When></OneOf>'
       );
     const steps = await stepsOf(
       {

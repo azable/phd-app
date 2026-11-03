@@ -6,15 +6,8 @@ import { markLabels, whenTags } from './label-values';
 
 const domain = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 8, 1]);
@@ -23,12 +16,12 @@ const domain = `<script lang="sverlin" domain>
 
 const insertion = `
 <script lang="sverlin">
-  for (@setup[let i = Index(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Index(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     const key = @key[values[i]];
     let j = i;
-    while (@guard[Before(Index(0), j) && Greater(values[Prev(j)], key)]) {
-      values[j] = values[Prev(j)];
-      j = Prev(j);
+    while (@guard[(Index(0) < j) && ((values[j - 1]) > key)]) {
+      values[j] = values[j - 1];
+      j--;
     }
     values[j] = key;
   }
@@ -113,7 +106,7 @@ describe('labels read in the view', () => {
   it('take a label on an expression, and are read only in the root and its parts', () => {
     const statement = `
 <script lang="sverlin">
-  for (@setup[let i = Index(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Index(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     @key[const key = values[i];]
     @put[values[i] = key;]
   }
@@ -131,35 +124,25 @@ describe('labels read in the view', () => {
     ).toThrow('@insert.key is read in a view, which sees only its value');
   });
 
-  it('narrow an operator’s render to a label, and give the lists of what has happened', () => {
+  it('list what a label has given so far, and refuse applied(…), naming the label view in its place', () => {
     const search = `
 <script lang="sverlin">
-  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @check{
+  for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @check{
     const seen = values[@at[i]];
-    if (@cond[Equal(seen, target)]) break;
+    if (@cond[seen === target]) break;
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Asking(e: Equal)}<Node>{e.a}</Node>{/snippet}
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
-{#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
-    const prepared = prepare(
-      `{@render Equal(@check)}
-{#each runs(@check.at) as p}{p}{/each}
-{@render Asked()}`,
-      search
-    );
-    expect(prepared.appliedIn?.['Equal_ℓcheck']?.operator).toBe('Equal');
+`;
+    const prepared = prepare(`{#each runs(@check.at) as p}{p}{/each}`, search);
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);
-    // Both inside the code labelled @check.
-    expect(prepared.histories).toEqual({ ǂEqualˑˑcheck: prepared.appliedIn?.['Equal_ℓcheck'] });
-    expect(() => prepare('{#each applied(Values) as e}{/each}', search)).toThrow(
-      'applied(Values) takes an operator the domain declares, as applied(Equal).'
-    );
-    // What has happened is a label's too: with none, it names the label to write.
-    expect(() => prepare('{#each applied(Equal) as e}{/each}', search)).toThrow(
-      "applied(Equal) draws no label's applications: write applied(Equal, @check.cond), a label around an application of Equal."
-    );
+    expect(() =>
+      prepare(
+        '{@render Asked()}',
+        `${search}\n{#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{e}{/each}</Node>{/snippet}`
+      )
+    ).toThrow('applied(Equal, @check) is not written: label the expression whose results it lists');
   });
 });
 

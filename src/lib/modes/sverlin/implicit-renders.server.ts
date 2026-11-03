@@ -11,7 +11,7 @@
  * offset the view's problems name moves.
  */
 
-import type { DomainRegistry } from './algorithm/structures.server';
+import type { DomainRegistry, OperatorType } from './algorithm/structures.server';
 import type { MasterStep } from './algorithm/interpret.server';
 import type { Insertion } from './components.server';
 import type { LabelReference } from './label-values';
@@ -41,6 +41,8 @@ type Part = {
 /** What the types of values read in the markup are found from: the domain and a first trace. */
 export type ViewTyping = {
   domain: DomainRegistry;
+  /** Every labelled expression as an operator named by its label (see withLabelOperators in compile.server.ts). */
+  labelOperators?: Readonly<Record<string, OperatorType>>;
   steps: readonly MasterStep[];
   labels: readonly Label[];
 };
@@ -61,7 +63,9 @@ export function implicitRenders(
 ): ImplicitRender[] {
   const { domain, steps } = typing;
   const { atoms, structures } = domain;
-  const isType = (name: string) => name in atoms || name in structures;
+  const operators = domain.operators ?? {};
+  // A label a view is typed by draws through that view, as a type does (see withLabelOperators).
+  const isType = (name: string) => name in atoms || name in structures || name in operators;
   const pathTypes = (path: string): Set<string> => {
     const found = new Set<string>();
     for (const step of steps) {
@@ -89,6 +93,18 @@ export function implicitRenders(
     return unions.length === 1 ? unions[0].name : undefined;
   };
   const record = (type: string | undefined) => {
+    const operator = type ? operators[type] : undefined;
+    if (operator)
+      return {
+        kind: 'record' as const,
+        name: operator.name,
+        fields: {
+          ...Object.fromEntries(
+            operator.parameters.map((parameter, index) => [parameter, operator.operands[index]])
+          ),
+          value: operator.result
+        }
+      };
     let structure = type ? structures[type] : undefined;
     if (structure?.kind === 'ref') structure = structures[structure.element];
     return structure?.kind === 'record' ? structure : undefined;
@@ -109,6 +125,7 @@ export function implicitRenders(
     if (!expression) return undefined;
     if (expression.type === 'Identifier' && typeof expression.name === 'string') {
       if (scope.has(expression.name)) return scope.get(expression.name);
+      if (expression.name in operators) return expression.name;
       const label = labelPaths.get(expression.name);
       return one(label !== undefined ? labelTypes(label) : pathTypes(expression.name));
     }
@@ -241,14 +258,16 @@ export function markImplicit(html: unknown, renders: readonly ImplicitRender[]):
  */
 export function implicitInsertions(
   renders: readonly ImplicitRender[],
-  removals: readonly Insertion[]
+  removals: readonly Insertion[],
+  /** The alias of a render at a place drawing its own choice of view, called in place of its type. */
+  aliasAt: (start: number) => string | undefined = () => undefined
 ): Insertion[] {
   const removed = (start: number) =>
     removals.some(({ at, remove = 0 }) => at <= start && start < at + remove);
   return renders
     .filter(({ start }) => !removed(start))
     .flatMap(({ start, end, type }) => [
-      { at: start + 1, text: `@render ${type}(` },
+      { at: start + 1, text: `@render ${aliasAt(start) ?? type}(` },
       { at: end - 1, text: ')' }
     ]);
 }

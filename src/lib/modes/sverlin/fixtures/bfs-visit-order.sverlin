@@ -9,17 +9,7 @@
   const Adjacency = collection(Neighbours);
   const Queue = collection(VertexRef);
   const VisitOrder = collection(VertexRef);
-  const Flag = type('boolean');
 
-  const Count = unop((n: Neighbours) => Slot(n.length));
-  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
-  const Step = unop((p: Slot) => Slot(p + 1));
-
-  const Waiting = unop((q: Queue) => Flag(q.length > 0));
-  const NotSeen = unop((seen: Seen) => Flag(!seen));
-  const Rest = unop((q: Queue) => Queue(q.slice(1)));
-  const Enqueue = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
-  const RecordVisit = binop((order: VisitOrder, v: VertexRef) => VisitOrder([...order, v]));
 </script>
 
 <script lang="sverlin" input>
@@ -44,16 +34,16 @@
 <script lang="sverlin">
   @init[let queue = Queue([0]);
   let order = VisitOrder([]);]
-  while (@more[Waiting(queue)]) @visit{
+  while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];
-    queue = Rest(queue);
-    order = RecordVisit(order, current);
+    queue.shift();
+    order.push(current);
     const around = adjacency[current];]
-    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+    for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
       const neighbour = around[slot];
-      if (@check[NotSeen(vertices[@next[neighbour]].seen)]) @add{
+      if (@check[!vertices[@next[neighbour]].seen]) @add{
         vertices[neighbour].seen = true;
-        queue = Enqueue(queue, neighbour);
+        queue.push(neighbour);
       }
     }
   }

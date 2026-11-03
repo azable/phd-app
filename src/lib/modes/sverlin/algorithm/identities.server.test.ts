@@ -10,14 +10,6 @@ const domain = interpretDomain(`
   const Counts = collection(Count);
   const Table = collection(Counts);
   const Flag = type('boolean');
-  const Filled = unop((v: Values) => Flag(v.length > 0));
-  const Before = binop((a: Count, b: Count) => Flag(a < b));
-  const Size = unop((v: Values) => Count(v.length));
-  const Up = unop((n: Count) => Count(n + 1));
-  const Down = unop((n: Count) => Count(n - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
-  const Append = binop((c: Values, x: Int) => Values([...c, x]));
-  const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 
 const idsOf = (identities: StepIdentities | undefined, paths: string[]) => ({
@@ -48,7 +40,7 @@ describe('identities', () => {
     const swap = 'const moved = values[0]; values[0] = values[1]; values[1] = moved;';
     // The whole swap is one step's code.
     const [before, after] = identities(
-      `@start[const values = Values([7, 3, 9]);] @swap[if (Filled(values)) { ${swap} }]`,
+      `@start[const values = Values([7, 3, 9]);] @swap[if ((values.length > 0)) { ${swap} }]`,
       ['values[0]', 'values[1]', 'values[2]']
     );
     const [seven, three, nine] = before.ids;
@@ -91,12 +83,12 @@ describe('identities', () => {
     // Pausing where the row changes, the key picked up leads up to the shifts and the placing.
     const snapshots = shown(
       `@start[const values = Values([5, 2, 4, 1]);]
-       for (let i = Count(1); Before(i, Size(values)); i = Up(i)) {
+       for (let i = Count(1); (i < values.length); i++) {
          @pick[const key = values[i];
          let j = i;]
-         @shift[while (Before(Count(0), j) && Greater(values[Down(j)], key)) {
-           values[j] = values[Down(j)];
-           j = Down(j);
+         @shift[while ((Count(0) < j) && ((values[j - 1]) > key)) {
+           values[j] = values[j - 1];
+           j--;
          }]
          @place[values[j] = key;]
        }`,
@@ -117,7 +109,7 @@ describe('identities', () => {
     const [start, merged] = identities(
       `@start[const left = Values([1, 4]);
        let merged = Values([]);]
-       @push[merged = Append(merged, left[0]);]`,
+       @push[merged.push(left[0]);]`,
       ['left[0]', 'merged[0]']
     );
     const one = start.ids[0];
@@ -140,7 +132,7 @@ describe('identities', () => {
   it('keep the rest when the front leaves', () => {
     const [before, after] = identities(
       `@start[let queue = Values([1, 2, 3]);]
-       @leave[queue = Rest(queue);]`,
+       @leave[queue.shift();]`,
       ['queue[0]', 'queue[1]', 'queue[2]']
     );
     expect(after.ids).toEqual([before.ids[1], before.ids[2], undefined]);
@@ -149,9 +141,9 @@ describe('identities', () => {
   it('follow elements through a queue: one arriving at the back, the front leaving', () => {
     const [start, joined, left] = identities(
       `@start[let queue = Values([1, 2]);]
-       @join[queue = Append(queue, 3);]
+       @join[queue.push(3);]
        @leave[const front = queue[0];
-       queue = Rest(queue);]`,
+       queue.shift();]`,
       ['queue[0]', 'queue[1]', 'queue[2]']
     );
     const [one, two] = start.ids;
@@ -166,10 +158,10 @@ describe('identities', () => {
     const [, joined, left] = identities(
       `@start[const listed = Values([1, 2]);
        let queue = Values([]);]
-       @join[queue = Append(queue, listed[0]);
-       queue = Append(queue, listed[1]);]
+       @join[queue.push(listed[0]);
+       queue.push(listed[1]);]
        @leave[const front = queue[0];
-       queue = Rest(queue);]`,
+       queue.shift();]`,
       ['queue[0]', 'queue[1]', 'listed[0]', 'front']
     );
     const [first, second, listed] = joined.ids;
@@ -180,7 +172,7 @@ describe('identities', () => {
     const [, , picked] = identities(
       `@start[const listed = Values([1, 2]);
        let queue = Values([]);]
-       @join[queue = Append(queue, listed[0]);]
+       @join[queue.push(listed[0]);]
        @pick[const front = queue[0];]`,
       ['queue[0]', 'front']
     );

@@ -9,8 +9,6 @@ const domain = interpretDomain(`
   const Node = record({ name: Name, next: Next });
   const NodeRef = ref(Node);
   const Next = union(NodeRef, End);
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
-  const NewNode = binop((v: Name, n: Next) => Node({ name: v, next: n }));
 `);
 
 const list = `const head = NodeRef(Node({ name: 'A', next:
@@ -42,7 +40,7 @@ describe('nodes and references', () => {
     const steps = run(`
       let prev = Next(End('end'));
       let cur = Next(head);
-      while (IsNode(cur)) @rewire{
+      while ((cur !== 'end')) @rewire{
         const after = cur.next;
         cur.next = prev;
         prev = cur;
@@ -67,8 +65,8 @@ describe('nodes and references', () => {
     const steps = run(
       `
       let first = Next(End('end'));
-      @push[first = NodeRef(NewNode(Name('D'), first));
-      first = NodeRef(NewNode(Name('C'), first));]
+      @push[first = NodeRef(Node({ name: Name('D'), next: first }));
+      first = NodeRef(Node({ name: Name('C'), next: first }));]
       @drop[first = first.next;]
     `,
       ''
@@ -86,11 +84,11 @@ describe('nodes and references', () => {
     const steps = run(
       `
       function visit(n) @visit{
-        if (IsNode(n.next)) visit(n.next);
+        if ((n.next !== 'end')) visit(n.next);
       }
       function build() @build{
-        const lone = NodeRef(NewNode(Name('D'), End('end')));
-        const b = NodeRef(NewNode(Name('B'), NodeRef(NewNode(Name('C'), End('end')))));
+        const lone = NodeRef(Node({ name: Name('D'), next: End('end') }));
+        const b = NodeRef(Node({ name: Name('B'), next: (NodeRef(Node({ name: Name('C'), next: End('end') }))) }));
         visit(b);
       }
       @go[build();]

@@ -154,6 +154,13 @@ export class DesignValueError extends Error {
  * one with no labels inside it, which has no pauses inside it, only on or off (see PauseMode in
  * algorithm/interpret.server.ts).
  */
+/**
+ * The variable choosing the view of a type, as views.Int; for a view typed by a label, the label as
+ * written, as views.@insert.compare for the operator ℓinsertˑcompare (see withLabelOperators).
+ */
+export const viewKey = (type: string): string =>
+  type.startsWith('ℓ') ? `views.@${type.slice(1).replaceAll('ˑ', '.')}` : `views.${type}`;
+
 export function pauseSpace(labels: readonly string[], leaves: ReadonlySet<string>): DesignSpace {
   return Object.fromEntries(
     labels.map((label) => [
@@ -267,7 +274,7 @@ export function designSpace(
 ): DesignSpace {
   return {
     ...Object.fromEntries(
-      Object.entries(views).map(([type, options]) => [`views.${type}`, [...options, 'none']])
+      Object.entries(views).map(([type, options]) => [viewKey(type), [...options, 'none']])
     ),
     ...Object.fromEntries(
       Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, [...options, 'none']])
@@ -305,7 +312,7 @@ export function starterVariant(
 ): Record<string, DesignValue> {
   return {
     ...Object.fromEntries(
-      Object.entries(views).map(([type, options]) => [`views.${type}`, options[0]])
+      Object.entries(views).map(([type, options]) => [viewKey(type), options[0]])
     ),
     ...Object.fromEntries(
       Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, options[0]])

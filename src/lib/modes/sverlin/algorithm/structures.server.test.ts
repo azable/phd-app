@@ -14,17 +14,6 @@ const domain = interpretDomain(`
   const Distances = collection(Dist);
   const Queue = collection(Vertex);
   const Either = union(Distance, Count);
-  const IsReached = unop((d: Dist) => Count(d !== Unreached('unreached') ? 1 : 0));
-  const IsUnreached = unop((d: Dist) => Count(d === Unreached('unreached') ? 1 : 0));
-  const Order = binop((a: Dist, b: Dist) => Count(a < b ? 1 : 0));
-  const Bump = unop((w: Weight) => Weight(w + 1));
-  const Double = unop((w: Weight) => Weight(w + w));
-  const Twice = unop((w: Weight) => Distance(Distance(w) + Distance(w)));
-  const Append = binop((c: Edges, x: Edge) => Edges([...c, x]));
-  const Tail = unop((c: Edges) => Edges(c.slice(1)));
-  const Enqueue = binop((c: Queue, x: Vertex) => Queue([...c, x]));
-  const Prepend = binop((c: Queue, x: Vertex) => Queue([x, ...c]));
-  const AddUnique = binop((c: Queue, x: Vertex) => Queue(c.includes(x) ? c : [...c, x]));
 `);
 
 /** Run an algorithm with the test domain from an input block, and return its last step. */
@@ -80,7 +69,7 @@ describe('union, record, and collection definitions', () => {
     [
       'refining a record',
       'const B = type("integer", { min: -100, max: 1000 }); const R = record({ b: B }); const A = type(R);',
-      /refines an atomic type/
+      /declared on its own, not from another/
     ]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);
@@ -129,7 +118,7 @@ describe('values made by collection and record types', () => {
 
   it('carries collections and records from the input into the algorithm', () => {
     const step = last(
-      'const e = edges[0]; e.weight = 7; edges = Append(edges, { from: 1, to: 2, weight: 5 }); const part = Tail(edges);',
+      'const e = edges[0]; e.weight = 7; edges.push({ from: 1, to: 2, weight: 5 }); const part = Edges([edges[1]]);',
       'const edges = Edges([{ from: 0, to: 1, weight: 4 }]);'
     );
     expect(step.state.edges).toEqual([
@@ -183,24 +172,21 @@ describe('values made by collection and record types', () => {
   });
 
   it('takes a literal in either branch of a conditional given to a type', () => {
-    expect(last('let q = Queue([1]); q = AddUnique(q, 1); q = AddUnique(q, 2);').state.q).toEqual([
-      1, 2
-    ]);
+    expect(
+      last(
+        'let q = Queue([1]); q = Queue(q[0] === 1 ? [1, 0] : [0]); q = Queue(q[1] === 1 ? [1, 1] : [0, 0]);'
+      ).state.q
+    ).toEqual([0, 0]);
     expect(() => last('const q = Vertex(1) === 1 ? [Vertex(1)] : Queue([]);')).toThrow(
       /Arrays are made by a collection type/
     );
-    expect(() =>
-      interpretDomain(
-        'const V = type([0, 1]); const Q = collection(V); const Add = binop((q: Q, v: V) => q.includes(v) ? q : Q([...q, v]));'
-      )
-    ).toThrow(/wrap the whole conditional/);
   });
 
   it('converts what is pushed or assigned into a collection to its element type', () => {
-    const step = last('let q = Queue([]); q = Enqueue(q, 1); q = Prepend(q, 0); q[2] = 3;');
+    const step = last('let q = Queue([]); q.push(1); q.unshift(0); q.push(2); q[2] = 3;');
     expect(step.state.q).toEqual([0, 1, 3]);
     expect(step.types).toMatchObject({ 'q[0]': 'Vertex', 'q[1]': 'Vertex', 'q[2]': 'Vertex' });
-    expect(() => last('let q = Queue([]); q = Enqueue(q, 9);')).toThrow(/9 is not a Vertex/);
+    expect(() => last('let q = Queue([]); q.push(9);')).toThrow(/9 is not a Vertex/);
   });
 });
 
@@ -236,22 +222,22 @@ describe('unions', () => {
   it('compares members with === and !==, but not by order', () => {
     const step = last(`
       const d = Distances([0, "unreached"]);
-      const reached = IsReached(d[0]);
-      const unreached = IsUnreached(d[1]);
+      const reached = Count(d[0] !== Unreached('unreached') ? 1 : 0);
+      const unreached = Count(d[1] === Unreached('unreached') ? 1 : 0);
     `);
     expect(step.state).toMatchObject({ reached: 1, unreached: 1 });
     expect(() =>
-      last('const d = Distances([0, "unreached"]); const x = Order(d[0], d[1]);')
+      last('const d = Distances([0, "unreached"]); const x = d[0] < d[1] ? 1 : 0;')
     ).toThrow(/cannot be combined/);
   });
 });
 
 describe('enumerations in arithmetic', () => {
   it('keeps the type, and fails when the result is not one of its values', () => {
-    const step = last('const w = Bump(Weight(4));');
+    const step = last('const w = Weight(4) + 1;');
     expect(step.state.w).toBe(5);
     expect(step.types.w).toBe('Weight');
-    expect(() => last('const w = Double(Weight(4));')).toThrow(
+    expect(() => last('const w = Weight(4) + Weight(4);')).toThrow(
       '8 is not a Weight; allowed values are 4, 5, 7.'
     );
   });
@@ -259,7 +245,7 @@ describe('enumerations in arithmetic', () => {
   it('converts to a numeric type of the same kind', () => {
     const step = last(`
       const e = Edge({ from: 0, to: 1, weight: 7 });
-      const d = Twice(e.weight);
+      const d = Distance(e.weight) + Distance(e.weight);
     `);
     expect(step.state.d).toBe(14);
     expect(step.types.d).toBe('Distance');

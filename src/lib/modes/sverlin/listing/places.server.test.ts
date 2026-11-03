@@ -9,12 +9,6 @@ const binarySearch = (listing: string) => `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
-  const Before = binop((a: Index, b: Index) => Flag(a <= b));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Last = unop((v: Values) => Index(v.length - 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([3, 8, 15, 23, 42, 57, 71]);
@@ -22,11 +16,11 @@ const binarySearch = (listing: string) => `<script lang="sverlin" domain>
 </script>
 <script lang="sverlin">
   @run[let lo = Index(0);
-  let hi = Last(values);]
-  while (@open[Before(lo, hi)]) @probe{
-    const mid = @mid[Middle(lo, hi)];
-    if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
-    else @left[hi = Prev(mid);]
+  let hi = values.length - 1;]
+  while (@open[lo < hi]) @probe{
+    const mid = @mid[Index(Math.floor((lo + hi) / 2))];
+    if (@low[values[mid] < target]) @right[lo = mid + 1;]
+    else @left[hi = mid - 1;]
   }
 </script>
 <script lang="sverlin" listing="pseudocode">
@@ -59,18 +53,14 @@ const linearSearch = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
 </script>
 <script lang="sverlin" input>
   const values = Values([4, 7, 2]);
   const target = Int(7);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @scan{
-    @check[if (@cond[Equal(values[i], target)]) break;]
+  for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @scan{
+    @check[if (@cond[values[i] === target]) break;]
   }
 </script>
 <script lang="sverlin" listing="pseudocode">
@@ -205,22 +195,17 @@ describe('tokens naming places in a listing', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
-    while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) @shift{
-      @copy[values[j] = values[Prev(j)];]
-      @down[j = Prev(j);]
+    while (@test[@bound[Position(0) < j] && @cmp[(values[j - 1]) > key]]) @shift{
+      @copy[values[j] = values[j - 1];]
+      @down[j--;]
     }
     @place[values[j] = key;]
   }

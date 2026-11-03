@@ -8,10 +8,6 @@ const domain = interpretDomain(`
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const Up = unop((n: Int) => Int(n + 1));
-  const Append = binop((c: Values, x: Int) => Values([...c, x]));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 /** Each event as its kind and what it names, with the source it is at. */
@@ -31,33 +27,28 @@ describe('the event log', () => {
   it('records each loop as entered, tested, iterated, and left, with continue and break', () => {
     const body = `const values = Values([1, 2, 3]);
       for (const v of values) {
-        if (Equal(v, 1)) continue;
-        if (Equal(v, 3)) break;
+        if ((v === 1)) continue;
+        if ((v === 3)) break;
       }`;
     // Without labels, the algorithm's one step is its end, holding all of its events.
     const [step] = run(body);
     expect(read(body, step.events).filter((line) => !line.startsWith('read'))).toEqual([
       'write values    const values = Values([1, 2, 3])'.replace('const ', ''),
-      'enter     for (const v of values) {\n        if (Equal(v, 1)) continue;\n        if (Equal(v, 3)) break;\n      }',
+      'enter     for (const v of values) {\n        if ((v === 1)) continue;\n        if ((v === 3)) break;\n      }',
       'write v   1 const v',
-      'iteration  0   for (const v of values) {\n        if (Equal(v, 1)) continue;\n        if (Equal(v, 3)) break;\n      }',
-      'apply Equal   true Equal(v, 1)',
-      'test   true  Equal(v, 1)',
+      'iteration  0   for (const v of values) {\n        if ((v === 1)) continue;\n        if ((v === 3)) break;\n      }',
+      'test   true  v === 1',
       'continue     continue;',
       'write v   2 const v',
-      'iteration  1   for (const v of values) {\n        if (Equal(v, 1)) continue;\n        if (Equal(v, 3)) break;\n      }',
-      'apply Equal   false Equal(v, 1)',
-      'test   false  Equal(v, 1)',
-      'apply Equal   false Equal(v, 3)',
-      'test   false  Equal(v, 3)',
+      'iteration  1   for (const v of values) {\n        if ((v === 1)) continue;\n        if ((v === 3)) break;\n      }',
+      'test   false  v === 1',
+      'test   false  v === 3',
       'write v   3 const v',
-      'iteration  2   for (const v of values) {\n        if (Equal(v, 1)) continue;\n        if (Equal(v, 3)) break;\n      }',
-      'apply Equal   false Equal(v, 1)',
-      'test   false  Equal(v, 1)',
-      'apply Equal   true Equal(v, 3)',
-      'test   true  Equal(v, 3)',
+      'iteration  2   for (const v of values) {\n        if ((v === 1)) continue;\n        if ((v === 3)) break;\n      }',
+      'test   false  v === 1',
+      'test   true  v === 3',
       'break     break;',
-      'exit     for (const v of values) {\n        if (Equal(v, 1)) continue;\n        if (Equal(v, 3)) break;\n      }'
+      'exit     for (const v of values) {\n        if ((v === 1)) continue;\n        if ((v === 3)) break;\n      }'
     ]);
   });
 
@@ -84,7 +75,7 @@ describe('the event log', () => {
   it('keeps each step’s latest events, counting every one', () => {
     // Pausing only at the marks, the loop leads up to the first.
     const body = `@fill[let values = Values([]);
-      for (let i = Int(0); Less(i, 1000); i = Up(i)) values = Append(values, i);]
+      for (let i = Int(0); (i < 1000); i++) values.push(i);]
       @mark[const a = Int(1);]
       @mark[const b = Int(2);]`;
     const { steps: trace } = traceAlgorithm(body, undefined, domain, {
@@ -103,10 +94,11 @@ describe('the event log', () => {
   });
 
   it('counts calls by function', () => {
-    const trace = run(`function f(a) { return Less(a[0], a[1]); }
+    const trace = run(`function f(a) { return (a[0] < a[1]); }
       const values = Values([1, 2]);
       const x = f(values);
       const y = f(values);`);
-    expect(trace.at(-1)?.counts).toMatchObject({ calls: { f: 2, Less: 2 } });
+    expect(trace.at(-1)?.counts).toMatchObject({ calls: { f: 2 } });
+    expect(trace.at(-1)?.counts?.calls).not.toHaveProperty('Less');
   });
 });

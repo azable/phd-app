@@ -24,12 +24,10 @@ afterAll(() => browser?.close());
 
 const list = (algorithm: string) => `<script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C']);
-  const Flag = type('boolean');
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
 </script>
 <script lang="sverlin" input>
   const head = NodeRef(ListNode({ name: 'A', next:
@@ -132,7 +130,7 @@ it.skipIf(!enabled)(
       list(`
   let prev = Next(End('end'));
   let cur = Next(head);
-  while (IsNode(cur)) @rewire{
+  while ((cur !== 'end')) @rewire{
     const after = cur.next;
     cur.next = prev;
     prev = cur;

@@ -235,10 +235,14 @@ export function checkSubset(
       if (ancestor.type === 'CallExpression') {
         if (!(ancestor.arguments as AnyNode[]).includes(child)) return false;
         const callee = ancestor.callee;
-        // A type or an operator gives a literal its type.
+        // A type gives a literal its type, as does a collection's push or unshift its element type.
         return (
-          callee.type === 'Identifier' &&
-          (constructors.has(callee.name) || operators.has(callee.name))
+          (callee.type === 'Identifier' &&
+            (constructors.has(callee.name) || operators.has(callee.name))) ||
+          (callee.type === 'MemberExpression' &&
+            !callee.computed &&
+            callee.property.type === 'Identifier' &&
+            (callee.property.name === 'push' || callee.property.name === 'unshift'))
         );
       }
       return (

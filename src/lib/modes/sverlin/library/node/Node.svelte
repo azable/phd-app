@@ -288,6 +288,15 @@
   const least = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
   const unit = $derived(__type ? types?.unit(__type) : undefined);
+  // A number type draws every value with its places, as 3.00, so values line up and keep one width.
+  const decimals = $derived(__type ? types?.places?.(__type) : undefined);
+  const printed = $derived(
+    value === null
+      ? '∅'
+      : typeof value === 'number' && decimals !== undefined
+        ? value.toFixed(decimals)
+        : String(value)
+  );
   // Every prop as given, to draw this node again inside its pointers.
   const given = $derived({
     value,
@@ -517,8 +526,7 @@
       {:else if value !== undefined}
         <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
         <span class="value" style:text-decoration-line={decoration}
-          >{value === null ? '∅' : String(value)}{#if unit}<span class="unit">{unit}</span
-            >{/if}</span
+          >{printed}{#if unit}<span class="unit">{unit}</span>{/if}</span
         >
       {/if}
       <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->

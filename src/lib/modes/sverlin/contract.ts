@@ -13,15 +13,6 @@ export const linearSearchSource = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
-  const Flag = type('boolean');
-
-  // walking the collection
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-
-  // what the algorithm does
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
 </script>
 <script lang="sverlin" input>
   const values = Values([3, 8, 5, 2, 7]);
@@ -29,8 +20,8 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 </script>
 <script lang="sverlin">
   function search(a, target) {
-    for (@first[let i = Index(0)]; @more[Before(i, Length(a))]; @next[i = Next(i)]) @check{
-      if (@equal[Equal(a[i], target)]) return i;
+    for (@first[let i = Index(0)]; @more[i < a.length]; @next[i++]) @check{
+      if (@equal[a[i] === target]) return i;
     }
     @missing[return Index(-1);]
   }
@@ -59,8 +50,8 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
 {#snippet Caption()}<Node>Find {target} by checking each cell in order.</Node>{/snippet}
-{#snippet Ask(e: Equal)}<Node>is {e.a} equal to {e.b}?</Node>{/snippet}
-{#snippet Checking()}<Node>Checking index {i}: {@render Equal(@check)}</Node>{/snippet}
+{#snippet Ask(c: @check.equal)}<Node>is {c.left} equal to {c.right}?</Node>{/snippet}
+{#snippet Checking()}<Node>Checking index {i}: {@check.equal}</Node>{/snippet}
 {#snippet Result()}<Node>Found {target} at index {found}.</Node>{/snippet}
 
 <Layout name="Main">

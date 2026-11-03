@@ -10,11 +10,9 @@ import { propOptions } from './library/node/design';
 const list = `<script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
-  const Flag = type('boolean');
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
 </script>
 <script lang="sverlin" input>
   const head = NodeRef(ListNode({ name: 'A', next:
@@ -23,7 +21,7 @@ const list = `<script lang="sverlin" domain>
 </script>
 <script lang="sverlin">
   @run[let cur = Next(head);]
-  while (@guard[IsNode(cur)]) @visit{
+  while (@guard[cur !== 'end']) @visit{
     cur = cur.next;
   }
 </script>

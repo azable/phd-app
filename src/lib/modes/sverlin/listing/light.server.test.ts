@@ -15,15 +15,11 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
 `);
 const input = interpretInput('const values = Values([3, 8, 5]); const target = Int(8);', domain);
 const body = `
-  for (let i = Index(0); @loop[Before(i, Length(values))]; i = Next(i)) {
-    @check[const found = @matches[Equal(values[i], target)];]
+  for (let i = Index(0); @loop[i < values.length]; i++) {
+    @check[const found = @matches[values[i] === target];]
     @test[if (found) {
       @stop[break;]
     }]
@@ -117,9 +113,9 @@ describe('lighting', () => {
   let a = Index(0);
   @swap{
     const kept = values[@from[a]];
-    a = Next(a);
+    a++;
   }
-`.replace('@swap{', 'if (Before(a, Length(values))) @swap{'),
+`.replace('@swap{', 'if ((a < values.length)) @swap{'),
       input,
       domain,
       { pauses: new Map([['swap', 'accumulate']]) }

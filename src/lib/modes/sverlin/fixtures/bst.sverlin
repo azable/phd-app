@@ -1,6 +1,5 @@
 <script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Flag = type('boolean');
   const Name = type(['end']);
   const TreeNode = record({ key: Int, left: Next, right: Next });
   const NodeRef = ref(TreeNode);
@@ -8,17 +7,6 @@
   const Values = collection(Int);
   const Index = index(Values);
 
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Advance = unop((p: Index) => Index(p + 1));
-
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const NewLeaf = binop((k: Int, e: Next) => TreeNode({
-    key: k,
-    left: e,
-    right: e
-  }));
-  const IsNode = unop((n: Next) => Flag(n !== 'end'));
 </script>
 
 <script lang="sverlin" input>
@@ -32,18 +20,18 @@
 
 <script lang="sverlin">
   function insert(node, value) @insert{
-    if (@direction[Less(value, node.key)]) {
-      if (@leftChild[IsNode(node.left)]) {
+    if (@direction[value < node.key]) {
+      if (@leftChild[node.left !== 'end']) {
         @descend[insert(node.left, value);]
-      } else @attach[node.left = NodeRef(NewLeaf(value, Next(Name('end'))));]
+      } else @attach[node.left = NodeRef(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
     } else {
-      if (@rightChild[IsNode(node.right)]) {
+      if (@rightChild[node.right !== 'end']) {
         @descend[insert(node.right, value);]
-      } else @attach[node.right = NodeRef(NewLeaf(value, Next(Name('end'))));]
+      } else @attach[node.right = NodeRef(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
     }
   }
 
-  for (@first[let i = Index(1)]; @more[Before(i, Length(values))]; @advance[i = Advance(i)]) @sequence{
+  for (@first[let i = Index(1)]; @more[i < values.length]; @advance[i++]) @sequence{
     const value = @pick[values[i]];
     insert(root, value);
   }

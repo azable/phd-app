@@ -22,4 +22,12 @@ describe('widestInteger', () => {
     expect(widestInteger(0, 2_500_000, proportional)).toBe(2_088_888);
     expect(widestInteger(-2_500_000, 0, proportional)).toBe(-2_088_888);
   });
+
+  it('searches a number type by its smallest step, each value printed with its places', () => {
+    // 0.00 to 2.50: every value prints as d.dd, so the widest digits win: 0.88, not 2.08.
+    expect(widestInteger(0, 2.5, proportional, 2)).toBe(0.88);
+    expect(widestInteger(0, 1, tabular, 2)).toBe(0);
+    // Zeros before the point are printed: 0.05 is as wide as 9.99 with every digit alike.
+    expect(widestInteger(0, 10, tabular, 2)).toBe(10);
+  });
 });

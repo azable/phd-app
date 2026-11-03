@@ -27,8 +27,8 @@ JavaScript (see The subset), followed by a script-free Svelte view. Only the
 algorithm block is required, and there is no design block (see Design).
 
 1. `<script lang="sverlin" domain>`: the types, atomic and the collections,
-   records, and unions built from them, and the operators the algorithm computes
-   with (see Atomic types; Collections, records, and unions; Operators).
+   records, and unions built from them (see Atomic types; Collections, records,
+   and unions).
 2. `<script lang="sverlin" input>`: the fixed starting data, declared with
    `const` or `let`, as `const values = Values([3, 8, 5]);`; every value has a
    domain type.
@@ -59,12 +59,12 @@ Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
   is a part of the page, as
   `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
   renders it, `{@render Title()}`; a part reads what a layout reads and renders
-  parts, views, and operators. A layout, `<Layout name="Side">…</Layout>`,
-  arranges the whole page, its one prop its name: its body is one root `<Node>`,
-  the frame (see Page frame), which holds renders, with `{#if}` and `{#each}`
-  around them, a `<Listing />`, and nodes arranging them, and is selectable as
-  the whole page. Its only prop is `layout`, `row` or `column` (the start), how
-  it arranges what it holds. Render the parts in the root rather than one part
+  parts and views. A layout, `<Layout name="Side">…</Layout>`, arranges the
+  whole page, its one prop its name: its body is one root `<Node>`, the frame
+  (see Page frame), which holds renders, with `{#if}` and `{#each}` around them,
+  a `<Listing />`, and nodes arranging them, and is selectable as the whole
+  page. Its only prop is `layout`, `row` or `column` (the start), how it
+  arranges what it holds. Render the parts in the root rather than one part
   holding the whole page.
 
 ```svelte
@@ -91,8 +91,8 @@ Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
   looking as it does elsewhere, unlike `{target}`.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
-- Write text in the participant's words about what the algorithm does, never an
-  operator's name: "the target is further right", not "Less is true".
+- Write text in the participant's words about what the algorithm does, never a
+  label's name: "the target is further right", not "low is true".
 - How anything looks is the design's, never the algorithm's; what a step shows
   is read from the algorithm's values and labels (see Steps).
 
@@ -121,13 +121,14 @@ type (`{#snippet Int(value: Int)}`), rendering a view by its own name
 (`{@render IntCell(value)}`; one render is drawn apart through its place, see
 Places), writing a value's view as a render of its type (`{@render Int(key)}`,
 which is `{key}`), and a value whose type no view draws are errors.
-`{@render Title()}` draws a part, and `{@render Greater(@check)}` an operator's
-application at a label (see Views of what a step computed). Views differ in what
-they draw: two differing only in look, as a cell and a round cell, are one view.
-Offer more than one where the request leaves open what a value shows, as a
-number as a cell or a tally, a flag as a word or a tick. In the view a type's
-name is its view, never a constructor: draw values the state holds, and a loop's
-own index, `k` in `{#each list as v, k}`, as text, `{k}`.
+`{@render Title()}` draws a part, and `{@check.equal}` what a labelled
+expression computed, through a view typed by its label (see Views of what a step
+computed). Views differ in what they draw: two differing only in look, as a cell
+and a round cell, are one view. Offer more than one where the request leaves
+open what a value shows, as a number as a cell or a tally, a flag as a word or a
+tick. In the view a type's name is its view, never a constructor: draw values
+the state holds, and a loop's own index, `k` in `{#each list as v, k}`, as text,
+`{k}`.
 
 A view of a collection or record draws its parts through their types' views:
 
@@ -199,21 +200,20 @@ written in the view so the label is a kind of its own.
 
 - A label marks code the steps are about: `@name[…]` around a statement,
   statements in a row, or an expression, as `@place[values[j] = key;]` or
-  `while (@test[Before(Position(0), j) && Greater(values[Prev(j)], key)])`, or
-  `@name{` on a block the code already has, a loop's, an `if`'s, or a function's
-  body, as `for (…) @insert{`. A name is one word, without dots, and the
-  algorithm runs as if the marks were spaces. A labelled loop runs its code once
-  per pass; a label on a function's body runs once per call, recursive calls
-  included.
+  `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code
+  already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`.
+  A name is one word, without dots, and the algorithm runs as if the marks were
+  spaces. A labelled loop runs its code once per pass; a label on a function's
+  body runs once per call, recursive calls included.
 - No code runs outside a label. Every statement of the algorithm, at its top
   level and in each function's body, is inside a label, as
   `@run[const found = search(values, target);]`. Every test of an `if`, `while`,
   or `do … while` is a label's own code, or conditions joined by `&&` and `||`
   that each are, as `if (@base[Short(lo, hi)])` or
-  `while (@bound[Before(Position(0), j)] && @compare[Greater(…)])`, so each
-  decision is a step, its value the condition's, even where it fails. Each part
-  of a `for` header is a label's own code too, as
-  `for (@start[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @scan{`:
+  `while (@bound[j > 0] && @compare[values[j - 1] > key])`, so each decision is
+  a step, its value the condition's, even where it fails. Each part of a `for`
+  header is a label's own code too, as
+  `for (@start[let i = Index(values, 0)]; @more[i < values.length]; @next[i++]) @scan{`:
   the start runs once, the test before each pass and once more at the end, its
   last value false, and the move after each pass, before the next test, so
   `@scan#1`, then `@next#1`, then `@more#2`.
@@ -235,7 +235,8 @@ written in the view so the label is a kind of its own.
   is `"on"` to start with, except one whose runs all draw what the step before
   drew, as a test whose result nothing shows, which starts `"off"`; the variant
   chooses where the steps pause. So label what a step can be about, as a
-  comparison, `@compare[Greater(…)]`, and the operands it reads, and draw them.
+  comparison, `@compare[values[j - 1] > key]`, and the operands it reads, and
+  draw them.
 - A step shows a change: the state just before its code, then just after it.
   Code not paused at, inside a label that is off or outside every label, leads
   up to the next step, and what a label there gives, a value or an application
@@ -279,10 +280,10 @@ written in the view so the label is a kind of its own.
   the same value. A variable holding a value a collection also holds shows a
   copy, as insertion sort's `key`, which keeps its place once the collection's
   is overwritten and moves back into the row when put down. A value copied to a
-  second place, as `values[j] = values[Prev(j)]`, starts where its source was,
-  as do an operator view's operands, lifting out of their cells into its caption
-  (a computed operand fades in); a value written anew fades in; one no longer
-  held fades out. Pointers slide; links switch with the step.
+  second place, as `values[j] = values[j - 1]`, starts where its source was, as
+  do a label view's operands, lifting out of their cells into its caption (a
+  computed operand fades in); a value written anew fades in; one no longer held
+  fades out. Pointers slide; links switch with the step.
 
 ## Loops and functions
 
@@ -319,15 +320,7 @@ Binary search, stopping where it finds the target:
   const Int = type('integer', { min: 0, max: 99 });
   const Values = collection(Int);
   const Index = index(Values);
-  const Flag = type('boolean');
 
-  const NotAfter = binop((a: Index, b: Index) => Flag(a <= b));
-  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Last = unop((v: Values) => Index(v.length - 1));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
 </script>
 
 <script lang="sverlin" input>
@@ -337,11 +330,11 @@ Binary search, stopping where it finds the target:
 
 <script lang="sverlin">
   @range[let lo = Index(0);
-  let hi = Last(values);]
-  while (@open[NotAfter(lo, hi)]) @probe{
-    const mid = Middle(lo, hi);
-    @check[if (@found[Equal(values[mid], target)]) break;]
-    if (@low[Less(values[mid], target)]) @right{ lo = Next(mid); } else @left{ hi = Prev(mid); }
+  let hi = values.length - 1;]
+  while (@open[lo <= hi]) @probe{
+    const mid = Index(Math.floor((lo + hi) / 2));
+    @check[if (@found[values[mid] === target]) break;]
+    if (@low[values[mid] < target]) @right{ lo = mid + 1; } else @left{ hi = mid - 1; }
   }
 </script>
 
@@ -373,42 +366,43 @@ for a value not there ends with `lo` past `hi`.
 
 No types are predefined: define each one the request needs, basic ones such as
 `Int` included, in the domain block, each as a top-level `const`, one per
-meaning (`Index`, `Distance`, `Visited`) rather than one general type:
+meaning (`Index`, `Distance`, `Visited`) rather than one general type. The
+domain declares types only; computing is the algorithm's (see Computing).
 
-- a primitive: `'integer'` or `'number'` with both `min` and `max`, as
-  `const Int = type('integer', { min: 0, max: 99 });`, or `'boolean'`;
-- a refinement of a type defined earlier, with optional `unit`, `min`, and
-  `max`: `const Height = type(Int, { unit: 'cm', min: 0, max: 250 });`;
+- an integer with both `min` and `max`, as
+  `const Int = type('integer', { min: 0, max: 99 });`;
+- a decimal number with `min`, `max`, and `places`, the decimal places every
+  value has and is drawn with, as
+  `const Price = type('number', { min: 0, max: 100, places: 2 });`: a value
+  entering it is rounded to its places, and `3` is drawn `3.00`;
+- `'boolean'`;
 - an enumeration of text or number values, named plainly, leaving how they look
   to views: `const Suit = type(['spades', 'hearts', 'diamonds', 'clubs']);`.
-  Text types are always enumerations.
+  Text types are always enumerations, and their values compare in the order
+  listed, as `'low' < 'high'` with `type(['low', 'high'])`.
+
+Any of them may take a `unit`, shown after the value, as
+`type('integer', { min: 0, max: 250, unit: 'cm' })`. A type is declared on its
+own, never from another: `type(Int, …)` is refused.
 
 Every type has a known, finite set of values, so a view can be drawn for each:
 choose ranges holding every value the algorithm reaches, as a count up to the
 input's length; positions need none. Type names cannot be variable names.
 
 Every number, boolean, and text a variable, element, or field holds is typed,
-made with a type's name, as `const target = Int(8);` or `Index(0)`. There is no
-`null`: every variable starts with a value, and "nothing yet" is a member of a
-union that says so, as `Unreached('unreached')`, as is a result that may be
-missing, as a search returning a `union(Index, NotFound)`. Reading a value not
-there, as `queue[0]` of an empty queue, is an error. A variable keeps the type
-it was made with and a value assigned to it takes that type, as an element or
-field does: after `let found = Found(false);`,
-`found = Equal(values[i], target)` stores a `Found`, and `found = Count(1)` is
-an error; one made by a union, `let d = Dist(0);`, holds any member.
+made with a type's name, as `const target = Int(8);` or `Index(values, 0)`.
+There is no `null`: every variable starts with a value, and "nothing yet" is a
+member of a union that says so, as `Unreached('unreached')`, as is a result that
+may be missing, as a search returning a `union(Index, NotFound)`. Reading a
+value not there, as `queue[0]` of an empty queue, is an error. A variable keeps
+the type it was made with and a value assigned to it takes that type, as an
+element or field does: after `let found = Found(false);`,
+`found = values[i] === target` stores a `Found`, and `found = Count(1)` is an
+error; one made by a union, `let d = Dist(0);`, holds any member.
 
-Typed values keep their type as they move and read as plain values in conditions
-and indexing. Inside an operator they compare as plain values, and arithmetic
-keeps types: `Int + Int` is an `Int`; a refined type with the type it refines or
-a plain number keeps the refined type (`Height(150) + 5`); an integer result no
-longer whole, as `Int(7) / Int(2)`, is an untyped number. A number enumeration
-keeps its type, and the result must be one of its values: with
-`const Weight = type([4, 5, 7]);`, `Weight(4) + 1` is the `Weight` 5 and
-`Weight(4) + Weight(4)` an error; convert to compute beyond, as
-`Distance(e.weight)`. Mixing unrelated types, arithmetic on text or booleans,
-and leaving a type's values, `min`, or `max` are errors. The view receives plain
-values; a value's type chooses the views that draw it.
+A word is a collection of characters, as `const Word = collection(Char);` with
+`const Char = type(['A', 'C', 'G', 'T']);`, written in the input as text,
+`Word('GATTACA')`; there is no text type to search, join, or copy in one step.
 
 ## Collections, records, and unions
 
@@ -428,9 +422,9 @@ order, each as a top-level `const`:
 Make one by calling its name with literals, which take their types from it:
 `Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
 `Vertex`, a `Vertex`, and a `Weight`. A literal written into an element or field
-takes its type, as `dist[v] = 0`, and one given to an operator the operand's, as
-`Append(queue, 3)`; an array or object literal anywhere else is an error. A
-record has exactly its fields. `.slice()` gives a collection of the same type.
+takes its type, as `dist[v] = 0`, and one pushed the collection's element type,
+as `queue.push(3)`; an array or object literal anywhere else is an error. A
+record has exactly its fields.
 
 A position is any whole number: 0 to length - 1 point at an element of its
 collection, others nowhere, as the length after a loop ends. Reading or writing
@@ -438,14 +432,13 @@ outside the collection is an error, except that writing at the length adds one.
 The view keeps room past an end for the positions its pointers draw, at most 4
 places; a position nothing draws keeps none. A position is bound to its
 collection when declared: `Index(0)` points into the only `Values`, and with
-several, name it, as `Index(left, 0)`; the binding stays, so
-`Move(k, Sum(i, j))` keeps `k` in its collection. One stored in a record or
-collection keeps where it came from (`Take({ from: j })`, `Next(i)`,
-`const at = take.from;`), and a number stored there points into the only
-collection of its type, or the one named, as `Take({ from: Index(left, 0) })`.
-To point at a cell of a grid, hold the row in a variable: `let row = paths[r];`
-is the row itself, so `ColIndex(row, 1)` points into `paths`, and
-`NextRow(row, paths[r])` moves it.
+several, name it, as `Index(left, 0)`; the binding stays, so `k = i + j` keeps
+`k` in its collection. One stored in a record or collection keeps where it came
+from (`Take({ from: j })`, `i + 1`, `const at = take.from;`), and a number
+stored there points into the only collection of its type, or the one named, as
+`Take({ from: Index(left, 0) })`. To point at a cell of a grid, hold the row in
+a variable: `let row = paths[r];` is the row itself, so `ColIndex(row, 1)`
+points into `paths`, and `NextRow(row, paths[r])` moves it.
 
 A reference, as `const front = Front(queue[0]);`, reads as its element. Where a
 position stays at its place as the collection changes, a reference stays with
@@ -456,12 +449,11 @@ value is also a field elsewhere. Use a position to step to a neighbour.
 
 A union value is always one of its members: a literal becomes the member it
 fits, as `Distances([0, 'unreached'])`, and one fitting two needs its type, as
-`Distance(4)`. Inside an operator, members compare with `===` and `!==`,
-different members unequal, but not with `<` or `>`, so check the member first:
+`Distance(4)`. Members compare with `===` and `!==`, different members unequal,
+but not with `<` or `>`, so check the member first:
 
 ```js
-const Reached = unop((d: Dist) => Flag(d !== 'unreached'));
-const Shorter = binop((a: Distance, b: Dist) => Flag(b === 'unreached' || a < b));
+
 ```
 
 The view receives plain arrays and objects, drawn by their types' views.
@@ -480,13 +472,11 @@ nodes `prev` and `cur` refer to both marked:
 ```svelte
 <script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C']);
-  const Flag = type('boolean');
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });  // Next is defined below
   const NodeRef = ref(ListNode);                         // always a node
   const Next = union(NodeRef, End);                      // a node, or the end
 
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
 </script>
 
 <script lang="sverlin" input>
@@ -498,7 +488,7 @@ nodes `prev` and `cur` refer to both marked:
 <script lang="sverlin">
   @begin[let prev = Next(End('end'));
   let cur = Next(head);]
-  while (@more[IsNode(cur)]) @rewire{
+  while (@more[cur !== 'end']) @rewire{
     const after = cur.next;
     cur.next = prev;
     prev = cur;
@@ -527,10 +517,9 @@ nodes `prev` and `cur` refer to both marked:
 ```
 
 - `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
-  one variable each, as the graph under Link; the algorithm makes one through a
-  structural operator, as
-  `const NewNode = binop((v: Name, n: Next) => ListNode({ name: v, next: n }));`
-  and `head = NodeRef(NewNode(v, head))`. A cycle is the algorithm's to make.
+  one variable each, as the graph under Link; the algorithm makes one the same
+  way, as `head = NodeRef(ListNode({ name: v, next: head }))`. A cycle is the
+  algorithm's to make.
 - A field is read and written through a reference, `cur.next = prev`; a value of
   another type is refused, and reading or writing one through the end is a
   mistake at that step ("cur is an End ("end"), so it has no next"). A variable
@@ -575,80 +564,60 @@ nodes `prev` and `cur` refer to both marked:
   past either end it draws nothing. A position has no fields (`p.name` is
   refused), and its number may be drawn, as an index means something.
 
-## Operators
+## Computing
 
-The input and algorithm compute nothing themselves: everything computed is an
-operator the domain declares, unary or binary, a function of typed operands, as
-`binop((a: Int, b: Int) => Flag(a > b))`, the only place types are written. The
-algorithm applies it as a call, each operand taking its parameter's type:
-`if (@found[Equal(values[i], target)]) break;`, `total = Add(total, v);`.
-Writing stays plain: `=` puts a value into a variable, element, or field. Name
-operators for what they compute, as `Before`, `Middle`, or `Shorter`, and keep
-those walking a collection apart from those for what the algorithm does:
+The algorithm computes as JavaScript does, on typed values:
+`values[j - 1] > key`, `i++`, `total += v`, `hi - lo < 2`, `queue.push(w)`,
+`values.length`. Types follow the values:
 
-```js
-// walking the collection
-const Length = unop((v: Values) => Index(v.length));
-const Before = binop((a: Index, b: Index) => Flag(a < b));
-const Next = unop((p: Index) => Index(p + 1));
+- arithmetic keeps its operands' type, `Int + Int` an `Int`, and a typed value
+  with a plain number the typed one, so `i + 1` is still an `Index` into the
+  collection `i` points into; a result outside the type's range is an error at
+  that line;
+- two different types do not mix: convert one where they meet, as
+  `distance + Int(edge.weight)`;
+- a comparison is a plain `true` or `false`, read by a condition; declared into
+  a variable it takes the domain's one boolean type, or the type written around
+  it, as `const hit = Found(values[i] === target);`;
+- `values.length` is the collection's position type where the domain declares
+  one for it, the position just past its last element;
+- `Math` and division give a plain number, whole or not depending on the values,
+  so the type it should be is written around it where it is computed:
+  `Index(values, Math.floor((lo + hi) / 2))`.
 
-// what the algorithm does
-const Equal = binop((a: Int, b: Int) => Flag(a === b));
-```
+Nothing hides a loop, so every step of the work can be shown and counted:
 
-- Raw: control flow (`if`, loops, `break`, `continue`, `return`, the algorithm's
-  functions, `? :`, `&&`, `||`, `??`), declarations, writes with `=` (to a `let`
-  variable, an element, or a field), reading elements and fields, and typed
-  values from literals, as `Index(0)` or `Flag(true)`.
-- Declared as operators: every operator on values (`<`, `===`, `+`, `!`, `-x`),
-  `++`, `--`, `+=`, `.length`, `Math`, template strings, and collection methods
-  (`.push`, `.shift`, `.indexOf`, `.slice`). Each written raw is an error naming
-  the declaration to add.
-- An operator changes nothing, so an application whose result is unused, as
-  `Append(served, front);` or a `for` update `Next(i)`, is an error naming the
-  write, `served = Append(served, front)`.
-- A collection's method is an operator computing the new collection, written
-  back with `=` in place, so the collection and the elements it keeps move
-  rather than reappear: `queue = Append(queue, v)` with
-  `binop((q: Queue, v: Vertex) => Queue([...q, v]))`, or `queue = Rest(queue)`
-  with `unop((q: Queue) => Queue(q.slice(1)))`.
-- An operator giving a collection or record only rearranges its operands: each
-  element or field is an operand, a read of one or its parts (`v[p]`, `e.to`),
-  or a spread of one or a slice of one (`...q`, `...q.slice(1)`), as
-  `Queue([...q, x])` or `Edge({ from: e.to, to: e.from })`. A new element,
-  computed or literal, is refused: compute it with a value operator and write
-  it, `values[p] = Inc(values[p])`, or pass it in. A collection filled at run
-  time is built in a loop,
-  `for (@first[let v = VertexRef(0)]; @more[Before(v, Length(vertices))]; @next[v = Next(v)]) @add[dist = Append(dist, u);]`.
-  Each branch of a conditional inside the type is held to the same, as
-  `Queue(q.includes(v) ? q : [...q, v])`, the type wrapping the whole
-  conditional.
-- An operator is one action a learner takes as one (compare, add, take the next
-  position, append), never a loop or a library algorithm, so
-  `[...a, ...b].sort(…)` is refused and merging is written in the algorithm. Its
-  function is one expression of its operands, reading only them and `Math`,
-  without braces, nested functions, other operators, methods outside the subset,
-  or the state, changing nothing, and wrapping what it computes in its result
-  type, as `Flag(a > b)`.
-- A rearrangement is plain writes labelled as one step, as a swap through a
-  temporary:
-  `@swap[const moved = values[i]; values[i] = values[Next(i)]; values[Next(i)] = moved;]`.
+- one-element actions are allowed: reading or writing an element or field,
+  `.length`, and `push`, `pop`, `shift`, and `unshift`, which change the
+  collection in place, so it and its elements keep their identities;
+- a search, a copy, or work across every element in one call is refused
+  (`.indexOf`, `.includes`, `.find`, `.some`, `.every`, `.slice`, `.map`,
+  `.join`, `.sort`, `.reverse`, a spread `...a`): write the loop, labelling its
+  steps;
+- text is not joined with `+` nor built from a template, and `===` between two
+  collections is refused, as it compares which collection each is: compare
+  element by element;
+- a new collection of a given length is made with its type, its every element
+  the value given, as `Values.ofLength(values.length, Int(0))`, then filled in a
+  labelled loop, as merge sort's scratch array is.
+
+A rearrangement is plain writes labelled as one step, as a swap through a
+temporary:
+`@swap[const moved = values[i]; values[i] = values[i + 1]; values[i + 1] = moved;]`.
 
 ## Views of what a step computed
 
-An operator is a type a view can take: `{#snippet Ask(g: Greater)}` views an
-application of `Greater`, its operands named by the operator's parameters
-(`g.a`, `g.b`; none can be called `value`) and its result `g.value`, each drawn
-through its type's view. It is reached only at a label:
-`{@render Greater(@sweep.pair.test)}` in the root or a part draws the
-application made inside that label's code since the step before, through the
-view `views.Greater` chooses, and nothing, keeping its room, where that code
-made none. A label around more code, as `@sweep.pair`, draws one made anywhere
-inside it; one the input never makes there is left out; an application outside
-every label is never drawn; `{@render Greater()}` and `applied(Greater)` without
-a label are refused. The view never applies an operator itself, as `Next(p)`:
-label an application, as `@next[Next(i)]`, and read the label. A view named as
-an operator is, as a pointer view called `Next`, is drawn through its type.
+A label on an expression is a type a view can take:
+`{#snippet Ask(c: @sweep.pair.test)}` views what that expression computed at a
+step, its operands named by its syntax, `c.left` and `c.right` for a comparison
+or arithmetic, `c.argument` for `!` or `-x`, a function's parameters by name for
+a labelled call, and its result `c.value`, each drawn through its type's view (a
+plain `true` or `false` as text). `{@sweep.pair.test}` in the root or a part
+draws what that expression computed since the step before, through the view
+`views.@sweep.pair.test` chooses, and nothing, keeping its room, where it
+computed nothing. A view typed by a label no step evaluates is refused. The view
+never computes itself: label the expression, as `@next[i + 1]`, and read the
+label.
 
 Bubble sort, the question at each comparison and a caption at each swap in one
 place:
@@ -656,15 +625,8 @@ place:
 ```svelte
 <script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -672,11 +634,11 @@ place:
 </script>
 
 <script lang="sverlin">
-  for (@last[let end = Length(values)]; @more[Before(Index(1), end)]; @shrink[end = Prev(end)]) @sweep{
-    for (@first[let i = Index(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
-      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
-        const moved = values[Prev(i)];
-        values[Prev(i)] = values[i];
+  for (@last[let end = values.length]; @more[Index(values, 1) < end]; @shrink[end--]) @sweep{
+    for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
+      if (@test[values[i - 1] > values[i]]) @swap{
+        const moved = values[i - 1];
+        values[i - 1] = values[i];
         values[i] = moved;
       }
     }
@@ -684,9 +646,8 @@ place:
 </script>
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}
-  <Node>is {g.a} > {g.b}? {g.value}</Node>
+{#snippet Ask(c: @sweep.pair.test)}
+  <Node>is {c.left} > {c.right}? {c.value}</Node>
 {/snippet}
 {#snippet Swapping()}<Node>out of order, so they swap</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
@@ -694,7 +655,7 @@ place:
   <Node layout="column">
     {@render Cells()}
     <OneOf><When of="@sweep.pair.test">
-      {@render Greater(@sweep.pair.test)}
+      {@sweep.pair.test}
     </When><When of="@sweep.pair.swap">
       {@render Swapping()}
     </When></OneOf>
@@ -708,10 +669,11 @@ place:
 </Layout>
 ```
 
-Paused at both, a comparison reads "is 5 > 1? yes", its operands lifting out of
+Paused at both, a comparison reads "is 5 > 1? true", its operands lifting out of
 their cells, and the swap after it says why they trade places. With
-`pause@sweep.pair.test` off the page plays the swaps alone; with `views.Greater`
-none the question is left out and the steps stay as they were.
+`pause@sweep.pair.test` off the page plays the swaps alone; with
+`views.@sweep.pair.test` none the question is left out and the steps stay as
+they were.
 
 A label is read in the root and its parts, never in a view, by its full name,
 the labels around it first, as `@insert.key` for `@key` inside `@insert`; a
@@ -731,8 +693,8 @@ so every mark looks the same, marking with a label rather than a loop variable
 (`@right`, not `i`) where the mark is what the step used:
 
 ```js
-for (@first[let i = Index(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
-  if (@compare[Greater(values[@left[Prev(i)]], values[@right[i]])]) @swap{ … }
+for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
+  if (@compare[values[@left[i - 1]] > values[@right[i]]]) @swap{ … }
 }
 ```
 
@@ -749,7 +711,7 @@ the mark shows at the step its code leads up to.
 A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
-reads, `values[@from[Prev(j)]]` and `values[@to[j]]`, with
+reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
 `Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
 the pairs found out of order red, and with `pause@insert.swap.to` on, as a step
 of their own before anything is written. Showing or hiding something at some
@@ -772,13 +734,10 @@ each keep their own room, so their texts stack down the page instead of
 replacing one another.
 
 What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
-the label has given up to this step, and `applied(Equal, @check)`, every
-application of `Equal` made inside `@check` so far:
+the label has given up to this step:
 
 ```svelte
-{#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}
 {#each runs(@check.at) as p}{p}{/each}
-{@render Asked()}
 ```
 
 ## Design
@@ -815,7 +774,7 @@ A snippet's name is its kind, so it names what its nodes are, never how they
 look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a
 name of its own in the whole view, nested ones included, as `CurrentCaption` and
 `NeighbourCaption` inside two pointer views, never `Caption` in both; a part is
-not named as a type, and a render names a part, a type, or an operator, so every
+not named as a type, and a render names a part, a type, or a label, so every
 kind is known before the view runs.
 
 Every kind of node has these props, each with a fixed set of options:
@@ -999,15 +958,16 @@ variables:
   types make; `if`, `for`, `while`, `do ... while`, each test and each part of a
   `for` header labelled, not `for … of`; `break`, `continue`, and functions at
   the top level of the algorithm block (see Loops and functions); `&&`, `||`,
-  `??`, and `? :`; writes with `=`; and the operators the domain declares (see
-  Operators), whose functions may use JavaScript's operators, template strings,
-  `.length`, the collection methods (`[...c, x]`, `.slice`, `.indexOf`,
-  `.includes`, `.join`), and
-  `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
+  `??`, and `? :`; writes with `=`; JavaScript's operators on values, `++`,
+  `+=`, `.length`, `push`, `pop`, `shift`, `unshift`, `Type.ofLength(n, x)`, and
+  `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI` inside a
+  type (see Computing).
 - Not allowed: `null` and `undefined`, other functions, such as arrow functions
-  outside an operator and functions inside blocks, `new`, classes, `this`, `==`,
-  string methods, other globals, and array or object literals except inside a
-  type or `.push`/`.unshift`, or assigned to an element or field.
+  and functions inside blocks, anything that hides a loop (searches, copies,
+  spreads, whole-collection methods), text joined with `+` or templates, `new`,
+  classes, `this`, `==`, string methods, other globals, and array or object
+  literals except inside a type or `.push`/`.unshift`, or assigned to an element
+  or field.
 - Limits: 200 steps a presentation shows, at the labels it pauses at; 2,000 ends
   of labels in all; 1,000,000 operations; 10,000 entries per array or object;
   and 10,000 characters per string.
@@ -1044,9 +1004,9 @@ to point at, such as a cell, a pointer name, or a caption, as a node of its own.
 participant follows, in the code or pseudocode they know or a textbook's,
 exactly as written, lighting the code each step ran. The algorithm block is what
 runs and the listing what is read, and they meet through labels, so the
-algorithm is written as the language needs (typed values, operators, labels)
-while the listing reads as the lesson; when the algorithm changes, its listing
-follows. Place it outside views, in a layout or a part, as
+algorithm is written as the language needs (typed values, labels) while the
+listing reads as the lesson; when the algorithm changes, its listing follows.
+Place it outside views, in a layout or a part, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
 The text is a `<script lang="sverlin" listing="textbook">` block; with several,
@@ -1116,13 +1076,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
-  const Flag = type('boolean');
 
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -1130,12 +1084,12 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </script>
 
 <script lang="sverlin">
-  for (@start[let i = Position(1)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @insert{
+  for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
-    while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) @shift{
-      @copy[values[j] = values[Prev(j)];]
-      @down[j = Prev(j);]
+    while (@test[@bound[Position(0) < j] && @cmp[(values[j - 1]) > key]]) @shift{
+      @copy[values[j] = values[j - 1];]
+      @down[j--;]
     }
     @place[values[j] = key;]
   }
@@ -1220,15 +1174,15 @@ participant liked ("keep this layout but …"), vary that kind's `form`,
 
 `<Link from={edge.from} to={edge.to} />` draws a link between two nodes. Put
 links among the children of the node whose children they join, or in a view
-rendered there, as of an edge, of a node (see Nodes and references), or of an
-operator's application; never in a pointer view, which draws inside the element
-it marks. They take no space; give the node a `layout`, `"free"` for a linked
-structure or `"row"` or `"column"`, unless it holds a collection's `{#each}`,
-which runs as the collection. Only a free layout places its children by their
-links; in a row or column links are drawn over the children, which stay where
-they would be without them, each arcing over ends side by side or beside ends
-one above the other, clear of the boxes. Each link is selectable, as a node is,
-and its look, how it runs and its heads, is its kind's (see Design), never a
+rendered there, as of an edge, of a node (see Nodes and references), or of what
+a labelled expression computed; never in a pointer view, which draws inside the
+element it marks. They take no space; give the node a `layout`, `"free"` for a
+linked structure or `"row"` or `"column"`, unless it holds a collection's
+`{#each}`, which runs as the collection. Only a free layout places its children
+by their links; in a row or column links are drawn over the children, which stay
+where they would be without them, each arcing over ends side by side or beside
+ends one above the other, clear of the boxes. Each link is selectable, as a node
+is, and its look, how it runs and its heads, is its kind's (see Design), never a
 prop, as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
@@ -1284,13 +1238,6 @@ at marked and the queue drawn by number:
   const Adjacency = collection(Out);
   const Queue = collection(VertexRef);
 
-  const Waiting = unop((q: Queue) => Flag(q.length > 0));
-  const Not = unop((f: Flag) => Flag(!f));
-  const Count = unop((n: Out) => Slot(n.length));
-  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
-  const Step = unop((p: Slot) => Slot(p + 1));
-  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
-  const Rest = unop((q: Queue) => Queue(q.slice(1)));
 </script>
 
 <script lang="sverlin" input>
@@ -1306,15 +1253,15 @@ at marked and the queue drawn by number:
 
 <script lang="sverlin">
   @init[let queue = Queue([0]);]
-  while (@more[Waiting(queue)]) @visit{
+  while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];
-    queue = Rest(queue);
+    queue.shift();
     const around = out[current];]
-    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+    for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
       const w = around[slot];
-      if (@check[Not(vertices[@next[w]].seen)]) @add{
+      if (@check[!vertices[@next[w]].seen]) @add{
         vertices[w].seen = true;
-        queue = Append(queue, w);
+        queue.push(w);
       }
     }
   }

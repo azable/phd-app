@@ -27,23 +27,18 @@ const insertion = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (let i = Position(1); (i <= values.length); i++) @insert{
     let j = i;
-    while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while ((Position(0) <= j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -191,12 +186,6 @@ const search = `<script lang="sverlin" domain>
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Middle = binop((a: Index, b: Index) => Index(Math.floor((a + b) / 2)));
-  const Before = binop((a: Index, b: Index) => Flag(a <= b));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Last = unop((v: Values) => Index(v.length - 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([3, 8, 15, 23, 42, 57, 71]);
@@ -204,11 +193,11 @@ const search = `<script lang="sverlin" domain>
 </script>
 <script lang="sverlin">
   let lo = Index(0);
-  let hi = Last(values);
-  while (@open[Before(lo, hi)]) @probe{
-    const mid = @mid[Middle(lo, hi)];
-    if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
-    else @left[hi = Prev(mid);]
+  let hi = values.length - 1;
+  while (@open[lo <= hi]) @probe{
+    const mid = @mid[Index(Math.floor((lo + hi) / 2))];
+    if (@low[values[mid] < target]) @right[lo = mid + 1;]
+    else @left[hi = mid - 1;]
   }
 </script>
 <script lang="sverlin" listing="pseudocode">

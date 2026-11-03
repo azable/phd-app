@@ -11,11 +11,11 @@ import {
 
 const source = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
+  const Greater = type('boolean');
 </script>
 <script lang="sverlin">
   for (let i = Index(1); Before(i, end); i = Next(i)) @compare{
-    if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{
+    if (values[@left[i - 1]] > values[@right[i]]) @swap{
       const moved = @held[values[Prev(i)]];
     }
   }
@@ -45,7 +45,7 @@ describe('references in messages', () => {
 
   it('name a declaration in a script', () => {
     expect(named('Greater')).toEqual(['Greater']);
-    expect(referenceRanges(source, 'Greater')[0].from).toBe(source.indexOf('Greater = binop'));
+    expect(referenceRanges(source, 'Greater')[0].from).toBe(source.indexOf('Greater = type'));
     expect(named('moved')).toEqual(['moved']);
   });
 
@@ -57,7 +57,7 @@ describe('references in messages', () => {
   it('name a label by its full path, never another with the same last name', () => {
     const twice = `<script lang="sverlin">
   for (let i = Index(1); Before(i, end); i = Next(i)) @rise{
-    if (@compare[Greater(values[@left[Prev(i)]], values[i])]) { const s = "@left[x]"; }
+    if (@compare[(values[@left[Prev(i)]]) > values[i]]) { const s = "@left[x]"; }
   }
   for (let i = Index(1); Before(i, end); i = Next(i)) @fall{
     if (@compare[Less(values[@left[Prev(i)]], values[i])]) {}
@@ -75,7 +75,7 @@ describe('references in messages', () => {
 </Layout>`;
     const at = (label: string) => referenceRanges(twice, label).map(({ from }) => from);
     const all = (text: string) =>
-      [...twice.matchAll(new RegExp(text.replace(/[.[()]/gu, '\\$&'), 'gu'))].map(
+      [...twice.matchAll(new RegExp(text.replace(/[.[]/gu, '\\$&'), 'gu'))].map(
         ({ index }) => index ?? 0
       );
     const declared = all('@left[');

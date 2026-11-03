@@ -1,10 +1,6 @@
 <script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
-
-  const Count = unop((n: Out) => Slot(n.length));
-  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
-  const Step = unop((p: Slot) => Slot(p + 1));
   const Vertex = record({ name: Name, seen: Flag });
   const Vertices = collection(Vertex);
   const VertexRef = index(Vertices);
@@ -13,10 +9,6 @@
   const Adjacency = collection(Out);
   const Queue = collection(VertexRef);
 
-  const Waiting = unop((q: Queue) => Flag(q.length > 0));
-  const Not = unop((f: Flag) => Flag(!f));
-  const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
-  const Rest = unop((q: Queue) => Queue(q.slice(1)));
 </script>
 
 <script lang="sverlin" input>
@@ -32,15 +24,15 @@
 
 <script lang="sverlin">
   @init[let queue = Queue([0]);]
-  while (@more[Waiting(queue)]) @visit{
+  while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];
-    queue = Rest(queue);
+    queue.shift();
     const around = out[current];]
-    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+    for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
       const w = around[slot];
-      if (@check[Not(vertices[@next[w]].seen)]) @add{
+      if (@check[!vertices[@next[w]].seen]) @add{
         vertices[w].seen = true;
-        queue = Append(queue, w);
+        queue.push(w);
       }
     }
   }

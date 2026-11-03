@@ -16,6 +16,7 @@ import {
   Atom,
   atomProblem,
   combinedType,
+  entering,
   numericResult,
   refines,
   type AtomBase,
@@ -35,10 +36,9 @@ import { readLabels, type Label, type LabelProblem } from './labels.server';
 import { parseBlock, spanOf } from './parse.server';
 import {
   changingMethods,
-  firstDiscarded,
-  firstRawOperation,
   rawOperation,
-  rawProblem,
+  hiddenProblem,
+  unwrappedNumber,
   type RawContext
 } from './raw.server';
 import {
@@ -48,7 +48,6 @@ import {
   noDomain,
   type CollectionType,
   type DomainRegistry,
-  type OperatorType,
   type RecordType,
   type RefType,
   type UnionType
@@ -194,6 +193,9 @@ export const algorithmLimits = {
   maximumLiveNodes: 64
 } as const;
 
+/** The name a label's applications are kept under, as the view reads the label: `@insert.compare` as `ℓinsertˑcompare`. */
+export const labelApplication = (full: string): string => `ℓ${full.replaceAll('.', 'ˑ')}`;
+
 /** Interpret the input block into the fixed initial state shared by every presentation. */
 export function interpretInput(body: string, domain: DomainRegistry = noDomain): TypedState {
   const { root, offset } = parseBlock(body, 'input', domain);
@@ -338,7 +340,11 @@ export function traceAlgorithm(
   domain: DomainRegistry = noDomain,
   pacing: Pacing = {},
   /** What views draw beyond the state: the labels whose values are kept, by full name. */
-  keep: { labels?: ReadonlySet<string> } = {},
+  keep: {
+    labels?: ReadonlySet<string>;
+    /** The labels a view typed by the label draws, whose operands and result are kept as applications. */
+    applications?: ReadonlySet<string>;
+  } = {},
   /** Whether no code may run outside a label, as in an authored source (see readLabels). */
   complete = false
 ): {
@@ -359,6 +365,11 @@ export function traceAlgorithm(
   for (const { full, nodes, statement } of labelled.labels)
     if (!statement && nodes.length === 1 && keep.labels?.has(full))
       captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
+  // A labelled expression a view typed by its label draws: its operands and result, kept as an application.
+  const applying = new Map<AnyNode, string[]>();
+  for (const { full, nodes, statement } of labelled.labels)
+    if (!statement && nodes.length === 1 && keep.applications?.has(full))
+      applying.set(nodes[0], [...(applying.get(nodes[0]) ?? []), full]);
   const named = new Map<Unit, string>();
   const holding = new Map<string, Unit>();
   for (const label of labelled.labels) {
@@ -371,6 +382,7 @@ export function traceAlgorithm(
     domain,
     code,
     captured,
+    applying,
     units: labelled.units,
     named,
     holding,
@@ -527,6 +539,10 @@ class Interpreter {
   #pendingLabelled: [string, LabelRun][] = [];
   /** Each labelled expression's node, with the full names of the labels on it. */
   readonly #captured: ReadonlyMap<AnyNode, readonly string[]>;
+  /** Each labelled expression a view typed by its label draws, with its labels' full names. */
+  readonly #applying: ReadonlyMap<AnyNode, readonly string[]>;
+  /** The operands each expression was last evaluated with, by name, for its label's application. */
+  readonly #operandsOf = new WeakMap<AnyNode, [string, Value][]>();
   /** The place each collection and record was last reached by, as values or edges[2]. */
   readonly #places = new WeakMap<object, string>();
   /** What the last element or field read read from, and by which key. */
@@ -547,10 +563,12 @@ class Interpreter {
       pauses?: Pauses;
       code?: string;
       captured?: ReadonlyMap<AnyNode, readonly string[]>;
+      applying?: ReadonlyMap<AnyNode, readonly string[]>;
     }
   ) {
     this.#root = root;
     this.#captured = options.captured ?? new Map();
+    this.#applying = options.applying ?? new Map();
     this.#units = options.units ?? { nodes: new Set(), ranges: new Map() };
     this.#named = options.named ?? new Map();
     this.#holding = options.holding ?? new Map();
@@ -571,12 +589,7 @@ class Interpreter {
           .replace(/([[(]) | ([\])])/gu, '$1$2')
           .trim();
       },
-      flag: atomTypes.find((type) => type.base === 'boolean')?.name,
-      indexOf: (collection) => atomTypes.find((type) => type.index === collection)?.name,
-      elementOf: (collection) => {
-        const structure = this.#domain.structures[collection];
-        return structure?.kind === 'collection' ? structure.element : undefined;
-      }
+      indexOf: (collection) => atomTypes.find((type) => type.index === collection)?.name
     };
     this.#globals.bindings.set('Math', { value: mathMarker, constant: true });
     this.#globals.bindings.set('Infinity', { value: Infinity, constant: true });
@@ -670,12 +683,13 @@ class Interpreter {
   }
 
   #execute(): void {
-    const discarded = firstDiscarded(this.#root, this.#domain.operators ?? {}, this.#raw.text);
-    if (discarded) this.#fail(discarded.node, discarded.message);
+    const unwrapped = unwrappedNumber(
+      this.#root,
+      (name) => Object.hasOwn(this.#atoms, name),
+      this.#raw.text
+    );
+    if (unwrapped) this.#fail(unwrapped.node, unwrapped.message);
     const completion = this.#block(this.#root.body, this.#topLevel);
-    // A raw operation that ran was a problem as it ran, naming its operands' types.
-    const raw = firstRawOperation(this.#root);
-    if (raw) this.#fail(raw.node, rawProblem(raw.node, raw.operation, undefined, this.#raw));
     if (completion === 'break' || completion === 'continue')
       throw new AlgorithmError(
         `${completion} must be inside a loop.`,
@@ -876,6 +890,34 @@ class Interpreter {
     return typeof key === 'number' ? `${place}[${key}]` : `${place}.${key}`;
   }
 
+  /**
+   * A collection's length, as a position into it where the domain declares exactly one position type
+   * for its kind, as values.length is the Index just past values' last element; else a plain number.
+   */
+  #lengthOf(object: Value[] | string, node: MemberExpression): Value {
+    const shape = Array.isArray(object) ? this.#shapes.get(object) : undefined;
+    const indexes = shape
+      ? Object.values(this.#atoms).filter((type) => type.index === shape.name)
+      : [];
+    if (indexes.length !== 1) return object.length;
+    const owner = node.object;
+    return new Atom(
+      indexes[0],
+      object.length,
+      owner.type === 'Identifier' ? owner.name : undefined
+    );
+  }
+
+  /**
+   * A comparison's plain true or false declared into a variable takes the domain's one boolean type,
+   * as const found = values[i] === target; with several, it is written in the one it means.
+   */
+  #asFlag(value: Value): Value {
+    if (typeof value !== 'boolean') return value;
+    const flags = Object.values(this.#atoms).filter((type) => type.base === 'boolean');
+    return flags.length === 1 ? new Atom(flags[0], value) : value;
+  }
+
   /** Conditions read an atom's underlying value, so Bool(false) is false. */
   #truthy(value: Value): boolean {
     return value instanceof Atom ? Boolean(value.value) : Boolean(value);
@@ -886,19 +928,63 @@ class Interpreter {
    * another type of the same kind, as in Distance(e.weight); or a union, record, or collection
    * from a literal, as in Edges([{ from: 0, to: 1 }]).
    */
+  /**
+   * A new collection of a given length, every element the given value, as Values.ofLength(n, Int(0)):
+   * how an algorithm makes a scratch collection, as merge sort's, which it then fills.
+   */
+  #ofLength(node: CallExpression, typeName: string, scope: Scope): Value {
+    const structure = this.#domain.structures[typeName] as CollectionType;
+    if (
+      node.arguments.length !== 2 ||
+      node.arguments.some((argument) => argument.type === 'SpreadElement')
+    )
+      this.#fail(
+        node,
+        `${typeName}.ofLength(…) takes a length and the value every element starts as, as ${typeName}.ofLength(n, ${structure.element}(0)).`
+      );
+    const [length, fill] = node.arguments.map((argument) =>
+      this.#expression(argument as Expression, scope)
+    );
+    const count = this.#number(length, node);
+    if (!Number.isInteger(count) || count < 0)
+      this.#fail(node, `${typeName}.ofLength(…) takes a whole length, not ${count}.`);
+    this.#checkLength(count, node);
+    this.#charge(node, count);
+    return this.#convert(
+      Array.from({ length: count }, () => fill),
+      typeName,
+      node,
+      typeName
+    );
+  }
+
   #construct(node: CallExpression, typeName: string, scope: Scope): Value {
     if (this.#atoms[typeName]?.index && node.arguments.length === 2)
       return this.#position(node, this.#atoms[typeName], scope);
     if (node.arguments.length !== 1 || node.arguments[0].type === 'SpreadElement')
       this.#fail(node, `${typeName}(...) takes exactly one value.`);
-    const argument = this.#expression(node.arguments[0] as Expression, scope);
+    let argument = this.#expression(node.arguments[0] as Expression, scope);
     const type = this.#atoms[typeName];
+    // In the input, a word of a collection of characters is written as text: Word('GATTACA').
+    const structure = this.#domain.structures[typeName];
+    if (
+      !type &&
+      this.#kind === 'input' &&
+      typeof argument === 'string' &&
+      structure?.kind === 'collection' &&
+      this.#atoms[structure.element]?.base === 'text'
+    )
+      argument = [...argument];
     if (!type) return this.#convert(argument, typeName, node, typeName);
-    if (argument instanceof Atom && atomBase(argument.type) !== atomBase(type))
+    if (
+      argument instanceof Atom &&
+      atomBase(argument.type) !== atomBase(type) &&
+      !(atomBase(argument.type) === 'integer' && atomBase(type) === 'number')
+    )
       this.#fail(node, `A ${argument.type.name} cannot become a ${type.name}.`);
     if (argument !== null && typeof argument === 'object' && !(argument instanceof Atom))
       this.#fail(node, `${type.name}(...) takes one value, not ${kind(argument)}.`);
-    const value = argument instanceof Atom ? argument.value : argument;
+    const value = entering(type, argument instanceof Atom ? argument.value : argument);
     const problem = atomProblem(type, value);
     if (problem) this.#fail(node, problem);
     return new Atom(type, value as string | number | boolean);
@@ -1011,9 +1097,10 @@ class Interpreter {
     }
     if (value !== null && typeof value === 'object')
       this.#fail(node, `${path} must be a ${type.name}, not ${kind(value)}.`);
-    const problem = atomProblem(type, value);
+    const entered = entering(type, value);
+    const problem = atomProblem(type, entered);
     if (problem) this.#fail(node, `${path}: ${problem}`);
-    return new Atom(type, value as string | number | boolean);
+    return new Atom(type, entered as string | number | boolean);
   }
 
   /** A typed value keeps its own member type; a literal becomes the one member it fits. */
@@ -1203,7 +1290,7 @@ class Interpreter {
     const computed =
       node.type === 'Literal' || node.type === 'ArrayExpression' || node.type === 'ObjectExpression'
         ? ''
-        : ' .indexOf(), .includes(), and .join() give plain values; wrap the result, as in Count(items.indexOf(x)).';
+        : ' Math and division give plain numbers; write the type around them, as Index(Math.floor(x)).';
     this.#fail(
       node,
       `${plain.path} would be the plain ${typeof plain.value} ${shown}, but input and algorithm values must have a domain type. ${fix}${computed}`
@@ -1292,7 +1379,7 @@ class Interpreter {
               declarator,
               `Give ${name} a starting value of its type, as in let ${name} = Index(-1);`
             );
-          const value = this.#expression(declarator.init, scope);
+          const value = this.#asFlag(this.#expression(declarator.init, scope));
           this.#typed(value, declarator.init, name);
           const type = this.#declaredType(declarator.init, value);
           const target =
@@ -1526,14 +1613,6 @@ class Interpreter {
     return { keeps, trail };
   }
 
-  /** Whether the view renders this application of an operator: inside a label it renders it at. */
-  #shows(name: string, node: AnyNode): boolean {
-    const at = this.#offset(node).start;
-    return (
-      this.#pacing.shown?.get(name)?.some(({ start, end }) => start <= at && at < end) ?? false
-    );
-  }
-
   /**
    * Record a step whose code has just run: the state after it, and the events since the last. Its
    * applications and labelled values are all those made since the step before; those given at earlier steps inside a run of
@@ -1655,6 +1734,7 @@ class Interpreter {
    * for the steps after it inside the run of the label around it that keep it (see PauseMode).
    */
   #capture(node: AnyNode, value: Value): void {
+    for (const name of this.#applying.get(node) ?? []) this.#applyLabel(name, node, value);
     const names = this.#captured.get(node);
     if (!names) return;
     for (const name of names) {
@@ -1670,6 +1750,28 @@ class Interpreter {
       if (around)
         this.#labelGiven.push({ name, run, around, inside: [...this.#runs], recorded: false });
     }
+  }
+
+  /**
+   * Keep what a labelled expression computed, for a view typed by its label: its operands by name
+   * (left and right of a comparison, arithmetic, or && and ||, argument of ! or -, a function's
+   * parameters) and its result as value, copied as an operator's application was, named by the label.
+   */
+  #applyLabel(name: string, node: AnyNode, value: Value): void {
+    const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
+    const into = { types: application.types, targets: {} as Record<string, string>, placed: [] };
+    const operands = this.#operandsOf.get(node) ?? [];
+    for (const [parameter, operand] of operands)
+      application.state[parameter] = this.#snapshot(operand, node, parameter, into);
+    application.state.value = this.#snapshot(value, node, 'value', into);
+    if (Object.keys(into.targets).length) application.targets = into.targets;
+    this.#pendingApplied.push([labelApplication(name), application]);
+    this.#operands.set(application, [
+      ...operands.flatMap(([path, operand]) =>
+        operand instanceof Atom ? [{ path, value: operand }] : []
+      ),
+      ...(value instanceof Atom ? [{ path: 'value', value }] : [])
+    ]);
   }
 
   /**
@@ -1779,6 +1881,11 @@ class Interpreter {
         for (const element of node.elements) {
           if (element === null) this.#fail(node, 'Array holes are not supported.');
           if (element.type === 'SpreadElement') {
+            if (!this.#inOperator)
+              this.#fail(
+                element,
+                `${this.#raw.text(element)} copies every element in one step, which nothing can show or count; add elements one at a time, as c.push(x), or copy in a labelled loop.`
+              );
             const spread = this.#expression(element.argument, scope);
             if (!Array.isArray(spread)) this.#fail(element, 'Only arrays can be spread.');
             this.#charge(element, spread.length);
@@ -1812,6 +1919,7 @@ class Interpreter {
       case 'UnaryExpression': {
         const value = this.#expression(node.argument, scope);
         if (rawOperation(node)) this.#rawCheck(node, [value]);
+        if (this.#applying.has(node)) this.#operandsOf.set(node, [['argument', value]]);
         if (node.operator === '!') return !this.#truthy(value);
         const number = this.#number(value, node);
         return node.operator === '-'
@@ -1827,10 +1935,34 @@ class Interpreter {
         const left = this.#expression(node.left as Expression, scope);
         const right = this.#expression(node.right, scope);
         this.#rawCheck(node, [left, right]);
+        if (this.#applying.has(node))
+          this.#operandsOf.set(node, [
+            ['left', left],
+            ['right', right]
+          ]);
         return this.#binary(node.operator, left, right, node);
       }
       case 'LogicalExpression': {
         const left = this.#expression(node.left, scope);
+        if (this.#applying.has(node)) {
+          const decided =
+            node.operator === '&&'
+              ? !this.#truthy(left)
+              : node.operator === '||'
+                ? this.#truthy(left)
+                : left !== null && left !== undefined;
+          const right = decided ? undefined : this.#expression(node.right, scope);
+          this.#operandsOf.set(
+            node,
+            decided
+              ? [['left', left]]
+              : [
+                  ['left', left],
+                  ['right', right as Value]
+                ]
+          );
+          return decided ? left : (right as Value);
+        }
         if (node.operator === '&&')
           return this.#truthy(left) ? this.#expression(node.right, scope) : left;
         if (node.operator === '||')
@@ -2013,7 +2145,7 @@ class Interpreter {
       return this.#fail(node, `Math.${String(key)} can only be called, or does not exist.`);
     }
     if (Array.isArray(object) || typeof object === 'string') {
-      if (key === 'length') return this.#readAt(object.length, object, key);
+      if (key === 'length') return this.#readAt(this.#lengthOf(object, node), object, key);
       if (typeof key === 'number' && Number.isInteger(key) && Array.isArray(object)) {
         if (key >= 0 && key < object.length) return this.#readAt(object[key], object, key);
         return this.#fail(
@@ -2052,9 +2184,15 @@ class Interpreter {
     const callee = node.callee;
     const declared = callee.type === 'Identifier' ? this.#functions.get(callee.name) : undefined;
     if (declared) return this.#invoke(node, declared, scope);
-    const operator =
-      callee.type === 'Identifier' ? this.#domain.operators?.[callee.name] : undefined;
-    if (operator) return this.#apply(node, operator, scope);
+    if (
+      callee.type === 'MemberExpression' &&
+      !callee.computed &&
+      callee.object.type === 'Identifier' &&
+      this.#domain.structures[callee.object.name]?.kind === 'collection' &&
+      callee.property.type === 'Identifier' &&
+      callee.property.name === 'ofLength'
+    )
+      return this.#ofLength(node, callee.object.name, scope);
     if (
       callee.type === 'Identifier' &&
       (Object.hasOwn(this.#atoms, callee.name) ||
@@ -2141,140 +2279,16 @@ class Interpreter {
   }
 
   /**
-   * An operation the input or algorithm computes itself, a problem outside an operator's function:
-   * an operator on its values, `.length`, or Math, named with the operands' types.
+   * The operations the input and algorithm may not write, as each hides a loop or a step the view
+   * cannot show: a search or a whole-collection method, a template string or text joined with +,
+   * and === between two collections, which compares their identities rather than their elements.
    */
-  #rawCheck(node: AnyNode, operands: Value[], placeType?: string): void {
+  #rawCheck(node: AnyNode, operands: Value[], _placeType?: string): void {
     if (this.#inOperator) return;
     const operation = rawOperation(node);
     if (!operation) return;
-    const types = operands.map((value, index) =>
-      index === 0 && placeType
-        ? placeType
-        : value instanceof Atom
-          ? value.type.name
-          : value !== null && typeof value === 'object'
-            ? (this.#shapes.get(value)?.name ?? kind(value))
-            : typeof value
-    );
-    this.#fail(node, rawProblem(node, operation, types, this.#raw));
-  }
-
-  /**
-   * An application of an operator: its operands, each converted to its type as a function's
-   * argument is, given by name to its function, which computes as JavaScript does and logs
-   * nothing. Its value is the function's, logged with the operands as an application.
-   */
-  #apply(node: CallExpression, operator: OperatorType, scope: Scope): Value {
-    const { name, operands, parameters } = operator;
-    if (
-      node.arguments.length !== operands.length ||
-      node.arguments.some((argument) => argument.type === 'SpreadElement')
-    )
-      this.#fail(
-        node,
-        `${name}(...) takes ${operands.length === 1 ? 'one operand' : 'two operands'}, ${operands.map((type) => `${/^[AEIOU]/u.test(type) ? 'an' : 'a'} ${type}`).join(' and ')}.`
-      );
-    const values = node.arguments.map((argument, index) => {
-      const value = this.#expression(argument as Expression, scope);
-      return this.#convert(
-        value,
-        operands[index],
-        argument,
-        `${name}'s ${parameters[index]}`,
-        collectionOf(value)
-      );
-    });
-    const body = new Scope(this.#globals);
-    parameters.forEach((parameter, index) =>
-      body.bindings.set(parameter, { value: values[index], constant: true, type: operands[index] })
-    );
-    const given = new Set<object>();
-    const gather = (value: Value): void => {
-      if (value === null || typeof value !== 'object' || value instanceof Atom || given.has(value))
-        return;
-      given.add(value);
-      (Array.isArray(value) ? value : Object.values(value)).forEach(gather);
-    };
-    values.forEach(gather);
-    this.#given.push(given);
-    this.#inOperator += 1;
-    const single = (value: Value) => {
-      const plain = unwrap(value);
-      return typeof plain === 'number' || typeof plain === 'string' || typeof plain === 'boolean'
-        ? plain
-        : undefined;
-    };
-    let result: Value;
-    try {
-      result = this.#expression(operator.body, body);
-    } catch (cause) {
-      if (!(cause instanceof AlgorithmError)) throw cause;
-      this.#inOperator -= 1;
-      this.#given.pop();
-      const shown = values.map((value) => {
-        const plain = single(value);
-        if (typeof plain === 'string') return JSON.stringify(plain);
-        return plain !== undefined
-          ? String(plain)
-          : (this.#shapes.get(value as object)?.name ?? kind(value));
-      });
-      return this.#fail(node, `${name}(${shown.join(', ')}): ${cause.message}`);
-    }
-    this.#inOperator -= 1;
-    this.#given.pop();
-    // A position an operator gives points where its operand of the same type points, as i + 1,
-    // or into its operand that is a collection of its type, named by a variable, as Length(left).
-    if (result instanceof Atom && result.type.index && !result.collection) {
-      const { index, name: type } = result.type;
-      const from = values.find(
-        (value) => value instanceof Atom && value.type.name === type && value.collection
-      );
-      const named = node.arguments.find(
-        (argument, at) =>
-          argument.type === 'Identifier' &&
-          Array.isArray(values[at]) &&
-          this.#shapes.get(values[at] as object)?.name === index
-      ) as { name: string } | undefined;
-      const collection = from ? collectionOf(from) : named?.name;
-      if (collection) result = new Atom(result.type, result.value, collection);
-    }
-    const shows = !this.#inOperator && this.#shows(name, node);
-    this.#emit('apply', node, {
-      name,
-      value: result,
-      operands: values.map((value) => single(value) ?? null)
-    });
-    // An application the view renders is kept for it, copied as a step's state is.
-    if (shows) {
-      const application: Application = { state: {}, types: {}, at: this.#offset(node).start };
-      const into = { types: application.types, targets: {} as Record<string, string>, placed: [] };
-      parameters.forEach((parameter, index) => {
-        application.state[parameter] = this.#snapshot(values[index], node, parameter, into);
-      });
-      application.state.value = this.#snapshot(result, node, 'value', into);
-      if (Object.keys(into.targets).length) application.targets = into.targets;
-      this.#pendingApplied.push([name, application]);
-      this.#operands.set(application, [
-        ...parameters.flatMap((parameter, index) => {
-          const value = values[index];
-          const argument = node.arguments[index];
-          return value instanceof Atom
-            ? [
-                {
-                  path: parameter,
-                  value,
-                  ...(argument?.type === 'Identifier' ? { from: argument.name } : {})
-                }
-              ]
-            : [];
-        }),
-        ...(result instanceof Atom ? [{ path: 'value', value: result }] : [])
-      ]);
-    }
-    if (result !== null && typeof result === 'object' && !(result instanceof Atom))
-      this.#computed.add(result);
-    return result;
+    const problem = hiddenProblem(node, operation, operands, this.#raw.text);
+    if (problem) this.#fail(node, problem);
   }
 
   /**
@@ -2329,6 +2343,11 @@ class Interpreter {
         this.#fail(argument, 'Spread arguments are not supported.');
       const parameter = parameters[index];
       let value = this.#expression(argument, scope);
+      if (this.#applying.has(node))
+        this.#operandsOf.set(node, [
+          ...(index ? (this.#operandsOf.get(node) ?? []) : []),
+          [parameter, value]
+        ]);
       this.#typed(value, argument, parameter);
       const type = this.#declaredType(argument, value);
       if (types && types[index] !== type)
@@ -2415,8 +2434,19 @@ class Interpreter {
         const plainLeft = unwrap(left);
         const plainRight = unwrap(right);
         const bothStrings = typeof plainLeft === 'string' && typeof plainRight === 'string';
-        const a = bothStrings ? plainLeft : this.#number(left, node);
-        const b = bothStrings ? plainRight : this.#number(right, node);
+        // Values of a text enumeration compare in the order it lists them, as 'low' < 'high'.
+        const listed =
+          bothStrings && left instanceof Atom && left.type.values ? left.type.values : undefined;
+        const a = listed
+          ? listed.indexOf(plainLeft as string)
+          : bothStrings
+            ? plainLeft
+            : this.#number(left, node);
+        const b = listed
+          ? listed.indexOf(plainRight as string)
+          : bothStrings
+            ? plainRight
+            : this.#number(right, node);
         if (operator === '<') return a < b;
         if (operator === '<=') return a <= b;
         return operator === '>' ? a > b : a >= b;

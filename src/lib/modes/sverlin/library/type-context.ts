@@ -54,6 +54,8 @@ export type TypeContext = {
   parent(typeName: string): string | undefined;
   /** A type's unit, or that of the nearest type it refines. */
   unit(typeName: string): string | undefined;
+  /** A number type's decimal places, which every one of its values is drawn with. */
+  places?(typeName: string): number | undefined;
 };
 
 export function typeContext(): TypeContext | undefined {

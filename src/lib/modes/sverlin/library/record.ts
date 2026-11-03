@@ -30,7 +30,11 @@ import { widestInteger } from './widest-number';
  * the values its root reads for placement, by path, with the step they are measured at.
  */
 export type Sizing = {
-  components: { name: string; cases: unknown[]; range?: { min: number; max: number } }[];
+  components: {
+    name: string;
+    cases: unknown[];
+    range?: { min: number; max: number; places?: number };
+  }[];
   placements: { path: string; step: number; values: unknown[] }[];
 };
 
@@ -178,8 +182,11 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     // Digits differ in width in most fonts, and the font is drawn per presentation, so a range too
     // large to draw whole is drawn again with the integer that prints widest in the value's font.
     if (range && font) {
-      const widest = widestInteger(range.min, range.max, (character) =>
-        measure.width(character, font)
+      const widest = widestInteger(
+        range.min,
+        range.max,
+        (character) => measure.width(character, font),
+        range.places
       );
       if (!cases.includes(widest)) probe([widest]);
     }

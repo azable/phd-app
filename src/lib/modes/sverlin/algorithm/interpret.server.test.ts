@@ -11,21 +11,9 @@ import {
 
 // Input and algorithm values all have domain types; these tests share a small domain.
 const atoms = interpretDomain(
-  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });" +
+  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000, places: 2 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });" +
     // The algorithm computes nothing itself: these are its operators.
-    `const Less = binop((a: Int, b: Int) => Flag(a < b));
-    const Equal = binop((a: Int, b: Int) => Flag(a === b));
-    const Add = binop((a: Int, b: Int) => Int(a + b));
-    const Next = unop((n: Int) => Int(n + 1));
-    const Count = unop((v: Ints) => Int(v.length));
-    const Root = unop((n: Int) => Real(Math.sqrt(n)));
-    const Width = unop((v: Reals) => Int(v.join('-').length));
-    const Halve = unop((n: Int) => Real(n / 2));
-    const Long = unop((v: Ints) => Int(v.join('${'-'.repeat(60)}').length));
-    const Push = binop((c: Reals, x: Real) => Reals([...c, x]));
-    const Find = binop((c: Reals, x: Real) => Int(c.indexOf(x)));
-    const Grow = binop((c: Ints, x: Int) => Ints([...c, x]));
-    const Flip = unop((c: Ints) => Ints(c.slice().reverse()));`
+    ``
 );
 const interpretAlgorithm = (body: string, input?: TypedState) => interpretTyped(body, input, atoms);
 const interpretInput = (body: string) => interpretTypedInput(body, atoms);
@@ -52,12 +40,12 @@ describe('algorithm interpretation', () => {
       let i = Int(-1);
       let found = Flag(false);]
       @first[i = Int(0);]
-      while (Less(i, Count(values))) {
-        @check[if (Equal(values[i], 8)) {
+      while ((i < values.length)) {
+        @check[if ((values[i] === 8)) {
           found = Flag(true);
           break;
         }]
-        @next[i = Next(i);]
+        @next[i++;]
       }
     `);
     expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 0, 1, 1]);
@@ -80,15 +68,14 @@ describe('algorithm interpretation', () => {
       let stack = Reals([]);
       const point = Point({ x: 1, y: 2 });
       let total = Int(0);
-      for (const n of Ints([4, 9, 16])) { stack = Push(stack, Root(n)); total = Add(total, n); }
+      for (const n of Ints([4, 9, 16])) { stack.push(Real(Math.sqrt(n))); total = total + n; }
       let k = Int(0);
-      while (true) { k = Next(k); if (Less(2, k)) break; else continue; }
-      point.x = Add(point.x, Find(stack, 3));
+      while (true) { k++; if ((2 < k)) break; else continue; }
+      point.x = point.x + 1;
       let i = Int(0);
       const a = Ints([0, 0]);
-      a[i] = Add(a[i], 5);
-      i = Next(i);
-      const joined = Width(stack);
+      a[i] = a[i] + 5;
+      i++;
       return;
     `);
     expect(trace.map(plain)).toEqual([
@@ -99,8 +86,7 @@ describe('algorithm interpretation', () => {
           total: 29,
           k: 3,
           i: 1,
-          a: [5, 0],
-          joined: 5
+          a: [5, 0]
         },
         types: undefined
       }
@@ -124,7 +110,7 @@ describe('algorithm interpretation', () => {
     [
       'object arithmetic',
       'const o = Point({ x: 1, y: 2 }); const n = Int(o - 1);',
-      /- on Point and Int/
+      /found an object/
     ],
     ['plain arrays', 'const a = [Int(1)];', /Arrays are made by a collection type/],
     ['plain objects', 'const o = { x: Int(1) };', /Objects are made by a record type/]
@@ -134,28 +120,21 @@ describe('algorithm interpretation', () => {
 
   it('stops endless loops and oversized state', () => {
     expect(() => interpretAlgorithm('while (true) {}')).toThrow(/operations/);
+    expect(() => interpretAlgorithm('const a = Ints.ofLength(20000, Int(0));')).toThrow(/entries/);
     expect(() =>
       interpretAlgorithm(
-        'let a = Ints([1]); while (Less(Count(a), 200)) a = Grow(a, 1); const n = Long(a);'
-      )
-    ).toThrow(/characters/);
-    expect(() =>
-      interpretAlgorithm('let a = Ints([1]); while (true) { a = Ints([...a, ...a]); }')
-    ).toThrow(/entries/);
-    expect(() =>
-      interpretAlgorithm(
-        '@grow[let a = Ints([1]); for (let i = Int(0); Less(i, 13); i = Next(i)) a = Ints([...a, ...a]);\nlet b = Int(0);] @loop[for (let j = Int(0); Less(j, 30); j = Next(j)) { b = Next(j); }]'
+        '@grow[let a = Ints.ofLength(9000, Int(1));\nlet b = Int(0);] @loop[for (let j = Int(0); (j < 30); j++) { b = j + 1; }]'
       )
     ).toThrow(/too large/);
     expect(() =>
       interpretAlgorithm(
-        `let n = Int(0); for (let i = Int(0); Less(i, 50); i = Next(i)) for (let j = Int(0); Less(j, ${algorithmLimits.maximumSourceSteps / 50 + 1}); j = Next(j)) @step[n = Next(j);]`
+        `let n = Int(0); for (let i = Int(0); (i < 50); i++) for (let j = Int(0); (j < (${algorithmLimits.maximumSourceSteps / 50 + 1})); j++) @step[n = j + 1;]`
       )
     ).toThrow(/labels end more than/);
   });
 
   it('bounds the steps a variant shows, not those pausing at every label only names', () => {
-    const body = `let n = Int(0); for (let i = Int(0); Less(i, 3); i = Next(i)) @pass{ for (let j = Int(0); Less(j, ${algorithmLimits.maximumSteps}); j = Next(j)) @step[n = Next(j);] }`;
+    const body = `let n = Int(0); for (let i = Int(0); (i < 3); i++) @pass{ for (let j = Int(0); (j < (${algorithmLimits.maximumSteps})); j++) @step[n = j + 1;] }`;
     // Every label paused at: over 200 steps, which only name what variants can show.
     expect(interpretAlgorithm(body).length).toBeGreaterThan(algorithmLimits.maximumSteps);
     // Pausing at the passes alone shows three steps.
@@ -168,7 +147,7 @@ describe('algorithm interpretation', () => {
   });
 
   it('gives an algorithm without labels one step, its end', () => {
-    const trace = interpretAlgorithm('let x = Int(1); x = Next(x);');
+    const trace = interpretAlgorithm('let x = Int(1); x++;');
     expect(trace.map(({ state }) => state)).toEqual([{ x: 2 }]);
   });
 
@@ -187,13 +166,13 @@ describe('input and step selection', () => {
   it('starts the algorithm from the input and records input variables', () => {
     const input = interpretInput('const values = Ints([2, 1]); const label = Text("pair");');
     const trace = interpretAlgorithm(
-      '@reverse[values = Flip(values);] @flag[let swapped = Flag(true);]',
+      '@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;] @flag[let swapped = Flag(true);]',
       input
     );
     expect(trace[0].before?.state).toEqual({ values: [2, 1], label: 'pair' });
     expect(trace.map(({ state }) => state)).toEqual([
-      { values: [1, 2], label: 'pair' },
-      { values: [1, 2], label: 'pair', swapped: true }
+      { values: [1, 2], label: 'pair', t: 2 },
+      { values: [1, 2], label: 'pair', t: 2, swapped: true }
     ]);
     expect(input.state.values).toEqual([2, 1]);
     expect(() => interpretAlgorithm('let values = Ints([]);', input)).toThrow(
@@ -223,18 +202,18 @@ describe('domain types', () => {
 
   it('rejects plain values the algorithm stores, at the statement that stores them', () => {
     expect(() => interpretAlgorithm('let i = 0;')).toThrow(/i would be the plain number 0/);
-    expect(() => interpretAlgorithm('let s = Ints([]); s = Grow(s, "x");')).toThrow(
+    expect(() => interpretAlgorithm('let s = Ints([]); s.push("x");')).toThrow(
       /Int values must be whole numbers, not "x"/
     );
     // A plain literal given to an operator takes its operand's type.
-    expect(interpretAlgorithm('let i = Int(0); i = Add(i, 1); i = Next(i);')[0].types).toEqual({
+    expect(interpretAlgorithm('let i = Int(0); i++; i++;')[0].types).toEqual({
       i: 'Int'
     });
   });
 
   it('keeps each variable the type it was made with, converting what is assigned to it', () => {
     const step = interpretAlgorithm(
-      'const d = Ints([0, 1]); let n = Int(0); n = Count(d); let found = Flag(false); found = Less(1, 2);'
+      'const d = Ints([0, 1]); let n = Int(0); n = d.length; let found = Flag(false); found = 1 < 2;'
     )[0];
     expect(step.state).toMatchObject({ n: 2, found: true });
     expect(step.types).toMatchObject({ n: 'Int', found: 'Flag' });
@@ -245,7 +224,7 @@ describe('domain types', () => {
         message: expect.stringMatching(/^found must be a Flag, not a Text/u)
       })
     );
-    expect(() => interpretAlgorithm('let h = Int(7); h = Halve(h);')).toThrow(
+    expect(() => interpretAlgorithm('let h = Int(7); h = Real(h / 2);')).toThrow(
       /h must be a Int, not a Real/
     );
   });

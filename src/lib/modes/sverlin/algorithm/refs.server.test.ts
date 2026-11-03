@@ -6,7 +6,6 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Front = ref(Values);
-  const Rest = unop((c: Values) => Values(c.slice(1)));
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
 
@@ -26,13 +25,13 @@ describe('references', () => {
     const trace = run(`
       @start[let queue = Values([4, 7, 9]);
       const front = Front(queue[1]);]
-      @leave[queue = Rest(queue);]
+      @leave[queue.shift();]
     `);
     expect(trace.map(({ state }) => state.front)).toEqual([7, 7]);
     expect(trace[0].types.front).toBe('Front');
     expect(
       whereIs(
-        `@start[let queue = Values([4, 7, 9]); const front = Front(queue[1]);] @leave[queue = Rest(queue);]`,
+        `@start[let queue = Values([4, 7, 9]); const front = Front(queue[1]);] @leave[queue.shift();]`,
         'front'
       )
     ).toEqual(['queue[1]', 'queue[0]']);
@@ -41,7 +40,7 @@ describe('references', () => {
   it('refer to nothing once their element is gone', () => {
     expect(
       whereIs(
-        `@start[let queue = Values([4, 7]); const front = Front(queue[0]);] @leave[queue = Rest(queue);]`,
+        `@start[let queue = Values([4, 7]); const front = Front(queue[0]);] @leave[queue.shift();]`,
         'front'
       )
     ).toEqual(['queue[0]', undefined]);
@@ -88,13 +87,12 @@ describe('references to positions', () => {
       const Edges = collection(Edge);
       const Queue = collection(Vertex);
       const Front = ref(Queue);
-      const Append = binop((c: Queue, x: Vertex) => Queue([...c, x]));
     `);
     const [step] = interpretAlgorithm(
       `const vertices = Names(['A', 'B', 'C']);
        const edges = Edges([{ from: 0, to: 2 }]);
        let queue = Queue([]);
-       queue = Append(queue, edges[0].to);
+       queue.push(edges[0].to);
        const front = Front(queue[0]);`,
       undefined,
       graph

@@ -7,7 +7,6 @@
   const None = type(['none']);
   const PreviousName = union(Name, None);
   const VisitedFlag = type('boolean');
-  const Flag = type('boolean');
 
   const Vertex = record({ name: Name });
   const Vertices = collection(Vertex);
@@ -22,18 +21,6 @@
   const Slot = index(Neighbours);
   const Adjacency = collection(Neighbours);
 
-  const Length = unop((v: Vertices) => VertexRef(v.length));
-  const Before = binop((a: VertexRef, b: VertexRef) => Flag(a < b));
-  const Next = unop((p: VertexRef) => VertexRef(p + 1));
-  const Count = unop((n: Neighbours) => Slot(n.length));
-  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
-  const Step = unop((p: Slot) => Slot(p + 1));
-  const NotVisited = unop((v: VisitedFlag) => Flag(!v));
-  const Reachable = unop((d: Dist) => Flag(d !== '∞'));
-  const IsVertex = unop((p: Choice) => Flag(p !== 'none'));
-  const IsNone = unop((p: Choice) => Flag(p === 'none'));
-  const Shorter = binop((a: Dist, b: Dist) => Flag(a !== '∞' && (b === '∞' || a < b)));
-  const AddWeight = binop((d: Dist, w: Weight) => Dist(d === '∞' ? '∞' : d + Distance(w)));
 </script>
 
 <script lang="sverlin" input>
@@ -60,24 +47,24 @@
   let visited = Visited([false, false, false, false, false]);]
   @initial[distances[source] = Distance(0);]
 
-  for (@firstRound[let round = VertexRef(0)]; @moreRounds[Before(round, Length(vertices))]; @nextRound[round = Next(round)]) @round{
+  for (@firstRound[let round = VertexRef(0)]; @moreRounds[round < vertices.length]; @nextRound[round++]) @round{
     let current = Choice(None('none'));
-    for (@firstVertex[let v = VertexRef(0)]; @moreVertices[Before(v, Length(vertices))]; @nextVertex[v = Next(v)]) @scan{
-      if (@open[NotVisited(visited[v]) && Reachable(distances[v])]) {
-        if (@unchosen[IsNone(current)]) @first{
+    for (@firstVertex[let v = VertexRef(0)]; @moreVertices[v < vertices.length]; @nextVertex[v++]) @scan{
+      if (@open[!visited[v] && distances[v] !== '∞']) {
+        if (@unchosen[current === 'none']) @first{
           current = v;
-        } else if (@shorter[Shorter(distances[v], distances[current])]) @better{
+        } else if (@shorter[distances[v] !== '∞' && (distances[current] === '∞' || distances[v] < distances[current])]) @better{
           current = v;
         }
       }
     }
-    if (@chosen[IsVertex(current)]) @settle{
+    if (@chosen[current !== 'none']) @settle{
       const edges = adjacency[current];
       @mark[visited[current] = true;]
-      for (@firstEdge[let slot = Slot(edges, 0)]; @moreEdges[Within(slot, Count(edges))]; @nextEdge[slot = Step(slot)]) @edge{
+      for (@firstEdge[let slot = Slot(edges, 0)]; @moreEdges[slot < edges.length]; @nextEdge[slot++]) @edge{
         const edge = edges[slot];
-        const alternative = @sum[AddWeight(distances[current], edge.weight)];
-        if (@improve[Shorter(alternative, distances[edge.to])]) @relax{
+        const alternative = @sum[distances[current] === '∞' ? '∞' : distances[current] + Distance(edge.weight)];
+        if (@improve[alternative !== '∞' && (distances[edge.to] === '∞' || alternative < distances[edge.to])]) @relax{
           distances[edge.to] = alternative;
           previous[edge.to] = vertices[current].name;
         }

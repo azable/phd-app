@@ -2,14 +2,7 @@
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
-  const Flag = type('boolean');
 
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -17,11 +10,11 @@
 </script>
 
 <script lang="sverlin">
-  for (@last[let end = Length(values)]; @more[Before(Position(1), end)]; @shrink[end = Prev(end)]) @pass{
-    for (@first[let i = Position(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
-      if (@compare[Greater(values[@left[Prev(i)]], values[@right[i]])]) @swap{
-        const moved = values[@from[Prev(i)]];
-        values[Prev(i)] = values[@to[i]];
+  for (@last[let end = values.length]; @more[Position(1) < end]; @shrink[end--]) @pass{
+    for (@first[let i = Position(1)]; @inside[i < end]; @step[i++]) @pair{
+      if (@compare[(values[@left[i - 1]]) > values[@right[i]]]) @swap{
+        const moved = values[@from[i - 1]];
+        values[i - 1] = values[@to[i]];
         values[i] = moved;
       }
     }
@@ -31,8 +24,8 @@
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet CompareMark(p: Position)}<Pointed />{/snippet}
 {#snippet SwapMark(p: Position)}<Pointed />{/snippet}
-{#snippet Ask(g: Greater)}
-  <Node>compare {g.a} and {g.b}</Node>
+{#snippet Ask(c: @pass.pair.compare)}
+  <Node>compare {c.left} and {c.right}</Node>
 {/snippet}
 {#snippet SwapNote()}<Node>Swap</Node>{/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
@@ -45,7 +38,7 @@
     <When of="@pass.pair.swap">
       <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
     </When>
-    {@render Greater(@pass.pair.compare)}
+    {@pass.pair.compare}
     <When of="@pass.pair.swap">{@render SwapNote()}</When>
   </Node>
 {/snippet}

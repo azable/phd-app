@@ -7,20 +7,6 @@ const domain = interpretDomain(`
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Same = binop((a: Index, b: Index) => Flag(a === b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Back2 = unop((p: Index) => Index(p - 2));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
-  const Below = binop((a: Int, b: Int) => Flag(a < b));
-  const Add = binop((a: Int, b: Int) => Int(a + b));
-  const Up = unop((n: Int) => Int(n + 1));
-  const Triple = unop((n: Int) => Int(n * 3));
-  const Even = unop((n: Int) => Flag(n % 2 === 0));
-  const Short = unop((v: Values) => Flag(v.length < 3));
-  const Tail = unop((v: Values) => Values(v.slice(1)));
-  const Append = binop((v: Values, x: Int) => Values([...v, x]));
 `);
 const run = (body: string, pacing?: Pacing) =>
   traceAlgorithm(body, undefined, domain, pacing).steps;
@@ -33,7 +19,7 @@ describe('functions', () => {
   it('are called with their arguments, giving back a position into the caller’s collection', () => {
     const [step] = run(`
       function search(a, target) {
-        for (let i = Index(0); Before(i, Length(a)); i = Next(i)) if (Equal(a[i], target)) return i;
+        for (let i = Index(0); (i < a.length); i++) if ((a[i] === target)) return i;
         return Index(-1);
       }
       const values = Values([3, 8, 5]);
@@ -48,8 +34,8 @@ describe('functions', () => {
     const trace = run(
       `
       function search(a, target) {
-        for (let i = Index(0); Before(i, Length(a)); i = Next(i)) {
-          @check[if (Equal(a[i], target)) return i;]
+        for (let i = Index(0); (i < a.length); i++) {
+          @check[if ((a[i] === target)) return i;]
         }
         @miss[return Index(-1);]
       }
@@ -72,7 +58,7 @@ describe('functions', () => {
         @step[const v = values[0];]
       }
       const values = Values([4, 2]);
-      first(Tail(values));
+      first(Values([2]));
     `);
     expect(inside.state).toMatchObject({ values: [2], v: 2 });
   });
@@ -81,8 +67,8 @@ describe('functions', () => {
     const trace = run(
       `
       function count(a, lo) {
-        @test[if (Same(lo, Length(a))) return Int(0);]
-        @add[return Add(a[lo], count(a, Next(lo)));]
+        @test[if ((lo === a.length)) return Int(0);]
+        @add[return (a[lo] + (count(a, (lo + 1))));]
       }
       const values = Values([3, 8, 5]);
       const total = count(values, Index(0));
@@ -96,7 +82,7 @@ describe('functions', () => {
 
   it('read and write the collections given, not the top level’s variables', () => {
     const [step] = run(`
-      function bump(a) { for (let i = Index(0); Before(i, Length(a)); i = Next(i)) a[i] = Up(a[i]); }
+      function bump(a) { for (let i = Index(0); (i < a.length); i++) a[i]++; }
       const values = Values([1, 2]);
       bump(values);
     `);
@@ -156,11 +142,11 @@ describe('loops', () => {
     const loops = `
       @start[const values = Values([1, 2, 3, 4, 5]);
       let last = Index(0);]
-      @down[for (let i = Index(4); Before(Index(-1), i); i = Back2(i)) {
+      @down[for (let i = Index(4); (Index(-1) < i); i = (i - 2)) {
         last = i;
       }]
-      for (let j = Index(0); Before(j, Length(values)); j = Next(j)) {
-        @skip[if (Even(values[j])) continue;]
+      for (let j = Index(0); (j < values.length); j++) {
+        @skip[if ((values[j] % 2 === 0)) continue;]
         @take[const odd = values[j];]
       }
     `;
@@ -177,11 +163,11 @@ describe('loops', () => {
     const trace = run(`
       @start[let values = Values([1]);
       let i = Index(0);]
-      for (i = Index(0); Before(i, Length(values)); i = Next(i)) {
-        @grow[if (Short(values)) values = Append(values, 1);]
+      for (i = Index(0); (i < values.length); i++) {
+        @grow[if ((values.length < 3)) values.push(1);]
       }
-      for (let k = Int(1); Below(k, 10); k = Triple(k)) {
-        @bump[k = Up(k);]
+      for (let k = Int(1); (k < 10); k = (k * 3)) {
+        @bump[k++;]
       }
     `);
     // @grow pauses at each run, the one finding values long enough too. The last test only drops
@@ -194,8 +180,8 @@ describe('loops', () => {
     const trace = run(`
       @start[let n = Int(0);]
       do {
-        @up[n = Up(n);]
-      } while (Below(n, 0));
+        @up[n++;]
+      } while ((n < 0));
     `);
     // The start, then the body's step; the test that fails after it changes nothing, so no end.
     expect(trace.map(({ state }) => state.n)).toEqual([0, 1]);

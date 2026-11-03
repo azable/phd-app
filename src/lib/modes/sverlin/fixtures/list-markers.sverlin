@@ -1,12 +1,10 @@
 <script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C', 'D']);
-  const Flag = type('boolean');
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
 </script>
 
 <script lang="sverlin" input>
@@ -22,7 +20,7 @@
 <script lang="sverlin">
   @begin[let prev = Next(End('end'));
   let cur = Next(head);]
-  while (@more[IsNode(cur)]) @rewire{
+  while (@more[cur !== 'end']) @rewire{
     @save[const after = cur.next;]
     @reverse[cur.next = prev;]
     @advance[prev = cur;

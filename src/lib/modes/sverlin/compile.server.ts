@@ -61,6 +61,7 @@ import {
   operatorNames,
   typeNames,
   type DomainRegistry,
+  type OperatorType,
   type RecordType,
   type RefType
 } from './algorithm/structures.server';
@@ -95,6 +96,7 @@ import {
   pauseSpace,
   starterPauses,
   starterVariant,
+  viewKey,
   type DesignKind,
   type DesignOrigin,
   type DesignSpace,
@@ -460,7 +462,7 @@ function listingsFrom(
 function earlyTyping(
   source: string,
   blocks: Partial<Record<BlockKind | 'design', Block>>
-): ViewTyping | undefined {
+): (ViewTyping & { labelOperators: Record<string, OperatorType> }) | undefined {
   if (!blocks.algorithm) return undefined;
   try {
     const domain = blocks.domain
@@ -477,15 +479,74 @@ function earlyTyping(
       (body) => stepLabels(parseBlock(body, 'algorithm', domain)).labels
     );
     const kept = new Set(labels.map(({ full }) => full));
+    // Every labelled expression's operands and result too, so a view typed by a label has its fields.
+    const steps = paced(
+      source,
+      algorithm,
+      input,
+      domain,
+      {},
+      { labels: kept, applications: kept }
+    ).steps;
     return {
       domain,
+      labelOperators: withLabelOperators(noDomain, steps).operators ?? {},
       labels,
-      steps: paced(source, algorithm, input, domain, {}, { labels: kept }).steps
+      steps
     };
   } catch {
     return undefined;
   }
 }
+
+/**
+ * The domain with each labelled expression a step recorded as an operator named by its label, as
+ * `ℓinsertˑcompare` for @insert.compare: its operands (left and right, argument, a function's
+ * parameters) and its result as value, typed as the trace recorded them, so a view typed by the
+ * label sees them as a record's fields (see viewDomainOf).
+ */
+function withLabelOperators(domain: DomainRegistry, steps: readonly MasterStep[]): DomainRegistry {
+  const operators: Record<string, OperatorType> = { ...(domain.operators ?? {}) };
+  for (const step of steps)
+    for (const [name, applications] of Object.entries(step.applied ?? {})) {
+      if (!isLabelKey(name)) continue;
+      for (const { state, types } of applications) {
+        const parameters = Object.keys(state).filter((key) => key !== 'value');
+        const known = operators[name];
+        if (known && known.parameters.length >= parameters.length && known.result) continue;
+        operators[name] = {
+          name,
+          parameters,
+          operands: parameters.map(
+            (parameter) =>
+              types[parameter] ??
+              (typeof state[parameter] === 'boolean' ? untypedBoolean : undefined) ??
+              known?.operands[known.parameters.indexOf(parameter)] ??
+              ''
+          ),
+          result:
+            types.value ??
+            (typeof state.value === 'boolean' ? untypedBoolean : undefined) ??
+            known?.result ??
+            '',
+          body: {
+            type: 'Literal',
+            value: null,
+            raw: 'null',
+            start: 0,
+            end: 0
+          } as unknown as OperatorType['body']
+        };
+      }
+    }
+  return { ...domain, operators };
+}
+
+/** What a label operator's operand or result is that no domain type holds: a comparison's true or false, drawn as text. */
+export const untypedBoolean = 'boolean';
+
+/** The full name of the label an operator's name is, as insert.compare for ℓinsertˑcompare. */
+const labelOfOperator = (name: string): string => name.slice(1).replaceAll('ˑ', '.');
 
 /** A value's view written as a render of its type, as {@render Int(key)}: a value is written {key}. */
 function writtenRenders(
@@ -714,7 +775,22 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     let ast = parseView(svelteSource);
     // A value in braces draws its type's view, as a render of that type, and a union's value its
     // member's, through a view added after the authored ones (see implicit-renders.server.ts).
-    const typing = earlyTyping(source, blocks);
+    const early = earlyTyping(source, blocks);
+    // Only the labels a view is typed by draw through a view (see withLabelOperators).
+    const typedBy = new Set(
+      findComponents(ast.html as Parameters<typeof findComponents>[0])
+        .components.map(({ type }) => type)
+        .filter(isLabelKey)
+    );
+    const typing = early && {
+      ...early,
+      domain: {
+        ...early.domain,
+        operators: Object.fromEntries(
+          Object.entries(early.labelOperators).filter(([name]) => typedBy.has(name))
+        )
+      }
+    };
     const authored = svelteSource.length;
     const pointerTypes = (html: unknown) => {
       const { components, pointers } = findComponents(html as Parameters<typeof findComponents>[0]);
@@ -869,9 +945,26 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         'Add a <script lang="sverlin"> algorithm block, labelling the code its steps are about, as @check[…] (see Steps).',
         { code: 'missing_algorithm' }
       );
-    const domain = blocks.domain
+    const declaredDomain = blocks.domain
       ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
       : noDomain;
+    // A view typed by a label sees the labelled expression as an operator named by it (see
+    // withLabelOperators), its operands and result the fields the first trace recorded.
+    const labelViews = new Set(found.components.map(({ type }) => type).filter(isLabelKey));
+    const domain: DomainRegistry = {
+      ...declaredDomain,
+      operators: Object.fromEntries(
+        Object.entries(typing?.domain.operators ?? {}).filter(([name]) => labelViews.has(name))
+      )
+    };
+    for (const name of labelViews)
+      if (!domain.operators?.[name])
+        viewProblems.push(
+          new InvalidSvelteSourceError(
+            `A view takes ${asWritten(name)}, which labels no expression the algorithm evaluates: type a view by a label on an expression, as @compare[a > b], whose operands and result it draws.`,
+            { code: 'view_component' }
+          )
+        );
     const { atoms } = domain;
     // A reference to a node shows as its place in the heap, no value a participant can read.
     for (const [start, type] of found.valueTypes) {
@@ -1186,6 +1279,12 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           }
           continue;
         }
+        // A view typed by a label, as (c: @insert.compare), names the label as its type, reading nothing.
+        if (
+          reference.kind === 'value' &&
+          /:\s*$/u.test(marked.slice(Math.max(0, reference.start - 40), reference.start))
+        )
+          continue;
         if (reference.kind === 'value' && tested.has(reference.start)) {
           problem(
             `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <When of="${asWritten(reference.key)}">…</When> draws its contents at each step inside a run of the label.`
@@ -1198,35 +1297,19 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           );
           continue;
         }
-        if (reference.kind === 'applied' && !operators.has(reference.operator)) {
+        if (reference.kind === 'applied') {
           problem(
-            `applied(${reference.operator}) takes an operator the domain declares, as applied(Equal).`
-          );
-          continue;
-        }
-        if (reference.path === undefined) {
-          const { operator } = reference as { operator: string };
-          problem(
-            `applied(${operator}) draws no label's applications: ${labelledForm(operator, algorithmLabels, (path) => `applied(${operator}, ${path})`)}.`
+            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as {#snippet Ask(c: @check.equal)}…{/snippet} drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
           );
           continue;
         }
         const filter = reference.kind === 'value' && filters.has(reference.key);
-        const found = resolveLabel(
-          reference.path,
-          algorithmLabels.labels,
-          reference.kind !== 'applied' && !filter
-        );
+        const found = resolveLabel(reference.path, algorithmLabels.labels, !filter);
         if ('problem' in found) {
           problem(found.problem);
           continue;
         }
-        if (reference.kind === 'applied')
-          histories[reference.key] = {
-            operator: reference.operator,
-            ...labelSpan(found.label)
-          };
-        else if (filter) narrowed.set(reference.key, labelSpan(found.label));
+        if (filter) narrowed.set(reference.key, labelSpan(found.label));
         else labelled[reference.key] = { label: found.label.full };
       }
     const whens = whenChainsOf(ast.html);
@@ -1281,7 +1364,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ])
       shown.set(operator, [...(shown.get(operator) ?? []), { start, end }]);
     const pacing: Pacing = { shown };
-    const keep = { labels: new Set(Object.values(labelled).map(({ label }) => label)) };
+    const keep = {
+      labels: new Set(Object.values(labelled).map(({ label }) => label)),
+      // The labels a view typed by the label draws, whose operands and result each step keeps.
+      applications: new Set(operatorNames(domain).filter(isLabelKey).map(labelOfOperator))
+    };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
     const steps = sourceSteps(master);
@@ -1611,7 +1698,13 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const tagged = withInsertions(svelteSource, [
       ...insertions,
       ...pointers.removals,
-      ...implicitInsertions(implicit, pointers.removals),
+      ...implicitInsertions(
+        implicit,
+        pointers.removals,
+        (start) =>
+          [...aliases.values()].find(({ callee }) => callee.start === start && callee.end === start)
+            ?.alias
+      ),
       ...slotInsertions(
         ast.html,
         svelteSource,
@@ -1629,11 +1722,14 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         referencesOf(master),
         positions.targets
       ),
-      ...[...aliases.values()].map(({ alias, callee }) => ({
-        at: callee.start,
-        text: alias,
-        remove: callee.end - callee.start
-      }))
+      // A brace render has no type name written to replace: its alias is its callee (see implicitInsertions).
+      ...[...aliases.values()]
+        .filter(({ callee }) => callee.end > callee.start)
+        .map(({ alias, callee }) => ({
+          at: callee.start,
+          text: alias,
+          remove: callee.end - callee.start
+        }))
     ]);
     const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted, paths, openingReads);
     // A place drawing its own choice of view is decided by that choice.
@@ -1872,7 +1968,7 @@ export async function bundlePresentation(
   const layoutShown = { [layoutProp]: { [frame.name]: true } };
   // Each type rendered by name draws the view the variant chose for it.
   const views = Object.fromEntries([
-    ...Object.keys(design.views).map((type) => [type, values[`views.${type}`]]),
+    ...Object.keys(design.views).map((type) => [type, values[viewKey(type)]]),
     // A place with a choice of its own draws through its alias (see places).
     ...Object.entries(design.places ?? {}).flatMap(([alias, { key, base, pointer }]) =>
       pointer ? [] : [[alias, values[key] ?? values[base]]]
@@ -2855,7 +2951,9 @@ function checkComponents(
     const at = { code: 'view_component', start: sourcePosition(source, start) };
     if (!definesType(domain, type))
       throw new InvalidSvelteSourceError(
-        `${name}'s type ${type} is not a type; define it in the domain block, or use one that is.`,
+        isLabelKey(type)
+          ? `${name} takes ${asWritten(type)}, which labels no expression any step evaluates: a view typed by a label draws what its expression computed, so label an expression the input reaches, as @compare[a > b].`
+          : `${name}'s type ${type} is not a type; define it in the domain block, or use one that is.`,
         at
       );
     if (

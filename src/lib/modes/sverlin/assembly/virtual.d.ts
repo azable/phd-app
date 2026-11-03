@@ -23,6 +23,7 @@ declare module 'virtual:atoms' {
       base: string;
       parent?: string;
       unit?: string;
+      places?: number;
       min?: number;
       max?: number;
       values?: (string | number)[];
@@ -40,7 +41,7 @@ declare module 'virtual:components' {
   export const components: {
     name: string;
     cases: unknown[];
-    range?: { min: number; max: number };
+    range?: { min: number; max: number; places?: number };
   }[];
   export const placements: { path: string; step: number; values: unknown[] }[];
   /** The listing in the variant's language, and what each step lights, if the view places one. */

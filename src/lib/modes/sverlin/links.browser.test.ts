@@ -31,24 +31,18 @@ const insertion = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
-  const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (let i = Position(1); (i < values.length); i++) @insert{
     let j = i;
-    while (Before(Position(0), j) && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while ((Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -167,25 +161,21 @@ it.skipIf(!enabled)(
 // A swap as an operation, whose view, rendered among the cells, brings its link in.
 const traded = insertion
   .replace(
-    '  const Greater = binop((a: Int, b: Int) => Flag(a > b));',
-    `  const Greater = binop((a: Int, b: Int) => Flag(a > b));
-  const Pair = record({ a: Position, b: Position });
-  const Adjacent = binop((a: Position, b: Position) => Pair({ a, b }));
-  const Swap = binop((v: Values, at: Pair) =>
-    Values([...v.slice(0, at.a), v[at.b], v[at.a], ...v.slice(at.b + 1)])
-  );`
+    '',
+    `
+  const Pair = record({ a: Position, b: Position });`
   )
   .replace(
-    `      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    `      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);`,
-    `      values = @trade[Swap(values, Adjacent(Prev(j), j))];
-      j = Prev(j);`
+      j--;`,
+    `      values = @trade[Values([...v.slice(0, (Pair({ ((j - 1)), j })).a), values[(Pair({ ((j - 1)), j })).b], values[(Pair({ ((j - 1)), j })).a], ...v.slice((Pair({ ((j - 1)), j })).b + 1)])];
+      j--;`
   )
   .replace(
     '    <Link from={@insert.swap.from} to={@insert.swap.to} />',
-    '    {@render Swap(@insert.swap.trade)}'
+    '    {@render Values([...v.slice(0, at.a), @insert.swap.trade[at.b], @insert.swap.trade[at.a], ...v.slice(at.b + 1)])}'
   )
   .replace(
     '{#snippet Cells()}',
@@ -196,7 +186,9 @@ it.skipIf(!enabled)(
   'lays out the link an operator’s view brings in among the cells, at its steps only',
   { timeout: 120_000 },
   async () => {
-    expect(traded).toContain('{@render Swap(@insert.swap.trade)}');
+    expect(traded).toContain(
+      '{@render Values([...v.slice(0, at.a), @insert.swap.trade[at.b], @insert.swap.trade[at.a], ...v.slice(at.b + 1)])}'
+    );
     const prepared = prepareSvelteComponent(traded);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {

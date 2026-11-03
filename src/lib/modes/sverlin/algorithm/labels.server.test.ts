@@ -7,8 +7,6 @@ const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Flag = type('boolean');
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
-  const Up = unop((n: Int) => Int(n + 1));
 `);
 const labelsOf = (body: string) =>
   traceAlgorithm(body, undefined, domain).labels.map(({ full, nodes }) => [
@@ -34,14 +32,14 @@ describe('labels', () => {
       labelsOf(`
         @start[let n = Int(0);
         let m = Int(1);]
-        while (@test[Less(n, 3)]) @up{
-          n = Up(n);
+        while (@test[n < 3]) @up{
+          n++;
         }
         @last[m = n];
       `)
     ).toEqual([
       ['start', 'VariableDeclaration VariableDeclaration'],
-      ['test', 'CallExpression'],
+      ['test', 'BinaryExpression'],
       ['up', 'BlockStatement'],
       // An expression that is its statement's whole expression labels the statement.
       ['last', 'ExpressionStatement']
@@ -51,8 +49,8 @@ describe('labels', () => {
   it('label a statement outside a block, as an if’s, by its text with its semicolon', () => {
     expect(
       labelsOf(`
-        for (let i = Int(0); Less(i, 3); i = Up(i)) @pass{
-          @stop[if (Less(0, i)) @leave[break;]]
+        for (let i = Int(0); (i < 3); i++) @pass{
+          @stop[if ((0 < i)) @leave[break;]]
         }
       `)
     ).toEqual([
@@ -66,27 +64,27 @@ describe('labels', () => {
     expect(
       labelsOf(`
         @start[let n = Int(0);]
-        @loop[while (@test[@low[Less(n, 3)] && @small[Less(n, 9)]]) {
-          n = Up(n);
+        @loop[while (@test[@low[n < 3] && @small[n < 9]]) {
+          n++;
         }]
       `).map(([full]) => full)
     ).toEqual(['start', 'loop', 'loop.test', 'loop.test.low', 'loop.test.small']);
   });
 
   it('cover every statement beside a labelled one, leaving a loop’s header, leading declarations, and an expression’s surroundings', () => {
-    expect(problemOf(`let a = Int(1);\na = Up(a);\n@b[let c = Int(2);]`)).toThrow(
-      'a = Up(a); is in the algorithm but in none of the labels beside it (@b)'
+    expect(problemOf(`let a = Int(1);\na++;\n@b[let c = Int(2);]`)).toThrow(
+      'a++; is in the algorithm but in none of the labels beside it (@b)'
     );
     // Declarations leading a block are the lead-up to its first step; one after labelled code is
     // not.
     expect(problemOf('let a = Int(1);\nconst d = Int(2);\n@b[let c = Int(3);]')).not.toThrow();
     expect(
       problemOf(`
-        for (let i = Int(0); Less(i, 3); i = Up(i)) @pass{
+        for (let i = Int(0); (i < 3); i++) @pass{
           let a = Int(1);
           @b[let c = Int(2);]
           let e = Int(3);
-          @f[e = Up(e);]
+          @f[e++;]
         }
       `)
     ).toThrow('let e = Int(3); is in @pass but in none of the labels beside it (@pass.b, @pass.f)');
@@ -94,8 +92,8 @@ describe('labels', () => {
     expect(
       problemOf(`
         @start[let n = Int(0);]
-        for (let i = Int(0); @test[Less(i, 3)]; i = Up(i)) @pass{
-          n = Up(n);
+        for (let i = Int(0); @test[i < 3]; i++) @pass{
+          n++;
         }
       `)
     ).not.toThrow();

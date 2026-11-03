@@ -19,13 +19,6 @@ const domain = interpretDomain(`
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
   const Edges = collection(Edge);
   const Flag = type('boolean');
-  const Append = binop((c: Values, x: Int) => Values([...c, x]));
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Skip = unop((p: Position) => Position(p + 2));
-  const Sum = binop((a: Position, b: Position) => Position(a + b - 1));
-  const Less = binop((a: Int, b: Int) => Flag(a < b));
 `);
 const run = (body: string, pacing?: Pacing) =>
   traceAlgorithm(body, undefined, domain, pacing).steps;
@@ -36,8 +29,8 @@ describe('positions', () => {
       @start[const values = Values([3, 8, 5]);
       let i = Position(-1);]
       @zero[i = Position(0);]
-      while (Before(i, Length(values))) {
-        @up[i = Next(i);]
+      while ((i < values.length)) {
+        @up[i++;]
       }
     `);
     // The loop's last test, after the last i++, changes nothing, so it is no step.
@@ -54,9 +47,9 @@ describe('positions', () => {
       let i = Position(left, 0);
       let j = Position(right, 0);
       let k = Position(merged, -1);]
-      while (Before(i, Length(left)) && Before(j, Length(right))) {
-        @take[if (Less(left[i], right[j])) { merged = Append(merged, left[i]); i = Next(i); } else { merged = Append(merged, right[j]); j = Next(j); }]
-        @count[k = Sum(i, j);]
+      while ((i < left.length) && (j < right.length)) {
+        @take[if ((left[i] < right[j])) { merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }]
+        @count[k = i + j - 1;]
       }
     `,
       { pauses: new Map(['start', 'count'].map((label) => [label, 'on'])) }
@@ -72,8 +65,8 @@ describe('positions', () => {
       @start[const values = Values([3, 8, 5]);
       let i = Position(-2);]
       @zero[i = Position(0);]
-      while (Before(i, Length(values))) {
-        @up[i = Skip(i);]
+      while ((i < values.length)) {
+        @up[i = i + 2;]
       }
       @far[i = 50;
       i = 0;]
@@ -114,7 +107,6 @@ describe('positions', () => {
       const Position = index(Values);
       const Positions = collection(Position);
       const Take = record({ from: Position });
-      const Next = unop((p: Position) => Position(p + 1));
     `);
 
     it('in records, collections, and the variables made from them', () => {
@@ -125,7 +117,7 @@ describe('positions', () => {
         let i = Position(left, 1);
         let j = Position(right, 0);
         const take = Take({ from: j });
-        const seen = Positions([i, Next(j), Position(right, 0)]);
+        const seen = Positions([i, (j + 1), Position(right, 0)]);
         let k = Position(left, 0);
         k = j;
         const moved = take.from;

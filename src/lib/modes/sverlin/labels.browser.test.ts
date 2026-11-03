@@ -23,15 +23,8 @@ afterAll(() => browser?.close());
 
 const domain = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
-  const Equal = binop((a: Int, b: Int) => Flag(a === b));
 </script>`;
 
 /** Each step's visible nodes, as kind:text, from the first step on, pausing as chosen. */
@@ -79,12 +72,12 @@ it.skipIf(!enabled)(
   const values = Values([5, 2, 8, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (let i = Index(1); (i < values.length); i++) @insert{
     const key = @key[values[i]];
     let j = i;
-    while (Before(Index(0), j) && Greater(values[Prev(j)], key)) {
-      values[j] = values[Prev(j)];
-      j = Prev(j);
+    while ((Index(0) < j) && ((values[j - 1]) > key)) {
+      values[j] = values[j - 1];
+      j--;
     }
     values[j] = key;
   }
@@ -121,11 +114,11 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script lang="sverlin">
-  for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
-    for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
-      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
-        const moved = @a[values[Prev(i)]];
-        values[Prev(i)] = @b[values[i]];
+  for (let end = values.length; (Index(1) < end); end--) @sweep{
+    for (let i = Index(1); (i < end); i++) @pair{
+      if (@test[(values[i - 1]) > values[i]]) @swap{
+        const moved = @a[values[i - 1]];
+        values[i - 1] = @b[values[i]];
         values[i] = moved;
       }
     }
@@ -139,7 +132,7 @@ it.skipIf(!enabled)(
 <Layout name="Main">
   <Node>
     {@render Cells()}
-    {@render Greater(@sweep.pair.test)}
+    {@sweep.pair.test}
     {@render Swapped()}
   </Node>
 </Layout>`;
@@ -170,8 +163,8 @@ it.skipIf(!enabled)(
   const target = Int(5);
 </script>
 <script lang="sverlin">
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
-    if (Equal(values[@at[i]], target)) break;
+  for (let i = Index(0); (i < values.length); i++) @check{
+    if ((values[@at[i]] === target)) break;
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -196,14 +189,13 @@ it.skipIf(!enabled)(
   const Digits = collection(Digit);
   const Counts = collection(Count);
   const At = ref(Digits);
-  const Inc = unop((n: Count) => Count(n + 1));
 </script>
 <script lang="sverlin" input>
   const digits = Digits([3, 1, 4]);
   const counts = Counts([0, 0, 0, 0, 0]);
 </script>
 <script lang="sverlin">
-  for (const v of digits) @count{ counts[v] = Inc(counts[v]); }
+  for (const v of digits) @count{ counts[v]++; }
 </script>
 {#snippet DigitCell(value: Digit)}<Node {value} />{/snippet}
 {#snippet CountCell(value: Count)}<Node {value} />{/snippet}

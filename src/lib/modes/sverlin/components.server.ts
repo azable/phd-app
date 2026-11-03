@@ -1313,7 +1313,7 @@ export type ComponentProbe = {
    * An integer range too large to draw whole, for a component that shows its value: the page also
    * draws it with the integer in the range that prints widest in the font the value is drawn in.
    */
-  range?: { min: number; max: number };
+  range?: { min: number; max: number; places?: number };
 };
 
 // A component's cases are drawn in one pass of the page; this bounds them, so a pass stays about as
@@ -1367,13 +1367,13 @@ export function componentProbes(
       values && (values.every?.length ?? Infinity) <= maximumCases ? values.every : values?.widest;
     const atom = domain.atoms[type];
     const range =
-      atom?.base === 'integer' &&
+      (atom?.base === 'integer' || (atom?.base === 'number' && atom.places !== undefined)) &&
       !atom.values &&
       atom.min !== undefined &&
       atom.max !== undefined &&
       cases === values?.widest &&
       !single(parameter)
-        ? { min: atom.min, max: atom.max }
+        ? { min: atom.min!, max: atom.max!, ...(atom.places ? { places: atom.places } : {}) }
         : undefined;
     if (cases && cases.length <= maximumCases)
       probes.push({ name, cases, ...(range ? { range } : {}) });
@@ -1435,6 +1435,9 @@ export function probeValues(
     path: string,
     single: (path: string) => boolean
   ): ProbeValues | undefined => {
+    // A comparison's true or false, which no domain type holds, drawn as text.
+    if (type === 'boolean' && !domain.atoms[type])
+      return { every: [true, false], widest: [true, false] };
     const atom = domain.atoms[type];
     // A position runs over the longest collection of its type in the trace, and as far past its
     // ends as the trace records one.
@@ -1500,7 +1503,18 @@ function atomValues(atom: AtomType, seen: readonly unknown[]): ProbeValues | und
     atom.values ??
     (atom.base === 'integer' && min !== undefined && max !== undefined && max - min < maximumCases
       ? Array.from({ length: max - min + 1 }, (_, index) => min + index)
-      : undefined);
+      : atom.base === 'number' &&
+          atom.places !== undefined &&
+          min !== undefined &&
+          max !== undefined &&
+          (max - min) * 10 ** atom.places < maximumCases
+        ? Array.from(
+            { length: Math.round((max - min) * 10 ** atom.places) + 1 },
+            (_, index) =>
+              Math.round((min + index / 10 ** atom.places!) * 10 ** atom.places!) /
+              10 ** atom.places!
+          )
+        : undefined);
   if (atom.base === 'text')
     return listed && { every: [...listed], widest: longestPrinted(listed, 2) };
   const ends = listed

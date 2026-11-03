@@ -3,7 +3,7 @@
  * unions, records, and collections built from them, and the operators on them.
  */
 
-import type { AnyNode, ArrowFunctionExpression, CallExpression, Expression, Pattern } from 'acorn';
+import type { AnyNode, CallExpression, Expression, Pattern } from 'acorn';
 
 import { atomBases, type AtomBase, type AtomType } from './atoms.server';
 import { AlgorithmError, domainFunctions } from './block.server';
@@ -26,7 +26,7 @@ import {
  */
 export function interpretDomain(body: string): DomainRegistry {
   const source = body;
-  const { root, offset, parameterTypes } = parseBlock(source, 'domain');
+  const { root, offset } = parseBlock(source, 'domain');
   const fail = (node: AnyNode, message: string): never => {
     throw new AlgorithmError(message, offset(node));
   };
@@ -73,7 +73,12 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });, or an operator with binop(...) or unop(...), as in const Greater = binop((a: Int, b: Int) => Flag(a > b));`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });.`
+        );
+      if (kind === 'binop' || kind === 'unop')
+        fail(
+          declarator as AnyNode,
+          `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as {#snippet Ask(c: @compare)}…{/snippet}.`
         );
       if (declared.has(name)) fail(declarator as AnyNode, `"${name}" is already defined.`);
       declared.set(name, {
@@ -108,8 +113,6 @@ export function interpretDomain(body: string): DomainRegistry {
         element: structure.element
       };
   for (const name of declared.keys()) if (isType(name)) checkFinite(name);
-  for (const [name, { kind, call }] of declared)
-    if (kind === 'binop' || kind === 'unop') operators[name] = defineOperator(name, kind, call);
   return { atoms, structures, operators };
 
   /** An atomic type: a primitive kind with options, a refinement of a defined type, or an enumeration. */
@@ -126,20 +129,10 @@ export function interpretDomain(body: string): DomainRegistry {
         fail(definition, `Unknown kind "${definition.value}"; use one of ${atomBases.join(', ')}.`);
       type = { name, base: definition.value as AtomBase };
     } else if (definition.type === 'Identifier') {
-      if (kindOf(definition.name) === 'atom' && declared.get(definition.name)?.kind === 'type')
-        defineType(definition.name);
-      const parent = atoms[definition.name];
-      if (!parent && isType(definition.name))
-        fail(
-          definition,
-          `type() refines an atomic type, and ${definition.name} is a ${kindOf(definition.name)}.`
-        );
-      if (!parent)
-        fail(
-          definition,
-          `Unknown type ${definition.name}; define it first, as in const ${definition.name} = type('integer', { min: 0, max: 9 });`
-        );
-      type = { ...parent, name, parent: parent.name };
+      type = fail(
+        definition,
+        `A type is declared on its own, not from another: write ${name} with its kind and range, as type('integer', { min: 0, max: 9 }) or type('number', { min: 0, max: 1, places: 2 }), a unit beside them if it has one, and convert where it meets another type, as ${definition.name}(x).`
+      );
     } else if (definition.type === 'ArrayExpression') {
       const values = definition.elements.map((element) => {
         const value = element ? literalValue(element as Expression) : undefined;
@@ -244,252 +237,6 @@ export function interpretDomain(body: string): DomainRegistry {
     return { kind: 'ref', name, collection: target, element: elementName };
   }
 
-  /**
-   * An operator, as in binop((a: Int, b: Int) => Flag(a > b)) or unop((p: Index) => Index(p + 1)):
-   * a function of its operands, each typed on its parameter, that is one expression, reading only
-   * its parameters and Math, and giving a typed value, the call of a type, which is its result's
-   * type.
-   */
-  function defineOperator(
-    name: string,
-    kind: 'binop' | 'unop',
-    call: CallExpression
-  ): OperatorType {
-    const arity = kind === 'binop' ? 2 : 1;
-    const example =
-      kind === 'binop'
-        ? 'binop((a: Int, b: Int) => Flag(a > b))'
-        : 'unop((p: Index) => Index(p + 1))';
-    const args = call.arguments as Expression[];
-    const lambda = args.at(-1);
-    const textOf = (node: AnyNode) => {
-      const { start, end } = offset(node);
-      return source.slice(start, end);
-    };
-    // The earlier form gave the operands' types before the function.
-    if (
-      args.length === arity + 1 &&
-      lambda?.type === 'ArrowFunctionExpression' &&
-      lambda.params.length === arity &&
-      lambda.params.every((parameter) => parameter.type === 'Identifier') &&
-      args.slice(0, arity).every((argument) => argument.type === 'Identifier')
-    ) {
-      const typed = lambda.params.map(
-        (parameter, index) =>
-          `${(parameter as { name: string }).name}: ${(args[index] as { name: string }).name}`
-      );
-      fail(
-        call,
-        `An operator's operand types are written on its parameters: const ${name} = ${kind}((${typed.join(', ')}) => ${textOf(lambda.body)});`
-      );
-    }
-    if (args.length !== 1 || lambda?.type !== 'ArrowFunctionExpression')
-      fail(
-        call,
-        `${kind}() takes a function of ${arity === 2 ? 'two operands' : 'one operand'}, each typed, as in ${example}.`
-      );
-    const arrow = lambda as ArrowFunctionExpression;
-    if (
-      arrow.async ||
-      arrow.params.length !== arity ||
-      arrow.params.some((p) => p.type !== 'Identifier')
-    )
-      fail(
-        arrow,
-        `${name}'s function takes ${arity} typed name${arity === 2 ? 's' : ''}, one per operand, as in ${example}.`
-      );
-    const parameters = arrow.params.map((parameter) => (parameter as { name: string }).name);
-    if (new Set(parameters).size !== parameters.length)
-      fail(arrow, `${name}'s operands need names of their own.`);
-    const named = arrow.params.find(
-      (parameter) => (parameter as { name: string }).name === 'value'
-    );
-    if (named)
-      fail(
-        named,
-        `value names an application's result, as a view of ${name} reads it; call the operand something else.`
-      );
-    const operands = arrow.params.map((parameter) => {
-      const written = parameterTypes.get(offset(parameter).end);
-      if (!written)
-        return fail(
-          parameter,
-          `Give ${(parameter as { name: string }).name} its type, as in ${example}.`
-        );
-      const type = written.type;
-      if (!Object.hasOwn(atoms, type) && !Object.hasOwn(structures, type))
-        throw new AlgorithmError(
-          Object.hasOwn(operators, type)
-            ? `${type} is an operator, not a type.`
-            : `Unknown type ${type}; define it earlier in the domain block.`,
-          { start: written.at, end: written.at + type.length }
-        );
-      return type;
-    });
-    if (arrow.body.type === 'BlockStatement')
-      fail(arrow.body, `${name}'s function is one expression, without braces, as in ${example}.`);
-    const body = arrow.body as Expression;
-    const result =
-      body.type === 'CallExpression' && body.callee.type === 'Identifier'
-        ? body.callee.name
-        : undefined;
-    if (!result || (!Object.hasOwn(atoms, result) && !Object.hasOwn(structures, result)))
-      fail(
-        body,
-        body.type === 'ConditionalExpression'
-          ? `${name} gives a typed value: wrap the whole conditional in the type it gives, as in binop((q: Queue, v: Vertex) => Queue(q.includes(v) ? q : [...q, v])).`
-          : `${name} gives a typed value: wrap what it computes in a type defined above, as in ${example}.`
-      );
-    // The function reads its operands and Math only, and makes values of the types above.
-    const visit = (node: unknown, parent?: AnyNode): void => {
-      if (Array.isArray(node)) return node.forEach((child) => visit(child, parent));
-      if (node === null || typeof node !== 'object' || typeof (node as AnyNode).type !== 'string')
-        return;
-      const part = node as AnyNode;
-      if (part.type === 'AssignmentExpression' || part.type === 'UpdateExpression')
-        fail(part, `${name} computes a value and changes nothing.`);
-      if (part.type === 'Identifier') {
-        const property =
-          (parent?.type === 'MemberExpression' && parent.property === part && !parent.computed) ||
-          (parent?.type === 'Property' &&
-            parent.key === part &&
-            !parent.computed &&
-            !parent.shorthand);
-        const typeCall =
-          parent?.type === 'CallExpression' &&
-          parent.callee === part &&
-          (Object.hasOwn(atoms, part.name) || Object.hasOwn(structures, part.name));
-        if (!property && !typeCall && part.name !== 'Math' && !parameters.includes(part.name))
-          fail(
-            part,
-            Object.hasOwn(operators, part.name)
-              ? `${name} cannot use the operator ${part.name}: an operator computes from its operands alone.`
-              : `${name} reads only its operands (${parameters.join(', ')}) and Math, not ${part.name}.`
-          );
-      }
-      for (const [key, child] of Object.entries(part)) if (key !== 'loc') visit(child, part);
-    };
-    visit(body);
-    checkStructural(name, result as string, body as CallExpression, parameters, textOf);
-    return { name, operands, parameters, result: result as string, body };
-  }
-
-  /**
-   * An operator giving a collection or record only rearranges its operands: each element or field
-   * of what it builds is an operand, a read of one or of its parts, or a spread of one or of a
-   * slice of one; the whole may be a slice of an operand or empty. A new element, computed or
-   * literal, is a value operator's to make, so every new value is an application of its own.
-   */
-  function checkStructural(
-    name: string,
-    result: string,
-    body: CallExpression,
-    parameters: readonly string[],
-    textOf: (node: AnyNode) => string
-  ): void {
-    const structure = structures[result];
-    if (structure?.kind !== 'collection' && structure?.kind !== 'record') return;
-    const what = structure.kind;
-    const article = /^[AEIOU]/u.test(result) ? 'an' : 'a';
-    /** An operand, or a read of one or of its parts. */
-    const part = (node: AnyNode): boolean =>
-      (node.type === 'Identifier' && parameters.includes(node.name)) ||
-      (node.type === 'MemberExpression' && part(node.object as AnyNode));
-    const method = (node: AnyNode, name: string): AnyNode | undefined =>
-      node.type === 'CallExpression' &&
-      node.callee.type === 'MemberExpression' &&
-      !node.callee.computed &&
-      node.callee.property.type === 'Identifier' &&
-      node.callee.property.name === name
-        ? (node.callee.object as AnyNode)
-        : undefined;
-    /** A slice of a part, or a slice of one reversed: its elements, rearranged. */
-    const slice = (node: AnyNode): boolean => {
-      const sliced = method(node, 'slice');
-      if (sliced) return part(sliced) || slice(sliced);
-      const reversed = method(node, 'reverse');
-      return Boolean(reversed && method(reversed, 'slice') && slice(reversed));
-    };
-    const literal = (node: AnyNode): boolean =>
-      node.type === 'Literal' ||
-      node.type === 'TemplateLiteral' ||
-      (node.type === 'UnaryExpression' && literal(node.argument as AnyNode)) ||
-      (node.type === 'CallExpression' &&
-        node.callee.type === 'Identifier' &&
-        node.arguments.length > 0 &&
-        node.arguments.every((argument) => literal(argument as AnyNode)));
-    const refuse = (node: AnyNode, type: string | undefined): never => {
-      const shown = textOf(node);
-      const kind = what === 'collection' ? 'element' : 'field';
-      const lead = `${name} builds ${article} ${result} with a new ${kind}, ${shown}; an operator building a ${what} only rearranges its operands.`;
-      if (literal(node))
-        return fail(
-          node,
-          what === 'collection'
-            ? `${lead} Pass it in as an operand, as binop((v: ${result}, x: ${type ?? 'Int'}) => ${result}([x, ...v])).`
-            : `${lead} Pass it in as an operand.`
-        );
-      // A record or collection made here, as Item({ v, c: 0 }): its own operator makes it.
-      const made =
-        node.type === 'CallExpression' &&
-        node.callee.type === 'Identifier' &&
-        Object.hasOwn(structures, node.callee.name)
-          ? node.callee.name
-          : undefined;
-      if (made)
-        return fail(
-          node,
-          what === 'collection'
-            ? `${lead} Make each ${made} with an operator of its own, and pass it in as an operand: binop((v: ${result}, x: ${made}) => ${result}([...v, x])), applied as Push(v, Make${made}(…)).`
-            : `${lead} Make the ${made} with an operator of its own, and pass it in as an operand.`
-        );
-      return fail(
-        node,
-        what === 'collection'
-          ? `${lead} Compute the value with an operator and write it into its place, as values[p] = Inc(values[p]).`
-          : `${lead} Compute the value with an operator, and pass it in or write it into its place.`
-      );
-    };
-    const [argument, ...rest] = body.arguments as AnyNode[];
-    if (!argument || rest.length) return;
-    if (what === 'collection') {
-      const element = (structure as { element: string }).element;
-      // Each branch of a conditional is what it builds, as c.includes(x) ? c : [...c, x].
-      const rearranged = (node: AnyNode): void => {
-        if (node.type === 'ConditionalExpression') {
-          rearranged(node.consequent as AnyNode);
-          rearranged(node.alternate as AnyNode);
-          return;
-        }
-        if (part(node) || slice(node)) return;
-        if (node.type !== 'ArrayExpression') return refuse(node, element);
-        for (const item of node.elements) {
-          if (!item) continue;
-          if (item.type === 'SpreadElement') {
-            const spread = item.argument as AnyNode;
-            if (!part(spread) && !slice(spread)) refuse(spread, element);
-          } else if (!part(item as AnyNode)) refuse(item as AnyNode, element);
-        }
-      };
-      rearranged(argument);
-      return;
-    }
-    const fields = (structure as { fields: Readonly<Record<string, string>> }).fields;
-    if (part(argument)) return;
-    if (argument.type !== 'ObjectExpression') return refuse(argument, undefined);
-    for (const property of argument.properties) {
-      if (property.type === 'SpreadElement') {
-        if (!part(property.argument as AnyNode)) refuse(property.argument as AnyNode, undefined);
-        continue;
-      }
-      const key =
-        property.key.type === 'Identifier'
-          ? property.key.name
-          : String((property.key as { value?: unknown }).value);
-      if (!part(property.value as AnyNode)) refuse(property.value as AnyNode, fields[key]);
-    }
-  }
-
   function defineStructure(
     name: string,
     kind: StructureType['kind'],
@@ -544,6 +291,11 @@ function applyAtomOptions(
     if (key.name === 'unit') {
       if (typeof literal !== 'string' || !literal.trim()) fail(value, 'unit must be text.');
       type.unit = literal as string;
+    } else if (key.name === 'places') {
+      if (type.base !== 'number') fail(property, 'places only applies to number types.');
+      if (typeof literal !== 'number' || !Number.isInteger(literal) || literal < 0 || literal > 6)
+        fail(value, 'places is a whole number from 0 to 6.');
+      type.places = literal as number;
     } else if (key.name === 'min' || key.name === 'max') {
       if (type.base !== 'integer' && type.base !== 'number')
         fail(property, `${key.name} only applies to integer and number types.`);
@@ -551,7 +303,7 @@ function applyAtomOptions(
         fail(value, `${key.name} must be a number.`);
       type[key.name] = literal as number;
     } else {
-      fail(property, `Unknown type() option "${key.name}"; use unit, min, or max.`);
+      fail(property, `Unknown type() option "${key.name}"; use unit, min, max, or places.`);
     }
   }
   if (type.min !== undefined && type.max !== undefined && type.min > type.max)
@@ -566,6 +318,13 @@ function unboundedProblem(type: AtomType): string | undefined {
   if (type.values || type.base === 'boolean') return undefined;
   if (type.base === 'text')
     return `List the values of ${type.name}, as in const ${type.name} = type(['start', 'done']);. ${reason}`;
+  if (
+    type.base === 'number' &&
+    type.places === undefined &&
+    type.min !== undefined &&
+    type.max !== undefined
+  )
+    return `Give ${type.name} its places, the decimal places its values have and show, as in const ${type.name} = type('number', { min: ${type.min}, max: ${type.max}, places: 2 });. ${reason}`;
   if (type.min !== undefined && type.max !== undefined) return undefined;
   const missing =
     type.min === undefined && type.max === undefined
@@ -575,7 +334,7 @@ function unboundedProblem(type: AtomType): string | undefined {
         : 'a max';
   const min = type.min ?? (type.max === undefined ? 0 : Math.min(0, type.max - 9));
   const max = type.max ?? min + 9;
-  return `Give ${type.name} ${missing}, as in const ${type.name} = type('${type.base}', { min: ${min}, max: ${max} });. ${reason}`;
+  return `Give ${type.name} ${missing}, as in const ${type.name} = type('${type.base}', { min: ${min}, max: ${max}${type.base === 'number' ? ', places: 2' : ''} });. ${reason}`;
 }
 
 /** A literal's value, including negative numbers; undefined for anything else. */

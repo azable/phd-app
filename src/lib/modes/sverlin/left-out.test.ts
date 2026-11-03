@@ -8,15 +8,12 @@ const source = `<script lang="sverlin" domain>
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([3, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @pass{
+  for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @pass{
     @pick[const v = values[i];]
     @put[values[i] = v;]
   }

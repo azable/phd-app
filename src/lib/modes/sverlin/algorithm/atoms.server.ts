@@ -21,6 +21,8 @@ export type AtomType = {
    * the length - 1 of the collection a variable is bound to point at an element.
    */
   index?: string;
+  /** For a number type, the decimal places its values have and are drawn with (see numericResult). */
+  places?: number;
 };
 
 /** Every atomic type available to a component, by name. */
@@ -37,6 +39,14 @@ export class Atom {
     /** For a position, the variable holding the collection it points into, kept wherever it goes. */
     readonly collection?: string
   ) {}
+}
+
+/** A value as it enters a type: a number type's rounded to its places, absorbing floating-point noise. */
+export function entering(type: AtomType, value: unknown): unknown {
+  if (type.base !== 'number' || type.places === undefined || typeof value !== 'number')
+    return value;
+  const scale = 10 ** type.places;
+  return Math.round(value * scale) / scale;
 }
 
 /** Why a value cannot belong to a type, or undefined when it can. */
@@ -102,6 +112,7 @@ export function numericResult(
 ): Atom | number {
   if (!type) return value;
   if (type.base === 'integer' && !Number.isInteger(value)) return value;
+  value = entering(type, value) as number;
   const problem = atomProblem(type, value);
   if (problem) throw new Error(problem);
   return new Atom(type, value, type.index ? collection : undefined);

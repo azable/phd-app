@@ -6,20 +6,35 @@
 export function widestInteger(
   min: number,
   max: number,
-  width: (character: string) => number
+  width: (character: string) => number,
+  /** A number type's decimal places: the range is searched as integers of its smallest step, each printed with them. */
+  places = 0
 ): number {
+  const scale = 10 ** places;
   const printed = (value: number) =>
-    [...String(value)].reduce((total, character) => total + width(character), 0);
-  const candidates =
-    max - min <= everyIntegerUpTo
-      ? Array.from({ length: max - min + 1 }, (_, index) => min + index)
-      : [
-          min,
-          max,
-          ...(max > 0 ? widestBelow(max, width) : []),
-          ...(min < 0 ? widestBelow(-min, width).map((magnitude) => -magnitude) : [])
-        ].filter((value) => value >= min && value <= max);
-  return candidates.reduce((widest, value) => (printed(value) > printed(widest) ? value : widest));
+    [...(places ? (value / scale).toFixed(places) : String(value))].reduce(
+      (total, character) => total + width(character),
+      0
+    );
+  if (places) {
+    const scaled = widestScaled(Math.round(min * scale), Math.round(max * scale), printed);
+    return scaled / scale;
+  }
+  return widestScaled(min, max, printed);
+  function widestScaled(min: number, max: number, printed: (value: number) => number): number {
+    const candidates =
+      max - min <= everyIntegerUpTo
+        ? Array.from({ length: max - min + 1 }, (_, index) => min + index)
+        : [
+            min,
+            max,
+            ...(max > 0 ? widestBelow(max, width) : []),
+            ...(min < 0 ? widestBelow(-min, width).map((magnitude) => -magnitude) : [])
+          ].filter((value) => value >= min && value <= max);
+    return candidates.reduce((widest, value) =>
+      printed(value) > printed(widest) ? value : widest
+    );
+  }
 }
 
 // Ranges this size are searched whole, which takes a few milliseconds on the page; larger ones by

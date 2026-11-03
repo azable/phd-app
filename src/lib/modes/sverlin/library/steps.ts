@@ -26,7 +26,7 @@ export type StepState = Record<string, unknown> & {
 };
 
 /** The component's atomic types by name, as its domain block defines them. */
-export type Atoms = Record<string, { parent?: string; unit?: string }>;
+export type Atoms = Record<string, { parent?: string; unit?: string; places?: number }>;
 
 /** The listing in the variant's language, and what each step lights, if the view places one. */
 export type StepListing = {
@@ -294,7 +294,8 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
               return Array.isArray(collection) ? collection.length : undefined;
             },
             parent: (typeName: string) => atoms[typeName]?.parent,
-            unit: unitOf
+            unit: unitOf,
+            places: (typeName: string) => atoms[typeName]?.places
           }
         ]
       ])

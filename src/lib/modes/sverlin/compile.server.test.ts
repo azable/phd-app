@@ -194,7 +194,7 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  @run[let i = 0;]\n\n</script>'
+        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  @run[let i = 0;]\n\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -261,7 +261,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b)); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) {\n  @add[total = Add(total, values[i]);]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
@@ -487,9 +487,9 @@ describe('single-component Svelte compilation', () => {
 
   it('shows the source’s own listing where the view places a <Listing />, lit per step', async () => {
     const source = [
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script>',
       '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
-      '<script lang="sverlin">@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[Before(i, Length(values))]; @step[i = Next(i)]) { last = i; }]</script>',
+      '<script lang="sverlin">@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[i < values.length]; @step[i++]) { last = i; }]</script>',
       '<script lang="sverlin" listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
       '{#snippet IndexCell(p: Index)}<Node value={p} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{last}</Node></Layout>'
     ].join('\n');
@@ -576,7 +576,7 @@ describe('single-component Svelte compilation', () => {
 
   it('marks the node showing a view’s own value with its type, for its unit', async () => {
     const source = (view: string, more = '') =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin"></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin"></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
     const view =
       '{#snippet HeightView(h: Height)}<Node layout="column"><Node value={h} /><Node>tall</Node></Node>{/snippet}';
     const prepared = prepareSvelteComponent(source(view));
@@ -599,7 +599,7 @@ describe('single-component Svelte compilation', () => {
     ).rejects.toMatchObject({
       code: 'algorithm_error',
       line: 3,
-      message: expect.stringContaining('Unknown type Integer')
+      message: expect.stringContaining('A type is declared on its own, not from another')
     });
     await expect(
       compileSvelteComponent(
@@ -723,7 +723,7 @@ describe('single-component Svelte compilation', () => {
 
   it('identifies the source by its steps, whatever the view and input', async () => {
     const source = (values: string, view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).stepSignature;
     const first = await signature(
@@ -891,7 +891,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
@@ -910,7 +910,7 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet M(mark: Mark)}<Node value={mark} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
+      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet M(mark: Mark)}<Node value={mark} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -935,7 +935,12 @@ describe('typed view components', () => {
       min: 0,
       max: 999
     });
-    expect(prepared.components.find(({ name }) => name === 'R')?.range).toBeUndefined();
+    // So does R, a number type, searched as its smallest steps, each printed with its places.
+    expect(prepared.components.find(({ name }) => name === 'R')?.range).toEqual({
+      min: 0,
+      max: 1,
+      places: 3
+    });
   });
 
   it.each([
@@ -1034,7 +1039,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Position(v.length)); const Before = binop((a: Position, b: Position) => Flag(a < b)); const Next = unop((p: Position) => Position(p + 1));</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (@from[let i = Position(1)]; @more[Before(i, Length(values))]; @step[i = Next(i)]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean");</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
@@ -1130,13 +1135,8 @@ describe('views of what a step computed', () => {
   const Index = index(Values);
 
   // walking the collection
-  const Length = unop((v: Values) => Index(v.length));
-  const Before = binop((a: Index, b: Index) => Flag(a < b));
-  const Next = unop((p: Index) => Index(p + 1));
-  const Prev = unop((p: Index) => Index(p - 1));
 
   // what the algorithm does
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -1144,11 +1144,11 @@ describe('views of what a step computed', () => {
 </script>
 
 <script lang="sverlin">
-  for (@setup[let end = Length(values)]; @guard[Before(Index(1), end)]; @onward[end = Prev(end)]) @sweep{
-    for (@setup[let i = Index(1)]; @guard[Before(i, end)]; @onward[i = Next(i)]) @pair{
-      if (@test[Greater(values[Prev(i)], values[i])]) @swap{
-        const moved = values[Prev(i)];
-        values[Prev(i)] = values[i];
+  for (@setup[let end = values.length]; @guard[Index(1) < end]; @onward[end--]) @sweep{
+    for (@setup[let i = Index(1)]; @guard[i < end]; @onward[i++]) @pair{
+      if (@test[values[i - 1] > values[i]]) @swap{
+        const moved = values[i - 1];
+        values[i - 1] = values[i];
         values[i] = moved;
       }
     }
@@ -1157,14 +1157,14 @@ describe('views of what a step computed', () => {
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}
-  <Node>is {g.a} > {g.b}? {g.value}</Node>
+{#snippet Ask(g: @sweep.pair.test)}
+  <Node>is {g.left} > {g.right}? {g.value}</Node>
 {/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
-    {@render Greater(@sweep.pair.test)}
+    {@sweep.pair.test}
   </Node>
 {/snippet}
 
@@ -1174,24 +1174,24 @@ describe('views of what a step computed', () => {
     {@render Board()}
   </Node>
 </Layout>`;
-  // The key of the render of Greater at @sweep.pair.test.
-  const greater = 'Greater_ℓsweepˑpairˑtest';
+  // The key of the render of the label @sweep.pair.test.
+  const test = 'ℓsweepˑpairˑtest';
 
-  it('take an operator as a type, its views a choice, and keep an application to stand in', () => {
+  it('take a label as a view’s type, its views a choice, and keep what it computed to stand in', () => {
     const prepared = prepareSvelteComponent(bubble);
-    expect(prepared.design.space['views.Greater']).toEqual(['Ask', 'none']);
-    expect(prepared.applied?.[greater]).toEqual({
-      state: { a: 5, b: 1, value: true },
-      types: { a: 'Int', b: 'Int', value: 'Flag' },
+    expect(prepared.design.space['views.@sweep.pair.test']).toEqual(['Ask', 'none']);
+    expect(Object.values(prepared.applied ?? {})[0]).toEqual({
+      state: { left: 5, right: 1, value: true },
+      types: { left: 'Int', right: 'Int' },
       at: expect.any(Number),
-      identities: { a: expect.any(Number), b: expect.any(Number), value: expect.any(Number) }
+      identities: { left: expect.any(Number), right: expect.any(Number) }
     });
   });
 
   it('give a step’s after its one application, and stand one in hidden elsewhere', async () => {
     const prepared = prepareSvelteComponent(bubble);
     const { javascript } = await bundlePresentation(prepared, 1);
-    expect(javascript).toContain('__applied_Greater');
+    expect(javascript).toMatch(/__applied_(?:ℓ|\\u2113)sweep/u);
   });
 
   it('pause at each comparison its label runs, and apart from it at each swap', async () => {
@@ -1200,7 +1200,7 @@ describe('views of what a step computed', () => {
     const steps = (master: typeof prepared.master) =>
       master.map(({ state, applied }) => [
         String(state.values),
-        applied?.Greater?.map(({ state }) => `${state.a} > ${state.b}`) ?? []
+        applied?.[test]?.map(({ state }) => `${state.left} > ${state.right}`) ?? []
       ]);
     // The comparison lifts its operands, then the swap moves them, each a step of its own.
     expect(steps(both).slice(1, 5)).toEqual([
@@ -1229,53 +1229,28 @@ describe('views of what a step computed', () => {
     expect(paced.stepSignature).toBe((await bundlePresentation(prepared, 1)).stepSignature);
   });
 
-  it('reject an operator rendered with a value, inside a view, or at no label', () => {
-    expect(() =>
-      prepareSvelteComponent(
-        bubble.replace('{@render Greater(@sweep.pair.test)}', '{@render Greater(values)}')
-      )
-    ).toThrow('draws a value of Greater, an operator, whose values are its applications');
+  it('refuse a label read inside a view, and a view typed by a label no step evaluates', () => {
     expect(() =>
       prepareSvelteComponent(
         bubble.replace(
           '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
-          '{#snippet IntCell(value: Int)}<Node {value} />{@render Greater(@sweep.pair.test)}{/snippet}'
+          '{#snippet IntCell(value: Int)}<Node {value} />{@sweep.pair.test}{/snippet}'
         )
       )
     ).toThrow('which only the root and its parts know: render it there');
-    // With no label, it names the label around Greater's application to write.
     expect(() =>
       prepareSvelteComponent(
-        bubble.replace('{@render Greater(@sweep.pair.test)}', '{@render Greater()}')
+        bubble
+          .replace(
+            '@test[values[i - 1] > values[i]]',
+            '@test[values[i - 1] > values[i] || (@early[end < Index(0)] && @never[values[0] < values[1]])]'
+          )
+          .replace(
+            '{#snippet FlagWord',
+            '{#snippet Tell(l: @sweep.pair.test.never)}<Node>{l.value}</Node>{/snippet}\n{#snippet FlagWord'
+          )
       )
-    ).toThrow(
-      "{@render Greater()} draws no label's application: write {@render Greater(@sweep.pair.test)}, a label around an application of Greater."
-    );
-  });
-
-  it('stand in an operator no step applies with its widest value, hidden throughout', () => {
-    const prepared = prepareSvelteComponent(
-      bubble
-        .replace(
-          '  // what the algorithm does',
-          '  const Less = binop((a: Int, b: Int) => Flag(a < b));\n  // what the algorithm does'
-        )
-        .replace(
-          '@test[Greater(values[Prev(i)], values[i])]',
-          '@test[Greater(values[Prev(i)], values[i])] || (@early[Before(end, Index(0))] && @never[Less(values[0], values[1])])'
-        )
-        .replace(
-          '{@render Greater(@sweep.pair.test)}',
-          '{@render Greater(@sweep.pair.test)}{@render Less(@sweep.pair.never)}'
-        )
-        .replace(
-          '{#snippet FlagWord',
-          '{#snippet Tell(l: Less)}<Node>{l.value}</Node>{/snippet}\n{#snippet FlagWord'
-        )
-    );
-    const less = prepared.applied?.['Less_ℓsweepˑpairˑnever'];
-    expect(Object.keys(less?.state ?? {})).toEqual(['a', 'b', 'value']);
-    expect(less?.types).toEqual({ a: 'Int', b: 'Int', value: 'Flag' });
+    ).toThrow('which labels no expression any step evaluates');
   });
 });
 
@@ -1285,11 +1260,6 @@ describe('pauses at labels', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 
 <script lang="sverlin" input>
@@ -1297,13 +1267,13 @@ describe('pauses at labels', () => {
 </script>
 
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
-    while (@guard[Before(Position(0), j)] && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while (@guard[Position(0) < j] && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -1320,14 +1290,14 @@ describe('pauses at labels', () => {
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}<Node>is {g.a} > {g.b}? {g.value}</Node>{/snippet}
+{#snippet Ask(g: @insert.compare)}<Node>is {g.left} > {g.right}? {g.value}</Node>{/snippet}
 {#snippet Highlight(p: Position)}<Pointed />{/snippet}
 {#snippet Board()}
   <Node layout="row">
     <Listing />
     <Node layout="column">
       <Node>{#each values as v}{v}{/each}</Node>
-      {@render Greater(@insert.compare)}
+      {@insert.compare}
     </Node>
   </Node>
 {/snippet}
@@ -1352,7 +1322,7 @@ describe('pauses at labels', () => {
   // Each step: the row after it, its comparison, the marks its code gave, and those held on.
   const played = (master: MasterStep[]) =>
     master.slice(1).map((step) => {
-      const comparison = step.applied?.Greater?.[0]?.state;
+      const comparison = step.applied?.['ℓinsertˑcompare']?.[0]?.state;
       const short = (labels?: Record<string, unknown>) =>
         Object.keys(labels ?? {})
           .map((label) => label.slice(label.lastIndexOf('.') + 1))
@@ -1360,7 +1330,7 @@ describe('pauses at labels', () => {
           .join(' ');
       return [
         String(step.state.values),
-        comparison ? `${comparison.a} > ${comparison.b}: ${comparison.value}` : '',
+        comparison ? `${comparison.left} > ${comparison.right}: ${comparison.value}` : '',
         short(step.labelled),
         short(step.held)
       ].join(' | ');
@@ -1391,9 +1361,7 @@ describe('pauses at labels', () => {
     });
     // What the view draws decides them: without its marks or its comparison, only the swap, which
     // moves values, draws something new.
-    const bare = insertion
-      .replace(/\{@insert\.[a-z.]*\}\n?/g, '')
-      .replace('{@render Greater(@insert.compare)}', '');
+    const bare = insertion.replace(/\{@insert\.[a-z.]*\}\n?/g, '').replace('{@insert.compare}', '');
     expect(bare).not.toContain('{@insert.compare.left}');
     expect(starterPauses(bare)).toEqual({
       'pause@guard': 'off',
@@ -1550,23 +1518,18 @@ describe('pauses accumulate', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
-    while (@guard[Before(Position(0), j)] && @compare[Greater(values[@left[Prev(j)]], values[@right[j]])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while (@guard[Position(0) < j] && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -1581,14 +1544,14 @@ describe('pauses accumulate', () => {
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}<Node>is {g.a} > {g.b}? {g.value}</Node>{/snippet}
+{#snippet Ask(g: @insert.compare)}<Node>is {g.left} > {g.right}? {g.value}</Node>{/snippet}
 {#snippet Highlight(p: Position)}<Pointed />{/snippet}
 {#snippet Board()}
   <Node layout="row">
     <Listing />
     <Node layout="column">
       <Node>{#each values as v}{v}{/each}</Node>
-      {@render Greater(@insert.compare)}
+      {@insert.compare}
     </Node>
   </Node>
 {/snippet}
@@ -1776,6 +1739,9 @@ describe('places', () => {
     expect(space['IntCell@v.color']).toBeDefined();
     // The editor's marker after the render names the place's own choice.
     expect(Object.values(renders)).toContain('views.Int@key');
+    // A value in braces at the place calls its alias in place of its type, writing nothing beside it.
+    expect(prepared.component).toMatch(/\$\.get\(__place\d+\), \(\) => \$\$props\.key/u);
+    expect(prepared.component).not.toMatch(/from_(?:html|svg)\(`[^`]*__place/u);
   });
 
   it('draws a value in braces by its type, refusing its view written as a render of the type', () => {
@@ -1823,7 +1789,6 @@ describe('nodes and references', () => {
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
-  const IsNode = unop((p: Next) => Flag(p !== 'end'));
 </script>
 <script lang="sverlin" input>
   const head = NodeRef(ListNode({ name: 'A', next: NodeRef(ListNode({ name: 'B', next: End('end') })) }));
@@ -1831,7 +1796,7 @@ describe('nodes and references', () => {
 <script lang="sverlin">
   @run[let prev = Next(End('end'));
   let cur = Next(head);]
-  while (@guard[IsNode(cur)]) @rewire{
+  while (@guard[cur !== 'end']) @rewire{
     const after = cur.next;
     cur.next = prev;
     prev = cur;
@@ -1878,23 +1843,18 @@ describe('the view reaching the code only through labels', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
-  const Prev = unop((p: Position) => Position(p - 1));
-  const Greater = binop((a: Int, b: Int) => Flag(a > b));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
-    while (@guard[Before(Position(0), j)] && @compare[Greater(values[Prev(j)], values[j])]) @swap{
-      const moved = values[@from[Prev(j)]];
-      values[Prev(j)] = values[@to[j]];
+    while (@guard[Position(0) < j] && @compare[(values[j - 1]) > values[j]]) @swap{
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
       values[j] = moved;
-      j = Prev(j);
+      j--;
     }
   }
 </script>
@@ -1961,17 +1921,15 @@ describe('the view reaching the code only through labels', () => {
     );
   });
 
-  it('refuse an operator applied in the view, naming the labels on its applications', () => {
+  it('refuse arithmetic on a label in the view, which draws only what the algorithm computed', () => {
     expect(() =>
       prepareSvelteComponent(
         swaps.replace(
           '<Link from={@insert.swap.from} to={@insert.swap.to} />',
-          '<Link from={@insert.swap.to} to={Prev(@insert.swap.to)} />'
+          '<Link from={@insert.swap.to} to={(@insert.swap.to - 1)} />'
         )
       )
-    ).toThrow(
-      'Prev(…) applies an operator in the view, which only draws what the algorithm computed: read @insert.swap.from, a label on an application of Prev, in the root or a part of the page.'
-    );
+    ).toThrow('The view reads @insert.swap.to itself');
   });
 });
 
@@ -1981,15 +1939,12 @@ describe('<When of="@label">', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @pass{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @pass{
     @look[const seen = @read[values[i]];]
   }
   @finish[const last = Position(0);]
@@ -2031,8 +1986,8 @@ describe('<When of="@label">', () => {
       `<script lang="sverlin">
   @scan[
     @begin[let i = Position(1);]
-    while (@guard[Before(i, Length(values))]) @step{
-      i = Next(i);
+    while (@guard[i < values.length]) @step{
+      i++;
     }
   ]
 </script>`
@@ -2102,15 +2057,12 @@ describe('<OneOf> branches', () => {
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
-  const Length = unop((v: Values) => Position(v.length));
-  const Before = binop((a: Position, b: Position) => Flag(a < b));
-  const Next = unop((p: Position) => Position(p + 1));
 </script>
 <script lang="sverlin" input>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @pass{
+  for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @pass{
     @look[const seen = values[i];]
     @note[const again = values[i];]
   }
@@ -2292,14 +2244,12 @@ describe('step limits', () => {
   const long = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 200 });
   const Flag = type('boolean');
-  const Before = binop((a: Int, b: Int) => Flag(a < b));
-  const Next = unop((n: Int) => Int(n + 1));
 </script>
 
 <script lang="sverlin">
   @run[let n = Int(0);]
-  for (@setup[let i = Int(0)]; @guard[Before(i, 3)]; @onward[i = Next(i)]) @pass{
-    for (@from[let j = Int(0)]; @more[Before(j, 100)]; @next[j = Next(j)]) @step[n = Next(j);]
+  for (@setup[let i = Int(0)]; @guard[i < 3]; @onward[i++]) @pass{
+    for (@from[let j = Int(0)]; @more[j < 100]; @next[j++]) @step[n = j + 1;]
   }
 </script>
 
