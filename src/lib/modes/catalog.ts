@@ -5,7 +5,6 @@
 
 import { sverlinStarter } from './sverlin/contract';
 import { htmlStarter } from './html/contract';
-import { htmlJsStarter } from './html-js/contract';
 
 export const modeCatalog = {
   sverlin: {
@@ -21,12 +20,5 @@ export const modeCatalog = {
     scriptedPlayback: false,
     title: 'System B',
     starter: htmlStarter
-  },
-  'html-js': {
-    assistantId: 'html-js-assistant',
-    authoring: 'candidates',
-    scriptedPlayback: true,
-    title: 'System C',
-    starter: htmlJsStarter
   }
 } as const;

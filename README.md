@@ -16,10 +16,9 @@ its starter artifact, assistant, validation/build code, and playback component:
 | --------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `sverlin` | One Svelte 5 component (`Main.svelte`) without imports | Bundled Svelte runtime, component library, and component, seeded and stepped in an isolated browser frame |
 | `html`    | A JSON manifest of script-free, complete HTML frames   | Sanitized HTML, one frame per step                                                                        |
-| `html-js` | JSON containing separate HTML and JavaScript           | Sanitized HTML plus JavaScript in an isolated browser frame                                               |
 
 For study blinding, the app shows each mode only by its catalogue title (System
-A, B, C), and its pages, passkey dialog, exports and assistants name no product.
+A, B), and its pages, passkey dialog, exports and assistants name no product.
 
 Administrator projects offer a blank starter in every mode and one populated
 Svelte example, [linear search](src/lib/modes/sverlin/contract.ts). No other
@@ -333,8 +332,7 @@ and iframe policy is in [`src/lib/modes/sandbox.ts`](src/lib/modes/sandbox.ts).
 Sverlin bundling also restricts module resolution: the entry, authored
 component, and library may reach only the Svelte runtime, the injected library,
 and the library's own files, so `require()` or any other module request cannot
-pull server files into a presentation. HTML/JS only transforms its script and
-never resolves modules.
+pull server files into a presentation.
 
 Shared project orchestration lives in
 [`src/lib/server/projects/`](src/lib/server/projects/) and its
@@ -459,15 +457,14 @@ study definitions live under `src/lib/studies/`; reusable study contracts,
 projections, and interaction schemas remain under
 [`src/lib/shared/study/`](src/lib/shared/study/). The main study compares
 Svelte-backed `sverlin` in a two-candidate workspace with script-free, per-frame
-`html` in a single-candidate workspace. The separate `html-js` mode is not a
-study condition. A project outside a study, as an administrator trying one,
-works under the condition for its mode in the first study open to enrollment
-(`trialCondition` in the registry, applied by `projectTrialCondition` in
-[`study.ts`](src/lib/server/study.ts)): its layout, presentation buffer and
-chooser. The `sverlin` condition keeps no buffer, so nothing builds pairs in the
-background: its stage shows the one version under discussion, and a pair, with
-its question, only while one of the assistant's comparisons is current
-(`questionPairs` in
+`html` in a single-candidate workspace, the only two modes. A project outside a
+study, as an administrator trying one, works under the condition for its mode in
+the first study open to enrollment (`trialCondition` in the registry, applied by
+`projectTrialCondition` in [`study.ts`](src/lib/server/study.ts)): its layout,
+presentation buffer and chooser. The `sverlin` condition keeps no buffer, so
+nothing builds pairs in the background: its stage shows the one version under
+discussion, and a pair, with its question, only while one of the assistant's
+comparisons is current (`questionPairs` in
 [`ProjectWorkspace.svelte`](src/lib/client/projects/ProjectWorkspace.svelte)).
 Dev mode shows the newest variants and every pair, so those New pair and Another
 variant make show at once. A mode no open study has keeps one presentation and

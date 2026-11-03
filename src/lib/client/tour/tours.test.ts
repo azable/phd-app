@@ -18,7 +18,7 @@ function memoryStorage(): Storage {
 
 describe('interface tours', () => {
   it('gives every system the same introduction, in its own words', () => {
-    for (const mode of ['sverlin', 'html', 'html-js'] as const) {
+    for (const mode of ['sverlin', 'html'] as const) {
       expect(introTour(mode).steps.map(({ part }) => part)).toEqual([
         'timeline',
         'stage',
@@ -41,7 +41,7 @@ describe('interface tours', () => {
       'answer-buttons',
       'comparison-card'
     ]);
-    for (const mode of ['html', 'html-js'] as const) {
+    for (const mode of ['html'] as const) {
       expect(hintTours(mode).map(({ id }) => id)).toEqual([
         `${mode}:hint:versions`,
         `${mode}:hint:history`

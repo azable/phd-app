@@ -38,13 +38,11 @@ export type InterfacePart = {
 
 const everySystem = (description: string): Record<VisualizationMode, string> => ({
   sverlin: description,
-  html: description,
-  'html-js': description
+  html: description
 });
 
 const singleVersionSystems = (description: string) => ({
-  html: description,
-  'html-js': description
+  html: description
 });
 
 export const interfaceParts: readonly InterfacePart[] = [

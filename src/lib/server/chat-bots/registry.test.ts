@@ -7,7 +7,6 @@ describe('chatbot registry', () => {
   it('resolves only assistants compatible with the requested execution contract', () => {
     expect(getChatbot('sverlin-assistant').id).toBe('sverlin-assistant');
     expect(getCandidateChatbot('html-assistant').id).toBe('html-assistant');
-    expect(getCandidateChatbot('html-js-assistant').id).toBe('html-js-assistant');
     expect(() => getChatbot('html-assistant')).toThrow('Unknown source-authoring assistant');
     expect(() => getCandidateChatbot('sverlin-assistant')).toThrow('Unknown candidate assistant');
   });
@@ -22,10 +21,6 @@ describe('chatbot registry', () => {
       botId: 'html-assistant',
       step: 'algorithm',
       text: 'What algorithm would you like to visualise? If you like, tell me who it’s for, and whether you’d like me to ask a few questions first or start with a first version.'
-    });
-    expect(assistantIntroduction('html-js-assistant')).toMatchObject({
-      botId: 'html-js-assistant',
-      step: 'algorithm'
     });
   });
 

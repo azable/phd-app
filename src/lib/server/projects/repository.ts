@@ -1,6 +1,6 @@
 /** PostgreSQL persistence for immutable project Timelines. */
 
-import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 
 import { headStillCurrent, summarizeProject } from '$lib/shared/projects/projection';
 import {
@@ -20,6 +20,8 @@ import {
   type ProjectId,
   type ProjectSummary
 } from '$lib/shared/projects/model';
+import { modeCatalog } from '$lib/modes/catalog';
+import type { VisualizationMode } from '$lib/shared/presentations';
 import { storableJson } from '$lib/shared/text';
 import { database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
@@ -52,10 +54,13 @@ export interface ProjectWriter {
 /** Complete persistence contract; production has exactly one PostgreSQL implementation. */
 export interface ProjectRepository extends ProjectReader, ProjectWriter {}
 
-/** Raised when a requested active project does not exist. */
+/** The modes a project can be listed and opened in: those still registered. */
+const registeredModes = Object.keys(modeCatalog) as VisualizationMode[];
+
+/** Raised when a requested active project does not exist, or cannot be opened. */
 export class ProjectNotFoundError extends Error {
-  constructor(projectId: string) {
-    super(`Unknown project ${projectId}.`);
+  constructor(projectId: string, message = `Unknown project ${projectId}.`) {
+    super(message);
     this.name = 'ProjectNotFoundError';
   }
 }
@@ -74,6 +79,8 @@ export class PostgresProjectRepository implements ProjectRepository {
     // Migrations own schema creation; application processes never mutate it implicitly.
   }
 
+  // A project made in a mode since removed, as html-js, stays stored and in the data export but is
+  // neither listed nor opened, as nothing can draw or edit it.
   async list(ownerUserId?: string): Promise<ProjectSummary[]> {
     const condition = ownerUserId
       ? and(eq(schema.projects.ownerUserId, ownerUserId), isNull(schema.projects.deletedAt))
@@ -88,7 +95,7 @@ export class PostgresProjectRepository implements ProjectRepository {
         mode: schema.projects.mode
       })
       .from(schema.projects)
-      .where(condition)
+      .where(and(condition, inArray(schema.projects.mode, registeredModes)))
       .orderBy(desc(schema.projects.updatedAt));
     return rows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }));
   }
@@ -125,11 +132,16 @@ export class PostgresProjectRepository implements ProjectRepository {
   async load(projectId: ProjectId): Promise<ProjectDocument> {
     assertProjectId(projectId);
     const project = await database()
-      .select({ id: schema.projects.id })
+      .select({ id: schema.projects.id, mode: schema.projects.mode })
       .from(schema.projects)
       .where(and(eq(schema.projects.id, projectId), isNull(schema.projects.deletedAt)))
       .limit(1);
     if (!project[0]) throw new ProjectNotFoundError(projectId);
+    if (!registeredModes.includes(project[0].mode))
+      throw new ProjectNotFoundError(
+        projectId,
+        `Project ${projectId} was made in a visualization mode that has been removed (${project[0].mode}); it stays in the data export but can no longer be opened.`
+      );
     const rows = await database()
       .select({ event: schema.projectEvents.event })
       .from(schema.projectEvents)

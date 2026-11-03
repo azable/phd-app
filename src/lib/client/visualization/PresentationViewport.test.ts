@@ -48,28 +48,4 @@ describe('mode-owned presentation playback', () => {
     expect(body).toContain("script-src 'none'");
     expect(body).toContain('Static');
   });
-
-  it('routes HTML/JS to its own playback component without application-origin permissions', () => {
-    const presentation: RenderablePresentation = {
-      presentationId: '12345678-1234-4123-8123-123456789ac3',
-      format: 'browser-bundle-v1',
-      mode: 'html-js',
-      stepSignature: 'single',
-      labels: ['Start'],
-      seed: 1,
-      source: recorded('{}', 'application/json'),
-      html: recorded('<main>Interactive</main>', 'text/html'),
-      javascript: recorded(
-        'document.querySelector("main").textContent = "Ready";',
-        'text/javascript'
-      )
-    };
-    const { body } = render(PresentationViewport, {
-      props: { presentation, step: 0, label: 'Scripted view' }
-    });
-    expect(body).toContain('sandbox="allow-scripts"');
-    expect(body).toContain('Interactive');
-    expect(body).toContain("connect-src 'none'");
-    expect(body).not.toContain('allow-same-origin');
-  });
 });

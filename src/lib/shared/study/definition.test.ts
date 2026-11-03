@@ -61,7 +61,6 @@ describe('trialCondition', () => {
   });
 
   it('has none for a mode no open study has', () => {
-    expect(trialCondition('html-js')).toBeUndefined();
     expect(trialCondition('sverlin', [{ definition: mainStudy, enrollment: 'closed' }])).toBe(
       undefined
     );

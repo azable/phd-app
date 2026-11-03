@@ -9,15 +9,14 @@ interrupted work is explicitly failed and retried by the user.
 
 Visualization modes are developer-registered in `src/lib/modes/catalog.ts`. The
 `sverlin` mode authors one import-free Svelte component that uses the injected
-library in `src/lib/modes/sverlin/library/`, `html` authors script-free frames,
-and `html-js` authors separate HTML and JavaScript. Each mode folder owns its
-assistant, starter artifact, validation/build implementation, and playback
-component. The sole main study in `src/lib/studies/main.ts` compares `sverlin`
-and `html`; `html-js` is outside that study. JavaScript from authored artifacts
-executes only in an opaque-origin sandboxed browser frame, never in the server
-process or application origin. Sanitize authored HTML with a library and reject
-external imports; an iframe alone cannot prove that arbitrary JS will never
-attempt navigation.
+library in `src/lib/modes/sverlin/library/`, and `html` authors script-free
+frames. Each mode folder owns its assistant, starter artifact, validation/build
+implementation, and playback component. The sole main study in
+`src/lib/studies/main.ts` compares the two, `sverlin` and `html`. JavaScript
+from authored artifacts executes only in an opaque-origin sandboxed browser
+frame, never in the server process or application origin. Sanitize authored HTML
+with a library and reject external imports; an iframe alone cannot prove that
+arbitrary JS will never attempt navigation.
 
 ## Communication and documentation
 
@@ -70,9 +69,8 @@ attempt navigation.
   language (an approved exception to keeping guides in the root `README.md`);
   update it in the same change as any change to the blocks, the subset,
   `Node`/`Link` props, or drawn defaults. Its `<!-- -->` comments are maintainer
-  notes stripped from the prompt; everything else is sent to the model. The
-  static HTML and HTML/JS modes have distinct assistants; never make one bot
-  serve more than one mode.
+  notes stripped from the prompt; everything else is sent to the model. Each
+  mode has its own assistant; never make one bot serve more than one mode.
 
 ## Commands and operational state
 
@@ -184,10 +182,10 @@ attempt navigation.
   add tests for reversible, low-impact changes that merely mirror
   implementation.
 - For source compilation or sandbox changes, verify at least one real Svelte
-  component build, static HTML sanitization, HTML/JS import rejection, and
-  presentation playback behavior. After any change that shows in a visualization
-  or the assistant's behaviour (the Sverlin language, its library, the
-  assistant's guide, or the app around them), load one or more examples that
+  component build, static HTML sanitization, rejection of imports in authored
+  source, and presentation playback behavior. After any change that shows in a
+  visualization or the assistant's behaviour (the Sverlin language, its library,
+  the assistant's guide, or the app around them), load one or more examples that
   illustrate it into `/dev/demo` (see above), flushing first so only they show
   unless the developer is using the page, check them there, and ask the
   developer to look at that page, naming what each shows; flush the demo once

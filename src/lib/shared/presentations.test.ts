@@ -23,9 +23,6 @@ describe('scripted presentation contract', () => {
     expect(
       v.safeParse(browserBundlePresentationSchema, { ...presentation, mode: 'sverlin' }).success
     ).toBe(true);
-    expect(
-      v.safeParse(browserBundlePresentationSchema, { ...presentation, mode: 'html-js' }).success
-    ).toBe(true);
   });
 
   it('reads steps stored with several names by their innermost, the last', () => {

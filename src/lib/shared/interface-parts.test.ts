@@ -10,8 +10,8 @@ describe('interface parts', () => {
     expect(interfacePartsFor('sverlin').map(({ id }) => id)).toEqual(
       interfaceParts.map(({ id }) => id)
     );
-    for (const mode of ['html', 'html-js'] as const) {
-      expect(interfacePartsFor(mode).map(({ id }) => id)).toEqual([
+    {
+      expect(interfacePartsFor('html').map(({ id }) => id)).toEqual([
         'timeline',
         'version-pill',
         'stage',

@@ -122,3 +122,40 @@ function renameEvent(
     payload: { previousTitle: 'Repository test', title }
   };
 }
+
+it.skipIf(!postgresTestsEnabled)(
+  'keeps a project made in a removed mode stored but neither listed nor opened',
+  async () => {
+    const suffix = randomUUID();
+    const ownerUserId = `resource-owner-${suffix}`;
+    const projectId = `resource-project-${suffix}`;
+    const repository = new PostgresProjectRepository();
+
+    await database()
+      .insert(schema.user)
+      .values({
+        id: ownerUserId,
+        name: 'Resource owner',
+        email: `${ownerUserId}@sverlin.invalid`,
+        emailVerified: true,
+        role: 'user'
+      });
+
+    try {
+      await repository.create(rootDocument(projectId, randomUUID()), ownerUserId);
+      await database()
+        .update(schema.projects)
+        .set({ mode: 'html-js' as never })
+        .where(eq(schema.projects.id, projectId));
+
+      expect(await repository.list(ownerUserId)).toEqual([]);
+      await expect(repository.load(projectId)).rejects.toThrow(
+        'was made in a visualization mode that has been removed (html-js)'
+      );
+    } finally {
+      await database().delete(schema.projects).where(eq(schema.projects.id, projectId));
+      await database().delete(schema.user).where(eq(schema.user.id, ownerUserId));
+    }
+  },
+  30_000
+);
