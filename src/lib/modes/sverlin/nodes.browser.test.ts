@@ -128,9 +128,9 @@ it.skipIf(!enabled)(
   async () => {
     const steps = await play(
       list(`
-  let prev = Next(End('end'));
-  let cur = Next(head);
-  while ((cur !== 'end')) @rewire{
+  @start[let prev = Next(End('end'));
+  let cur = Next(head);]
+  while (@more[cur !== 'end']) @rewire{
     const after = cur.next;
     cur.next = prev;
     prev = cur;
