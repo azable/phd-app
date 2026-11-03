@@ -21,16 +21,16 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-const insertion = `<script lang="sverlin" domain>
+const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Position(1); (i < values.length); i++) @insert{
     let j = i;
     while ((Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{

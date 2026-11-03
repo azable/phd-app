@@ -3,18 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { listingMapsOf, prepareSvelteComponent } from '../compile.server';
 import { readRegions } from './mapped.server';
 
-const blocks = (algorithm: string, listing: string) => `<script lang="sverlin" domain>
+const blocks = (algorithm: string, listing: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([2, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
 ${algorithm}
 </script>
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
 ${listing}
 </script>
 {#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}

@@ -1,6 +1,6 @@
 /**
  * A listing of the source's own: a fixed text, such as a textbook's pseudocode, in a
- * <script lang="sverlin" listing="name"> block, whose regions, marked @name[…], light when the
+ * <script listing="name"> block, whose regions, marked @name[…], light when the
  * algorithm runs the code with that label (see algorithm/labels.server.ts). A region inside
  * another takes its name as a prefix, as a label does, so names line up with the algorithm's.
  * Every region needs a label, and every label a region, as each label is a place the page can

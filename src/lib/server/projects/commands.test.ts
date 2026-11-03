@@ -1301,7 +1301,7 @@ describe('submitProjectFeedback', () => {
     // Sources sharing most lines, each failing with a problem of its own, or building.
     const lines = (close: string, snippet = '', node = '') =>
       [
-        '<script lang="sverlin"></script>',
+        '<script algorithm></script>',
         '{#snippet Shown()}<Node>one</Node>{/snippet}',
         snippet,
         '<Layout name="Main"><Node>',
@@ -1316,7 +1316,7 @@ describe('submitProjectFeedback', () => {
       twice: lines('</Layout>', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
       unknown: lines('</Layout>', '', '<Node>{@render Missing()}</Node>'),
       rewritten:
-        '<script lang="sverlin"></script>\n<Layout name="Main">\n<Node>{@render Gone()}</Node>\n</Layout>',
+        '<script algorithm></script>\n<Layout name="Main">\n<Node>{@render Gone()}</Node>\n</Layout>',
       working: lines('</Layout>')
     };
     // Each explains a difficulty, as the simpler fallback must; the others' are dropped.
@@ -2325,7 +2325,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Shown()}</Node></Layout>`,
+              : `<script algorithm></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Shown()}</Node></Layout>`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -3274,7 +3274,7 @@ describe('several variants from chat', () => {
 
   it('sends a picture too large to read back once, then shows it as built', async () => {
     const wide = [
-      '<script lang="sverlin"></script>',
+      '<script algorithm></script>',
       '<Layout name="Main"><Node layout="row">',
       ...Array.from({ length: 150 }, (_, index) => `<Node>cell ${index}</Node>`),
       '</Node></Layout>'

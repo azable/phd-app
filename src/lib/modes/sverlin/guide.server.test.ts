@@ -29,7 +29,7 @@ describe('Sverlin language guide and assistant instructions', () => {
   it('builds every complete component example', async () => {
     const examples = [...guide.matchAll(/```svelte\n([\s\S]*?)```/gu)]
       .map(([, source]) => source)
-      .filter((source) => source.includes('<script lang="sverlin">'));
+      .filter((source) => source.includes('<script algorithm>'));
     expect(examples.length).toBeGreaterThan(0);
     for (const example of examples) {
       const result = await compileSvelteComponent(example);

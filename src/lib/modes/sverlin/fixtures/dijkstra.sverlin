@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Int = type('integer', { min: 0, max: 99 });
   const Weight = type('integer', { min: 1, max: 9 });
@@ -13,7 +13,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([
     { name: 'A', distance: 0, done: false },
     { name: 'B', distance: 99, done: false },
@@ -33,7 +33,7 @@
   ]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @none[let current = VertexIndex(-1);]
 
   for (@firstRound[let round = VertexIndex(0)]; @moreRounds[round < vertices.length]; @nextRound[round++]) @round{

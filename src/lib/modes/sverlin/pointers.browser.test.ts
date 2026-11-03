@@ -25,15 +25,15 @@ it.skipIf(!enabled)(
   'paints each element in the kind of the pointer at it, though a pointer written later is elsewhere',
   { timeout: 120_000 },
   async () => {
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   const i = Index(1);
   const j = Index(0);
 </script>
@@ -87,15 +87,15 @@ it.skipIf(!enabled)(
   'draws a position type rendered by name as a mark outside a node and its number inside one',
   { timeout: 120_000 },
   async () => {
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   const i = Index(2);
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -146,15 +146,15 @@ it.skipIf(!enabled)(
   'colours one render apart through its place, the other drawn as its kind is',
   { timeout: 120_000 },
   async () => {
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   const i = Index(1);
   const j = Index(0);
 </script>
@@ -203,14 +203,14 @@ it.skipIf(!enabled)(
   'draws one render with another view of its type through its place',
   { timeout: 120_000 },
   async () => {
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   const key = Int(3);
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}

@@ -22,16 +22,16 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-const insertion = `<script lang="sverlin" domain>
+const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Position(1); (i <= values.length); i++) @insert{
     let j = i;
     while ((Position(0) <= j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
@@ -42,7 +42,7 @@ const insertion = `<script lang="sverlin" domain>
     }
   }
 </script>
-<script lang="sverlin" listing="code">
+<script listing="code">
   for i = 1 to length(A) - 1
     @insert[j = i
     while j > 0 and @compare[A[@left[j - 1]] > A[@right[j]]]
@@ -181,17 +181,17 @@ it.skipIf(!enabled)(
   }
 );
 
-const search = `<script lang="sverlin" domain>
+const search = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 8, 15, 23, 42, 57, 71]);
   const target = Int(42);
 </script>
-<script lang="sverlin">
+<script algorithm>
   let lo = Index(0);
   let hi = values.length - 1;
   while (@open[lo <= hi]) @probe{
@@ -200,7 +200,7 @@ const search = `<script lang="sverlin" domain>
     else @left[hi = mid - 1;]
   }
 </script>
-<script lang="sverlin" listing="pseudocode">
+<script listing="pseudocode">
   while @open[$lo[lo] <= $hi[hi]]
     @probe[@mid[$mid[mid] = (lo + hi) / 2]
     if @low[$mid[A[mid]] < $target[target]]

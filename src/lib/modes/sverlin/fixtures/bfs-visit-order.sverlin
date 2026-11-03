@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
   const Seen = type('boolean');
   const Vertex = record({ name: Name, seen: Seen });
@@ -12,7 +12,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([
     { name: 'A', seen: true },
     { name: 'B', seen: false },
@@ -31,7 +31,7 @@
   ]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @init[let queue = Queue([0]);
   let order = VisitOrder([]);]
   while (@more[queue.length > 0]) @visit{
@@ -49,7 +49,7 @@
   }
 </script>
 
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
 BFS(start)
   @init[queue = [start]]
   while @more[queue is not empty]

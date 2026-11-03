@@ -4,17 +4,17 @@ import { prepareSvelteComponent, shownListing } from '../compile.server';
 import { readRegions } from './mapped.server';
 import { placePaint, touchedPlaces } from './places.server';
 
-const binarySearch = (listing: string) => `<script lang="sverlin" domain>
+const binarySearch = (listing: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 8, 15, 23, 42, 57, 71]);
   const target = Int(42);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @run[let lo = Index(0);
   let hi = values.length - 1;]
   while (@open[lo < hi]) @probe{
@@ -23,7 +23,7 @@ const binarySearch = (listing: string) => `<script lang="sverlin" domain>
     else @left[hi = mid - 1;]
   }
 </script>
-<script lang="sverlin" listing="pseudocode">
+<script listing="pseudocode">
 ${listing}
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -48,22 +48,22 @@ const tokened = `  @run[start:] lo = 0, hi = n - 1
     else
       @left[$hi[hi] = mid - 1]]`;
 
-const linearSearch = `<script lang="sverlin" domain>
+const linearSearch = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([4, 7, 2]);
   const target = Int(7);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @scan{
     @check[if (@cond[values[i] === target]) break;]
   }
 </script>
-<script lang="sverlin" listing="pseudocode">
+<script listing="pseudocode">
   for @setup[i = 0] @guard[to n - 1] @onward[step 1]
     @scan[@check[if @cond[$i[A[i]] = $target[target]] then return $i[i]]]
 </script>
@@ -190,16 +190,16 @@ describe('tokens naming places in a listing', () => {
   });
 
   it('touch the loop variables and the key of insertion sort', () => {
-    const insertion = `<script lang="sverlin" domain>
+    const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
@@ -210,7 +210,7 @@ describe('tokens naming places in a listing', () => {
     @place[values[j] = key;]
   }
 </script>
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
   for @setup[i = 2] @guard[to n] @onward[step 1]
       @insert[@key[$key[key] = $i[A[i]]]
       @init[j = i - 1]

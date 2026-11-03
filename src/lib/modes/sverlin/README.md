@@ -22,22 +22,21 @@ of a pair should differ in how they show the algorithm.
 
 ## Blocks
 
-A component is `<script lang="sverlin">` blocks, written in a subset of
-JavaScript (see The subset), followed by a script-free Svelte view. Only the
-algorithm block is required, and there is no design block (see Design).
+A component is code blocks, each a `<script>` named by one attribute and written
+in a subset of JavaScript (see The subset), followed by a script-free Svelte
+view. Only the algorithm block is required, and there is no design block (see
+Design). A plain `<script>`, or one with any other attribute, is refused.
 
-1. `<script lang="sverlin" domain>`: the types, atomic and the collections,
-   records, and unions built from them (see Atomic types; Collections, records,
-   and unions).
-2. `<script lang="sverlin" input>`: the fixed starting data, declared with
-   `const` or `let`, as `const values = Values([3, 8, 5]);`; every value has a
-   domain type.
-3. `<script lang="sverlin">`: the algorithm. It starts from the input variables,
-   may update them and declare more, may declare functions (see Loops and
+1. `<script domain>`: the types, atomic and the collections, records, and unions
+   built from them (see Atomic types; Collections, records, and unions).
+2. `<script input>`: the fixed starting data, declared with `const` or `let`, as
+   `const values = Values([3, 8, 5]);`; every value has a domain type.
+3. `<script algorithm>`: the algorithm. It starts from the input variables, may
+   update them and declare more, may declare functions (see Loops and
    functions), and labels the code its steps are about (see Steps). It runs
    once.
-4. `<script lang="sverlin" listing="textbook">`, any number, any name but none:
-   texts of the algorithm to show beside the view (see Listing).
+4. `<script listing="textbook">`, any number, any name but none: texts of the
+   algorithm to show beside the view (see Listing).
 
 ## View
 
@@ -52,7 +51,7 @@ step and the library components are already in scope; never write `import`, and
 never declare names `Node`, `Link`, `Pointed`, `Listing`, `Layout`, `When`, or
 `OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`, `{#snippet}`);
 Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
-`<When>`.
+`<When>`; and code is in `<script>` blocks named by an attribute.
 
 - The top level holds parts, views, and at least one layout: every source
   declares its layouts, and one without is refused. A snippet without parameters
@@ -316,19 +315,19 @@ parameter hides a top-level variable of the same name.
 Binary search, stopping where it finds the target:
 
 ```svelte
-<script lang="sverlin" domain>
+<script domain>
   const Int = type('integer', { min: 0, max: 99 });
   const Values = collection(Int);
   const Index = index(Values);
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([2, 5, 8, 12, 16, 23, 38]);
   const target = Int(23);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @range[let lo = Index(0);
   let hi = values.length - 1;]
   while (@open[lo <= hi]) @probe{
@@ -470,7 +469,7 @@ reference or an index would never end, and is refused. A list reversed, the
 nodes `prev` and `cur` refer to both marked:
 
 ```svelte
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });  // Next is defined below
@@ -479,13 +478,13 @@ nodes `prev` and `cur` refer to both marked:
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const head = NodeRef(ListNode({ name: 'A', next:
     NodeRef(ListNode({ name: 'B', next:
       NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @begin[let prev = Next(End('end'));
   let cur = Next(head);]
   while (@more[cur !== 'end']) @rewire{
@@ -623,17 +622,17 @@ Bubble sort, the question at each comparison and a caption at each swap in one
 place:
 
 ```svelte
-<script lang="sverlin" domain>
+<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4, 2, 3]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (@last[let end = values.length]; @more[Index(values, 1) < end]; @shrink[end--]) @sweep{
     for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
       if (@test[values[i - 1] > values[i]]) @swap{
@@ -1009,7 +1008,7 @@ listing reads as the lesson; when the algorithm changes, its listing follows.
 Place it outside views, in a layout or a part, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
-The text is a `<script lang="sverlin" listing="textbook">` block; with several,
+The text is a `<script listing="textbook">` block; with several,
 `listing.language` chooses which one a presentation shows, the first in the
 starter, or `none`.
 
@@ -1072,18 +1071,18 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 `key`:
 
 ```svelte
-<script lang="sverlin" domain>
+<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
@@ -1095,7 +1094,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   }
 </script>
 
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
   INSERTION-SORT(A, n)
   1  for @start[i = 2] @more[to n] @next[step 1]
   2      @insert[@key[$key[key] = $i[A[i]]]
@@ -1227,7 +1226,7 @@ from each vertex `k` to them, with the vertex visited and the neighbour looked
 at marked and the queue drawn by number:
 
 ```svelte
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag });
@@ -1240,7 +1239,7 @@ at marked and the queue drawn by number:
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([
     { name: 'A', seen: true },
     { name: 'B', seen: false },
@@ -1251,7 +1250,7 @@ at marked and the queue drawn by number:
   const out = Adjacency([[1, 2], [3], [3], [4], []]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @init[let queue = Queue([0]);]
   while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];

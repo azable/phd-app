@@ -210,7 +210,7 @@ describe('variant markers', () => {
   });
 
   it('shows each label’s pauses after its mark, by its full name', () => {
-    const algorithm = '<script lang="sverlin">\n  @insert{ @swap[x = 1;] }\n</script>';
+    const algorithm = '<script algorithm>\n  @insert{ @swap[x = 1;] }\n</script>';
     const paused = presentations.map((presentation, index) => ({
       ...presentation,
       variant: { 'pause@insert': 'accumulate', 'pause@insert.swap': index ? 'off' : 'on' }

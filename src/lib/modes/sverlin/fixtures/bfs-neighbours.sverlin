@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag });
@@ -11,7 +11,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([
     { name: 'A', seen: true },
     { name: 'B', seen: false },
@@ -22,7 +22,7 @@
   const out = Adjacency([[1, 2], [3], [3], [4], []]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @init[let queue = Queue([0]);]
   while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];

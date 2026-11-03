@@ -14,17 +14,17 @@ import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
-const merge = `<script lang="sverlin" domain>
+const merge = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const left = Values([1, 4, 7]);
   const right = Values([2, 3, 9]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @start[let merged = Values([]);
   let i = Position(left, 0);
   let j = Position(right, 0);]
@@ -214,7 +214,7 @@ it.skipIf(!enabled)(
   }
 );
 
-const walk = `<script lang="sverlin" domain>
+const walk = `<script domain>
   const Name = type(['A', 'B', 'C']);
   const Names = collection(Name);
   const Vertex = index(Names);
@@ -223,11 +223,11 @@ const walk = `<script lang="sverlin" domain>
   const EdgeIndex = index(Edges);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const vertices = Names(['A', 'B', 'C']);
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @step[for (let e = EdgeIndex(0); (e < edges.length); e++) {}]
 </script>
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
@@ -293,18 +293,18 @@ it.skipIf(!enabled)(
   }
 );
 
-const taken = `<script lang="sverlin" domain>
+const taken = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
   const Take = record({ from: Index });
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const left = Values([1, 4, 6]);
   const right = Values([2, 3, 5]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @start[let i = Index(left, 0);
   let j = Index(right, 0);
   let take = Take({ from: j });]
@@ -378,15 +378,15 @@ it.skipIf(!enabled)(
   }
 );
 
-const apart = `<script lang="sverlin" domain>
+const apart = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([1, 4, 6, 2]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @start[let i = Index(0);
   let j = Index(2);]
   @once[i = (i + 1) % 4;
@@ -463,15 +463,15 @@ it.skipIf(!enabled)(
   }
 );
 
-const far = `<script lang="sverlin" domain>
+const far = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 8]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @start[let i = Index(0);]
   @far[i = 9;]
 </script>
@@ -668,7 +668,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+      `<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -711,16 +711,16 @@ it.skipIf(!enabled)(
   }
 );
 
-const compared = `<script lang="sverlin" domain>
+const compared = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(1); (i < values.length); i++) @compare{
     if (((values[i - 1]) > values[i])) @swap{
       const moved = values[i - 1];

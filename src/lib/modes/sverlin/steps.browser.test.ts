@@ -26,16 +26,16 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     // Each step is a write of 7; the loop moving i, which the view draws, leads up to it.
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([1, 1, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(0); (i < values.length); i++) {
     @write[values[i] = 7;]
   }
@@ -118,16 +118,16 @@ it.skipIf(!enabled)(
   'leaves out a value out of scope at every step with the node around it, as shown false does',
   { timeout: 120_000 },
   async () => {
-    const source = `<script lang="sverlin" domain>
+    const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(0); (i < values.length); i++) @pass{
     @pick[const key = values[i];]
     @put[values[i] = key;]

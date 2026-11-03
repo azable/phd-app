@@ -36,7 +36,7 @@ const kindsOf = (space: Record<string, unknown>) =>
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{n}</Node></Layout>'
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{n}</Node></Layout>'
     );
     // The input as given, then a step at each label, each named by its label and run.
     expect(result.labels).toEqual(['start', '@run#1', '@a#1', '@b#1']);
@@ -129,7 +129,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects a design block, and a source with no algorithm block', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">\n\n</script>\n<script lang="sverlin" design>\nconst size = 1;\n</script>'
+        '<script algorithm>\n\n</script>\n<script design>\nconst size = 1;\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'sverlin_block',
@@ -138,15 +138,15 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" input>const x = 1;</script>{#snippet X()}<Node>x</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
+        '<script input>const x = 1;</script>{#snippet X()}<Node>x</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
       )
-    ).rejects.toThrow('Add a <script lang="sverlin"> algorithm block');
+    ).rejects.toThrow('Add a <script algorithm> block');
   });
 
   it('rejects looks given as props, which are the design’s', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(
-        `<script lang="sverlin"></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
+        `<script algorithm></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
       );
     await expect(view('<Node fill="amber" value={1} />')).rejects.toMatchObject({
       code: 'unknown_prop',
@@ -161,7 +161,7 @@ describe('single-component Svelte compilation', () => {
 
   it('reports the view’s problems together with a block’s, in source order', async () => {
     const failure = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  @run[let i = 0;]\n\n</script>\n{#snippet A()}<Node shape="circle">v1</Node>{/snippet}\n{#snippet B()}<Node class="x" />{/snippet}\n<Layout name="Main"><Node>{@render A()}{@render B()}</Node></Layout>'
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script algorithm>\n  @run[let i = 0;]\n\n</script>\n{#snippet A()}<Node shape="circle">v1</Node>{/snippet}\n{#snippet B()}<Node class="x" />{/snippet}\n<Layout name="Main"><Node>{@render A()}{@render B()}</Node></Layout>'
     ).catch((cause: InvalidSvelteSourceError) => cause);
     expect(failure).toMatchObject({ line: 3, message: expect.stringContaining('plain number 0') });
     expect((failure as InvalidSvelteSourceError).others).toMatchObject([
@@ -173,12 +173,12 @@ describe('single-component Svelte compilation', () => {
   it('places problems at their authored positions', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n\n<script module>import x from "y";</script>'
+        '<script algorithm></script>\n\n<script module>import x from "y";</script>'
       )
     ).rejects.toMatchObject({ line: 3 });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n{#snippet A()}<Node>a</Node>{/snippet}\n{#snippet B()}<Node tags="b">b</Node>{/snippet}\n<Layout name="Main"><Node>{@render A()}{@render B()}</Node></Layout>'
+        '<script algorithm></script>\n{#snippet A()}<Node>a</Node>{/snippet}\n{#snippet B()}<Node tags="b">b</Node>{/snippet}\n<Layout name="Main"><Node>{@render A()}{@render B()}</Node></Layout>'
       )
     ).rejects.toMatchObject({
       code: 'unknown_prop',
@@ -187,14 +187,14 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n<Layout name="Main"><Node>\n<div>a</div></Node></Layout>'
+        '<script algorithm></script>\n<Layout name="Main"><Node>\n<div>a</div></Node></Layout>'
       )
     ).rejects.toMatchObject({ code: 'view_markup', line: 3 });
   });
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script lang="sverlin" input>\n  const values = Values([3, "x"]);\n</script>\n<script lang="sverlin">\n  @run[let i = 0;]\n\n</script>'
+        '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int);</script>\n<script input>\n  const values = Values([3, "x"]);\n</script>\n<script algorithm>\n  @run[let i = 0;]\n\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -207,7 +207,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script lang="sverlin">\n  @run[let i = 0;]\n\n</script>'
+        '<script domain>const Int = type("integer", { min: -100, max: 1000 });</script>\n<script algorithm>\n  @run[let i = 0;]\n\n</script>'
       )
     ).rejects.toMatchObject({
       line: 3,
@@ -218,7 +218,7 @@ describe('single-component Svelte compilation', () => {
 
   it('reports algorithm errors at their authored line and column', async () => {
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin">\n  @run[let x = Int(1);\n\n  x = missing;]\n</script><Layout name="Main"><Node><Node>{x}</Node></Node></Layout>';
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 });</script><script algorithm>\n  @run[let x = Int(1);\n\n  x = missing;]\n</script><Layout name="Main"><Node><Node>{x}</Node></Node></Layout>';
     await expect(compileSvelteComponent(source)).rejects.toMatchObject({
       name: 'InvalidSvelteSourceError',
       code: 'algorithm_error',
@@ -231,7 +231,7 @@ describe('single-component Svelte compilation', () => {
   it('keeps Svelte error positions after removing the algorithm block', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">\n\n</script>\n\n<Layout name="Main"><Node>{#if}</Node></Layout>'
+        '<script algorithm>\n\n</script>\n\n<Layout name="Main"><Node>{#if}</Node></Layout>'
       )
     ).rejects.toMatchObject({ line: 5 });
   });
@@ -241,9 +241,9 @@ describe('single-component Svelte compilation', () => {
       compileSvelteComponent(
         '{#snippet Hi()}<Node>Hi</Node>{/snippet}<Layout name="Main"><Node>{@render Hi()}</Node></Layout>'
       )
-    ).rejects.toThrow('Add a <script lang="sverlin"> algorithm block');
+    ).rejects.toThrow('Add a <script algorithm> block');
     await expect(
-      compileSvelteComponent('<script lang="sverlin"></script><script lang="sverlin"></script>')
+      compileSvelteComponent('<script algorithm></script><script algorithm></script>')
     ).rejects.toThrow('only one algorithm block');
   });
 
@@ -252,7 +252,7 @@ describe('single-component Svelte compilation', () => {
     expect(result.javascript).toContain('sv-node');
     expect(result.javascript).toContain('sv-node');
     const withoutModuleScript = await compileSvelteComponent(
-      '<script lang="sverlin"></script>{#snippet X()}<Node>x</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
+      '<script algorithm></script>{#snippet X()}<Node>x</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
     );
     // The input as given (here none), then the algorithm's one step, its end.
     expect(withoutModuleScript.labels).toEqual(['start', 'end']);
@@ -261,7 +261,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values([4, 9]);</script>\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
@@ -272,7 +272,7 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0); let j = Position(1);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}{@render Note()}{@render Pair()}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0); let j = Position(1);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}{@render Note()}{@render Pair()}</Node></Layout>`
     );
     expect(kindsOf(design.space)).toEqual(
       [
@@ -336,15 +336,15 @@ describe('single-component Svelte compilation', () => {
       /A takes a parameter without a type/
     ]
   ])('rejects %s', async (_name, markup, message) => {
-    await expect(
-      compileSvelteComponent(`<script lang="sverlin"></script>${markup}`)
-    ).rejects.toThrow(message);
+    await expect(compileSvelteComponent(`<script algorithm></script>${markup}`)).rejects.toThrow(
+      message
+    );
   });
 
   it('rejects a <Pointed> and a node of one kind', () => {
     expect(() =>
       prepareSvelteComponent(
-        `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet Arrow(p: Position)}{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node>{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}</Node></Layout>`
+        `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0);]</script>{#snippet Arrow(p: Position)}{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node>{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}</Node></Layout>`
       )
     ).toThrow(/Arrow\.Pointed is the kind of a <\w+> and of another kind of tag/);
   });
@@ -352,7 +352,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects props a library component does not take, and written values it cannot use', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(
-        `<script lang="sverlin"></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
+        `<script algorithm></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
       );
     // A free layout's look is its kind's, so the markup cannot set it.
     for (const prop of ['form="ring"', 'curve="straight"', 'layoutSeed={3}'])
@@ -420,7 +420,7 @@ describe('single-component Svelte compilation', () => {
 
   it('refuses a name the view reads that nothing gives it, where it is written', () => {
     const source = (markup: string) =>
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Int(1);]</script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
+      `<script domain>const Int = type([1, 3]); const Values = collection(Int);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source('<Node>{valeus.length}</Node>'))).toThrow(
       expect.objectContaining({
         code: 'view_name',
@@ -444,11 +444,11 @@ describe('single-component Svelte compilation', () => {
   it('draws views only with Node and Link', async () => {
     const view = (markup: string) =>
       compileSvelteComponent(
-        `<script lang="sverlin"></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
+        `<script algorithm></script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`
       );
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n{#snippet V()}<Node>Hi</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>\n<style>div { color: red; }</style>'
+        '<script algorithm></script>\n{#snippet V()}<Node>Hi</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>\n<style>div { color: red; }</style>'
       )
     ).rejects.toMatchObject({
       code: 'view_style',
@@ -468,7 +468,7 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script><svelte:head><title>x</title></svelte:head>'
+        '<script algorithm></script><svelte:head><title>x</title></svelte:head>'
       )
     ).rejects.toMatchObject({ code: 'view_markup' });
     await expect(view('<svelte:element this="div" />')).rejects.toMatchObject({
@@ -480,17 +480,17 @@ describe('single-component Svelte compilation', () => {
     // between nodes is ignored.
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type([1, 3]);</script><script lang="sverlin">@run[let i = Int(1);]</script>\n{#snippet IntNote(value: Int)}is <Node {value} />{/snippet}\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
+        '<script domain>const Int = type([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n{#snippet IntNote(value: Int)}is <Node {value} />{/snippet}\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
       )
     ).resolves.toBeDefined();
   });
 
   it('shows the source’s own listing where the view places a <Listing />, lit per step', async () => {
     const source = [
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script>',
-      '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
-      '<script lang="sverlin">@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[i < values.length]; @step[i++]) { last = i; }]</script>',
-      '<script lang="sverlin" listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
+      '<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values); const Flag = type("boolean");</script>',
+      '<script input>const values = Values([3, 8]);</script>',
+      '<script algorithm>@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[i < values.length]; @step[i++]) { last = i; }]</script>',
+      '<script listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
       '{#snippet IndexCell(p: Index)}<Node value={p} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{last}</Node></Layout>'
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
@@ -512,7 +512,7 @@ describe('single-component Svelte compilation', () => {
 
   it('rejects a <Listing /> with props or children, inside a view, or with no listing', () => {
     const blocks =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@run[const n = Int(1);]</script>\n';
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[const n = Int(1);]</script>\n';
     expect(() =>
       prepareSvelteComponent(
         `${blocks}<Layout name="Main"><Node><Listing language="python" /></Node></Layout>`
@@ -531,7 +531,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects view scripts and values that shadow library components', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n\n<script>const x = 1;</script>\n{#snippet X()}<Node>{x}</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
+        '<script algorithm></script>\n\n<script>const x = 1;</script>\n{#snippet X()}<Node>{x}</Node>{/snippet}<Layout name="Main"><Node>{@render X()}</Node></Layout>'
       )
     ).rejects.toMatchObject({
       code: 'view_script',
@@ -539,23 +539,26 @@ describe('single-component Svelte compilation', () => {
       message: expect.stringContaining('Views cannot have their own <script>')
     });
     await expect(
-      compileSvelteComponent('<script lang="sverlin"></script><script module>const x = 1;</script>')
+      compileSvelteComponent('<script algorithm></script><script module>const x = 1;</script>')
     ).rejects.toThrow('Views cannot have their own <script>');
     await expect(
-      compileSvelteComponent(
-        '<script lang="sverlin"></script>\n<script lang="sverlin" inputs>const x = 1;</script>'
-      )
+      compileSvelteComponent('<script algorithm></script>\n<script inputs>const x = 1;</script>')
     ).rejects.toMatchObject({ code: 'sverlin_block', line: 2 });
     await expect(
+      compileSvelteComponent('<script lang="sverlin">@run[const x = 1;]</script>')
+    ).rejects.toThrow(
+      'Unrecognized block <script lang="sverlin">; a block is a <script> named by one attribute: <script domain> for the types'
+    );
+    await expect(
       compileSvelteComponent(
-        '<script lang="sverlin">@run[const Node = 1;]</script><Layout name="Main"><Node><Node>x</Node></Node></Layout>'
+        '<script algorithm>@run[const Node = 1;]</script><Layout name="Main"><Node><Node>x</Node></Node></Layout>'
       )
     ).rejects.toThrow('"Node" names a library component');
   });
 
   it('draws nested collections with nested {#each} blocks, and no longer takes items', async () => {
     const source = (view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}${view}`;
+      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script input>const grid = Grid([[1, 2], [3, 4]]);</script><script algorithm></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}${view}`;
     const result = await compileSvelteComponent(
       source(
         '{#snippet Rows()}<Node layout="column">{#each grid as row}<Node>{#each row as v}{v}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Rows()}</Node></Layout>'
@@ -576,7 +579,7 @@ describe('single-component Svelte compilation', () => {
 
   it('marks the node showing a view’s own value with its type, for its unit', async () => {
     const source = (view: string, more = '') =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin"></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
+      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = collection(Height);</script><script input>const people = People([150, 170]);</script><script algorithm></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
     const view =
       '{#snippet HeightView(h: Height)}<Node layout="column"><Node value={h} /><Node>tall</Node></Node>{/snippet}';
     const prepared = prepareSvelteComponent(source(view));
@@ -594,7 +597,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects invalid domain blocks, views, and clashing names', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n<script lang="sverlin" domain>\nconst A = type(Integer);\n</script>'
+        '<script algorithm></script>\n<script domain>\nconst A = type(Integer);\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -603,24 +606,24 @@ describe('single-component Svelte compilation', () => {
     });
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin"></script>\n{#snippet IntCell(value: Int, node)}{value}{/snippet}<Layout name="Main"><Node /></Layout>'
+        '<script domain>const Int = type("integer", { min: -100, max: 1000 });</script><script algorithm></script>\n{#snippet IntCell(value: Int, node)}{value}{/snippet}<Layout name="Main"><Node /></Layout>'
       )
     ).rejects.toThrow('IntCell takes one value, its type given');
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Text = type(["a"]);</script><script lang="sverlin">@run[const Text = 1;]</script>'
+        '<script domain>const Text = type(["a"]);</script><script algorithm>@run[const Text = 1;]</script>'
       )
     ).rejects.toThrow('"Text" names a type');
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Node = type("integer", { min: -100, max: 1000 });</script><script lang="sverlin"></script>'
+        '<script domain>const Node = type("integer", { min: -100, max: 1000 });</script><script algorithm></script>'
       )
     ).rejects.toThrow('"Node" names a library component');
   });
 
   it('takes chosen values, keeps base values that still fit, and gives the rest the starter', async () => {
     const prepared = prepareSvelteComponent(
-      '<script lang="sverlin"></script>{#snippet One()}<Node value={1} />{/snippet}<Layout name="Main"><Node>{@render One()}</Node></Layout>'
+      '<script algorithm></script>{#snippet One()}<Node value={1} />{/snippet}<Layout name="Main"><Node>{@render One()}</Node></Layout>'
     );
     const built = await bundlePresentation(prepared, 3, {
       chosen: { 'One.radius': 999 },
@@ -648,7 +651,7 @@ describe('single-component Svelte compilation', () => {
 
   it('takes the page frame from the layout’s values in the variant', async () => {
     const prepared = prepareSvelteComponent(
-      '<script lang="sverlin"></script>{#snippet A()}<Node>a</Node>{/snippet}<Layout name="Main"><Node>{@render A()}</Node></Layout>'
+      '<script algorithm></script>{#snippet A()}<Node>a</Node>{/snippet}<Layout name="Main"><Node>{@render A()}</Node></Layout>'
     );
     expect(prepared.design.starter['Main.ratio']).toBe('fit');
     const built = await bundlePresentation(prepared, 1, { chosen: { 'Main.ratio': '4:3' } });
@@ -660,7 +663,7 @@ describe('single-component Svelte compilation', () => {
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
     const algorithm =
-      '<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}';
+      '<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}';
     const nested = prepareSvelteComponent(
       `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{v}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
@@ -679,7 +682,7 @@ describe('single-component Svelte compilation', () => {
   });
 
   it('tags every Node with its source position and reserves __ props', async () => {
-    const algorithm = '<script lang="sverlin"></script>';
+    const algorithm = '<script algorithm></script>';
     const { component } = prepareSvelteComponent(
       `${algorithm}\n{#snippet C()}<Node layout="column">\n  {#if true}<Node value={1} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render C()}</Node></Layout>`
     );
@@ -703,7 +706,7 @@ describe('single-component Svelte compilation', () => {
     async (path) => {
       await expect(
         compileSvelteComponent(
-          `<script lang="sverlin"></script>{#snippet R()}<Node>{require(${JSON.stringify(path)})}</Node>{/snippet}<Layout name="Main"><Node>{@render R()}</Node></Layout>`
+          `<script algorithm></script>{#snippet R()}<Node>{require(${JSON.stringify(path)})}</Node>{/snippet}<Layout name="Main"><Node>{@render R()}</Node></Layout>`
         )
       ).rejects.toMatchObject({
         name: 'InvalidSvelteSourceError',
@@ -716,14 +719,14 @@ describe('single-component Svelte compilation', () => {
   it('keeps authored line numbers after prelude injection', async () => {
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin"></script>\n{#snippet S()}<Node>\n{$state(1)}</Node>{/snippet}<Layout name="Main"><Node>{@render S()}</Node></Layout>'
+        '<script algorithm></script>\n{#snippet S()}<Node>\n{$state(1)}</Node>{/snippet}<Layout name="Main"><Node>{@render S()}</Node></Layout>'
       )
     ).rejects.toMatchObject({ line: 3, column: 2 });
   });
 
   it('identifies the source by its steps, whatever the view and input', async () => {
     const source = (values: string, view: string) =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
+      `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int);</script><script input>const values = Values(${values});</script><script algorithm>@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).stepSignature;
     const first = await signature(
@@ -754,7 +757,7 @@ describe('single-component Svelte compilation', () => {
 describe('pointers', () => {
   /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
   const view = (parts: string, renders = '') =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}${parts}<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[let i = Position(0);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}${parts}<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
@@ -841,9 +844,8 @@ describe('pointers', () => {
 });
 
 describe('typed view components', () => {
-  const domain =
-    '<script lang="sverlin" domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';
-  const algorithm = '<script lang="sverlin">@run[let i = Int(1);]</script>';
+  const domain = '<script domain>const Int = type([1, 3]); const Flag = type("boolean");</script>';
+  const algorithm = '<script algorithm>@run[let i = Int(1);]</script>';
   const component = (view: string) => prepareSvelteComponent(`${domain}${algorithm}${view}`);
 
   it('reads typed snippets as views of one type, and draws the view the variant chooses for the type', async () => {
@@ -869,7 +871,7 @@ describe('typed view components', () => {
 
   it('orders components after those they render', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{value}{/each}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Row = collection(Int);</script><script algorithm>@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{value}{/each}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`
     );
     expect(prepared.components.map(({ name }) => name)).toEqual(['Plain', 'Boxed', 'Search']);
     // Plain and Boxed show their value, so they take every value; Search only passes its values to
@@ -881,7 +883,7 @@ describe('typed view components', () => {
 
   it('draws a record with one value for each field passed only to a view', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin"></script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{edge.from}{edge.to}<Node value={edge.weight} /></Node>{/snippet}<Layout name="Main"><Node /></Layout>`
+      `<script domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script algorithm></script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{edge.from}{edge.to}<Node value={edge.weight} /></Node>{/snippet}<Layout name="Main"><Node /></Layout>`
     );
     // from and to go to VertexView; weight is shown, so it takes each of its values.
     expect(prepared.components.find(({ name }) => name === 'EdgeView')?.cases).toEqual(
@@ -891,7 +893,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
@@ -901,7 +903,7 @@ describe('typed view components', () => {
 
   it('measures a position with every place in its collection, and as far past it as the trace goes', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3, 1, 3]);</script><script lang="sverlin">@start[let i = Position(-1);] @move[i = Position(0);]</script>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3, 1, 3]);</script><script algorithm>@start[let i = Position(-1);] @move[i = Position(0);]</script>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}</Node></Layout>`
     );
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
@@ -910,7 +912,7 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet M(mark: Mark)}<Node value={mark} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
+      `<script domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script algorithm>@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet M(mark: Mark)}<Node value={mark} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -1028,7 +1030,7 @@ describe('typed view components', () => {
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
-          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin"></script>{#snippet F(flags: Flags)}<Node value={flags.a} />{/snippet}<Layout name="Main"><Node /></Layout>`
+          `<script domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script algorithm></script>{#snippet F(flags: Flags)}<Node value={flags.a} />{/snippet}<Layout name="Main"><Node /></Layout>`
         ),
       /F would be drawn with too many values of Flags/
     ]
@@ -1039,7 +1041,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean");</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean");</script><script input>const values = Values([5, 2]);</script><script algorithm>for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
@@ -1095,7 +1097,7 @@ describe('scope', () => {
 
 describe('views', () => {
   it('are only drawn with {@render}, never called to make a value', () => {
-    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin"></script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{v}{Index(k)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`;
+    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm></script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{v}{Index(k)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source)).toThrow(
       'Index(…) is a view, which only draws: write {value}'
     );
@@ -1104,7 +1106,7 @@ describe('views', () => {
 
 describe('view choices and prop values', () => {
   const domain =
-    '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 3 });</script><script lang="sverlin">@run[const i = Int(1);]</script>';
+    '<script domain>const Int = type("integer", { min: 0, max: 3 });</script><script algorithm>@run[const i = Int(1);]</script>';
 
   it('leaves out of a type’s views those that draw the type itself', () => {
     const prepared = prepareSvelteComponent(
@@ -1128,7 +1130,7 @@ describe('view choices and prop values', () => {
 });
 
 describe('views of what a step computed', () => {
-  const bubble = `<script lang="sverlin" domain>
+  const bubble = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
   const Values = collection(Int);
@@ -1139,11 +1141,11 @@ describe('views of what a step computed', () => {
   // what the algorithm does
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4, 2, 3]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let end = values.length]; @guard[Index(1) < end]; @onward[end--]) @sweep{
     for (@setup[let i = Index(1)]; @guard[i < end]; @onward[i++]) @pair{
       if (@test[values[i - 1] > values[i]]) @swap{
@@ -1255,18 +1257,18 @@ describe('views of what a step computed', () => {
 });
 
 describe('pauses at labels', () => {
-  const insertion = `<script lang="sverlin" domain>
+  const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
     while (@guard[Position(0) < j] && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
@@ -1278,7 +1280,7 @@ describe('pauses at labels', () => {
   }
 </script>
 
-<script lang="sverlin" listing="code">
+<script listing="code">
   for (@setup[i = 1]; @guard[i < length(A)]; @onward[i = i + 1])
     @insert[j = i
     while @guard[j > 0] and @compare[A[@left[j - 1]] > A[@right[j]]]
@@ -1513,16 +1515,16 @@ describe('pauses at labels', () => {
 describe('pauses accumulate', () => {
   const insertion = prepareSvelteComponent(
     // The pauses-at-labels source, whose listing marks every label.
-    `<script lang="sverlin" domain>
+    `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
     while (@guard[Position(0) < j] && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
@@ -1533,7 +1535,7 @@ describe('pauses accumulate', () => {
     }
   }
 </script>
-<script lang="sverlin" listing="code">
+<script listing="code">
   for (@setup[i = 1]; @guard[i < length(A)]; @onward[i = i + 1])
     @insert[j = i
     while @guard[j > 0] and @compare[A[@left[j - 1]] > A[@right[j]]]
@@ -1713,7 +1715,7 @@ describe('pauses accumulate', () => {
 
 describe('places', () => {
   const source = (view: string, algorithm = '@run[let i = Index(1); let key = Int(2);]') =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">${algorithm}</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm>${algorithm}</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
 
   it('refuses a view rendered by its own name, naming its type', () => {
     expect(() =>
@@ -1756,7 +1758,7 @@ describe('places', () => {
 
   it('draws a union value by its member’s view, refusing a view of the union', () => {
     const union = (views: string) =>
-      `<script lang="sverlin" domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = collection(Dist);</script><script lang="sverlin" input>const dists = Dists([0, "none"]);</script><script lang="sverlin">@run[const d = dists[1];]</script>${views}<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
+      `<script domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = collection(Dist);</script><script input>const dists = Dists([0, "none"]);</script><script algorithm>@run[const d = dists[1];]</script>${views}<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
     const prepared = prepareSvelteComponent(
       union(
         '{#snippet StepsCell(value: Steps)}<Node {value} />{/snippet}{#snippet NoneMark(value: None)}<Node>–</Node>{/snippet}'
@@ -1782,7 +1784,7 @@ describe('places', () => {
 });
 
 describe('nodes and references', () => {
-  const domain = `<script lang="sverlin" domain>
+  const domain = `<script domain>
   const Name = type(['A', 'B', 'C']);
   const Flag = type('boolean');
   const End = type(['end']);
@@ -1790,10 +1792,10 @@ describe('nodes and references', () => {
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
-<script lang="sverlin" input>
+<script input>
   const head = NodeRef(ListNode({ name: 'A', next: NodeRef(ListNode({ name: 'B', next: End('end') })) }));
 </script>
-<script lang="sverlin">
+<script algorithm>
   @run[let prev = Next(End('end'));
   let cur = Next(head);]
   while (@guard[cur !== 'end']) @rewire{
@@ -1838,16 +1840,16 @@ describe('nodes and references', () => {
 });
 
 describe('the view reaching the code only through labels', () => {
-  const swaps = `<script lang="sverlin" domain>
+  const swaps = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     let j = i;
     while (@guard[Position(0) < j] && @compare[(values[j - 1]) > values[j]]) @swap{
@@ -1934,16 +1936,16 @@ describe('the view reaching the code only through labels', () => {
 });
 
 describe('<When of="@label">', () => {
-  const caption = (block: string) => `<script lang="sverlin" domain>
+  const caption = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @pass{
     @look[const seen = @read[values[i]];]
   }
@@ -1982,8 +1984,8 @@ describe('<When of="@label">', () => {
 
   it('takes a run of statements in a row to its last, the labels inside it included', () => {
     const rows = caption('').replace(
-      /<script lang="sverlin">[\s\S]*?<\/script>/u,
-      `<script lang="sverlin">
+      /<script algorithm>[\s\S]*?<\/script>/u,
+      `<script algorithm>
   @scan[
     @begin[let i = Position(1);]
     while (@guard[i < values.length]) @step{
@@ -2052,16 +2054,16 @@ describe('<When of="@label">', () => {
 });
 
 describe('<OneOf> branches', () => {
-  const chain = (block: string) => `<script lang="sverlin" domain>
+  const chain = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 4, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @pass{
     @look[const seen = values[i];]
     @note[const again = values[i];]
@@ -2170,7 +2172,7 @@ describe('references read in the view', () => {
 
 describe('at(p), the element a position points at', () => {
   const graph = (markup: string, more = '') =>
-    `<script lang="sverlin" domain>
+    `<script domain>
   const Name = type(['A', 'B', 'C']);
   const Seen = type('boolean');
   const Vertex = record({ name: Name, seen: Seen });
@@ -2181,13 +2183,13 @@ describe('at(p), the element a position points at', () => {
   const Edges = collection(Edge);
   const Int = type('integer', { min: 0, max: 9 });${more}
 </script>
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([{ name: 'A', seen: true }, { name: 'B', seen: false }, { name: 'C', seen: false }]);
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }]);
   const queue = Queue([1, 2]);
   const n = Int(1);
 </script>
-<script lang="sverlin"></script>
+<script algorithm></script>
 {#snippet NameText(value: Name)}<Node {value} />{/snippet}
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet VertexCard(vertex: Vertex)}<Node layout="column">{vertex.name}</Node>{/snippet}
@@ -2241,12 +2243,12 @@ ${markup}`;
 describe('step limits', () => {
   // Three passes of a hundred steps, each with its test and its move: over 900 pausing at every
   // label, more than one presentation shows.
-  const long = `<script lang="sverlin" domain>
+  const long = `<script domain>
   const Int = type('integer', { min: 0, max: 200 });
   const Flag = type('boolean');
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @run[let n = Int(0);]
   for (@setup[let i = Int(0)]; @guard[i < 3]; @onward[i++]) @pass{
     for (@from[let j = Int(0)]; @more[j < 100]; @next[j++]) @step[n = j + 1;]

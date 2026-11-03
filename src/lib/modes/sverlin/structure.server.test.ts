@@ -7,19 +7,19 @@ import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import reversal from './fixtures/list-markers.sverlin?raw';
 import { propOptions } from './library/node/design';
 
-const list = `<script lang="sverlin" domain>
+const list = `<script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
-<script lang="sverlin" input>
+<script input>
   const head = NodeRef(ListNode({ name: 'A', next:
     NodeRef(ListNode({ name: 'B', next: NodeRef(ListNode({ name: 'C', next: End('end') })) }))
   }));
 </script>
-<script lang="sverlin">
+<script algorithm>
   @run[let cur = Next(head);]
   while (@guard[cur !== 'end']) @visit{
     cur = cur.next;
@@ -41,17 +41,17 @@ const list = `<script lang="sverlin" domain>
   </Node>
 </Layout>`;
 
-const ring = `<script lang="sverlin" domain>
+const ring = `<script domain>
   const Name = type(['A', 'B', 'C', 'D']);
   const Names = collection(Name);
   const Position = index(Names);
   const Nexts = collection(Position);
 </script>
-<script lang="sverlin" input>
+<script input>
   const names = Names(['A', 'B', 'C', 'D']);
   const next = Nexts([1, 2, 3, 0]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @run[let at = Position(0);]
   @first[at = next[at];]
   @second[at = next[at];]
@@ -69,15 +69,15 @@ const ring = `<script lang="sverlin" domain>
   </Node>
 </Layout>`;
 
-const unlinked = `<script lang="sverlin" domain>
+const unlinked = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 1, 2]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   @run[let i = Position(0);]
   @move[i = Position(1);]
 </script>

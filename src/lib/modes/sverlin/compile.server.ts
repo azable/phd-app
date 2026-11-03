@@ -942,7 +942,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     ];
     if (!blocks.algorithm)
       throw new InvalidSvelteSourceError(
-        'Add a <script lang="sverlin"> algorithm block, labelling the code its steps are about, as @check[…] (see Steps).',
+        'Add a <script algorithm> block, labelling the code its steps are about, as @check[…] (see Steps).',
         { code: 'missing_algorithm' }
       );
     const declaredDomain = blocks.domain
@@ -1503,7 +1503,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
-          'A <Listing /> shows a listing of the source\'s own: add its text in a <script lang="sverlin" listing="code"> block, marking each part to light as @label[text], and label the algorithm\'s code the same way, as @label[…] around it (see Listing).',
+          'A <Listing /> shows a listing of the source\'s own: add its text in a <script listing="code"> block, marking each part to light as @label[text], and label the algorithm\'s code the same way, as @label[…] around it (see Listing).',
           { code: 'view_markup', start: sourcePosition(source, listingAt ?? 0) }
         )
       );
@@ -2257,10 +2257,14 @@ export function leftOutOf(
   );
 }
 
-const sverlinBlock =
-  /<script\s+lang\s*=\s*(["'])sverlin\1(?:\s+(domain|input|design))?\s*>([\s\S]*?)<\/script\s*>/giu;
-const listingBlock =
-  /<script\s+lang\s*=\s*(["'])sverlin\1\s+listing\s*=\s*(["'])([\w-]*)\2\s*>([\s\S]*?)<\/script\s*>/giu;
+const sverlinBlock = /<script\s+(domain|input|algorithm|design)\s*>([\s\S]*?)<\/script\s*>/giu;
+const listingBlock = /<script\s+listing\s*=\s*(["'])([\w-]*)\1\s*>([\s\S]*?)<\/script\s*>/giu;
+/** A script's own attributes, as Svelte's (`lang="ts"`, `module`) on a view's script by habit. */
+const scriptOpening = /<script\b([^>]*)>/giu;
+const svelteAttributes =
+  /^(?:\s+(?:lang\s*=\s*(["'])(?:ts|js|typescript|javascript)\1|module|context\s*=\s*(["'])module\2))*\s*$/iu;
+const blockAdvice =
+  '<script domain> for the types, <script input> for the starting data, <script algorithm> for the algorithm, and <script listing="name"> for a listing';
 
 /** A listing of the source's own: its name, its text, where the text starts, and the block. */
 type ListingBlock = Block & { name: string; start: number };
@@ -2278,8 +2282,8 @@ function extractBlocks(source: string): {
   for (const match of source.matchAll(listingBlock)) {
     const start = match.index;
     listings.push({
-      name: match[3],
-      body: match[4],
+      name: match[2],
+      body: match[3],
       offset: start + match[0].indexOf('>') + 1,
       start
     });
@@ -2289,25 +2293,28 @@ function extractBlocks(source: string): {
       svelteSource.slice(start + match[0].length);
   }
   for (const match of svelteSource.matchAll(sverlinBlock)) {
-    const kind = (match[2] ?? 'algorithm') as BlockKind | 'design';
+    const kind = match[1].toLowerCase() as BlockKind | 'design';
     if (blocks[kind])
       throw new InvalidSvelteSourceError(`A component can have only one ${kind} block.`, {
         code: 'sverlin_block',
         start: sourcePosition(source, match.index)
       });
     const start = match.index;
-    blocks[kind] = { body: match[3], offset: start + match[0].indexOf('>') + 1 };
+    blocks[kind] = { body: match[2], offset: start + match[0].indexOf('>') + 1 };
     svelteSource =
       svelteSource.slice(0, start) +
       match[0].replace(/[^\n]/gu, ' ') +
       svelteSource.slice(start + match[0].length);
   }
-  const unrecognized = /<script\b[^>]*\blang\s*=\s*(["'])sverlin\1[^>]*>/iu.exec(svelteSource);
-  if (unrecognized)
+  // A plain <script>, or one with Svelte's own attributes, is a view's script, refused as such
+  // later; any other attributes name no block.
+  for (const opening of svelteSource.matchAll(scriptOpening)) {
+    if (svelteAttributes.test(opening[1])) continue;
     throw new InvalidSvelteSourceError(
-      `Unrecognized sverlin block ${unrecognized[0]}; use <script lang="sverlin">, or add domain, input, or design, as in <script lang="sverlin" input>.`,
-      { code: 'sverlin_block', start: sourcePosition(source, unrecognized.index) }
+      `Unrecognized block ${opening[0]}; a block is a <script> named by one attribute: ${blockAdvice}.`,
+      { code: 'sverlin_block', start: sourcePosition(source, opening.index) }
     );
+  }
   return { svelteSource, blocks, listings };
 }
 

@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag, out: Out });
@@ -9,7 +9,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const e = VertexRef(Vertex({ name: 'E', seen: false, out: [] }));
   const d = VertexRef(Vertex({ name: 'D', seen: false, out: [e] }));
   const b = VertexRef(Vertex({ name: 'B', seen: false, out: [d] }));
@@ -17,7 +17,7 @@
   const a = VertexRef(Vertex({ name: 'A', seen: true, out: [b, c] }));
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @init[let queue = Queue([a]);]
   while (@more[queue.length > 0]) @visit{
     @take[const current = queue[0];

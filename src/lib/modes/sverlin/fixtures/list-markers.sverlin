@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
@@ -7,7 +7,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const head = NodeRef(ListNode({ name: 'A', next:
     NodeRef(ListNode({ name: 'B', next:
       NodeRef(ListNode({ name: 'C', next:
@@ -17,7 +17,7 @@
   }));
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @begin[let prev = Next(End('end'));
   let cur = Next(head);]
   while (@more[cur !== 'end']) @rewire{
@@ -29,7 +29,7 @@
   @finish[const result = prev;]
 </script>
 
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
 REVERSE(head)
 @begin[prev = ∅
 cur = head]

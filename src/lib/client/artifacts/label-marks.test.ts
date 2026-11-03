@@ -6,7 +6,7 @@ const marked = (source: string) => labelMarks(source).map(([from, to]) => source
 
 describe('label marks', () => {
   it('find a span’s name and closing ], and a block’s name, in the algorithm', () => {
-    const source = `<script lang="sverlin">
+    const source = `<script algorithm>
   for (let i = 0; i < 3; i++) @pass{
     @set[values[i] = '@x[';] // @y[
   }
@@ -15,7 +15,7 @@ describe('label marks', () => {
   });
 
   it('find them in a listing, its text read as text, and nowhere else', () => {
-    const source = `<script lang="sverlin" listing="textbook">
+    const source = `<script listing="textbook">
   if @check[A[i] == "it's"]
 </script>
 <Node>{@render Int(v)} @a[</Node>`;
@@ -23,14 +23,14 @@ describe('label marks', () => {
   });
 
   it('names each label of the algorithm in full where it opens, a label inside another after it', () => {
-    const source = `<script lang="sverlin">
+    const source = `<script algorithm>
   for (let i = 0; i < 3; i++) @insert{
     if (x[0]) { @shift[values[i] = x[@left[i]];] }
     @place[values[i] = key;] // @not[
   }
   @done[n = 1;]
 </script>
-<script lang="sverlin" listing="textbook">@insert[A[i]]</script>`;
+<script listing="textbook">@insert[A[i]]</script>`;
     expect(
       labelOpenings(source).map(({ from, to, full }) => [source.slice(from, to), full])
     ).toEqual([
@@ -42,7 +42,7 @@ describe('label marks', () => {
     ]);
   });
 
-  const hovered = `<script lang="sverlin">
+  const hovered = `<script algorithm>
   function sort(a, lo, hi) @sort{
     @merge[
       @copy[from = a;]
@@ -50,7 +50,7 @@ describe('label marks', () => {
     ]
   }
 </script>
-<script lang="sverlin" listing="c">@merge[merge(a);]</script>
+<script listing="c">@merge[merge(a);]</script>
 <When of="@sort.merge"><Node>{@render Int(@sort.merge.take)}</Node></When>`;
   const regions = labelRegions(hovered);
   const slices = (ranges: { from: number; to: number }[]) =>

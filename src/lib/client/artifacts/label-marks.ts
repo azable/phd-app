@@ -17,7 +17,7 @@ import {
 
 import { referenceRanges } from './source-references';
 
-const sverlinBlock = /<script\b([^>]*\blang="sverlin"[^>]*)>([\s\S]*?)<\/script>/gu;
+const sverlinBlock = /<script\s+(domain|input|algorithm|listing="[^"]*")\s*>([\s\S]*?)<\/script>/gu;
 const marker = /^@[A-Za-z_$][\w$]*(?:[ \t]*\{|\[)/u;
 
 /** A label where the algorithm opens it: its mark, from `@` to its name's end, and its full name. */

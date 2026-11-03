@@ -314,7 +314,7 @@ function labelRanges(source: string, label: string): SourceRange[] {
  */
 function labelDeclarations(source: string): { full: string; from: number; to: number }[] {
   const found: { full: string; from: number; to: number }[] = [];
-  const blocks = /<script\s+lang="sverlin"(\s+listing="[^"]*")?\s*>([\s\S]*?)<\/script>/gu;
+  const blocks = /<script\s+(?:algorithm|(listing="[^"]*"))\s*>([\s\S]*?)<\/script>/gu;
   for (const block of source.matchAll(blocks)) {
     const listing = Boolean(block[1]);
     const body = block[2];

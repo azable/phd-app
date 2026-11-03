@@ -118,17 +118,17 @@ it.skipIf(!enabled)(
   'draws partners naming each other in a row as one line over the cells',
   { timeout: 120_000 },
   async () => {
-    const pairs = `<script lang="sverlin" domain>
+    const pairs = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
   const Partners = collection(Position);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 1, 4, 1]);
   const partner = Partners([1, 0, 3, 2]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   let i = Position(0);
   @next[i = Position(1);]
 </script>

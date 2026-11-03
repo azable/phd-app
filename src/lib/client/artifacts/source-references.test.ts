@@ -9,11 +9,11 @@ import {
   referenceRanges
 } from './source-references';
 
-const source = `<script lang="sverlin" domain>
+const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Greater = type('boolean');
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(1); Before(i, end); i = Next(i)) @compare{
     if (values[@left[i - 1]] > values[@right[i]]) @swap{
       const moved = @held[values[Prev(i)]];
@@ -55,7 +55,7 @@ describe('references in messages', () => {
   });
 
   it('name a label by its full path, never another with the same last name', () => {
-    const twice = `<script lang="sverlin">
+    const twice = `<script algorithm>
   for (let i = Index(1); Before(i, end); i = Next(i)) @rise{
     if (@compare[(values[@left[Prev(i)]]) > values[i]]) { const s = "@left[x]"; }
   }
@@ -63,7 +63,7 @@ describe('references in messages', () => {
     if (@compare[Less(values[@left[Prev(i)]], values[i])]) {}
   }
 </script>
-<script lang="sverlin" listing="code">
+<script listing="code">
   @rise[if @compare[A[@left[i - 1]] > A[i]]]
   @fall[if @compare[A[@left[i - 1]] < A[i]]]
 </script>
@@ -180,12 +180,12 @@ describe('view choices, by what a build records each render reads', () => {
 });
 
 describe('code in an error message', () => {
-  const dotted = `<script lang="sverlin" listing="code">
+  const dotted = `<script listing="code">
   for i = 0 to n - 1
       @check[if A[i] == target:] @check.found[return i]
       @next[@found[return i]]
 </script>
-<script lang="sverlin">let i = Index(1);</script>
+<script algorithm>let i = Index(1);</script>
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
 
 <Layout name="Main">

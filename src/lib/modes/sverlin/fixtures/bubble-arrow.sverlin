@@ -1,15 +1,15 @@
-<script lang="sverlin" domain>
+<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Position = index(Values);
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4, 2, 3]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (@last[let end = values.length]; @more[Position(1) < end]; @shrink[end--]) @pass{
     for (@first[let i = Position(1)]; @inside[i < end]; @step[i++]) @pair{
       if (@compare[(values[@left[i - 1]]) > values[@right[i]]]) @swap{

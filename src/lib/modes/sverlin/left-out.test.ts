@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { leftOutOf, phasesOf, prepareSvelteComponent } from './compile.server';
 import { hiddenAt, siteOf } from './left-out';
 
-const source = `<script lang="sverlin" domain>
+const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @pass{
     @pick[const v = values[i];]
     @put[values[i] = v;]

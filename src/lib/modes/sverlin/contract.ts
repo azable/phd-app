@@ -5,20 +5,20 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>\n'
+    '<script algorithm>\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
-export const linearSearchSource = `<script lang="sverlin" domain>
+export const linearSearchSource = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 8, 5, 2, 7]);
   const target = Int(2);
 </script>
-<script lang="sverlin">
+<script algorithm>
   function search(a, target) {
     for (@first[let i = Index(0)]; @more[i < a.length]; @next[i++]) @check{
       if (@equal[a[i] === target]) return i;

@@ -21,7 +21,7 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-const source = `<script lang="sverlin" domain>
+const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
   const Values = collection(Int);
@@ -32,11 +32,11 @@ const source = `<script lang="sverlin" domain>
   // what the algorithm does
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4, 2, 3]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   for (let end = values.length; (Index(1) < end); end--) @sweep{
     for (let i = Index(1); (i < end); i++) @pair{
       if (@test[(values[i - 1]) > values[i]]) @swap{

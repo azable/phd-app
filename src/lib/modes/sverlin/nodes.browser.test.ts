@@ -22,18 +22,18 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-const list = (algorithm: string) => `<script lang="sverlin" domain>
+const list = (algorithm: string) => `<script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
-<script lang="sverlin" input>
+<script input>
   const head = NodeRef(ListNode({ name: 'A', next:
     NodeRef(ListNode({ name: 'B', next: NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
 </script>
-<script lang="sverlin">${algorithm}</script>
+<script algorithm>${algorithm}</script>
 {#snippet NameCell(value: Name)}<Node {value} />{/snippet}
 {#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
 {#snippet NodeBox(n: ListNode)}

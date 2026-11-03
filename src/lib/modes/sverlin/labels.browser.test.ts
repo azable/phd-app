@@ -21,7 +21,7 @@ beforeAll(async () => {
 });
 afterAll(() => browser?.close());
 
-const domain = `<script lang="sverlin" domain>
+const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
@@ -68,10 +68,10 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const source = `${domain}
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 8, 1]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(1); (i < values.length); i++) @insert{
     const key = @key[values[i]];
     let j = i;
@@ -110,10 +110,10 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const source = `${domain}
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 1, 4]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let end = values.length; (Index(1) < end); end--) @sweep{
     for (let i = Index(1); (i < end); i++) @pair{
       if (@test[(values[i - 1]) > values[i]]) @swap{
@@ -158,11 +158,11 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const search = `${domain}
-<script lang="sverlin" input>
+<script input>
   const values = Values([3, 8, 5, 2]);
   const target = Int(5);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (let i = Index(0); (i < values.length); i++) @check{
     if ((values[@at[i]] === target)) break;
   }
@@ -183,18 +183,18 @@ it.skipIf(!enabled)(
     // The input as given, nothing checked yet; then each check adds its cell.
     expect(checked).toEqual([[], ['3'], ['3', '8'], ['3', '8', '5']]);
 
-    const counting = `<script lang="sverlin" domain>
+    const counting = `<script domain>
   const Digit = type('integer', { min: 0, max: 9 });
   const Count = type('integer', { min: 0, max: 9 });
   const Digits = collection(Digit);
   const Counts = collection(Count);
   const At = ref(Digits);
 </script>
-<script lang="sverlin" input>
+<script input>
   const digits = Digits([3, 1, 4]);
   const counts = Counts([0, 0, 0, 0, 0]);
 </script>
-<script lang="sverlin">
+<script algorithm>
   for (const v of digits) @count{ counts[v]++; }
 </script>
 {#snippet DigitCell(value: Digit)}<Node {value} />{/snippet}

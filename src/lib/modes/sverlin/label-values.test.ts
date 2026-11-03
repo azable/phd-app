@@ -4,18 +4,18 @@ import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/int
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
 import { markLabels, whenTags } from './label-values';
 
-const domain = `<script lang="sverlin" domain>
+const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = collection(Int);
   const Index = index(Values);
 </script>
-<script lang="sverlin" input>
+<script input>
   const values = Values([5, 2, 8, 1]);
   const target = Int(8);
 </script>`;
 
 const insertion = `
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Index(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     const key = @key[values[i]];
     let j = i;
@@ -92,7 +92,7 @@ describe('labels read in the view', () => {
       '@nothing names no label of the algorithm; its labels are @setup, @guard, @onward, @insert, @insert.key, @insert.guard.'
     );
     const twice = `
-<script lang="sverlin">
+<script algorithm>
   @a[const x = @v[values[0]];]
   @b[const y = @v[values[1]];]
 </script>
@@ -105,7 +105,7 @@ describe('labels read in the view', () => {
 
   it('take a label on an expression, and are read only in the root and its parts', () => {
     const statement = `
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Index(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     @key[const key = values[i];]
     @put[values[i] = key;]
@@ -126,7 +126,7 @@ describe('labels read in the view', () => {
 
   it('list what a label has given so far, and refuse applied(…), naming the label view in its place', () => {
     const search = `
-<script lang="sverlin">
+<script algorithm>
   for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @check{
     const seen = values[@at[i]];
     if (@cond[seen === target]) break;

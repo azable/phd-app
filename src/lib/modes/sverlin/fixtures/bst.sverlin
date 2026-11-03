@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Int = type('integer', { min: 0, max: 99 });
   const Name = type(['end']);
   const TreeNode = record({ key: Int, left: Next, right: Next });
@@ -9,7 +9,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const values = Values([8, 3, 10, 1, 6, 14, 4, 7, 13]);
   const root = NodeRef(TreeNode({
     key: values[0],
@@ -18,7 +18,7 @@
   }));
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   function insert(node, value) @insert{
     if (@direction[value < node.key]) {
       if (@leftChild[node.left !== 'end']) {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { locateElement } from './element-ref';
 
 const source = [
-  '<script lang="sverlin"></script>',
+  '<script algorithm></script>',
   '<Node layout="row">',
   '  {#each values as item}<Node value={item} />{/each}',
   '</Node>',

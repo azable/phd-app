@@ -1,4 +1,4 @@
-<script lang="sverlin" domain>
+<script domain>
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Distance = type('integer', { min: 0, max: 99 });
   const Weight = type('integer', { min: 1, max: 20 });
@@ -23,7 +23,7 @@
 
 </script>
 
-<script lang="sverlin" input>
+<script input>
   const vertices = Vertices([
     { name: 'A' },
     { name: 'B' },
@@ -41,7 +41,7 @@
   ]);
 </script>
 
-<script lang="sverlin">
+<script algorithm>
   @unknown[let distances = Distances(['∞', '∞', '∞', '∞', '∞']);
   let previous = Previous(['none', 'none', 'none', 'none', 'none']);
   let visited = Visited([false, false, false, false, false]);]
@@ -73,7 +73,7 @@
   }
 </script>
 
-<script lang="sverlin" listing="textbook">
+<script listing="textbook">
 DIJKSTRA(graph, source)
 @unknown[every distance = ∞, no predecessors, none visited]
 @initial[distance[source] = 0]

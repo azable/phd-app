@@ -8,10 +8,10 @@ describe('a demo example header', () => {
       '<!-- summary: Marks with `@left`. -->',
       '<!-- variant: {"frames":"compare"} -->',
       '<!-- note: Click `@left` to see where it is labelled. -->',
-      '<script lang="sverlin"></script>'
+      '<script algorithm></script>'
     ].join('\n');
     expect(withoutHeader(example)).toEqual({
-      source: '<script lang="sverlin"></script>',
+      source: '<script algorithm></script>',
       summary: 'Marks with `@left`.',
       variant: '{"frames":"compare"}',
       note: 'Click `@left` to see where it is labelled.'
@@ -19,8 +19,8 @@ describe('a demo example header', () => {
   });
 
   it('reads no header from a source without one', () => {
-    expect(withoutHeader('<script lang="sverlin"></script>')).toEqual({
-      source: '<script lang="sverlin"></script>'
+    expect(withoutHeader('<script algorithm></script>')).toEqual({
+      source: '<script algorithm></script>'
     });
   });
 });
