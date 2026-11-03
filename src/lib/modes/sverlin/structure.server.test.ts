@@ -25,12 +25,12 @@ const list = `<script domain>
     cur = cur.next;
   }
 </script>
-{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
-{#snippet EndMark(this: End)}<Node>∅</Node>{/snippet}
-{#snippet NodeBox(this: ListNode)}
+<View of="Name" name="NameCell"><Node value={this} /></View>
+<View of="End" name="EndMark"><Node>∅</Node></View>
+<View of="ListNode" name="NodeBox">
   {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
   <Node layout="row">{this.name}{@render NextField()}</Node>
-{/snippet}
+</View>
 {#snippet Heap()}
   <Node layout="free">{#each all(ListNode) as node}{node}{/each}</Node>
 {/snippet}
@@ -56,7 +56,7 @@ const ring = `<script domain>
   @first[at = next[at];]
   @second[at = next[at];]
 </script>
-{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
+<View of="Name" name="NameCell"><Node value={this} /></View>
 {#snippet Ring()}
   <Node layout="free">
     {#each names as name, k}{name}<Link from={k} to={next[k]} />{/each}
@@ -81,7 +81,7 @@ const unlinked = `<script domain>
   @run[let i = Position(0);]
   @move[i = Position(1);]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Cells()}<Node layout="free">{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">

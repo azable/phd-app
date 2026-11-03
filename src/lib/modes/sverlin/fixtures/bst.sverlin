@@ -37,10 +37,10 @@
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet EndMark(this: Name)}<Node>∅</Node>{/snippet}
-{#snippet NextLink(this: NodeRef)}<Link to={this} />{/snippet}
-{#snippet TreeCard(this: TreeNode)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Name" name="EndMark"><Node>∅</Node></View>
+<View of="NodeRef" name="NextLink"><Link to={this} /></View>
+<View of="TreeNode" name="TreeCard">
   <Node layout="column">
     <Node>{this.key}</Node>
     <Node layout="row">
@@ -48,7 +48,7 @@
       <Node layout="row"><Node>R</Node>{this.right}</Node>
     </Node>
   </Node>
-{/snippet}
+</View>
 {#snippet Title()}<Node>Binary search tree insertion</Node>{/snippet}
 {#snippet Heap()}
   <Node layout="free" flow="y">

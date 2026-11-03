@@ -48,11 +48,11 @@ const source = `<script domain>
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet FlagWord(this: Flag)}<Node>{this ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(this: Greater)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
+<View of="Greater" name="Ask">
   <Node>is {this.a} > {this.b}? {this.value}</Node>
-{/snippet}
+</View>
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">

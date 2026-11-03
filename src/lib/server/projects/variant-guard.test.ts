@@ -47,6 +47,14 @@ describe('pictureTree', () => {
     expect(allowedChange(guard, 'Bare.shown', false)).toBe(false);
     expect(allowedChange(guard, 'layout', 'Stacked')).toBe(true);
   });
+
+  it('reads a view written as a tag as a snippet of its name', () => {
+    const viewed =
+      pictureTree(`<View of="Values" name="Row">{#snippet Under()}<Node>i</Node>{/snippet}<Node>{@render Under()}</Node></View>
+<Layout name="Main"><Node>{@render Row()}</Node></Layout>`);
+    expect(viewed.snippets.get('Row')).toEqual(['Under']);
+    expect(viewed.layouts.get('Main')).toEqual(['Row']);
+  });
 });
 
 describe('allowedChange', () => {

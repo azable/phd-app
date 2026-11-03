@@ -49,17 +49,17 @@ describe('drawn value markers', () => {
 
   describe('views no presentation drew', () => {
     const views = [
-      '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
-      '{#snippet IntTally(this: Int)}<Node layout="column"><Node value={this} /></Node>{/snippet}',
-      '{#snippet IntDots(this: Int)}<Node>{this}</Node>{/snippet}',
+      '<View of="Int" name="IntCell"><Node value={this} /></View>',
+      '<View of="Int" name="IntTally"><Node layout="column"><Node value={this} /></Node></View>',
+      '<View of="Int" name="IntDots"><Node>{this}</Node></View>',
       '{@render Int(target)}'
     ].join('\n');
     const options = { Int: ['IntCell', 'IntTally', 'IntDots'] };
     const showing = (view: string) => ({ 'views.Int': view });
     const greyed = (doc: string, presentations: Parameters<typeof unchosenViews>[1]) =>
       unchosenViews(EditorState.create({ doc }), presentations).map(({ from, to, title }) => ({
-        view: /#snippet (\w+)/u.exec(doc.slice(from, to))?.[1],
-        whole: doc.slice(to - '{/snippet}'.length, to) === '{/snippet}',
+        view: /name="(\w+)"/u.exec(doc.slice(from, to))?.[1],
+        whole: doc.slice(to - '</View>'.length, to) === '</View>',
         title
       }));
 
@@ -125,7 +125,7 @@ describe('drawn value markers', () => {
 
 describe('variant markers', () => {
   const source =
-    '{#snippet Here(this: Index)}\n  <Pointed />\n{/snippet}\n{#snippet Title()}<Node>Search</Node>{/snippet}';
+    '<View of="Index" name="Here">\n  <Pointed />\n</View>\n{#snippet Title()}<Node>Search</Node>{/snippet}';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
@@ -286,11 +286,11 @@ describe('variant markers', () => {
 
 describe('place values', () => {
   const doc = [
-    '{#snippet Highlight(this: Index)}<Pointed />{/snippet}',
-    '{#snippet Arrow(this: Index)}<Node layout="column"><Pointed /></Node>{/snippet}',
-    '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
-    '{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}',
-    '{#snippet Ask(this: Greater)}<Node>{@render Int(this.a)}</Node>{/snippet}',
+    '<View of="Index" name="Highlight"><Pointed /></View>',
+    '<View of="Index" name="Arrow"><Node layout="column"><Pointed /></Node></View>',
+    '<View of="Int" name="IntCell"><Node value={this} /></View>',
+    '<View of="Index" name="IndexText"><Node value={this} /></View>',
+    '<View of="Greater" name="Ask"><Node>{@render Int(this.a)}</Node></View>',
     '{#snippet Top()}<Node>looking at {@render Index(i)}</Node>{/snippet}',
     '{@render Index(@left)}',
     '{@render Index(@right)}',

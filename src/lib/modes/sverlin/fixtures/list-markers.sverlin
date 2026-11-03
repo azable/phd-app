@@ -41,15 +41,15 @@ while @more[cur ≠ ∅]
 @finish[return prev]
 </script>
 
-{#snippet NameCell(this: Name)}
+<View of="Name" name="NameCell">
   <Node value={this} />
-{/snippet}
+</View>
 
-{#snippet EndMark(this: End)}
+<View of="End" name="EndMark">
   <Node>∅</Node>
-{/snippet}
+</View>
 
-{#snippet NodeBox(this: ListNode)}
+<View of="ListNode" name="NodeBox">
   {#snippet NextField()}
     <Node><Link to={this.next} /></Node>
   {/snippet}
@@ -57,9 +57,9 @@ while @more[cur ≠ ∅]
     {this.name}
     {@render NextField()}
   </Node>
-{/snippet}
+</View>
 
-{#snippet Marker(this: NodeRef)}
+<View of="NodeRef" name="Marker">
   {#snippet PointerLabel()}
     <Node>{this === prev ? 'prev' : this === cur ? 'cur' : 'next'}</Node>
   {/snippet}
@@ -67,7 +67,7 @@ while @more[cur ≠ ∅]
     <Pointed />
     {@render PointerLabel()}
   </Node>
-{/snippet}
+</View>
 
 {#snippet Title()}
   <Node>Reverse a singly linked list</Node>

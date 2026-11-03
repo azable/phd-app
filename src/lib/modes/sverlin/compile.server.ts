@@ -41,6 +41,7 @@ import {
   momentTarget,
   resolveLabel,
   viewThis,
+  viewTags,
   viewThisValues,
   whenTags,
   written as asWritten
@@ -108,6 +109,8 @@ import {
 } from './design.server';
 import {
   hiddenAt,
+  inWritten,
+  inWrittenSource,
   leftOutModel,
   leftOutSites,
   outsideNodes,
@@ -727,10 +730,31 @@ export function listingMapsOf(
  * Check, interpret, and compile once per source. Only a single component is accepted; its
  * runtime and the component library are bundled locally, and only the design depends on the seed.
  */
-export function prepareSvelteComponent(source: string): PreparedComponent {
-  if (Buffer.byteLength(source, 'utf8') > maximumSourceBytes) {
+export function prepareSvelteComponent(written: string): PreparedComponent {
+  if (Buffer.byteLength(written, 'utf8') > maximumSourceBytes) {
     throw new InvalidSvelteSourceError('The Svelte component is too large.', { code: 'too_large' });
   }
+  // Views become the snippets they stand for (see viewTags), each closing longer than written, so
+  // positions and sites name the source as written (see inWrittenSource).
+  const tags = viewTags(written);
+  if (tags.problems.length)
+    throw InvalidSvelteSourceError.combine(
+      tags.problems.map(
+        ({ message, start }) =>
+          new InvalidSvelteSourceError(message, {
+            code: 'view_component',
+            start: sourcePosition(written, start)
+          })
+      )
+    );
+  return inWrittenSource(tags.source, written, tags.authoredOffset, () => ({
+    ...prepareViews(tags.source, tags.views),
+    source: written
+  }));
+}
+
+/** prepareSvelteComponent for a source whose views are snippets, each starting at an offset of `viewStarts`. */
+function prepareViews(source: string, viewStarts: readonly number[]): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
     const extracted = extractBlocks(source);
@@ -787,6 +811,20 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       viewProblems = [new InvalidSvelteSourceError(noLayoutMessage, { code: 'view_layout' })];
     let svelteSource = page.text;
     let ast = parseView(svelteSource);
+    const topLevel = new Set(
+      ((ast.html as { children?: { start?: number }[] }).children ?? []).map(({ start }) => start)
+    );
+    const nested = viewStarts.filter((start) => !topLevel.has(start));
+    if (nested.length)
+      throw InvalidSvelteSourceError.combine(
+        nested.map(
+          (start) =>
+            new InvalidSvelteSourceError(
+              'A <View> is written at the top level, beside the parts and layouts, never inside a part, a layout, or a node: move it out, and draw it where it belongs by rendering its value there.',
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
     // A value in braces draws its type's view, as a render of that type, and a union's value its
     // member's, through a view added after the authored ones (see implicit-renders.server.ts).
     const early = earlyTyping(source, blocks);
@@ -990,7 +1028,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       if (structure?.kind === 'ref' && structure.heap)
         viewProblems.push(
           new InvalidSvelteSourceError(
-            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(this: ${type})}<Pointed />{/snippet}.`,
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as <View of="${type}" name="Here"><Pointed /></View>.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           )
         );
@@ -1108,7 +1146,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const undrawn = rendered.find(({ name }) => !views[name]?.length);
     if (undrawn)
       throw new InvalidSvelteSourceError(
-        `${undrawn.name} is a type, and nothing draws it: add a view of it, as {#snippet ${undrawn.name}Cell(this: ${undrawn.name})}<Node value={this} />{/snippet}.`,
+        `${undrawn.name} is a type, and nothing draws it: add a view of it, as <View of="${undrawn.name}" name="${undrawn.name}Cell"><Node value={this} /></View>.`,
         { code: 'view_component', start: sourcePosition(source, undrawn.start) }
       );
     const unknown = renderedNames(ast.html).find(
@@ -1116,7 +1154,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     if (unknown)
       throw new InvalidSvelteSourceError(
-        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or label is named: define it, as {#snippet ${unknown.name}(this: Index)}<Pointed />{/snippet} for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
+        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or label is named: define it, as <View of="Index" name="${unknown.name}"><Pointed /></View> for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
         { code: 'view_component', start: sourcePosition(source, unknown.start) }
       );
     // Each type rendered by name chooses among its views: its plain views, where it also has
@@ -1155,7 +1193,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     );
     if (endless)
       throw new InvalidSvelteSourceError(
-        `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as {#snippet ${endless.name}Cell(this: ${endless.name})}<Node value={this} />{/snippet}.`,
+        `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as <View of="${endless.name}" name="${endless.name}Cell"><Node value={this} /></View>.`,
         { code: 'view_component', start: sourcePosition(source, endless.start) }
       );
     // Which view draws a value is a look, the variant's: a value is rendered through its type, and
@@ -1313,7 +1351,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         }
         if (reference.kind === 'applied') {
           problem(
-            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as {#snippet Ask(this: @check.equal)}…{/snippet} drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
+            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
           );
           continue;
         }
@@ -1923,7 +1961,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         ? cause
         : new InvalidSvelteSourceError(
             cause instanceof Error ? cause.message : String(cause),
-            cause
+            svelteIssueAsWritten(source, cause)
           );
     throw viewProblems.length && !viewProblems.includes(error)
       ? InvalidSvelteSourceError.combine([error, ...viewProblems])
@@ -2348,7 +2386,23 @@ function interpretBlock<T>(source: string, block: Block, run: (body: string) => 
   }
 }
 
-function sourcePosition(source: string, offset: number): { line: number; column: number } {
+/** A Svelte error, its start and end positions in the source as written (see inWrittenSource). */
+function svelteIssueAsWritten(source: string, cause: unknown): unknown {
+  type At = { line?: unknown; column?: unknown } | undefined;
+  const issue = cause as { code?: unknown; start?: At; end?: At } | undefined;
+  const lineStarts = [0, ...[...source.matchAll(/\n/gu)].map(({ index }) => index + 1)];
+  const moved = (at: At) =>
+    typeof at?.line === 'number' && typeof at.column === 'number'
+      ? sourcePosition(source, (lineStarts[at.line - 1] ?? 0) + at.column)
+      : at;
+  return issue && { code: issue.code, start: moved(issue.start), end: moved(issue.end) };
+}
+
+function sourcePosition(
+  rewrittenSource: string,
+  rewrittenOffset: number
+): { line: number; column: number } {
+  const { source, offset } = inWritten(rewrittenSource, rewrittenOffset);
   const before = source.slice(0, offset);
   const lineStart = before.lastIndexOf('\n') + 1;
   return { line: before.split('\n').length, column: offset - lineStart };

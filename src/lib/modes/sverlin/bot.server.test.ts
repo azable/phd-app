@@ -242,7 +242,7 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean');</script><script algorithm>@run[let last = Count(9);] for (@setup[let n = Count(0)]; @guard[n < Count(${to})]; @onward[n++]) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(this: Count)}<Node value={this} />{/snippet}<Layout name="Main"><Node>{last}</Node></Layout>`;
+    `<script domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean');</script><script algorithm>@run[let last = Count(9);] for (@setup[let n = Count(0)]; @guard[n < Count(${to})]; @onward[n++]) @step{ last = n; } @done[const done = Flag(true);]</script><View of="Count" name="CountCell"><Node value={this} /></View><Layout name="Main"><Node>{last}</Node></Layout>`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
     // Named by their labels' runs: the input as given (here none), last set, n set and tested, a

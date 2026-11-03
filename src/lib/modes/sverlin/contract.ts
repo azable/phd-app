@@ -27,16 +27,16 @@ export const linearSearchSource = `<script domain>
   }
   @run[const found = search(values, target);]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet IntTally(this: Int)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Int" name="IntTally">
   {#snippet Tally()}<Node>{'•'.repeat(this)}</Node>{/snippet}
   <Node layout="column">
     <Node value={this} />
     {@render Tally()}
   </Node>
-{/snippet}
-{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
-{#snippet Row(this: Values)}
+</View>
+<View of="Index" name="IndexText"><Node value={this} /></View>
+<View of="Values" name="Row">
   <Node layout="row">
     {#each this as value, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
@@ -46,11 +46,11 @@ export const linearSearchSource = `<script domain>
       </Node>
     {/each}
   </Node>
-{/snippet}
-{#snippet Highlight(this: Index)}<Pointed />{/snippet}
+</View>
+<View of="Index" name="Highlight"><Pointed /></View>
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
 {#snippet Caption()}<Node>Find {target} by checking each cell in order.</Node>{/snippet}
-{#snippet Ask(this: @check.equal)}<Node>is {this.left} equal to {this.right}?</Node>{/snippet}
+<View of="@check.equal" name="Ask"><Node>is {this.left} equal to {this.right}?</Node></View>
 {#snippet Checking()}<Node>Checking index {i}: {@check.equal}</Node>{/snippet}
 {#snippet Result()}<Node>Found {target} at index {found}.</Node>{/snippet}
 

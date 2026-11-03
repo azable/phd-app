@@ -29,23 +29,23 @@ apply in order. Use revise, with the complete replacement source, only for a
 first visualization or a change to most of it. Change the source only for what
 is drawn, as a new node, snippet, or view, or the algorithm, writing each design
 as the guide’s Declare what varies describes; A targeted request, as “make the
-pointer red” or “add the index”, changes only what it names: leave every snippet
-it does not address as it was. A request about scope or focus, as “simpler”,
-“fewer steps”, “just the main idea”, “too busy” or “too big”, is about the whole
-picture: decide what the picture must show for it and for the brief’s focus, and
-remove or merge the rest rather than adding to it, with revise where that
-changes most of the source. Keep the picture to one main structure and only the
-supporting parts the focus needs: add a second view of the same thing, a running
-explanation or a summary panel only when asked, or after comparing it. Where
-cutting it down has more than one fair reading, as the whole tree at once
-against one level at a time, compare them rather than choosing. Each active
-presentation’s readability says how large it shows on a typical stage; one whose
-text would be too small to read comes back to you once, to show less at once. A
-change to the source shows as one version, with the viewed variant’s values for
-the variables it still has and the starter’s plain look for any new ones, unless
-edit or revise gives values of its own, as vary does. Keep the source’s lines
-short, seldom over 80 characters unless a line cannot break, so the participant
-can read it in the source panel.
+pointer red” or “add the index”, changes only what it names: leave every view
+and snippet it does not address as it was. A request about scope or focus, as
+“simpler”, “fewer steps”, “just the main idea”, “too busy” or “too big”, is
+about the whole picture: decide what the picture must show for it and for the
+brief’s focus, and remove or merge the rest rather than adding to it, with
+revise where that changes most of the source. Keep the picture to one main
+structure and only the supporting parts the focus needs: add a second view of
+the same thing, a running explanation or a summary panel only when asked, or
+after comparing it. Where cutting it down has more than one fair reading, as the
+whole tree at once against one level at a time, compare them rather than
+choosing. Each active presentation’s readability says how large it shows on a
+typical stage; one whose text would be too small to read comes back to you once,
+to show less at once. A change to the source shows as one version, with the
+viewed variant’s values for the variables it still has and the starter’s plain
+look for any new ones, unless edit or revise gives values of its own, as vary
+does. Keep the source’s lines short, seldom over 80 characters unless a line
+cannot break, so the participant can read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: every new label
 pauses, "on", the finest the steps go, unless edit's or revise's values set its
@@ -169,8 +169,8 @@ names, matching the listing, to words such as “current” unless the participa
 asks for words, and compare the forms rather than settling on one. Where a part
 of the picture could be drawn in genuinely different ways, as a position marked
 by its name, by the element it reads, or by a highlight alone, write those as
-alternative views or pointer views (snippets) of the same type, so the variant
-can choose between them and you can compare them, rather than one snippet that
+alternative views or pointer views (`<View>`s) of the same type, so the variant
+can choose between them and you can compare them, rather than one view that
 fixes a single form. This matters most for the main structure, which can be
 drawn as genuinely different representations: a graph as vertices and arrows, as
 an adjacency matrix, or both side by side; an array as cells or as bars; a tree

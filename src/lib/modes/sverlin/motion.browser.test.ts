@@ -39,11 +39,11 @@ const merge = `<script domain>
     @step[const k = merged.length - 1;]
   }
 </script>
-{#snippet IntText(this: Int)}<Node value={this} />{/snippet}
-{#snippet IntCard(this: Int)}<Node layout="row"><Node value={this} /></Node>{/snippet}
-{#snippet Row(this: Values)}<Node layout="row">{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet Arrow(this: Position)}<Node layout="column"><Pointed /><Node>↑</Node></Node>{/snippet}
-{#snippet Placed(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntText"><Node value={this} /></View>
+<View of="Int" name="IntCard"><Node layout="row"><Node value={this} /></Node></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>↑</Node></Node></View>
+<View of="Position" name="Placed"><Pointed /></View>
 {#snippet Rows()}<Node layout="column">{left}{right}{merged}</Node>{/snippet}
 
 <Layout name="Main">
@@ -230,9 +230,9 @@ const walk = `<script domain>
 <script algorithm>
   @step[for (let e = EdgeIndex(0); (e < edges.length); e++) {}]
 </script>
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet Arrow(this: Edge)}<Link from={this.from} to={this.to} />{/snippet}
-{#snippet Current(this: EdgeIndex)}<Pointed />{/snippet}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Edge" name="Arrow"><Link from={this.from} to={this.to} /></View>
+<View of="EdgeIndex" name="Current"><Pointed /></View>
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as name}{name}{/each}
@@ -318,11 +318,11 @@ const taken = `<script domain>
     }
   }]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Row(this: Values)}<Node layout="row">{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet Taken(this: Index)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Taken">
   <Node layout="column"><Pointed /><Node>taken</Node></Node>
-{/snippet}
+</View>
 
 <Layout name="Main">
   <Node>
@@ -394,10 +394,10 @@ const apart = `<script domain>
   @twice[i = (i + 1) % 4;
   j = (j + 1) % 4;]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Row(this: Values)}<Node layout="row">{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet Short(this: Index)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}
-{#snippet Long(this: Index)}<Node layout="column"><Pointed /><Node>the other one</Node></Node>{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Short"><Node layout="column"><Pointed /><Node>i</Node></Node></View>
+<View of="Index" name="Long"><Node layout="column"><Pointed /><Node>the other one</Node></Node></View>
 
 <Layout name="Main">
   <Node>
@@ -475,9 +475,9 @@ const far = `<script domain>
   @start[let i = Index(0);]
   @far[i = 9;]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Row(this: Values)}<Node layout="row">{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet Here(this: Index)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
 
 <Layout name="Main">
   <Node>
@@ -538,8 +538,8 @@ it.skipIf(!enabled)(
 const cursors = taken
   .replace(
     '<Layout name="Main">',
-    `{#snippet ICursor(this: Index)}{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node>{/snippet}
-{#snippet JCursor(this: Index)}{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node>{/snippet}
+    `<View of="Index" name="ICursor">{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node></View>
+<View of="Index" name="JCursor">{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node></View>
 <Layout name="Main">`
   )
   .replace(
@@ -668,7 +668,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+      `<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -729,8 +729,8 @@ const compared = `<script domain>
     }
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Ask(this: Greater)}<Node>{this.a} vs {this.b}</Node>{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Greater" name="Ask"><Node>{this.a} vs {this.b}</Node></View>
 {#snippet Board()}
   <Node layout="column"><Node>{#each values as v}{v}{/each}</Node>{@compare}</Node>
 {/snippet}

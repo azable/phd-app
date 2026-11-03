@@ -49,8 +49,36 @@ export type LeftOutModel = {
   ownTops: string[];
 };
 
+/**
+ * Each source being prepared whose views are rewritten as snippets, with the source as written and
+ * where an offset in it is there (see viewTags), so sites and positions name the source as written.
+ */
+const rewritten = new Map<string, { written: string; offset: (offset: number) => number }>();
+
+/** Run with `source`'s sites and positions in `written`, `offset` mapping one to the other. */
+export function inWrittenSource<T>(
+  source: string,
+  written: string,
+  offset: (offset: number) => number,
+  run: () => T
+): T {
+  rewritten.set(source, { written, offset });
+  try {
+    return run();
+  } finally {
+    rewritten.delete(source);
+  }
+}
+
+/** The source as written, and where an offset of `source` is in it. */
+export function inWritten(source: string, offset: number): { source: string; offset: number } {
+  const found = rewritten.get(source);
+  return found ? { source: found.written, offset: found.offset(offset) } : { source, offset };
+}
+
 /** A site as tags record it: the line and column (both from 1) of where it starts. */
-export function siteOf(source: string, offset: number): string {
+export function siteOf(rewrittenSource: string, rewrittenOffset: number): string {
+  const { source, offset } = inWritten(rewrittenSource, rewrittenOffset);
   const before = source.slice(0, offset);
   const lineStart = before.lastIndexOf('\n') + 1;
   return `${before.split('\n').length}:${offset - lineStart + 1}`;

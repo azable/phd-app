@@ -82,7 +82,7 @@ it.skipIf(!enabled)(
     values[j] = key;
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Inserting()}<Node>inserting {@insert.key}</Node>{/snippet}
 
@@ -124,10 +124,10 @@ it.skipIf(!enabled)(
     }
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Swapped()}<Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node>{/snippet}
-{#snippet Ask(this: Greater)}<Node>is {this.a} > {this.b}?</Node>{/snippet}
+<View of="Greater" name="Ask"><Node>is {this.a} > {this.b}?</Node></View>
 
 <Layout name="Main">
   <Node>
@@ -167,8 +167,8 @@ it.skipIf(!enabled)(
     if ((values[@at[i]] === target)) break;
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Checked(this: Index)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Index" name="Checked"><Pointed /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
@@ -197,9 +197,9 @@ it.skipIf(!enabled)(
 <script algorithm>
   for (const v of digits) @count{ counts[v]++; }
 </script>
-{#snippet DigitCell(this: Digit)}<Node value={this} />{/snippet}
-{#snippet CountCell(this: Count)}<Node value={this} />{/snippet}
-{#snippet Reading(this: At)}<Pointed />{/snippet}
+<View of="Digit" name="DigitCell"><Node value={this} /></View>
+<View of="Count" name="CountCell"><Node value={this} /></View>
+<View of="At" name="Reading"><Pointed /></View>
 {#snippet DigitRow()}<Node>{#each digits as d}{d}{/each}</Node>{/snippet}
 {#snippet CountRow()}<Node>{#each counts as c}{c}{/each}</Node>{/snippet}
 

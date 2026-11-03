@@ -88,11 +88,11 @@ export type TagGhosts = {
   pause?: true;
 };
 
-/** A view no shown presentation drew, from its {#snippet to its {/snippet}. */
+/** A view no shown presentation drew, from its <View to its </View>. */
 export type UnchosenView = { from: number; to: number; title: string };
 
 /**
- * The views no shown presentation drew: each {#snippet} that is one of a type's views, chosen by no
+ * The views no shown presentation drew: each <View> that is one of a type's views, chosen by no
  * shown presentation's variant, and rendered nowhere by its own name. A presentation that recorded
  * no variant leaves its views be.
  */
@@ -116,7 +116,7 @@ export function unchosenViews(
         );
   const renderedElsewhere = (name: string, view: { from: number }) =>
     [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
-      ({ index }) => doc.slice(view.from, index).trim() !== '{#snippet'
+      ({ index }) => !/^(?:\{#snippet\s*|<View\b[^>]*\bname=")$/u.test(doc.slice(view.from, index))
     );
   const unchosen = new Map<string, UnchosenView>();
   for (const [key, names] of options) {
@@ -229,18 +229,9 @@ function nodeEnd(doc: string, from: number): number {
   return opening;
 }
 
-/** Each named {#snippet} block of a source, from its {#snippet to the end of its {/snippet}. */
+/** Each named view or snippet of a source, from its opening to the end of its closing. */
 function snippetBlocks(doc: string): Map<string, { from: number; to: number }> {
-  const blocks = new Map<string, { from: number; to: number }>();
-  const open: { name: string; from: number }[] = [];
-  for (const match of doc.matchAll(/\{#snippet\s+([A-Za-z_$][\w$]*)|\{\/snippet\}/gu)) {
-    if (match[1]) open.push({ name: match[1], from: match.index });
-    else {
-      const block = open.pop();
-      if (block) blocks.set(block.name, { from: block.from, to: match.index + match[0].length });
-    }
-  }
-  return blocks;
+  return new Map(snippetRanges(doc).map(({ name, from, to }) => [name, { from, to }]));
 }
 
 /** Where a value of a presentation's variant came from, for its hover text. */
@@ -333,14 +324,18 @@ export function tagGhosts(
 /** A render's argument that makes it a place: a label, a variable, or a field, as written. */
 const placeArgument = /^@?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
 
-/** Each {#snippet} of a source, from its {#snippet to its {/snippet}, and whether it takes a value. */
+/**
+ * Each view and snippet of a source, from its opening to the end of its closing, and whether it
+ * takes a value, as only a view does.
+ */
 function snippetRanges(doc: string): { name: string; from: number; to: number; typed: boolean }[] {
   const ranges: { name: string; from: number; to: number; typed: boolean }[] = [];
   const open: { name: string; from: number; typed: boolean }[] = [];
   for (const match of doc.matchAll(
-    /\{#snippet\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)|\{\/snippet\}/gu
+    /\{#snippet\s+([A-Za-z_$][\w$]*)|<View\b[^>]*?\bname="([A-Za-z_$][\w$]*)"[^>]*>|\{\/snippet\}|<\/View\s*>/gu
   )) {
-    if (match[1]) open.push({ name: match[1], from: match.index, typed: match[2].trim() !== '' });
+    if (match[1] || match[2])
+      open.push({ name: match[1] ?? match[2], from: match.index, typed: Boolean(match[2]) });
     else {
       const block = open.pop();
       if (block) ranges.push({ ...block, to: match.index + match[0].length });

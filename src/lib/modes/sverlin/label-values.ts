@@ -310,9 +310,9 @@ export function resolveLabel(
 export const viewThis = 'þhis';
 
 /**
- * A view's value is `this`: `{#snippet Card(this: Vertex)}<Node>{this.name}</Node>{/snippet}`.
- * JavaScript takes no parameter named this, so each `this` in a typed snippet's parameter and in the
- * expressions of its markup becomes `þhis`, no longer than written; a `this` read anywhere else, in
+ * A view's value is `this`: `<View of="Vertex" name="Card"><Node>{this.name}</Node></View>`, by
+ * now `{#snippet Card(this: Vertex)}` (see viewTags). JavaScript takes no parameter named this, so
+ * each `this` in a view's parameter and in the expressions of its markup becomes `þhis`, no longer than written; a `this` read anywhere else, in
  * a part of the page or the root, is a problem, as only a view has a value.
  */
 export function viewThisValues(source: string): {
@@ -367,11 +367,151 @@ export function viewThisValues(source: string): {
       else
         problems.push({
           message:
-            'this is the value a view draws, and only a view has one: read it inside a view, as {#snippet Card(this: Vertex)}<Node>{this.name}</Node>{/snippet}, and in a part of the page or the root read the variable itself.',
+            'this is the value a view draws, and only a view has one: read it inside a view, as <View of="Vertex" name="Card"><Node>{this.name}</Node></View>, and in a part of the page or the root read the variable itself.',
           start: at
         });
       at += 3;
     }
   }
   return { source: text, problems };
+}
+
+/** How a view is written, for messages. */
+const viewAdvice =
+  'a view is written <View of="Int" name="Bar">…</View>, of its type or a label, as of="@insert.compare", and named, its value this';
+
+/** A view tag as written, before it is a snippet. */
+const viewTag = /<(\/?)View\b((?:[^>{]|\{[^}]*\})*)>/gu;
+const viewProp = /^\s*(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
+const viewType = /^(?:[A-Za-z_$][\w$]*|@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
+const viewName = /^[A-Za-z_$][\w$]*$/u;
+
+/**
+ * The source with each view, `<View of="Int" name="Bar">…</View>`, as the snippet it stands for,
+ * `{#snippet Bar(this: Int)}…{/snippet}`, and the problems: a view written otherwise, not at the top
+ * level, or as a snippet taking a value. The opening is no longer than written, padded with spaces,
+ * and every line stays in place; each closing is three longer, so `authoredOffset` gives where an
+ * offset in the source returned is in the source as written.
+ */
+export function viewTags(source: string): {
+  source: string;
+  problems: { message: string; start: number }[];
+  /** Where each view's snippet starts in the source returned. */
+  views: number[];
+  authoredOffset: (offset: number) => number;
+} {
+  const problems: { message: string; start: number }[] = [];
+  // Comments and scripts are not markup: read as spaces, nothing in them counts.
+  const scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, (skipped) =>
+    skipped.replace(/[^\n]/gu, ' ')
+  );
+  for (const match of scanned.matchAll(/\{#snippet\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/gu)) {
+    const [, name, parameters] = match;
+    if (!parameters.trim()) continue;
+    const type = /:\s*([^,]+?)\s*$/u.exec(parameters)?.[1];
+    problems.push({
+      message: type
+        ? `${name} takes a value, as only a view does: write it as a view, <View of="${type}" name="${name}">…</View>, its value this; a snippet takes nothing and is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`
+        : `${name} takes a parameter: a snippet takes nothing and is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}, and ${viewAdvice}.`,
+      start: match.index ?? 0
+    });
+  }
+  const edits: { start: number; length: number; text: string; view?: boolean }[] = [];
+  let open: { start: number } | undefined;
+  for (const match of scanned.matchAll(viewTag)) {
+    const start = match.index ?? 0;
+    const [whole, closing, props] = match;
+    if (closing) {
+      if (!open) {
+        problems.push({ message: `This </View> closes no view: ${viewAdvice}.`, start });
+        continue;
+      }
+      edits.push({ start, length: whole.length, text: '{/snippet}' });
+      open = undefined;
+      continue;
+    }
+    if (open) {
+      problems.push({
+        message: `A <View> is written at the top level, beside the parts and layouts, not inside another view: close the view before it with </View>.`,
+        start
+      });
+      continue;
+    }
+    if (props.trimEnd().endsWith('/')) {
+      problems.push({
+        message: `${whole} holds nothing: a view holds what it draws, so close it with </View>, as <View of="Int" name="Numeral"><Node value={this} /></View>.`,
+        start
+      });
+      continue;
+    }
+    const given = new Map<string, string>();
+    let rest = props;
+    let problem: string | undefined;
+    while (rest.trim() && !problem) {
+      const prop = viewProp.exec(rest);
+      if (!prop) problem = `${whole} is no view: ${viewAdvice}.`;
+      else if (prop[1] !== 'of' && prop[1] !== 'name')
+        problem = `A <View> takes only of, its type or label, and name: ${prop[1]} is no prop of a view, and how its value is drawn goes inside it.`;
+      else if (prop[4] !== undefined)
+        problem = `A <View>'s ${prop[1]} is written as it is, not computed, as ${prop[1]}="${prop[1] === 'of' ? 'Int' : 'Bar'}": every view is known before the algorithm runs.`;
+      else if (given.has(prop[1])) problem = `${whole} gives ${prop[1]} twice: ${viewAdvice}.`;
+      else {
+        given.set(prop[1], (prop[2] ?? prop[3]).trim());
+        rest = rest.slice(prop[0].length);
+      }
+    }
+    const of = given.get('of');
+    const name = given.get('name');
+    if (!problem && (of === undefined || name === undefined))
+      problem = `${whole} has no ${of === undefined ? 'of' : 'name'}: ${viewAdvice}.`;
+    else if (!problem && !viewType.test(of!))
+      problem = `${of} is no type or label: a view's of names a type of the domain, as of="Int", or a label by its full name, as of="@insert.compare".`;
+    else if (!problem && !viewName.test(name!))
+      problem = `${name} is no name: a view is named in one word, as name="Bar".`;
+    // A view refused still pairs with its closing, so nothing more is said about it.
+    open = { start };
+    if (problem) {
+      problems.push({ message: problem, start });
+      continue;
+    }
+    edits.push({
+      start,
+      length: whole.length,
+      text: `{#snippet ${name}(this: ${of})}`,
+      view: true
+    });
+  }
+  if (open)
+    problems.push({
+      message: 'The <View> is never closed: close it with </View>.',
+      start: open.start
+    });
+  let out = '';
+  let at = 0;
+  const shifts: { from: number; to: number; by: number }[] = [];
+  const views: number[] = [];
+  for (const { start, length, text, view } of edits) {
+    const padded = text.padEnd(length);
+    out += source.slice(at, start);
+    if (view) views.push(out.length);
+    out += padded;
+    at = start + length;
+    if (padded.length !== length)
+      shifts.push({ from: out.length - padded.length, to: out.length, by: padded.length - length });
+  }
+  out += source.slice(at);
+  return {
+    source: out,
+    problems,
+    views,
+    authoredOffset: (offset) => {
+      let by = 0;
+      for (const shift of shifts) {
+        if (offset < shift.from) break;
+        if (offset < shift.to) return shift.from - by;
+        by += shift.by;
+      }
+      return offset - by;
+    }
+  };
 }

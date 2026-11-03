@@ -18,7 +18,7 @@ const source = `<script domain>
     @put[values[i] = v;]
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Title()}<Node>Pass</Node>{/snippet}
 {#snippet Picked()}<Node>picked {v}</Node>{/snippet}
 {#snippet Both()}<Node>{v} and {values[0]}</Node>{/snippet}

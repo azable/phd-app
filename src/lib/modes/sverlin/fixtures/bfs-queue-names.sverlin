@@ -39,24 +39,24 @@
   }
 </script>
 
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet SeenWord(this: Seen)}<Node>{this ? 'seen' : 'unseen'}</Node>{/snippet}
-{#snippet VertexCard(this: Vertex)}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Seen" name="SeenWord"><Node>{this ? 'seen' : 'unseen'}</Node></View>
+<View of="Vertex" name="VertexCard">
   <Node layout="column">
     {this.name}
     {this.seen}
   </Node>
-{/snippet}
+</View>
 
-{#snippet VertexNumber(this: VertexRef)}<Node value={this} />{/snippet}
-{#snippet VertexName(this: VertexRef)}{at(this).name}{/snippet}
-{#snippet VertexMini(this: VertexRef)}{at(this)}{/snippet}
+<View of="VertexRef" name="VertexNumber"><Node value={this} /></View>
+<View of="VertexRef" name="VertexName">{at(this).name}</View>
+<View of="VertexRef" name="VertexMini">{at(this)}</View>
 
-{#snippet QueueItems(this: Queue)}
+<View of="Queue" name="QueueItems">
   <Node>{#each this as item}{item}{/each}</Node>
-{/snippet}
+</View>
 
-{#snippet Outline(this: VertexRef)}<Pointed />{/snippet}
+<View of="VertexRef" name="Outline"><Pointed /></View>
 
 {#snippet Title()}<Node>Breadth-first search from A</Node>{/snippet}
 {#snippet Graph()}

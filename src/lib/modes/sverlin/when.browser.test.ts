@@ -41,7 +41,7 @@ const insertion = `<script domain>
     }
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Caption()}<Node>Swap</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
@@ -158,7 +158,7 @@ it.skipIf(!enabled)(
     const chained = insertion
       .replace(
         '{#snippet Caption()}',
-        "{#snippet FlagWord(this: Flag)}<Node>{this ? 'yes' : 'no'}</Node>{/snippet}\n{#snippet Ask(this: Greater)}<Node>Is {this.a} greater than {this.b}? {this.value}</Node>{/snippet}\n{#snippet Caption()}"
+        '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="Greater" name="Ask"><Node>Is {this.a} greater than {this.b}? {this.value}</Node></View>\n{#snippet Caption()}'
       )
       .replace(
         '<When of="@insert.swap">{@render Caption()}</When>',

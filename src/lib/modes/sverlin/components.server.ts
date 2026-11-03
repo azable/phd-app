@@ -1,6 +1,6 @@
 /**
- * Typed view components: top-level snippets that view one domain type, as in
- * {#snippet IntText(this: Int)}, optionally taking the props of the node they draw, as in
+ * Typed view components: top-level snippets that view one domain type, as a view written
+ * <View of="Int" name="IntText"> is by now {#snippet IntText(this: Int)} (see viewTags), optionally taking the props of the node they draw, as in
  * (value: Int, node). A component reads only its value and other components, so its size can be
  * found by rendering it for every value of its type (see assembly/entry.ts). A type renders by its
  * name, as in {@render Int(value)}, drawing the view of it its variant chooses (views.Int). A
@@ -101,12 +101,12 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
       });
     else if (types[0] === undefined || parameters.length > 1)
       problems.push({
-        message: `${name} takes one value, its type given, as in (this: Int): a component views one domain type.`,
+        message: `${name} takes one value, its type given, as a view written <View of="Int" name="${name}">…</View> does: a component views one domain type.`,
         start: snippet.start ?? 0
       });
     else if (parameters[0].name !== viewThis)
       problems.push({
-        message: `${name} names its value ${parameters[0].name}; a view's value is always this, as in {#snippet ${name}(this: ${typed[0].startsWith('ℓ') ? `@${typed[0].slice(1).replaceAll('ˑ', '.')}` : typed[0]})}, read as {this}, {this.name} or <Node value={this} />.`,
+        message: `${name} names its value ${parameters[0].name}; a view's value is always this, as in <View of="${typed[0].startsWith('ℓ') ? `@${typed[0].slice(1).replaceAll('ˑ', '.')}` : typed[0]}" name="${name}">, read as {this}, {this.name} or <Node value={this} />.`,
         start: snippet.start ?? 0
       });
     else return typed[0];
@@ -129,7 +129,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
       for (const tag of pointed)
         problems.push({
           message:
-            '<Pointed> stands for the element a position points at, so it belongs in a view of an index type, as in {#snippet Arrow(this: Position)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}.',
+            '<Pointed> stands for the element a position points at, so it belongs in a view of an index type, as in <View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>i</Node></Node></View>.',
           start: tag.start ?? 0
         });
       continue;
@@ -186,7 +186,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     else if (name) named.add(name);
     if (name && part.parameters?.length && !typeOf(part))
       problems.push({
-        message: `${name} takes a parameter without a type: a view takes one value, its type given, as in (this: Int), and a snippet without parameters is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`,
+        message: `${name} takes a parameter without a type: a view takes one value, written <View of="Int" name="${name}">…</View>, and a snippet without parameters is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`,
         start: part.start ?? 0
       });
     for (const [key, child] of Object.entries(part))
@@ -752,7 +752,7 @@ export function pointerCalls(
         problems.push({
           message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as {i} for a position i${
             inNode && pointers.get(name)?.view
-              ? `; or, to show the position as a number here, add a view that draws it, as {#snippet ${name}Text(this: ${name})}<Node value={this} />{/snippet}`
+              ? `; or, to show the position as a number here, add a view that draws it, as <View of="${name}" name="${name}Text"><Node value={this} /></View>`
               : ''
           }.`,
           start

@@ -45,17 +45,18 @@ a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
 `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`, with no `<script>`,
 `<style>`, HTML, or SVG: every visible thing is a node or a link, so
 participants can select it and presentations can vary it. Nodes take no props
-that set a look: a node's kind is the snippet it is in, and the design gives
-each kind its look. Every input and algorithm variable in scope at the selected
-step and the library components are already in scope; never write `import`, and
-never declare names `Node`, `Link`, `Pointed`, `Listing`, `Layout`, `When`, or
-`OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`, `{#snippet}`);
-Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
-`<When>`; and code is in `<script>` blocks named by an attribute.
+that set a look: a node's kind is the view or snippet it is in, and the design
+gives each kind its look. Every input and algorithm variable in scope at the
+selected step and the library components are already in scope; never write
+`import`, and never declare names `Node`, `Link`, `Pointed`, `Listing`, `View`,
+`Layout`, `When`, or `OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`,
+`{#each}`, `{#snippet}`); Sverlin's own constructs are capitalised tags, as
+`<Node>`, `<View>`, `<Layout>`, and `<When>`; and code is in `<script>` blocks
+named by an attribute.
 
 - The top level holds parts, views, and at least one layout: every source
-  declares its layouts, and one without is refused. A snippet without parameters
-  is a part of the page, as
+  declares its layouts, and one without is refused. A snippet, which takes no
+  parameters, is a part of the page, as
   `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
   renders it, `{@render Title()}`; a part reads what a layout reads and renders
   parts and views. A layout, `<Layout name="Side">…</Layout>`, arranges the
@@ -97,19 +98,21 @@ Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
 
 ## Views of types
 
-A view is a snippet drawing one value of one domain type, its one parameter of
-that type, always written `this`, as
-`{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}` or
-`{#snippet VertexCard(this: Vertex)}<Node>{this.name}</Node>{/snippet}`; another
-name is an error, and `this` in a part of the page or the root, which has no
-value of its own, is an error too. The node showing the value shows the type's
-unit too. Define views at the top level. A view reads only `this`, types, other
-views, labels (`@…`), the library's components, `Math`, `at(p)`, `runs(@label)`,
-`all(Node)`, and the names its `{#each}` blocks and `{@const}` tags declare:
-never the input or algorithm variables, a pointer apart, and never browser
-globals such as `window` or `self`. How two values relate is drawn where both
-are in scope, in the view holding them or by a pointer; a part of the page or
-the root also reads the input and algorithm variables.
+A view draws one value of one domain type, written
+`<View of="Type" name="Name">` holding what it draws, its value always `this`,
+as `<View of="Int" name="IntCell"><Node value={this} /></View>` or
+`<View of="Vertex" name="VertexCard"><Node>{this.name}</Node></View>`. Its two
+props are written as they are, never computed, and it takes no others. A snippet
+takes no value: one with a parameter is an error, and so is `this` in a part of
+the page or the root, which has no value of its own. The node showing the value
+shows the type's unit too. Define views at the top level, never inside a part, a
+layout, or a node. A view reads only `this`, types, other views, labels (`@…`),
+the library's components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`, and the
+names its `{#each}` blocks and `{@const}` tags declare: never the input or
+algorithm variables, a pointer apart, and never browser globals such as `window`
+or `self`. How two values relate is drawn where both are in scope, in the view
+holding them or by a pointer; a part of the page or the root also reads the
+input and algorithm variables.
 
 A value in braces is drawn by its type's view: in the markup's text, `{key}`,
 with `key` an `Int`, draws the view `views.Int` chooses, among every view of
@@ -123,7 +126,7 @@ holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
 of its own; one member drawn as a pointer, as a position beside `'none'`, marks
 where the value points. Name views after how they draw, as `IntCell` or
 `IntTally`. Which view draws a value is the variant's, so a view named as its
-type (`{#snippet Int(this: Int)}`), rendering a view by its own name
+type (`<View of="Int" name="Int">`), rendering a view by its own name
 (`{@render IntCell(it)}`; one render is drawn apart through its place, see
 Places), writing a value's view as a render of its type (`{@render Int(key)}`,
 which is `{key}`), and a value whose type no view draws are errors.
@@ -139,8 +142,8 @@ the state holds, and a loop's own index, `k` in `{#each list as v, k}`, as text,
 A view of a collection or record draws its parts through their types' views:
 
 ```svelte
-{#snippet Items(this: Values)}<Node>{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet VertexCard(this: Vertex)}<Node layout="column">{this.name}{this.seen}</Node>{/snippet}
+<View of="Values" name="Items"><Node>{#each this as v}{v}{/each}</Node></View>
+<View of="Vertex" name="VertexCard"><Node layout="column">{this.name}{this.seen}</Node></View>
 ```
 
 A node whose only child is an `{#each}` holds a collection: its items sit on
@@ -344,9 +347,9 @@ Binary search, stopping where it finds the target:
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet IndexText(this: Index)}<Node value={this} />{/snippet}
-{#snippet Mark(this: Index)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Index" name="IndexText"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
 {#snippet Title()}<Node>Binary search for {target}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Range()}<Node>between {lo} and {hi}</Node>{/snippet}
@@ -502,13 +505,13 @@ nodes `prev` and `cur` refer to both marked:
   }
 </script>
 
-{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
-{#snippet EndMark(this: End)}<Node>∅</Node>{/snippet}
-{#snippet NodeBox(this: ListNode)}
+<View of="Name" name="NameCell"><Node value={this} /></View>
+<View of="End" name="EndMark"><Node>∅</Node></View>
+<View of="ListNode" name="NodeBox">
   {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
   <Node layout="row">{this.name}{@render NextField()}</Node>
-{/snippet}
-{#snippet Here(this: NodeRef)}<Pointed />{/snippet}
+</View>
+<View of="NodeRef" name="Here"><Pointed /></View>
 {#snippet Heap()}
   <Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>
 {/snippet}
@@ -544,7 +547,7 @@ nodes `prev` and `cur` refer to both marked:
   nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
   Write links there, reading the record's fields: one in a view of the reference
   type itself, as
-  `{#snippet NextLink(this: NodeRef)}<Link to={this} />{/snippet}`, ends at the
+  `<View of="NodeRef" name="NextLink"><Link to={this} /></View>`, ends at the
   value drawn, not at a node. Draw a node as fields, as a textbook does,
   `[ A | next ]` or a tree's `[ left | key | right ]`: a node holding only such
   links is a field, its own snippet so it has its own look
@@ -560,13 +563,13 @@ nodes `prev` and `cur` refer to both marked:
   `index(Nodes)`.
 - A view reads through a position with `at(p)`, the element it points at in the
   collection it points into, as
-  `{#snippet VertexName(this: VertexRef)}{at(this).name}{/snippet}`; the root
-  and its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a
-  `Vertex` and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and
-  a record of positions reads through twice, `at(edge.from).name`. What draws it
-  is the element itself, so a pointer's view drawn round the whole element marks
-  it there too; but it moves as the position, so a name in a queue slides with
-  its entry and fades out as it leaves while the element stays where it is held;
+  `<View of="VertexRef" name="VertexName">{at(this).name}</View>`; the root and
+  its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a `Vertex`
+  and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and a record
+  of positions reads through twice, `at(edge.from).name`. What draws it is the
+  element itself, so a pointer's view drawn round the whole element marks it
+  there too; but it moves as the position, so a name in a queue slides with its
+  entry and fades out as it leaves while the element stays where it is held;
   past either end it draws nothing. A position has no fields (`p.name` is
   refused), and its number may be drawn, as an index means something.
 
@@ -614,7 +617,7 @@ temporary:
 ## Views of what a step computed
 
 A label on an expression is a type a view can take:
-`{#snippet Ask(this: @sweep.pair.test)}` views what that expression computed at
+`<View of="@sweep.pair.test" name="Ask">` views what that expression computed at
 a step, its operands named by its syntax, `this.left` and `this.right` for a
 comparison or arithmetic, `this.argument` for `!` or `-x`, a function's
 parameters by name for a labelled call, and its result `this.value`, each drawn
@@ -651,10 +654,10 @@ place:
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Ask(this: @sweep.pair.test)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="@sweep.pair.test" name="Ask">
   <Node>is {this.left} > {this.right}? {this.value}</Node>
-{/snippet}
+</View>
 {#snippet Swapping()}<Node>out of order, so they swap</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Board()}
@@ -768,16 +771,16 @@ The design space is every variable of a component's look, found in its markup:
   lit look, as `listing.lit.radius`, and each region's paint, as
   `listing.lit@insert.compare.left.fill`, which follows its label's mark until
   set, and where it has tokens, `listing.places` (see Listing).
-- Each kind of node's props. A kind is the snippet a node is in: a view's or a
-  part's name, as `Items` or `Title`, and for a snippet inside another, both, as
-  `IntTally.Tally`; every node of a snippet is of its kind. A pointer view's
-  `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's
-  `<Link>`, as `Graph.Link`. A variable is its kind and prop, as
-  `Here.Pointed.fill` or `Items.Under.shown`.
+- Each kind of node's props. A kind is the view or snippet a node is in: a
+  view's or a part's name, as `Items` or `Title`, and for a snippet inside
+  another, both, as `IntTally.Tally`; every node of a view or snippet is of its
+  kind. A pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`,
+  and so is a snippet's `<Link>`, as `Graph.Link`. A variable is its kind and
+  prop, as `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 
-A snippet's name is its kind, so it names what its nodes are, never how they
-look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a
+A view's or snippet's name is its kind, so it names what its nodes are, never
+how they look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each has a
 name of its own in the whole view, nested ones included, as `CurrentCaption` and
 `NeighbourCaption` inside two pointer views, never `Caption` in both; a part is
 not named as a type, and a render names a part, a type, or a label, so every
@@ -944,18 +947,18 @@ variables:
   values of a kind.
 
 ```svelte
-{#snippet IntTally(this: Int)}
+<View of="Int" name="IntTally">
   {#snippet Tally()}<Node>{'•'.repeat(this)}</Node>{/snippet}
   <Node layout="column"><Node value={this} />{@render Tally()}</Node>
-{/snippet}
-{#snippet Items(this: Values)}
+</View>
+<View of="Values" name="Items">
   <Node>
     {#each this as v, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
       <Node layout="column">{v}{@render Under()}</Node>
     {/each}
   </Node>
-{/snippet}
+</View>
 ```
 
 ## The subset
@@ -1113,8 +1116,8 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   8      @place[$j[A[j + 1]] = $key[key]]]
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Mark(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Position" name="Mark"><Pointed /></View>
 {#snippet Key()}<Node>key {key}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Board()}
@@ -1273,12 +1276,12 @@ at marked and the queue drawn by number:
   }
 </script>
 
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet SeenMark(this: Flag)}<Node>{this ? '✓' : '·'}</Node>{/snippet}
-{#snippet VertexCard(this: Vertex)}<Node layout="column">{this.name}{this.seen}</Node>{/snippet}
-{#snippet RefCard(this: VertexRef)}<Node value={this} />{/snippet}
-{#snippet QueueItems(this: Queue)}<Node>{#each this as v}{v}{/each}</Node>{/snippet}
-{#snippet Marked(this: VertexRef)}<Pointed />{/snippet}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Flag" name="SeenMark"><Node>{this ? '✓' : '·'}</Node></View>
+<View of="Vertex" name="VertexCard"><Node layout="column">{this.name}{this.seen}</Node></View>
+<View of="VertexRef" name="RefCard"><Node value={this} /></View>
+<View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
+<View of="VertexRef" name="Marked"><Pointed /></View>
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as v, k}

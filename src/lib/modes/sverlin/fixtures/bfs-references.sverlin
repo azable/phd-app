@@ -33,13 +33,13 @@
   }
 </script>
 
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet SeenMark(this: Flag)}<Node>{this ? '✓' : '·'}</Node>{/snippet}
-{#snippet VertexCard(this: Vertex)}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Flag" name="SeenMark"><Node>{this ? '✓' : '·'}</Node></View>
+<View of="Vertex" name="VertexCard">
   {#snippet OutField()}<Node>{#each this.out as w}<Link to={w} />{/each}</Node>{/snippet}
   <Node layout="column">{this.name}{this.seen}{@render OutField()}</Node>
-{/snippet}
-{#snippet Marked(this: VertexRef)}<Pointed />{/snippet}
+</View>
+<View of="VertexRef" name="Marked"><Pointed /></View>
 {#snippet Graph()}
   <Node layout="free">{#each all(Vertex) as v}{v}{/each}</Node>
 {/snippet}

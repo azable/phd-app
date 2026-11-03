@@ -78,7 +78,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (kind === 'binop' || kind === 'unop')
         fail(
           declarator as AnyNode,
-          `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as {#snippet Ask(this: @compare)}…{/snippet}.`
+          `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as <View of="@compare" name="Ask">…</View>.`
         );
       if (declared.has(name)) fail(declarator as AnyNode, `"${name}" is already defined.`);
       declared.set(name, {

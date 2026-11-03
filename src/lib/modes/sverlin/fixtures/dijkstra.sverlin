@@ -60,29 +60,29 @@
   }
 </script>
 
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet WeightText(this: Weight)}<Node value={this} />{/snippet}
-{#snippet FlagWord(this: Flag)}<Node>{this ? 'done' : 'open'}</Node>{/snippet}
-{#snippet IndexText(this: VertexIndex)}<Node value={this} />{/snippet}
-{#snippet CurrentMark(this: VertexIndex)}<Pointed />{/snippet}
-{#snippet EdgeMark(this: EdgeIndex)}<Pointed />{/snippet}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Weight" name="WeightText"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'done' : 'open'}</Node></View>
+<View of="VertexIndex" name="IndexText"><Node value={this} /></View>
+<View of="VertexIndex" name="CurrentMark"><Pointed /></View>
+<View of="EdgeIndex" name="EdgeMark"><Pointed /></View>
 
-{#snippet VertexCard(this: Vertex)}
+<View of="Vertex" name="VertexCard">
   <Node layout="column">
     {this.name}
     <Node>distance {this.distance}</Node>
     {this.done}
   </Node>
-{/snippet}
+</View>
 
-{#snippet EdgeLink(this: Edge)}
+<View of="Edge" name="EdgeLink">
   <Link from={this.from} to={this.to}>{this.weight}</Link>
-{/snippet}
+</View>
 
-{#snippet LessQuestion(this: @round.visit.edge.relax.check)}
+<View of="@round.visit.edge.relax.check" name="LessQuestion">
   <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
-{/snippet}
+</View>
 
 {#snippet Graph()}
   <Node layout="free">

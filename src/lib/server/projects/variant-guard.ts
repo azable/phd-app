@@ -23,7 +23,7 @@ export function hides(variable: string, value: unknown): boolean {
 const hiddenAtMost = 0.5;
 
 /**
- * The snippets a source defines, what each renders, what its root renders (in every layout), and
+ * The views and snippets a source defines, by name, what each renders, what its root renders (in every layout), and
  * what each layout's root renders, the picture being the layout's a variant shows.
  */
 export type PictureTree = {
@@ -40,20 +40,21 @@ export function pictureTree(source: string): PictureTree {
   const layouts = new Map<string, string[]>();
   let layout: string[] | undefined;
   const tokens =
-    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|<Layout\s+name="([A-Za-z_]\w*)"|<\/Layout\s*>/gu;
+    /\{#snippet\s+([A-Za-z_]\w*)|<View\b[^>]*?\bname="([A-Za-z_]\w*)"[^>]*>|\{\/snippet\}|<\/View\s*>|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|<Layout\s+name="([A-Za-z_]\w*)"|<\/Layout\s*>/gu;
   for (const match of markup.matchAll(tokens)) {
-    if (match[3]) layouts.set(match[3], (layout = []));
-    else if (match[0].startsWith('</Layout')) layout = undefined;
-    else if (match[1]) {
-      open.push(match[1]);
-      if (!snippets.has(match[1])) snippets.set(match[1], []);
-    } else if (match[0] === '{/snippet}') open.pop();
-    else if (match[2]) {
+    const [whole, snippet, view, render, named] = match;
+    if (named) layouts.set(named, (layout = []));
+    else if (whole.startsWith('</Layout')) layout = undefined;
+    else if (snippet || view) {
+      open.push(snippet ?? view);
+      if (!snippets.has(snippet ?? view)) snippets.set(snippet ?? view, []);
+    } else if (whole === '{/snippet}' || whole.startsWith('</View')) open.pop();
+    else if (render) {
       const parent = open.at(-1);
-      if (parent) snippets.get(parent)!.push(match[2]);
+      if (parent) snippets.get(parent)!.push(render);
       else {
-        root.push(match[2]);
-        layout?.push(match[2]);
+        root.push(render);
+        layout?.push(render);
       }
     } else if (open.length === 0) layout?.push('<Listing>');
     else snippets.get(open.at(-1)!)!.push('<Listing>');

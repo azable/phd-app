@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
-import { markLabels, whenTags } from './label-values';
+import { markLabels, viewTags, whenTags } from './label-values';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -26,7 +26,7 @@ const insertion = `
     values[j] = key;
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}`;
 
 /** A source of the algorithm and its parts, its one layout holding `view`. */
@@ -96,7 +96,7 @@ describe('labels read in the view', () => {
   @a[const x = @v[values[0]];]
   @b[const y = @v[values[1]];]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}`;
+<View of="Int" name="IntCell"><Node value={this} /></View>`;
     expect(() => prepare('{@v}', twice)).toThrow(
       '@v is not a full name; write its full name, @a.v or @b.v.'
     );
@@ -111,7 +111,7 @@ describe('labels read in the view', () => {
     @put[values[i] = key;]
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}`;
+<View of="Int" name="IntCell"><Node value={this} /></View>`;
     expect(() => prepare('{@insert.key}', statement)).toThrow(
       '@insert.key labels a statement, which gives no value; label its expression, as const key = @key[values[i]].'
     );
@@ -119,7 +119,7 @@ describe('labels read in the view', () => {
       prepare(
         '{@render Cells()}',
         insertion,
-        '{#snippet Shown(this: Values)}<Node>{@insert.key}</Node>{/snippet}'
+        '<View of="Values" name="Shown"><Node>{@insert.key}</Node></View>'
       )
     ).toThrow('@insert.key is read in a view, which sees only its value');
   });
@@ -132,8 +132,8 @@ describe('labels read in the view', () => {
     if (@cond[seen === target]) break;
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Checked(this: Index)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Index" name="Checked"><Pointed /></View>
 `;
     const prepared = prepare(`{#each runs(@check.at) as p}{p}{/each}`, search);
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);
@@ -189,5 +189,49 @@ describe('<When> and <OneOf>', () => {
       'The <When> is never closed: close it with </When>.'
     );
     expect(problem('<When of="a">x</When>')[0]).toContain('<When of="a"> is no <When>');
+  });
+});
+
+describe('<View>', () => {
+  it('becomes the snippet it stands for, every line in place and offsets mapped back', () => {
+    const written =
+      '<View of="Int" name="Bar"><Node length={this} /></View> {x}\n<View of="@a.b" name="Ask">\n  {this.left}\n</View>';
+    const { source, problems, views, authoredOffset } = viewTags(written);
+    expect(problems).toEqual([]);
+    expect(source).toBe(
+      '{#snippet Bar(this: Int)} <Node length={this} />{/snippet} {x}\n{#snippet Ask(this: @a.b)} \n  {this.left}\n{/snippet}'
+    );
+    expect(views).toEqual([0, source.indexOf('{#snippet Ask')]);
+    for (const text of ['{this}', '{x}', '{this.left}'])
+      expect(authoredOffset(source.indexOf(text))).toBe(written.indexOf(text));
+  });
+
+  it('is refused as a snippet taking a value, unclosed, or with other props', () => {
+    const problem = (text: string) => viewTags(text).problems.map(({ message }) => message);
+    expect(problem('{#snippet Bar(this: Int)}<Node />{/snippet}')).toEqual([
+      expect.stringContaining('write it as a view, <View of="Int" name="Bar">…</View>')
+    ]);
+    expect(problem('<View of="Int" name="Bar">')).toEqual([
+      'The <View> is never closed: close it with </View>.'
+    ]);
+    expect(problem('<View of="Int" name="Bar" as="v"></View>')).toEqual([
+      expect.stringContaining('as is no prop of a view')
+    ]);
+    expect(problem('</View>')).toEqual([expect.stringContaining('This </View> closes no view')]);
+  });
+
+  it('keeps positions after a view on its line, in problems', () => {
+    const view =
+      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View><Layout name="Main"><Node>{nope}</Node></Layout>';
+    let error: { code?: string; line?: number; column?: number; others: unknown[] } | undefined;
+    try {
+      prepareSvelteComponent(view);
+    } catch (cause) {
+      error = cause as typeof error;
+    }
+    const unknown = [error, ...(error?.others ?? [])].find(
+      (problem) => (problem as typeof error)?.code === 'view_name'
+    );
+    expect(unknown).toMatchObject({ line: 2, column: view.split('\n')[1].indexOf('nope') + 1 });
   });
 });

@@ -53,27 +53,27 @@ while @more[the queue is not empty]
     @step[slot = the next neighbour]]
 </script>
 
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet SeenWord(this: Seen)}<Node>{this ? 'seen' : 'unseen'}</Node>{/snippet}
-{#snippet VertexCard(this: Vertex)}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Seen" name="SeenWord"><Node>{this ? 'seen' : 'unseen'}</Node></View>
+<View of="Vertex" name="VertexCard">
   <Node layout="column">
     {this.name}
     {this.seen}
   </Node>
-{/snippet}
-{#snippet VertexNumber(this: VertexRef)}<Node value={this} />{/snippet}
-{#snippet QueueItems(this: Queue)}
+</View>
+<View of="VertexRef" name="VertexNumber"><Node value={this} /></View>
+<View of="Queue" name="QueueItems">
   <Node>{#each this as item}{item}{/each}</Node>
-{/snippet}
+</View>
 
-{#snippet Outline(this: VertexRef)}<Pointed />{/snippet}
-{#snippet Captioned(this: VertexRef)}
+<View of="VertexRef" name="Outline"><Pointed /></View>
+<View of="VertexRef" name="Captioned">
   {#snippet Caption()}<Node>start here</Node>{/snippet}
   <Node layout="column">
     <Pointed />
     {@render Caption()}
   </Node>
-{/snippet}
+</View>
 
 {#snippet Title()}<Node>Breadth-first search from A</Node>{/snippet}
 {#snippet Graph()}

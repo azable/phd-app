@@ -36,7 +36,7 @@ const kindsOf = (space: Record<string, unknown>) =>
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
-      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{n}</Node></Layout>'
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{n}</Node></Layout>'
     );
     // The input as given, then a step at each label, each named by its label and run.
     expect(result.labels).toEqual(['start', '@run#1', '@a#1', '@b#1']);
@@ -278,7 +278,7 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0); let j = Position(1);]</script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet Arrow(this: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(this: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}{@render Note()}{@render Pair()}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View><View of="Position" name="Arrow">{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node></View><View of="Position" name="Mark"><Pointed /></View>{#snippet Cells()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}{@render Note()}{@render Pair()}</Node></Layout>`
     );
     expect(kindsOf(design.space)).toEqual(
       [
@@ -339,7 +339,7 @@ describe('single-component Svelte compilation', () => {
     [
       'a snippet taking a parameter without a type',
       '{#snippet A(x)}<Node>{x}</Node>{/snippet}<Layout name="Main"><Node>{1}</Node></Layout>',
-      /A takes a parameter without a type/
+      /A takes a parameter: a snippet takes nothing and is a part of the page/
     ]
   ])('rejects %s', async (_name, markup, message) => {
     await expect(compileSvelteComponent(`<script algorithm></script>${markup}`)).rejects.toThrow(
@@ -350,7 +350,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects a <Pointed> and a node of one kind', () => {
     expect(() =>
       prepareSvelteComponent(
-        `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0);]</script>{#snippet Arrow(this: Position)}{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node>{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}</Node></Layout>`
+        `<script domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Position" name="Arrow">{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node></View>{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}</Node></Layout>`
       )
     ).toThrow(/Arrow\.Pointed is the kind of a <\w+> and of another kind of tag/);
   });
@@ -429,15 +429,17 @@ describe('single-component Svelte compilation', () => {
       `<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>
 ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     expect(() =>
-      prepareSvelteComponent(source('{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}'))
+      prepareSvelteComponent(source('<View of="Int" name="IntCell"><Node value={this} /></View>'))
     ).not.toThrow();
     expect(() =>
       prepareSvelteComponent(source('{#snippet IntCell(v: Int)}<Node value={v} />{/snippet}'))
-    ).toThrow("IntCell names its value v; a view's value is always this");
+    ).toThrow(
+      'IntCell takes a value, as only a view does: write it as a view, <View of="Int" name="IntCell">…</View>, its value this'
+    );
     expect(() =>
       prepareSvelteComponent(
         source(
-          '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet Part()}<Node>{this}</Node>{/snippet}'
+          '<View of="Int" name="IntCell"><Node value={this} /></View>{#snippet Part()}<Node>{this}</Node>{/snippet}'
         )
       )
     ).toThrow('this is the value a view draws, and only a view has one');
@@ -445,7 +447,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     expect(() =>
       prepareSvelteComponent(
         source(
-          '<!-- a view draws {this} -->{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}'
+          '<!-- a view draws {this} --><View of="Int" name="IntCell"><Node value={this} /></View>'
         )
       )
     ).not.toThrow();
@@ -517,7 +519,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     // between nodes is ignored.
     await expect(
       compileSvelteComponent(
-        '<script domain>const Int = type([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n{#snippet IntNote(this: Int)}is <Node value={this} />{/snippet}\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
+        '<script domain>const Int = type([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntNote">is <Node value={this} /></View>\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
       )
     ).resolves.toBeDefined();
   });
@@ -528,7 +530,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
       '<script input>const values = Values([3, 8]);</script>',
       '<script algorithm>@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[i < values.length]; @step[i++]) { last = i; }]</script>',
       '<script listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
-      '{#snippet IndexCell(this: Index)}<Node value={this} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{last}</Node></Layout>'
+      '<View of="Index" name="IndexCell"><Node value={this} /></View>{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{last}</Node></Layout>'
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
@@ -557,7 +559,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     ).toThrow('takes no props or children');
     expect(() =>
       prepareSvelteComponent(
-        `${blocks}{#snippet Code(this: Int)}<Node value={this} /><Listing />{/snippet}<Layout name="Main"><Node>{n}</Node></Layout>`
+        `${blocks}<View of="Int" name="Code"><Node value={this} /><Listing /></View><Layout name="Main"><Node>{n}</Node></Layout>`
       )
     ).toThrow('place <Listing /> outside views');
     expect(() =>
@@ -595,7 +597,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('draws nested collections with nested {#each} blocks, and no longer takes items', async () => {
     const source = (view: string) =>
-      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script input>const grid = Grid([[1, 2], [3, 4]]);</script><script algorithm></script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}${view}`;
+      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script input>const grid = Grid([[1, 2], [3, 4]]);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>${view}`;
     const result = await compileSvelteComponent(
       source(
         '{#snippet Rows()}<Node layout="column">{#each grid as row}<Node>{#each row as v}{v}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Rows()}</Node></Layout>'
@@ -618,7 +620,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
     const source = (view: string, more = '') =>
       `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = collection(Height);</script><script input>const people = People([150, 170]);</script><script algorithm></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
     const view =
-      '{#snippet HeightView(this: Height)}<Node layout="column"><Node value={this} /><Node>tall</Node></Node>{/snippet}';
+      '<View of="Height" name="HeightView"><Node layout="column"><Node value={this} /><Node>tall</Node></Node></View>';
     const prepared = prepareSvelteComponent(source(view));
     expect(prepared.component.match(/__type: 'Height'/g)).toHaveLength(1);
     await expect(
@@ -645,7 +647,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
       compileSvelteComponent(
         '<script domain>const Int = type("integer", { min: -100, max: 1000 });</script><script algorithm></script>\n{#snippet IntCell(value: Int, node)}{value}{/snippet}<Layout name="Main"><Node /></Layout>'
       )
-    ).rejects.toThrow('IntCell takes one value, its type given');
+    ).rejects.toThrow('IntCell takes a parameter: a snippet takes nothing');
     await expect(
       compileSvelteComponent(
         '<script domain>const Text = type(["a"]);</script><script algorithm>@run[const Text = 1;]</script>'
@@ -700,7 +702,7 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
     const algorithm =
-      '<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}';
+      '<script domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>';
     const nested = prepareSvelteComponent(
       `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{v}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
@@ -794,12 +796,12 @@ ${markup}<Layout name="Main"><Node>{n}</Node></Layout>`;
 describe('pointers', () => {
   /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
   const view = (parts: string, renders = '') =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[let i = Position(0);]</script>{#snippet IntText(this: Int)}<Node value={this} />{/snippet}{#snippet Row(this: Values)}<Node layout="row">{#each this as v}{v}{/each}</Node>{/snippet}${parts}<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View><View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>${parts}<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
       view(
-        '{#snippet Arrow(this: Position)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}',
+        '<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>i</Node></Node></View>',
         '{i}'
       )
     );
@@ -809,9 +811,9 @@ describe('pointers', () => {
   });
 
   it('draws a position type rendered by name as a mark outside a node, its number inside one', () => {
-    const pointer = '{#snippet Highlight(this: Position)}<Pointed />{/snippet}';
+    const pointer = '<View of="Position" name="Highlight"><Pointed /></View>';
     const caption = '{#snippet At()}<Node>at {i}</Node>{/snippet}';
-    const text = '{#snippet PositionText(this: Position)}<Node value={this} />{/snippet}';
+    const text = '<View of="Position" name="PositionText"><Node value={this} /></View>';
     const both = prepareSvelteComponent(view(`${text}${pointer}${caption}`, '{@render At()}{i}'));
     expect(both.design.space['views.Position']).toEqual(['PositionText', 'none']);
     expect(both.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
@@ -834,7 +836,7 @@ describe('pointers', () => {
     expect(marks.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
     expect(marks.design.space['views.Position']).toBeUndefined();
     expect(() => prepareSvelteComponent(view(`${pointer}${caption}`, '{@render At()}'))).toThrow(
-      'or, to show the position as a number here, add a view that draws it, as {#snippet PositionText(this: Position)}<Node value={this} />{/snippet}'
+      'or, to show the position as a number here, add a view that draws it, as <View of="Position" name="PositionText"><Node value={this} /></View>'
     );
   });
 
@@ -847,31 +849,31 @@ describe('pointers', () => {
     ],
     [
       'a pointer that is not a view of an index type',
-      '{#snippet Mark(this: Int)}<Pointed />{/snippet}',
+      '<View of="Int" name="Mark"><Pointed /></View>',
       '',
       /Int is neither an index nor a reference type/
     ],
     [
       'two <Pointed> in one pointer',
-      '{#snippet Arrow(this: Position)}<Node><Pointed /><Pointed /></Node>{/snippet}',
+      '<View of="Position" name="Arrow"><Node><Pointed /><Pointed /></Node></View>',
       '',
       /has 2 <Pointed>/
     ],
     [
       'props <Pointed> does not take',
-      '{#snippet Arrow(this: Position)}<Pointed layout="row" />{/snippet}',
+      '<View of="Position" name="Arrow"><Pointed layout="row" /></View>',
       '',
       /<Pointed> takes no props/
     ],
     [
       'a pointer rendered in a part of the page',
-      '{#snippet Arrow(this: Position)}<Pointed />{/snippet}{#snippet Marks()}{i}{/snippet}',
+      '<View of="Position" name="Arrow"><Pointed /></View>{#snippet Marks()}{i}{/snippet}',
       '{@render Marks()}',
       /rendered at the top of the view, outside blocks other than \{#if\} and outside snippets/
     ],
     [
       'a <Pointed> in a snippet inside its pointer view',
-      '{#snippet Arrow(this: Position)}{#snippet Mark()}<Pointed />{/snippet}<Node>{@render Int()}</Node>{/snippet}',
+      '<View of="Position" name="Arrow">{#snippet Mark()}<Pointed />{/snippet}<Node>{@render Int()}</Node></View>',
       '{i}',
       /A <Pointed> is written in its pointer view itself/
     ]
@@ -887,7 +889,7 @@ describe('typed view components', () => {
 
   it('reads typed snippets as views of one type, and draws the view the variant chooses for the type', async () => {
     const prepared = component(
-      '{#snippet IntText(this: Int)}<Node value={this} />{/snippet}{#snippet IntPair(this: Int)}<Node layout="row"><Node value={this} /><Node value={this} /></Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>'
+      '<View of="Int" name="IntText"><Node value={this} /></View><View of="Int" name="IntPair"><Node layout="row"><Node value={this} /><Node value={this} /></Node></View><Layout name="Main"><Node>{i}</Node></Layout>'
     );
     expect(prepared.components).toEqual([
       { name: 'IntText', cases: [1, 3] },
@@ -908,7 +910,7 @@ describe('typed view components', () => {
 
   it('orders components after those they render', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Row = collection(Int);</script><script algorithm>@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script>{#snippet Search(this: Row)}<Node layout="row">{#each this as value}{value}{/each}</Node>{/snippet}{#snippet Plain(this: Int)}<Node value={this} />{/snippet}{#snippet Boxed(this: Int)}<Node layout="row"><Node value={this} /></Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Row = collection(Int);</script><script algorithm>@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script><View of="Row" name="Search"><Node layout="row">{#each this as value}{value}{/each}</Node></View><View of="Int" name="Plain"><Node value={this} /></View><View of="Int" name="Boxed"><Node layout="row"><Node value={this} /></Node></View><Layout name="Main"><Node>{values}</Node></Layout>`
     );
     expect(prepared.components.map(({ name }) => name)).toEqual(['Plain', 'Boxed', 'Search']);
     // Plain and Boxed show their value, so they take every value; Search only passes its values to
@@ -920,7 +922,7 @@ describe('typed view components', () => {
 
   it('draws a record with one value for each field passed only to a view', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script algorithm></script>{#snippet VertexView(this: Vertex)}<Node value={this} />{/snippet}{#snippet EdgeView(this: Edge)}<Node layout="row">{this.from}{this.to}<Node value={this.weight} /></Node>{/snippet}<Layout name="Main"><Node /></Layout>`
+      `<script domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script algorithm></script><View of="Vertex" name="VertexView"><Node value={this} /></View><View of="Edge" name="EdgeView"><Node layout="row">{this.from}{this.to}<Node value={this.weight} /></Node></View><Layout name="Main"><Node /></Layout>`
     );
     // from and to go to VertexView; weight is shown, so it takes each of its values.
     expect(prepared.components.find(({ name }) => name === 'EdgeView')?.cases).toEqual(
@@ -930,7 +932,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(this: Int)}<Node value={this} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int);</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script><View of="Int" name="IntView"><Node value={this} /></View>{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
@@ -949,7 +951,7 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script algorithm>@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(this: Count)}<Node value={this} />{/snippet}{#snippet R(this: Ratio)}<Node value={this} />{/snippet}{#snippet M(this: Mark)}<Node value={this} />{/snippet}{#snippet P(this: Pair)}<Node>{this.a}{this.b}</Node>{/snippet}{#snippet G(this: Grid)}<Node layout="column">{#each this as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
+      `<script domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script algorithm>@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script><View of="Count" name="C"><Node value={this} /></View><View of="Ratio" name="R"><Node value={this} /></View><View of="Mark" name="M"><Node value={this} /></View><View of="Pair" name="P"><Node>{this.a}{this.b}</Node></View><View of="Grid" name="G"><Node layout="column">{#each this as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node></View><Layout name="Main"><Node>{r}</Node></Layout>`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -995,7 +997,7 @@ describe('typed view components', () => {
       'rendering a snippet that is not defined',
       () =>
         component(
-          '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet I()}<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}{@render Compared(i)}</Node></Layout>'
+          '<View of="Int" name="IntCell"><Node value={this} /></View>{#snippet I()}<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}{@render Compared(i)}</Node></Layout>'
         ),
       /\{@render Compared\(…\)\} draws Compared, which no snippet, type, or label is named/
     ],
@@ -1003,7 +1005,7 @@ describe('typed view components', () => {
       'a view named after its type',
       () =>
         component(
-          '{#snippet Int(this: Int)}<Node value={this} />{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>'
+          '<View of="Int" name="Int"><Node value={this} /></View><Layout name="Main"><Node>{i}</Node></Layout>'
         ),
       /Int is a view named after its type/
     ],
@@ -1019,7 +1021,7 @@ describe('typed view components', () => {
       'reading an algorithm variable',
       () =>
         component(
-          '{#snippet Cell(this: Int)}<Node value={i} />{/snippet}<Layout name="Main"><Node /></Layout>'
+          '<View of="Int" name="Cell"><Node value={i} /></View><Layout name="Main"><Node /></Layout>'
         ),
       /Cell reads i, an input or algorithm variable/
     ],
@@ -1027,7 +1029,7 @@ describe('typed view components', () => {
       'reading an algorithm variable past a loop of the same name',
       () =>
         component(
-          '{#snippet Cell(this: Int)}<Node>{#each [1] as i}{/each}{this} at {i}</Node>{/snippet}<Layout name="Main"><Node /></Layout>'
+          '<View of="Int" name="Cell"><Node>{#each [1] as i}{/each}{this} at {i}</Node></View><Layout name="Main"><Node /></Layout>'
         ),
       /Cell reads i, an input or algorithm variable/
     ],
@@ -1035,47 +1037,76 @@ describe('typed view components', () => {
       'types that are not domain types',
       () =>
         component(
-          '{#snippet Cell(this: Number)}<Node value={this} />{/snippet}<Layout name="Main"><Node /></Layout>'
+          '<View of="Number" name="Cell"><Node value={this} /></View><Layout name="Main"><Node /></Layout>'
         ),
       /Cell's type Number is not a type/
     ],
     [
-      'viewing more than one type',
+      'a view written as a snippet',
       () =>
         component(
-          '{#snippet Cell(value: Int, current: Flag)}<Node {value} />{/snippet}<Layout name="Main"><Node /></Layout>'
+          '{#snippet Cell(this: Int)}<Node value={this} />{/snippet}<Layout name="Main"><Node /></Layout>'
         ),
-      /Cell takes 2 domain types, Int, Flag; a component views one type/
+      /Cell takes a value, as only a view does: write it as a view, <View of="Int" name="Cell">/
     ],
     [
-      'a parameter before the value',
+      'a view without a name',
       () =>
         component(
-          '{#snippet Cell(node, value: Int)}<Node {value} />{/snippet}<Layout name="Main"><Node /></Layout>'
+          '<View of="Int"><Node value={this} /></View><Layout name="Main"><Node /></Layout>'
         ),
-      /Cell takes one value, its type given/
+      /<View of="Int"> has no name: a view is written <View of="Int" name="Bar">/
     ],
     [
-      'a parameter after the value',
+      'a view with a prop of another kind',
       () =>
         component(
-          '{#snippet Cell(value: Int, node)}<Node {value} />{/snippet}<Layout name="Main"><Node /></Layout>'
+          '<View of="Int" name="Cell" fill="red"><Node value={this} /></View><Layout name="Main"><Node /></Layout>'
         ),
-      /Cell takes one value, its type given/
+      /A <View> takes only of, its type or label, and name: fill is no prop of a view/
+    ],
+    [
+      'a view whose type is computed',
+      () =>
+        component(
+          '<View of={Int} name="Cell"><Node value={this} /></View><Layout name="Main"><Node /></Layout>'
+        ),
+      /A <View>'s of is written as it is, not computed, as of="Int"/
+    ],
+    [
+      'a view holding nothing',
+      () => component('<View of="Int" name="Cell" /><Layout name="Main"><Node /></Layout>'),
+      /<View of="Int" name="Cell" \/> holds nothing: a view holds what it draws/
+    ],
+    [
+      'a view never closed',
+      () =>
+        component(
+          '<View of="Int" name="Cell"><Node value={this} /><Layout name="Main"><Node /></Layout>'
+        ),
+      /The <View> is never closed/
+    ],
+    [
+      'a view inside another',
+      () =>
+        component(
+          '<View of="Int" name="Cell"><View of="Int" name="Inner"><Node value={this} /></View></View><Layout name="Main"><Node /></Layout>'
+        ),
+      /A <View> is written at the top level, beside the parts and layouts, not inside another view/
     ],
     [
       'components inside markup',
       () =>
         component(
-          '{#snippet Part()}<Node>{#snippet Cell(this: Int)}<Node value={this} />{/snippet}</Node>{/snippet}<Layout name="Main"><Node>{@render Part()}</Node></Layout>'
+          '{#snippet Part()}<Node><View of="Int" name="Cell"><Node value={this} /></View></Node>{/snippet}<Layout name="Main"><Node>{@render Part()}</Node></Layout>'
         ),
-      /components are defined at the top level/
+      /A <View> is written at the top level, beside the parts and layouts, never inside a part/
     ],
     [
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
-          `<script domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script algorithm></script>{#snippet F(this: Flags)}<Node value={this.a} />{/snippet}<Layout name="Main"><Node /></Layout>`
+          `<script domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script algorithm></script><View of="Flags" name="F"><Node value={this.a} /></View><Layout name="Main"><Node /></Layout>`
         ),
       /F would be drawn with too many values of Flags/
     ]
@@ -1086,7 +1117,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean");</script><script input>const values = Values([5, 2]);</script><script algorithm>for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script>{#snippet IntText(this: Int)}<Node value={this} />{/snippet}${markup}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values); const Flag = type("boolean");</script><script input>const values = Values([5, 2]);</script><script algorithm>for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script><View of="Int" name="IntText"><Node value={this} /></View>${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
@@ -1142,7 +1173,7 @@ describe('scope', () => {
 
 describe('views', () => {
   it('are only drawn with {@render}, never called to make a value', () => {
-    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm></script>{#snippet IntText(this: Int)}<Node value={this} />{/snippet}{#snippet IndexLabel(this: Index)}<Node value={this} />{/snippet}{#snippet Row(this: Values)}<Node layout="row">{#each this as v, k}{v}{Index(k)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`;
+    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm></script><View of="Int" name="IntText"><Node value={this} /></View><View of="Index" name="IndexLabel"><Node value={this} /></View><View of="Values" name="Row"><Node layout="row">{#each this as v, k}{v}{Index(k)}{/each}</Node></View><Layout name="Main"><Node>{values}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source)).toThrow(
       'Index(…) is a view, which only draws: write {value}'
     );
@@ -1155,12 +1186,12 @@ describe('view choices and prop values', () => {
 
   it('leaves out of a type’s views those that draw the type itself', () => {
     const prepared = prepareSvelteComponent(
-      `${domain}{#snippet Plain(this: Int)}<Node value={this} />{/snippet}{#snippet Boxed(this: Int)}<Node>{this}</Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>`
+      `${domain}<View of="Int" name="Plain"><Node value={this} /></View><View of="Int" name="Boxed"><Node>{this}</Node></View><Layout name="Main"><Node>{i}</Node></Layout>`
     );
     expect(prepared.design.space['views.Int']).toEqual(['Plain', 'none']);
     expect(() =>
       prepareSvelteComponent(
-        `${domain}{#snippet Boxed(this: Int)}<Node>{this}</Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>`
+        `${domain}<View of="Int" name="Boxed"><Node>{this}</Node></View><Layout name="Main"><Node>{i}</Node></Layout>`
       )
     ).toThrow('Every view of Int draws Int itself');
   });
@@ -1202,11 +1233,11 @@ describe('views of what a step computed', () => {
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet FlagWord(this: Flag)}<Node>{this ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(this: @sweep.pair.test)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
+<View of="@sweep.pair.test" name="Ask">
   <Node>is {this.left} > {this.right}? {this.value}</Node>
-{/snippet}
+</View>
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
@@ -1280,8 +1311,8 @@ describe('views of what a step computed', () => {
     expect(() =>
       prepareSvelteComponent(
         bubble.replace(
-          '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
-          '{#snippet IntCell(this: Int)}<Node value={this} />{@sweep.pair.test}{/snippet}'
+          '<View of="Int" name="IntCell"><Node value={this} /></View>',
+          '<View of="Int" name="IntCell"><Node value={this} />{@sweep.pair.test}</View>'
         )
       )
     ).toThrow('which only the root and its parts know: write it there');
@@ -1293,8 +1324,8 @@ describe('views of what a step computed', () => {
             '@test[values[i - 1] > values[i] || (@early[end < Index(0)] && @never[values[0] < values[1]])]'
           )
           .replace(
-            '{#snippet FlagWord',
-            '{#snippet Tell(this: @sweep.pair.test.never)}<Node>{this.value}</Node>{/snippet}\n{#snippet FlagWord'
+            '<View of="Flag" name="FlagWord"',
+            '<View of="@sweep.pair.test.never" name="Tell"><Node>{this.value}</Node></View>\n<View of="Flag" name="FlagWord"'
           )
       )
     ).toThrow('which labels no expression any step evaluates');
@@ -1335,10 +1366,10 @@ describe('pauses at labels', () => {
       j = j - 1]]
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet FlagWord(this: Flag)}<Node>{this ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(this: @insert.compare)}<Node>is {this.left} > {this.right}? {this.value}</Node>{/snippet}
-{#snippet Highlight(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
+<View of="@insert.compare" name="Ask"><Node>is {this.left} > {this.right}? {this.value}</Node></View>
+<View of="Position" name="Highlight"><Pointed /></View>
 {#snippet Board()}
   <Node layout="row">
     <Listing />
@@ -1589,10 +1620,10 @@ describe('pauses accumulate', () => {
       A[j] = moved
       j = j - 1]]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet FlagWord(this: Flag)}<Node>{this ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(this: @insert.compare)}<Node>is {this.left} > {this.right}? {this.value}</Node>{/snippet}
-{#snippet Highlight(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
+<View of="@insert.compare" name="Ask"><Node>is {this.left} > {this.right}? {this.value}</Node></View>
+<View of="Position" name="Highlight"><Pointed /></View>
 {#snippet Board()}
   <Node layout="row">
     <Listing />
@@ -1760,7 +1791,7 @@ describe('pauses accumulate', () => {
 
 describe('places', () => {
   const source = (view: string, algorithm = '@run[let i = Index(1); let key = Int(2);]') =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm>${algorithm}</script>{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}{#snippet IntTally(this: Int)}<Node>{'•'.repeat(this)}</Node>{/snippet}{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm>${algorithm}</script><View of="Int" name="IntCell"><Node value={this} /></View><View of="Int" name="IntTally"><Node>{'•'.repeat(this)}</Node></View>{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
 
   it('refuses a view rendered by its own name, naming its type', () => {
     expect(() =>
@@ -1806,15 +1837,13 @@ describe('places', () => {
       `<script domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = collection(Dist);</script><script input>const dists = Dists([0, "none"]);</script><script algorithm>@run[const d = dists[1];]</script>${views}<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
     const prepared = prepareSvelteComponent(
       union(
-        '{#snippet StepsCell(this: Steps)}<Node value={this} />{/snippet}{#snippet NoneMark(this: None)}<Node>–</Node>{/snippet}'
+        '<View of="Steps" name="StepsCell"><Node value={this} /></View><View of="None" name="NoneMark"><Node>–</Node></View>'
       )
     );
     expect(prepared.design.space['views.Steps']).toEqual(['StepsCell', 'none']);
     expect(prepared.design.space['views.None']).toEqual(['NoneMark', 'none']);
     expect(() =>
-      prepareSvelteComponent(
-        union('{#snippet DistCell(this: Dist)}<Node value={this} />{/snippet}')
-      )
+      prepareSvelteComponent(union('<View of="Dist" name="DistCell"><Node value={this} /></View>'))
     ).toThrow('DistCell views Dist, a union, whose values are drawn by their member');
   });
 
@@ -1852,11 +1881,11 @@ describe('nodes and references', () => {
     cur = after;
   }
 </script>
-{#snippet NameCell(this: Name)}<Node value={this} />{/snippet}
-{#snippet EndMark(this: End)}<Node>∅</Node>{/snippet}
-{#snippet Here(this: NodeRef)}<Pointed />{/snippet}`;
+<View of="Name" name="NameCell"><Node value={this} /></View>
+<View of="End" name="EndMark"><Node>∅</Node></View>
+<View of="NodeRef" name="Here"><Pointed /></View>`;
   const heap = `{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}{cur}</Node></Layout>`;
-  const box = `{#snippet NodeBox(this: ListNode)}<Node layout="row">{this.name}<Link to={this.next} /></Node>{/snippet}`;
+  const box = `<View of="ListNode" name="NodeBox"><Node layout="row">{this.name}<Link to={this.next} /></Node></View>`;
 
   it('draws every live node with all(…), a reference as a pointer, and the end through its view', () => {
     const prepared = prepareSvelteComponent(`${domain}${box}${heap}`);
@@ -1907,8 +1936,8 @@ describe('the view reaching the code only through labels', () => {
     }
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Highlight(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Position" name="Highlight"><Pointed /></View>
 {#snippet Cells()}
   <Node layout="row">
     {#each values as v}{v}{/each}
@@ -1960,8 +1989,8 @@ describe('the view reaching the code only through labels', () => {
       prepareSvelteComponent(
         swaps
           .replace(
-            '{#snippet Highlight(this: Position)}<Pointed />{/snippet}',
-            '{#snippet Highlight(this: Position)}<Pointed /><Link from={this} to={this} />{/snippet}'
+            '<View of="Position" name="Highlight"><Pointed /></View>',
+            '<View of="Position" name="Highlight"><Pointed /><Link from={this} to={this} /></View>'
           )
           .replace('{@render Cells()}', '{@render Cells()}\n{@insert.swap.to}')
       )
@@ -1998,7 +2027,7 @@ describe('<When of="@label">', () => {
   }
   @finish[const last = Position(0);]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Caption()}<Node>Looking</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
@@ -2092,8 +2121,8 @@ describe('<When of="@label">', () => {
     expect(() =>
       prepareSvelteComponent(
         caption('{values[0]}').replace(
-          '{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}',
-          '{#snippet IntCell(this: Int)}<Node value={this} /><When of="@pass"><Node>!</Node></When>{/snippet}'
+          '<View of="Int" name="IntCell"><Node value={this} /></View>',
+          '<View of="Int" name="IntCell"><Node value={this} /><When of="@pass"><Node>!</Node></When></View>'
         )
       )
     ).toThrow('<When of="@pass"> is in a view, which draws only its value');
@@ -2116,7 +2145,7 @@ describe('<OneOf> branches', () => {
     @note[const again = values[i];]
   }
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Looking()}<Node>Looking</Node>{/snippet}
 {#snippet Noting()}<Node>Noting</Node>{/snippet}
 {#snippet Board()}
@@ -2207,8 +2236,8 @@ describe('references read in the view', () => {
 
   it('refuse a reference to a node drawn as a value, its place in the heap', () => {
     const drawn = bfsReferences.replace(
-      '{#snippet Marked(this: VertexRef)}<Pointed />{/snippet}',
-      '{#snippet Marked(this: VertexRef)}<Pointed />{/snippet}\n{#snippet RefCard(this: VertexRef)}<Node value={this} />{/snippet}'
+      '<View of="VertexRef" name="Marked"><Pointed /></View>',
+      '<View of="VertexRef" name="Marked"><Pointed /></View>\n<View of="VertexRef" name="RefCard"><Node value={this} /></View>'
     );
     expect(drawn).toContain('RefCard');
     expect(() => prepareSvelteComponent(drawn)).toThrow(
@@ -2237,15 +2266,15 @@ describe('at(p), the element a position points at', () => {
   const n = Int(1);
 </script>
 <script algorithm></script>
-{#snippet NameText(this: Name)}<Node value={this} />{/snippet}
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet VertexCard(this: Vertex)}<Node layout="column">{this.name}</Node>{/snippet}
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Vertex" name="VertexCard"><Node layout="column">{this.name}</Node></View>
 ${markup}`;
 
   it('reads the element in a view of a position, and through a position in a part', () => {
     const { component } = prepareSvelteComponent(
       graph(
-        `{#snippet VertexName(this: VertexRef)}{at(this).name}{/snippet}
+        `<View of="VertexRef" name="VertexName">{at(this).name}</View>
 {#snippet Queued()}<Node>{#each queue as q}{q}{/each}</Node>{/snippet}
 {#snippet Ends()}<Node>{#each edges as edge}{at(edge.from).name}{at(edge.to)}{/each}</Node>{/snippet}
 <Layout name="Main"><Node>{@render Queued()}{@render Ends()}</Node></Layout>`
@@ -2302,7 +2331,7 @@ describe('step limits', () => {
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
 
 <Layout name="Main">
   <Node>{n}</Node>

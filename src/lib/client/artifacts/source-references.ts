@@ -353,14 +353,17 @@ function labelDeclarations(source: string): { full: string; from: number; to: nu
   return found;
 }
 
-/** A snippet's declaration, or a declaration in a script; for `.Pointed`, the snippet's marks. */
+/** A view's or snippet's declaration, or a declaration in a script; for `.Pointed`, its marks. */
 function kindRanges(source: string, segments: string[]): SourceRange[] {
   const part = segments.at(-1) === 'Pointed' || segments.at(-1) === 'Link' ? segments.at(-1) : '';
   const snippet = part ? segments.at(-2) : segments.at(-1);
   if (!snippet) return [];
   const declared = matches(
     source,
-    new RegExp(String.raw`\{#snippet\s+(${escape(snippet)})\s*\(`, 'gu'),
+    new RegExp(
+      String.raw`(?:\{#snippet\s+|<View\b[^>]*?\bname=")(${escape(snippet)})(?:\s*\(|")`,
+      'gu'
+    ),
     1
   );
   if (!declared.length) {
@@ -373,7 +376,9 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
   }
   if (!part) return declared;
   const body = source.slice(declared[0].to);
-  const end = body.indexOf('{/snippet}');
+  const end = body.indexOf(
+    source.slice(0, declared[0].from).endsWith('name="') ? '</View>' : '{/snippet}'
+  );
   const inside = end < 0 ? body : body.slice(0, end);
   return [
     ...declared,

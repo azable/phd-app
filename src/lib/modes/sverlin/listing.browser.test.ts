@@ -51,8 +51,8 @@ const insertion = `<script domain>
       A[j] = moved
       j = j - 1]]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Highlight(this: Position)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Position" name="Highlight"><Pointed /></View>
 {#snippet Board()}
   <Node layout="row">
     <Listing />
@@ -208,8 +208,8 @@ const search = `<script domain>
     else
       @left[$hi[hi] = mid - 1]]
 </script>
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet Arrow(this: Index)}<Pointed />{/snippet}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Index" name="Arrow"><Pointed /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Goal()}<Node>target {target}</Node>{/snippet}
 <Layout name="Main">

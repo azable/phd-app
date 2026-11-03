@@ -21,17 +21,17 @@
   }
 </script>
 
-{#snippet IntCell(this: Int)}<Node value={this} />{/snippet}
-{#snippet CompareMark(this: Position)}<Pointed />{/snippet}
-{#snippet SwapMark(this: Position)}<Pointed />{/snippet}
-{#snippet Ask(this: @pass.pair.compare)}
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Position" name="CompareMark"><Pointed /></View>
+<View of="Position" name="SwapMark"><Pointed /></View>
+<View of="@pass.pair.compare" name="Ask">
   <Node>compare {this.left} and {this.right}</Node>
-{/snippet}
+</View>
 {#snippet SwapNote()}<Node>Swap</Node>{/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
-{#snippet Cells(this: Values)}
+<View of="Values" name="Cells">
   <Node>{#each this as v}{v}{/each}</Node>
-{/snippet}
+</View>
 {#snippet Board()}
   <Node layout="column">
     {values}
