@@ -236,7 +236,7 @@ export function stateReadsOf(
     if (node.type === 'Identifier' && typeof node.name === 'string' && !member && !property)
       read.add(node.name);
     for (const [childKey, child] of Object.entries(node))
-      if (childKey !== 'parent' && childKey !== 'loc') walk(child, node, childKey);
+      if (childKey !== 'parent' && childKey !== 'loc') walk(child);
   };
   walk(expression);
   return [...read].filter((name) => stateNames.has(name) && !locals.has(name));
@@ -285,14 +285,16 @@ export function scopedReadsOf(
   scoped: ReadonlySet<string>
 ): { name: string; start: number }[] {
   const found: { name: string; start: number }[] = [];
-  const walk = (value: unknown, parent?: Record<string, unknown>, key?: string): void => {
+  // Only reads of the variable itself: not a name an {#each}, {@const} or function declares there.
+  const free = new Set(freeReads(markup).map(({ start }) => start));
+  const walk = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
-    if (Array.isArray(value)) return value.forEach((item) => walk(item, parent, key));
+    if (Array.isArray(value)) return value.forEach((item) => walk(item));
     const node = value as Record<string, unknown> & { type?: string; name?: string };
     if (node.type === 'RenderTag' || (node.type === 'SnippetBlock' && !isPart(node))) return;
     if (node.type === 'EachBlock') {
-      walk(node.body ?? node.children, node, 'body');
-      walk(node.fallback ?? node.else, node, 'fallback');
+      walk(node.body ?? node.children);
+      walk(node.fallback ?? node.else);
       return;
     }
     // A link's end read straight from a variable or label is drawn hidden where it is absent.
@@ -300,12 +302,10 @@ export function scopedReadsOf(
       const [only] = Array.isArray(node.value) ? (node.value as { expression?: unknown }[]) : [];
       if ((only?.expression as { type?: string } | undefined)?.type === 'Identifier') return;
     }
-    const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
-    const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
-    if (node.type === 'Identifier' && scoped.has(node.name ?? '') && !member && !property)
+    if (node.type === 'Identifier' && scoped.has(node.name ?? '') && free.has(node.start as number))
       found.push({ name: node.name ?? '', start: (node.start as number | undefined) ?? 0 });
     for (const [childKey, child] of Object.entries(node))
-      if (childKey !== 'parent' && childKey !== 'loc') walk(child, node, childKey);
+      if (childKey !== 'parent' && childKey !== 'loc') walk(child);
   };
   walk(markup);
   return found;
@@ -332,47 +332,82 @@ export function unknownReadOf(
 }
 
 /**
- * The identifiers markup reads, with where each is, less member and key names and the names it
- * declares: snippets' names and parameters, {#each} names, and {@const} names, wherever they are.
+ * The identifiers markup reads, with where each is, less member and key names and the names
+ * declared where they are read: snippet and {@const} names in their fragment, a snippet's
+ * parameters in its body, an {#each} block's names in its body, and a function's parameters and
+ * variables in the function.
  */
 function freeReads(
   markup: unknown,
   given: readonly string[] = []
 ): { name: string; start: number }[] {
-  const declared = new Set(given);
+  type Part = Record<string, unknown> & { type?: string; name?: string };
   const read: { name: string; start: number }[] = [];
-  const walk = (value: unknown, parent?: Record<string, unknown>, key?: string): void => {
+  const declaring = (scope: ReadonlySet<string>, patterns: unknown[]) => {
+    const inner = new Set(scope);
+    for (const pattern of patterns) collectPattern(pattern, inner);
+    return inner;
+  };
+  // The variables a function body declares, not counting those of functions inside it.
+  const declarators = (value: unknown, into: unknown[] = []): unknown[] => {
+    if (!value || typeof value !== 'object') return into;
+    if (Array.isArray(value)) value.forEach((item) => declarators(item, into));
+    else if ((value as Part).type === 'VariableDeclarator') into.push((value as Part).id);
+    else if (!/Function/.test((value as Part).type ?? ''))
+      for (const [key, child] of Object.entries(value))
+        if (key !== 'parent' && key !== 'loc' && key !== 'typeAnnotation') declarators(child, into);
+    return into;
+  };
+  const walk = (
+    value: unknown,
+    scope: ReadonlySet<string>,
+    parent?: Record<string, unknown>,
+    key?: string
+  ): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      for (const item of value) walk(item, parent, key);
+      const declared = (value as (Part | null)[]).flatMap((item) =>
+        item?.type === 'SnippetBlock'
+          ? [item.expression]
+          : item?.type === 'ConstTag'
+            ? [(item.expression as { left?: unknown } | undefined)?.left]
+            : []
+      );
+      const fragment = declared.length ? declaring(scope, declared) : scope;
+      for (const item of value) walk(item, fragment, parent, key);
       return;
     }
-    const node = value as Record<string, unknown> & { type?: string; name?: string };
+    const node = value as Part;
     if (node.type === 'Identifier' && typeof node.name === 'string') {
       const member = parent?.type === 'MemberExpression' && key === 'property' && !parent.computed;
       const property = parent?.type === 'Property' && key === 'key' && !parent.computed;
-      if (!member && !property)
+      if (!member && !property && !scope.has(node.name))
         read.push({ name: node.name, start: (node.start as number | undefined) ?? 0 });
     }
-    if (node.type === 'SnippetBlock') {
-      collectPattern(node.expression, declared);
-      for (const parameter of (node.parameters as unknown[] | undefined) ?? [])
-        collectPattern(parameter, declared);
-    }
+    if (node.type === 'SnippetBlock')
+      return walk(node.children, declaring(scope, (node.parameters as unknown[]) ?? []));
     if (node.type === 'EachBlock') {
-      collectPattern(node.context, declared);
-      if (typeof node.index === 'string') declared.add(node.index);
+      const body = declaring(scope, [node.context]);
+      if (typeof node.index === 'string') body.add(node.index);
+      walk(node.expression, scope);
+      walk(node.key, body);
+      walk(node.children, body);
+      return walk(node.else, scope);
     }
-    if (node.type === 'VariableDeclarator') collectPattern(node.id, declared);
-    // {@const x = …} parses as an assignment to x.
+    // {@const x = …} parses as an assignment to x, declared in its fragment.
     if (node.type === 'ConstTag')
-      collectPattern((node.expression as { left?: unknown } | undefined)?.left, declared);
+      return walk((node.expression as { right?: unknown } | undefined)?.right, scope);
+    if (/Function/.test(node.type ?? '')) {
+      const params = (node.params as unknown[] | undefined) ?? [];
+      return walk(node.body, declaring(scope, [node.id, ...params, ...declarators(node.body)]));
+    }
+    if (node.type === 'VariableDeclarator') return walk(node.init, scope);
     for (const [childKey, child] of Object.entries(node))
       if (childKey !== 'parent' && childKey !== 'loc' && childKey !== 'typeAnnotation')
-        walk(child, node, childKey);
+        walk(child, scope, node, childKey);
   };
-  walk(markup);
-  return read.filter(({ name }) => !declared.has(name));
+  walk(markup, new Set(given));
+  return read;
 }
 
 /**

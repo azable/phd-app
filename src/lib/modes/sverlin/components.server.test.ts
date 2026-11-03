@@ -1,7 +1,13 @@
 import { parse } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 
-import { pointerCalls, slotInsertions, withInsertions } from './components.server';
+import {
+  pointerCalls,
+  readsOf,
+  scopedReadsOf,
+  slotInsertions,
+  withInsertions
+} from './components.server';
 import { viewThisValues } from './label-values';
 
 /** Slots without the site each is stamped with, which one test checks on its own. */
@@ -212,6 +218,30 @@ describe('scope', () => {
         new Set(['e'])
       ).calls[0]
     ).toContain('reads: ["e"], ');
+  });
+
+  it('counts a name a block declares as declared only inside that block', () => {
+    const root = parse(
+      [
+        '{#each row as i}{i}{/each}{i}',
+        '{#if open}{@const n = i + 1}{n}{/if}{n}',
+        '{#snippet Part(k)}{k}{/snippet}{k}{@render Part(i)}',
+        '{#each row as v, j (v)}{j}{:else}{j}{/each}',
+        '{[1].map((x) => x + j)}<script lang="ts"></script>'
+      ].join(''),
+      { filename: 'Main.svelte' }
+    ).html;
+    expect([...readsOf(root as Parameters<typeof readsOf>[0])].sort()).toEqual(
+      ['i', 'j', 'k', 'n', 'open', 'row'].sort()
+    );
+  });
+
+  it('finds the variable read itself, not a loop name that shares its name', () => {
+    const root = parse(
+      '<Node>{#each values as v, i}<Node>{i}</Node>{v}{/each}</Node><Node>{i}</Node><script lang="ts"></script>',
+      { filename: 'Main.svelte' }
+    ).html;
+    expect(scopedReadsOf(root, new Set(['i']))).toEqual([{ name: 'i', start: 68 }]);
   });
 });
 

@@ -1024,6 +1024,14 @@ describe('typed view components', () => {
       /Cell reads i, an input or algorithm variable/
     ],
     [
+      'reading an algorithm variable past a loop of the same name',
+      () =>
+        component(
+          '{#snippet Cell(this: Int)}<Node>{#each [1] as i}{/each}{this} at {i}</Node>{/snippet}<Layout name="Main"><Node /></Layout>'
+        ),
+      /Cell reads i, an input or algorithm variable/
+    ],
+    [
       'types that are not domain types',
       () =>
         component(
