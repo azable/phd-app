@@ -135,6 +135,8 @@ import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 import { layOutOnServer, layoutFailureMessage } from './layout.server';
+import { boundDesign, boundDomain, type Binding } from './bound-props.server';
+import { bindableProps } from './library/node/bound';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
@@ -964,8 +966,19 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       nodeKinds,
       localKinds,
       listing,
-      listingAt
-    } = withNodeRefs(svelteSource, ast, source, found.roots, found.valueTypes, paths, linkedTypes);
+      listingAt,
+      bindings
+    } = withNodeRefs(
+      svelteSource,
+      ast,
+      source,
+      found.roots,
+      found.valueTypes,
+      paths,
+      linkedTypes,
+      new Map(found.components.map(({ name, type }) => [name, type])),
+      typing?.domain
+    );
     // Each layout is a kind, its frame's values the variables of its root's tag.
     const kindNames = new Set([...paths.keys(), ...paths.values()]);
     const layoutProblems = page.layouts.flatMap(({ name, root }) => {
@@ -1941,7 +1954,8 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           ),
           ...listingRegionSpace(regionLabels),
           ...placesSpace,
-          ...pauseSpace(labelNames, leaves)
+          ...pauseSpace(labelNames, leaves),
+          ...boundDesign(bindings).space
         },
         starter: {
           ...starterVariant(
@@ -1958,7 +1972,8 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           ),
           ...regionStarter,
           ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
-          ...starterPauses(labelNames, runs)
+          ...starterPauses(labelNames, runs),
+          ...boundDesign(bindings).starter
         }
       },
       ...(listings ? { listings } : {}),
@@ -2788,8 +2803,13 @@ function withNodeRefs(
   /** Every snippet's path, by its name (see snippetPaths). */
   paths: ReadonlyMap<string, string>,
   /** The types and operators with a view whose links its nodes leave to the node it is rendered in. */
-  linkedTypes: ReadonlySet<string> = new Set()
+  linkedTypes: ReadonlySet<string> = new Set(),
+  /** Each view's type, by its name, and the domain, for the props a view binds to its value. */
+  viewTypes: ReadonlyMap<string, string> = new Map(),
+  domain?: DomainRegistry
 ): {
+  /** The props views bind to their values (see bound-props.server.ts). */
+  bindings: Binding[];
   insertions: Insertion[];
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
@@ -2872,6 +2892,41 @@ function withNodeRefs(
     }
     localKinds.push({ name: name.data ?? '', start });
     return `${view}.${name.data}`;
+  };
+  // A look written as an expression of a view's value, as stroke={this.visited}, is bound to it:
+  // the prop is renamed __bound_stroke for the node, which maps the value to an option by the
+  // design (see library/node/bound.ts), and the values it can take go with it.
+  const bindings: Binding[] = [];
+  const boundProps: Insertion[] = [];
+  const domains = new Map<number, Record<string, unknown>>();
+  const bind = (tag: Tag, kind: string): Attribute[] => {
+    const attributes = tag.attributes ?? [];
+    const thisType = viewTypes.get(kind.split('.')[0]);
+    if (tag.name !== 'Node' || thisType === undefined) return attributes;
+    return attributes.filter((attribute) => {
+      const [part] = Array.isArray(attribute.value) ? attribute.value : [];
+      const expression = part?.type === 'MustacheTag' ? part.expression : undefined;
+      if (!attribute.name || !bindableProps.has(attribute.name) || !expression) return true;
+      const prop = attribute.name;
+      const start = attribute.start ?? tag.start ?? 0;
+      const written = svelteSource.slice(expression.start ?? 0, expression.end ?? 0);
+      const found = boundDomain(prop, expression, written, thisType, domain);
+      if ('problem' in found) {
+        reject(found.problem, 'bound_prop', start);
+        return false;
+      }
+      const other = bindings.find((binding) => binding.kind === kind && binding.prop === prop);
+      if (other && JSON.stringify(other.domain) !== JSON.stringify(found))
+        reject(
+          `${kind} binds ${prop} to values of two kinds: one kind of node takes one option per value, so give the other node a kind of its own, as kind="Visited".`,
+          'bound_prop',
+          start
+        );
+      else if (!other) bindings.push({ kind, prop, domain: found });
+      boundProps.push({ at: start, text: '__bound_' });
+      domains.set(tag.start ?? 0, { ...domains.get(tag.start ?? 0), [prop]: found });
+      return false;
+    });
   };
   // Each <Link> belongs to the nearest <Node> around it, which then lays out with links. Text
   // belongs inside a node, where it can be selected; a view may also write it beside its nodes.
@@ -2957,6 +3012,7 @@ function withNodeRefs(
       return;
     }
     if (library && tag.start !== undefined) {
+      const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
       const reserved = tag.attributes?.find(({ name }) => name?.startsWith('__'));
       if (reserved)
         problems.push(
@@ -2968,13 +3024,12 @@ function withNodeRefs(
       else
         checkProps(
           tag.name as 'Node' | 'Link' | 'Pointed',
-          tag.attributes ?? [],
+          bind(tag, kind),
           tag.start,
           source,
           problems,
           view
         );
-      const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
       const entry = { start: tag.start, name: tag.name as string, links: false, view: kind, tag };
       tags.push(entry);
       // A link with no from starts at the element its view draws, laid out by the free layout
@@ -3128,11 +3183,22 @@ function withNodeRefs(
     const root = roots.get(start);
     const type = valueTypes.get(start);
     const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
+    const bound = domains.get(start);
     return {
       at: start + name.length + 1,
-      text: ` __view="${view}"${ref}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: ` __view="${view}"${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
+  // A kind arranging no children has no gap, align, or justify to bind.
+  for (const { kind, prop } of bindings) {
+    const role = kinds.get(kind);
+    if (role && !roleProps[role].includes(prop as DesignProp))
+      reject(
+        `${kind} has no ${prop} to bind: it is a look only of a node arranging children, with a layout.`,
+        'bound_prop',
+        tags.find((entry) => entry.view === kind)?.start
+      );
+  }
   for (const start of listings) {
     const { line, column } = sourcePosition(source, start);
     insertions.push({ at: start + 'Listing'.length + 1, text: ` __ref="${line}:${column + 1}"` });
@@ -3140,7 +3206,8 @@ function withNodeRefs(
   return {
     listing: listings.length > 0,
     ...(listings.length ? { listingAt: listings[0] } : {}),
-    insertions: [...insertions, ...kindProps],
+    insertions: [...insertions, ...kindProps, ...boundProps],
+    bindings,
     localKinds,
     problems,
     kinds: [...kinds].map(([key, role]) => ({ key, role })),

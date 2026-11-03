@@ -781,6 +781,8 @@ The design space is every variable of a component's look, found in its markup:
   `<Link>`, as `Graph.Link`. A variable is its kind and prop, as
   `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
+- Each prop a view binds to its value, as `VertexCard.fill@true` or
+  `LevelCell.textSize@from` (see Props bound to a view's value).
 
 A view's or snippet's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
@@ -886,6 +888,40 @@ blindness too: differ in lightness, three shades or more (`amber-100` against
 `red-300`, not `red-100`), or as blue against orange or amber, never as red
 against green or another hue alone. The starter's look is safe, neutral with one
 amber accent.
+
+### Props bound to a view's value
+
+Inside a view, and only there, a node's look may follow the view's value: a prop
+written as an expression of `this`, its fields, and comparisons and arithmetic
+of them, as `<Node fill={this.seen}>` or `<Node textSize={this.level}>`. Any
+prop above with options of its own may be bound but `shown`, which `<When>`
+decides. The expression's values, worked out from the view's type before the
+algorithm runs, must fit the prop's options: a colour tells apart its colours,
+`opacity` four values, `weight` two. A `Level` of
+`type('integer', { min: 0, max: 3 })` fits `opacity`, an `Int` from 0 to 99 does
+not: group it in the expression, as `opacity={this > 50}` or
+`textSize={Math.floor(this / 25)}`. A constant look stays the design's, so a
+bound prop reads `this`.
+
+- `true` and `false`, and words of an enumeration, are unordered: each value has
+  a variable of its own over the prop's options, as `VertexCard.fill@true` and
+  `VertexCard.fill@false`, starting with false neutral and the rest in distinct
+  hues.
+- Numbers run in order, and go only onto props whose options run in order
+  (`textSize`, `strokeWidth`, `opacity`, `padding`, `radius`, `minSize`,
+  `weight`, `gap`), taking consecutive options from `@from`, as
+  `LevelCell.textSize@from`, or onto a colour, taking the shades of `@hue`,
+  lightest first; `@order` runs them `up` or `down`.
+- One kind binds a prop to one expression's values: two nodes of a kind binding
+  it differently need kinds of their own (`kind="Visited"`). A bound prop that
+  sizes a box keeps the box at its largest over every step, as every box does.
+
+```svelte
+<View of="Vertex" name="VertexCard">
+  <Node layout="column" fill={this.seen}>{this.name}</Node>
+</View>
+<View of="Level" name="LevelCell"><Node value={this} textSize={this} /></View>
+```
 
 ### Places
 
@@ -1173,6 +1209,8 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `kind`: a kind of its own within its snippet or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
   root node is its frame and takes none.
+- A look, inside a view, as an expression of its value, as `fill={this.seen}`
+  (see Props bound to a view's value); anywhere else a look is its kind's.
 
 ## Grid
 

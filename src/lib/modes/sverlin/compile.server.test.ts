@@ -2397,6 +2397,71 @@ describe('kinds named by nodes', () => {
   });
 });
 
+describe('props bound to a view’s value', () => {
+  const domain =
+    "<script domain>const Flag = type('boolean'); const Level = type('integer', { min: 0, max: 3 }); const Wide = type('integer', { min: 0, max: 99 }); const Card = record({ seen: Flag, level: Level });</script>";
+  const algorithm =
+    '<script algorithm>@run[let card = Card({ seen: false, level: 1 }); let wide = Wide(5);]</script>';
+  const component = (views: string, page = '<Node>{card}</Node>') =>
+    prepareSvelteComponent(
+      `${domain}${algorithm}<View of="Flag" name="FlagText"><Node value={this} /></View><View of="Level" name="LevelText"><Node value={this} /></View><View of="Wide" name="WideText"><Node value={this} /></View>${views}<Layout name="Main">${page}</Layout>`
+    );
+
+  it('gives each value of an unordered domain its own option, false the plainest', () => {
+    const { design } = component(
+      '<View of="Card" name="CardBox"><Node fill={this.seen}>{this.level}</Node></View>'
+    );
+    expect(design.space['CardBox.fill@true']).toContain('blue-200');
+    expect(design.starter).toMatchObject({
+      'CardBox.fill@false': 'neutral-200',
+      'CardBox.fill@true': 'blue-200'
+    });
+  });
+
+  it('maps an ordered domain onto an ordered prop in order, from a first option', () => {
+    const { design } = component(
+      '<View of="Card" name="CardBox"><Node textSize={this.level}>{this.level}</Node></View>'
+    );
+    expect(design.space['CardBox.textSize@from']).toEqual([12, 14, 16, 18, 20, 24]);
+    expect(design.space['CardBox.textSize@order']).toEqual(['up', 'down']);
+    expect(design.starter).toMatchObject({
+      'CardBox.textSize@from': 16,
+      'CardBox.textSize@order': 'up'
+    });
+  });
+
+  it.each([
+    [
+      'a constant look',
+      '<View of="Card" name="CardBox"><Node fill={1}>{this.level}</Node></View>',
+      /reads nothing of the view's value/
+    ],
+    [
+      'more values than options',
+      '<View of="Wide" name="WideBox"><Node opacity={this}>w</Node></View>',
+      /can take 100 values, and opacity tells apart 4/
+    ],
+    [
+      'a number on a prop without order',
+      '<View of="Card" name="CardBox"><Node font={this.level}>{this.level}</Node></View>',
+      /a number, whose values run in order, and font's options do not/
+    ],
+    [
+      'values unknown before the run',
+      '<View of="Card" name="CardBox"><Node opacity={this.seen ? Math.random() : 1}>{this.level}</Node></View>',
+      /cannot be known before the algorithm runs/
+    ]
+  ])('refuses %s', (_, views, message) => {
+    expect(() => component(views)).toThrow(message);
+  });
+
+  it('keeps a look outside a view the design’s', () => {
+    expect(() => component('', '<Node><Node fill={card.seen}>x</Node>{card}</Node>')).toThrow(
+      /fill is a look, which the design gives every kind of node/
+    );
+  });
+});
+
 describe('grids', () => {
   const domain = '<script domain>const Int = type([1, 3]);</script>';
   const algorithm = '<script algorithm>@run[let i = Int(1);]</script>';

@@ -44,7 +44,12 @@ a box that holds a value or groups a part: give one only to the kinds where it
 does, never every kind at once, and leave text such as titles, captions and
 labels unboxed. Where views of one type say different things, as pointer views
 captioned i and j, they are not looks: choose each place’s view by what it says,
-as pointers.Position@j for the one captioned j, and never draw them at random.
+as pointers.Position@j for the one captioned j, and never draw them at random. A
+prop a view binds to its value gives each value its look, as
+VertexCard.fill@true and VertexCard.fill@false, or for numbers in order
+LevelCell.textSize@from and LevelCell.textSize@order: keep its values told
+apart, never two of them one option, and give each a look that says what it
+means, as a seen vertex standing out from an unseen one.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go, except labels whose runs all draw nothing new, which start

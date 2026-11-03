@@ -68,6 +68,7 @@
     placedKind,
     strokeStyleCss
   } from './design';
+  import { boundLook, type BoundDomain } from './bound';
   import { fontClass } from '../fonts';
   import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
@@ -93,7 +94,9 @@
     __itemOf,
     __itemAt,
     __items,
-    __places
+    __places,
+    __domains,
+    ...bound
   }: {
     /** A primitive to display, when the node has no children. */
     value?: Primitive;
@@ -135,6 +138,12 @@
     __items?: ArrayLike<unknown>;
     /** Internal: the places of the root's pointers at the element this node draws again, by their names (see Pointed). */
     __places?: readonly string[];
+    /**
+     * Internal: the values a view binds props to, as __bound_fill for fill={this.state}, set by the
+     * compiler, with the values each can take (see bound.ts).
+     */
+    __domains?: Readonly<Record<string, BoundDomain>>;
+    [bound: `__bound_${string}`]: unknown;
   } = $props();
 
   const types = typeContext();
@@ -145,9 +154,13 @@
   const placed = untrack(() => placedKind(placeContext(), __view));
   const look = (prop: string): unknown => {
     const over = __over && (__over.active || !paintProps.has(prop)) ? __over : undefined;
-    return over
-      ? lookUp(design, over.kind, over.placed, prop)
-      : lookUp(design, __view, placed, prop);
+    if (over) return lookUp(design, over.kind, over.placed, prop);
+    // A prop the view binds takes the option its value maps to, where the design gives one.
+    const domain = __domains?.[prop];
+    const mapped = domain
+      ? boundLook(design, __view, prop, bound[`__bound_${prop}`], domain)
+      : undefined;
+    return mapped ?? lookUp(design, __view, placed, prop);
   };
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();

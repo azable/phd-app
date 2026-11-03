@@ -453,13 +453,14 @@ export function buildVariant(
 }
 
 /**
- * The prop a variable sets, as fill for Compared.Pointed.fill, views for a choice of views
- * (views.Int, pointers.Index) or of layouts, and the variable itself for the pauses.
+ * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card.fill@true,
+ * views for a choice of views (views.Int, pointers.Index) or of layouts, and the variable itself for
+ * the pauses.
  */
 function propOf(key: string): string {
   if (key.startsWith('views.') || key.startsWith('pointers.') || key === 'layout') return 'views';
   if (key.startsWith('pause@')) return key;
-  return key.slice(key.lastIndexOf('.') + 1);
+  return key.slice(key.lastIndexOf('.') + 1).replace(/@.*/u, '');
 }
 
 /**
@@ -524,6 +525,8 @@ function drawOne(
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
   if (prop.startsWith('pause@') || kept.has(prop) || framedKinds(space).has(kindOf(key)))
     return value;
+  // A bound prop's hue, or the way its options run, is drawn afresh.
+  if (key.endsWith('@hue') || key.endsWith('@order')) return pick(options);
   if (colourProps.has(prop)) {
     const parts = typeof value === 'string' ? colourParts(value) : undefined;
     if (!parts) return value;
