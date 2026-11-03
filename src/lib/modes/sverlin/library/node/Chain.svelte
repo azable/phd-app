@@ -1,5 +1,5 @@
 <!--
-  An {#if when(…)} chain (see components.server.ts): one box drawing the branch the step is
+  A <OneOf>, or a lone <When>, as rewritten to an {#if when(…)} chain (see components.server.ts): one box drawing the branch the step is
   inside, a node as a listing is, so it keeps the largest size it reaches at any step (see
   LayoutMemory) and taking turns moves nothing around it. `ref` is the chain's line:column, the id
   it claims.

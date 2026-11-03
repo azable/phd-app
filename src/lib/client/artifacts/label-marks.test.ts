@@ -51,7 +51,7 @@ describe('label marks', () => {
   }
 </script>
 <script lang="sverlin" listing="c">@merge[merge(a);]</script>
-{#if when(@sort.merge)}<Node>{@render Int(@sort.merge.take)}</Node>{/if}`;
+<When of="@sort.merge"><Node>{@render Int(@sort.merge.take)}</Node></When>`;
   const regions = labelRegions(hovered);
   const slices = (ranges: { from: number; to: number }[]) =>
     ranges.map(({ from, to }) => hovered.slice(from, to));
@@ -68,7 +68,7 @@ describe('label marks', () => {
 
   it('name the label under a position, where it opens or where it is read by its full name', () => {
     expect(labelAt(hovered, regions, hovered.indexOf('@take') + 2)).toBe('sort.merge.take');
-    expect(labelAt(hovered, regions, hovered.indexOf('@sort.merge)') + 3)).toBe('sort.merge');
+    expect(labelAt(hovered, regions, hovered.indexOf('@sort.merge"') + 3)).toBe('sort.merge');
     expect(labelAt(hovered, regions, hovered.indexOf('@render') + 2)).toBeUndefined();
     expect(labelAt(hovered, regions, hovered.indexOf('from = a'))).toBeUndefined();
   });

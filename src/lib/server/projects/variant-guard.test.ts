@@ -36,8 +36,8 @@ describe('pictureTree', () => {
   it('measures the picture by the layout a variant shows, never hiding a layout’s own nodes', () => {
     const laid = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
 {#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
-{#layout Stacked}<Node>{@render Title()}{@render Board()}</Node>{/layout}
-{#layout Bare}<Node layout="row"><Node>{@render Board()}</Node></Node>{/layout}`);
+<Layout name="Stacked"><Node>{@render Title()}{@render Board()}</Node></Layout>
+<Layout name="Bare"><Node layout="row"><Node>{@render Board()}</Node></Node></Layout>`);
     expect(laid.layouts.get('Stacked')).toEqual(['Title', 'Board']);
     expect(laid.layouts.get('Bare')).toEqual(['Board']);
     // Hiding the title hides a quarter of the stacked page, and nothing of the bare one.
@@ -75,7 +75,7 @@ describe('allowedComparisonSide', () => {
   const page = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
 {#snippet Note()}<Node>n</Node>{/snippet}
 {#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
-{#layout Stacked}<Node>{@render Title()}{@render Board()}</Node>{/layout}`);
+<Layout name="Stacked"><Node>{@render Title()}{@render Board()}</Node></Layout>`);
   const guard = { tree: page, base: { layout: 'Stacked' }, settled: {} };
 
   it('lets the assistant compare a top-level title with and without, which a chooser may not hide', () => {

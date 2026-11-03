@@ -139,11 +139,11 @@ it.skipIf(!enabled)(
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
   </Node>
-{/layout}`;
+</Layout>`;
     const { steps, errors } = await linksAtEachStep(pairs);
     for (const step of steps)
       expect(step).toEqual([

@@ -16,7 +16,7 @@ const source = `<script lang="sverlin" domain>
   const values = Values([3, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @pass{
+  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @pass{
     @pick[const v = values[i];]
     @put[values[i] = v;]
   }
@@ -27,14 +27,14 @@ const source = `<script lang="sverlin" domain>
 {#snippet Both()}<Node>{@render Int(v)} and {@render Int(values[0])}</Node>{/snippet}
 {#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Picked()}
     {@render Both()}
     {@render Cells()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 const prepared = prepareSvelteComponent(source);
 const siteIn = (text: string) => (written: string) => siteOf(text, text.indexOf(written));
@@ -144,7 +144,7 @@ describe('left out', () => {
     // A part reads found itself: allowed, as found is out of scope only before its declaration,
     // and its node hides where found is absent, as at step 0, the input as given.
     const reading = source
-      .replace('for (let i', '@start[let found = Flag(false);]\n  for (let i')
+      .replace('for (@setup[let i', '@start[let found = Flag(false);]\n  for (@setup[let i')
       .replace(
         '{#snippet Title()}<Node>Pass</Node>{/snippet}',
         '{#snippet Status()}<Node>{#if found}found{:else}looking{/if}</Node>{/snippet}'

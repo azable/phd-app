@@ -42,13 +42,13 @@ it.skipIf(!enabled)(
 {#snippet Second(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
     {@render Index(i)}
     {@render Index(j)}
   </Node>
-{/layout}`;
+</Layout>`;
     // Both are drawn by First unless a variant gives a place its own view, as j's here.
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'pointers.Index@j': 'Second' }
@@ -104,13 +104,13 @@ it.skipIf(!enabled)(
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet At()}<Node>at {@render Index(i)}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
     {@render At()}
     {@render Index(i)}
   </Node>
-{/layout}`;
+</Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
@@ -162,13 +162,13 @@ it.skipIf(!enabled)(
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
     {@render Index(i)}
     {@render Index(j)}
   </Node>
-{/layout}`;
+</Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
     });
@@ -218,12 +218,12 @@ it.skipIf(!enabled)(
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
     {@render Key()}
   </Node>
-{/layout}`;
+</Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'views.Int@key': 'IntTally' }
     });

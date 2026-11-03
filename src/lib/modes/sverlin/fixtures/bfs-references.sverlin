@@ -4,6 +4,10 @@
   const Vertex = record({ name: Name, seen: Flag, out: Out });
   const VertexRef = ref(Vertex);
   const Out = collection(VertexRef);
+  const Slot = index(Out);
+  const Count = unop((n: Out) => Slot(n.length));
+  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
+  const Step = unop((p: Slot) => Slot(p + 1));
   const Queue = collection(VertexRef);
 
   const Waiting = unop((q: Queue) => Flag(q.length > 0));
@@ -21,12 +25,14 @@
 </script>
 
 <script lang="sverlin">
-  let queue = Queue([a]);
-  while (Waiting(queue)) @visit{
+  @init[let queue = Queue([a]);]
+  while (@more[Waiting(queue)]) @visit{
     @take[const current = queue[0];
-    queue = Rest(queue);]
-    for (const w of current.out) @look{
-      if (Not(@next[w].seen)) @add{
+    queue = Rest(queue);
+    const around = current.out;]
+    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+      const w = around[slot];
+      if (@check[Not(@next[w].seen)]) @add{
         w.seen = true;
         queue = Append(queue, w);
       }
@@ -47,11 +53,11 @@
 
 {#snippet Line()}<Node>queue: {#each queue as q}{@render Name(q.name)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Graph()}
     {@render Line()}
     {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.next)}
+    {@render VertexRef(@visit.look.check.next)}
   </Node>
-{/layout}
+</Layout>

@@ -65,7 +65,7 @@ const insertion = `<script lang="sverlin" domain>
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Board()}
     {@render Position(@insert.compare.left)}
@@ -73,7 +73,7 @@ const insertion = `<script lang="sverlin" domain>
     {@render Position(@insert.swap.from)}
     {@render Position(@insert.swap.to)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'paints each region as its mark, in pills that move no text',
@@ -223,7 +223,7 @@ const search = `<script lang="sverlin" domain>
 {#snippet Arrow(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
-{#layout Main}
+<Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
@@ -231,7 +231,7 @@ const search = `<script lang="sverlin" domain>
     {@render Index(hi)}
     {@render Index(mid)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'lights a place in the listing and the picture alike, hovering one outlining the others',

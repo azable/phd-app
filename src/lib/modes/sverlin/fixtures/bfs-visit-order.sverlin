@@ -5,10 +5,15 @@
   const Vertices = collection(Vertex);
   const VertexRef = index(Vertices);
   const Neighbours = collection(VertexRef);
+  const Slot = index(Neighbours);
   const Adjacency = collection(Neighbours);
   const Queue = collection(VertexRef);
   const VisitOrder = collection(VertexRef);
   const Flag = type('boolean');
+
+  const Count = unop((n: Neighbours) => Slot(n.length));
+  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
+  const Step = unop((p: Slot) => Slot(p + 1));
 
   const Waiting = unop((q: Queue) => Flag(q.length > 0));
   const NotSeen = unop((seen: Seen) => Flag(!seen));
@@ -37,14 +42,16 @@
 </script>
 
 <script lang="sverlin">
-  let queue = Queue([0]);
-  let order = VisitOrder([]);
-  while (Waiting(queue)) @visit{
+  @init[let queue = Queue([0]);
+  let order = VisitOrder([]);]
+  while (@more[Waiting(queue)]) @visit{
     @take[const current = queue[0];
     queue = Rest(queue);
-    order = RecordVisit(order, current);]
-    for (const neighbour of adjacency[current]) @look{
-      if (NotSeen(vertices[@next[neighbour]].seen)) @add{
+    order = RecordVisit(order, current);
+    const around = adjacency[current];]
+    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+      const neighbour = around[slot];
+      if (@check[NotSeen(vertices[@next[neighbour]].seen)]) @add{
         vertices[neighbour].seen = true;
         queue = Enqueue(queue, neighbour);
       }
@@ -54,14 +61,17 @@
 
 <script lang="sverlin" listing="textbook">
 BFS(start)
-  queue = [start]
-  while queue is not empty
+  @init[queue = [start]]
+  while @more[queue is not empty]
     @visit[@take[current = remove front of queue
     record current as visited]
-    for each neighbour of current
-      @look[if @next[neighbour has not been seen]
+    @first[slot = the first neighbour of current]
+    while @another[slot is a neighbour]
+      @look[neighbour = neighbour slot
+      if @check[@next[neighbour] has not been seen]
         @add[mark neighbour as seen
-        add neighbour to the queue]]]
+        add neighbour to the queue]]
+      @step[slot = the next neighbour]]
 </script>
 
 {#snippet NameText(value: Name)}<Node value={value} />{/snippet}
@@ -123,7 +133,7 @@ BFS(start)
 {/snippet}
 
 {#snippet NeighbourInfo()}
-  <Node>checking neighbour {@render VertexRef(@visit.look.next)}</Node>
+  <Node>checking neighbour {@render VertexRef(@visit.look.check.next)}</Node>
 {/snippet}
 
 {#snippet StatePanel()}
@@ -145,11 +155,11 @@ BFS(start)
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Lesson()}
     {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.next)}
+    {@render VertexRef(@visit.look.check.next)}
   </Node>
-{/layout}
+</Layout>

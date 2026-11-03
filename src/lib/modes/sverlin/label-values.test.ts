@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
-import { markLabels } from './label-values';
+import { markLabels, whenTags } from './label-values';
 
 const domain = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -23,10 +23,10 @@ const domain = `<script lang="sverlin" domain>
 
 const insertion = `
 <script lang="sverlin">
-  for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (@setup[let i = Index(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
     const key = @key[values[i]];
     let j = i;
-    while (Before(Index(0), j) && Greater(values[Prev(j)], key)) {
+    while (@guard[Before(Index(0), j) && Greater(values[Prev(j)], key)]) {
       values[j] = values[Prev(j)];
       j = Prev(j);
     }
@@ -39,7 +39,7 @@ const insertion = `
 /** A source of the algorithm and its parts, its one layout holding `view`. */
 const prepare = (view: string, algorithm = insertion, parts = '') =>
   prepareSvelteComponent(
-    `${domain}${algorithm}\n${parts}\n{#layout Main}<Node>${view}</Node>{/layout}`
+    `${domain}${algorithm}\n${parts}\n<Layout name="Main"><Node>${view}</Node></Layout>`
   );
 
 describe('labels read in the view', () => {
@@ -65,7 +65,7 @@ describe('labels read in the view', () => {
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@render Int(@insert.key)}</Node>{/snippet}\n{#layout Main}<Node>{@render Inserting()}</Node>{/layout}`
+        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@render Int(@insert.key)}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Inserting()}</Node></Layout>`
       )
     ).resolves.toBeDefined();
   });
@@ -96,7 +96,7 @@ describe('labels read in the view', () => {
       '@key is not a full name; write its full name, @insert.key.'
     );
     expect(() => prepare('{@render Int(@nothing)}')).toThrow(
-      '@nothing names no label of the algorithm; its labels are @insert, @insert.key.'
+      '@nothing names no label of the algorithm; its labels are @setup, @guard, @onward, @insert, @insert.key, @insert.guard.'
     );
     const twice = `
 <script lang="sverlin">
@@ -113,7 +113,7 @@ describe('labels read in the view', () => {
   it('take a label on an expression, and are read only in the root and its parts', () => {
     const statement = `
 <script lang="sverlin">
-  for (let i = Index(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (@setup[let i = Index(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
     @key[const key = values[i];]
     @put[values[i] = key;]
   }
@@ -134,8 +134,9 @@ describe('labels read in the view', () => {
   it('narrow an operator’s render to a label, and give the lists of what has happened', () => {
     const search = `
 <script lang="sverlin">
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @check{
-    if (Equal(values[@at[i]], target)) break;
+  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @check{
+    const seen = values[@at[i]];
+    if (@cond[Equal(seen, target)]) break;
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
@@ -157,7 +158,7 @@ describe('labels read in the view', () => {
     );
     // What has happened is a label's too: with none, it names the label to write.
     expect(() => prepare('{#each applied(Equal) as e}{/each}', search)).toThrow(
-      "applied(Equal) draws no label's applications: write applied(Equal, @check), a label around an application of Equal."
+      "applied(Equal) draws no label's applications: write applied(Equal, @check.cond), a label around an application of Equal."
     );
   });
 });
@@ -177,5 +178,33 @@ describe('a for … of variable', () => {
     ).steps;
     const { identities } = steps[1];
     expect(identities?.refs.v).toBe(identities?.ids['digits[1]']);
+  });
+});
+
+describe('<When> and <OneOf>', () => {
+  it('become {#if when(…)} chains no longer than written, every line in place', () => {
+    const one = '<When of="@swap"><Node>x</Node></When>';
+    expect(whenTags(one).source.trimEnd()).toBe('{#if when(@swap)}<Node>x</Node>{/if}');
+    const two =
+      '<OneOf>\n  <When of="@a"><Node>a</Node></When>\n  <When of="end"><Node>b</Node></When>\n</OneOf>';
+    const { source, problems } = whenTags(two);
+    expect(problems).toEqual([]);
+    expect(source).toHaveLength(two.length);
+    expect(source.split('\n')).toHaveLength(two.split('\n').length);
+    expect(source.replace(/\s+/gu, ' ').trim()).toBe(
+      '{#if when(@a)}<Node>a</Node>{:else if when(end)} <Node>b</Node>{/if}'
+    );
+  });
+
+  it('refuse when(), anything between branches, and unpaired tags', () => {
+    const problem = (text: string) => whenTags(text).problems.map(({ message }) => message);
+    expect(problem('{#if when(@a)}x{/if}')[0]).toContain('when() is not written in a view');
+    expect(
+      problem('<OneOf><When of="@a">a</When><Node>x</Node><When of="@b">b</When></OneOf>')[0]
+    ).toContain('A <OneOf> holds only its <When> branches');
+    expect(problem('<When of="@a">x')[0]).toBe(
+      'The <When> is never closed: close it with </When>.'
+    );
+    expect(problem('<When of="a">x</When>')[0]).toContain('<When of="a"> is no <When>');
   });
 });

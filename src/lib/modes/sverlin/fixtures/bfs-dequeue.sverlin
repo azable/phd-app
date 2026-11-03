@@ -5,9 +5,14 @@
   const Vertices = collection(Vertex);
   const VertexRef = index(Vertices);
   const Neighbours = collection(VertexRef);
+  const Slot = index(Neighbours);
   const Adjacency = collection(Neighbours);
   const Queue = collection(VertexRef);
   const Flag = type('boolean');
+
+  const Count = unop((n: Neighbours) => Slot(n.length));
+  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
+  const Step = unop((p: Slot) => Slot(p + 1));
 
   const Waiting = unop((q: Queue) => Flag(q.length > 0));
   const Unseen = unop((seen: Seen) => Flag(!seen));
@@ -28,11 +33,13 @@
 </script>
 
 <script lang="sverlin">
-  let queue = Queue([start]);
+  @init[let queue = Queue([start]);]
   while (@more[Waiting(queue)]) @visit{
-    @take[const current = queue[0];]
+    @take[const current = queue[0];
+    const around = neighbours[current];]
     @remove[queue = Rest(queue);]
-    for (const w of neighbours[current]) @look{
+    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+      const w = around[slot];
       if (@unseen[Unseen(vertices[w].seen)]) @add{
         vertices[w].seen = true;
         queue = Append(queue, w);
@@ -90,10 +97,10 @@
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Board()}
     {@render Taken()}
   </Node>
-{/layout}
+</Layout>

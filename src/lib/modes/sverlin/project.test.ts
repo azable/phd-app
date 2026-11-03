@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>n</Node>{/snippet}{#layout Main}<Node>{@render Shown()}{@render Int(n)}</Node>{/layout}';
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Shown()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render Shown()}{@render Int(n)}</Node></Layout>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -84,7 +84,7 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
     expect(left.steps).toEqual(right.steps);
-    expect(left.steps).toHaveLength(6);
+    expect(left.steps).toHaveLength(19);
     // The first is the starter; the second is randomised from it.
     expect(left.variant?.['views.Int']).toBe('IntCell');
     expect(left.origins?.['IntCell.fill']).toBe('starter');

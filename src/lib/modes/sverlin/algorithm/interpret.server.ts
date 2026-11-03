@@ -283,7 +283,9 @@ export type Pacing = {
  * problems with them, among them two labels on the same code, which could never pause or draw apart.
  */
 export function stepLabels(
-  parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'code'>
+  parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'code'>,
+  /** Whether no code may run outside a label, as in an authored source (see readLabels). */
+  complete = false
 ): {
   units: FrameUnits;
   unitOf: ReadonlyMap<Label, Unit>;
@@ -291,7 +293,7 @@ export function stepLabels(
   problems: LabelProblem[];
 } {
   const { root, markers, code } = parsed;
-  const read = readLabels(root, markers, code);
+  const read = readLabels(root, markers, code, complete);
   const problems = [...read.problems];
   const nodes = new Set<AnyNode>();
   const ranges = new Map<AnyNode, Row[]>();
@@ -336,7 +338,9 @@ export function traceAlgorithm(
   domain: DomainRegistry = noDomain,
   pacing: Pacing = {},
   /** What views draw beyond the state: the labels whose values are kept, by full name. */
-  keep: { labels?: ReadonlySet<string> } = {}
+  keep: { labels?: ReadonlySet<string> } = {},
+  /** Whether no code may run outside a label, as in an authored source (see readLabels). */
+  complete = false
 ): {
   steps: MasterStep[];
   /** Step 0: the input as given, before any of the algorithm runs (see run). */
@@ -347,7 +351,7 @@ export function traceAlgorithm(
 } {
   const parsed = parseBlock(body, 'algorithm', domain);
   const { root, offset, code } = parsed;
-  const labelled = stepLabels(parsed);
+  const labelled = stepLabels(parsed, complete);
   const [problem] = labelled.problems;
   if (problem) throw new AlgorithmError(problem.message, problem.at);
   // The values each labelled expression gives are kept, for views drawing them (labels as values).
@@ -1369,10 +1373,15 @@ class Interpreter {
     }
   }
 
-  /** A condition, logged with whether it held. */
+  /** A condition, logged with whether it held, inside its label's run where it has one. */
   #test(node: Expression, scope: Scope): boolean {
-    const held = this.#truthy(this.#expression(node, scope));
+    const labelled = this.#units.nodes.has(node);
+    if (labelled) this.#begin(node, scope);
+    const value = this.#evaluate(node, scope);
+    this.#capture(node, value);
+    const held = this.#truthy(value);
     this.#emit('test', node, { held });
+    if (labelled) this.#end(node, scope);
     return held;
   }
 

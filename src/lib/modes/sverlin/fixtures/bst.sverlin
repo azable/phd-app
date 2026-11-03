@@ -33,17 +33,17 @@
 <script lang="sverlin">
   function insert(node, value) @insert{
     if (@direction[Less(value, node.key)]) {
-      if (IsNode(node.left)) {
+      if (@leftChild[IsNode(node.left)]) {
         @descend[insert(node.left, value);]
       } else @attach[node.left = NodeRef(NewLeaf(value, Next(Name('end'))));]
     } else {
-      if (IsNode(node.right)) {
+      if (@rightChild[IsNode(node.right)]) {
         @descend[insert(node.right, value);]
       } else @attach[node.right = NodeRef(NewLeaf(value, Next(Name('end'))));]
     }
   }
 
-  for (let i = Index(1); Before(i, Length(values)); i = Advance(i)) @sequence{
+  for (@first[let i = Index(1)]; @more[Before(i, Length(values))]; @advance[i = Advance(i)]) @sequence{
     const value = @pick[values[i]];
     insert(root, value);
   }
@@ -77,10 +77,10 @@
   <Node>Insert next value {@render Int(@sequence.pick)}</Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Heap()}
     {@render Status()}
   </Node>
-{/layout}
+</Layout>

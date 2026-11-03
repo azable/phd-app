@@ -968,7 +968,7 @@ export function slotInsertions(
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent' && key !== 'metadata') follow(child, locals);
   };
-  // The {:else if when(…)} branch after an {#if when(…)} block or branch, on a key by now.
+  // A <OneOf>'s next branch, an {:else if when(…)} as rewritten, on a key by now.
   const whenBranchOf = (part: Part): Part | undefined => {
     const children = ((part.else as Part | undefined)?.children as Part[] | undefined) ?? [];
     const [next, ...rest] = children.filter(
@@ -1141,7 +1141,7 @@ export function slotInsertions(
       walk(part.children as Part[] | undefined, locals);
       return;
     }
-    // An {#if when(@label)} block, an {#if} on the label's key by now (see label-values.ts): its
+    // A <When of="@label">, an {#if} on the label's key by now (see label-values.ts): its
     // contents in a slot hidden where the step is inside no run of the label, keeping their room.
     // A chain, its branches {:else if} on their keys by now, is one box, a node keeping the largest
     // size it reaches, drawing only the branch the step is inside (see Chain.svelte).

@@ -242,16 +242,24 @@ describe('recorded steps in the assistant context', () => {
         : {})
     });
   const counting = (to: number) =>
-    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">let last = Count(9); for (let n = Count(0); Below(n, Count(${to})); n = Up(n)) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(value: Count)}<Node {value} />{/snippet}{#layout Main}<Node>{@render Count(last)}</Node>{/layout}`;
+    `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 9 }); const Flag = type('boolean'); const Below = binop((a: Count, b: Count) => Flag(a < b)); const Up = unop((n: Count) => Count(n + 1));</script><script lang="sverlin">@run[let last = Count(9);] for (@setup[let n = Count(0)]; @guard[Below(n, Count(${to}))]; @onward[n = Up(n)]) @step{ last = n; } @done[const done = Flag(true);]</script>{#snippet CountCell(value: Count)}<Node {value} />{/snippet}<Layout name="Main"><Node>{@render Count(last)}</Node></Layout>`;
 
   it('gives the steps the current source records, with the variables in scope', () => {
-    // Named by their labels' runs: the input as given (here none), a step per pass, then the step
-    // after the loop, where n is out of scope.
+    // Named by their labels' runs: the input as given (here none), last set, n set and tested, a
+    // step per pass with n moved and tested again, then the step after the loop, where n is out of
+    // scope.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
         { name: 'start', state: {} },
+        { name: '@run#1', state: { last: 9 } },
+        { name: '@setup#1', state: { last: 9, n: 0 } },
+        { name: '@guard#1', state: { last: 9, n: 0 } },
         { name: '@step#1', state: { last: 0, n: 0 } },
+        { name: '@onward#1', state: { last: 0, n: 1 } },
+        { name: '@guard#2', state: { last: 0, n: 1 } },
         { name: '@step#2', state: { last: 1, n: 1 } },
+        { name: '@onward#2', state: { last: 1, n: 2 } },
+        { name: '@guard#3', state: { last: 1, n: 2 } },
         { name: '@done#1', state: { last: 1, done: true } }
       ]
     });
@@ -261,13 +269,19 @@ describe('recorded steps in the assistant context', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
       steps: [
         { name: 'start', state: {} },
+        { name: '@run#1', state: { last: 9 } },
+        { name: '@setup#1', state: { last: 9, n: 0 } },
+        { name: '@guard#1', state: { last: 9, n: 0 } },
         { name: '@step#1', state: { last: 0, n: 0 } },
+        { name: '@onward#1', state: { last: 0, n: 1 } },
+        { name: '@guard#2', state: { last: 0, n: 1 } },
         { name: '@done#1', state: { last: 0, done: true } }
       ]
     });
     expect(
       (
-        context(counting(2), '<script lang="sverlin">let n = Nope(1);</script>').recordedSteps as {
+        context(counting(2), '<script lang="sverlin">@run[let n = Nope(1);]</script>')
+          .recordedSteps as {
           problem: string;
         }
       ).problem

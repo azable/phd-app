@@ -21,8 +21,8 @@ const binarySearch = (listing: string) => `<script lang="sverlin" domain>
   const target = Int(42);
 </script>
 <script lang="sverlin">
-  let lo = Index(0);
-  let hi = Last(values);
+  @run[let lo = Index(0);
+  let hi = Last(values);]
   while (@open[Before(lo, hi)]) @probe{
     const mid = @mid[Middle(lo, hi)];
     if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
@@ -36,7 +36,7 @@ ${listing}
 {#snippet Arrow(p: Index)}<Pointed />{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
-{#layout Main}
+<Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
@@ -44,9 +44,9 @@ ${listing}
     {@render Index(hi)}
     {@render Index(mid)}
   </Node>
-{/layout}`;
+</Layout>`;
 
-const tokened = `  lo = 0, hi = n - 1
+const tokened = `  @run[start:] lo = 0, hi = n - 1
   while @open[$lo[lo] <= $hi[hi]]
     @probe[@mid[$mid[mid] = (lo + hi) / 2]
     if @low[$mid[A[mid]] < $target[target]]
@@ -69,25 +69,25 @@ const linearSearch = `<script lang="sverlin" domain>
   const target = Int(7);
 </script>
 <script lang="sverlin">
-  for (let i = Index(0); Before(i, Length(values)); i = Next(i)) @scan{
-    @check[if (Equal(values[i], target)) break;]
+  for (@setup[let i = Index(0)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @scan{
+    @check[if (@cond[Equal(values[i], target)]) break;]
   }
 </script>
 <script lang="sverlin" listing="pseudocode">
-  for i = 0 to n - 1
-    @scan[@check[if $i[A[i]] = $target[target] then return $i[i]]]
+  for @setup[i = 0] @guard[to n - 1] @onward[step 1]
+    @scan[@check[if @cond[$i[A[i]] = $target[target]] then return $i[i]]]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Mark(p: Index)}<Pointed />{/snippet}
 {#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#layout Main}
+<Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
     {@render Index(i)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 /** Each step's touched places, as the starter shows them, pausing at the labels given. */
 function touched(source: string, pauses: readonly string[]) {
@@ -215,7 +215,7 @@ describe('tokens naming places in a listing', () => {
   const values = Values([5, 2, 4, 1]);
 </script>
 <script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (@setup[let i = Position(1)]; @guard[Before(i, Length(values))]; @onward[i = Next(i)]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
     while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) @shift{
@@ -226,7 +226,7 @@ describe('tokens naming places in a listing', () => {
   }
 </script>
 <script lang="sverlin" listing="textbook">
-  for i = 2 to n
+  for @setup[i = 2] @guard[to n] @onward[step 1]
       @insert[@key[$key[key] = $i[A[i]]]
       @init[j = i - 1]
       while @test[@bound[j > 0] and @cmp[A[j] > $key[key]]]
@@ -238,14 +238,14 @@ describe('tokens naming places in a listing', () => {
 {#snippet Mark(p: Position)}<Pointed />{/snippet}
 {#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#layout Stacked}
+<Layout name="Stacked">
   <Node layout="row">
     <Listing />
     <Node layout="column">{@render Key()}{@render Cells()}</Node>
     {@render Position(i)}
     {@render Position(j)}
   </Node>
-{/layout}`;
+</Layout>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
     expect(steps[1]).toEqual(['@key', '@i']);
     expect(steps[2]).toEqual(['@j']);

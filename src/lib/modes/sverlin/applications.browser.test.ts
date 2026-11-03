@@ -66,12 +66,12 @@ const source = `<script lang="sverlin" domain>
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Board()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 /** The caption Ask draws at a step, and whether it is hidden. */
 async function captionAt(step: number, chosen: Record<string, unknown> = {}) {

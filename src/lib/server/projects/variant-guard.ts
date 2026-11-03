@@ -40,10 +40,10 @@ export function pictureTree(source: string): PictureTree {
   const layouts = new Map<string, string[]>();
   let layout: string[] | undefined;
   const tokens =
-    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|\{#layout\s+([A-Za-z_]\w*)|\{\/layout\s*\}/gu;
+    /\{#snippet\s+([A-Za-z_]\w*)|\{\/snippet\}|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|<Layout\s+name="([A-Za-z_]\w*)"|<\/Layout\s*>/gu;
   for (const match of markup.matchAll(tokens)) {
     if (match[3]) layouts.set(match[3], (layout = []));
-    else if (match[0].startsWith('{/layout')) layout = undefined;
+    else if (match[0].startsWith('</Layout')) layout = undefined;
     else if (match[1]) {
       open.push(match[1]);
       if (!snippets.has(match[1])) snippets.set(match[1], []);

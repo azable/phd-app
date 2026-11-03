@@ -115,14 +115,14 @@ describe('laying out on the server', () => {
       (await bundlePresentation(prepared, seed, { chosen: { ...everyPause(prepared), ...chosen } }))
         .layout.drawn;
     const starter = await drawnWith(1, {});
-    expect(starter).toHaveLength(17);
+    expect(starter).toHaveLength(18);
     // Another seed places nothing here; a cell's least size is under what the pointer keeps.
     expect(await drawnWith(2, {})).toEqual(starter);
     expect(await drawnWith(2, { 'IntCell.minSize': 1 })).toEqual(starter);
     // The pointer's fill shows from the second step, where mid first points into the cells.
     expect(
       differingSteps(starter, await drawnWith(2, { 'Arrow.Pointed.fill': 'red-200' }))
-    ).toEqual(Array.from({ length: 16 }, (_, index) => index + 1));
+    ).toEqual(Array.from({ length: 17 }, (_, index) => index + 1));
   }, 60_000);
 
   it('counts no step where marks differ only in the room kept for labels not yet shown', async () => {
@@ -142,7 +142,9 @@ describe('laying out on the server', () => {
       ).layout?.drawn;
     const labelled = await drawnWith(true);
     // Before lo and hi are set, both draw the cells alone, the labelled keeping room for its labels.
-    expect(differingSteps(labelled, await drawnWith(false))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(differingSteps(labelled, await drawnWith(false))).toEqual(
+      Array.from({ length: 14 }, (_, index) => index + 1)
+    );
     expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
   }, 60_000);
 

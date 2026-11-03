@@ -19,11 +19,15 @@
 
   const Neighbour = record({ to: VertexRef, weight: Weight });
   const Neighbours = collection(Neighbour);
+  const Slot = index(Neighbours);
   const Adjacency = collection(Neighbours);
 
   const Length = unop((v: Vertices) => VertexRef(v.length));
   const Before = binop((a: VertexRef, b: VertexRef) => Flag(a < b));
   const Next = unop((p: VertexRef) => VertexRef(p + 1));
+  const Count = unop((n: Neighbours) => Slot(n.length));
+  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
+  const Step = unop((p: Slot) => Slot(p + 1));
   const NotVisited = unop((v: VisitedFlag) => Flag(!v));
   const Reachable = unop((d: Dist) => Flag(d !== '∞'));
   const IsVertex = unop((p: Choice) => Flag(p !== 'none'));
@@ -51,25 +55,27 @@
 </script>
 
 <script lang="sverlin">
-  let distances = Distances(['∞', '∞', '∞', '∞', '∞']);
+  @unknown[let distances = Distances(['∞', '∞', '∞', '∞', '∞']);
   let previous = Previous(['none', 'none', 'none', 'none', 'none']);
-  let visited = Visited([false, false, false, false, false]);
+  let visited = Visited([false, false, false, false, false]);]
   @initial[distances[source] = Distance(0);]
 
-  for (let round = VertexRef(0); Before(round, Length(vertices)); round = Next(round)) @round{
+  for (@firstRound[let round = VertexRef(0)]; @moreRounds[Before(round, Length(vertices))]; @nextRound[round = Next(round)]) @round{
     let current = Choice(None('none'));
-    for (let v = VertexRef(0); Before(v, Length(vertices)); v = Next(v)) @scan{
-      if (NotVisited(visited[v]) && Reachable(distances[v])) {
-        if (IsNone(current)) @first{
+    for (@firstVertex[let v = VertexRef(0)]; @moreVertices[Before(v, Length(vertices))]; @nextVertex[v = Next(v)]) @scan{
+      if (@open[NotVisited(visited[v]) && Reachable(distances[v])]) {
+        if (@unchosen[IsNone(current)]) @first{
           current = v;
-        } else if (Shorter(distances[v], distances[current])) @better{
+        } else if (@shorter[Shorter(distances[v], distances[current])]) @better{
           current = v;
         }
       }
     }
-    if (IsVertex(current)) @settle{
+    if (@chosen[IsVertex(current)]) @settle{
+      const edges = adjacency[current];
       @mark[visited[current] = true;]
-      for (const edge of adjacency[current]) @edge{
+      for (@firstEdge[let slot = Slot(edges, 0)]; @moreEdges[Within(slot, Count(edges))]; @nextEdge[slot = Step(slot)]) @edge{
+        const edge = edges[slot];
         const alternative = @sum[AddWeight(distances[current], edge.weight)];
         if (@improve[Shorter(alternative, distances[edge.to])]) @relax{
           distances[edge.to] = alternative;
@@ -82,18 +88,27 @@
 
 <script lang="sverlin" listing="textbook">
 DIJKSTRA(graph, source)
+@unknown[every distance = ∞, no predecessors, none visited]
 @initial[distance[source] = 0]
-@round[repeat once for each vertex
-  @scan[for each vertex v
-    if v is unvisited and reachable
-      @first[choose v if no vertex is chosen]
-      @better[otherwise choose v if its distance is shorter]]
-  @settle[with the closest vertex
-    @mark[mark it settled]
-    @edge[for each neighbouring edge
-      @sum[alternative = distance + edge weight]
+@firstRound[round = 1]
+while @moreRounds[round ≤ number of vertices]
+  @round[@firstVertex[v = the first vertex]
+  while @moreVertices[v is a vertex]
+    @scan[if @open[v is unvisited and reachable]
+      if @unchosen[no vertex is chosen]
+        @first[choose v]
+      else if @shorter[its distance is shorter]
+        @better[choose v]]
+    @nextVertex[v = the next vertex]
+  if @chosen[a vertex is chosen]
+    @settle[@mark[mark it settled]
+    @firstEdge[e = its first edge]
+    while @moreEdges[e is one of its edges]
+      @edge[@sum[alternative = distance + edge weight]
       if @improve[alternative is shorter]
-        @relax[update the neighbour's distance and predecessor]]]]
+        @relax[update the neighbour's distance and predecessor]]
+      @nextEdge[e = its next edge]]]
+  @nextRound[round = round + 1]
 </script>
 
 {#snippet NameText(value: Name)}<Node value={value} />{/snippet}
@@ -141,10 +156,10 @@ DIJKSTRA(graph, source)
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Board()}
     {@render VertexRef(v)}
   </Node>
-{/layout}
+</Layout>

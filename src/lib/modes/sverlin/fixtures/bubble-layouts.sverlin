@@ -17,8 +17,8 @@
 </script>
 
 <script lang="sverlin">
-  for (let end = Length(values); Before(Position(1), end); end = Prev(end)) @pass{
-    for (let i = Position(1); Before(i, end); i = Next(i)) @pair{
+  for (@last[let end = Length(values)]; @more[Before(Position(1), end)]; @shrink[end = Prev(end)]) @pass{
+    for (@first[let i = Position(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
       if (@compare[Greater(values[@left[Prev(i)]], values[@right[i]])]) @swap{
         const moved = values[@from[Prev(i)]];
         values[Prev(i)] = values[@to[i]];
@@ -42,32 +42,32 @@
 {#snippet Board()}
   <Node layout="column">
     {@render Values(values)}
-    {#if when(@pass.pair.swap)}
+    <When of="@pass.pair.swap">
       <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
-    {/if}
+    </When>
     {@render Greater(@pass.pair.compare)}
-    {#if when(@pass.pair.swap)}{@render SwapNote()}{/if}
+    <When of="@pass.pair.swap">{@render SwapNote()}</When>
   </Node>
 {/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Title()}
     {@render Board()}
     {@render Position(@pass.pair.compare.left)}
     {@render Position(@pass.pair.compare.right)}
-    {#if when(@pass.pair.swap)}
+    <When of="@pass.pair.swap">
       {@render Position(@pass.pair.swap.from)}
       {@render Position(@pass.pair.swap.to)}
-    {/if}
+    </When>
   </Node>
-{/layout}
+</Layout>
 
-{#layout Side}
+<Layout name="Side">
   <Node layout="row">
     <Node>{@render Title()}</Node>
     {@render Board()}
     {@render Position(@pass.pair.compare.left)}
     {@render Position(@pass.pair.compare.right)}
   </Node>
-{/layout}
+</Layout>

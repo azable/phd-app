@@ -3,8 +3,10 @@
  * `@name[…]` wraps a statement, statements in a row, or an expression; `@name{` names a block the
  * code has, a loop's, an if's, or a function's body. A label inside another takes its name as a
  * prefix (insert.shift). The markers are blanked to spaces before parsing, keeping every offset.
- * The algorithm is the root label: in a label with labelled statements, every statement is inside
- * one of them or contains one.
+ * In a label with labelled statements, every statement is inside one of them or contains one. In
+ * an authored source no code runs outside a label: every statement is inside one, every test is a
+ * label's own code or conditions joined by && and || that each are, and every part of a for header
+ * is a label's own code; for … of is refused (see checkCoverage and checkParts).
  */
 
 import type { AnyNode, BlockStatement } from 'acorn';
@@ -136,7 +138,9 @@ export function readMarkers(body: string): {
 export function readLabels(
   root: BlockStatement,
   markers: readonly Marker[],
-  code: string
+  code: string,
+  /** Whether no code may run outside a label, as in an authored source; else a fragment. */
+  complete = false
 ): { labels: Label[]; problems: LabelProblem[] } {
   const problems: LabelProblem[] = [];
 
@@ -188,6 +192,7 @@ export function readLabels(
   }
   for (const label of labels) label.full = fullName(label);
   checkCoverage();
+  if (complete) checkParts();
   return { labels, problems };
 
   function fullName(label: Label): string {
@@ -253,15 +258,23 @@ export function readLabels(
 
   /**
    * In each label with labelled statements, and in the algorithm and each function's body, every
-   * statement is inside one of them or contains one.
+   * statement is inside one of them or contains one; in an authored source, every statement is
+   * inside a label at all. A header's parts are its own (see checkParts).
    */
   function checkCoverage(): void {
-    const statementLabels = labels.filter((label) => label.statement);
+    const parts = partsOfHeaders();
+    const statementLabels = labels.filter((label) => label.statement && !parts.has(label.nodes[0]));
     const reported: AnyNode[] = [];
+    const report = (node: AnyNode, message: (text: string) => string) => {
+      if (reported.some((outer) => within(node, outer))) return;
+      reported.push(node);
+      const text = code.slice(spanOf(node).start, spanOf(node).end).trim().split('\n')[0];
+      problems.push({ message: message(text), at: spanOf(node).start });
+    };
     for (const node of nodes) {
       if (!isStatement(node) || node.type === 'BlockStatement') continue;
       if (node.type === 'FunctionDeclaration' || spanOf(node).start < 0) continue;
-      // A loop's header declaration is its control code.
+      // A loop's header declaration is its control code, labelled as a part of it (see checkParts).
       const parent = parents.get(node);
       if (parent && isLoop(parent) && (parent as { body: AnyNode }).body !== node) continue;
       const fn = enclosingFunction(node);
@@ -273,18 +286,84 @@ export function readLabels(
       const beside = statementLabels.filter(
         (label) => inScope(label) && outerStatementLabel(label) === owner
       );
-      if (!beside.length) continue;
-      if (beside.some((label) => label.nodes.some((marked) => within(marked, node)))) continue;
+      const containsOne = beside.some((label) =>
+        label.nodes.some((marked) => within(marked, node))
+      );
+      if (complete && !owner && !containsOne) {
+        report(
+          node,
+          (text) =>
+            `${text} runs outside every label, and no code may: wrap it, as @name[${text}]${fn ? ", or label the function's body, as function f(…) @f{" : ''}.`
+        );
+        continue;
+      }
+      if (!beside.length || containsOne) continue;
       // Declarations leading their block, before any labelled code, are the lead-up to its first
       // step, as a loop's header is.
       if (node.type === 'VariableDeclaration' && leading(node, beside)) continue;
-      if (reported.some((outer) => within(node, outer))) continue;
-      reported.push(node);
-      const text = code.slice(spanOf(node).start, spanOf(node).end).trim().split('\n')[0];
-      problems.push({
-        message: `${text} is ${owner ? `in @${owner.full}` : 'in the algorithm'} but in none of the labels beside it (${beside.map((label) => `@${label.full}`).join(', ')}); wrap it, as @name[${text}], or put it inside one of them, so each step is one label's code.`,
-        at: spanOf(node).start
-      });
+      report(
+        node,
+        (text) =>
+          `${text} is ${owner ? `in @${owner.full}` : 'in the algorithm'} but in none of the labels beside it (${beside.map((label) => `@${label.full}`).join(', ')}); wrap it, as @name[${text}], or put it inside one of them, so each step is one label's code.`
+      );
+    }
+  }
+
+  /** The tests of ifs and loops and the parts of for headers. */
+  function partsOfHeaders(): Set<AnyNode> {
+    const parts = new Set<AnyNode>();
+    for (const node of nodes)
+      for (const part of headerParts[node.type] ?? []) {
+        const child = (node as unknown as Record<string, AnyNode | null>)[part];
+        if (child) parts.add(child);
+      }
+    return parts;
+  }
+
+  /**
+   * In an authored source, every test and every part of a for header is a label's own code, so
+   * each decision and each move of a loop is a run of its own; a for … of loop, whose header walks
+   * a collection no label can split, is refused.
+   */
+  function checkParts(): void {
+    const own = new Set(
+      labels.filter(({ nodes: marked }) => marked.length === 1).map(({ nodes: [node] }) => node)
+    );
+    // A label's own code, or conditions joined by && and || or negated, each its own label's, so
+    // each part's decision shows as its run, as @bound[…] && @compare[…].
+    const labelled = (node: AnyNode): boolean => {
+      if (own.has(node)) return true;
+      if (node.type === 'LogicalExpression') return labelled(node.left) && labelled(node.right);
+      if (node.type === 'UnaryExpression' && node.operator === '!') return labelled(node.argument);
+      return false;
+    };
+    for (const node of nodes) {
+      if (spanOf(node).start < 0) continue;
+      if (node.type === 'ForOfStatement') {
+        const loop = node as unknown as { left: AnyNode; right: AnyNode };
+        const items = code.slice(spanOf(loop.right).start, spanOf(loop.right).end).trim();
+        problems.push({
+          message: `for (… of ${items}) walks ${items} in a header no label can split; write an index loop, its three parts labelled, as for (@start[let i = Index(0)]; @more[Before(i, Length(${items}))]; @next[i = Next(i)]) @visit{ … }, reading ${items}[i].`,
+          at: spanOf(node).start
+        });
+        continue;
+      }
+      for (const part of headerParts[node.type] ?? []) {
+        const child = (node as unknown as Record<string, AnyNode | null>)[part];
+        if (!child || labelled(child)) continue;
+        const written = code.slice(spanOf(child).start, spanOf(child).end).trim();
+        const keyword =
+          node.type === 'IfStatement' ? 'if' : node.type === 'ForStatement' ? 'for' : 'while';
+        const shows = {
+          init: 'what it sets up',
+          test: 'the decision it makes',
+          update: 'the move it makes'
+        }[part];
+        problems.push({
+          message: `The ${part} of ${keyword} (…), ${written}, is in no label of its own, so ${shows} would not show: label it, as @name[${written}]${keyword === 'for' ? ', as each part of a for header is: for (@start[…]; @more[…]; @next[…])' : ''}.`,
+          at: spanOf(child).start
+        });
+      }
     }
   }
 
@@ -316,6 +395,14 @@ export function readLabels(
     return undefined;
   }
 }
+
+/** The parts of a header that are each a label's own code in an authored source, by statement. */
+const headerParts: Record<string, readonly ('init' | 'test' | 'update')[]> = {
+  ForStatement: ['init', 'test', 'update'],
+  WhileStatement: ['test'],
+  DoWhileStatement: ['test'],
+  IfStatement: ['test']
+};
 
 const isLoop = (node: AnyNode) =>
   ['ForStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement'].includes(node.type);

@@ -192,7 +192,7 @@ describe('variant markers', () => {
 
   it('puts a layout’s frame in its root’s chip, and greys the layouts no variant shows', () => {
     const laid =
-      '{#layout Side}\n  <Node layout="row">{@render Title()}</Node>\n{/layout}\n{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}';
+      '<Layout name="Side">\n  <Node layout="row">{@render Title()}</Node>\n</Layout>\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>';
     const shown = [
       {
         seed: 1,
@@ -205,7 +205,7 @@ describe('variant markers', () => {
     expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
     expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
     expect(unchosenLayouts(state, shown).map(({ from, to }) => laid.slice(from, to))).toEqual([
-      '{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}'
+      '<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>'
     ]);
   });
 

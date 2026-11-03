@@ -53,14 +53,14 @@ const merge = `<script lang="sverlin" domain>
 {#snippet Placed(p: Position)}<Pointed />{/snippet}
 {#snippet Rows()}<Node layout="column">{@render Values(left)}{@render Values(right)}{@render Values(merged)}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Rows()}
     {@render Position(i)}
     {@render Position(j)}
     {@render Position(k)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 let browser: Browser | undefined;
 beforeAll(async () => {
@@ -250,12 +250,12 @@ const walk = `<script lang="sverlin" domain>
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Graph()}
     {@render EdgeIndex(e)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'draws each arrow with its own step’s arrowhead while two steps are in the page',
@@ -338,13 +338,13 @@ const taken = `<script lang="sverlin" domain>
   <Node layout="column"><Pointed /><Node>taken</Node></Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Values(left)}
     {@render Values(right)}
     {@render Index(take.from)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'keeps every element in place as a pointer moves between collections',
@@ -414,13 +414,13 @@ const apart = `<script lang="sverlin" domain>
 {#snippet Short(at: Index)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}
 {#snippet Long(at: Index)}<Node layout="column"><Pointed /><Node>the other one</Node></Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Values(values)}
     {@render Index(i)}
     {@render Index(j)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'keeps every element in place as pointers never at one element share a slot for their labels',
@@ -494,12 +494,12 @@ const far = `<script lang="sverlin" domain>
 {#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Here(at: Index)}<Pointed />{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Values(values)}
     {@render Index(i)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'keeps room at most 4 past an end, a pointer further out drawing nothing',
@@ -552,10 +552,10 @@ it.skipIf(!enabled)(
 
 const cursors = taken
   .replace(
-    '{#layout Main}',
+    '<Layout name="Main">',
     `{#snippet ICursor(at: Index)}{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node>{/snippet}
 {#snippet JCursor(at: Index)}{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node>{/snippet}
-{#layout Main}`
+<Layout name="Main">`
   )
   .replace(
     '{@render Index(take.from)}',
@@ -683,7 +683,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}{#layout Main}<Node>{@render Pair()}</Node>{/layout}`
+      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -755,11 +755,11 @@ const compared = `<script lang="sverlin" domain>
   <Node layout="column"><Node>{#each values as v}{@render Int(v)}{/each}</Node>{@render Greater(@compare)}</Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Board()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'starts an operator’s operands, drawn by its view, at the cells they were read from',

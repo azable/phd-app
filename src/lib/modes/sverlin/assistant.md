@@ -51,7 +51,10 @@ Pace a new or changed source yourself, as no one else does: every new label
 pauses, "on", the finest the steps go, unless edit's or revise's values set its
 pause@label; only a label whose runs all draw nothing new starts "off". So give
 a first visualization, and each label you add, values that step through it
-sensibly. project.runs gives each label of the base by name, how many times it
+sensibly. As no code runs outside a label (see the guide's Steps), a source has
+labels it rarely pauses at: a loop's start, test, and move, and tests whose
+outcome the view does not show, are off unless a step should show where the code
+goes next. project.runs gives each label of the base by name, how many times it
 runs and how many of those runs change what the view draws (drawn); for a label
 the base does not have, judge the same from what the algorithm does. A label
 whose runs change nothing drawn only repeats the step before, so turn it off,
@@ -395,7 +398,7 @@ neighbours, or a step split for clarity, and a participant’s request that
 implies changing them is followed. Avoid only a workaround where the language
 has a direct way: a flag, a sentinel, or a variable added solely to make
 something show or hide, or a cast to reach another view, where a label,
-`{#if when(@label)}`, a view chosen per place, or a pointer at a label does it
+`<When of="@label">`, a view chosen per place, or a pointer at a label does it
 (see Views of what a step computed).
 
 An interaction of kind runtime-failure was reported by the participant’s

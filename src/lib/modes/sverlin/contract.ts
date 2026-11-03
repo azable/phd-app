@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n{#layout Stacked}\n  <Node>{@render Title()}</Node>\n{/layout}\n'
+    '<script lang="sverlin">\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
@@ -29,12 +29,12 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 </script>
 <script lang="sverlin">
   function search(a, target) {
-    for (let i = Index(0); Before(i, Length(a)); i = Next(i)) @check{
-      if (Equal(a[i], target)) return i;
+    for (@first[let i = Index(0)]; @more[Before(i, Length(a))]; @next[i = Next(i)]) @check{
+      if (@equal[Equal(a[i], target)]) return i;
     }
     @missing[return Index(-1);]
   }
-  const found = search(values, target);
+  @run[const found = search(values, target);]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}
@@ -63,7 +63,7 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 {#snippet Checking()}<Node>Checking index {@render Index(i)}: {@render Equal(@check)}</Node>{/snippet}
 {#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Caption()}
@@ -73,4 +73,4 @@ export const linearSearchSource = `<script lang="sverlin" domain>
     {@render Checking()}
     {@render Result()}
   </Node>
-{/layout}`;
+</Layout>`;

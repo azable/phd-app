@@ -18,11 +18,11 @@
 </script>
 
 <script lang="sverlin">
-  let lo = Index(0);
-  let hi = Last(values);
-  while (Before(lo, hi)) @probe{
+  @range[let lo = Index(0);
+  let hi = Last(values);]
+  while (@open[Before(lo, hi)]) @probe{
     const mid = Middle(lo, hi);
-    if (Less(values[mid], target)) @right[lo = Next(mid);]
+    if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
     else @left[hi = Prev(mid);]
   }
 </script>
@@ -42,10 +42,10 @@
 
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     <Node layout="row"><Node>Searching for {@render Int(target)}</Node>{@render Cells()}</Node>
     {@render Index(lo)}
     {@render Index(hi)}
   </Node>
-{/layout}
+</Layout>

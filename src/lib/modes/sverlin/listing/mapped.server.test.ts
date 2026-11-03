@@ -24,15 +24,15 @@ ${algorithm}
 ${listing}
 </script>
 {#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}
-{#layout Main}
+<Layout name="Main">
   <Node>
     <Listing />
     {@render Cells()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 const insertion = blocks(
-  `  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) {
+  `  for (@first[let i = Position(1)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) {
     @key[const key = values[i];]
     @init[let j = i;]
     while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) {
@@ -42,7 +42,7 @@ const insertion = blocks(
     @place[values[j] = key;]
   }`,
   `INSERTION-SORT(A, n)
-1  for i = 2 to n
+1  for @first[i = 2] @more[to n] @next[step 1]
 2      @key[key = A[i]]
 3      // Insert A[i] into the sorted part.
 4      @init[j = i - 1]

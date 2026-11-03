@@ -20,9 +20,9 @@
 </script>
 
 <script lang="sverlin">
-  let prev = Next(End('end'));
-  let cur = Next(head);
-  while (IsNode(cur)) @rewire{
+  @begin[let prev = Next(End('end'));
+  let cur = Next(head);]
+  while (@more[IsNode(cur)]) @rewire{
     @save[const after = cur.next;]
     @reverse[cur.next = prev;]
     @advance[prev = cur;
@@ -33,9 +33,9 @@
 
 <script lang="sverlin" listing="textbook">
 REVERSE(head)
-prev = ∅
-cur = head
-while cur ≠ ∅
+@begin[prev = ∅
+cur = head]
+while @more[cur ≠ ∅]
     @rewire[@save[next = cur.next]
     @reverse[cur.next = prev]
     @advance[prev = cur
@@ -105,18 +105,18 @@ while cur ≠ ∅
 
 {#snippet StepNote()}
   <Node>
-    {#if when(@rewire.save)}
+    <OneOf><When of="@rewire.save">
       {@render SaveNote()}
-    {:else if when(@rewire.reverse)}
+    </When><When of="@rewire.reverse">
       {@render ReverseNote()}
-    {:else if when(@rewire.advance)}
+    </When><When of="@rewire.advance">
       {@render AdvanceNote()}
-    {:else if when(@finish)}
+    </When><When of="@finish">
       {@render FinishNote()}
-    {/if}
-    {#if when(start)}
+    </When></OneOf>
+    <When of="start">
       {@render StartNote()}
-    {/if}
+    </When>
   </Node>
 {/snippet}
 
@@ -134,7 +134,7 @@ while cur ≠ ∅
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Board()}
@@ -142,4 +142,4 @@ while cur ≠ ∅
     {@render NodeRef(cur)}
     {@render NodeRef(after)}
   </Node>
-{/layout}
+</Layout>

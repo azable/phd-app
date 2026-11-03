@@ -45,22 +45,22 @@
 </script>
 
 <script lang="sverlin">
-  let current = VertexIndex(-1);
+  @none[let current = VertexIndex(-1);]
 
-  for (let round = VertexIndex(0); BeforeVertex(round, VertexCount(vertices)); round = NextVertex(round)) @round{
+  for (@firstRound[let round = VertexIndex(0)]; @moreRounds[BeforeVertex(round, VertexCount(vertices))]; @nextRound[round = NextVertex(round)]) @round{
     @reset[current = VertexIndex(-1);]
 
-    for (let v = VertexIndex(0); BeforeVertex(v, VertexCount(vertices)); v = NextVertex(v)) @choose{
-      if (Not(vertices[v].done) && (SameVertex(current, VertexIndex(-1)) || Less(vertices[v].distance, vertices[current].distance))) @select{
+    for (@firstVertex[let v = VertexIndex(0)]; @moreVertices[BeforeVertex(v, VertexCount(vertices))]; @nextVertex[v = NextVertex(v)]) @choose{
+      if (@closer[Not(vertices[v].done) && (SameVertex(current, VertexIndex(-1)) || Less(vertices[v].distance, vertices[current].distance))]) @select{
         current = v;
       }
     }
 
-    if (Not(SameVertex(current, VertexIndex(-1)))) @visit{
+    if (@found[Not(SameVertex(current, VertexIndex(-1)))]) @visit{
       @settle[vertices[current].done = true;]
 
-      for (let e = EdgeIndex(0); BeforeEdge(e, EdgeCount(edges)); e = NextEdge(e)) @edge{
-        if (SameVertex(edges[e].from, current)) @relax{
+      for (@firstEdge[let e = EdgeIndex(0)]; @moreEdges[BeforeEdge(e, EdgeCount(edges))]; @nextEdge[e = NextEdge(e)]) @edge{
+        if (@outgoing[SameVertex(edges[e].from, current)]) @relax{
           @candidate[const candidate = Add(vertices[current].distance, edges[e].weight);]
           if (@check[Less(candidate, vertices[edges[e].to].distance)]) @update{
             vertices[edges[e].to].distance = candidate;
@@ -114,7 +114,7 @@
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Title()}
     {@render Graph()}
@@ -122,4 +122,4 @@
     {@render VertexIndex(current)}
     {@render EdgeIndex(e)}
   </Node>
-{/layout}
+</Layout>

@@ -1,9 +1,9 @@
 /**
- * Layout blocks, `{#layout Name}…{/layout}`: each an arrangement of the whole page, its body one root
- * <Node>, the frame. Svelte has no such block, so before the view is parsed each becomes
- * `{#if __L.Name}…{/if}`, as long, drawn only where the variant's layout is Name (the prop __L holds
- * it), and its root's tags are blanked, so what the root holds is the page's top level, and every
- * check of the top level holds for it. Every source declares at least one layout.
+ * Layouts, `<Layout name="Name">…</Layout>`: each an arrangement of the whole page, its body one root
+ * <Node>, the frame. Svelte has no such tag, so before the view is parsed each becomes
+ * `{#if __L.Name}…{/if}`, no longer, drawn only where the variant's layout is Name (the prop __L
+ * holds it), and its root's tags are blanked, so what the root holds is the page's top level, and
+ * every check of the top level holds for it. Every source declares at least one layout.
  */
 
 import type { FrameLayout } from './library/node/props';
@@ -38,25 +38,23 @@ export function layoutNameOf(block: unknown): string | undefined {
     : undefined;
 }
 
-/** Where each opening or closing of a layout starts, written well or not. */
-const layoutTag = /\{([#/])layout\b/gu;
-const wellOpened = /^\{#layout([ \t]+)([A-Za-z_$][\w$]*)([ \t]*)\}/u;
-const wellClosed = /^\{\/layout[ \t]*\}/u;
+/** Where each opening or closing of a layout starts. */
+const layoutTag = /<(\/?)Layout\b/gu;
+const wellOpened = /^<Layout[ \t]+name="([A-Za-z_$][\w$]*)"[ \t]*>/u;
+const wellClosed = /^<\/Layout[ \t]*>/u;
 
-/** What is wrong with an opening that is not {#layout Name}, and its fix. */
+/** What is wrong with an opening that is not <Layout name="Name">, and its fix. */
 function openingProblem(line: string): string {
-  const named = /^\{#layout[ \t]+([A-Za-z_$][\w$]*)[ \t]*(>?)/u.exec(line);
-  if (named?.[2])
-    return `${named[0]} ends with >: close the opening with }, as {#layout ${named[1]}}.`;
-  if (named && /^(<|$)/u.test(line.slice(named[0].length)))
-    return `${named[0]} is never closed: close the opening with }, as {#layout ${named[1]}}.`;
-  const written = /^\{#layout[^}]*\}?/u.exec(line)![0];
-  return `${written} is no layout: write {#layout Name}, its name one word naming the arrangement, as {#layout Side}, on one line.`;
+  const named = /^<Layout[ \t]+name=["']?([A-Za-z_$][\w$]*)/u.exec(line);
+  if (named && /\/>/u.test(line.split('>', 1)[0] + '>'))
+    return `<Layout name="${named[1]}" /> holds nothing: a layout's body is its root <Node>, as <Layout name="${named[1]}"><Node>…</Node></Layout>.`;
+  const written = /^<Layout[^>]*>?/u.exec(line)![0];
+  return `${written} is no layout: write <Layout name="Name">, its one prop the name, one word naming the arrangement, as <Layout name="Side">.`;
 }
 
 /**
- * Each layout block as an {#if} of the same length, keeping every offset and line in place; any
- * opening or closing written otherwise, or left unpaired, is a problem naming its fix.
+ * Each layout as an {#if} no longer than it, keeping every offset and line in place; any opening or
+ * closing written otherwise or left unpaired is a problem naming its fix.
  */
 function rewritten(text: string): { text: string; problems: Problem[] } {
   const problems: Problem[] = [];
@@ -68,41 +66,35 @@ function rewritten(text: string): { text: string; problems: Problem[] } {
       tag.padEnd(written.length) +
       replaced.slice(start + written.length);
   };
-  for (const { 1: kind, index: start } of text.matchAll(layoutTag)) {
+  for (const { 1: tagClose, index: start } of text.matchAll(layoutTag)) {
     const line = text.slice(start).split('\n', 1)[0];
-    if (kind === '#') {
+    if (!tagClose) {
       const named = wellOpened.exec(line);
-      open.push({ name: named?.[2] ?? 'opened here', start });
+      open.push({ name: named?.[1] ?? 'opened here', start });
       if (!named) {
         problems.push({ message: openingProblem(line), start });
         continue;
       }
-      const [whole, before, name, after] = named;
-      replace(
-        start,
-        whole,
-        `{#if ${layoutProp}.${name}${' '.repeat(before.length + after.length - 1)}}`
-      );
+      replace(start, named[0], `{#if ${layoutProp}.${named[1]}}`);
       continue;
     }
     if (!open.pop())
       problems.push({
         message:
-          'This {/layout} closes no layout: open each layout with {#layout Name} before its root <Node>, or remove the extra {/layout}.',
+          'This </Layout> closes no layout: open each layout with <Layout name="Name"> before its root <Node>, or remove the extra </Layout>.',
         start
       });
-    // A close written with an HTML tag's >, as {/layout>, is a slip taken as meant.
-    const closed = wellClosed.exec(line) ?? /^\{\/layout[ \t]*>/u.exec(line);
+    const closed = wellClosed.exec(line);
     if (closed) replace(start, closed[0], '{/if}');
     else
       problems.push({
-        message: `${/^\{\/layout[ \t]*>?/u.exec(line)![0]} does not close the layout: close the layout with {/layout}.`,
+        message: `${/^<\/Layout[^>]*>?/u.exec(line)![0]} does not close the layout: close the layout with </Layout>.`,
         start
       });
   }
   for (const { name, start } of open)
     problems.push({
-      message: `The layout ${name} is never closed: close the layout with {/layout} after its root <Node>.`,
+      message: `The layout ${name} is never closed: close the layout with </Layout> after its root <Node>.`,
       start
     });
   return { text: replaced, problems };
@@ -132,18 +124,18 @@ const significant = (part: Part) =>
 
 /** What the compiler says of a source without layouts. */
 export const noLayoutMessage =
-  'The view declares no layout: put what the page draws in {#layout Main}<Node>…</Node>{/layout}, one root <Node> holding the parts, and a second layout for another arrangement.';
+  'The view declares no layout: put what the page draws in <Layout name="Main"><Node>…</Node></Layout>, one root <Node> holding the parts, and a second layout for another arrangement.';
 
 /**
- * The page's layouts, and the view as Svelte parses it: each layout block an {#if}, its root's tags
- * blanked. `parse` gives the markup's top-level parts, from Svelte's parser. A view without layout
- * blocks has none, which the compiler refuses (see noLayoutMessage), with the view's other problems.
+ * The page's layouts, and the view as Svelte parses it: each layout an {#if}, its root's tags
+ * blanked. `parse` gives the markup's top-level parts, from Svelte's parser. A view without layouts
+ * has none, which the compiler refuses (see noLayoutMessage), with the view's other problems.
  */
 export function pageLayouts(
   text: string,
   parse: (text: string) => Part[]
 ): { text: string; layouts: PageLayout[]; problems: Problem[] } {
-  if (!/\{[#/]layout\b/u.test(text)) return { text, layouts: [], problems: [] };
+  if (!/<\/?Layout\b|\{[#/]layout\b/u.test(text)) return { text, layouts: [], problems: [] };
   const { text: blocks, problems } = rewritten(text);
   // A block left as written would only fail to parse.
   if (problems.length) return { text: blocks, layouts: [], problems };
@@ -157,7 +149,7 @@ export function pageLayouts(
       if (part.type !== 'SnippetBlock' && significant(part))
         problems.push({
           message:
-            'With layouts, the top level holds only parts, views, and layouts: render this in a layout, inside its root <Node>, as {#layout Side}<Node layout="row">{@render Board()}{@render Table()}</Node>{/layout}.',
+            'With layouts, the top level holds only parts, views, and layouts: render this in a layout, inside its root <Node>, as <Layout name="Side"><Node layout="row">{@render Board()}{@render Table()}</Node></Layout>.',
           start: part.start ?? 0
         });
       continue;
@@ -171,14 +163,14 @@ export function pageLayouts(
     names.add(name);
     if (part.else)
       problems.push({
-        message: `A layout has no {:else}: the variant shows one layout at a time, so write another arrangement as a layout of its own, {#layout Other}…{/layout}.`,
+        message: `A layout has no {:else}: the variant shows one layout at a time, so write another arrangement as a layout of its own, <Layout name="Other">…</Layout>.`,
         start
       });
     const body = (part.children ?? []).filter(significant);
     const [root] = body;
     if (body.length !== 1 || root.type !== 'InlineComponent' || root.name !== 'Node') {
       problems.push({
-        message: `The layout ${name}'s body is one root <Node>, the frame, holding what the page shows, as {#layout ${name}}<Node layout="row">{@render Board()}{@render Table()}</Node>{/layout}; every other part goes inside it.`,
+        message: `The layout ${name}'s body is one root <Node>, the frame, holding what the page shows, as <Layout name="${name}"><Node layout="row">{@render Board()}{@render Table()}</Node></Layout>; every other part goes inside it.`,
         start: (root ?? part).start ?? start
       });
       continue;

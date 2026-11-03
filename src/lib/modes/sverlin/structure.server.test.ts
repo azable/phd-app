@@ -22,8 +22,8 @@ const list = `<script lang="sverlin" domain>
   }));
 </script>
 <script lang="sverlin">
-  let cur = Next(head);
-  while (IsNode(cur)) @visit{
+  @run[let cur = Next(head);]
+  while (@guard[IsNode(cur)]) @visit{
     cur = cur.next;
   }
 </script>
@@ -37,11 +37,11 @@ const list = `<script lang="sverlin" domain>
   <Node layout="free">{#each all(ListNode) as node}{@render ListNode(node)}{/each}</Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Heap()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 const ring = `<script lang="sverlin" domain>
   const Name = type(['A', 'B', 'C', 'D']);
@@ -54,7 +54,7 @@ const ring = `<script lang="sverlin" domain>
   const next = Nexts([1, 2, 3, 0]);
 </script>
 <script lang="sverlin">
-  let at = Position(0);
+  @run[let at = Position(0);]
   @first[at = next[at];]
   @second[at = next[at];]
 </script>
@@ -65,11 +65,11 @@ const ring = `<script lang="sverlin" domain>
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Ring()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 const unlinked = `<script lang="sverlin" domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -80,17 +80,17 @@ const unlinked = `<script lang="sverlin" domain>
   const values = Values([3, 1, 2]);
 </script>
 <script lang="sverlin">
-  let i = Position(0);
+  @run[let i = Position(0);]
   @move[i = Position(1);]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 const designOf = (source: string) => prepareSvelteComponent(source).design;
 

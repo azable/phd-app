@@ -1304,7 +1304,7 @@ describe('submitProjectFeedback', () => {
         '<script lang="sverlin"></script>',
         '{#snippet Shown()}<Node>one</Node>{/snippet}',
         snippet,
-        '{#layout Main}<Node>',
+        '<Layout name="Main"><Node>',
         '<Node>{@render Shown()}</Node>',
         '<Node>two</Node>',
         '<Node>three</Node>',
@@ -1312,12 +1312,12 @@ describe('submitProjectFeedback', () => {
         `</Node>${close}`
       ].join('\n');
     const sources = {
-      unclosed: lines('{/layout'),
-      twice: lines('{/layout}', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
-      unknown: lines('{/layout}', '', '<Node>{@render Missing()}</Node>'),
+      unclosed: lines('</Layout'),
+      twice: lines('</Layout>', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
+      unknown: lines('</Layout>', '', '<Node>{@render Missing()}</Node>'),
       rewritten:
-        '<script lang="sverlin"></script>\n{#layout Main}\n<Node>{@render Gone()}</Node>\n{/layout}',
-      working: lines('{/layout}')
+        '<script lang="sverlin"></script>\n<Layout name="Main">\n<Node>{@render Gone()}</Node>\n</Layout>',
+      working: lines('</Layout>')
     };
     // Each explains a difficulty, as the simpler fallback must; the others' are dropped.
     const attempts = (...names: (keyof typeof sources)[]) => {
@@ -2220,7 +2220,7 @@ describe('submitProjectFeedback', () => {
       type: 'presentation-ref',
       presentationId,
       step: 1,
-      stepName: '@check#1'
+      stepName: '@check.equal#1'
     });
   });
 
@@ -2325,7 +2325,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n{#layout Main}<Node>{@render Shown()}</Node>{/layout}`,
+              : `<script lang="sverlin"></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Shown()}</Node></Layout>`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -2655,14 +2655,17 @@ describe('assistant edits', () => {
     const { document, source } = await created('Edited');
     // The caption is a part, rendered in the layout, as the top level holds only parts and layouts.
     const captioned = source
-      .replace('{#layout Main}', '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}')
+      .replace(
+        '<Layout name="Main">',
+        '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
+      )
       .replace('{@render Result()}', '{@render Result()}{@render Note()}');
     mocks.generatePrepared.mockReset().mockResolvedValue(
       edit(
         [
           {
-            find: '{#layout Main}',
-            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+            find: '<Layout name="Main">',
+            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
           },
           { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
         ],
@@ -2689,8 +2692,8 @@ describe('assistant edits', () => {
         action: 'edit' as const,
         edits: [
           {
-            find: '{#layout Main}',
-            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+            find: '<Layout name="Main">',
+            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
           },
           { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
         ],
@@ -2709,7 +2712,7 @@ describe('assistant edits', () => {
     );
     expect(presentation?.variant?.['pause@missing']).toBe('off');
     expect(presentation?.origins?.['pause@missing']).toBe('chosen');
-    expect(presentation?.variant?.['pause@check']).toBe('on');
+    expect(presentation?.variant?.['pause@check.equal']).toBe('on');
   });
 
   it('asks again with what kept the edits from applying, and accepts the correction', async () => {
@@ -3272,9 +3275,9 @@ describe('several variants from chat', () => {
   it('sends a picture too large to read back once, then shows it as built', async () => {
     const wide = [
       '<script lang="sverlin"></script>',
-      '{#layout Main}<Node layout="row">',
+      '<Layout name="Main"><Node layout="row">',
       ...Array.from({ length: 150 }, (_, index) => `<Node>cell ${index}</Node>`),
-      '</Node>{/layout}'
+      '</Node></Layout>'
     ].join('\n');
     const result = await attempts(
       () => ({
@@ -3358,8 +3361,8 @@ describe('several variants from chat', () => {
 
   const caption = [
     {
-      find: '{#layout Main}',
-      replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n{#layout Main}'
+      find: '<Layout name="Main">',
+      replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
     },
     { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
   ];

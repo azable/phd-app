@@ -49,27 +49,31 @@ participants can select it and presentations can vary it. Nodes take no props
 that set a look: a node's kind is the snippet it is in, and the design gives
 each kind its look. Every input and algorithm variable in scope at the selected
 step and the library components are already in scope; never write `import`, and
-never declare names `Node`, `Link`, `Pointed`, or `Listing`.
+never declare names `Node`, `Link`, `Pointed`, `Listing`, `Layout`, `When`, or
+`OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`, `{#snippet}`);
+Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
+`<When>`.
 
 - The top level holds parts, views, and at least one layout: every source
   declares its layouts, and one without is refused. A snippet without parameters
   is a part of the page, as
   `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
   renders it, `{@render Title()}`; a part reads what a layout reads and renders
-  parts, views, and operators. A layout, `{#layout Side}…{/layout}`, arranges
-  the whole page: its body is one root `<Node>`, the frame (see Page frame),
-  which holds renders, with `{#if}` and `{#each}` around them, a `<Listing />`,
-  and nodes arranging them, and is selectable as the whole page. Its only prop
-  is `layout`, `row` or `column` (the start), how it arranges what it holds.
-  Render the parts in the root rather than one part holding the whole page.
+  parts, views, and operators. A layout, `<Layout name="Side">…</Layout>`,
+  arranges the whole page, its one prop its name: its body is one root `<Node>`,
+  the frame (see Page frame), which holds renders, with `{#if}` and `{#each}`
+  around them, a `<Listing />`, and nodes arranging them, and is selectable as
+  the whole page. Its only prop is `layout`, `row` or `column` (the start), how
+  it arranges what it holds. Render the parts in the root rather than one part
+  holding the whole page.
 
 ```svelte
-{#layout Side}
+<Layout name="Side">
   <Node layout="row">{@render Board()}<Node>{@render Table()}<Listing /></Node></Node>
-{/layout}
-{#layout Stacked}
+</Layout>
+<Layout name="Stacked">
   <Node>{@render Title()}{@render Board()}{@render Table()}</Node>
-{/layout}
+</Layout>
 ```
 
 - The variant shows one layout, its `layout` variable (see Design), the first
@@ -77,8 +81,8 @@ never declare names `Node`, `Link`, `Pointed`, or `Listing`.
   open how the page is arranged or what it holds, as the parts side by side or
   stacked, or the page with a listing against one without; layouts, as views,
   differ in how they arrange the parts or which they hold, never only in look,
-  which is the variant's. A part looks alike in every layout. A layout block
-  arranges the page, a node's `layout` prop its children.
+  which is the variant's. A part looks alike in every layout. A layout arranges
+  the page, a node's `layout` prop its children.
 - Draw every value of a domain type through a view of its type, as
   `{@render Int(target)}`, and every position through a pointer; the markup
   around them arranges, labels, and explains. A node of text and renders with no
@@ -189,21 +193,31 @@ written in the view so the label is a kind of its own.
   `@name{` on a block the code already has, a loop's, an `if`'s, or a function's
   body, as `for (…) @insert{`. A name is one word, without dots, and the
   algorithm runs as if the marks were spaces. A labelled loop runs its code once
-  per pass, its test leading up to the pass; a label on a function's body runs
-  once per call, recursive calls included.
+  per pass; a label on a function's body runs once per call, recursive calls
+  included.
+- No code runs outside a label. Every statement of the algorithm, at its top
+  level and in each function's body, is inside a label, as
+  `@run[const found = search(values, target);]`. Every test of an `if`, `while`,
+  or `do … while` is a label's own code, or conditions joined by `&&` and `||`
+  that each are, as `if (@base[Short(lo, hi)])` or
+  `while (@bound[Before(Position(0), j)] && @compare[Greater(…)])`, so each
+  decision is a step, its value the condition's, even where it fails. Each part
+  of a `for` header is a label's own code too, as
+  `for (@start[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @scan{`:
+  the start runs once, the test before each pass and once more at the end, its
+  last value false, and the move after each pass, before the next test, so
+  `@scan#1`, then `@next#1`, then `@more#2`.
 - A label inside another takes its name as a prefix: `@shift[…]` inside
   `@insert{` is `insert.shift`. A label around statements in a row runs from the
   first to the last, the labels inside it included:
   `@merge[@copy[…] for (…) @take{…}]` ends after the loop's last pass. Two
   labels may not mark the same code, as `@add[@one[n = Up(n);]]`: they would
-  pause and draw together, so keep one name. Once the algorithm, a label, or a
-  function's body has labelled statements, every statement in it is inside one
-  or contains one, so only loops' headers and tests run outside every label; a
-  statement left out is an error naming the labels beside it. Declarations
-  leading a block, before its first labelled statement, need no label, as
-  `let min = i;` at the top of `@select{`. A label on part of a statement asks
-  nothing of the code around it. An algorithm with no labels has one step, its
-  end.
+  pause and draw together, so keep one name. Once a label or a function's body
+  has labelled statements, every statement in it is inside one or contains one;
+  a statement left out is an error naming the labels beside it. Declarations
+  leading a labelled block, before its first labelled statement, need no label
+  of their own, as `let min = i;` at the top of `@select{`. A label on part of a
+  statement asks nothing of the code around it.
 - The page pauses where labels finish, and only there: a pause at a label is a
   step at the end of each of its runs, so a check finding nothing is a step too.
   Each label is a variable, `pause@` and its full name, as
@@ -262,17 +276,20 @@ written in the view so the label is a kind of its own.
 
 ## Loops and functions
 
-The algorithm's loops and branches are JavaScript's: `for`,
-`for (const v of values)`, `while`, `do ... while`, `if` and `else`, `break`,
-and `continue`. End a loop with `break` or `return` where it has what it looks
-for, rather than a flag its test reads, and walk only what each step is about,
-as a vertex's own neighbours rather than every edge. Use
-`for (const v of values)` where a loop only reads the values and the view points
-at none of them, as a sum, and an index loop where the position matters: a
-pointer, a write back, a neighbour, or a position as the result. A `for … of`
-variable refers to the element it is at, as a reference does: with
-`const At = ref(Digits);` and a pointer view of `At`, `{@render At(v)}` marks
-the cell `v` is at in `for (const v of digits)`.
+The algorithm's loops and branches are JavaScript's: `for`, `while`,
+`do ... while`, `if` and `else`, `break`, and `continue`, each test and each
+part of a `for` header labelled (see Steps). End a loop with `break` or `return`
+where it has what it looks for, rather than a flag its test reads, and walk only
+what each step is about, as a vertex's own neighbours rather than every edge.
+`for … of` is refused, as its header walks a collection in a way no label can
+split: walk it with an index, its start, test, and move labelled, and read the
+element at the index, as
+`for (@first[let k = Slot(around, 0)]; @another[Within(k, Count(around))]; @step[k = Step(k)]) @look{ const w = around[k]; … }`,
+where `Slot = index(Neighbours)` and `around` is the list declared before the
+loop. A position names the collection it points into, as `Slot(around, 0)`,
+where that is not the only one of its type at the top level, and draws as a
+pointer into it: with a pointer view of `Position`, `{@render Position(i)}`
+marks the cell `i` points at as an index loop walks `digits`.
 
 A function is declared at the top level of the algorithm block, as
 `function search(a, target) { ... }`, and sees only its parameters: give it the
@@ -309,12 +326,12 @@ Binary search, stopping where it finds the target:
 </script>
 
 <script lang="sverlin">
-  let lo = Index(0);
-  let hi = Last(values);
-  while (NotAfter(lo, hi)) @probe{
+  @range[let lo = Index(0);
+  let hi = Last(values);]
+  while (@open[NotAfter(lo, hi)]) @probe{
     const mid = Middle(lo, hi);
-    @check[if (Equal(values[mid], target)) break;]
-    if (Less(values[mid], target)) @right{ lo = Next(mid); } else @left{ hi = Prev(mid); }
+    @check[if (@found[Equal(values[mid], target)]) break;]
+    if (@low[Less(values[mid], target)]) @right{ lo = Next(mid); } else @left{ hi = Prev(mid); }
   }
 </script>
 
@@ -325,7 +342,7 @@ Binary search, stopping where it finds the target:
 {#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
 {#snippet Range()}<Node>between {@render Index(lo)} and {@render Index(hi)}</Node>{/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Title()}
     {@render Cells()}
@@ -334,7 +351,7 @@ Binary search, stopping where it finds the target:
     {@render Index(mid)}
     {@render Index(hi)}
   </Node>
-{/layout}
+</Layout>
 ```
 
 Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; in the root
@@ -469,9 +486,9 @@ nodes `prev` and `cur` refer to both marked:
 </script>
 
 <script lang="sverlin">
-  let prev = Next(End('end'));
-  let cur = Next(head);
-  while (IsNode(cur)) @rewire{
+  @begin[let prev = Next(End('end'));
+  let cur = Next(head);]
+  while (@more[IsNode(cur)]) @rewire{
     const after = cur.next;
     cur.next = prev;
     prev = cur;
@@ -490,13 +507,13 @@ nodes `prev` and `cur` refer to both marked:
   <Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>
 {/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Heap()}
     {@render NodeRef(prev)}
     {@render NodeRef(cur)}
   </Node>
-{/layout}
+</Layout>
 ```
 
 - `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
@@ -555,10 +572,10 @@ The input and algorithm compute nothing themselves: everything computed is an
 operator the domain declares, unary or binary, a function of typed operands, as
 `binop((a: Int, b: Int) => Flag(a > b))`, the only place types are written. The
 algorithm applies it as a call, each operand taking its parameter's type:
-`if (Equal(values[i], target)) break;`, `total = Add(total, v);`. Writing stays
-plain: `=` puts a value into a variable, element, or field. Name operators for
-what they compute, as `Before`, `Middle`, or `Shorter`, and keep those walking a
-collection apart from those for what the algorithm does:
+`if (@found[Equal(values[i], target)]) break;`, `total = Add(total, v);`.
+Writing stays plain: `=` puts a value into a variable, element, or field. Name
+operators for what they compute, as `Before`, `Middle`, or `Shorter`, and keep
+those walking a collection apart from those for what the algorithm does:
 
 ```js
 // walking the collection
@@ -592,7 +609,8 @@ const Equal = binop((a: Int, b: Int) => Flag(a === b));
   `Queue([...q, x])` or `Edge({ from: e.to, to: e.from })`. A new element,
   computed or literal, is refused: compute it with a value operator and write
   it, `values[p] = Inc(values[p])`, or pass it in. A collection filled at run
-  time is built in a loop, `for (const v of vertices) dist = Append(dist, u);`.
+  time is built in a loop,
+  `for (@first[let v = VertexRef(0)]; @more[Before(v, Length(vertices))]; @next[v = Next(v)]) @add[dist = Append(dist, u);]`.
   Each branch of a conditional inside the type is held to the same, as
   `Queue(q.includes(v) ? q : [...q, v])`, the type wrapping the whole
   conditional.
@@ -645,8 +663,8 @@ place:
 </script>
 
 <script lang="sverlin">
-  for (let end = Length(values); Before(Index(1), end); end = Prev(end)) @sweep{
-    for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
+  for (@last[let end = Length(values)]; @more[Before(Index(1), end)]; @shrink[end = Prev(end)]) @sweep{
+    for (@first[let i = Index(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
       if (@test[Greater(values[Prev(i)], values[i])]) @swap{
         const moved = values[Prev(i)];
         values[Prev(i)] = values[i];
@@ -666,19 +684,19 @@ place:
 {#snippet Board()}
   <Node layout="column">
     {@render Cells()}
-    {#if when(@sweep.pair.test)}
+    <OneOf><When of="@sweep.pair.test">
       {@render Greater(@sweep.pair.test)}
-    {:else if when(@sweep.pair.swap)}
+    </When><When of="@sweep.pair.swap">
       {@render Swapping()}
-    {/if}
+    </When></OneOf>
   </Node>
 {/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Board()}
   </Node>
-{/layout}
+</Layout>
 ```
 
 Paused at both, a comparison reads "is 5 > 1? yes", its operands lifting out of
@@ -704,14 +722,14 @@ so every mark looks the same, marking with a label rather than a loop variable
 (`@right`, not `i`) where the mark is what the step used:
 
 ```js
-for (let i = Index(1); Before(i, end); i = Next(i)) @pair{
-  if (Greater(values[@left[Prev(i)]], values[@right[i]])) @swap{ … }
+for (@first[let i = Index(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pair{
+  if (@compare[Greater(values[@left[Prev(i)]], values[@right[i]])]) @swap{ … }
 }
 ```
 
 ```svelte
-{@render Index(@pair.left)}
-{@render Index(@pair.right)}
+{@render Index(@pair.compare.left)}
+{@render Index(@pair.compare.right)}
 ```
 
 A label gives a value only where its code ran, `&&` skipping it included, so the
@@ -727,20 +745,20 @@ reads, `values[@from[Prev(j)]]` and `values[@to[j]]`, with
 the pairs found out of order red, and with `pause@insert.swap.to` on, as a step
 of their own before anything is written. Showing or hiding something at some
 steps needs no flag, sentinel, or cast in the algorithm: a label, a pointer at a
-label, a view chosen per place, or `{#if when(@label)}` below does it.
+label, a view chosen per place, or `<When of="@label">` below does it.
 
-`{#if when(@insert.swap)}…{/if}` draws its contents at each step inside a run of
-a label, any label: the step that ends a run and those inside it where labels
+`<When of="@insert.swap">…</When>` draws its contents at each step inside a run
+of a label, any label: the step that ends a run and those inside it where labels
 within pause, whatever the pauses, never steps leading up to it or after it;
-elsewhere they are hidden, keeping their room. `when(start)` and `when(end)`
-draw them at the first step, the input as given, and at the last, as a note on
-what the algorithm starts from or ends with. `when(…)` is the whole test, never
-part of another condition, and never reads the label's value (`{#if @label}` is
-refused); no `{:else}`. Branches that take turns share one place, as large as
-the largest, `{#if when(@a)}…{:else if when(@b)}…{/if}`, as in bubble sort
-above; a chain whose branches would show at one step, as a label and one inside
-it, is refused. Text that changes from step to step in one place, as a status
-line saying what each step does, is one chain: separate `{#if when(…)}` blocks
+elsewhere they are hidden, keeping their room. `of="start"` and `of="end"` draw
+them at the first step, the input as given, and at the last, as a note on what
+the algorithm starts from or ends with. A `<When>` names one label or moment and
+never reads the label's value (`{#if @label}` is refused); it has no `{:else}`.
+Branches that take turns share one place, as large as the largest,
+`<OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>`, as in bubble sort
+above; a `<OneOf>` whose branches would show at one step, as a label and one
+inside it, is refused. Text that changes from step to step in one place, as a
+status line saying what each step does, is one `<OneOf>`: separate `<When>`s
 each keep their own room, so their texts stack down the page instead of
 replacing one another.
 
@@ -887,17 +905,19 @@ amber accent.
 
 A render with an argument is a place, named by what is written there after `@`:
 a label, by its full name, a variable, or a field, as
-`{@render Index(@pair.left)}` at `@pair.left`, `{@render Index(found)}` at
-`@found`, and `{@render Int(g.a)}` in `Ask` at `Ask.` and `@g.a`. A render of
-another expression, or with nothing between the brackets, is none. Every render
-is drawn by the view its type's variable chooses, in its kinds' looks; a place
-has variables of its own that fall back to those until a variant sets them, so
-one render is drawn apart with nothing declared:
+`{@render Index(@pair.compare.left)}` at `@pair.compare.left`,
+`{@render Index(found)}` at `@found`, and `{@render Int(g.a)}` in `Ask` at
+`Ask.` and `@g.a`. A render of another expression, or with nothing between the
+brackets, is none. Every render is drawn by the view its type's variable
+chooses, in its kinds' looks; a place has variables of its own that fall back to
+those until a variant sets them, so one render is drawn apart with nothing
+declared:
 
 - its own choice of view, where its type has more than one view of the kind it
   draws, as `pointers.Index@found` or `views.Int@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
-  can draw, nested snippets included, as `Highlight.Pointed@pair.left.fill` or
+  can draw, nested snippets included, as
+  `Highlight.Pointed@pair.compare.left.fill` or
   `IntTally.Tally@swap.held.shown`, though not for another view that view
   renders.
 
@@ -905,7 +925,7 @@ one render is drawn apart with nothing declared:
 {
   "pointers.Index": "Highlight",
   "pointers.Index@found": "Arrow",
-  "Highlight.Pointed@pair.left.fill": "sky-100",
+  "Highlight.Pointed@pair.compare.left.fill": "sky-100",
   "IntCell@swap.held.fill": "neutral-100"
 }
 ```
@@ -969,12 +989,13 @@ variables:
 ## The subset
 
 - Allowed: numbers, strings, booleans, and the collections and records their
-  types make; `if`, `for`, `for (const x of array)`, `while`, `do ... while`,
-  `break`, `continue`, and functions at the top level of the algorithm block
-  (see Loops and functions); `&&`, `||`, `??`, and `? :`; writes with `=`; and
-  the operators the domain declares (see Operators), whose functions may use
-  JavaScript's operators, template strings, `.length`, the collection methods
-  (`[...c, x]`, `.slice`, `.indexOf`, `.includes`, `.join`), and
+  types make; `if`, `for`, `while`, `do ... while`, each test and each part of a
+  `for` header labelled, not `for … of`; `break`, `continue`, and functions at
+  the top level of the algorithm block (see Loops and functions); `&&`, `||`,
+  `??`, and `? :`; writes with `=`; and the operators the domain declares (see
+  Operators), whose functions may use JavaScript's operators, template strings,
+  `.length`, the collection methods (`[...c, x]`, `.slice`, `.indexOf`,
+  `.includes`, `.join`), and
   `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI`.
 - Not allowed: `null` and `undefined`, other functions, such as arrow functions
   outside an operator and functions inside blocks, `new`, classes, `this`, `==`,
@@ -1102,7 +1123,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </script>
 
 <script lang="sverlin">
-  for (let i = Position(1); Before(i, Length(values)); i = Next(i)) @insert{
+  for (@start[let i = Position(1)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @insert{
     @key[const key = values[i];]
     @init[let j = i;]
     while (@test[@bound[Before(Position(0), j)] && @cmp[Greater(values[Prev(j)], key)]]) @shift{
@@ -1115,7 +1136,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 <script lang="sverlin" listing="textbook">
   INSERTION-SORT(A, n)
-  1  for i = 2 to n
+  1  for @start[i = 2] @more[to n] @next[step 1]
   2      @insert[@key[$key[key] = $i[A[i]]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
   4      @init[j = i - 1]
@@ -1136,13 +1157,13 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   </Node>
 {/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Board()}
     {@render Position(i)}
     {@render Position(j)}
   </Node>
-{/layout}
+</Layout>
 ```
 
 ## Node
@@ -1253,11 +1274,15 @@ at marked and the queue drawn by number:
   const Vertices = collection(Vertex);
   const VertexRef = index(Vertices);
   const Out = collection(VertexRef);
+  const Slot = index(Out);
   const Adjacency = collection(Out);
   const Queue = collection(VertexRef);
 
   const Waiting = unop((q: Queue) => Flag(q.length > 0));
   const Not = unop((f: Flag) => Flag(!f));
+  const Count = unop((n: Out) => Slot(n.length));
+  const Within = binop((a: Slot, b: Slot) => Flag(a < b));
+  const Step = unop((p: Slot) => Slot(p + 1));
   const Append = binop((q: Queue, v: VertexRef) => Queue([...q, v]));
   const Rest = unop((q: Queue) => Queue(q.slice(1)));
 </script>
@@ -1274,12 +1299,14 @@ at marked and the queue drawn by number:
 </script>
 
 <script lang="sverlin">
-  let queue = Queue([0]);
-  while (Waiting(queue)) @visit{
+  @init[let queue = Queue([0]);]
+  while (@more[Waiting(queue)]) @visit{
     @take[const current = queue[0];
-    queue = Rest(queue);]
-    for (const w of out[current]) @look{
-      if (Not(vertices[@next[w]].seen)) @add{
+    queue = Rest(queue);
+    const around = out[current];]
+    for (@first[let slot = Slot(around, 0)]; @another[Within(slot, Count(around))]; @step[slot = Step(slot)]) @look{
+      const w = around[slot];
+      if (@check[Not(vertices[@next[w]].seen)]) @add{
         vertices[w].seen = true;
         queue = Append(queue, w);
       }
@@ -1304,23 +1331,23 @@ at marked and the queue drawn by number:
 {/snippet}
 {#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
 
-{#layout Stacked}
+<Layout name="Stacked">
   <Node>
     {@render Graph()}
     {@render QueueLine()}
     {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.next)}
+    {@render VertexRef(@visit.look.check.next)}
   </Node>
-{/layout}
+</Layout>
 
-{#layout Side}
+<Layout name="Side">
   <Node layout="row">
     {@render Graph()}
     {@render QueueLine()}
     {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.next)}
+    {@render VertexRef(@visit.look.check.next)}
   </Node>
-{/layout}
+</Layout>
 ```
 
 ```

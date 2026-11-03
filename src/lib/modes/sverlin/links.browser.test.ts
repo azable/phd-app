@@ -60,11 +60,11 @@ const insertion = `<script lang="sverlin" domain>
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
   </Node>
-{/layout}`;
+</Layout>`;
 
 it.skipIf(!enabled)(
   'joins the two swapped cells with an arrow at the swap step only',

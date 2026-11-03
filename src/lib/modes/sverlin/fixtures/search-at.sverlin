@@ -18,8 +18,8 @@
 </script>
 
 <script lang="sverlin">
-  let lo = Index(0);
-  let hi = Last(values);
+  @range[let lo = Index(0);
+  let hi = Last(values);]
   while (@open[Before(lo, hi)]) @probe{
     const mid = @mid[Middle(lo, hi)];
     if (@low[Less(values[mid], target)]) @right[lo = Next(mid);]
@@ -41,11 +41,11 @@
   </Node>
 {/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Cells()}
     {@render Bounds()}
     {@render Index(lo)}
     {@render Index(hi)}
   </Node>
-{/layout}
+</Layout>

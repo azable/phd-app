@@ -153,7 +153,7 @@ export function unchosenViews(
 }
 
 /**
- * The layouts no shown presentation drew, each from its {#layout to the end of its {/layout}, while
+ * The layouts no shown presentation drew, each from its <Layout to the end of its </Layout>, while
  * every shown presentation recorded its layout.
  */
 export function unchosenLayouts(
@@ -164,8 +164,8 @@ export function unchosenLayouts(
   if (!chosen.length || !chosen.every((name) => typeof name === 'string')) return [];
   const doc = state.doc.toString();
   const picked = [...new Set(chosen)].join(' and ');
-  return [...doc.matchAll(/\{#layout[ \t]+([A-Za-z_$][\w$]*)[^}]*\}/gu)].flatMap((match) => {
-    const close = /\{\/layout\s*\}/gu;
+  return [...doc.matchAll(/<Layout[ \t]+name="([A-Za-z_$][\w$]*)"[^>]*>/gu)].flatMap((match) => {
+    const close = /<\/Layout\s*>/gu;
     close.lastIndex = match.index;
     const end = close.exec(doc);
     return chosen.includes(match[1]) || !end

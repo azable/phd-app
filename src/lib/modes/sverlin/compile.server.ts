@@ -40,6 +40,7 @@ import {
   markLabels,
   momentTarget,
   resolveLabel,
+  whenTags,
   written as asWritten
 } from './label-values';
 import type { Listing, PlaceToken } from './listing/listing';
@@ -299,7 +300,7 @@ export type PreparedComponent = {
   labelled?: Record<string, { label: string; sample?: LabelRun }>;
   /** The operators whose applications so far inside a label the root draws, by key. */
   histories?: Record<string, { operator: string; start: number; end: number }>;
-  /** The labels {#if when(…)} blocks draw their contents in the runs of, by full name, by key. */
+  /** The labels <When>s draw their contents in the runs of, by full name, by key. */
   during?: Record<string, string>;
   /** The view's nodes and renders, and its views, for what each presentation leaves out. */
   leftOut?: { model: LeftOutModel; components: string[] };
@@ -453,7 +454,7 @@ function paced(
   keep: Parameters<typeof traceAlgorithm>[4] = {}
 ): ReturnType<typeof traceAlgorithm> {
   const run = interpretBlock(source, algorithm, (body) =>
-    traceAlgorithm(body, input, domain, pacing, keep)
+    traceAlgorithm(body, input, domain, pacing, keep, true)
   );
   return { ...run, steps: [run.opening, ...run.steps] };
 }
@@ -529,7 +530,9 @@ export function listingsOf(source: string): Record<string, Listing> {
     ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
     : { state: {}, types: {} };
   const algorithm = blocks.algorithm;
-  const traced = interpretBlock(source, algorithm, (body) => traceAlgorithm(body, input, domain));
+  const traced = interpretBlock(source, algorithm, (body) =>
+    traceAlgorithm(body, input, domain, {}, {}, true)
+  );
   return listingsFrom(source, traced, algorithm, listingBlocks).listings;
 }
 
@@ -592,8 +595,20 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
   try {
     const extracted = extractBlocks(source);
     const { blocks, listings: listingBlocks } = extracted;
-    // Labels the markup reads become identifiers of the same length (see label-values.ts).
-    const { source: marked, references, heaps } = markLabels(extracted.svelteSource);
+    // <When> and <OneOf> become {#if when(…)} chains no longer than written, and the labels the
+    // markup reads identifiers of the same length (see label-values.ts).
+    const asIfs = whenTags(extracted.svelteSource);
+    if (asIfs.problems.length)
+      throw InvalidSvelteSourceError.combine(
+        asIfs.problems.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_label',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
+    const { source: marked, references, heaps } = markLabels(asIfs.source);
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -992,7 +1007,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const labelled: Record<string, { label: string; sample?: LabelRun }> = {};
     const histories: Record<string, { operator: string; start: number; end: number }> = {};
     const narrowed = new Map<string, { start: number; end: number }>();
-    // The labels {#if when(…)} blocks draw their contents in the runs of, by key.
+    // The labels <When>s draw their contents in the runs of, by key.
     const during: Record<string, string> = {};
     const tested = ifTestsOf(ast.html, isLabelKey);
     const duringTests = ifTestsOf(ast.html, isDuringKey);
@@ -1003,20 +1018,18 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
-          const call = reference.moment
-            ? `when(${reference.moment})`
-            : `when(@${reference.path ?? ''})`;
+          const call = `<When of="${reference.moment ?? `@${reference.path ?? ''}`}">`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(
               `${call} is in a view, which draws only its value: write it in the root or a part of the page.`
             );
           else if (reference.path === undefined && !reference.moment)
             problem(
-              'when() takes a label by its full name, as {#if when(@insert.swap)}…{/if}, and draws its contents at each step inside a run of that label; when(start) and when(end) draw them at the first step, the input as given, and the last.'
+              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a run of that label; of="start" and of="end" draw them at the first step, the input as given, and the last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
-              `${call} is the whole test of an {#if} or {:else if}, as {#if ${call}}…{/if}, saying at which steps its contents show; it is never part of another condition.`
+              `${call} says at which steps its contents show, as ${call}…</When>; it is never part of a condition.`
             );
           else if (reference.moment) during[reference.key] = momentTarget(reference.moment);
           else if (reference.path !== undefined) {
@@ -1028,7 +1041,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         }
         if (reference.kind === 'value' && tested.has(reference.start)) {
           problem(
-            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: {#if when(${asWritten(reference.key)})}…{/if} draws its contents at each step inside a run of the label.`
+            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <When of="${asWritten(reference.key)}">…</When> draws its contents at each step inside a run of the label.`
           );
           continue;
         }
@@ -1073,7 +1086,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     for (const start of whens.elses)
       labelProblems.push(
         new InvalidSvelteSourceError(
-          "An {#if when(…)} has no {:else}: what shows outside the label's runs goes beside the block, where it shows at every step, and another label's steps take a branch of their own, {:else if when(@insert.swap)}.",
+          'A <When> has no {:else}: what shows outside the label\'s runs goes beside the <When>, where it shows at every step, and another label\'s steps take a branch of their own, as <OneOf><When of="@insert.compare">…</When><When of="@insert.swap">…</When></OneOf>.',
           { code: 'view_label', start: sourcePosition(source, start) }
         )
       );
@@ -1167,7 +1180,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       const steps = [...new Set(both.map(({ step }) => step))];
       return [
         new InvalidSvelteSourceError(
-          `The {#if when(…)} chain's branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a chain's branches take turns in one place, so give each a label whose runs never meet the others', or write them as blocks of their own.`,
+          `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a <OneOf>'s branches take turns in one place, so give each a label whose runs never meet the others', or write them as <When>s of their own.`,
           { code: 'view_label', start: sourcePosition(source, start) }
         )
       ];
@@ -1427,7 +1440,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         scopedReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: {#if when(${asWritten(name)})}…{/if} draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
+              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1792,7 +1805,7 @@ export async function bundlePresentation(
       for (const [path, target] of Object.entries(run.targets))
         (own ? ownTargets : standIn.targets)[at(path, key)] = target;
     }
-    // An {#if when(…)} block's label: there where the step is inside one of its runs, else hidden, its
+    // A <When>'s label: there where the step is inside one of its runs, else hidden, its
     // contents keeping their room.
     for (const [key, label] of Object.entries(prepared.during ?? {}))
       (atWhen(label, master, step) ? ownApplied : standIn.state)[key] = true;
@@ -3168,7 +3181,7 @@ type IfPart = {
   else?: { start?: number; children?: IfPart[] };
 };
 
-/** The {:else if when(…)} branch following an {#if when(…)} block or branch, on a key by now. */
+/** A <OneOf>'s next branch, an {:else if when(…)} after a <When> as rewritten, on a key by now. */
 function nextBranch(part: IfPart): IfPart | undefined {
   const [next, ...rest] = (part.else?.children ?? []).filter(
     (child) => child.type !== 'Text' || String((child as { data?: string }).data ?? '').trim()
@@ -3183,7 +3196,7 @@ function nextBranch(part: IfPart): IfPart | undefined {
 }
 
 /**
- * Each {#if when(…)} block's chain of branches, by where it starts, its keys in order; and where each
+ * Each <When>'s chain of branches, a <OneOf>'s as rewritten, by where it starts, its keys in order; and where each
  * {:else} of one starts, as no branch (see label-values.ts).
  */
 function whenChainsOf(markup: unknown): {
@@ -3220,7 +3233,7 @@ function whenChainsOf(markup: unknown): {
 
 /**
  * Where each {#if} or {:else if} whose test is one key alone starts its test, as {#if @insert.swap}
- * for a label read or {#if when(@insert.swap)} for its runs.
+ * for a label read or <When of="@insert.swap"> for its runs.
  */
 function ifTestsOf(markup: unknown, is: (name: string) => boolean): Set<number> {
   const found = new Set<number>();
@@ -3419,7 +3432,7 @@ export type LabelRuns = { runs: number; drawn: number };
 /**
  * For each label, its runs in the steps given (paced at every label), and how many change what the
  * view draws: a variable it reads, a label's value it renders, an application of an operator it
- * renders at a label, or a label it draws for in an {#if when(…)}.
+ * renders at a label, or a label it draws for in a <When>.
  */
 function labelRuns(
   steps: readonly MasterStep[],
@@ -3449,16 +3462,15 @@ function labelRuns(
   return runs;
 }
 
-/** Whether an {#if when(…)} draws at master step `at`: inside a run of its label, or the first or last step. */
+/** Whether a <When> draws at master step `at`: inside a run of its label, or the first or last step. */
 function atWhen(target: string, steps: readonly MasterStep[], at: number): boolean {
   if (target === momentTarget('start')) return at === 0;
   if (target === momentTarget('end')) return at === steps.length - 1;
   return steps[at].inside?.includes(target) ?? false;
 }
 
-/** What an {#if when(…)} names, as written. */
-const whenText = (target: string) =>
-  target.startsWith('#') ? `when(${target.slice(1)})` : `@${target}`;
+/** What a <When> names, as its `of` is written. */
+const whenText = (target: string) => (target.startsWith('#') ? target.slice(1) : `@${target}`);
 
 /**
  * The heap each reference refers into, by the path of the value with its indices as [], as

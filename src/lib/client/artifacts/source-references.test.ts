@@ -24,13 +24,13 @@ const source = `<script lang="sverlin" domain>
 {#snippet Row(list: Values)}
   {#snippet Under()}<Node>i</Node>{/snippet}
 {/snippet}
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Index(@compare.left)}
     {@render Index(@compare.right)}
     {@render Int(@compare.swap.held)}
   </Node>
-{/layout}`;
+</Layout>`;
 
 /** The text each region covers. */
 const named = (text: string) =>
@@ -67,12 +67,12 @@ describe('references in messages', () => {
   @rise[if @compare[A[@left[i - 1]] > A[i]]]
   @fall[if @compare[A[@left[i - 1]] < A[i]]]
 </script>
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Index(@rise.compare.left)}
     {@render Index(@fall.compare.left)}
   </Node>
-{/layout}`;
+</Layout>`;
     const at = (label: string) => referenceRanges(twice, label).map(({ from }) => from);
     const all = (text: string) =>
       [...twice.matchAll(new RegExp(text.replace(/[.[()]/gu, '\\$&'), 'gu'))].map(
@@ -189,11 +189,11 @@ describe('code in an error message', () => {
 <script lang="sverlin">let i = Index(1);</script>
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
 
-{#layout Main}
+<Layout name="Main">
   <Node>
     {@render Highlight(@left)}
   </Node>
-{/layout}`;
+</Layout>`;
   const code = (text: string, inSource = dotted) =>
     codeIn(inSource, text).flatMap((span) => (span.code ? [span.text] : []));
 

@@ -313,9 +313,105 @@ describe('pauses at labels', () => {
     expect(traceAlgorithm('@a[const n = Int(1);]', undefined, domain).opening.state).toEqual({});
   });
 
-  it('give a source without labels one step, its end', () => {
+  it('give a fragment without labels one step, its end', () => {
     const trace = steps('const n = Int(1);');
     expect(trace).toHaveLength(1);
     expect(trace[0].state.n).toBe(1);
+  });
+});
+
+describe('no code outside a label, in an authored source', () => {
+  const authored = (body: string) => traceAlgorithm(body, input, domain, {}, {}, true).steps;
+  const names = (body: string) => authored(body).map(({ name }) => name);
+  const labelled = `
+  @start[let checked = Int(0);]
+  for (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @pass{
+    @count[checked = Up(checked);]
+    @check[if (@found[Equal(values[i], target)]) break;]
+  }
+`;
+
+  it('runs a for header’s parts in order: the start, the test before each pass, the move after it', () => {
+    // [3, 8, 5, 2], looking for 5: the third pass breaks, so no move or test follows it.
+    expect(names(labelled)).toEqual([
+      '@start#1',
+      '@first#1',
+      '@more#1',
+      '@pass.count#1',
+      '@pass.check.found#1',
+      '@pass.check#1',
+      '@pass#1',
+      '@next#1',
+      '@more#2',
+      '@pass.count#2',
+      '@pass.check.found#2',
+      '@pass.check#2',
+      '@pass#2',
+      '@next#2',
+      '@more#3',
+      '@pass.count#3',
+      '@pass.check.found#3',
+      '@pass.check#3',
+      '@pass#3'
+    ]);
+  });
+
+  it('ends a loop that runs out with its test, its last value false', () => {
+    const counting = `
+  @start[let n = Int(0);]
+  for (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) @pass{
+    n = Up(n);
+  }
+`;
+    const trace = traceAlgorithm(counting, input, domain, {}, { labels: new Set(['more']) }, true);
+    const tests = trace.steps.filter(({ name }) => name?.startsWith('@more'));
+    expect(tests.map(({ labelled }) => labelled?.more?.[0].state.value)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false
+    ]);
+    expect(trace.steps.at(-1)?.name).toBe('@more#5');
+  });
+
+  it('refuses a statement outside every label, at the top level and in a function', () => {
+    expect(() => authored('let n = Int(0);')).toThrow(
+      'let n = Int(0); runs outside every label, and no code may: wrap it, as @name[let n = Int(0);].'
+    );
+    expect(() => authored('function f(x) { return x; }\n@run[const y = f(Int(1));]')).toThrow(
+      "return x; runs outside every label, and no code may: wrap it, as @name[return x;], or label the function's body, as function f(…) @f{."
+    );
+    // Declarations leading a labelled block need no label of their own.
+    expect(() =>
+      authored('function f(x) @f{ const y = x; @give[return y;] }\n@run[const z = f(Int(1));]')
+    ).not.toThrow();
+  });
+
+  it('refuses a test or a part of a for header without a label of its own', () => {
+    expect(() =>
+      authored(labelled.replace('@found[Equal(values[i], target)]', 'Equal(values[i], target)'))
+    ).toThrow(
+      // Inside @check, around the if, the test is still not a label's own code.
+      'The test of if (…), Equal(values[i], target), is in no label of its own, so the decision it makes would not show: label it, as @name[Equal(values[i], target)].'
+    );
+    expect(() => authored(labelled.replace('@next[i = Next(i)]', 'i = Next(i)'))).toThrow(
+      'The update of for (…), i = Next(i), is in no label of its own'
+    );
+    // Conditions joined by && and ||, each a label's own, are enough.
+    expect(() =>
+      authored(
+        labelled.replace(
+          '@found[Equal(values[i], target)]',
+          '@found[Equal(values[i], target)] || @low[Less(values[i], Int(0))]'
+        )
+      )
+    ).not.toThrow();
+  });
+
+  it('refuses a for … of loop, advising an index loop with its parts labelled', () => {
+    expect(() =>
+      authored('@start[let n = Int(0);]\nfor (const v of values) @each{ n = Up(n); }')
+    ).toThrow('for (… of values) walks values in a header no label can split; write an index loop');
   });
 });
