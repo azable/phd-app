@@ -96,10 +96,26 @@ export const browserBundlePresentationSchema = v.strictObject({
   html: recordedTextSchema,
   javascript: recordedTextSchema,
   /**
-   * Every step its source can show, in order, each by every name it has, which its labels are some
-   * of (see alignPresentationFrames); absent for a mode whose versions are never shown together.
+   * Every step its source can show, in order, by name, which its labels are some of (see
+   * alignPresentationFrames); absent for a mode whose versions are never shown together. A step
+   * stored with several names, before two labels could no longer mark the same code, is read by its
+   * innermost, the last.
    */
-  steps: v.optional(v.pipe(v.array(v.pipe(v.array(textSchema), v.minLength(1))), v.minLength(1))),
+  steps: v.optional(
+    v.pipe(
+      v.array(
+        v.union([
+          textSchema,
+          v.pipe(
+            v.array(textSchema),
+            v.minLength(1),
+            v.transform((names) => names[names.length - 1])
+          )
+        ])
+      ),
+      v.minLength(1)
+    )
+  ),
   /** Its variant: every variable of the source's design space, by key. */
   variant: v.optional(designValuesSchema),
   /** Where each of the variant's values came from. */
@@ -150,7 +166,7 @@ export function presentationStepLabels(presentation: RenderablePresentation): st
 
 /**
  * A Sverlin step's name, the same however its steps pause: a label's full name and which run of it
- * the step ends, as @insert.swap#1, or start or end.
+ * the step ends, the nth of that label's runs to begin, as @insert.swap#1, or start or end.
  */
 export const stepNameSchema = v.pipe(
   v.string(),
@@ -243,16 +259,14 @@ function sourcePlaces(
 }
 
 /**
- * Where each step named falls among a source's steps (see BrowserBundlePresentation.steps), a step
- * with several names under any of them; none where one is not among them, or not in order.
+ * Where each step named falls among a source's steps (see BrowserBundlePresentation.steps); none
+ * where one is not among them, or not in order.
  */
 export function stepPlaces(
-  steps: readonly (readonly string[])[],
+  steps: readonly string[],
   labels: readonly string[]
 ): number[] | undefined {
-  const placeOf = new Map(
-    steps.flatMap((names, place) => names.map((name): [string, number] => [name, place]))
-  );
+  const placeOf = new Map(steps.map((name, place): [string, number] => [name, place]));
   const places = labels.map((label) => placeOf.get(label) ?? -1);
   return places.every((place, index) => place >= 0 && (index === 0 || place > places[index - 1]))
     ? places

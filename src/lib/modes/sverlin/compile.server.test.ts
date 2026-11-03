@@ -81,7 +81,7 @@ describe('single-component Svelte compilation', () => {
         '@check#4',
         'end'
       ]);
-      expect(bundle.steps).toEqual(bundle.labels.map((label) => [label]));
+      expect(bundle.steps).toEqual(bundle.labels);
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
       new Set(['IntCell', 'IntTally'])
@@ -1330,7 +1330,7 @@ describe('pauses at labels', () => {
       ].join(' | ');
     });
 
-  it('offers a pause at every label, by its full name, each on to start with whatever the view draws', () => {
+  it('offers a pause at every label, by its full name, on to start where its runs draw something', () => {
     const prepared = prepareSvelteComponent(insertion);
     const starterPauses = (source: string) =>
       Object.fromEntries(
@@ -1338,8 +1338,9 @@ describe('pauses at labels', () => {
           key.startsWith('pause@')
         )
       );
+    // A pass's end draws what its last swap drew, so it starts off; the rest each draw a change.
     expect(starterPauses(insertion)).toEqual({
-      'pause@insert': 'on',
+      'pause@insert': 'off',
       'pause@insert.compare': 'on',
       'pause@insert.compare.left': 'on',
       'pause@insert.compare.right': 'on',
@@ -1347,12 +1348,21 @@ describe('pauses at labels', () => {
       'pause@insert.swap.from': 'on',
       'pause@insert.swap.to': 'on'
     });
-    // Nothing the view draws changes them: without its marks or its comparison, the same.
+    // What the view draws decides them: without its marks or its comparison, only the swap, which
+    // moves values, draws something new.
     const bare = insertion
       .replace(/\{@render Position\(@[^)]*\)\}\n?/g, '')
       .replace('{@render Greater(@insert.compare)}', '');
     expect(bare).not.toContain('{@render Position(@');
-    expect(starterPauses(bare)).toEqual(starterPauses(insertion));
+    expect(starterPauses(bare)).toEqual({
+      'pause@insert': 'off',
+      'pause@insert.compare': 'off',
+      'pause@insert.compare.left': 'off',
+      'pause@insert.compare.right': 'off',
+      'pause@insert.swap': 'on',
+      'pause@insert.swap.from': 'off',
+      'pause@insert.swap.to': 'off'
+    });
     // A label with labels inside it can accumulate; one without is only on or off.
     expect(prepared.design.space['pause@insert.compare']).toEqual(['accumulate', 'on', 'off']);
     expect(prepared.design.space['pause@insert.swap.to']).toEqual(['on', 'off']);
@@ -1930,6 +1940,30 @@ describe('{#if when(@label)}', () => {
     ).toThrow('branches @pass and when(end) would both show');
   });
 
+  it('takes a run of statements in a row to its last, the labels inside it included', () => {
+    const rows = caption('').replace(
+      /<script lang="sverlin">[\s\S]*?<\/script>/u,
+      `<script lang="sverlin">
+  @scan[
+    @begin[let i = Position(1);]
+    while (Before(i, Length(values))) @step{
+      i = Next(i);
+    }
+  ]
+</script>`
+    );
+    const chain = (block: string) =>
+      rows.replace('<Node>{#each values', `${block}\n    <Node>{#each values`);
+    // Every pass of the loop is inside the run of @scan, so the two branches would show together.
+    expect(() =>
+      prepareSvelteComponent(
+        chain(
+          '{#if when(@scan.step)}{@render Caption()}{:else if when(@scan)}{@render Caption()}{/if}'
+        )
+      )
+    ).toThrow('branches @scan.step and @scan would both show');
+  });
+
   it('takes any label, a statement’s or an expression’s, keeping every position', () => {
     for (const label of ['@pass.look', '@pass.look.read', '@pass']) {
       const prepared = prepareSvelteComponent(
@@ -2058,7 +2092,12 @@ describe('the bundle', () => {
     // Dijkstra on five vertices as an assistant wrote it, paused at every label (115 steps): each
     // step's state repeating the variant made it more than 2 MB.
     const prepared = prepareSvelteComponent(dijkstra);
-    const { javascript, labels } = await bundlePresentation(prepared, 1);
+    const everyPause = Object.fromEntries(
+      Object.keys(prepared.design.space)
+        .filter((key) => key.startsWith('pause@'))
+        .map((key) => [key, 'on'])
+    );
+    const { javascript, labels } = await bundlePresentation(prepared, 1, { chosen: everyPause });
     expect(labels.length).toBeGreaterThan(100);
     expect(javascript.length).toBeLessThan(1024 * 1024);
   });
@@ -2149,6 +2188,40 @@ ${markup}`;
     ).toContain('A Vertex has no field weight; its fields are name, seen.');
     expect(problem('{#snippet Shown()}<Node>{at(n)}</Node>{/snippet}')?.message).toContain(
       'at(n) reads through a position, and n is of type Int'
+    );
+  });
+});
+
+describe('step limits', () => {
+  // Three passes of a hundred steps: 300 pausing at every label, more than one presentation shows.
+  const long = `<script lang="sverlin" domain>
+  const Int = type('integer', { min: 0, max: 200 });
+  const Flag = type('boolean');
+  const Before = binop((a: Int, b: Int) => Flag(a < b));
+  const Next = unop((n: Int) => Int(n + 1));
+</script>
+
+<script lang="sverlin">
+  let n = Int(0);
+  for (let i = Int(0); Before(i, 3); i = Next(i)) @pass{
+    for (let j = Int(0); Before(j, 100); j = Next(j)) @step[n = Next(j);]
+  }
+</script>
+
+{#snippet IntCell(value: Int)}<Node {value} />{/snippet}
+
+{#layout Main}
+  <Node>{@render Int(n)}</Node>
+{/layout}
+`;
+
+  it('builds a variant pausing at fewer labels, and says where to pause less over the limit', async () => {
+    const prepared = prepareSvelteComponent(long);
+    expect(prepared.steps.length).toBeGreaterThan(300);
+    const passes = await bundlePresentation(prepared, 1, { chosen: { 'pause@pass.step': 'off' } });
+    expect(passes.labels.length).toBeLessThanOrEqual(5);
+    await expect(bundlePresentation(prepared, 1)).rejects.toThrow(
+      /variant shows more than 200 steps, most at the end of @pass\.step/
     );
   });
 });

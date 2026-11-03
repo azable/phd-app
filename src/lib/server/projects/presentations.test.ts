@@ -118,7 +118,7 @@ function comparisonDocument(
     mode: 'sverlin' as const,
     stepSignature: 'shared',
     labels: ['Start', 'Result'],
-    steps: [['Start'], ['Result']],
+    steps: ['Start', 'Result'],
     source,
     html: recordText('', 'text/html'),
     javascript: recordText('void 0;', 'text/javascript')

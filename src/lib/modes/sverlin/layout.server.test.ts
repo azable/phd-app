@@ -14,6 +14,14 @@ import { layOutOnServer } from './layout.server';
 import { differingSteps } from '$lib/shared/differing-steps';
 import { smallestReadableText } from '$lib/shared/readability';
 
+// Every label paused at, the finest steps a source has, as the starter was before it thinned them.
+const everyPause = (prepared: ReturnType<typeof prepareSvelteComponent>) =>
+  Object.fromEntries(
+    Object.keys(prepared.design.space)
+      .filter((key) => key.startsWith('pause@'))
+      .map((key) => [key, 'on'])
+  );
+
 /** A server bundle whose layout answers with what it is given, as geometry would come back. */
 const answering = (body: string) =>
   `globalThis.__sverlinLayOut = async (devicePixelRatio) => JSON.stringify((() => { ${body} })());`;
@@ -104,7 +112,8 @@ describe('laying out on the server', () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
     const drawnWith = async (seed: number, chosen: Record<string, string | number>) =>
-      (await bundlePresentation(prepared, seed, { chosen })).layout.drawn;
+      (await bundlePresentation(prepared, seed, { chosen: { ...everyPause(prepared), ...chosen } }))
+        .layout.drawn;
     const starter = await drawnWith(1, {});
     expect(starter).toHaveLength(17);
     // Another seed places nothing here; a cell's least size is under what the pointer keeps.
@@ -123,6 +132,7 @@ describe('laying out on the server', () => {
       (
         await bundlePresentation(prepared, 1, {
           chosen: {
+            ...everyPause(prepared),
             'pointers.Index@lo': 'LowerMark',
             'pointers.Index@hi': 'UpperMark',
             'LowerMark.LowerLabel.shown': labels,

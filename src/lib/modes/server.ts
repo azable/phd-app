@@ -27,9 +27,9 @@ export type ModeBuildResult =
         html: string;
         javascript: string;
         labels: string[];
-        // Aligned modes: every step the source can show, each by all its names, which the steps
+        // Aligned modes: every step the source can show, by name, which the steps
         // kept are some of, and their identity.
-        steps?: string[][];
+        steps?: string[];
         stepSignature?: string;
         // Modes with a design space: the variant, where each value came from, and each type's views.
         variant?: DesignValues;

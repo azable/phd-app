@@ -55,7 +55,7 @@ describe('presentation playback', () => {
   });
 
   it('aligns steps by their names among the source’s, holding the previous step where one is omitted', () => {
-    const steps = [['Start'], ['Compare 0'], ['Compare 1'], ['Found']];
+    const steps = ['Start', 'Compare 0', 'Compare 1', 'Found'];
     const fine = aligned(1, ['Start', 'Compare 0', 'Compare 1', 'Found'], steps);
     const coarse = aligned(2, ['Start', 'Compare 1', 'Found'], steps);
     const context = presentationPlaybackContext([fine, coarse]);
@@ -105,24 +105,15 @@ describe('presentation playback', () => {
   });
 
   it('counts a pair’s differences in shared steps where one side omits a step', () => {
-    const steps = [['Start'], ['A'], ['B'], ['End']];
+    const steps = ['Start', 'A', 'B', 'End'];
     const fine = { ...aligned(1, ['Start', 'A', 'B', 'End'], steps), differsAt: [2] };
     const coarse = { ...aligned(2, ['Start', 'B', 'End'], steps), differsAt: [2] };
     expect(presentationPlaybackContext([fine, coarse]).differsAt).toEqual([2]);
     expect(presentationPlaybackContext([fine]).differsAt).toBeUndefined();
   });
 
-  it('aligns a step by any of its names, as nested labels ending together give it', () => {
-    const steps = [['start'], ['@scan#1', '@scan.check#1'], ['end']];
-    const outer = aligned(1, ['start', '@scan#1', 'end'], steps);
-    const inner = aligned(2, ['start', '@scan.check#1', 'end'], steps);
-    const context = presentationPlaybackContext([outer, inner]);
-    expect(context.stepCount).toBe(3);
-    expect(context.frames.every(({ held }) => held.length === 0)).toBe(true);
-  });
-
   it('refuses to show presentations of two sources, or steps not their source’s, together', () => {
-    const steps = [['A'], ['B'], ['C']];
+    const steps = ['A', 'B', 'C'];
     const left = aligned(1, ['A', 'B', 'C'], steps);
     const right = aligned(2, ['A', 'B'], steps);
     right.presentation = { ...right.presentation, stepSignature: 'other' };
@@ -136,7 +127,7 @@ describe('presentation playback', () => {
   });
 });
 
-function aligned(id: number, labels: string[], steps: string[][]): TimelinePresentation {
+function aligned(id: number, labels: string[], steps: string[]): TimelinePresentation {
   const entry = presentation(id, 'a'.repeat(64), labels.length);
   if (entry.presentation.format !== 'browser-bundle-v1') throw new Error('Expected a bundle.');
   return { ...entry, presentation: { ...entry.presentation, labels, steps } };
@@ -154,7 +145,7 @@ function presentation(id: number, sourceSha256: string, stepCount: number): Time
       mode: 'sverlin',
       stepSignature: 'same-source',
       labels: Array.from({ length: stepCount }, (_, step) => `Step ${step + 1}`),
-      steps: Array.from({ length: stepCount }, (_, step) => [`Step ${step + 1}`]),
+      steps: Array.from({ length: stepCount }, (_, step) => `Step ${step + 1}`),
       seed: id,
       source: { text: 'component', sha256: sourceSha256, mediaType: 'text/x-svelte' },
       html: { text: '', sha256: '0'.repeat(64), mediaType: 'text/html' },

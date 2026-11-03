@@ -226,9 +226,22 @@ export function listingRegionFallbacks(
   );
 }
 
-/** The pauses a source starts with: every label on, for the chooser to thin. */
-export function starterPauses(labels: readonly string[]): Record<string, DesignValue> {
-  return Object.fromEntries(labels.map((label) => [`pause@${label}`, 'on']));
+/**
+ * The pauses a source starts with: every label on, for the assistant and chooser to thin, except
+ * those whose runs, paced at every label, all draw what the step before drew (runs from its
+ * build). A label that never ran, or never names a step, adds no step and stays on, so it pauses
+ * where another input runs it; where no label's runs draw anything, every label stays on, so the
+ * steps still walk the code.
+ */
+export function starterPauses(
+  labels: readonly string[],
+  runs: Readonly<Record<string, { runs: number; drawn: number }>> = {}
+): Record<string, DesignValue> {
+  const silent = (label: string) => (runs[label]?.runs ?? 0) > 0 && runs[label].drawn === 0;
+  const thinned = labels.some((label) => !silent(label));
+  return Object.fromEntries(
+    labels.map((label) => [`pause@${label}`, thinned && silent(label) ? 'off' : 'on'])
+  );
 }
 
 /** A pause@ value, accumulating at a label with no labels inside it as on; any other as it is. */

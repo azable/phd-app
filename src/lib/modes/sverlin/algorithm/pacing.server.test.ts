@@ -180,37 +180,94 @@ describe('pauses at labels', () => {
     expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
   });
 
-  it('name a step by every label marking its code, each counting its runs however steps pause', () => {
-    const nested = `
+  it('refuse two labels on the same code, which could never pause or draw apart', () => {
+    const same = `
   let n = Int(0);
   while (Less(n, 2)) @up{
     @add[@one[n = Up(n);]]
   }
 `;
-    const names = (pauses?: Pacing['pauses']) =>
-      steps(nested, { pauses }).map(({ name, names }) => names ?? [name]);
-    expect(names()).toEqual([
-      ['@up.add#1', '@up.add.one#1'],
-      ['@up#1'],
-      ['@up.add#2', '@up.add.one#2'],
-      ['@up#2']
+    expect(() => steps(same)).toThrow(
+      '@up.add.one marks the same code as @up.add, so the two can never pause or draw apart: keep one name.'
+    );
+  });
+
+  it('run a label around statements in a row to its last, the labels inside it included', () => {
+    const merged = `
+  let n = Int(0);
+  @outer[
+    @first[n = Up(n); n = Up(n);]
+    while (Less(n, 4)) @take{
+      n = Up(n);
+    }
+  ]
+`;
+    const all = steps(merged);
+    expect(all.map(({ name, state }) => [name, state.n])).toEqual([
+      ['@outer.first#1', 2],
+      ['@outer.take#1', 3],
+      ['@outer.take#2', 4],
+      ['@outer#1', 4]
     ]);
-    // Paused at the outer label alone, the same steps take its name and keep their counts.
-    expect(steps(nested, { pauses: pausedAt('up', 'up.add') }).map(({ name }) => name)).toEqual([
-      '@up.add#1',
-      '@up#1',
-      '@up.add#2',
-      '@up#2'
-    ]);
-    // Accumulating or not, the steps are the same.
+    // Every take is inside the outer label's run.
+    expect(all.slice(1, 3).every(({ inside }) => inside?.includes('outer'))).toBe(true);
+    // Paused at the outer label alone, its one step comes after the loop.
     expect(
-      steps(nested, {
-        pauses: new Map([
-          ['up', 'on'],
-          ['up.add.one', 'on']
-        ])
-      }).map(({ name }) => name)
-    ).toEqual(steps(nested, { pauses: pausedAt('up', 'up.add.one') }).map(({ name }) => name));
+      steps(merged, { pauses: new Map([['outer', 'on']]) }).map(({ name, state }) => [
+        name,
+        state.n
+      ])
+    ).toEqual([['@outer#1', 4]]);
+    // Labelled statements in a row each count once, the outer label's end named after it.
+    const rows = `
+  let n = Int(0);
+  @outer[@first[n = Up(n);] @second[n = Up(n);]]
+`;
+    expect(steps(rows).map(({ name, state }) => [name, state.n])).toEqual([
+      ['@outer.first#1', 1],
+      ['@outer.second#1', 2],
+      ['@outer#1', 2]
+    ]);
+  });
+
+  it('number a label’s runs in the order they begin, each step named where its run ends', () => {
+    const recursive = `
+  function count(n) @call{
+    if (Less(n, 2)) @deeper[count(Up(n));]
+  }
+  @go[count(Int(0));]
+`;
+    // The first call made is @call#1, though it ends last, after the calls inside it.
+    expect(steps(recursive).map(({ name, state }) => [name, state.n])).toEqual([
+      ['@call#3', 2],
+      ['@call.deeper#2', 1],
+      ['@call#2', 1],
+      ['@call.deeper#1', 0],
+      ['@call#1', 0],
+      ['@go#1', undefined]
+    ]);
+  });
+
+  it('keep the code an accumulating row has run lit at the steps inside it', () => {
+    const merged = `
+  let n = Int(0);
+  @outer[
+    @first[n = Up(n);]
+    while (Less(n, 3)) @take{
+      n = Up(n);
+    }
+  ]
+`;
+    const run = steps(merged, {
+      pauses: new Map([
+        ['outer', 'accumulate'],
+        ['outer.take', 'on']
+      ])
+    });
+    expect(run.map(({ name }) => name)).toEqual(['@outer.take#1', '@outer.take#2', '@outer#1']);
+    // Each take keeps lit what the outer run did before it, from the first label's code on.
+    for (const step of run.slice(0, 2))
+      expect(step.trail?.some(([, , labels]) => labels.includes('outer'))).toBe(true);
   });
 
   it('number every step by its moment, the same however steps are paced', () => {
@@ -225,7 +282,7 @@ describe('pauses at labels', () => {
       });
     // Presentations paced differently line up by their steps' names among those of every label
     // paused, one holding its step where the other has one of its own.
-    const every = steps(search, { shown }).map(({ name, names }) => names ?? [name as string]);
+    const every = steps(search, { shown }).map(({ name }) => name as string);
     const presentation = (id: string, trace: typeof byCheck) => ({
       presentationId: id,
       format: 'browser-bundle-v1' as const,

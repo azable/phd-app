@@ -15,6 +15,7 @@ import {
   declaredNames,
   interpretDomain,
   interpretInput,
+  algorithmLimits,
   stepLabels,
   traceAlgorithm,
   type Application,
@@ -187,7 +188,7 @@ export type SvelteBundle = {
   /** The name of each step this presentation keeps (see MasterStep), the same in every pacing. */
   labels: string[];
   /** Every step the source can show, by name, and its identity (see PreparedComponent.steps). */
-  steps: string[][];
+  steps: string[];
   stepSignature: string;
   /** The presentation's variant: every variable's value, by key. */
   variant: Record<string, DesignValue>;
@@ -235,11 +236,11 @@ export type PreparedComponent = {
    */
   paced: (pauses: Pauses | ReadonlySet<string>) => PacedSteps;
   /**
-   * Every step the source can show, in run order, each by every name it has (see MasterStep.names):
-   * the master's, with the end, which a variant pausing at fewer labels may keep where the master
+   * Every step the source can show, in run order, by name (see MasterStep.name): the master's, with
+   * the end, which a variant pausing at fewer labels may keep where the master
    * does not. Every variant's steps are some of these, by name, which is how they line up.
    */
-  steps: string[][];
+  steps: string[];
   /** The source's identity, from its steps, shared by its presentations however they are paced. */
   signature: string;
   atoms: AtomRegistry;
@@ -461,9 +462,9 @@ function paced(
  * Every step a source can show, from the master's (see PreparedComponent.steps): a variant pausing
  * at fewer labels ends on a step of its own where its last step differs from the master's.
  */
-function sourceSteps(master: readonly MasterStep[]): string[][] {
-  const steps = master.map(({ name, names }, index) => names ?? [name ?? `Step ${index + 1}`]);
-  return steps.at(-1)?.includes('end') ? steps : [...steps, ['end']];
+function sourceSteps(master: readonly MasterStep[]): string[] {
+  const steps = master.map(({ name }, index) => name ?? `Step ${index + 1}`);
+  return steps.at(-1) === 'end' ? steps : [...steps, 'end'];
 }
 
 /** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
@@ -1527,8 +1528,11 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       const key = pausesKey(pauses);
       const made = pacedBy.get(key);
       if (made) return made;
+      // The master, pausing at every label, is bounded only as the source's (algorithmLimits); a
+      // variant pausing so is held to what one presentation shows, by tracing it as a variant.
       const steps =
-        key === pausesKey(new Map(labelNames.map((label) => [label, 'on'])))
+        key === pausesKey(new Map(labelNames.map((label) => [label, 'on']))) &&
+        master.length <= algorithmLimits.maximumSteps + 1
           ? master
           : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
       const result: PacedSteps = {
@@ -1567,7 +1571,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       pauses: { labels: labelNames, leaves: [...leaves], runs },
       paced: pacedSteps,
       steps,
-      signature: stepSignature(steps.map((names) => names.join(' '))),
+      signature: stepSignature(steps),
       atoms,
       components: probes,
       design: {
@@ -1623,7 +1627,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           ),
           ...regionStarter,
           ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
-          ...starterPauses(labelNames)
+          ...starterPauses(labelNames, runs)
         }
       },
       ...(listings ? { listings } : {}),

@@ -192,20 +192,26 @@ written in the view so the label is a kind of its own.
   per pass, its test leading up to the pass; a label on a function's body runs
   once per call, recursive calls included.
 - A label inside another takes its name as a prefix: `@shift[…]` inside
-  `@insert{` is `insert.shift`. Once the algorithm, a label, or a function's
-  body has labelled statements, every statement in it is inside one or contains
-  one, so only loops' headers and tests run outside every label; a statement
-  left out is an error naming the labels beside it. Declarations leading a
-  block, before its first labelled statement, need no label, as `let min = i;`
-  at the top of `@select{`. A label on part of a statement asks nothing of the
-  code around it. An algorithm with no labels has one step, its end.
+  `@insert{` is `insert.shift`. A label around statements in a row runs from the
+  first to the last, the labels inside it included:
+  `@merge[@copy[…] for (…) @take{…}]` ends after the loop's last pass. Two
+  labels may not mark the same code, as `@add[@one[n = Up(n);]]`: they would
+  pause and draw together, so keep one name. Once the algorithm, a label, or a
+  function's body has labelled statements, every statement in it is inside one
+  or contains one, so only loops' headers and tests run outside every label; a
+  statement left out is an error naming the labels beside it. Declarations
+  leading a block, before its first labelled statement, need no label, as
+  `let min = i;` at the top of `@select{`. A label on part of a statement asks
+  nothing of the code around it. An algorithm with no labels has one step, its
+  end.
 - The page pauses where labels finish, and only there: a pause at a label is a
   step at the end of each of its runs, so a check finding nothing is a step too.
   Each label is a variable, `pause@` and its full name, as
   `"pause@insert.swap": "on"`: `"accumulate"`, `"on"`, or `"off"`. Every label
-  is `"on"` to start with and the variant chooses where the steps pause; nothing
-  in the view turns a pause on or off. So label what a step can be about, as a
-  comparison, `@compare[Greater(…)]`, and the operands it reads.
+  is `"on"` to start with, except one whose runs all draw what the step before
+  drew, as a test whose result nothing shows, which starts `"off"`; the variant
+  chooses where the steps pause. So label what a step can be about, as a
+  comparison, `@compare[Greater(…)]`, and the operands it reads, and draw them.
 - A step shows a change: the state just before its code, then just after it.
   Code not paused at, inside a label that is off or outside every label, leads
   up to the next step, and what a label there gives, a value or an application
@@ -236,12 +242,14 @@ written in the view so the label is a kind of its own.
   declares through a view or a pointer. A name is declared once among the blocks
   in scope: a loop inside another cannot declare `j` again, while loops one
   after another can.
-- A step is named by the label whose run it ends and which run that is, as
-  `@insert.swap#1` (`start` for the input as given, `end` for the end), the same
-  in every variant, which numbers only the steps it shows. A step has no text:
-  the view says what it shows, from the recorded variables, so what it should
-  say is in the algorithm's variables, as an answer is the value a search
-  returns or where its loop stops.
+- A step is named by the label whose run it ends and which run that is, the nth
+  run of that label to begin, as `@insert.swap#1` (`start` for the input as
+  given, `end` for the end): in a recursive function, `@sort#1` ends the first
+  call made, the outermost, at the last of its steps. The name is the same in
+  every variant, which numbers only the steps it shows. A step has no text: the
+  view says what it shows, from the recorded variables, so what it should say is
+  in the algorithm's variables, as an answer is the value a search returns or
+  where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value a collection also holds shows a
@@ -911,12 +919,12 @@ an error: rename the label.
 A variant gives every variable a value, and a presentation draws one. The
 starter is each type in its first view, each kind in a plain look for what it
 is: values framed, text and layouts unframed, and pointers marked in amber, and
-every label paused `"on"`. A presentation built after a change keeps the values
-of the one it was made from where nothing else sets them, and takes the
-starter's for anything new; the assistant sets values with `vary`, or with
-`edit` or `revise` for the source it changes, and asking for several variants,
-or Another variant (in dev mode), asks the chooser, which may change what is
-shown where the conversation leaves it open.
+every label paused `"on"` but those whose runs draw nothing new. A presentation
+built after a change keeps the values of the one it was made from where nothing
+else sets them, and takes the starter's for anything new; the assistant sets
+values with `vary`, or with `edit` or `revise` for the source it changes, and
+asking for several variants, or Another variant (in dev mode), asks the chooser,
+which may change what is shown where the conversation leaves it open.
 
 ### Declare what varies
 
@@ -972,7 +980,8 @@ variables:
   outside an operator and functions inside blocks, `new`, classes, `this`, `==`,
   string methods, other globals, and array or object literals except inside a
   type or `.push`/`.unshift`, or assigned to an element or field.
-- Limits: 200 steps, 1,000,000 operations, 10,000 entries per array or object,
+- Limits: 200 steps a presentation shows, at the labels it pauses at; 2,000 ends
+  of labels in all; 1,000,000 operations; 10,000 entries per array or object;
   and 10,000 characters per string.
 
 ## Library

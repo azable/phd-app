@@ -47,16 +47,17 @@ captioned i and j, they are not looks: choose each place’s view by what it say
 as pointers.Position@j for the one captioned j, and never draw them at random.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
-finest the steps go. project.runs gives each label’s runs and how many change
-what the view draws (drawn): a label whose runs change nothing drawn only
-repeats the step before, so turn it off, and around labels kept on, one whose
-own runs add nothing beyond theirs is off too, or "accumulate" where its run
-builds up from the parts paused at inside it, as a comparison from its operands.
-Where a listing shows, a pause at a loop’s or an if’s body lights all the code
-its run ran, and one at its test only the test’s line, though it draws nothing
-new: pause at either or neither, by whether a step should show a pass’s work or
-where the code goes next. The assistant paced the source as it wrote it: vary
-its pauses as any other open choice, by these rules.
+finest the steps go, except labels whose runs all draw nothing new, which start
+"off". project.runs gives each label’s runs and how many change what the view
+draws (drawn): a label whose runs change nothing drawn only repeats the step
+before, so turn it off, and around labels kept on, one whose own runs add
+nothing beyond theirs is off too, or "accumulate" where its run builds up from
+the parts paused at inside it, as a comparison from its operands. Where a
+listing shows, a pause at a loop’s or an if’s body lights all the code its run
+ran, and one at its test only the test’s line, though it draws nothing new:
+pause at either or neither, by whether a step should show a pass’s work or where
+the code goes next. The assistant paced the source as it wrote it: vary its
+pauses as any other open choice, by these rules.
 
 What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.

@@ -32,7 +32,7 @@ import {
 import { EventLog, type EventCounts, type EventKind, type TraceEvent } from './events.server';
 import { Identities, type Placed, type StepIdentities } from './identities.server';
 import { readLabels, type Label, type LabelProblem } from './labels.server';
-import { parseBlock } from './parse.server';
+import { parseBlock, spanOf } from './parse.server';
 import {
   changingMethods,
   firstDiscarded,
@@ -116,15 +116,10 @@ export type MasterStep = {
   unit?: Span;
   /**
    * The step's name, the same however the steps pause: the label whose run it ends, by its full
-   * name, and which run of it that is over the whole algorithm, as @insert.swap#1; `start` for the
-   * input as given and `end` for the algorithm's end.
+   * name, and which run of it that is, the nth of that label's runs to begin over the whole
+   * algorithm, as @insert.swap#1; `start` for the input as given and `end` for the algorithm's end.
    */
   name?: string;
-  /**
-   * Every name the step has where several labels mark the code whose run it ends, as @scan#2 and
-   * @scan.check#2: a variant pausing at any one of them shows this step under that name.
-   */
-  names?: string[];
   state: TraceState;
   types: TypeMap;
   targets?: Record<string, string>;
@@ -182,8 +177,15 @@ export type LabelRun = {
 };
 
 // Bounds keep interpretation short, memory small, and the embedded trace well inside the bundle limit.
+// maximumSteps bounds what one presentation shows, the steps of the labels a variant pauses at.
+// maximumSourceSteps bounds the trace pausing at every label, which only names and orders the
+// steps any variant can show (PreparedComponent.steps): each presentation carries its names, 20 to
+// 25 bytes a step in the Dijkstra and BST fixtures, so 2,000 keep that list near 50 KB; the trace
+// values stay bounded by maximumTraceValues, and each step keeps at most maximumStepEvents events
+// (events.server.ts).
 export const algorithmLimits = {
   maximumSteps: 200,
+  maximumSourceSteps: 2_000,
   maximumOperations: 1_000_000,
   maximumCallDepth: 100,
   maximumCollectionLength: 10_000,
@@ -238,11 +240,21 @@ export function spanKey({ start, end }: Span): string {
   return `${start}:${end}`;
 }
 
+/** Statements in a row one label marks, each run of it from the first to the last. */
+export type Row = { first: AnyNode; last: AnyNode };
+
+/** The code one label marks: a single node, or statements in a row. */
+type Unit = AnyNode | Row;
+
 /**
  * The code labels mark, each run of which can be a step: single nodes (a statement, a block, an
- * expression, a call; a loop at each pass), and statements in a row, by their first and last.
+ * expression, a call; a loop at each pass), and statements in a row, by the statement each starts
+ * at, outermost first where rows inside one another start together.
  */
-export type FrameUnits = { nodes: ReadonlySet<AnyNode>; ranges: ReadonlyMap<AnyNode, AnyNode> };
+export type FrameUnits = {
+  nodes: ReadonlySet<AnyNode>;
+  ranges: ReadonlyMap<AnyNode, readonly Row[]>;
+};
 
 /**
  * How the page pauses at a label: at the end of each of its runs, the pauses inside a run each
@@ -266,18 +278,52 @@ export type Pacing = {
   pauses?: Pauses;
 };
 
-/** The source's labels (see labels.server.ts), the code they mark, and the problems with them. */
+/**
+ * The source's labels (see labels.server.ts), the code they mark, each label's unit, and the
+ * problems with them, among them two labels on the same code, which could never pause or draw apart.
+ */
 export function stepLabels(
   parsed: Pick<ReturnType<typeof parseBlock>, 'root' | 'markers' | 'code'>
-): { units: FrameUnits; labels: Label[]; problems: LabelProblem[] } {
+): {
+  units: FrameUnits;
+  unitOf: ReadonlyMap<Label, Unit>;
+  labels: Label[];
+  problems: LabelProblem[];
+} {
   const { root, markers, code } = parsed;
   const read = readLabels(root, markers, code);
+  const problems = [...read.problems];
   const nodes = new Set<AnyNode>();
-  const ranges = new Map<AnyNode, AnyNode>();
-  for (const { nodes: marked } of read.labels)
-    if (marked.length === 1) nodes.add(marked[0]);
-    else ranges.set(marked[0], marked[marked.length - 1]);
-  return { units: { nodes, ranges }, labels: read.labels, problems: read.problems };
+  const ranges = new Map<AnyNode, Row[]>();
+  const unitOf = new Map<Label, Unit>();
+  for (const label of read.labels) {
+    const marked = label.nodes;
+    const first = marked[0];
+    const last = marked[marked.length - 1];
+    const same = read.labels.find(
+      (other) => unitOf.has(other) && other.nodes[0] === first && other.nodes.at(-1) === last
+    );
+    if (same) {
+      problems.push({
+        message: `@${label.full} marks the same code as @${same.full}, so the two can never pause or draw apart: keep one name.`,
+        at: label.at
+      });
+      continue;
+    }
+    if (marked.length === 1) {
+      nodes.add(first);
+      unitOf.set(label, first);
+      continue;
+    }
+    const row = { first, last };
+    unitOf.set(label, row);
+    const rows = [...(ranges.get(first) ?? []), row];
+    ranges.set(
+      first,
+      rows.sort((a, b) => spanOf(b.last).end - spanOf(a.last).end)
+    );
+  }
+  return { units: { nodes, ranges }, unitOf, labels: read.labels, problems };
 }
 
 /**
@@ -309,11 +355,11 @@ export function traceAlgorithm(
   for (const { full, nodes, statement } of labelled.labels)
     if (!statement && nodes.length === 1 && keep.labels?.has(full))
       captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
-  const named = new Map<AnyNode, string[]>();
-  const holding = new Map<string, AnyNode>();
-  for (const { full, nodes, parent } of labelled.labels) {
-    named.set(nodes[0], [...(named.get(nodes[0]) ?? []), full]);
-    if (parent) holding.set(full, parent.nodes[0]);
+  const named = new Map<Unit, string>();
+  const holding = new Map<string, Unit>();
+  for (const label of labelled.labels) {
+    named.set(labelled.unitOf.get(label)!, label.full);
+    if (label.parent) holding.set(label.full, labelled.unitOf.get(label.parent)!);
   }
   const interpreter = new Interpreter(root, offset, {
     kind: 'algorithm',
@@ -347,12 +393,15 @@ type Completion = 'normal' | 'break' | 'continue' | 'return';
 /** Where a step's code starts: the state then, and how many events led up to it. */
 type Since = { before: StepSnapshot; gap: number };
 /**
- * A run of labelled code going on, numbered in the order runs start, the scope it runs in, and,
- * where it is a step, since. It starts after `start` events.
+ * A run of labelled code going on: its unit and the node it starts at, numbered in the order runs
+ * start, and among its label's runs (`ordinal`, from 1), the scope it runs in, and, where it is a
+ * step, since. It starts after `start` events.
  */
 type Run = {
+  unit: Unit;
   node: AnyNode;
   number: number;
+  ordinal: number;
   scope: Scope;
   start: number;
   since?: Since;
@@ -441,11 +490,11 @@ class Interpreter {
   /** The scope each running call was made from, outermost first: its variables keep nodes live. */
   readonly #callers: Scope[] = [];
   readonly #log = new EventLog();
-  /** The code labels mark, and the full names of the labels on each, by its first node. */
+  /** The code labels mark, and the full name of the label on each unit. */
   readonly #units: FrameUnits;
-  readonly #named: ReadonlyMap<AnyNode, readonly string[]>;
-  /** The first node of the label around each label, by its full name. */
-  readonly #holding: ReadonlyMap<string, AnyNode>;
+  readonly #named: ReadonlyMap<Unit, string>;
+  /** The unit of the label around each label, by its full name. */
+  readonly #holding: ReadonlyMap<string, Unit>;
   /** What the view shows applied, kept for it. */
   readonly #pacing: Pacing;
   /** The labels to pause at, by full name. */
@@ -454,8 +503,10 @@ class Interpreter {
   #labelGiven: Given[] = [];
   /** How many runs have started, numbering each. */
   #runCount = 0;
-  /** How many runs of each label have ended, by full name, which names the steps. */
-  readonly #ended = new Map<string, number>();
+  /** How many runs of each label have begun, by full name, which numbers each run as it begins. */
+  readonly #begun = new Map<string, number>();
+  /** How many steps end at each label paused at, by full name, for advice on pausing at fewer. */
+  readonly #stepsAt = new Map<string, number>();
   /** The label runs going on, outermost first. */
   readonly #runs: Run[] = [];
   /** The applications the step being recorded made, by operator. */
@@ -486,8 +537,8 @@ class Interpreter {
       initial?: TypedState;
       domain?: DomainRegistry;
       units?: FrameUnits;
-      named?: ReadonlyMap<AnyNode, readonly string[]>;
-      holding?: ReadonlyMap<string, AnyNode>;
+      named?: ReadonlyMap<Unit, string>;
+      holding?: ReadonlyMap<string, Unit>;
       pacing?: Pacing;
       pauses?: Pauses;
       code?: string;
@@ -1169,23 +1220,35 @@ class Interpreter {
   }
 
   #block(statements: readonly Statement[], scope: Scope): Completion {
-    for (let index = 0; index < statements.length; index++) {
+    return this.#statements(statements, 0, statements.length, scope);
+  }
+
+  /**
+   * Statements `from` up to `to`, statements in a row marked together each one run, the labels
+   * inside it included; `begun` rows starting at the first are already running, outermost first.
+   */
+  #statements(
+    statements: readonly Statement[],
+    from: number,
+    to: number,
+    scope: Scope,
+    begun = 0
+  ): Completion {
+    for (let index = from; index < to; index++) {
       const statement = statements[index];
-      const last = this.#units.ranges.get(statement);
-      if (!last) {
+      const open = index === from ? begun : 0;
+      const row = this.#units.ranges.get(statement)?.[open];
+      if (!row) {
         const completion = this.#statement(statement, scope);
         if (completion !== 'normal') return completion;
         continue;
       }
-      // Statements in a row marked together are one run.
-      const end = statements.indexOf(last as Statement);
-      this.#begin(statement, scope);
-      let completion: Completion = 'normal';
-      for (; index <= end && completion === 'normal'; index++)
-        completion = this.#statement(statements[index], scope);
-      this.#end(last, scope);
+      const end = statements.indexOf(row.last as Statement) + 1;
+      this.#begin(row, scope);
+      const completion = this.#statements(statements, index, end, scope, open + 1);
+      this.#end(row.last, scope);
       if (completion !== 'normal') return completion;
-      index = end;
+      index = end - 1;
     }
     return 'normal';
   }
@@ -1363,12 +1426,18 @@ class Interpreter {
   }
 
   /** Start a run of labelled code; where its label is paused at, the state before it. */
-  #begin(node: AnyNode, scope: Scope): void {
+  #begin(unit: Unit, scope: Scope): void {
     const number = this.#runCount++;
-    const step = (this.#named.get(node) ?? []).some((label) => this.#pauses.has(label));
+    const node = 'type' in unit ? unit : unit.first;
+    const label = this.#named.get(unit);
+    const step = label !== undefined && this.#pauses.has(label);
+    const ordinal = (this.#begun.get(label ?? '') ?? 0) + 1;
+    if (label !== undefined) this.#begun.set(label, ordinal);
     this.#runs.push({
+      unit,
       node,
       number,
+      ordinal,
       scope,
       start: this.#log.seen,
       ...(step
@@ -1386,38 +1455,37 @@ class Interpreter {
   #end(node: AnyNode, scope: Scope): void {
     const run = this.#runs.pop();
     if (!run) return;
-    for (const label of this.#named.get(run.node) ?? [])
-      this.#ended.set(label, (this.#ended.get(label) ?? 0) + 1);
     if (run.since) this.#record(run.node, node, scope, run.since, run);
     // A value no longer inside a run of the label around it is never kept again.
     this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
   }
 
-  /** A step's name, ending a run: its innermost paused label and which run of it this is. */
+  /** A step's name, ending a run: its label and which run of it this is, counted as runs begin. */
   #nameOf(run: Run): string {
-    const labels = this.#named.get(run.node) ?? [];
-    const paused = labels.filter((label) => this.#pauses.has(label));
-    const pool = paused.length ? paused : labels;
-    const depth = (label: string) => label.split('.').length;
-    const label = pool.reduce(
-      (inner, each) => (depth(each) > depth(inner) ? each : inner),
-      pool[0]
-    );
-    return `@${label}#${this.#ended.get(label) ?? 0}`;
+    return `@${this.#named.get(run.unit)}#${run.ordinal}`;
   }
 
-  /** Every name of a step ending a run, one by each label marking its code (see MasterStep). */
-  #namesOf(run: Run): string[] | undefined {
-    const labels = this.#named.get(run.node) ?? [];
-    return labels.length > 1
-      ? labels.map((label) => `@${label}#${this.#ended.get(label) ?? 0}`)
-      : undefined;
+  /** The label on a run's code, as a list, empty where none is. */
+  #labelsOf(run: Run): string[] {
+    const label = this.#named.get(run.unit);
+    return label === undefined ? [] : [label];
   }
 
-  /** How the page pauses at a run's labels: accumulating if any of them does (see PauseMode). */
+  /** Why a variant shows too many steps: the labels most of them end at, to pause at less. */
+  #tooManySteps(): string {
+    const most = [...this.#stepsAt]
+      .filter(([label]) => label !== 'end')
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3);
+    const counts = most.map(([label, count]) => `@${label} (${count})`).join(', ');
+    const off = most.length ? ` as pause@${most[0][0]} off` : '';
+    return `This variant shows more than ${algorithmLimits.maximumSteps} steps, most at the end of ${counts || 'its labels'}; stop pausing at some of them${off}, pause at the labels around them instead, or give a smaller input.`;
+  }
+
+  /** How the page pauses at a run's label (see PauseMode). */
   #modeOf(run: Run): PauseMode | 'off' {
-    const modes = (this.#named.get(run.node) ?? []).map((label) => this.#pauses.get(label));
-    return modes.includes('accumulate') ? 'accumulate' : modes.includes('on') ? 'on' : 'off';
+    const label = this.#named.get(run.unit);
+    return (label !== undefined && this.#pauses.get(label)) || 'off';
   }
 
   /**
@@ -1438,14 +1506,13 @@ class Interpreter {
       }
       return false;
     };
-    const labels = (run: Run) => this.#named.get(run.node) ?? [];
-    const trail: Stretch[] = ending ? [[ending.start, now, labels(ending)]] : [];
+    const trail: Stretch[] = ending ? [[ending.start, now, this.#labelsOf(ending)]] : [];
     let limit = now;
     for (const run of around) {
       const mode = this.#modeOf(run);
       if (mode === 'on') limit = Math.min(limit, run.start);
       else if (mode === 'accumulate' && run.start < limit)
-        trail.push([run.start, limit, labels(run)]);
+        trail.push([run.start, limit, this.#labelsOf(run)]);
     }
     return { keeps, trail };
   }
@@ -1465,11 +1532,14 @@ class Interpreter {
    * PauseMode). The runs going on start their code again after it.
    */
   #record(unit: AnyNode, node: AnyNode, scope: Scope, since: Since, ending?: Run): void {
-    if (this.#trace.length >= algorithmLimits.maximumSteps)
+    // A variant's own pauses bound what it shows; pausing at every label only names the steps.
+    if (!this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSourceSteps)
       this.#fail(
         unit,
-        `The algorithm takes more than ${algorithmLimits.maximumSteps} steps, each the end of a run of a label the page pauses at; pause at fewer labels, give a smaller input, or label less of the code.`
+        `The algorithm's labels end more than ${algorithmLimits.maximumSourceSteps} times; give a smaller input, or label less of the code.`
       );
+    if (this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSteps)
+      this.#fail(unit, this.#tooManySteps());
     const { keeps, trail } = this.#kept(ending);
     const held: Record<string, LabelRun[]> = {};
     for (const given of this.#labelGiven) {
@@ -1485,11 +1555,7 @@ class Interpreter {
     this.#applied = byName(this.#pendingApplied);
     this.#labelled = byName(this.#pendingLabelled);
     const inside = [
-      ...new Set(
-        [...this.#runs, ...(ending ? [ending] : [])].flatMap(
-          (run) => this.#named.get(run.node) ?? []
-        )
-      )
+      ...new Set([...this.#runs, ...(ending ? [ending] : [])].flatMap((run) => this.#labelsOf(run)))
     ];
     const after = this.#state(node, scope, [], this.#operandPlaces(scope));
     this.#nameOperands(after.identities?.ids);
@@ -1499,7 +1565,8 @@ class Interpreter {
         ? single
         : undefined;
     });
-    const names = ending && this.#namesOf(ending);
+    const label = ending ? this.#nameOf(ending).replace(/^@|#\d+$/gu, '') : 'end';
+    this.#stepsAt.set(label, (this.#stepsAt.get(label) ?? 0) + 1);
     this.#trace.push({
       // Strictly later than the step before, though no event came between them.
       moment: Math.max(this.#log.seen, (this.#trace.at(-1)?.moment ?? -1) + 1),
@@ -1507,7 +1574,6 @@ class Interpreter {
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name: ending ? this.#nameOf(ending) : 'end',
-      ...(names ? { names } : {}),
       ...(inside.length ? { inside } : {}),
       ...after,
       ...logged,
@@ -1591,7 +1657,7 @@ class Interpreter {
       });
       this.#pendingLabelled.push([name, run]);
       const parent = this.#holding.get(name);
-      const around = parent && this.#runs.findLast((each) => each.node === parent);
+      const around = parent && this.#runs.findLast((each) => each.unit === parent);
       if (around)
         this.#labelGiven.push({ name, run, around, inside: [...this.#runs], recorded: false });
     }

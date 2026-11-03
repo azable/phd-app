@@ -5,6 +5,7 @@ import {
   interpretAlgorithm as interpretTyped,
   interpretDomain,
   interpretInput as interpretTypedInput,
+  traceAlgorithm,
   type TypedState
 } from './interpret.server';
 
@@ -148,9 +149,22 @@ describe('algorithm interpretation', () => {
     ).toThrow(/too large/);
     expect(() =>
       interpretAlgorithm(
-        `let n = Int(0); @loop[for (let i = Int(0); Less(i, ${algorithmLimits.maximumSteps + 1}); i = Next(i)) { n = Next(i); }]`
+        `let n = Int(0); for (let i = Int(0); Less(i, 50); i = Next(i)) for (let j = Int(0); Less(j, ${algorithmLimits.maximumSourceSteps / 50 + 1}); j = Next(j)) @step[n = Next(j);]`
       )
-    ).toThrow(/more than/);
+    ).toThrow(/labels end more than/);
+  });
+
+  it('bounds the steps a variant shows, not those pausing at every label only names', () => {
+    const body = `let n = Int(0); for (let i = Int(0); Less(i, 3); i = Next(i)) @pass{ for (let j = Int(0); Less(j, ${algorithmLimits.maximumSteps}); j = Next(j)) @step[n = Next(j);] }`;
+    // Every label paused at: over 200 steps, which only name what variants can show.
+    expect(interpretAlgorithm(body).length).toBeGreaterThan(algorithmLimits.maximumSteps);
+    // Pausing at the passes alone shows three steps.
+    const passes = traceAlgorithm(body, undefined, atoms, { pauses: new Map([['pass', 'on']]) });
+    expect(passes.steps.map(({ name }) => name)).toEqual(['@pass#1', '@pass#2', '@pass#3']);
+    // Pausing at each step shows more than one presentation can, and says where to pause less.
+    expect(() =>
+      traceAlgorithm(body, undefined, atoms, { pauses: new Map([['pass.step', 'on']]) })
+    ).toThrow(/variant shows more than 200 steps, most at the end of @pass.step \(200\)/);
   });
 
   it('gives an algorithm without labels one step, its end', () => {

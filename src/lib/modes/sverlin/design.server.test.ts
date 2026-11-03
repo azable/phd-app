@@ -10,7 +10,8 @@ import {
   buildVariant,
   DesignValueError,
   listingRegionFallbacks,
-  listingRegionSpace
+  listingRegionSpace,
+  starterPauses
 } from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
@@ -74,6 +75,26 @@ describe('design space', () => {
     expect(Object.keys(starter).sort()).toEqual(Object.keys(space).sort());
     expect(starter['views.Int']).toBe('IntCell');
     for (const [key, value] of Object.entries(starter)) expect(space[key]).toContain(value);
+  });
+
+  it('starts a label off where every run draws what the step before drew', () => {
+    const labels = ['pass', 'pass.check', 'pass.swap', 'pass.rare'];
+    const runs = {
+      pass: { runs: 3, drawn: 0 },
+      'pass.check': { runs: 9, drawn: 9 },
+      'pass.swap': { runs: 4, drawn: 4 }
+    };
+    expect(starterPauses(labels, runs)).toEqual({
+      'pause@pass': 'off',
+      'pause@pass.check': 'on',
+      'pause@pass.swap': 'on',
+      // Never ran here: adds no step, and pauses where another input runs it.
+      'pause@pass.rare': 'on'
+    });
+    // Where nothing draws anything new, every label stays on, so the steps still walk the code.
+    expect(
+      starterPauses(['a', 'b'], { a: { runs: 2, drawn: 0 }, b: { runs: 1, drawn: 0 } })
+    ).toEqual({ 'pause@a': 'on', 'pause@b': 'on' });
   });
 });
 
