@@ -520,9 +520,10 @@ latest build of the source it shows
 Interrupted work is explicitly failed and can be retried by the user.
 
 After resetting the database, open the app and register a new administrator
-passkey at the one-time setup page. From `/admin`, create a participant, assign
-the open study version, and use a preview to verify both conditions before
-inviting participants.
+passkey at the one-time setup page. Signed in, **Add passkey** on `/admin`
+registers another, such as a second security key to recover with; any of them
+signs in. From `/admin`, create a participant, assign the open study version,
+and use a preview to verify both conditions before inviting participants.
 
 ## Deployment
 

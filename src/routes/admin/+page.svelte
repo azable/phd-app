@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
 
   import AddParticipantDialog from '$lib/client/admin/AddParticipantDialog.svelte';
+  import AddPasskeyButton from '$lib/client/admin/AddPasskeyButton.svelte';
   import AdminProjectList from '$lib/client/admin/AdminProjectList.svelte';
   import DeleteParticipantDialog from '$lib/client/admin/DeleteParticipantDialog.svelte';
   import GeneratePasswordDialog from '$lib/client/admin/GeneratePasswordDialog.svelte';
@@ -117,8 +118,9 @@
       <p class="text-sm text-muted-foreground">Administration</p>
       <h1 class="text-3xl font-semibold">Research studies</h1>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center justify-end gap-2">
       <Button href={resolve('/')} variant="outline">Back to projects</Button>
+      <AddPasskeyButton />
       <form method="POST" action={resolve('/logout')}>
         <Button type="submit" variant="outline">Sign out</Button>
       </form>

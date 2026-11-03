@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   authenticationRequired,
+  registeredPasskeyOwner,
   safeReturnPath,
   validateAuthenticationConfiguration
 } from './auth';
@@ -26,6 +27,15 @@ describe('Better Auth configuration', () => {
 
     delete process.env.BETTER_AUTH_URL;
     expect(() => validateAuthenticationConfiguration()).toThrow('BETTER_AUTH_URL');
+  });
+
+  it('lets only a signed-in administrator add a passkey', async () => {
+    await expect(registeredPasskeyOwner({ role: 'admin' })).resolves.toEqual({
+      name: 'Administrator passkey'
+    });
+    await expect(registeredPasskeyOwner({ role: 'user' })).rejects.toThrow(
+      'Only an administrator can add a passkey.'
+    );
   });
 
   it('allows only same-origin, non-auth return paths', () => {

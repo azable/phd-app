@@ -3,6 +3,7 @@
 import { getRequestEvent } from '$app/server';
 import { passkey } from '@better-auth/passkey';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError, getSessionFromCtx } from 'better-auth/api';
 import { admin, username } from 'better-auth/plugins';
 import { betterAuth } from 'better-auth/minimal';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
@@ -60,6 +61,25 @@ async function ensureBootstrapAdmin(): Promise<string> {
     .returning({ id: authSchema.user.id });
   if (!inserted[0]) throw new Error('Administrator setup has already been completed.');
   return bootstrapAdminId;
+}
+
+/**
+ * Who a verified passkey is registered for. Signed in, the passkey plugin registers it for the
+ * session's user, excluding that user's passkeys already registered, and only an administrator may
+ * add one; signed out, it is the one-time setup creating the first administrator.
+ */
+export async function registeredPasskeyOwner(
+  signedIn: Record<string, unknown> | null
+): Promise<{ userId?: string; name: string }> {
+  if (!signedIn)
+    return { userId: await ensureBootstrapAdmin(), name: 'Primary administrator passkey' };
+  if (signedIn.role !== 'admin') {
+    throw APIError.from('FORBIDDEN', {
+      code: 'ADMIN_PASSKEY_ONLY',
+      message: 'Only an administrator can add a passkey.'
+    });
+  }
+  return { name: 'Administrator passkey' };
 }
 
 export const auth = betterAuth({
@@ -120,10 +140,8 @@ export const auth = betterAuth({
             displayName: bootstrapAdminName
           };
         },
-        afterVerification: async () => ({
-          userId: await ensureBootstrapAdmin(),
-          name: 'Primary administrator passkey'
-        })
+        afterVerification: async ({ ctx }) =>
+          registeredPasskeyOwner((await getSessionFromCtx(ctx))?.user ?? null)
       }
     }),
     sveltekitCookies(getRequestEvent)
