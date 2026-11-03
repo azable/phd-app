@@ -135,7 +135,7 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}
   <Node layout="row">
-    {#each values as v, k}{@render Int(v)}<Link from={k} to={partner[k]} />{/each}
+    {#each values as v, k}{v}<Link from={k} to={partner[k]} />{/each}
   </Node>
 {/snippet}
 

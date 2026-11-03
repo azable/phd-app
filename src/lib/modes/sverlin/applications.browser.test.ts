@@ -56,12 +56,12 @@ const source = `<script lang="sverlin" domain>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
 {#snippet Ask(g: Greater)}
-  <Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+  <Node>is {g.a} > {g.b}? {g.value}</Node>
 {/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
     {@render Greater(@sweep.pair.test)}
   </Node>
 {/snippet}

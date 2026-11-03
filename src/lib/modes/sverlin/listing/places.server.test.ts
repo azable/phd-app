@@ -34,15 +34,15 @@ ${listing}
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Arrow(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Goal()}<Node>target {target}</Node>{/snippet}
 <Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
-    {@render Index(lo)}
-    {@render Index(hi)}
-    {@render Index(mid)}
+    {lo}
+    {hi}
+    {mid}
   </Node>
 </Layout>`;
 
@@ -79,13 +79,13 @@ const linearSearch = `<script lang="sverlin" domain>
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Mark(p: Index)}<Pointed />{/snippet}
-{#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Goal()}<Node>target {target}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 <Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
-    {@render Index(i)}
+    {i}
   </Node>
 </Layout>`;
 
@@ -124,7 +124,7 @@ describe('tokens naming places in a listing', () => {
     [
       'a token naming a place nothing renders',
       '$k[k]',
-      'names @k, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {@render Position(mid)}, and the places it renders are @hi, @lo, @mid, @target, @v.'
+      'names @k, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {mid}, and the places it renders are @hi, @lo, @mid, @target, @v.'
     ]
   ])('refuse %s', (_, token, message) => {
     const listing = tokened.replace('lo = 0', `${token} = 0`);
@@ -236,14 +236,14 @@ describe('tokens naming places in a listing', () => {
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Mark(p: Position)}<Pointed />{/snippet}
-{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Key()}<Node>key {key}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 <Layout name="Stacked">
   <Node layout="row">
     <Listing />
     <Node layout="column">{@render Key()}{@render Cells()}</Node>
-    {@render Position(i)}
-    {@render Position(j)}
+    {i}
+    {j}
   </Node>
 </Layout>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);

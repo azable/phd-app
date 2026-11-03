@@ -83,14 +83,12 @@ Sverlin's own constructs are capitalised tags, as `<Node>`, `<Layout>`, and
   differ in how they arrange the parts or which they hold, never only in look,
   which is the variant's. A part looks alike in every layout. A layout arranges
   the page, a node's `layout` prop its children.
-- Draw every value of a domain type through a view of its type, as
-  `{@render Int(target)}`, and every position through a pointer; the markup
-  around them arranges, labels, and explains. A node of text and renders with no
-  `layout` reads as a line of text, its renders inline at their own sizes,
-  wrapping between words, as
-  `<Node>Found {@render Int(target)} at index {@render Position(i)}.</Node>`,
-  which keeps each value sized and looking as it does elsewhere, unlike
-  `{target}`.
+- Draw every value of a domain type through a view of its type, as `{target}`,
+  and every position through a pointer; the markup around them arranges, labels,
+  and explains. A node of text and renders with no `layout` reads as a line of
+  text, its renders inline at their own sizes, wrapping between words, as
+  `<Node>Found {target} at index {i}.</Node>`, which keeps each value sized and
+  looking as it does elsewhere, unlike `{target}`.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
 - Write text in the participant's words about what the algorithm does, never an
@@ -107,12 +105,24 @@ A view reads only its value and other views, never the input or algorithm
 variables, a pointer apart: how two values relate is drawn where both are in
 scope, in the view holding them or by a pointer.
 
-A type is drawn by its name: `{@render Int(value)}` draws the view `views.Int`
-chooses, among every view of `Int` and `none`. Name views after how they draw,
-as `IntCell` or `IntTally`. Which view draws a value is the variant's, so a view
-named as its type (`{#snippet Int(value: Int)}`), rendering a view by its own
-name (`{@render IntCell(value)}`; one render is drawn apart through its place,
-see Places), and rendering a type no view draws are errors. Views differ in what
+A value in braces is drawn by its type's view: in the markup's text, `{key}`,
+with `key` an `Int`, draws the view `views.Int` chooses, among every view of
+`Int` and `none`. The braces are Svelte's, holding a value; what they draw is
+Sverlin's, the type of the value deciding: a view's parameter by its annotation,
+an `{#each}` item by its collection, a field by its record, a variable or a
+label by what the steps record it holding. A value without a domain type, as a
+loop's own index, is text, and a value shown as plain text is a node's value,
+`<Node value={key} />`. A union's value is drawn by the view of the member it
+holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
+of its own; one member drawn as a pointer, as a position beside `'none'`, marks
+where the value points. Name views after how they draw, as `IntCell` or
+`IntTally`. Which view draws a value is the variant's, so a view named as its
+type (`{#snippet Int(value: Int)}`), rendering a view by its own name
+(`{@render IntCell(value)}`; one render is drawn apart through its place, see
+Places), writing a value's view as a render of its type (`{@render Int(key)}`,
+which is `{key}`), and a value whose type no view draws are errors.
+`{@render Title()}` draws a part, and `{@render Greater(@check)}` an operator's
+application at a label (see Views of what a step computed). Views differ in what
 they draw: two differing only in look, as a cell and a round cell, are one view.
 Offer more than one where the request leaves open what a value shows, as a
 number as a cell or a tally, a flag as a word or a tick. In the view a type's
@@ -122,8 +132,8 @@ own index, `k` in `{#each list as v, k}`, as text, `{k}`.
 A view of a collection or record draws its parts through their types' views:
 
 ```svelte
-{#snippet Items(list: Values)}<Node>{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet VertexCard(v: Vertex)}<Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
+{#snippet Items(list: Values)}<Node>{#each list as v}{v}{/each}</Node>{/snippet}
+{#snippet VertexCard(v: Vertex)}<Node layout="column">{v.name}{v.seen}</Node>{/snippet}
 ```
 
 A node whose only child is an `{#each}` holds a collection: its items sit on
@@ -157,13 +167,13 @@ written in the view so the label is a kind of its own.
   text colour, shadow, glow, fill style, decoration) shows only there, the rest
   of its look in every slot, so every slot keeps one size.
 - Render a pointer in a layout's root itself, outside other nodes, snippets, and
-  blocks other than `{#if}`, with a position from the state: a variable
-  (`{@render Index(i)}`), an element, a field (`{@render Index(edges[e].to)}`),
-  or a label (see Views of what a step computed). There a position type draws as
-  a mark, through its pointer views (`pointers.Index`), so every mark of it
-  looks the same; inside another node, as `<Node>at {@render Index(i)}</Node>`,
-  as its number, through its other views (`views.Index`). A pointer only another
-  layout renders draws nothing and keeps no room.
+  blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
+  an element, a field (`{edges[e].to}`), or a label (see Views of what a step
+  computed). There a position type draws as a mark, through its pointer views
+  (`pointers.Index`), so every mark of it looks the same; inside another node,
+  as `<Node>at {i}</Node>`, as its number, through its other views
+  (`views.Index`). A pointer only another layout renders draws nothing and keeps
+  no room.
 - The page draws the pointer around the element wherever that is drawn. Every
   element keeps room for the pointers that can point into its collection, and a
   position shown past an end gets a slot there, so nothing moves as pointers
@@ -288,8 +298,8 @@ element at the index, as
 where `Slot = index(Neighbours)` and `around` is the list declared before the
 loop. A position names the collection it points into, as `Slot(around, 0)`,
 where that is not the only one of its type at the top level, and draws as a
-pointer into it: with a pointer view of `Position`, `{@render Position(i)}`
-marks the cell `i` points at as an index loop walks `digits`.
+pointer into it: with a pointer view of `Position`, `{i}` marks the cell `i`
+points at as an index loop walks `digits`.
 
 A function is declared at the top level of the algorithm block, as
 `function search(a, target) { ... }`, and sees only its parameters: give it the
@@ -338,18 +348,18 @@ Binary search, stopping where it finds the target:
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
 {#snippet Mark(p: Index)}<Pointed />{/snippet}
-{#snippet Title()}<Node>Binary search for {@render Int(target)}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Range()}<Node>between {@render Index(lo)} and {@render Index(hi)}</Node>{/snippet}
+{#snippet Title()}<Node>Binary search for {target}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Range()}<Node>between {lo} and {hi}</Node>{/snippet}
 
 <Layout name="Stacked">
   <Node>
     {@render Title()}
     {@render Cells()}
     {@render Range()}
-    {@render Index(lo)}
-    {@render Index(mid)}
-    {@render Index(hi)}
+    {lo}
+    {mid}
+    {hi}
   </Node>
 </Layout>
 ```
@@ -500,18 +510,18 @@ nodes `prev` and `cur` refer to both marked:
 {#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
 {#snippet NodeBox(n: ListNode)}
   {#snippet NextField()}<Node><Link to={n.next} /></Node>{/snippet}
-  <Node layout="row">{@render Name(n.name)}{@render NextField()}</Node>
+  <Node layout="row">{n.name}{@render NextField()}</Node>
 {/snippet}
 {#snippet Here(p: NodeRef)}<Pointed />{/snippet}
 {#snippet Heap()}
-  <Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>
+  <Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>
 {/snippet}
 
 <Layout name="Stacked">
   <Node>
     {@render Heap()}
-    {@render NodeRef(prev)}
-    {@render NodeRef(cur)}
+    {prev}
+    {cur}
   </Node>
 </Layout>
 ```
@@ -526,9 +536,8 @@ nodes `prev` and `cur` refer to both marked:
   mistake at that step ("cur is an End ("end"), so it has no next"). A variable
   holding a node or the end is made with the union, `let cur = Next(head);`. The
   root and its parts read a field through a reference too, from the node it
-  refers to, as `{#each queue as q}{@render Name(q.name)}{/each}`; a view
-  drawing a reference itself as a value is refused, as it would show the node's
-  place.
+  refers to, as `{#each queue as q}{q.name}{/each}`; a view drawing a reference
+  itself as a value is refused, as it would show the node's place.
 - A node lives while something refers to it: a variable in scope, a collection,
   or a live node. `all(ListNode)` is every live node, in the order made, drawn
   as a collection, each through the record's view; one no longer referred to
@@ -540,8 +549,8 @@ nodes `prev` and `cur` refer to both marked:
   nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
   Write links there, reading the record's fields: one in a view of the reference
   type itself, as
-  `{#snippet NextMark(value: Next)}<Link to={value} />{/snippet}`, ends at the
-  value drawn, not at a node. Draw a node as fields, as a textbook does,
+  `{#snippet NextLink(value: NodeRef)}<Link to={value} />{/snippet}`, ends at
+  the value drawn, not at a node. Draw a node as fields, as a textbook does,
   `[ A | next ]` or a tree's `[ left | key | right ]`: a node holding only such
   links is a field, its own snippet so it has its own look
   (`NodeBox.NextField`); the arrow leaves the field, arcing over its node where
@@ -556,13 +565,13 @@ nodes `prev` and `cur` refer to both marked:
   `index(Nodes)`.
 - A view reads through a position with `at(p)`, the element it points at in the
   collection it points into, as
-  `{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}`; the
-  root and its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a
-  `Vertex` and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and
-  a record of positions reads through twice, `at(edge.from).name`. What draws it
-  is the element itself, so a pointer's view drawn round the whole element marks
-  it there too; but it moves as the position, so a name in a queue slides with
-  its entry and fades out as it leaves while the element stays where it is held;
+  `{#snippet VertexName(p: VertexRef)}{at(p).name}{/snippet}`; the root and its
+  parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a `Vertex` and
+  `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and a record of
+  positions reads through twice, `at(edge.from).name`. What draws it is the
+  element itself, so a pointer's view drawn round the whole element marks it
+  there too; but it moves as the position, so a name in a queue slides with its
+  entry and fades out as it leaves while the element stays where it is held;
   past either end it draws nothing. A position has no fields (`p.name` is
   refused), and its number may be drawn, as an index means something.
 
@@ -677,10 +686,10 @@ place:
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
 {#snippet Ask(g: Greater)}
-  <Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+  <Node>is {g.a} > {g.b}? {g.value}</Node>
 {/snippet}
 {#snippet Swapping()}<Node>out of order, so they swap</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
     {@render Cells()}
@@ -714,8 +723,8 @@ after, and missing where it gave none or several. It is held at later steps
 inside the run around it that keeps it (see Steps), drawn from the step's
 before, so a mark stays until that code finishes. So a view shows what a step's
 code held though no variable holds it, as the key a whole insertion inserts,
-`{@render Int(@insert.key)}`, out of scope once its block ends. A label giving a
-position is drawn by a pointer, pointing while that code runs.
+`{@insert.key}`, out of scope once its block ends. A label giving a position is
+drawn by a pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -728,8 +737,8 @@ for (@first[let i = Index(1)]; @inside[Before(i, end)]; @step[i = Next(i)]) @pai
 ```
 
 ```svelte
-{@render Index(@pair.compare.left)}
-{@render Index(@pair.compare.right)}
+{@pair.compare.left}
+{@pair.compare.right}
 ```
 
 A label gives a value only where its code ran, `&&` skipping it included, so the
@@ -768,7 +777,7 @@ application of `Equal` made inside `@check` so far:
 
 ```svelte
 {#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}
-{#each runs(@check.at) as p}{@render Index(p)}{/each}
+{#each runs(@check.at) as p}{p}{/each}
 {@render Asked()}
 ```
 
@@ -800,7 +809,7 @@ The design space is every variable of a component's look, found in its markup:
   `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's
   `<Link>`, as `Graph.Link`. A variable is its kind and prop, as
   `Here.Pointed.fill` or `Items.Under.shown`.
-- Each place's own, for a render with an argument (see Places).
+- Each place's own, for a value in braces (see Places).
 
 A snippet's name is its kind, so it names what its nodes are, never how they
 look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each snippet has a
@@ -816,16 +825,16 @@ Every kind of node has these props, each with a fixed set of options:
   draws an absent value: for a whole presentation left out, keeping no room, and
   at one step hidden, keeping its room. A node of only text and renders is one
   statement that one missing render takes whole, so
-  `<Node>swap {@render Int(@swap.a)} and {@render Int(@swap.b)}</Node>` hides at
-  a step that swaps nothing; a node holding other nodes has parts, each node and
-  render in it, and goes only with all of them, so in
-  `<Node layout="row"><Node>lo {@render Index(lo)}</Node><Node>mid {@render Index(mid)}</Node></Node>`
-  only the `mid` part hides while `mid` is out of scope (a part of the page
-  rendered in it counts as its nodes do). Split a sentence into parts to keep
-  what is there. A node holding no render, as a title, stays. A `<Pointed>` kind
-  has no `shown`: to drop a pointer, leave out a node around its `<Pointed>`,
-  give its type's view `none`, or render it in `{#if}`, its elements then drawn
-  as without it.
+  `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step that swaps
+  nothing; a node holding other nodes has parts, each node and render in it, and
+  goes only with all of them, so in
+  `<Node layout="row"><Node>lo {lo}</Node><Node>mid {mid}</Node></Node>` only
+  the `mid` part hides while `mid` is out of scope (a part of the page rendered
+  in it counts as its nodes do). Split a sentence into parts to keep what is
+  there. A node holding no render, as a title, stays. A `<Pointed>` kind has no
+  `shown`: to drop a pointer, leave out a node around its `<Pointed>`, give its
+  type's view `none`, or render it in `{#if}`, its elements then drawn as
+  without it.
 - `fill` and `stroke`: `none` or a colour; `color`: the text's colour.
 - `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels; `strokeStyle`: solid, dashed
   (suiting a place rather than a value), or dotted; `opacity`: 0.25, 0.5, 0.75,
@@ -903,15 +912,13 @@ amber accent.
 
 ### Places
 
-A render with an argument is a place, named by what is written there after `@`:
-a label, by its full name, a variable, or a field, as
-`{@render Index(@pair.compare.left)}` at `@pair.compare.left`,
-`{@render Index(found)}` at `@found`, and `{@render Int(g.a)}` in `Ask` at
-`Ask.` and `@g.a`. A render of another expression, or with nothing between the
-brackets, is none. Every render is drawn by the view its type's variable
-chooses, in its kinds' looks; a place has variables of its own that fall back to
-those until a variant sets them, so one render is drawn apart with nothing
-declared:
+A value in braces is a place, named by what is written there after `@`: a label,
+by its full name, a variable, or a field, as `{@pair.compare.left}` at
+`@pair.compare.left`, `{found}` at `@found`, and `{g.a}` in `Ask` at `Ask.` and
+`@g.a`. A value written another way, as `{values[0]}`, is none. Every value in
+braces is drawn by the view its type's variable chooses, in its kinds' looks; a
+place has variables of its own that fall back to those until a variant sets
+them, so one value is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it
   draws, as `pointers.Index@found` or `views.Int@swap.held`;
@@ -980,7 +987,7 @@ variables:
   <Node>
     {#each list as v, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{@render Int(v)}{@render Under()}</Node>
+      <Node layout="column">{v}{@render Under()}</Node>
     {/each}
   </Node>
 {/snippet}
@@ -1073,24 +1080,24 @@ there: the assistant for a new or edited source, a chooser for more variants.
   it lights as one. A line lights from its first character to its last, never
   its indentation.
 - A token, `$name[text]`, marks text as a reference to the place the root or a
-  part renders at `@name` (see Places), as `$mid[A[mid]]` for
-  `{@render Index(mid)}` or `$key[key]` for `{@render Int(key)}` in a part.
-  Tokens are written by hand, never matched by name, so `$j[A[j + 1]]` names
-  `@j` where the pseudocode's `j` is the algorithm's `j - 1`. Tokens and regions
-  nest either way, as `$x[A[@left[j - 1]]]`, a region inside a token keeping its
-  prefix; a token inside another, an unclosed one, or one naming a place nothing
-  renders is an error. When a step's own code, not code kept lit from earlier,
-  overlaps a token, the step touches its place: every token naming it and its
-  references in the picture light together, in the colour of the place's mark,
-  its pointer view's `<Pointed>` fill (`Mark.Pointed@i.fill`) or its value's
-  view's (`IntCell@key.fill`), or its stroke where the fill is none or white. In
-  the picture, a place is the element a pointer at it points at, or the
-  outermost node of a value rendered there or of a pointer view with nodes
-  around its `<Pointed>`, a caption's number included. Hovering any reference
-  outlines the others, dashed in its colour. `listing.places`, there only where
-  a listing has tokens, says how places light: `fill` (the start: the token
-  filled, a 3px band round the node), `underline`, `outline` (a ring), or
-  `none`, which lights nothing and links nothing on hover; none takes room.
+  part renders at `@name` (see Places), as `$mid[A[mid]]` for `{mid}` or
+  `$key[key]` for `{key}` in a part. Tokens are written by hand, never matched
+  by name, so `$j[A[j + 1]]` names `@j` where the pseudocode's `j` is the
+  algorithm's `j - 1`. Tokens and regions nest either way, as
+  `$x[A[@left[j - 1]]]`, a region inside a token keeping its prefix; a token
+  inside another, an unclosed one, or one naming a place nothing renders is an
+  error. When a step's own code, not code kept lit from earlier, overlaps a
+  token, the step touches its place: every token naming it and its references in
+  the picture light together, in the colour of the place's mark, its pointer
+  view's `<Pointed>` fill (`Mark.Pointed@i.fill`) or its value's view's
+  (`IntCell@key.fill`), or its stroke where the fill is none or white. In the
+  picture, a place is the element a pointer at it points at, or the outermost
+  node of a value rendered there or of a pointer view with nodes around its
+  `<Pointed>`, a caption's number included. Hovering any reference outlines the
+  others, dashed in its colour. `listing.places`, there only where a listing has
+  tokens, says how places light: `fill` (the start: the token filled, a 3px band
+  round the node), `underline`, `outline` (a ring), or `none`, which lights
+  nothing and links nothing on hover; none takes room.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes
@@ -1148,8 +1155,8 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Mark(p: Position)}<Pointed />{/snippet}
-{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Key()}<Node>key {key}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Board()}
   <Node layout="row">
     <Listing />
@@ -1160,8 +1167,8 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 <Layout name="Stacked">
   <Node>
     {@render Board()}
-    {@render Position(i)}
-    {@render Position(j)}
+    {i}
+    {j}
   </Node>
 </Layout>
 ```
@@ -1244,9 +1251,8 @@ prop, as `Arrow.Link` for a link in `Arrow`.
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
 it: text, as `<Link from={k} to={w}>next</Link>`, or views of values and nodes,
-as `<Link from={u} to={v}>{@render Weight(cost)}</Link>`, each of its own kind,
-so a weight can be a white pill on the line, followed from step to step as any
-value is.
+as `<Link from={u} to={v}>{cost}</Link>`, each of its own kind, so a weight can
+be a white pill on the line, followed from step to step as any value is.
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
@@ -1316,27 +1322,27 @@ at marked and the queue drawn by number:
 
 {#snippet NameText(name: Name)}<Node value={name} />{/snippet}
 {#snippet SeenMark(seen: Flag)}<Node>{seen ? '✓' : '·'}</Node>{/snippet}
-{#snippet VertexCard(v: Vertex)}<Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}</Node>{/snippet}
+{#snippet VertexCard(v: Vertex)}<Node layout="column">{v.name}{v.seen}</Node>{/snippet}
 {#snippet RefCard(v: VertexRef)}<Node value={v} />{/snippet}
-{#snippet QueueItems(q: Queue)}<Node>{#each q as v}{@render VertexRef(v)}{/each}</Node>{/snippet}
+{#snippet QueueItems(q: Queue)}<Node>{#each q as v}{v}{/each}</Node>{/snippet}
 {#snippet Marked(v: VertexRef)}<Pointed />{/snippet}
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as v, k}
       {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{@render Vertex(v)}{@render VertexNumber()}</Node>
+      <Node layout="column">{v}{@render VertexNumber()}</Node>
       {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
   </Node>
 {/snippet}
-{#snippet QueueLine()}<Node>queue {@render Queue(queue)}</Node>{/snippet}
+{#snippet QueueLine()}<Node>queue {queue}</Node>{/snippet}
 
 <Layout name="Stacked">
   <Node>
     {@render Graph()}
     {@render QueueLine()}
-    {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.check.next)}
+    {current}
+    {@visit.look.check.next}
   </Node>
 </Layout>
 
@@ -1344,8 +1350,8 @@ at marked and the queue drawn by number:
   <Node layout="row">
     {@render Graph()}
     {@render QueueLine()}
-    {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.check.next)}
+    {current}
+    {@visit.look.check.next}
   </Node>
 </Layout>
 ```

@@ -131,6 +131,13 @@ import { layOutOnServer, layoutFailureMessage } from './layout.server';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
+import {
+  implicitInsertions,
+  implicitRenders,
+  markImplicit,
+  unionViews,
+  type ViewTyping
+} from './implicit-renders.server';
 
 // One component should be much smaller; these ceilings bound compilation and inline Timeline storage.
 const maximumSourceBytes = 256 * 1024;
@@ -445,6 +452,76 @@ function listingsFrom(
 }
 
 /** The algorithm's steps paced as given (see Pacing), opening on step 0, the input as given. */
+
+/**
+ * The domain and a first trace, which give the types of the values the markup draws (see
+ * implicit-renders.server.ts); none where a block fails, whose problem the build reports in turn.
+ */
+function earlyTyping(
+  source: string,
+  blocks: Partial<Record<BlockKind | 'design', Block>>
+): ViewTyping | undefined {
+  if (!blocks.algorithm) return undefined;
+  try {
+    const domain = blocks.domain
+      ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+      : noDomain;
+    const input = blocks.input
+      ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
+      : { state: {}, types: {} };
+    // Every label's values are kept, so a label read in the markup has its type.
+    const algorithm = blocks.algorithm;
+    const labels = interpretBlock(
+      source,
+      algorithm,
+      (body) => stepLabels(parseBlock(body, 'algorithm', domain)).labels
+    );
+    const kept = new Set(labels.map(({ full }) => full));
+    return {
+      domain,
+      labels,
+      steps: paced(source, algorithm, input, domain, {}, { labels: kept }).steps
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** A value's view written as a render of its type, as {@render Int(key)}: a value is written {key}. */
+function writtenRenders(
+  html: unknown,
+  domain: DomainRegistry,
+  source: string,
+  authored: number
+): InvalidSvelteSourceError[] {
+  const types = new Set([...Object.keys(domain.atoms), ...Object.keys(domain.structures)]);
+  const problems: InvalidSvelteSourceError[] = [];
+  visit(html as never, (node) => {
+    const part = node as {
+      type?: string;
+      implicit?: boolean;
+      start?: number;
+      expression?: {
+        callee?: { type?: string; name?: string };
+        arguments?: { start?: number; end?: number }[];
+      };
+    };
+    if (part.type !== 'RenderTag' || part.implicit || (part.start ?? 0) >= authored) return;
+    const name =
+      part.expression?.callee?.type === 'Identifier' ? part.expression.callee.name : undefined;
+    const [argument] = part.expression?.arguments ?? [];
+    if (!name || !types.has(name) || !argument) return;
+    const written = source.slice(argument.start ?? 0, argument.end ?? 0);
+    problems.push(
+      new InvalidSvelteSourceError(
+        `{@render ${name}(${written})} is written {${written}}: a value in braces draws its type's view, the one views.${name} chooses, at its place.`,
+        { code: 'view_component', start: sourcePosition(source, part.start ?? 0) }
+      )
+    );
+  });
+  return problems;
+}
+
 function paced(
   source: string,
   algorithm: Block,
@@ -633,9 +710,79 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     // Every source declares its layouts; one that does not is refused with the view's other problems.
     if (!page.layouts.length)
       viewProblems = [new InvalidSvelteSourceError(noLayoutMessage, { code: 'view_layout' })];
-    const svelteSource = page.text;
-    const ast = parseView(svelteSource);
+    let svelteSource = page.text;
+    let ast = parseView(svelteSource);
+    // A value in braces draws its type's view, as a render of that type, and a union's value its
+    // member's, through a view added after the authored ones (see implicit-renders.server.ts).
+    const typing = earlyTyping(source, blocks);
+    const authored = svelteSource.length;
+    const pointerTypes = (html: unknown) => {
+      const { components, pointers } = findComponents(html as Parameters<typeof findComponents>[0]);
+      return new Set(components.filter(({ name }) => pointers.has(name)).map(({ type }) => type));
+    };
+    let implicit = typing
+      ? implicitRenders(ast.html, typing, references, pointerTypes(ast.html))
+      : [];
+    if (typing) {
+      const unions = new Set(
+        implicit
+          .map(({ type }) => type)
+          .filter((type) => typing.domain.structures[type]?.kind === 'union')
+      );
+      const added = unionViews(unions, typing.domain);
+      viewProblems.push(
+        ...added.problems.map(
+          (message) => new InvalidSvelteSourceError(message, { code: 'view_component' })
+        )
+      );
+      if (added.text) {
+        svelteSource += added.text;
+        ast = parseView(svelteSource);
+        implicit = implicitRenders(ast.html, typing, references, pointerTypes(ast.html));
+      }
+    }
+    markImplicit(ast.html, implicit);
+    // A label drawn in text with no type of its own says why, as the name of no label.
+    if (typing) {
+      const paths = new Map(
+        references.flatMap((reference) =>
+          reference.kind === 'value' ? [[reference.key, reference.path] as const] : []
+        )
+      );
+      visit(ast.html, (node) => {
+        const tag = node as {
+          type: string;
+          start?: number;
+          expression?: { type?: string; name?: string };
+        };
+        const path =
+          tag.type === 'MustacheTag' && tag.expression?.type === 'Identifier'
+            ? paths.get(tag.expression.name ?? '')
+            : undefined;
+        if (path === undefined) return;
+        const found = resolveLabel(path, typing.labels, true);
+        if (!('problem' in found)) return;
+        viewProblems.push(
+          new InvalidSvelteSourceError(found.problem, {
+            code: 'view_label',
+            start: sourcePosition(source, tag.start ?? 0)
+          })
+        );
+        tag.type = 'Comment';
+      });
+    }
+    if (typing) viewProblems.push(...writtenRenders(ast.html, typing.domain, source, authored));
     const found = findComponents(ast.html as Parameters<typeof findComponents>[0]);
+    // A union's value is drawn by its member's view, so no view of the union is written.
+    if (typing)
+      for (const { name, type, start } of found.components)
+        if (start < authored && typing.domain.structures[type]?.kind === 'union')
+          viewProblems.push(
+            new InvalidSvelteSourceError(
+              `${name} views ${type}, a union, whose values are drawn by their member's view: {value} picks the view of the member it holds, so remove ${name} and give each member of ${type} a view.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+          );
     visit(ast, (node) => {
       if (
         node.type === 'ImportDeclaration' ||
@@ -736,7 +883,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
       if (structure?.kind === 'ref' && structure.heap)
         viewProblems.push(
           new InvalidSvelteSourceError(
-            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {@render Name(q.name)} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(v: ${type})}<Pointed />{/snippet}.`,
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as {#snippet Here(v: ${type})}<Pointed />{/snippet}.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           )
         );
@@ -914,7 +1061,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
           const type = components[name];
           const variable = `${found.pointers.has(name) ? 'pointers' : 'views'}.${type}`;
           return new InvalidSvelteSourceError(
-            `{@render ${name}(…)} names the view ${name}, but which view draws a value is the variant's: render its type, as {@render ${type}(…)}, which ${variable} chooses the view of, and a place's own choice draws one render apart.`,
+            `{@render ${name}(…)} names the view ${name}, but which view draws a value is the variant's: write the value in braces, as {…}, drawn by the view ${variable} chooses, and a place's own choice draws one render apart.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           );
         })
@@ -1047,7 +1194,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
         }
         if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end)) {
           problem(
-            `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in the root and its parts, which pass what a view draws, as {@render Int(@swap.a)}.`
+            `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in the root and its parts, which pass what a view draws, as {@swap.a}.`
           );
           continue;
         }
@@ -1405,13 +1552,17 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
             })
         )
       );
-    const viewCalls = viewCallsOf(ast.html, viewNames);
+    // A type with a view is drawn, never called, rendered or not: {Index(k)} is refused too.
+    const viewCalls = viewCallsOf(
+      ast.html,
+      new Set([...viewNames, ...found.components.map(({ type }) => type)])
+    );
     if (viewCalls.length)
       throw InvalidSvelteSourceError.combine(
         viewCalls.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `${name}(…) is a view, which only draws: write {@render ${name}(value)}, with a value from the state. Values are made in the input and algorithm blocks, not in the view; a loop's own index, as k in {#each list as v, k}, is shown as text, {k}.`,
+              `${name}(…) is a view, which only draws: write {value}, the value in braces, with a value from the state. Values are made in the input and algorithm blocks, not in the view; a loop's own index, as k in {#each list as v, k}, is shown as text, {k}.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1460,6 +1611,7 @@ export function prepareSvelteComponent(source: string): PreparedComponent {
     const tagged = withInsertions(svelteSource, [
       ...insertions,
       ...pointers.removals,
+      ...implicitInsertions(implicit, pointers.removals),
       ...slotInsertions(
         ast.html,
         svelteSource,
@@ -2235,7 +2387,7 @@ function checkProps(
               : component === 'Link' && attribute.name === 'directed'
                 ? `<Link> takes no directed: a link is an arrow from its from to its to, and its direction follows from the data. Where the same <Link> joins two elements both ways at the same steps, as neighbour lists naming each edge from both its ends, the pair is one two-way line, with its kind's head at both ends.`
                 : component === 'Link' && attribute.name === 'label'
-                  ? `<Link> takes no label: write its label as its children, drawn at its middle, as <Link from={u} to={v}>{@render Weight(cost)}</Link>, or text, as <Link from={u} to={v}>next</Link>.`
+                  ? `<Link> takes no label: write its label as its children, drawn at its middle, as <Link from={u} to={v}>{cost}</Link>, or text, as <Link from={u} to={v}>next</Link>.`
                   : component === 'Link' && linkLooks.has(attribute.name)
                     ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
                     : designProps.has(attribute.name)
@@ -2448,7 +2600,7 @@ function withNodeRefs(
       (tag.expression?.type !== 'CallExpression' || tag.expression.callee?.type !== 'Identifier')
     ) {
       reject(
-        '{@render …} names the snippet it draws, as {@render Title()} or {@render Int(value)}, so the kinds of the nodes it draws are known before the view runs.',
+        '{@render …} names the snippet it draws, as {@render Title()}, so the kinds of the nodes it draws are known before the view runs.',
         'view_markup',
         tag.start
       );

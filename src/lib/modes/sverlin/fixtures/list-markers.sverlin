@@ -56,7 +56,7 @@ while @more[cur ≠ ∅]
     <Node><Link to={node.next} /></Node>
   {/snippet}
   <Node layout="row">
-    {@render Name(node.name)}
+    {node.name}
     {@render NextField()}
   </Node>
 {/snippet}
@@ -78,7 +78,7 @@ while @more[cur ≠ ∅]
 {#snippet Heap()}
   <Node layout="free">
     {#each all(ListNode) as node}
-      {@render ListNode(node)}
+      {node}
     {/each}
   </Node>
 {/snippet}
@@ -138,8 +138,8 @@ while @more[cur ≠ ∅]
   <Node>
     {@render Title()}
     {@render Board()}
-    {@render NodeRef(prev)}
-    {@render NodeRef(cur)}
-    {@render NodeRef(after)}
+    {prev}
+    {cur}
+    {after}
   </Node>
 </Layout>

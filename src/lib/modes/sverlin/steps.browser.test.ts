@@ -45,8 +45,8 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet At()}<Node>at {@render Index(i)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet At()}<Node>at {i}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
@@ -141,8 +141,8 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Title()}<Node>Pass</Node>{/snippet}
-{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
-{#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
+{#snippet Key()}<Node>key {key}</Node>{/snippet}
+{#snippet Cells()}<Node layout="row">{#each values as x}{x}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>

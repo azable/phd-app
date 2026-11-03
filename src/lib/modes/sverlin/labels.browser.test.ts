@@ -90,8 +90,8 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Inserting()}<Node>inserting {@insert.key}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
@@ -132,9 +132,9 @@ it.skipIf(!enabled)(
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Swapped()}<Node>swap {@render Int(@sweep.pair.swap.a)} and {@render Int(@sweep.pair.swap.b)}</Node>{/snippet}
-{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}?</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Swapped()}<Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {g.a} > {g.b}?</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
@@ -176,12 +176,12 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Cells()}
-    {#each runs(@check.at) as p}{@render Index(p)}{/each}
+    {#each runs(@check.at) as p}{p}{/each}
   </Node>
 </Layout>`;
     const checked = (await stepsOf(search, 4, { 'pause@check.at': 'off' })).map((nodes) =>
@@ -208,14 +208,14 @@ it.skipIf(!enabled)(
 {#snippet DigitCell(value: Digit)}<Node {value} />{/snippet}
 {#snippet CountCell(value: Count)}<Node {value} />{/snippet}
 {#snippet Reading(r: At)}<Pointed />{/snippet}
-{#snippet DigitRow()}<Node>{#each digits as d}{@render Digit(d)}{/each}</Node>{/snippet}
-{#snippet CountRow()}<Node>{#each counts as c}{@render Count(c)}{/each}</Node>{/snippet}
+{#snippet DigitRow()}<Node>{#each digits as d}{d}{/each}</Node>{/snippet}
+{#snippet CountRow()}<Node>{#each counts as c}{c}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render DigitRow()}
     {@render CountRow()}
-    {@render At(v)}
+    {v}
   </Node>
 </Layout>`;
     const reading = (await stepsOf(counting, 4)).map(

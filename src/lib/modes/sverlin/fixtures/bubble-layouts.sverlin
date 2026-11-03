@@ -32,16 +32,16 @@
 {#snippet CompareMark(p: Position)}<Pointed />{/snippet}
 {#snippet SwapMark(p: Position)}<Pointed />{/snippet}
 {#snippet Ask(g: Greater)}
-  <Node>compare {@render Int(g.a)} and {@render Int(g.b)}</Node>
+  <Node>compare {g.a} and {g.b}</Node>
 {/snippet}
 {#snippet SwapNote()}<Node>Swap</Node>{/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Cells(list: Values)}
-  <Node>{#each list as v}{@render Int(v)}{/each}</Node>
+  <Node>{#each list as v}{v}{/each}</Node>
 {/snippet}
 {#snippet Board()}
   <Node layout="column">
-    {@render Values(values)}
+    {values}
     <When of="@pass.pair.swap">
       <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
     </When>
@@ -54,11 +54,11 @@
   <Node>
     {@render Title()}
     {@render Board()}
-    {@render Position(@pass.pair.compare.left)}
-    {@render Position(@pass.pair.compare.right)}
+    {@pass.pair.compare.left}
+    {@pass.pair.compare.right}
     <When of="@pass.pair.swap">
-      {@render Position(@pass.pair.swap.from)}
-      {@render Position(@pass.pair.swap.to)}
+      {@pass.pair.swap.from}
+      {@pass.pair.swap.to}
     </When>
   </Node>
 </Layout>
@@ -67,7 +67,7 @@
   <Node layout="row">
     <Node>{@render Title()}</Node>
     {@render Board()}
-    {@render Position(@pass.pair.compare.left)}
-    {@render Position(@pass.pair.compare.right)}
+    {@pass.pair.compare.left}
+    {@pass.pair.compare.right}
   </Node>
 </Layout>

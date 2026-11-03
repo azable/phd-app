@@ -185,17 +185,8 @@ export function markLabels(source: string): {
   let out = '';
   let depth = 0;
   let quote: string | undefined;
-  // Whether a tag is open, from `<name` to its `>`, and the quote of an attribute value in it.
-  let tag = false;
-  let tagQuote: string | undefined;
   for (let index = 0; index < source.length; index++) {
     const char = source[index];
-    if (depth === 0) {
-      if (!tag) tag = char === '<' && /[A-Za-z]/u.test(source[index + 1] ?? '');
-      else if (tagQuote) tagQuote = char === tagQuote ? undefined : tagQuote;
-      else if (char === '"' || char === "'") tagQuote = char;
-      else if (char === '>') tag = false;
-    }
     if (depth > 0 && quote) {
       if (char === '\\') {
         out += char + (source[index + 1] ?? '');
@@ -266,11 +257,11 @@ export function markLabels(source: string): {
         index += made[0].length - 1;
         continue;
       }
-      // A Svelte tag opens with {@, as {@render …}; an attribute's value may be a label, as
-      // from={@a}, but only inside a tag: in text, i = {@render Index(i)} renders.
-      const brace = source.slice(0, index).trimEnd();
-      const attribute = tag && brace.endsWith('{') && brace.slice(0, -1).trimEnd().endsWith('=');
-      const read = char === '@' && (before !== '{' || attribute) && !word ? path.exec(rest) : null;
+      // A Svelte tag opens with {@, as {@render …}; anything else after {@ is a label: an
+      // attribute's value, as from={@a}, or a value drawn in text, as {@swap.from} (see
+      // implicit-renders.server.ts).
+      const svelteTag = before === '{' && /^@(?:render|html|const|debug|attach)\b/u.test(rest);
+      const read = char === '@' && !svelteTag && !word ? path.exec(rest) : null;
       if (read) {
         const key = labelKey(read[1]);
         references.push({ kind: 'value', key, path: read[1], start: index });

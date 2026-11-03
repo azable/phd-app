@@ -52,20 +52,20 @@
 {#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
 {#snippet VertexCard(vertex: Vertex)}
   <Node layout="column">
-    {@render Name(vertex.name)}
-    {@render Seen(vertex.seen)}
+    {vertex.name}
+    {vertex.seen}
   </Node>
 {/snippet}
-{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}
+{#snippet VertexName(p: VertexRef)}{at(p).name}{/snippet}
 {#snippet QueueItems(items: Queue)}
-  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+  <Node>{#each items as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet Title()}<Node>Breadth-first search from A, on an undirected graph</Node>{/snippet}
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as vertex, k}
-      {@render Vertex(vertex)}
+      {vertex}
       {#each neighbours[k] as w}
         <Link from={k} to={w} />
       {/each}
@@ -75,7 +75,7 @@
 {#snippet QueueLine()}
   <Node layout="row">
     <Node>queue</Node>
-    {@render Queue(queue)}
+    {queue}
   </Node>
 {/snippet}
 

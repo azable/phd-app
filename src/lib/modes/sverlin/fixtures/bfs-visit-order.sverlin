@@ -80,17 +80,17 @@ BFS(start)
 
 {#snippet VertexCard(vertex: Vertex)}
   <Node layout="column">
-    {@render Name(vertex.name)}
-    {@render Seen(vertex.seen)}
+    {vertex.name}
+    {vertex.seen}
   </Node>
 {/snippet}
 
 {#snippet QueueItems(items: Queue)}
-  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+  <Node>{#each items as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet OrderItems(items: VisitOrder)}
-  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+  <Node>{#each items as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet PositionMark(value: VertexRef)}<Pointed />{/snippet}
@@ -104,7 +104,7 @@ BFS(start)
     {#each vertices as vertex, k}
       {#snippet IndexLabel()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
-        {@render Vertex(vertex)}
+        {vertex}
         {@render IndexLabel()}
       </Node>
       {#each adjacency[k] as neighbour}
@@ -117,23 +117,23 @@ BFS(start)
 {#snippet QueueLine()}
   <Node layout="row">
     <Node>queue</Node>
-    {@render Queue(queue)}
+    {queue}
   </Node>
 {/snippet}
 
 {#snippet OrderLine()}
   <Node layout="row">
     <Node>visit order</Node>
-    {@render VisitOrder(order)}
+    {order}
   </Node>
 {/snippet}
 
 {#snippet CurrentInfo()}
-  <Node>removing vertex {@render VertexRef(current)} and exploring its neighbours</Node>
+  <Node>removing vertex {current} and exploring its neighbours</Node>
 {/snippet}
 
 {#snippet NeighbourInfo()}
-  <Node>checking neighbour {@render VertexRef(@visit.look.check.next)}</Node>
+  <Node>checking neighbour {@visit.look.check.next}</Node>
 {/snippet}
 
 {#snippet StatePanel()}
@@ -159,7 +159,7 @@ BFS(start)
   <Node>
     {@render Title()}
     {@render Lesson()}
-    {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.check.next)}
+    {current}
+    {@visit.look.check.next}
   </Node>
 </Layout>

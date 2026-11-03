@@ -31,10 +31,10 @@ const list = `<script lang="sverlin" domain>
 {#snippet EndMark(value: End)}<Node>∅</Node>{/snippet}
 {#snippet NodeBox(node: ListNode)}
   {#snippet NextField()}<Node><Link to={node.next} /></Node>{/snippet}
-  <Node layout="row">{@render Name(node.name)}{@render NextField()}</Node>
+  <Node layout="row">{node.name}{@render NextField()}</Node>
 {/snippet}
 {#snippet Heap()}
-  <Node layout="free">{#each all(ListNode) as node}{@render ListNode(node)}{/each}</Node>
+  <Node layout="free">{#each all(ListNode) as node}{node}{/each}</Node>
 {/snippet}
 
 <Layout name="Main">
@@ -61,7 +61,7 @@ const ring = `<script lang="sverlin" domain>
 {#snippet NameCell(value: Name)}<Node {value} />{/snippet}
 {#snippet Ring()}
   <Node layout="free">
-    {#each names as name, k}{@render Name(name)}<Link from={k} to={next[k]} />{/each}
+    {#each names as name, k}{name}<Link from={k} to={next[k]} />{/each}
   </Node>
 {/snippet}
 
@@ -84,7 +84,7 @@ const unlinked = `<script lang="sverlin" domain>
   @move[i = Position(1);]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Cells()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node layout="free">{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>

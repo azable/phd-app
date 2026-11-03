@@ -36,7 +36,7 @@ const kindsOf = (space: Record<string, unknown>) =>
 describe('single-component Svelte compilation', () => {
   it('bundles a component and its playback input without executing it', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{@render Int(n)}</Node></Layout>'
+      '<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 });</script><script lang="sverlin">@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet S()}<Node>n</Node>{/snippet}<Layout name="Main"><Node>{@render S()}{n}</Node></Layout>'
     );
     // The input as given, then a step at each label, each named by its label and run.
     expect(result.labels).toEqual(['start', '@run#1', '@a#1', '@b#1']);
@@ -261,7 +261,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b)); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) {\n  @add[total = Add(total, values[i]);]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = {total}; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
+      '<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int); const Add = binop((a: Int, b: Int) => Int(a + b)); const Index = index(Values); const Flag = type("boolean"); const Length = unop((v: Values) => Index(v.length)); const Before = binop((a: Index, b: Index) => Flag(a < b)); const Next = unop((p: Index) => Index(p + 1));</script><script lang="sverlin" input>const values = Values([4, 9]);</script>\n<script lang="sverlin">@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[Before(i, Length(values))]; @next[i = Next(i)]) {\n  @add[total = Add(total, values[i]);]\n}</script>\n{#snippet Sum()}<Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node>{/snippet}<Layout name="Main"><Node>{@render Sum()}</Node></Layout>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
@@ -272,7 +272,7 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0); let j = Position(1);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{@render Position(i)}{@render Note()}{@render Pair()}</Node></Layout>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0); let j = Position(1);]</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Arrow(p: Position)}{#snippet Name()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Name()}</Node>{/snippet}{#snippet Mark(p: Position)}<Pointed />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}{#snippet Note()}<Node>note</Node>{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}{@render Note()}{@render Pair()}</Node></Layout>`
     );
     expect(kindsOf(design.space)).toEqual(
       [
@@ -332,7 +332,7 @@ describe('single-component Svelte compilation', () => {
     ],
     [
       'a snippet taking a parameter without a type',
-      '{#snippet A(x)}<Node>{x}</Node>{/snippet}<Layout name="Main"><Node>{@render A(1)}</Node></Layout>',
+      '{#snippet A(x)}<Node>{x}</Node>{/snippet}<Layout name="Main"><Node>{1}</Node></Layout>',
       /A takes a parameter without a type/
     ]
   ])('rejects %s', async (_name, markup, message) => {
@@ -344,7 +344,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects a <Pointed> and a node of one kind', () => {
     expect(() =>
       prepareSvelteComponent(
-        `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet Arrow(p: Position)}{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node>{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{@render Position(i)}</Node></Layout>`
+        `<script lang="sverlin" domain>const Int = type([1, 3]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 3]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet Arrow(p: Position)}{#snippet Pointed()}<Node>i</Node>{/snippet}<Node layout="column"><Pointed />{@render Pointed()}</Node>{/snippet}{#snippet Cells()}<Node layout="row">{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{i}</Node></Layout>`
       )
     ).toThrow(/Arrow\.Pointed is the kind of a <\w+> and of another kind of tag/);
   });
@@ -480,7 +480,7 @@ describe('single-component Svelte compilation', () => {
     // between nodes is ignored.
     await expect(
       compileSvelteComponent(
-        '<script lang="sverlin" domain>const Int = type([1, 3]);</script><script lang="sverlin">@run[let i = Int(1);]</script>\n{#snippet IntNote(value: Int)}is <Node {value} />{/snippet}\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{@render Int(i)}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
+        '<script lang="sverlin" domain>const Int = type([1, 3]);</script><script lang="sverlin">@run[let i = Int(1);]</script>\n{#snippet IntNote(value: Int)}is <Node {value} />{/snippet}\n{#snippet V()}<Node>Step {i}</Node>\n<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>'
       )
     ).resolves.toBeDefined();
   });
@@ -491,7 +491,7 @@ describe('single-component Svelte compilation', () => {
       '<script lang="sverlin" input>const values = Values([3, 8]);</script>',
       '<script lang="sverlin">@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[Before(i, Length(values))]; @step[i = Next(i)]) { last = i; }]</script>',
       '<script lang="sverlin" listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
-      '{#snippet IndexCell(p: Index)}<Node value={p} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{@render Index(last)}</Node></Layout>'
+      '{#snippet IndexCell(p: Index)}<Node value={p} />{/snippet}{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}<Layout name="Main"><Node><Listing />{@render Cells()}{last}</Node></Layout>'
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
@@ -520,7 +520,7 @@ describe('single-component Svelte compilation', () => {
     ).toThrow('takes no props or children');
     expect(() =>
       prepareSvelteComponent(
-        `${blocks}{#snippet Code(value: Int)}<Node {value} /><Listing />{/snippet}<Layout name="Main"><Node>{@render Int(n)}</Node></Layout>`
+        `${blocks}{#snippet Code(value: Int)}<Node {value} /><Listing />{/snippet}<Layout name="Main"><Node>{n}</Node></Layout>`
       )
     ).toThrow('place <Listing /> outside views');
     expect(() =>
@@ -558,7 +558,7 @@ describe('single-component Svelte compilation', () => {
       `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int); const Grid = collection(Row);</script><script lang="sverlin" input>const grid = Grid([[1, 2], [3, 4]]);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}${view}`;
     const result = await compileSvelteComponent(
       source(
-        '{#snippet Rows()}<Node layout="column">{#each grid as row}<Node>{#each row as v}{@render Int(v)}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Rows()}</Node></Layout>'
+        '{#snippet Rows()}<Node layout="column">{#each grid as row}<Node>{#each row as v}{v}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Rows()}</Node></Layout>'
       )
     );
     expect(result.javascript).toContain('sv-node');
@@ -576,7 +576,7 @@ describe('single-component Svelte compilation', () => {
 
   it('marks the node showing a view’s own value with its type, for its unit', async () => {
     const source = (view: string, more = '') =>
-      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin"></script>${view}{#snippet Everyone()}<Node>{#each people as person}{@render Height(person)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
+      `<script lang="sverlin" domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type(Int, { unit: "cm" }); const People = collection(Height);</script><script lang="sverlin" input>const people = People([150, 170]);</script><script lang="sverlin"></script>${view}{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
     const view =
       '{#snippet HeightView(h: Height)}<Node layout="column"><Node value={h} /><Node>tall</Node></Node>{/snippet}';
     const prepared = prepareSvelteComponent(source(view));
@@ -662,13 +662,13 @@ describe('single-component Svelte compilation', () => {
     const algorithm =
       '<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}';
     const nested = prepareSvelteComponent(
-      `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{@render Int(v)}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+      `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{v}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
     expect(nested.component).toMatch(/__ref: ['"]4:13['"]/u);
     expect(nested.component).toMatch(/__links: true/u);
     expect(() =>
       prepareSvelteComponent(
-        `${algorithm}{#snippet Pair()}<Node>{#each values as v}{@render Int(v)}{/each}</Node><Link from={i} to={j} />{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+        `${algorithm}{#snippet Pair()}<Node>{#each values as v}{v}{/each}</Node><Link from={i} to={j} />{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
       )
     ).toThrow('put it, with the nodes it joins, in a <Node layout="free">');
     expect(() =>
@@ -726,14 +726,19 @@ describe('single-component Svelte compilation', () => {
       `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values(${values});</script><script lang="sverlin">@reverse[values = Reversed(values);]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).stepSignature;
-    const first = await signature('[1, 2]', '<Node>{#each values as v}{v}{/each}</Node>');
+    const first = await signature(
+      '[1, 2]',
+      '<Node>{#each values as v}<Node value={v} />{/each}</Node>'
+    );
     expect(
       await signature(
         '[1, 2]',
-        '<Node layout="column">{#each values as v}<Node>{v}</Node>{/each}</Node>'
+        '<Node layout="column">{#each values as v}<Node><Node value={v} /></Node>{/each}</Node>'
       )
     ).toBe(first);
-    expect(await signature('[2, 1]', '<Node>{#each values as v}{v}{/each}</Node>')).toBe(first);
+    expect(
+      await signature('[2, 1]', '<Node>{#each values as v}<Node value={v} />{/each}</Node>')
+    ).toBe(first);
   });
 
   it('retains line and column for assistant source repair', async () => {
@@ -749,13 +754,13 @@ describe('single-component Svelte compilation', () => {
 describe('pointers', () => {
   /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
   const view = (parts: string, renders = '') =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}${parts}<Layout name="Main"><Node>{@render Values(values)}${renders}</Node></Layout>`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]);</script><script lang="sverlin">@run[let i = Position(0);]</script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}${parts}<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
       view(
         '{#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}',
-        '{@render Position(i)}'
+        '{i}'
       )
     );
     expect(prepared.component).toContain('__sverlinPointers');
@@ -765,29 +770,27 @@ describe('pointers', () => {
 
   it('draws a position type rendered by name as a mark outside a node, its number inside one', () => {
     const pointer = '{#snippet Highlight(p: Position)}<Pointed />{/snippet}';
-    const caption = '{#snippet At()}<Node>at {@render Position(i)}</Node>{/snippet}';
+    const caption = '{#snippet At()}<Node>at {i}</Node>{/snippet}';
     const text = '{#snippet PositionText(p: Position)}<Node value={p} />{/snippet}';
-    const both = prepareSvelteComponent(
-      view(`${text}${pointer}${caption}`, '{@render At()}{@render Position(i)}')
-    );
+    const both = prepareSvelteComponent(view(`${text}${pointer}${caption}`, '{@render At()}{i}'));
     expect(both.design.space['views.Position']).toEqual(['PositionText', 'none']);
     expect(both.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
     expect(both.design.starter['pointers.Position']).toBe('Highlight');
     // Each render's variable, by its line:column, for the editor.
-    const source = view(`${text}${pointer}${caption}`, '{@render At()}{@render Position(i)}');
+    const source = view(`${text}${pointer}${caption}`, '{@render At()}{i}');
     const siteOf = (needle: string, from = 0) => {
       const at = source.indexOf(needle, from);
       const before = source.slice(0, at);
       return `${before.split('\n').length}:${at - before.lastIndexOf('\n')}`;
     };
-    const inCaption = source.indexOf('{@render Position(i)}');
+    const inCaption = source.indexOf('{i}');
     expect(both.design.renders).toMatchObject({
-      [siteOf('{@render Position(i)}')]: 'views.Position',
-      [siteOf('{@render Position(i)}', inCaption + 1)]: 'pointers.Position'
+      [siteOf('{i}')]: 'views.Position',
+      [siteOf('{i}', inCaption + 1)]: 'pointers.Position'
     });
     expect(both.component).toContain('__sverlinPointers');
     // With only pointer views, the type's choice is its pointers variable all the same.
-    const marks = prepareSvelteComponent(view(pointer, '{@render Position(i)}'));
+    const marks = prepareSvelteComponent(view(pointer, '{i}'));
     expect(marks.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
     expect(marks.design.space['views.Position']).toBeUndefined();
     expect(() => prepareSvelteComponent(view(`${pointer}${caption}`, '{@render At()}'))).toThrow(
@@ -822,14 +825,14 @@ describe('pointers', () => {
     ],
     [
       'a pointer rendered in a part of the page',
-      '{#snippet Arrow(p: Position)}<Pointed />{/snippet}{#snippet Marks()}{@render Position(i)}{/snippet}',
+      '{#snippet Arrow(p: Position)}<Pointed />{/snippet}{#snippet Marks()}{i}{/snippet}',
       '{@render Marks()}',
       /rendered at the top of the view, outside blocks other than \{#if\} and outside snippets/
     ],
     [
       'a <Pointed> in a snippet inside its pointer view',
       '{#snippet Arrow(p: Position)}{#snippet Mark()}<Pointed />{/snippet}<Node>{@render Int()}</Node>{/snippet}',
-      '{@render Position(i)}',
+      '{i}',
       /A <Pointed> is written in its pointer view itself/
     ]
   ])('rejects %s', (_name, parts, renders, message) => {
@@ -845,7 +848,7 @@ describe('typed view components', () => {
 
   it('reads typed snippets as views of one type, and draws the view the variant chooses for the type', async () => {
     const prepared = component(
-      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntPair(value: Int)}<Node layout="row"><Node {value} /><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{@render Int(i)}</Node></Layout>'
+      '{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IntPair(value: Int)}<Node layout="row"><Node {value} /><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>'
     );
     expect(prepared.components).toEqual([
       { name: 'IntText', cases: [1, 3] },
@@ -866,7 +869,7 @@ describe('typed view components', () => {
 
   it('orders components after those they render', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{@render Int(value)}{/each}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{@render Row(values)}</Node></Layout>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Row = collection(Int);</script><script lang="sverlin">@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script>{#snippet Search(values: Row)}<Node layout="row">{#each values as value}{value}{/each}</Node>{/snippet}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`
     );
     expect(prepared.components.map(({ name }) => name)).toEqual(['Plain', 'Boxed', 'Search']);
     // Plain and Boxed show their value, so they take every value; Search only passes its values to
@@ -878,7 +881,7 @@ describe('typed view components', () => {
 
   it('draws a record with one value for each field passed only to a view', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin"></script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{@render Vertex(edge.from)}{@render Vertex(edge.to)}<Node value={edge.weight} /></Node>{/snippet}<Layout name="Main"><Node /></Layout>`
+      `<script lang="sverlin" domain>const Vertex = type("integer", { min: 0, max: 5 }); const Weight = type([1, 4, 7]); const Edge = record({ from: Vertex, to: Vertex, weight: Weight });</script><script lang="sverlin"></script>{#snippet VertexView(v: Vertex)}<Node value={v} />{/snippet}{#snippet EdgeView(edge: Edge)}<Node layout="row">{edge.from}{edge.to}<Node value={edge.weight} /></Node>{/snippet}<Layout name="Main"><Node /></Layout>`
     );
     // from and to go to VertexView; weight is shown, so it takes each of its values.
     expect(prepared.components.find(({ name }) => name === 'EdgeView')?.cases).toEqual(
@@ -888,7 +891,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{@render Int(value)}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Int(target)}{@render Cells()}</Node></Layout>`
+      `<script lang="sverlin" domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int); const Reversed = unop((c: Values) => Values(c.slice().reverse()));</script><script lang="sverlin" input>const values = Values([1, 3, 1]); const target = Int(3);</script><script lang="sverlin">@start[let i = Index(-1);] @move[i = Index(0);]</script>{#snippet IntView(value: Int)}<Node {value} />{/snippet}{#snippet Cells()}<Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{target}{@render Cells()}</Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
@@ -907,15 +910,16 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet S(slot: Slot)}<Node value={slot} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{@render Count(count)}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Ratio(r)}</Node></Layout>`
+      `<script lang="sverlin" domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count); const Grid = collection(Row);</script><script lang="sverlin">@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script>{#snippet C(count: Count)}<Node value={count} />{/snippet}{#snippet R(ratio: Ratio)}<Node value={ratio} />{/snippet}{#snippet M(mark: Mark)}<Node value={mark} />{/snippet}{#snippet P(pair: Pair)}<Node>{pair.a}{pair.b}</Node>{/snippet}{#snippet G(grid: Grid)}<Node layout="column">{#each grid as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node>{/snippet}<Layout name="Main"><Node>{r}</Node></Layout>`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
         // A range's ends, and the value in the trace that prints longest.
         C: [0, 999, 1],
         R: [0, 1, 0.125],
-        S: [0, 999, 1, 'yes', 'x'],
-        P: [0, 999, 1].flatMap((a) => ['x', 'yes'].map((b) => ({ a, b }))),
+        M: ['x', 'yes'],
+        // P draws its fields through C and M, which keep their boxes, so one value does.
+        P: [{ a: 0, b: 'yes' }],
         // G draws its counts only through C, which keeps its box whichever count it shows.
         G: [
           [
@@ -939,7 +943,7 @@ describe('typed view components', () => {
       'rendering a type nothing draws',
       () =>
         component(
-          '{#snippet I()}<Node>{@render Int(i)}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}</Node></Layout>'
+          '{#snippet I()}<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}</Node></Layout>'
         ),
       /Int is a type, and nothing draws it: add a view of it/
     ],
@@ -947,7 +951,7 @@ describe('typed view components', () => {
       'rendering a snippet that is not defined',
       () =>
         component(
-          '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet I()}<Node>{@render Int(i)}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}{@render Compared(i)}</Node></Layout>'
+          '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet I()}<Node>{i}</Node>{/snippet}<Layout name="Main"><Node>{@render I()}{@render Compared(i)}</Node></Layout>'
         ),
       /\{@render Compared\(…\)\} draws Compared, which no snippet, type, or operator is named/
     ],
@@ -955,7 +959,7 @@ describe('typed view components', () => {
       'a view named after its type',
       () =>
         component(
-          '{#snippet Int(value: Int)}<Node {value} />{/snippet}<Layout name="Main"><Node>{@render Int(i)}</Node></Layout>'
+          '{#snippet Int(value: Int)}<Node {value} />{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>'
         ),
       /Int is a view named after its type/
     ],
@@ -1019,7 +1023,7 @@ describe('typed view components', () => {
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
-          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin"></script>{#snippet F(flags: Flags)}<Node>{flags.a}</Node>{/snippet}<Layout name="Main"><Node /></Layout>`
+          `<script lang="sverlin" domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script lang="sverlin"></script>{#snippet F(flags: Flags)}<Node value={flags.a} />{/snippet}<Layout name="Main"><Node /></Layout>`
         ),
       /F would be drawn with too many values of Flags/
     ]
@@ -1034,7 +1038,7 @@ describe('scope', () => {
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
-      source('<Layout name="Main"><Node>{@render Int(key)}</Node></Layout>')
+      source('<Layout name="Main"><Node>{key}</Node></Layout>')
     );
     const { javascript } = await bundlePresentation(prepared, 1);
     // After the loop, i and key are out of scope: they stand in from the step that had them, and are
@@ -1047,7 +1051,7 @@ describe('scope', () => {
     expect(() =>
       prepareSvelteComponent(
         source(
-          '{#snippet K()}<Node>{key}</Node>{/snippet}<Layout name="Main"><Node>{@render K()}</Node></Layout>'
+          '{#snippet K()}<Node><Node value={key} /></Node>{/snippet}<Layout name="Main"><Node>{@render K()}</Node></Layout>'
         )
       )
     ).toThrow('The view reads key itself, but key is out of scope at some steps');
@@ -1086,9 +1090,9 @@ describe('scope', () => {
 
 describe('views', () => {
   it('are only drawn with {@render}, never called to make a value', () => {
-    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin"></script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{@render Int(v)}{@render Index(Index(k))}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Values(values)}</Node></Layout>`;
+    const source = `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin"></script>{#snippet IntText(value: Int)}<Node {value} />{/snippet}{#snippet IndexLabel(value: Index)}<Node {value} />{/snippet}{#snippet Row(list: Values)}<Node layout="row">{#each list as v, k}{v}{Index(k)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{values}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source)).toThrow(
-      'Index(…) is a view, which only draws: write {@render Index(value)}'
+      'Index(…) is a view, which only draws: write {value}'
     );
   });
 });
@@ -1099,12 +1103,12 @@ describe('view choices and prop values', () => {
 
   it('leaves out of a type’s views those that draw the type itself', () => {
     const prepared = prepareSvelteComponent(
-      `${domain}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}<Layout name="Main"><Node>{@render Int(i)}</Node></Layout>`
+      `${domain}{#snippet Plain(value: Int)}<Node {value} />{/snippet}{#snippet Boxed(value: Int)}<Node>{value}</Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>`
     );
     expect(prepared.design.space['views.Int']).toEqual(['Plain', 'none']);
     expect(() =>
       prepareSvelteComponent(
-        `${domain}{#snippet Boxed(value: Int)}<Node>{@render Int(value)}</Node>{/snippet}<Layout name="Main"><Node>{@render Int(i)}</Node></Layout>`
+        `${domain}{#snippet Boxed(value: Int)}<Node>{value}</Node>{/snippet}<Layout name="Main"><Node>{i}</Node></Layout>`
       )
     ).toThrow('Every view of Int draws Int itself');
   });
@@ -1154,12 +1158,12 @@ describe('views of what a step computed', () => {
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
 {#snippet Ask(g: Greater)}
-  <Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>
+  <Node>is {g.a} > {g.b}? {g.value}</Node>
 {/snippet}
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
     {@render Greater(@sweep.pair.test)}
   </Node>
 {/snippet}
@@ -1266,7 +1270,7 @@ describe('views of what a step computed', () => {
         )
         .replace(
           '{#snippet FlagWord',
-          '{#snippet Tell(l: Less)}<Node>{@render Flag(l.value)}</Node>{/snippet}\n{#snippet FlagWord'
+          '{#snippet Tell(l: Less)}<Node>{l.value}</Node>{/snippet}\n{#snippet FlagWord'
         )
     );
     const less = prepared.applied?.['Less_ℓsweepˑpairˑnever'];
@@ -1316,13 +1320,13 @@ describe('pauses at labels', () => {
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {g.a} > {g.b}? {g.value}</Node>{/snippet}
 {#snippet Highlight(p: Position)}<Pointed />{/snippet}
 {#snippet Board()}
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+      <Node>{#each values as v}{v}{/each}</Node>
       {@render Greater(@insert.compare)}
     </Node>
   </Node>
@@ -1331,10 +1335,10 @@ describe('pauses at labels', () => {
 <Layout name="Main">
   <Node>
     {@render Board()}
-    {@render Position(@insert.compare.left)}
-    {@render Position(@insert.compare.right)}
-    {@render Position(@insert.swap.from)}
-    {@render Position(@insert.swap.to)}
+    {@insert.compare.left}
+    {@insert.compare.right}
+    {@insert.swap.from}
+    {@insert.swap.to}
   </Node>
 </Layout>`;
   const fine = new Set([
@@ -1388,9 +1392,9 @@ describe('pauses at labels', () => {
     // What the view draws decides them: without its marks or its comparison, only the swap, which
     // moves values, draws something new.
     const bare = insertion
-      .replace(/\{@render Position\(@[^)]*\)\}\n?/g, '')
+      .replace(/\{@insert\.[a-z.]*\}\n?/g, '')
       .replace('{@render Greater(@insert.compare)}', '');
-    expect(bare).not.toContain('{@render Position(@');
+    expect(bare).not.toContain('{@insert.compare.left}');
     expect(starterPauses(bare)).toEqual({
       'pause@guard': 'off',
       'pause@insert.guard': 'off',
@@ -1577,13 +1581,13 @@ describe('pauses accumulate', () => {
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}
-{#snippet Ask(g: Greater)}<Node>is {@render Int(g.a)} > {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>is {g.a} > {g.b}? {g.value}</Node>{/snippet}
 {#snippet Highlight(p: Position)}<Pointed />{/snippet}
 {#snippet Board()}
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+      <Node>{#each values as v}{v}{/each}</Node>
       {@render Greater(@insert.compare)}
     </Node>
   </Node>
@@ -1592,10 +1596,10 @@ describe('pauses accumulate', () => {
 <Layout name="Main">
   <Node>
     {@render Board()}
-    {@render Position(@insert.compare.left)}
-    {@render Position(@insert.compare.right)}
-    {@render Position(@insert.swap.from)}
-    {@render Position(@insert.swap.to)}
+    {@insert.compare.left}
+    {@insert.compare.right}
+    {@insert.swap.from}
+    {@insert.swap.to}
   </Node>
 </Layout>`
   );
@@ -1746,7 +1750,7 @@ describe('pauses accumulate', () => {
 
 describe('places', () => {
   const source = (view: string, algorithm = '@run[let i = Index(1); let key = Int(2);]') =>
-    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">${algorithm}</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}${view}`;
+    `<script lang="sverlin" domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int); const Index = index(Values);</script><script lang="sverlin" input>const values = Values([5, 2]);</script><script lang="sverlin">${algorithm}</script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
 
   it('refuses a view rendered by its own name, naming its type', () => {
     expect(() =>
@@ -1756,13 +1760,13 @@ describe('places', () => {
         )
       )
     ).toThrow(
-      "{@render IntTally(…)} names the view IntTally, but which view draws a value is the variant's: render its type, as {@render Int(…)}"
+      "{@render IntTally(…)} names the view IntTally, but which view draws a value is the variant's: write the value in braces, as {…}, drawn by the view views.Int chooses"
     );
   });
 
   it("gives a render with an argument its own choice of view and paint, falling back to its type's", () => {
     const view =
-      '{#snippet Key()}<Node>{@render Int(key)}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{@render Key()}</Node></Layout>';
+      '{#snippet Key()}<Node>{key}</Node>{/snippet}<Layout name="Main"><Node>{@render Cells()}{@render Key()}</Node></Layout>';
     const prepared = prepareSvelteComponent(source(view));
     const { space, starter, renders, fallbacks } = prepared.design;
     expect(space['views.Int@key']).toEqual(['IntCell', 'IntTally', 'none']);
@@ -1774,12 +1778,37 @@ describe('places', () => {
     expect(Object.values(renders)).toContain('views.Int@key');
   });
 
+  it('draws a value in braces by its type, refusing its view written as a render of the type', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        source(
+          '{#snippet Key()}<Node>{@render Int(key)}</Node>{/snippet}<Layout name="Main"><Node>{@render Key()}</Node></Layout>'
+        )
+      )
+    ).toThrow('{@render Int(key)} is written {key}: a value in braces draws its type');
+  });
+
+  it('draws a union value by its member’s view, refusing a view of the union', () => {
+    const union = (views: string) =>
+      `<script lang="sverlin" domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = collection(Dist);</script><script lang="sverlin" input>const dists = Dists([0, "none"]);</script><script lang="sverlin">@run[const d = dists[1];]</script>${views}<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
+    const prepared = prepareSvelteComponent(
+      union(
+        '{#snippet StepsCell(value: Steps)}<Node {value} />{/snippet}{#snippet NoneMark(value: None)}<Node>–</Node>{/snippet}'
+      )
+    );
+    expect(prepared.design.space['views.Steps']).toEqual(['StepsCell', 'none']);
+    expect(prepared.design.space['views.None']).toEqual(['NoneMark', 'none']);
+    expect(() =>
+      prepareSvelteComponent(union('{#snippet DistCell(value: Dist)}<Node {value} />{/snippet}'))
+    ).toThrow('DistCell views Dist, a union, whose values are drawn by their member');
+  });
+
   it('refuses a label and a variable a place would share', () => {
     expect(() =>
       prepareSvelteComponent(
         source(
-          '{#snippet Shown()}<Node>{@render Int(key)} {@render Int(@key)}</Node>{/snippet}<Layout name="Main"><Node>{@render Shown()}</Node></Layout>',
-          'let key = Int(2); const picked = @key[values[0]];'
+          '{#snippet Shown()}<Node>{key} {@key}</Node>{/snippet}<Layout name="Main"><Node>{@render Shown()}</Node></Layout>',
+          '@shown[let key = Int(2); const picked = @key[values[0]];]'
         )
       )
     ).toThrow('rename the label');
@@ -1812,8 +1841,8 @@ describe('nodes and references', () => {
 {#snippet NameCell(value: Name)}<Node {value} />{/snippet}
 {#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
 {#snippet Here(p: NodeRef)}<Pointed />{/snippet}`;
-  const heap = `{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}{@render NodeRef(cur)}</Node></Layout>`;
-  const box = `{#snippet NodeBox(n: ListNode)}<Node layout="row">{@render Name(n.name)}<Link to={n.next} /></Node>{/snippet}`;
+  const heap = `{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}{cur}</Node></Layout>`;
+  const box = `{#snippet NodeBox(n: ListNode)}<Node layout="row">{n.name}<Link to={n.next} /></Node>{/snippet}`;
 
   it('draws every live node with all(…), a reference as a pointer, and the end through its view', () => {
     const prepared = prepareSvelteComponent(`${domain}${box}${heap}`);
@@ -1830,7 +1859,7 @@ describe('nodes and references', () => {
   it.each([
     [
       'all(…) of a record no reference refers to',
-      `${box}{#snippet Heap()}<Node layout="free">{#each all(Name) as n}{@render ListNode(n)}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}</Node></Layout>`,
+      `${box}{#snippet Heap()}<Node layout="free">{#each all(Name) as n}{n}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}</Node></Layout>`,
       /all\(Name\) draws every live node of a record a reference refers to, and Name is not one/
     ],
     [
@@ -1873,7 +1902,7 @@ describe('the view reaching the code only through labels', () => {
 {#snippet Highlight(p: Position)}<Pointed />{/snippet}
 {#snippet Cells()}
   <Node layout="row">
-    {#each values as v}{@render Int(v)}{/each}
+    {#each values as v}{v}{/each}
     <Link from={@insert.swap.from} to={@insert.swap.to} />
   </Node>
 {/snippet}
@@ -1902,8 +1931,8 @@ describe('the view reaching the code only through labels', () => {
     expect(() =>
       prepareSvelteComponent(
         swaps.replace(
-          '<Node layout="row">\n    {#each values as v}{@render Int(v)}{/each}',
-          '<Node>\n    {@render Int(values[0])}{@render Int(values[1])}'
+          '<Node layout="row">\n    {#each values as v}{v}{/each}',
+          '<Node>\n    {values[0]}{values[1]}'
         )
       )
     ).toThrow('A <Node> joining links needs a layout: layout="free" for a linked structure');
@@ -1925,7 +1954,7 @@ describe('the view reaching the code only through labels', () => {
             '{#snippet Highlight(p: Position)}<Pointed />{/snippet}',
             '{#snippet Highlight(p: Position)}<Pointed /><Link from={p} to={p} />{/snippet}'
           )
-          .replace('{@render Cells()}', '{@render Cells()}\n{@render Position(@insert.swap.to)}')
+          .replace('{@render Cells()}', '{@render Cells()}\n{@insert.swap.to}')
       )
     ).toThrow(
       'Highlight is a pointer view, drawn inside the element it marks, so its <Link> joins'
@@ -1969,7 +1998,7 @@ describe('<When of="@label">', () => {
 {#snippet Caption()}<Node>Looking</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
     ${block}
   </Node>
 {/snippet}
@@ -2058,7 +2087,7 @@ describe('<When of="@label">', () => {
     ).toThrow('when() is not written in a view: write <When of="@insert.swap">…</When>');
     expect(() =>
       prepareSvelteComponent(
-        caption('{@render Int(values[0])}').replace(
+        caption('{values[0]}').replace(
           '{#snippet IntCell(value: Int)}<Node {value} />{/snippet}',
           '{#snippet IntCell(value: Int)}<Node {value} /><When of="@pass"><Node>!</Node></When>{/snippet}'
         )
@@ -2091,7 +2120,7 @@ describe('<OneOf> branches', () => {
 {#snippet Noting()}<Node>Noting</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
     ${block}
   </Node>
 {/snippet}
@@ -2209,15 +2238,15 @@ describe('at(p), the element a position points at', () => {
 <script lang="sverlin"></script>
 {#snippet NameText(value: Name)}<Node {value} />{/snippet}
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet VertexCard(vertex: Vertex)}<Node layout="column">{@render Name(vertex.name)}</Node>{/snippet}
+{#snippet VertexCard(vertex: Vertex)}<Node layout="column">{vertex.name}</Node>{/snippet}
 ${markup}`;
 
   it('reads the element in a view of a position, and through a position in a part', () => {
     const { component } = prepareSvelteComponent(
       graph(
-        `{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}
-{#snippet Queued()}<Node>{#each queue as q}{@render VertexRef(q)}{/each}</Node>{/snippet}
-{#snippet Ends()}<Node>{#each edges as edge}{@render Name(at(edge.from).name)}{@render Vertex(at(edge.to))}{/each}</Node>{/snippet}
+        `{#snippet VertexName(p: VertexRef)}{at(p).name}{/snippet}
+{#snippet Queued()}<Node>{#each queue as q}{q}{/each}</Node>{/snippet}
+{#snippet Ends()}<Node>{#each edges as edge}{at(edge.from).name}{at(edge.to)}{/each}</Node>{/snippet}
 <Layout name="Main"><Node>{@render Queued()}{@render Ends()}</Node></Layout>`
       )
     );
@@ -2277,7 +2306,7 @@ describe('step limits', () => {
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 
 <Layout name="Main">
-  <Node>{@render Int(n)}</Node>
+  <Node>{n}</Node>
 </Layout>
 `;
 

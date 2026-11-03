@@ -40,12 +40,12 @@
   <Node layout="column"><Pointed />{@render UpperLabel()}</Node>
 {/snippet}
 
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
-    <Node layout="row"><Node>Searching for {@render Int(target)}</Node>{@render Cells()}</Node>
-    {@render Index(lo)}
-    {@render Index(hi)}
+    <Node layout="row"><Node>Searching for {target}</Node>{@render Cells()}</Node>
+    {lo}
+    {hi}
   </Node>
 </Layout>

@@ -40,13 +40,13 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet First(p: Index)}<Pointed />{/snippet}
 {#snippet Second(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Cells()}
-    {@render Index(i)}
-    {@render Index(j)}
+    {i}
+    {j}
   </Node>
 </Layout>`;
     // Both are drawn by First unless a variant gives a place its own view, as j's here.
@@ -101,14 +101,14 @@ it.skipIf(!enabled)(
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IndexText(p: Index)}<Node value={p} />{/snippet}
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet At()}<Node>at {@render Index(i)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet At()}<Node>at {i}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Cells()}
     {@render At()}
-    {@render Index(i)}
+    {i}
   </Node>
 </Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
@@ -160,13 +160,13 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Cells()}
-    {@render Index(i)}
-    {@render Index(j)}
+    {i}
+    {j}
   </Node>
 </Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
@@ -215,8 +215,8 @@ it.skipIf(!enabled)(
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet IntTally(value: Int)}<Node>{'•'.repeat(value)}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Key()}<Node>key {@render Int(key)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Key()}<Node>key {key}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>

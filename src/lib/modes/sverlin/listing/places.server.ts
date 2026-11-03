@@ -24,7 +24,7 @@ export function tokenProblems(
   return tokens
     .filter(({ place }) => !known.has(place))
     .map(({ place, at }) => ({
-      message: `The token $${place.slice(1)}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {@render Position(mid)}, and ${listed}.`,
+      message: `The token $${place.slice(1)}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {mid}, and ${listed}.`,
       block: 'listing' as const,
       at
     }));

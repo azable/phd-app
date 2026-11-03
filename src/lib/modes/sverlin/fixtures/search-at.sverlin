@@ -30,14 +30,14 @@
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 
 {#snippet IndexNumber(p: Index)}<Node value={p} />{/snippet}
-{#snippet IndexValue(p: Index)}{@render Int(at(p))}{/snippet}
+{#snippet IndexValue(p: Index)}{at(p)}{/snippet}
 {#snippet Arrow(p: Index)}<Pointed />{/snippet}
 
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Bounds()}
   <Node layout="row">
-    <Node>lo</Node>{@render Index(lo)}
-    <Node>hi</Node>{@render Index(hi)}
+    <Node>lo</Node>{lo}
+    <Node>hi</Node>{hi}
   </Node>
 {/snippet}
 
@@ -45,7 +45,7 @@
   <Node>
     {@render Cells()}
     {@render Bounds()}
-    {@render Index(lo)}
-    {@render Index(hi)}
+    {lo}
+    {hi}
   </Node>
 </Layout>

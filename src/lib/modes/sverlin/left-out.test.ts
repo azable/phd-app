@@ -23,9 +23,9 @@ const source = `<script lang="sverlin" domain>
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Title()}<Node>Pass</Node>{/snippet}
-{#snippet Picked()}<Node>picked {@render Int(v)}</Node>{/snippet}
-{#snippet Both()}<Node>{@render Int(v)} and {@render Int(values[0])}</Node>{/snippet}
-{#snippet Cells()}<Node layout="row">{#each values as x}{@render Int(x)}{/each}</Node>{/snippet}
+{#snippet Picked()}<Node>picked {v}</Node>{/snippet}
+{#snippet Both()}<Node>{v} and {values[0]}</Node>{/snippet}
+{#snippet Cells()}<Node layout="row">{#each values as x}{x}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
@@ -74,11 +74,12 @@ describe('left out', () => {
     // and text are one statement, so "v and values[0]" goes too, and the parts drawing nothing else.
     expect(left(whole)).toEqual({
       nodes: [node('Picked'), node('Both')],
+      // v is in scope at no step, so it has no type to draw it by: its reads are left out as text.
       renders: [
-        site('{@render Int(v)}</Node>'),
-        site('{@render Int(v)} and'),
         site('{@render Picked()}'),
-        site('{@render Both()}')
+        site('{@render Both()}'),
+        `read ${site('v}</Node>')}`,
+        `read ${site('v} and')}`
       ]
     });
   });
@@ -95,10 +96,10 @@ describe('left out', () => {
     const expected = {
       nodes: [node('Picked'), node('Both'), node('Cells')],
       renders: [
-        site('{@render Int(v)}</Node>'),
-        site('{@render Int(v)} and'),
-        site('{@render Int(values[0])}'),
-        site('{@render Int(x)}'),
+        site('{v}</Node>'),
+        site('{v} and'),
+        site('{values[0]}'),
+        site('{x}'),
         site('{@render Picked()}'),
         site('{@render Both()}'),
         site('{@render Cells()}')
@@ -122,9 +123,9 @@ describe('left out', () => {
   it('hide at a step a node one of whose own renders is hidden, and a row only with all its parts', () => {
     const nested = source
       .replace(
-        '{#snippet Picked()}<Node>picked {@render Int(v)}</Node>{/snippet}',
-        '{#snippet Outer()}<Node><Node>picked {@render Int(v)}</Node></Node>{/snippet}' +
-          '{#snippet Parts()}<Node><Node>v {@render Int(v)}</Node><Node>first {@render Int(values[0])}</Node></Node>{/snippet}'
+        '{#snippet Picked()}<Node>picked {v}</Node>{/snippet}',
+        '{#snippet Outer()}<Node><Node>picked {v}</Node></Node>{/snippet}' +
+          '{#snippet Parts()}<Node><Node>v {v}</Node><Node>first {values[0]}</Node></Node>{/snippet}'
       )
       .replace('{@render Picked()}', '{@render Outer()}{@render Parts()}');
     const at = siteIn(nested);
@@ -133,7 +134,7 @@ describe('left out', () => {
     // v out of scope here: its node hides, and the node around it, all of whose parts are gone; "v
     // and values[0]" is one statement and hides whole; in the row only the part drawing v hides.
     expect([...hidden(['v'])].sort()).toEqual(
-      [first('Outer'), at('<Node>picked'), at('<Node>v {@render'), first('Both')].sort()
+      [first('Outer'), at('<Node>picked'), at('<Node>v {v}'), first('Both')].sort()
     );
     expect(hidden(['v'])).not.toContain(first('Parts'));
     expect(hidden(['v'])).not.toContain(at('<Node>first'));
@@ -159,10 +160,10 @@ describe('left out', () => {
   it('take each render in a node holding nodes as a part, a column losing only its caption', () => {
     const shaped = source
       .replace(
-        '{#snippet Picked()}<Node>picked {@render Int(v)}</Node>{/snippet}',
-        '{#snippet Column()}<Node layout="column"><Node>{#each values as x}{@render Int(x)}{/each}</Node>{@render Int(v)}</Node>{/snippet}' +
+        '{#snippet Picked()}<Node>picked {v}</Node>{/snippet}',
+        '{#snippet Column()}<Node layout="column"><Node>{#each values as x}{x}{/each}</Node>{v}</Node>{/snippet}' +
           // Accepted: a sentence with a node in it is parts too, so only its loose render goes.
-          '{#snippet Mixed()}<Node>picked {@render Int(v)} <Node>first {@render Int(values[0])}</Node></Node>{/snippet}'
+          '{#snippet Mixed()}<Node>picked {v} <Node>first {values[0]}</Node></Node>{/snippet}'
       )
       .replace('{@render Picked()}', '{@render Column()}{@render Mixed()}');
     const built = prepareSvelteComponent(shaped);
@@ -176,7 +177,7 @@ describe('left out', () => {
     const left = leftOutOf(passes, design, { Int: design['views.Int'] }, phasesOf(passes.master));
     expect(left.nodes).not.toContain(first('Column'));
     expect(left.nodes).not.toContain(first('Mixed'));
-    expect(left.renders).toContain(siteIn(shaped)('{@render Int(v)}</Node>'));
+    expect(left.renders).toContain(`read ${siteIn(shaped)('v}</Node>')}`);
   });
 
   it('takes a part rendered in another part’s node as one of that node’s parts', () => {

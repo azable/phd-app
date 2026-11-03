@@ -52,17 +52,17 @@
 {#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
 {#snippet VertexCard(vertex: Vertex)}
   <Node layout="column">
-    {@render Name(vertex.name)}
-    {@render Seen(vertex.seen)}
+    {vertex.name}
+    {vertex.seen}
   </Node>
 {/snippet}
 
 {#snippet VertexNumber(p: VertexRef)}<Node value={p} />{/snippet}
-{#snippet VertexName(p: VertexRef)}{@render Name(at(p).name)}{/snippet}
-{#snippet VertexMini(p: VertexRef)}{@render Vertex(at(p))}{/snippet}
+{#snippet VertexName(p: VertexRef)}{at(p).name}{/snippet}
+{#snippet VertexMini(p: VertexRef)}{at(p)}{/snippet}
 
 {#snippet QueueItems(items: Queue)}
-  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+  <Node>{#each items as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet Outline(p: VertexRef)}<Pointed />{/snippet}
@@ -71,7 +71,7 @@
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as vertex, k}
-      {@render Vertex(vertex)}
+      {vertex}
       {#each neighbours[k] as w}
         <Link from={k} to={w} />
       {/each}
@@ -81,7 +81,7 @@
 {#snippet QueueLine()}
   <Node layout="row">
     <Node>queue</Node>
-    {@render Queue(queue)}
+    {queue}
   </Node>
 {/snippet}
 {#snippet Board()}
@@ -93,7 +93,7 @@
 {#snippet Taken()}
   <Node layout="row">
     <Node>current</Node>
-    {@render VertexRef(current)}
+    {current}
   </Node>
 {/snippet}
 

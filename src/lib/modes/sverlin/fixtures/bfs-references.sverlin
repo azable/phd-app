@@ -44,20 +44,20 @@
 {#snippet SeenMark(seen: Flag)}<Node>{seen ? '✓' : '·'}</Node>{/snippet}
 {#snippet VertexCard(v: Vertex)}
   {#snippet OutField()}<Node>{#each v.out as w}<Link to={w} />{/each}</Node>{/snippet}
-  <Node layout="column">{@render Name(v.name)}{@render Flag(v.seen)}{@render OutField()}</Node>
+  <Node layout="column">{v.name}{v.seen}{@render OutField()}</Node>
 {/snippet}
 {#snippet Marked(v: VertexRef)}<Pointed />{/snippet}
 {#snippet Graph()}
-  <Node layout="free">{#each all(Vertex) as v}{@render Vertex(v)}{/each}</Node>
+  <Node layout="free">{#each all(Vertex) as v}{v}{/each}</Node>
 {/snippet}
 
-{#snippet Line()}<Node>queue: {#each queue as q}{@render Name(q.name)}{/each}</Node>{/snippet}
+{#snippet Line()}<Node>queue: {#each queue as q}{q.name}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Graph()}
     {@render Line()}
-    {@render VertexRef(current)}
-    {@render VertexRef(@visit.look.check.next)}
+    {current}
+    {@visit.look.check.next}
   </Node>
 </Layout>

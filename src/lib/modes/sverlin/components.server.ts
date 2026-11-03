@@ -710,7 +710,7 @@ export function pointerCalls(
       const start = part.start ?? 0;
       if (where !== 'top' || inNode)
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as in {@render ${name}(i)}${
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as {i} for a position i${
             inNode && pointers.get(name)?.view
               ? `; or, to show the position as a number here, add a view that draws it, as {#snippet ${name}Text(p: ${name})}<Node value={p} />{/snippet}`
               : ''

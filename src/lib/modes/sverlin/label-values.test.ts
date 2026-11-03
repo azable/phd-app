@@ -34,7 +34,7 @@ const insertion = `
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}`;
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}`;
 
 /** A source of the algorithm and its parts, its one layout holding `view`. */
 const prepare = (view: string, algorithm = insertion, parts = '') =>
@@ -45,10 +45,10 @@ const prepare = (view: string, algorithm = insertion, parts = '') =>
 describe('labels read in the view', () => {
   it('are rewritten as identifiers of the same length, outside tags and strings', () => {
     const markup =
-      '<Node>a@b {@render Int(@swap.a)} {"@x"} {#each runs(@check.at) as p}{/each} {#each applied(Equal, @in) as e}{/each}</Node>';
+      '<Node>a@b {@swap.a} {"@x"} {#each runs(@check.at) as p}{/each} {#each applied(Equal, @in) as e}{/each}</Node>';
     const { source, references } = markLabels(markup);
     expect(source).toHaveLength(markup.length);
-    expect(source).toContain('{@render Int(ℓswapˑa)}');
+    expect(source).toContain('{ℓswapˑa}');
     expect(source).toContain('{"@x"}');
     expect(source).toContain('a@b');
     expect(references.map(({ kind, key }) => [kind, key])).toEqual([
@@ -59,13 +59,13 @@ describe('labels read in the view', () => {
   });
 
   it('are an attribute’s value only inside a tag, so text before {@render …} may end in =', async () => {
-    const text = '<Node>current key = {@render Int(v)}</Node>';
+    const text = '<Node>current key = {v}</Node>';
     expect(markLabels(text)).toEqual({ source: text, references: [], heaps: [] });
     const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@render Int(@insert.key)}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Inserting()}</Node></Layout>`
+        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@insert.key}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Inserting()}</Node></Layout>`
       )
     ).resolves.toBeDefined();
   });
@@ -74,7 +74,7 @@ describe('labels read in the view', () => {
     const prepared = prepare(
       '{@render Inserting()}',
       insertion,
-      '{#snippet Inserting()}<Node>inserting {@render Int(@insert.key)}</Node>{/snippet}'
+      '{#snippet Inserting()}<Node>inserting {@insert.key}</Node>{/snippet}'
     );
     expect(prepared.labelled).toEqual({
       ℓinsertˑkey: {
@@ -91,11 +91,11 @@ describe('labels read in the view', () => {
   });
 
   it('name a label by its full name only, refusing a shorter ending even where unique', () => {
-    expect(() => prepare('{@render Int(@insert.key)}')).not.toThrow();
-    expect(() => prepare('{@render Int(@key)}')).toThrow(
+    expect(() => prepare('{@insert.key}')).not.toThrow();
+    expect(() => prepare('{@key}')).toThrow(
       '@key is not a full name; write its full name, @insert.key.'
     );
-    expect(() => prepare('{@render Int(@nothing)}')).toThrow(
+    expect(() => prepare('{@nothing}')).toThrow(
       '@nothing names no label of the algorithm; its labels are @setup, @guard, @onward, @insert, @insert.key, @insert.guard.'
     );
     const twice = `
@@ -104,10 +104,10 @@ describe('labels read in the view', () => {
   @b[const y = @v[values[1]];]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
-    expect(() => prepare('{@render Int(@v)}', twice)).toThrow(
+    expect(() => prepare('{@v}', twice)).toThrow(
       '@v is not a full name; write its full name, @a.v or @b.v.'
     );
-    expect(() => prepare('{@render Int(@a.v)}{@render Int(@b.v)}', twice)).not.toThrow();
+    expect(() => prepare('{@a.v}{@b.v}', twice)).not.toThrow();
   });
 
   it('take a label on an expression, and are read only in the root and its parts', () => {
@@ -119,14 +119,14 @@ describe('labels read in the view', () => {
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}`;
-    expect(() => prepare('{@render Int(@insert.key)}', statement)).toThrow(
+    expect(() => prepare('{@insert.key}', statement)).toThrow(
       '@insert.key labels a statement, which gives no value; label its expression, as const key = @key[values[i]].'
     );
     expect(() =>
       prepare(
         '{@render Cells()}',
         insertion,
-        '{#snippet Shown(v: Values)}<Node>{@render Int(@insert.key)}</Node>{/snippet}'
+        '{#snippet Shown(v: Values)}<Node>{@insert.key}</Node>{/snippet}'
       )
     ).toThrow('@insert.key is read in a view, which sees only its value');
   });
@@ -140,12 +140,12 @@ describe('labels read in the view', () => {
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Asking(e: Equal)}<Node>{@render Int(e.a)}</Node>{/snippet}
+{#snippet Asking(e: Equal)}<Node>{e.a}</Node>{/snippet}
 {#snippet Checked(p: Index)}<Pointed />{/snippet}
 {#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{@render Equal(e)}{/each}</Node>{/snippet}`;
     const prepared = prepare(
       `{@render Equal(@check)}
-{#each runs(@check.at) as p}{@render Index(p)}{/each}
+{#each runs(@check.at) as p}{p}{/each}
 {@render Asked()}`,
       search
     );

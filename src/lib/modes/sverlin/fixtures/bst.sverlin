@@ -51,30 +51,24 @@
 
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet EndMark(value: Name)}<Node>∅</Node>{/snippet}
-{#snippet NextMark(value: Next)}
-  {#if value === 'end'}
-    {@render Name(value)}
-  {:else}
-    <Link to={value} />
-  {/if}
-{/snippet}
+{#snippet NextLink(value: NodeRef)}<Link to={value} />{/snippet}
 {#snippet TreeCard(node: TreeNode)}
   <Node layout="column">
-    <Node>{@render Int(node.key)}</Node>
+    <Node>{node.key}</Node>
     <Node layout="row">
-      <Node layout="row"><Node>L</Node>{@render Next(node.left)}</Node>
-      <Node layout="row"><Node>R</Node>{@render Next(node.right)}</Node>
+      <Node layout="row"><Node>L</Node>{node.left}</Node>
+      <Node layout="row"><Node>R</Node>{node.right}</Node>
     </Node>
   </Node>
 {/snippet}
 {#snippet Title()}<Node>Binary search tree insertion</Node>{/snippet}
 {#snippet Heap()}
   <Node layout="free" flow="y">
-    {#each all(TreeNode) as node}{@render TreeNode(node)}{/each}
+    {#each all(TreeNode) as node}{node}{/each}
   </Node>
 {/snippet}
 {#snippet Status()}
-  <Node>Insert next value {@render Int(@sequence.pick)}</Node>
+  <Node>Insert next value {@sequence.pick}</Node>
 {/snippet}
 
 <Layout name="Main">

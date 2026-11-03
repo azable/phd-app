@@ -26,9 +26,9 @@ const source = `<script lang="sverlin" domain>
 {/snippet}
 <Layout name="Main">
   <Node>
-    {@render Index(@compare.left)}
-    {@render Index(@compare.right)}
-    {@render Int(@compare.swap.held)}
+    {@compare.left}
+    {@compare.right}
+    {@compare.swap.held}
   </Node>
 </Layout>`;
 
@@ -98,18 +98,17 @@ describe('references in messages', () => {
     expect(named('Highlight.Pointed@compare.left.fill')).toEqual([
       'Highlight',
       '<Pointed',
-      '{@render Index(@compare.left)}'
+      '{@compare.left}'
     ]);
-    expect(named('views.Int')).toEqual(['{@render Int(@compare.swap.held)}']);
-    expect(named('pointers.Index@compare.right')).toEqual(['{@render Index(@compare.right)}']);
+    // Without a build, a value in braces has no type the text says; a place still names it.
+    expect(named('views.Int')).toEqual([]);
+    expect(named('pointers.Index@compare.right')).toEqual(['{@compare.right}']);
   });
 
   it('name lines, a line and column, or a run of lines', () => {
     expect(named('line 12')).toEqual(['{#snippet Highlight(p: Index)}<Pointed />{/snippet}']);
     expect(named('12:11')).toEqual(['Highlight(p: Index)}<Pointed />{/snippet}']);
-    expect(named('lines 18-19')).toEqual([
-      '    {@render Index(@compare.left)}\n    {@render Index(@compare.right)}'
-    ]);
+    expect(named('lines 18-19')).toEqual(['    {@compare.left}\n    {@compare.right}']);
     expect(named('line 99')).toEqual([]);
   });
 
@@ -228,7 +227,7 @@ describe('code in an error message', () => {
 describe('problems of a build', () => {
   it('cover from their position to their end, or to the end of the line', () => {
     const ranges = diagnosticRanges(source, [
-      { message: 'here', raw: 'here', severity: 'error', line: 18, column: 14 },
+      { message: 'here', raw: 'here', severity: 'error', line: 18, column: 6 },
       {
         message: 'span',
         raw: 'span',
@@ -242,7 +241,7 @@ describe('problems of a build', () => {
     ]);
     expect(ranges.map(({ from, to }) => source.slice(from, to))).toEqual([
       'Highlight',
-      'Index(@compare.left)}'
+      '@compare.left}'
     ]);
   });
 });

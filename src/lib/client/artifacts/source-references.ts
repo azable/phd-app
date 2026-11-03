@@ -302,7 +302,7 @@ function labelRanges(source: string, label: string): SourceRange[] {
     ...labelDeclarations(source)
       .filter(({ full }) => full === label)
       .map(({ from, to }) => ({ from, to })),
-    ...matches(source, new RegExp(String.raw`(?<!\{)@${escape(label)}(?![\w$.[{])`, 'gu'))
+    ...matches(source, new RegExp(String.raw`@${escape(label)}(?![\w$.[{])`, 'gu'))
   ]);
 }
 
@@ -405,10 +405,11 @@ function choiceRanges(source: string, key: string, design: ReferenceDesign): Sou
   const view = design.variant?.[key] ?? design.variant?.[`${wanted.kind}.${wanted.type}`];
   const starts = lineStarts(source);
   const found: SourceRange[] = [];
-  for (const match of source.matchAll(/\{@render\s/gu)) {
-    const at = match.index ?? 0;
-    const line = starts.findLastIndex((start) => start <= at);
-    const read = design.renders?.[`${line + 1}:${at - starts[line] + 1}`];
+  // Every render the build records, written {@render Index(found)} or as a value in braces, {found}.
+  for (const [position, read] of Object.entries(design.renders ?? {})) {
+    const [line, column] = position.split(':').map(Number);
+    const at = (starts[line - 1] ?? 0) + column - 1;
+    if (source[at] !== '{') continue;
     const reading = read ? choice(read) : undefined;
     if (
       !read ||
@@ -431,7 +432,11 @@ function renders(source: string, type: string, place?: string): SourceRange[] {
   const argument = place === undefined ? '[^)]*' : placeArgument(place);
   return matches(
     source,
-    new RegExp(String.raw`\{@render\s+${escape(type)}\(${argument}\)\}`, 'gu')
+    new RegExp(
+      String.raw`\{@render\s+${escape(type)}\(${argument}\)\}` +
+        (place === undefined ? '' : '|' + String.raw`\{${argument}\}`),
+      'gu'
+    )
   );
 }
 
@@ -439,7 +444,12 @@ function renders(source: string, type: string, place?: string): SourceRange[] {
 function placeRenders(source: string, place: string): SourceRange[] {
   return matches(
     source,
-    new RegExp(String.raw`\{@render\s+${name}\(${placeArgument(place)}\)\}`, 'gu')
+    new RegExp(
+      String.raw`\{@render\s+${name}\(${placeArgument(place)}\)\}` +
+        '|' +
+        String.raw`\{${placeArgument(place)}\}`,
+      'gu'
+    )
   );
 }
 

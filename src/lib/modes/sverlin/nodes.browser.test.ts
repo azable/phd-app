@@ -40,9 +40,9 @@ const list = (algorithm: string) => `<script lang="sverlin" domain>
 {#snippet EndMark(e: End)}<Node>∅</Node>{/snippet}
 {#snippet NodeBox(n: ListNode)}
   {#snippet NextField()}<Node><Link to={n.next} /></Node>{/snippet}
-  <Node layout="row">{@render Name(n.name)}{@render NextField()}</Node>
+  <Node layout="row">{n.name}{@render NextField()}</Node>
 {/snippet}
-{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{@render ListNode(n)}{/each}</Node>{/snippet}
+{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>

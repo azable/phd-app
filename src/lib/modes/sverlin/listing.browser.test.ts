@@ -61,17 +61,17 @@ const insertion = `<script lang="sverlin" domain>
 {#snippet Board()}
   <Node layout="row">
     <Listing />
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
   </Node>
 {/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Board()}
-    {@render Position(@insert.compare.left)}
-    {@render Position(@insert.compare.right)}
-    {@render Position(@insert.swap.from)}
-    {@render Position(@insert.swap.to)}
+    {@insert.compare.left}
+    {@insert.compare.right}
+    {@insert.swap.from}
+    {@insert.swap.to}
   </Node>
 </Layout>`;
 
@@ -221,15 +221,15 @@ const search = `<script lang="sverlin" domain>
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Arrow(p: Index)}<Pointed />{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{@render Int(v)}{/each}</Node>{/snippet}
-{#snippet Goal()}<Node>target {@render Int(target)}</Node>{/snippet}
+{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+{#snippet Goal()}<Node>target {target}</Node>{/snippet}
 <Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node>{@render Goal()}{@render Cells()}</Node>
-    {@render Index(lo)}
-    {@render Index(hi)}
-    {@render Index(mid)}
+    {lo}
+    {hi}
+    {mid}
   </Node>
 </Layout>`;
 

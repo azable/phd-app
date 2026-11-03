@@ -81,27 +81,27 @@
 
 {#snippet VertexCard(value: Vertex)}
   <Node layout="column">
-    {@render Name(value.name)}
-    <Node>distance {@render Int(value.distance)}</Node>
-    {@render Flag(value.done)}
+    {value.name}
+    <Node>distance {value.distance}</Node>
+    {value.done}
   </Node>
 {/snippet}
 
 {#snippet EdgeLink(value: Edge)}
-  <Link from={value.from} to={value.to}>{@render Weight(value.weight)}</Link>
+  <Link from={value.from} to={value.to}>{value.weight}</Link>
 {/snippet}
 
 {#snippet LessQuestion(value: Less)}
-  <Node>candidate {@render Int(value.a)} &lt; current distance {@render Int(value.b)}: {@render Flag(value.value)}</Node>
+  <Node>candidate {value.a} &lt; current distance {value.b}: {value.value}</Node>
 {/snippet}
 
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as vertex}
-      {@render Vertex(vertex)}
+      {vertex}
     {/each}
     {#each edges as edge}
-      {@render Edge(edge)}
+      {edge}
     {/each}
   </Node>
 {/snippet}
@@ -109,7 +109,7 @@
 {#snippet Title()}<Node>Dijkstra's shortest paths</Node>{/snippet}
 {#snippet Status()}
   <Node layout="column">
-    <Node>Nearest chosen: {@render VertexIndex(current)}</Node>
+    <Node>Nearest chosen: {current}</Node>
     {@render Less(@round.visit.edge.relax.check)}
   </Node>
 {/snippet}
@@ -119,7 +119,7 @@
     {@render Title()}
     {@render Graph()}
     {@render Status()}
-    {@render VertexIndex(current)}
-    {@render EdgeIndex(e)}
+    {current}
+    {e}
   </Node>
 </Layout>

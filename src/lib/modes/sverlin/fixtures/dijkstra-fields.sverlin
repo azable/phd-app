@@ -112,31 +112,32 @@ while @moreRounds[round ≤ number of vertices]
 </script>
 
 {#snippet NameText(value: Name)}<Node value={value} />{/snippet}
-{#snippet DistanceValue(value: Dist)}<Node value={value} />{/snippet}
+{#snippet DistanceCell(value: Distance)}<Node {value} />{/snippet}
+{#snippet InfinityCell(value: Infinity)}<Node {value} />{/snippet}
 {#snippet WeightText(value: Weight)}<Node value={value} />{/snippet}
-{#snippet PreviousValue(value: PreviousName)}<Node value={value === 'none' ? '—' : value} />{/snippet}
+{#snippet NoneMark(value: None)}<Node value="—" />{/snippet}
 {#snippet VisitedWord(value: VisitedFlag)}<Node>{value ? 'settled' : 'unsettled'}</Node>{/snippet}
 {#snippet ScanMark(value: VertexRef)}<Pointed />{/snippet}
 
 {#snippet Title()}
-  <Node>Dijkstra’s shortest paths from {@render Name(vertices[source].name)}</Node>
+  <Node>Dijkstra’s shortest paths from {vertices[source].name}</Node>
 {/snippet}
 
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as vertex, k}
-      {#snippet DistanceLine()}<Node>distance {@render Dist(distances[k])}</Node>{/snippet}
-      {#snippet PreviousLine()}<Node>via {@render PreviousName(previous[k])}</Node>{/snippet}
+      {#snippet DistanceLine()}<Node>distance {distances[k]}</Node>{/snippet}
+      {#snippet PreviousLine()}<Node>via {previous[k]}</Node>{/snippet}
       <Node layout="column">
-        {@render Name(vertex.name)}
+        {vertex.name}
         {@render DistanceLine()}
         {@render PreviousLine()}
-        {@render VisitedFlag(visited[k])}
+        {visited[k]}
       </Node>
     {/each}
     {#each vertices as vertex, k}
       {#each adjacency[k] as neighbour}
-        <Link from={k} to={neighbour.to}>{@render Weight(neighbour.weight)}</Link>
+        <Link from={k} to={neighbour.to}>{neighbour.weight}</Link>
       {/each}
     {/each}
   </Node>
@@ -160,6 +161,6 @@ while @moreRounds[round ≤ number of vertices]
   <Node>
     {@render Title()}
     {@render Board()}
-    {@render VertexRef(v)}
+    {v}
   </Node>
 </Layout>

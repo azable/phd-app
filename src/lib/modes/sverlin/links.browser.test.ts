@@ -55,7 +55,7 @@ const insertion = `<script lang="sverlin" domain>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
 {#snippet Cells()}
   <Node layout="row">
-    {#each values as v}{@render Int(v)}{/each}
+    {#each values as v}{v}{/each}
     <Link from={@insert.swap.from} to={@insert.swap.to} />
   </Node>
 {/snippet}

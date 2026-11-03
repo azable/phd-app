@@ -48,17 +48,17 @@ const merge = `<script lang="sverlin" domain>
 </script>
 {#snippet IntText(value: Int)}<Node {value} />{/snippet}
 {#snippet IntCard(value: Int)}<Node layout="row"><Node {value} /></Node>{/snippet}
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}
 {#snippet Arrow(p: Position)}<Node layout="column"><Pointed /><Node>↑</Node></Node>{/snippet}
 {#snippet Placed(p: Position)}<Pointed />{/snippet}
-{#snippet Rows()}<Node layout="column">{@render Values(left)}{@render Values(right)}{@render Values(merged)}</Node>{/snippet}
+{#snippet Rows()}<Node layout="column">{left}{right}{merged}</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Rows()}
-    {@render Position(i)}
-    {@render Position(j)}
-    {@render Position(k)}
+    {i}
+    {j}
+    {k}
   </Node>
 </Layout>`;
 
@@ -245,15 +245,15 @@ const walk = `<script lang="sverlin" domain>
 {#snippet Current(c: EdgeIndex)}<Pointed />{/snippet}
 {#snippet Graph()}
   <Node layout="free">
-    {#each vertices as name}{@render Name(name)}{/each}
-    {#each edges as edge}{@render Edge(edge)}{/each}
+    {#each vertices as name}{name}{/each}
+    {#each edges as edge}{edge}{/each}
   </Node>
 {/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Graph()}
-    {@render EdgeIndex(e)}
+    {e}
   </Node>
 </Layout>`;
 
@@ -333,16 +333,16 @@ const taken = `<script lang="sverlin" domain>
   }]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}
 {#snippet Taken(at: Index)}
   <Node layout="column"><Pointed /><Node>taken</Node></Node>
 {/snippet}
 
 <Layout name="Main">
   <Node>
-    {@render Values(left)}
-    {@render Values(right)}
-    {@render Index(take.from)}
+    {left}
+    {right}
+    {take.from}
   </Node>
 </Layout>`;
 
@@ -410,15 +410,15 @@ const apart = `<script lang="sverlin" domain>
   j = Turn(j);]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}
 {#snippet Short(at: Index)}<Node layout="column"><Pointed /><Node>i</Node></Node>{/snippet}
 {#snippet Long(at: Index)}<Node layout="column"><Pointed /><Node>the other one</Node></Node>{/snippet}
 
 <Layout name="Main">
   <Node>
-    {@render Values(values)}
-    {@render Index(i)}
-    {@render Index(j)}
+    {values}
+    {i}
+    {j}
   </Node>
 </Layout>`;
 
@@ -491,13 +491,13 @@ const far = `<script lang="sverlin" domain>
   @far[i = 9;]
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{@render Int(v)}{/each}</Node>{/snippet}
+{#snippet Row(list: Values)}<Node layout="row">{#each list as v}{v}{/each}</Node>{/snippet}
 {#snippet Here(at: Index)}<Pointed />{/snippet}
 
 <Layout name="Main">
   <Node>
-    {@render Values(values)}
-    {@render Index(i)}
+    {values}
+    {i}
   </Node>
 </Layout>`;
 
@@ -558,10 +558,10 @@ const cursors = taken
 <Layout name="Main">`
   )
   .replace(
-    '{@render Index(take.from)}',
-    `{@render Index(i)}
-    {@render Index(j)}
-    {@render Index(take.from)}`
+    '{take.from}',
+    `{i}
+    {j}
+    {take.from}`
   );
 /** The cursors' places, each drawn by its own pointer view (Taken draws every Index otherwise). */
 const cursorViews = { 'pointers.Index@i': 'ICursor', 'pointers.Index@j': 'JCursor' };
@@ -683,7 +683,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{@render Int(v)}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+      `<script lang="sverlin" domain>const Int = type([1, 2]); const Values = collection(Int); const Position = index(Values);</script><script lang="sverlin" input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script lang="sverlin"></script>{#snippet IntCell(value: Int)}<Node {value} />{/snippet}{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -750,9 +750,9 @@ const compared = `<script lang="sverlin" domain>
   }
 </script>
 {#snippet IntCell(value: Int)}<Node {value} />{/snippet}
-{#snippet Ask(g: Greater)}<Node>{@render Int(g.a)} vs {@render Int(g.b)}</Node>{/snippet}
+{#snippet Ask(g: Greater)}<Node>{g.a} vs {g.b}</Node>{/snippet}
 {#snippet Board()}
-  <Node layout="column"><Node>{#each values as v}{@render Int(v)}{/each}</Node>{@render Greater(@compare)}</Node>
+  <Node layout="column"><Node>{#each values as v}{v}{/each}</Node>{@render Greater(@compare)}</Node>
 {/snippet}
 
 <Layout name="Main">

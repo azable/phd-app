@@ -50,7 +50,7 @@ const insertion = `<script lang="sverlin" domain>
 {#snippet Caption()}<Node>Swap</Node>{/snippet}
 {#snippet Board()}
   <Node layout="column">
-    <Node>{#each values as v}{@render Int(v)}{/each}</Node>
+    <Node>{#each values as v}{v}{/each}</Node>
     <When of="@insert.swap">{@render Caption()}</When>
   </Node>
 {/snippet}
@@ -163,7 +163,7 @@ it.skipIf(!enabled)(
     const chained = insertion
       .replace(
         '{#snippet Caption()}',
-        "{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}\n{#snippet Ask(g: Greater)}<Node>Is {@render Int(g.a)} greater than {@render Int(g.b)}? {@render Flag(g.value)}</Node>{/snippet}\n{#snippet Caption()}"
+        "{#snippet FlagWord(value: Flag)}<Node>{value ? 'yes' : 'no'}</Node>{/snippet}\n{#snippet Ask(g: Greater)}<Node>Is {g.a} greater than {g.b}? {g.value}</Node>{/snippet}\n{#snippet Caption()}"
       )
       .replace(
         '<When of="@insert.swap">{@render Caption()}</When>',

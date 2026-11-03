@@ -50,7 +50,7 @@ export const linearSearchSource = `<script lang="sverlin" domain>
     {#each list as value, k}
       {#snippet Under()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
-        {@render Int(value)}
+        {value}
         {@render Under()}
       </Node>
     {/each}
@@ -58,18 +58,18 @@ export const linearSearchSource = `<script lang="sverlin" domain>
 {/snippet}
 {#snippet Highlight(p: Index)}<Pointed />{/snippet}
 {#snippet Title()}<Node>Linear search</Node>{/snippet}
-{#snippet Caption()}<Node>Find {@render Int(target)} by checking each cell in order.</Node>{/snippet}
-{#snippet Ask(e: Equal)}<Node>is {@render Int(e.a)} equal to {@render Int(e.b)}?</Node>{/snippet}
-{#snippet Checking()}<Node>Checking index {@render Index(i)}: {@render Equal(@check)}</Node>{/snippet}
-{#snippet Result()}<Node>Found {@render Int(target)} at index {@render Index(found)}.</Node>{/snippet}
+{#snippet Caption()}<Node>Find {target} by checking each cell in order.</Node>{/snippet}
+{#snippet Ask(e: Equal)}<Node>is {e.a} equal to {e.b}?</Node>{/snippet}
+{#snippet Checking()}<Node>Checking index {i}: {@render Equal(@check)}</Node>{/snippet}
+{#snippet Result()}<Node>Found {target} at index {found}.</Node>{/snippet}
 
 <Layout name="Main">
   <Node>
     {@render Title()}
     {@render Caption()}
-    {@render Values(values)}
-    {@render Index(i)}
-    {@render Index(found)}
+    {values}
+    {i}
+    {found}
     {@render Checking()}
     {@render Result()}
   </Node>

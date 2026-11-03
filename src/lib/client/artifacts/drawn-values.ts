@@ -360,6 +360,45 @@ function braceEnd(doc: string, from: number): number | undefined {
 }
 
 /**
+ * Each render of a type in the editor's text, where its tag starts, the type, and what is written
+ * between its brackets: written {@render Flag(seen)}, or as a value in braces, {seen}, whose type
+ * the build records with where it reads (`views.Flag`, or a place's `views.Flag@seen`).
+ */
+function typeRenders(
+  state: EditorState,
+  presentations: readonly DrawnPresentation[]
+): { index: number; type: string; argument: string }[] {
+  const doc = state.doc.toString();
+  const found: { index: number; type: string; argument: string }[] = [];
+  for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
+    const opened = match.index + match[0].length;
+    let close = opened;
+    for (let depth = 1; close < doc.length && depth; close++)
+      if (doc[close] === '(') depth++;
+      else if (doc[close] === ')') depth--;
+    found.push({
+      index: match.index,
+      type: match[1],
+      argument: doc.slice(opened, close - 1).trim()
+    });
+  }
+  const sites = new Map<string, string>();
+  for (const { renders = {} } of presentations)
+    for (const [site, read] of Object.entries(renders)) if (!sites.has(site)) sites.set(site, read);
+  for (const [site, read] of sites) {
+    const [line, column] = site.split(':').map(Number);
+    if (line < 1 || line > state.doc.lines) continue;
+    const index = state.doc.line(line).from + column - 1;
+    if (doc[index] !== '{' || doc.startsWith('{@render', index)) continue;
+    const type = /^(?:views|pointers)\.(?:[\w$]+\.)*([\w$]+?)(?:@.*)?$/u.exec(read)?.[1];
+    const end = braceEnd(doc, index);
+    if (!type || end === undefined) continue;
+    found.push({ index, type, argument: doc.slice(index + 1, end - 1).trim() });
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+
+/**
  * A place's own values, as each shown presentation's variant has them, after the render drawn there,
  * as {@render Index(@left)}: its own view choice, where it has one, and the paint of the kinds of
  * the view it draws with, as `Highlight.Pointed@left.fill`. A place is named by the argument as
@@ -380,14 +419,10 @@ export function placeGhosts(
   const doc = state.doc.toString();
   const snippets = snippetRanges(doc);
   const ghosts: TagGhosts[] = [];
-  for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
-    const type = match[1];
-    const opened = match.index + match[0].length;
-    let close = opened;
-    for (let depth = 1; close < doc.length && depth; close++)
-      if (doc[close] === '(') depth++;
-      else if (doc[close] === ')') depth--;
-    const place = placeArgument.exec(doc.slice(opened, close - 1).trim())?.[1];
+  for (const render of typeRenders(state, presentations)) {
+    const match = { index: render.index };
+    const type = render.type;
+    const place = placeArgument.exec(render.argument)?.[1];
     const end = braceEnd(doc, match.index);
     if (!place || end === undefined) continue;
     // In a typed view, a place's variables carry the view's path; at the top level or in a part,
@@ -528,7 +563,8 @@ export function viewMarkers(
     )
   );
   const markers: DrawnMarker[] = [];
-  for (const match of doc.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
+  for (const { index, type } of typeRenders(state, presentations)) {
+    const match = { index, 1: type };
     // The variable the build says this render reads: a position type's number or its mark.
     const line = state.doc.lineAt(match.index);
     const site = `${line.number}:${match.index - line.from + 1}`;

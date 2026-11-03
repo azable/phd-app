@@ -66,13 +66,13 @@ while @more[the queue is not empty]
 {#snippet SeenWord(value: Seen)}<Node>{value ? 'seen' : 'unseen'}</Node>{/snippet}
 {#snippet VertexCard(vertex: Vertex)}
   <Node layout="column">
-    {@render Name(vertex.name)}
-    {@render Seen(vertex.seen)}
+    {vertex.name}
+    {vertex.seen}
   </Node>
 {/snippet}
 {#snippet VertexNumber(value: VertexRef)}<Node {value} />{/snippet}
 {#snippet QueueItems(items: Queue)}
-  <Node>{#each items as item}{@render VertexRef(item)}{/each}</Node>
+  <Node>{#each items as item}{item}{/each}</Node>
 {/snippet}
 
 {#snippet Outline(p: VertexRef)}<Pointed />{/snippet}
@@ -88,7 +88,7 @@ while @more[the queue is not empty]
 {#snippet Graph()}
   <Node layout="free">
     {#each vertices as vertex, k}
-      {@render Vertex(vertex)}
+      {vertex}
       {#each neighbours[k] as w}
         <Link from={k} to={w} />
       {/each}
@@ -98,7 +98,7 @@ while @more[the queue is not empty]
 {#snippet QueueLine()}
   <Node layout="row">
     <Node>queue</Node>
-    {@render Queue(queue)}
+    {queue}
   </Node>
 {/snippet}
 {#snippet Board()}
@@ -115,7 +115,7 @@ while @more[the queue is not empty]
   <Node>
     {@render Title()}
     {@render Board()}
-    {@render VertexRef(start)}
-    {@render VertexRef(current)}
+    {start}
+    {current}
   </Node>
 </Layout>
