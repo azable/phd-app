@@ -7,6 +7,8 @@
  * - any other node keeps the largest size it reaches at any step, laid out with the sizes the nodes
  *   inside it keep, so it holds them at every step;
  * - the items of a collection all keep the largest any of them reaches;
+ * - a grid's columns and rows each keep the largest any of their cells reaches at any step, and
+ *   the node holding it is sized with those tracks;
  * - a free layout is solved once over every step from its children's sizes (see node/span.ts), and
  *   the node holding it is sized with it at that size.
  *
@@ -57,6 +59,7 @@ export type Reservation = {
 type Kind =
   | { kind: 'boxed'; size: Size }
   | { kind: 'reserved'; key: string; id: string }
+  | { kind: 'grid'; key: string; id: string }
   | { kind: 'arranged'; key: string; props: ArrangementProps };
 
 /** A drawing read for sizing: its looks, its parents, and what decides each node's size. */
@@ -131,7 +134,10 @@ function sizer(options: ReserveOptions) {
         inside ||= box !== undefined;
       } else if (classes.includes('sv-chain') && !insideBox && id)
         kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
-      else if (classes.includes('sv-arranged')) {
+      else if (classes.includes('sv-grid') && !insideBox && element.attributes['data-sv-grid']) {
+        const grid = element.attributes['data-sv-grid'];
+        kinds.set(element, { kind: 'grid', key: `g:${grid}`, id: grid });
+      } else if (classes.includes('sv-arranged')) {
         const props = JSON.parse(element.attributes['data-sv-arrange'] ?? '{}') as ArrangementProps;
         kinds.set(element, { kind: 'arranged', key: `a:${props.scope}`, props });
       }
@@ -163,6 +169,15 @@ function sizer(options: ReserveOptions) {
     const span = memory.scopes.get(kind.props.scope)?.span;
     return span ? { width: span.width, height: span.height } : alone.get(element);
   };
+  // A grid keeps the tracks worked out over every step, which the markup drawn for sizing lacks.
+  const gridTracks = (at: Read, element: ModelElement) => {
+    const kind = at.kinds.get(element);
+    return kind?.kind === 'grid' ? memory.tracks.get(kind.id) : undefined;
+  };
+  const tracksTag = (at: Read, element: ModelElement) => {
+    const tracks = gridTracks(at, element);
+    return tracks ? `#${tracks.columns.join(',')}/${tracks.rows.join(',')}` : '';
+  };
 
   let layouts = 0;
   /**
@@ -181,6 +196,8 @@ function sizer(options: ReserveOptions) {
         const size = arrangedSize(at, element);
         if (size)
           return { width: { px: size.width, percent: 0 }, height: { px: size.height, percent: 0 } };
+        const tracks = gridTracks(at, element);
+        if (tracks) return { gridTemplateColumns: tracks.columns, gridTemplateRows: tracks.rows };
         const room = roomOf(at, element);
         const own = at.styled.get(element)?.look.padding;
         return (
@@ -253,7 +270,7 @@ function sizer(options: ReserveOptions) {
     let known = wholeSignatures.get(element);
     if (known !== undefined) return known;
     const size = leastOf(at, element) ?? arrangedSize(at, element);
-    known = `${idOf(at.styled.get(element))}${size ? `@${size.width}x${size.height}` : ''}${JSON.stringify(element.attributes)}(`;
+    known = `${idOf(at.styled.get(element))}${tracksTag(at, element)}${size ? `@${size.width}x${size.height}` : ''}${JSON.stringify(element.attributes)}(`;
     for (const child of element.children)
       known += isElement(child)
         ? wholeSignature(at, child) + roomTag(at, child)
@@ -319,7 +336,7 @@ function sizer(options: ReserveOptions) {
   function signature(at: Read, element: ModelElement): string {
     let known = signatures.get(element);
     if (known !== undefined) return known;
-    let text = `${idOf(at.styled.get(element))}(`;
+    let text = `${idOf(at.styled.get(element))}${tracksTag(at, element)}(`;
     for (const child of element.children) {
       if (!isElement(child)) {
         text += JSON.stringify(child);
@@ -477,6 +494,25 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
         }
       }
       if (entry.inputs.size) solveRecorded(entry);
+    }
+    // Then the grids, each column as wide as the widest cell it holds at any step and each row as
+    // tall as the tallest, as many as the largest coordinate any step uses.
+    for (const key of keys.filter((each) => each.startsWith('g:'))) {
+      const columns: number[] = [];
+      const rows: number[] = [];
+      for (const { at, element } of instances.get(key) ?? [])
+        for (const cell of elementsOf(element)) {
+          const row = Number(cell.attributes['data-sv-row']);
+          const column = Number(cell.attributes['data-sv-col']);
+          if (!Number.isInteger(row) || !Number.isInteger(column)) continue;
+          const { width, height } = model.sizeAlone(at, cell);
+          columns[column] = Math.max(columns[column] ?? 0, width);
+          rows[row] = Math.max(rows[row] ?? 0, height);
+        }
+      memory.tracks.set(key.slice(2), {
+        columns: Array.from(columns, (width) => width ?? 0),
+        rows: Array.from(rows, (height) => height ?? 0)
+      });
     }
     // Then the nodes, each keeping the largest size it reaches.
     for (const key of keys.filter((each) => each.startsWith('n:'))) {

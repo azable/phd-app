@@ -834,23 +834,23 @@ Every kind of node has these props, each with a fixed set of options:
 
 A kind arranging its children, with a `layout`, a collection, or links, also has
 `gap` (as `padding`), `align` (start, center, or end, across) and `justify`
-(start, center, end, between, around, or evenly, along); where a collection's
-node has more room than its tracks need, `justify` start, center, or end puts
-the room after, around, or before them, and between, around, or evenly spreads
-the tracks over it. Positions past a collection's ends are drawn in end slots,
-kept only as far as drawn positions go: a collection's kind has `overflow`,
-included (end slots are tracks of its box) or excluded (they hang outside, so
-centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
-the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
-`stroke`, `strokeWidth`, `opacity`, and `strokeStyle`; `route`, `layout` (as its
-layout's arrows run, the start), `straight`, `curved` (each arrow choosing its
-own side and how far to bow round what is in its way), or `wire` (straight runs
-turning only at right angles, round the boxes, side by side apart); `head`, the
-mark at each end a link points to, `none`, `arrow` (a filled triangle), `open`
-(an outlined one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none`
-where every link of the kind is a two-way line and `arrow` otherwise; and
-`headSize`, 6, 9 (the start), 12, or 16 pixels. A label's look is its own nodes'
-kind.
+(start, center, end, between, around, or evenly, along; for a grid, see Grid);
+where a collection's node has more room than its tracks need, `justify` start,
+center, or end puts the room after, around, or before them, and between, around,
+or evenly spreads the tracks over it. Positions past a collection's ends are
+drawn in end slots, kept only as far as drawn positions go: a collection's kind
+has `overflow`, included (end slots are tracks of its box) or excluded (they
+hang outside, so centring it centres its elements), and a `<Pointed>` kind too,
+shown (drawn past the ends) or hidden (nothing there, keeping no room). A link's
+kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and `strokeStyle`;
+`route`, `layout` (as its layout's arrows run, the start), `straight`, `curved`
+(each arrow choosing its own side and how far to bow round what is in its way),
+or `wire` (straight runs turning only at right angles, round the boxes, side by
+side apart); `head`, the mark at each end a link points to, `none`, `arrow` (a
+filled triangle), `open` (an outlined one), `vee`, `dot`, `diamond`, or `bar`,
+which starts at `none` where every link of the kind is a two-way line and
+`arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16 pixels. A label's
+look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -1164,11 +1164,45 @@ A node's props say what it is and how its children are arranged; its look is its
 kind's (see Design). Props starting with `__` are reserved for the library.
 
 - `value`: the number, string, or boolean a value node shows.
-- `layout`: `'row'`, `'column'`, or `'free'` (placed by layout; see Free layout
-  and links); arranges a node's children.
+- `layout`: `'row'`, `'column'`, `'grid'` (placed by coordinates; see Grid), or
+  `'free'` (placed by layout; see Free layout and links); arranges a node's
+  children.
+- `row` and `col`: in a grid, the cell a child is placed in, whole numbers from
+  0, as `row={i} col={j}`; only a grid's children take them, and each takes
+  both.
 - `kind`: a kind of its own within its snippet or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
   root node is its frame and takes none.
+
+## Grid
+
+`layout="grid"` lines up columns and rows, as a table, each child placed in its
+cell by `row` and `col`, usually loop indices or positions:
+
+```svelte
+{#snippet Table()}
+  <Node layout="grid">
+    {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
+    {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
+    {#each t as cells, i}
+      {#each cells as cell, j}<Node row={i + 1} col={j + 1}>{cell}</Node>{/each}
+    {/each}
+  </Node>
+{/snippet}
+```
+
+- A grid holds only nodes placed by `row` and `col`, from any number of
+  `{#each}` and `{#if}` blocks, in any order; a value or text goes inside one.
+- A coordinate no node uses is a gap, as the corner above the headers, a
+  triangle of comparisons per pass, or a sparse adjacency matrix placing each
+  edge at `row={e.from} col={e.to}`: no placeholder nodes.
+- Two cells at one coordinate at one step is an error at that step.
+- Every column is as wide as its widest cell and every row as tall as its
+  tallest at any step, as many as the largest coordinate any step uses, so a
+  table filling in never moves.
+- The grid's kind has `gap`, between columns and rows; `align`, where each cell
+  sits in its column and row; and `justify`, how the columns spread where the
+  grid has more room than they need.
 
 ## Free layout and links
 

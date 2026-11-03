@@ -2497,7 +2497,7 @@ type Attribute = {
   value?: true | { type?: string; data?: string; expression?: Expression }[];
 };
 
-const layouts = ['row', 'column', 'free'];
+const layouts = ['row', 'column', 'grid', 'free'];
 const named = (scale: object, numeric = true) => ({ names: Object.keys(scale), numeric });
 type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
 
@@ -2511,7 +2511,9 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
     children: null,
     flow: named({ x: 0, y: 0 }, false),
-    kind: null
+    kind: null,
+    row: null,
+    col: null
   },
   Pointed: {},
   Link: {
@@ -2551,7 +2553,7 @@ const designProps = new Set([
 
 /**
  * Reject a prop a library component does not take, or a written value it cannot use, such as
- * layout="grid", which would otherwise be ignored without a word. The kind is the snippet the
+ * layout="table", which would otherwise be ignored without a word. The kind is the snippet the
  * component is in, which a look belongs to.
  */
 function checkProps(
@@ -2680,6 +2682,76 @@ function nodeAround(markup: unknown, target: unknown): boolean {
     );
   };
   return walk(markup, false);
+}
+
+/**
+ * A grid's children are nodes placed by row and col, through {#each} and {#if} as anywhere, and
+ * row and col place only a grid's children.
+ */
+function gridProblems(markup: unknown, source: string): InvalidSvelteSourceError[] {
+  type Tag = {
+    type?: string;
+    name?: string;
+    start?: number;
+    data?: string;
+    attributes?: Attribute[];
+    children?: unknown[];
+  };
+  const problems: InvalidSvelteSourceError[] = [];
+  const reject = (message: string, start: number | undefined) =>
+    problems.push(
+      new InvalidSvelteSourceError(message, {
+        code: 'view_grid',
+        start: sourcePosition(source, start ?? 0)
+      })
+    );
+  const walk = (value: unknown, inGrid: boolean): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach((part) => walk(part, inGrid));
+    const tag = value as Tag & Record<string, unknown>;
+    if (tag.type === 'SnippetBlock') return walk(tag.children, false);
+    if (tag.type === 'InlineComponent' && tag.name === 'Node') {
+      const attribute = (name: string) => tag.attributes?.find((each) => each.name === name);
+      const placed = attribute('row') && attribute('col');
+      if (inGrid && !placed)
+        reject(
+          'A node in a grid is placed by its row and col, whole numbers from 0, as <Node row={i} col={j}>: give it both.',
+          tag.start
+        );
+      if (!inGrid && (attribute('row') || attribute('col')))
+        reject(
+          'row and col place a node in a grid: they go on the nodes a <Node layout="grid"> holds, as <Node row={i} col={j}>.',
+          (attribute('row') ?? attribute('col'))?.start ?? tag.start
+        );
+      const layout = attribute('layout');
+      const parts = Array.isArray(layout?.value) ? layout.value : [];
+      const written = parts.length === 1 && parts[0].type === 'Text' && parts[0].data === 'grid';
+      if (!written && parts.length === 1 && possibleValues(parts[0].expression).includes('grid'))
+        reject(
+          'A grid is written as layout="grid", not computed: its cells are placed by row and col, which only a grid takes.',
+          layout?.start ?? tag.start
+        );
+      return walk(tag.children, written);
+    }
+    if (inGrid) {
+      const shown =
+        (tag.type === 'Text' && tag.data?.trim()) ||
+        tag.type === 'MustacheTag' ||
+        tag.type === 'RenderTag' ||
+        tag.type === 'InlineComponent';
+      if (shown) {
+        reject(
+          'A grid holds only nodes placed by row and col: put this in one, as <Node row={i} col={j}>…</Node>.',
+          (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0)
+        );
+        return;
+      }
+    }
+    for (const [key, child] of Object.entries(tag))
+      if (key !== 'attributes' && key !== 'parent' && key !== 'metadata') walk(child, inGrid);
+  };
+  walk(markup, false);
+  return problems;
 }
 
 /** Template markup other than <Node> and <Link> that a view cannot use, by its parsed type. */
@@ -2957,6 +3029,7 @@ function withNodeRefs(
       ast.css.start
     );
   walk(ast.html, undefined, false, 'root', true);
+  problems.push(...gridProblems(ast.html, source));
   // What a node is says which props its kind has: one that arranges its children has a layout's.
   // A field holds only links that start at it, as a node's next: a box, its content centred.
   const isField = ({ name, tag }: Entry) => {

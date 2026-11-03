@@ -402,7 +402,9 @@ describe('single-component Svelte compilation', () => {
       code: 'invalid_prop',
       line: 2
     });
-    await expect(view('<Node layout="grid" />')).rejects.toThrow("use 'row', 'column', 'free'");
+    await expect(view('<Node layout="table" />')).rejects.toThrow(
+      "use 'row', 'column', 'grid', 'free'"
+    );
     await expect(view('<Node class="big" />')).rejects.toMatchObject({
       code: 'unknown_prop',
       message: expect.stringContaining('<Node> has no prop class')
@@ -2392,5 +2394,48 @@ describe('kinds named by nodes', () => {
     expect(() => component('<Layout name="Main"><Node kind="Page">{i}</Node></Layout>')).toThrow(
       /root <Node> of the layout Main is the frame/
     );
+  });
+});
+
+describe('grids', () => {
+  const domain = '<script domain>const Int = type([1, 3]);</script>';
+  const algorithm = '<script algorithm>@run[let i = Int(1);]</script>';
+  const component = (view: string) =>
+    prepareSvelteComponent(
+      `${domain}${algorithm}<View of="Int" name="IntText"><Node value={this} /></View>${view}`
+    );
+  const table = (grid: string) =>
+    component(
+      `{#snippet Table()}${grid}{/snippet}<Layout name="Main"><Node>{@render Table()}</Node></Layout>`
+    );
+
+  it('places each of a grid’s nodes by row and col, the grid’s kind arranging them', () => {
+    const prepared = table(
+      '<Node layout="grid"><Node kind="Header" row={0} col={1}>a</Node>{#each [1, 3] as v, j}<Node row={1} col={j}>{v}</Node>{/each}</Node>'
+    );
+    expect(prepared.design.space['Table.justify']).toBeDefined();
+    expect(prepared.design.space['Table.Header.fill']).toBeDefined();
+  });
+
+  it.each([
+    [
+      'a node without col',
+      '<Node layout="grid"><Node row={0}>a</Node></Node>',
+      /placed by its row and col/
+    ],
+    [
+      'row and col outside a grid',
+      '<Node layout="row"><Node row={0} col={0}>a</Node></Node>',
+      /row and col place a node in a grid/
+    ],
+    ['text in a grid', '<Node layout="grid">a</Node>', /A grid holds only nodes/],
+    ['a value in a grid', '<Node layout="grid">{i}</Node>', /A grid holds only nodes/],
+    [
+      'a computed grid',
+      '<Node layout={i > 1 ? "grid" : "row"}><Node>a</Node></Node>',
+      /written as layout="grid", not computed/
+    ]
+  ])('refuses %s', (_name, grid, message) => {
+    expect(() => table(grid)).toThrow(message);
   });
 });

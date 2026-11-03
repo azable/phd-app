@@ -1,0 +1,48 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Char = type(['A', 'C', 'G', 'T']);
+  const Word = collection(Char);
+  const Row = collection(Int);
+  const Table = collection(Row);
+  const Count = type('integer', { min: 0, max: 5 });
+</script>
+
+<script input>
+  const x = Word('GATC');
+  const y = Word('ATGC');
+  const t = Table([
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ]);
+</script>
+
+<script algorithm>
+  for (@rowStart[let i = Count(1)]; @rowMore[i < t.length]; @rowNext[i++]) @row{
+    for (@cellStart[let j = Count(1)]; @cellMore[j < t[i].length]; @cellNext[j++]) @cell{
+      if (@same[x[i - 1] === y[j - 1]]) @diagonal[t[i][j] = t[i - 1][j - 1] + 1;]
+      else if (@up[t[i - 1][j] >= t[i][j - 1]]) @fromUp[t[i][j] = t[i - 1][j];]
+      else @fromLeft[t[i][j] = t[i][j - 1];]
+    }
+  }
+</script>
+
+<View of="Int" name="Numeral"><Node value={this} /></View>
+<View of="Char" name="Letter"><Node value={this} /></View>
+<View of="Count" name="CountText"><Node value={this} /></View>
+
+{#snippet Lcs()}
+  <Node layout="grid">
+    {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
+    {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
+    {#each t as cells, i}
+      {#each cells as cell, j}<Node row={i + 1} col={j + 1}>{cell}</Node>{/each}
+    {/each}
+  </Node>
+{/snippet}
+
+<Layout name="Main">
+  <Node>{@render Lcs()}</Node>
+</Layout>

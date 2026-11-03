@@ -46,6 +46,8 @@
     providePointerIdentity,
     provideCollectionLayout,
     provideSequence,
+    provideGrid,
+    gridContext,
     collectionLayoutContext,
     sequenceContext,
     slotContext,
@@ -74,6 +76,8 @@
   let {
     value,
     layout,
+    row,
+    col,
     children,
     flow,
     __view = 'root',
@@ -95,6 +99,9 @@
     value?: Primitive;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
+    /** In a grid, the cell this node is placed in: whole numbers from 0, as loop indices. */
+    row?: number;
+    col?: number;
     children?: Snippet;
     /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
     flow?: 'x' | 'y';
@@ -320,9 +327,35 @@
   );
   const arrangement = $derived(layout ?? (collection ? collectionLayout : undefined));
   untrack(() => {
-    if (arrangement) provideSequence(arrangement !== 'free');
+    if (arrangement) provideSequence(arrangement === 'row' || arrangement === 'column');
     if (collection) provideCollectionLayout(arrangement);
   });
+  // A grid's child is placed in the cell its row and col name, one to a coordinate at each step;
+  // the nodes inside it are no grid's children. A grid keeps the tracks the page worked out over
+  // every step (see LayoutMemory), so it never moves as it fills in.
+  const grid = gridContext();
+  const cell = untrack(() => (row !== undefined && col !== undefined ? { row, col } : undefined));
+  untrack(() => {
+    if (!cell) return;
+    if (![cell.row, cell.col].every((at) => Number.isInteger(at) && at >= 0))
+      throw new Error(
+        `A grid's cell is placed at whole numbers from 0, not row ${cell.row}, col ${cell.col}.`
+      );
+    const at = `${cell.row},${cell.col}`;
+    if (grid?.has(at))
+      throw new Error(
+        `Two cells of a grid are at row ${cell.row}, col ${cell.col} at this step: each coordinate holds one cell at a time.`
+      );
+    grid?.add(at);
+  });
+  untrack(() => provideGrid(arrangement === 'grid' ? new Set() : undefined));
+  const tracks = untrack(() =>
+    arrangement === 'grid' && memory && !memory.measuring && !insideBox && id
+      ? memory.tracks.get(id)
+      : undefined
+  );
+  const trackCss = (sizes: readonly number[] | undefined) =>
+    sizes?.length ? sizes.map((size) => `${size}px`).join(' ') : undefined;
   const measured = (prop: string, unit: string) => {
     const setting = look(prop);
     return typeof setting === 'number' ? `${setting}${unit}` : undefined;
@@ -403,9 +436,7 @@
   <Node {...given} {__text} __ref={undefined} />
 {/snippet}
 
-{#if look('shown') === false || leftOut}
-  <!-- Left out of this presentation: drawn nowhere, keeping no room. -->
-{:else}
+{#snippet drawn()}
   {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
     <Overhang {overhang} side="before">
       {#each itemEnds.before as end (end)}
@@ -490,6 +521,21 @@
         >
           {@render contents()}
         </Arranged>
+      {:else if arrangement === 'grid'}
+        <!-- data-sv-grid names the grid whose tracks the page keeps (see model/reserve.ts); align
+             places each cell in its column and row, and justify spreads the columns. -->
+        <div
+          class="sv-grid"
+          data-sv-grid={id}
+          style:gap={`${gap}em`}
+          style:align-items={alignment}
+          style:justify-items={alignment}
+          style:justify-content={justification}
+          style:grid-template-columns={trackCss(tracks?.columns)}
+          style:grid-template-rows={trackCss(tracks?.rows)}
+        >
+          {@render contents()}
+        </div>
       {:else if arrangement}
         <!-- data-sv-collection marks the items of one collection, so the page gives them all the
              largest size any of them reaches (see model/reserve.ts) and they line up;
@@ -539,6 +585,23 @@
       {/each}
     </Overhang>
   {/if}
+{/snippet}
+
+{#if look('shown') === false || leftOut}
+  <!-- Left out of this presentation: drawn nowhere, keeping no room. -->
+{:else if cell}
+  <!-- A grid's child, in the cell its row and col place it in. -->
+  <div
+    class="sv-cell"
+    data-sv-row={cell.row}
+    data-sv-col={cell.col}
+    style:grid-row-start={cell.row + 1}
+    style:grid-column-start={cell.col + 1}
+  >
+    {@render drawn()}
+  </div>
+{:else}
+  {@render drawn()}
 {/if}
 
 <style>
@@ -580,6 +643,18 @@
   }
   .column {
     flex-direction: column;
+  }
+  /*
+    A grid places each cell by its row and col, each column as wide as its widest cell and each row
+    as tall as its tallest; a cell holds its node at the node's own size.
+  */
+  .sv-grid {
+    display: grid;
+    grid-auto-columns: max-content;
+    grid-auto-rows: max-content;
+  }
+  .sv-cell {
+    display: flex;
   }
   /*
     A collection's items sit on equal tracks, each as large as the largest item, so the items of a

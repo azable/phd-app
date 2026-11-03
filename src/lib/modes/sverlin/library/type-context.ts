@@ -201,6 +201,12 @@ export type LayoutMemory = {
    */
   reserved: Map<string, { width: number; height: number }>;
   /**
+   * Each grid's tracks, by its node's id: every column as wide as the widest cell it holds at any
+   * step and every row as tall as the tallest, as many as the largest coordinate any step uses, so a
+   * grid filling in never moves.
+   */
+  tracks: Map<string, { columns: number[]; rows: number[] }>;
+  /**
    * The largest size each typed component's root reaches for any value of its parameters, by
    * component; every render of the component keeps it as its least size, so they line up.
    */
@@ -616,6 +622,15 @@ export function provideSequence(sequence: boolean): void {
 
 export function sequenceContext(): boolean | undefined {
   return getContext<boolean | undefined>('sverlin:sequence');
+}
+
+/** The cells a grid holds at this step, by row and col, so two at one coordinate are found. */
+export function provideGrid(cells: Set<string> | undefined): void {
+  setContext('sverlin:grid', cells);
+}
+
+export function gridContext(): Set<string> | undefined {
+  return getContext<Set<string> | undefined>('sverlin:grid');
 }
 
 /** The way the collection around a node runs, so a collection inside it runs across it, as rows in a column do. */

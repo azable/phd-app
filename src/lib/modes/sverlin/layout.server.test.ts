@@ -148,6 +148,23 @@ describe('laying out on the server', () => {
     expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
   }, 60_000);
 
+  it('keeps each grid column and row at its largest, and refuses two cells at one coordinate', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/lcs-grid.sverlin', 'utf8');
+    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    expect(layout.errors).toEqual([]);
+    const prefix = 'window.__sverlinGeometry=';
+    const [given] = JSON.parse(
+      javascript.slice(prefix.length, javascript.indexOf(';\n'))
+    ) as Geometry[];
+    // The headers at row 0 and col 0 and the table from 1: six of each, the corner left empty.
+    const [[, tracks]] = given.tracks;
+    expect(tracks.columns).toHaveLength(6);
+    expect(tracks.rows).toHaveLength(6);
+    expect(Math.min(...tracks.columns, ...tracks.rows)).toBeGreaterThan(0);
+    const twice = source.replace('row={i + 1} col={j + 1}', 'row={i} col={j + 1}');
+    const clashing = await bundlePresentation(prepareSvelteComponent(twice), 1);
+    expect(clashing.layout.errors.join(' ')).toMatch(/Two cells of a grid are at row 0, col 2/);
+  }, 60_000);
   it('lays a node out in its case, wider uppercase, alike at the starter', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
@@ -226,6 +243,7 @@ describe('the geometry a page draws with', () => {
     devicePixelRatio,
     borders,
     reserved: [],
+    tracks: [],
     components: [],
     spans: [],
     lines: []

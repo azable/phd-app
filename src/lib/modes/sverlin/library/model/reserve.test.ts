@@ -43,6 +43,7 @@ const memoryOf = (): LayoutMemory => ({
   scopes: new Map(),
   fits: new Map(),
   reserved: new Map(),
+  tracks: new Map(),
   components: new Map(),
   lines: new Set()
 });

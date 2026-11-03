@@ -2,9 +2,9 @@
  * The layout model: every element's box worked out from a step's markup (see tree.ts), the
  * library's style sheets (see css.ts, look.ts) and text widths, with nothing read from a laid-out
  * page. It lays out what views draw, as the browser does, to its 64ths of a pixel: blocks stacked,
- * flex rows and columns on one line, grids of one column or of equal tracks, lines of text with
- * views inside them, and boxes placed out of flow. What it does not model it refuses, naming it in
- * `problems`, rather than guessing.
+ * flex rows and columns on one line, grids of one column, of equal tracks, or of items placed by
+ * line, lines of text with views inside them, and boxes placed out of flow. What it does not model
+ * it refuses, naming it in `problems`, rather than guessing.
  */
 
 import type { Rule } from './css';
@@ -399,6 +399,70 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         : [];
     };
     void anonymous;
+    if (
+      kids.some((item) => 'element' in item && item.look.gridRowStart !== undefined) ||
+      look.gridTemplateColumns.length ||
+      look.gridTemplateRows.length
+    )
+      return placedGrid();
+    // Items placed by their lines, as a grid of rows and columns: each track as its template gives
+    // it, or else as large as the largest item in it, and the room left across spread by
+    // justify-content.
+    function placedGrid(): Content {
+      if (look.gridAutoColumns !== 'max-content' || look.gridAutoRows !== 'max-content')
+        problems.add(`grid-auto-columns and -rows: ${look.gridAutoColumns} ${look.gridAutoRows}`);
+      const lines = kids.map((item) =>
+        'element' in item &&
+        item.look.gridRowStart !== undefined &&
+        item.look.gridColumnStart !== undefined
+          ? { row: item.look.gridRowStart - 1, column: item.look.gridColumnStart - 1 }
+          : undefined
+      );
+      if (lines.some((line) => !line)) problems.add('grid items not placed by line');
+      const tracks = (axis: 'row' | 'column', template: readonly number[]) =>
+        Array.from(
+          {
+            length: Math.max(template.length, ...lines.map((line) => (line ? line[axis] + 1 : 0)))
+          },
+          (_, track) =>
+            template[track] ??
+            Math.max(
+              0,
+              ...lines.flatMap((line, index) =>
+                line?.[axis] === track
+                  ? [axis === 'column' ? natural[index].width : natural[index].height]
+                  : []
+              )
+            )
+        );
+      const columns = tracks('column', look.gridTemplateColumns);
+      const rows = tracks('row', look.gridTemplateRows);
+      const extent = (sizes: readonly number[], gap: number) =>
+        sizes.reduce((total, size) => total + size, 0) + Math.max(0, sizes.length - 1) * gap;
+      const starts = (sizes: readonly number[], gap: number, start: number, between: number) => {
+        let at = start;
+        return sizes.map((size) => {
+          const here = at;
+          at += size + gap + between;
+          return here;
+        });
+      };
+      const outerWidth = width ?? extent(columns, columnGap);
+      const outerHeight = height ?? extent(rows, rowGap);
+      const across = distribute(
+        outerWidth - extent(columns, columnGap),
+        columns.length,
+        look.justifyContent
+      );
+      const xs = starts(columns, columnGap, across.start, across.between);
+      const ys = starts(rows, rowGap, 0, 0);
+      const children = lines.flatMap((line, index) =>
+        line
+          ? place(index, xs[line.column], ys[line.row], columns[line.column], rows[line.row])
+          : []
+      );
+      return { width: outerWidth, height: outerHeight, children };
+    }
     if (look.gridAutoFlow.startsWith('column')) {
       if (look.gridAutoColumns !== '1fr')
         problems.add(`grid-auto-columns: ${look.gridAutoColumns}`);

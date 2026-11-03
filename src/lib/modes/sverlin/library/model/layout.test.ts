@@ -176,6 +176,44 @@ describe('layout', () => {
     expect(boxes.get(items[1])).toEqual({ x: 34, y: 0, width: 30, height: 20 });
   });
 
+  it('places grid items by line, each track its largest item or its template', () => {
+    const at = (row: number, column: number, width: number, height: number) =>
+      div({
+        'grid-row-start': `${row}`,
+        'grid-column-start': `${column}`,
+        width: `${width}px`,
+        height: `${height}px`
+      });
+    // Column 2 holds only the item at row 2, and row 3 none: an empty track is a gap's width.
+    const items = [at(1, 1, 10, 10), at(1, 3, 30, 20), at(2, 2, 6, 8), at(4, 1, 12, 4)];
+    const grid = {
+      display: 'grid',
+      'grid-auto-columns': 'max-content',
+      'grid-auto-rows': 'max-content',
+      'justify-items': 'center',
+      'align-items': 'flex-start',
+      'column-gap': '2px',
+      'row-gap': '4px'
+    };
+    const root = div(grid, ...items);
+    const { boxes, problems } = lay(root);
+    expect(problems).toEqual([]);
+    // Columns 12, 6 and 30 wide; rows 20, 8, 0 and 4 tall.
+    expect(boxes.get(root)).toMatchObject({ width: 12 + 6 + 30 + 4, height: 20 + 8 + 0 + 4 + 12 });
+    expect(boxes.get(items[0])).toEqual({ x: 1, y: 0, width: 10, height: 10 });
+    expect(boxes.get(items[1])).toEqual({ x: 22, y: 0, width: 30, height: 20 });
+    expect(boxes.get(items[2])).toEqual({ x: 14, y: 24, width: 6, height: 8 });
+    expect(boxes.get(items[3])).toEqual({ x: 0, y: 40, width: 12, height: 4 });
+    // Tracks a solved grid gives keep their sizes whatever the items in them.
+    const fixed = div(
+      { ...grid, 'grid-template-columns': '20px 10px 40px', 'grid-template-rows': '24px' },
+      ...items
+    );
+    const solved = lay(fixed);
+    expect(solved.boxes.get(fixed)).toMatchObject({ width: 74, height: 24 + 8 + 0 + 4 + 12 });
+    expect(solved.boxes.get(items[1])).toMatchObject({ x: 39, y: 0 });
+  });
+
   it('centres a cell value, the cell kept at its least size', () => {
     const value = element('span', {}, {}, '42');
     const cell = div(

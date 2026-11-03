@@ -48,6 +48,12 @@ export type Look = {
   gridAutoFlow: string;
   gridAutoColumns: string;
   gridAutoRows: string;
+  /** Explicit tracks, in pixels, as grid-template-columns: 40px 32px gives them; none, implicit. */
+  gridTemplateColumns: number[];
+  gridTemplateRows: number[];
+  /** The line a grid item starts at, from 1, as grid-row-start: 2 places it; none, auto-placed. */
+  gridRowStart?: number;
+  gridColumnStart?: number;
   tabSize: number;
 };
 
@@ -365,6 +371,22 @@ export function lookOf(
     const value = get(property);
     return value === undefined || value === 'auto' ? 'auto' : evaluate(value, { em: fontSize });
   };
+  // Tracks given in pixels, as a solved grid has them; any other track sizing is not modelled.
+  const tracksOf = (property: string): number[] => {
+    const value = get(property);
+    if (value === undefined || value === 'none') return [];
+    return value
+      .trim()
+      .split(/\s+/u)
+      .map((track) => px(track, fontSize));
+  };
+  const lineOf = (key: 'gridRowStart' | 'gridColumnStart', property: string) => {
+    const value = get(property);
+    if (value === undefined || value === 'auto') return {};
+    if (!/^\d+$/u.test(value))
+      throw new Error(`Layout model: ${property}: ${value} is not modelled`);
+    return { [key]: Number(value) };
+  };
   const position = (get('position') ?? 'static') as Look['position'];
   let display =
     'hidden' in element.attributes ? 'none' : (get('display') ?? displays[element.tag] ?? 'inline');
@@ -428,9 +450,13 @@ export function lookOf(
     gridAutoFlow: get('grid-auto-flow') ?? 'row',
     gridAutoColumns: get('grid-auto-columns') ?? 'auto',
     gridAutoRows: get('grid-auto-rows') ?? 'auto',
+    gridTemplateColumns: tracksOf('grid-template-columns'),
+    gridTemplateRows: tracksOf('grid-template-rows'),
+    ...lineOf('gridRowStart', 'grid-row-start'),
+    ...lineOf('gridColumnStart', 'grid-column-start'),
     tabSize: inherited.tabSize
   };
-  for (const property of ['grid-template-columns', 'grid-template-rows', 'float', 'flex-wrap'])
+  for (const property of ['float', 'flex-wrap'])
     if (get(property) !== undefined && !['none', 'nowrap'].includes(get(property) as string))
       throw new Error(
         `Layout model: ${property} is not modelled (${classesOf(element).join('.')})`
