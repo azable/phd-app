@@ -367,7 +367,11 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
     1
   );
   if (!declared.length) {
-    if (segments.length > 1) return [];
+    // A kind a node names, as kind="Header" for Table.Header.
+    if (segments.length > 1)
+      return part
+        ? []
+        : matches(source, new RegExp(String.raw`\bkind="(${escape(snippet)})"`, 'gu'), 1);
     return matches(
       source,
       new RegExp(String.raw`(?:\b(?:const|let|function)\s+)(${escape(snippet)})\b`, 'gu'),

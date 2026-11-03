@@ -22,7 +22,7 @@ const source = `<script domain>
 </script>
 <View of="Index" name="Highlight"><Pointed /></View>
 <View of="Values" name="Row">
-  {#snippet Under()}<Node>i</Node>{/snippet}
+  {#snippet Under()}<Node>i</Node>{/snippet}<Node kind="Label">v</Node>
 </View>
 <Layout name="Main">
   <Node>
@@ -40,6 +40,7 @@ describe('references in messages', () => {
   it('name a snippet by its declaration, nested ones by their path', () => {
     expect(named('Highlight')).toEqual(['Highlight']);
     expect(named('Row.Under')).toEqual(['Under']);
+    expect(named('Row.Label.fill')).toEqual(['Label']);
     expect(referenceRanges(source, 'Highlight')[0].from).toBe(source.indexOf('Highlight"'));
   });
 

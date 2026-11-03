@@ -45,14 +45,14 @@ a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
 `{#each}`, `{#snippet}`, `{@render}`, and `{@const}`, with no `<script>`,
 `<style>`, HTML, or SVG: every visible thing is a node or a link, so
 participants can select it and presentations can vary it. Nodes take no props
-that set a look: a node's kind is the view or snippet it is in, and the design
-gives each kind its look. Every input and algorithm variable in scope at the
-selected step and the library components are already in scope; never write
-`import`, and never declare names `Node`, `Link`, `Pointed`, `Listing`, `View`,
-`Layout`, `When`, or `OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`,
-`{#each}`, `{#snippet}`); Sverlin's own constructs are capitalised tags, as
-`<Node>`, `<View>`, `<Layout>`, and `<When>`; and code is in `<script>` blocks
-named by an attribute.
+that set a look: a node's kind is the view or snippet it is in, or one it names
+with `kind`, and the design gives each kind its look. Every input and algorithm
+variable in scope at the selected step and the library components are already in
+scope; never write `import`, and never declare names `Node`, `Link`, `Pointed`,
+`Listing`, `View`, `Layout`, `When`, or `OneOf`. Blocks in `{#…}` are Svelte's
+own (`{#if}`, `{#each}`, `{#snippet}`); Sverlin's own constructs are capitalised
+tags, as `<Node>`, `<View>`, `<Layout>`, and `<When>`; and code is in `<script>`
+blocks named by an attribute.
 
 - The top level holds parts, views, and at least one layout: every source
   declares its layouts, and one without is refused. A snippet, which takes no
@@ -774,17 +774,25 @@ The design space is every variable of a component's look, found in its markup:
 - Each kind of node's props. A kind is the view or snippet a node is in: a
   view's or a part's name, as `Items` or `Title`, and for a snippet inside
   another, both, as `IntTally.Tally`; every node of a view or snippet is of its
-  kind. A pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`,
-  and so is a snippet's `<Link>`, as `Graph.Link`. A variable is its kind and
-  prop, as `Here.Pointed.fill` or `Items.Under.shown`.
+  kind. A node naming its kind, as `<Node kind="Header">` in `Table`, is of the
+  kind `Table.Header`, with the nodes inside it, as a snippet `Header` inside
+  `Table` would make them; in a layout, as `Main.Note`. A pointer view's
+  `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's
+  `<Link>`, as `Graph.Link`. A variable is its kind and prop, as
+  `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 
-A view's or snippet's name is its kind, so it names what its nodes are, never
-how they look: `Caption`, `Visited`, `Under`, not `Amber` or `Big`. Each has a
-name of its own in the whole view, nested ones included, as `CurrentCaption` and
-`NeighbourCaption` inside two pointer views, never `Caption` in both; a part is
-not named as a type, and a render names a part, a type, or a label, so every
-kind is known before the view runs.
+A view's or snippet's name is its kind, and so is a node's `kind`, so each names
+what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
+`Amber` or `Big`. Each has a name of its own in the whole view, nested ones
+included, as `CurrentCaption` and `NeighbourCaption` inside two pointer views,
+never `Caption` in both; a part is not named as a type, and a render names a
+part, a type, or a label, so every kind is known before the view runs. A `kind`
+is written as it is, one capitalised word, never computed; nodes of one snippet
+naming the same kind are one kind, and it is named apart from every snippet,
+layout, and type. Name a kind with `kind` where its nodes take no value and are
+drawn once, as a table's header cells; a nested snippet is for a part used more
+than once.
 
 Every kind of node has these props, each with a fixed set of options:
 
@@ -1158,6 +1166,9 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `value`: the number, string, or boolean a value node shows.
 - `layout`: `'row'`, `'column'`, or `'free'` (placed by layout; see Free layout
   and links); arranges a node's children.
+- `kind`: a kind of its own within its snippet or layout, written as it is, as
+  `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
+  root node is its frame and takes none.
 
 ## Free layout and links
 

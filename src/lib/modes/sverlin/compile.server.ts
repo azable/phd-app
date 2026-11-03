@@ -962,6 +962,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       flows,
       tagKinds,
       nodeKinds,
+      localKinds,
       listing,
       listingAt
     } = withNodeRefs(svelteSource, ast, source, found.roots, found.valueTypes, paths, linkedTypes);
@@ -979,10 +980,21 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           ]
         : [];
     });
+    const layoutNames = new Set(page.layouts.map(({ name }) => name));
+    const kindLayoutProblems = localKinds
+      .filter(({ name }) => layoutNames.has(name))
+      .map(
+        ({ name, start }) =>
+          new InvalidSvelteSourceError(
+            `kind="${name}" has a layout's name, which is that layout's kind: rename one.`,
+            { code: 'view_kinds', start: sourcePosition(source, start) }
+          )
+      );
     viewProblems = [
       ...viewProblems,
       ...problems,
       ...layoutProblems,
+      ...kindLayoutProblems,
       ...linkProblems,
       ...found.problems.map(
         ({ message, start }) =>
@@ -1102,6 +1114,12 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       throw new InvalidSvelteSourceError(
         `${ownName.name} is a view named after its type: name it after how it draws, as ${ownName.name}Cell, and {@render ${ownName.name}(…)} draws whichever view of ${ownName.name} the design chooses.`,
         { code: 'view_component', start: sourcePosition(source, ownName.start) }
+      );
+    const typeKind = localKinds.find(({ name }) => definesType(viewing, name));
+    if (typeKind)
+      throw new InvalidSvelteSourceError(
+        `kind="${typeKind.name}" has the name of a type: name the kind after what the node is, as kind="${typeKind.name}Label".`,
+        { code: 'view_kinds', start: sourcePosition(source, typeKind.start) }
       );
     // A part is rendered by its name, which a type or operator would take.
     const typeNamed = [...paths.keys()].find(
@@ -2492,7 +2510,8 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     value: null,
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
     children: null,
-    flow: named({ x: 0, y: 0 }, false)
+    flow: named({ x: 0, y: 0 }, false),
+    kind: null
   },
   Pointed: {},
   Link: {
@@ -2711,6 +2730,8 @@ function withNodeRefs(
   tagKinds: Record<string, string[]>;
   /** Each <Node> tag's kind, by where it starts, for what a presentation leaves out. */
   nodeKinds: Map<number, string>;
+  /** The kinds nodes name, as kind="Header", with where each kind prop starts. */
+  localKinds: { name: string; start: number }[];
   /** Whether the view places a <Listing />, and where the first starts. */
   listing: boolean;
   listingAt?: number;
@@ -2732,6 +2753,54 @@ function withNodeRefs(
     problems.push(
       new InvalidSvelteSourceError(message, { code, start: sourcePosition(source, start ?? 0) })
     );
+  // A node naming its kind, as <Node kind="Header"> in Table, is of the kind Table.Header with the
+  // nodes inside it, as a snippet Header inside Table would make it; the prop goes before Svelte.
+  const kindProps: Insertion[] = [];
+  const localKinds: { name: string; start: number }[] = [];
+  const ownKind = (tag: Tag, view: string): string => {
+    const attribute = tag.attributes?.find(({ name }) => name === 'kind') as
+      | (Attribute & { end?: number })
+      | undefined;
+    if (!attribute) return view;
+    const start = attribute.start ?? tag.start ?? 0;
+    kindProps.push({ at: start, text: '', remove: (attribute.end ?? start) - start });
+    const [part] = Array.isArray(attribute.value) ? attribute.value : [];
+    const name = Array.isArray(attribute.value) && attribute.value.length === 1 ? part : undefined;
+    if (name?.type !== 'Text') {
+      reject(
+        'A <Node>\'s kind is written as it is, not computed, as kind="Header": every kind is known before the view runs.',
+        'view_kinds',
+        start
+      );
+      return view;
+    }
+    if (!/^[A-Z][A-Za-z0-9]*$/u.test(name.data ?? '')) {
+      reject(
+        `kind="${name.data}" is no kind: a kind is named in one capitalised word saying what the node is, as kind="Header", never how it looks.`,
+        'view_kinds',
+        start
+      );
+      return view;
+    }
+    if (paths.has(name.data ?? '')) {
+      reject(
+        `kind="${name.data}" has a snippet's name, which is its kind too: rename one.`,
+        'view_kinds',
+        start
+      );
+      return view;
+    }
+    if (view === 'root') {
+      reject(
+        `A <Node> outside any view, part, or layout has no kind to name ${name.data} within.`,
+        'view_kinds',
+        start
+      );
+      return view;
+    }
+    localKinds.push({ name: name.data ?? '', start });
+    return `${view}.${name.data}`;
+  };
   // Each <Link> belongs to the nearest <Node> around it, which then lays out with links. Text
   // belongs inside a node, where it can be selected; a view may also write it beside its nodes.
   // `page`: in the root or a part of the page, rather than in a view.
@@ -2809,7 +2878,7 @@ function withNodeRefs(
     }
     if (library && tag.name === 'Pointed' && view.includes('.')) {
       reject(
-        "A <Pointed> is written in its pointer view itself, not in a snippet inside it, as the view's kind is the pointer's.",
+        "A <Pointed> is written in its pointer view itself, not in a snippet or a node of a kind of its own inside it, as the view's kind is the pointer's.",
         'view_markup',
         tag.start
       );
@@ -2833,7 +2902,8 @@ function withNodeRefs(
           problems,
           view
         );
-      const entry = { start: tag.start, name: tag.name as string, links: false, view, tag };
+      const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
+      const entry = { start: tag.start, name: tag.name as string, links: false, view: kind, tag };
       tags.push(entry);
       // A link with no from starts at the element its view draws, laid out by the free layout
       // around the elements rather than by the node it sits in.
@@ -2858,7 +2928,7 @@ function withNodeRefs(
             tag.start
           );
       }
-      walk(tag.children, tag.name === 'Node' ? entry : around, true, view, page);
+      walk(tag.children, tag.name === 'Node' ? entry : around, true, kind, page);
       return;
     }
     // What a layout holds is the page's top level, and a node written there is of the layout's kind.
@@ -2997,7 +3067,8 @@ function withNodeRefs(
   return {
     listing: listings.length > 0,
     ...(listings.length ? { listingAt: listings[0] } : {}),
-    insertions,
+    insertions: [...insertions, ...kindProps],
+    localKinds,
     problems,
     kinds: [...kinds].map(([key, role]) => ({ key, role })),
     freeNodes,

@@ -2352,3 +2352,45 @@ describe('step limits', () => {
     );
   });
 });
+
+describe('kinds named by nodes', () => {
+  const domain = '<script domain>const Int = type([1, 3]);</script>';
+  const algorithm = '<script algorithm>@run[let i = Int(1);]</script>';
+  const component = (view: string) =>
+    prepareSvelteComponent(
+      `${domain}${algorithm}<View of="Int" name="IntText"><Node value={this} /></View>${view}`
+    );
+
+  it('gives a node with kind, and the nodes inside it, the kind within its snippet', () => {
+    const prepared = component(
+      '{#snippet Table()}<Node layout="row"><Node kind="Header">a</Node><Node kind="Header"><Node>b</Node></Node><Node>{i}</Node></Node>{/snippet}<Layout name="Main"><Node><Node kind="Note">n</Node>{@render Table()}</Node></Layout>'
+    );
+    const kinds = new Set(
+      Object.keys(prepared.design.space)
+        .filter((key) => /^(Table|Main\.Note)/u.test(key))
+        .map((key) => key.slice(0, key.lastIndexOf('.')))
+    );
+    expect([...kinds].sort()).toEqual(['Main.Note', 'Table', 'Table.Header']);
+    expect(prepared.component).not.toContain('kind="');
+  });
+
+  it.each([
+    ['a computed kind', '<Node kind={"Header"}>a</Node>', /written as it is, not computed/],
+    ['a kind not in one capitalised word', '<Node kind="header">a</Node>', /is no kind/],
+    ["a snippet's name", '<Node kind="Table">a</Node>', /kind="Table" has a snippet's name/],
+    ["a layout's name", '<Node kind="Main">a</Node>', /kind="Main" has a layout's name/],
+    ["a type's name", '<Node kind="Int">a</Node>', /kind="Int" has the name of a type/]
+  ])('refuses %s', (_name, node, message) => {
+    expect(() =>
+      component(
+        `{#snippet Table()}<Node>${node}</Node>{/snippet}<Layout name="Main"><Node>{@render Table()}</Node></Layout>`
+      )
+    ).toThrow(message);
+  });
+
+  it("refuses a kind on a layout's root node, its frame", () => {
+    expect(() => component('<Layout name="Main"><Node kind="Page">{i}</Node></Layout>')).toThrow(
+      /root <Node> of the layout Main is the frame/
+    );
+  });
+});
