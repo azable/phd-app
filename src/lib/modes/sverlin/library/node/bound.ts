@@ -120,3 +120,29 @@ export function boundLook(
   const from = options.indexOf(design[keys.from] as BoundValue);
   return from < 0 ? undefined : options[from + step];
 }
+
+/**
+ * Lengths a view binds, as `<Node width={this} />`: the value times a unit of the node's kind, from
+ * zero, so a bar's length is its value. Any number of values fits, so these are the one exception
+ * to a domain fitting its prop's options.
+ */
+export const lengthProps: ReadonlySet<string> = new Set(['width', 'height']);
+
+/** The pixels per unit a length's kind may take. */
+export const lengthUnits: readonly number[] = [1, 2, 3, 4, 6, 8, 12, 16, 24];
+
+/** The variable giving a length's pixels per unit, as Bar.width@unit. */
+export const unitKey = (kind: string, prop: string): string => `${kind}.${prop}@unit`;
+
+/** A bound length in pixels: the value times its kind's unit, or undefined where either is missing. */
+export function boundLength(
+  design: Readonly<Record<string, unknown>>,
+  kind: string,
+  prop: string,
+  value: unknown
+): number | undefined {
+  const unit = design[unitKey(kind, prop)];
+  return typeof value === 'number' && typeof unit === 'number'
+    ? Math.max(0, value) * unit
+    : undefined;
+}

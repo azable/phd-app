@@ -1,0 +1,30 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int);
+  const Position = index(Values);
+</script>
+
+<script input>
+  const values = Values([6, 2, 9, 4, 0, 7]);
+</script>
+
+<script algorithm>
+  for (@start[let pass = Position(0)]; @passes[pass < values.length - 1]; @nextPass[pass++]) @sweep{
+    for (@first[let j = Position(0)]; @inner[j < values.length - 1 - pass]; @next[j++]) @pair{
+      if (@test[values[j] > values[j + 1]]) @swap{
+        const moved = values[j];
+        values[j] = values[j + 1];
+        values[j + 1] = moved;
+      }
+    }
+  }
+</script>
+
+<View of="Int" name="Bar"><Node height={this} /></View>
+<View of="Position" name="Here"><Pointed /></View>
+
+{#snippet Bars()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}
+
+<Layout name="Main">
+  <Node>{@render Bars()}{j}</Node>
+</Layout>

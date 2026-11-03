@@ -782,7 +782,8 @@ The design space is every variable of a component's look, found in its markup:
   `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard.fill@true` or
-  `LevelCell.textSize@from` (see Props bound to a view's value).
+  `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
+  bound to a view's value).
 
 A view's or snippet's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
@@ -915,12 +916,24 @@ bound prop reads `this`.
 - One kind binds a prop to one expression's values: two nodes of a kind binding
   it differently need kinds of their own (`kind="Visited"`). A bound prop that
   sizes a box keeps the box at its largest over every step, as every box does.
+- `width` and `height` are lengths, bound only in a view: the value times a unit
+  of the node's kind, from zero, as `<Node height={this} />`, a bar. Any number
+  of values fits, but none below zero. The unit, in pixels per unit, is a
+  variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or 24), starting at
+  the largest that keeps the type's largest value within 200 pixels, and every
+  node of the kind shares it. A bar holding nothing is exactly its length, so 0
+  draws only its border; one holding a label is the longer of the two. It stands
+  in a room as long as its type's largest value, from the room's left, or for
+  `height` its bottom, so bars of different values line up and nothing around
+  them moves. Anywhere else a box sizes to its contents, at least its kind's
+  `minSize`.
 
 ```svelte
 <View of="Vertex" name="VertexCard">
   <Node layout="column" fill={this.seen}>{this.name}</Node>
 </View>
 <View of="Level" name="LevelCell"><Node value={this} textSize={this} /></View>
+<View of="Int" name="Bar"><Node height={this} /></View>
 ```
 
 ### Places
@@ -1211,6 +1224,9 @@ kind's (see Design). Props starting with `__` are reserved for the library.
   root node is its frame and takes none.
 - A look, inside a view, as an expression of its value, as `fill={this.seen}`
   (see Props bound to a view's value); anywhere else a look is its kind's.
+- `width` and `height`, inside a view, as an expression of its value, as
+  `height={this}`: a length, the value times its kind's unit (see Props bound to
+  a view's value); nowhere else.
 
 ## Grid
 

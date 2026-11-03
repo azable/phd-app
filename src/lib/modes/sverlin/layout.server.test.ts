@@ -148,6 +148,18 @@ describe('laying out on the server', () => {
     expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
   }, 60_000);
 
+  it('keeps a bar’s room at its type’s largest value times its unit', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/bars.sverlin', 'utf8');
+    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    expect(layout.errors).toEqual([]);
+    const prefix = 'window.__sverlinGeometry=';
+    const [given] = JSON.parse(
+      javascript.slice(prefix.length, javascript.indexOf(';\n'))
+    ) as Geometry[];
+    // Values up to 9 at the starter's 16 pixels per unit: 144 pixels, whatever the input reaches.
+    expect(new Map(given.components).get('Bar')?.height).toBe(144);
+  }, 60_000);
+
   it('keeps each grid column and row at its largest, and refuses two cells at one coordinate', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/lcs-grid.sverlin', 'utf8');
     const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);

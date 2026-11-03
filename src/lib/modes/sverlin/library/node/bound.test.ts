@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { boundLook, shadesFor } from './bound';
+import { boundLength, boundLook, shadesFor } from './bound';
 
 describe('bound props', () => {
   it('give each value of an unordered domain its own variable’s option', () => {
@@ -33,5 +33,13 @@ describe('bound props', () => {
 
   it('leave the kind’s own look where the design gives none', () => {
     expect(boundLook({}, 'Card', 'fill', true, { values: [true], ordered: false })).toBeUndefined();
+  });
+
+  it('draw a length as the value times its kind’s unit, from zero', () => {
+    const design = { 'Bar.height@unit': 16 };
+    expect([0, 1, 9].map((value) => boundLength(design, 'Bar', 'height', value))).toEqual([
+      0, 16, 144
+    ]);
+    expect(boundLength({}, 'Bar', 'height', 3)).toBeUndefined();
   });
 });

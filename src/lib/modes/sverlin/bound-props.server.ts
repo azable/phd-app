@@ -1,7 +1,7 @@
 /**
  * Props a view binds to its value, as `<Node stroke={this.visited} />` (see library/node/bound.ts):
  * the values each expression can take, worked out from the view's type before the algorithm runs,
- * and the variables saying which option each value takes.
+ * and the variables saying which option each value takes, or for a length, its unit.
  */
 
 import type { AtomType } from './algorithm/atoms.server';
@@ -13,9 +13,12 @@ import {
   boundHues,
   boundOptions,
   colourProps,
+  lengthProps,
+  lengthUnits,
   orderKeys,
   orderedProps,
   orders,
+  unitKey,
   valueKey,
   type BoundDomain,
   type BoundValue
@@ -214,6 +217,56 @@ export function boundDomain(
   return { values, ordered };
 }
 
+/**
+ * The least and largest values a length bound to `expression` in a view of `thisType` can take, or
+ * why it cannot be bound: numbers, none below zero, as many as the type has. A type with too many
+ * values to list is read by its range.
+ */
+export function boundLengthDomain(
+  prop: string,
+  expression: unknown,
+  written: string,
+  thisType: string,
+  domain: DomainRegistry | undefined
+): BoundDomain | { problem: string } {
+  if (!readsThis(expression))
+    return {
+      problem: `${prop}={${written}} reads nothing of the view's value: a length is the value times a unit, so it reads this, as ${prop}={this} or ${prop}={this.dist}; a box not bound sizes to its contents.`
+    };
+  const node = expression as Node;
+  const type =
+    domain && (node.type === 'Identifier' || node.type === 'MemberExpression')
+      ? typeOf(node, thisType, domain)
+      : undefined;
+  const atom = type === undefined ? undefined : domain?.atoms[type];
+  const found =
+    (domain && valuesOf(node, thisType, domain)) ??
+    (atom && atom.base !== 'boolean' && atom.min !== undefined && atom.max !== undefined
+      ? [atom.min, atom.max]
+      : undefined);
+  if (!found)
+    return {
+      problem: `${prop}={${written}} takes values that cannot be known before the algorithm runs: a length reads this, its fields, and arithmetic of them, each of a number type with a least and largest value, as type('integer', { min: 0, max: 99 }).`
+    };
+  if (!found.every((value) => typeof value === 'number'))
+    return {
+      problem: `${prop}={${written}} is not a number: a length is a number, the value times a unit, as ${prop}={this} for a view of an integer type.`
+    };
+  const numbers = found as number[];
+  const [least, largest] = [Math.min(...numbers), Math.max(...numbers)];
+  if (least < 0)
+    return {
+      problem: `${prop}={${written}} can be ${least}, below zero: a length runs from zero, so bind it to a type that is never negative, as type('integer', { min: 0, max: 99 }).`
+    };
+  return { values: [least, largest], ordered: true };
+}
+
+/** The unit a length starts with: the largest that keeps the largest value within 200 pixels. */
+function starterUnit(largest: number): number {
+  const fitting = lengthUnits.filter((unit) => largest * unit <= 200);
+  return fitting.at(-1) ?? lengthUnits[0];
+}
+
 /** The starting option of each value of an unordered domain: distinct, and false the plainest. */
 function starterOptions(prop: string, values: readonly BoundValue[]): DesignValue[] {
   if (colourProps.has(prop)) {
@@ -240,6 +293,12 @@ export function boundDesign(bindings: readonly Binding[]): {
   const space: Record<string, readonly DesignValue[]> = {};
   const starter: Record<string, DesignValue> = {};
   for (const { kind, prop, domain } of bindings) {
+    if (lengthProps.has(prop)) {
+      const key = unitKey(kind, prop);
+      space[key] = lengthUnits;
+      starter[key] = starterUnit(Math.max(...(domain.values as number[])));
+      continue;
+    }
     const options = boundOptions(prop);
     if (!domain.ordered) {
       const starting = starterOptions(prop, domain.values);

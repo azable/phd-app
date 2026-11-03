@@ -68,7 +68,7 @@
     placedKind,
     strokeStyleCss
   } from './design';
-  import { boundLook, type BoundDomain } from './bound';
+  import { boundLength, boundLook, type BoundDomain } from './bound';
   import { fontClass } from '../fonts';
   import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
@@ -162,6 +162,15 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
+  // A length the view binds, as width={this}: its value times its kind's unit, in pixels. A bar
+  // draws its length from the start of a room that keeps the largest it reaches, so nothing around
+  // it moves; a vertical bar stands on the room's bottom.
+  const lengthOf = (prop: 'width' | 'height') =>
+    __domains?.[prop] ? boundLength(design, __view, prop, bound[`__bound_${prop}`]) : undefined;
+  const barWidth = $derived(lengthOf('width'));
+  const barHeight = $derived(lengthOf('height'));
+  const bar = untrack(() => Boolean(__domains?.width || __domains?.height));
+  const standing = untrack(() => Boolean(__domains?.height));
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -305,7 +314,7 @@
     if (!memory || memory.measuring || insideBox || !id) return undefined;
     return memory.reserved.get(id);
   });
-  const least = (scale: string | undefined, pixels: number | undefined) =>
+  const leastOf = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
   const unit = $derived(__type ? types?.unit(__type) : undefined);
   // A number type draws every value with its places, as 3.00, so values line up and keep one width.
@@ -373,6 +382,22 @@
     const setting = look(prop);
     return typeof setting === 'number' ? `${setting}${unit}` : undefined;
   };
+  // A bar holding nothing is its length along it, with no padding there, so 0 draws no length; one
+  // holding a label is as long as the larger of the two.
+  const bare = $derived(!children && value === undefined && !__items);
+  const barPadding = $derived.by(() => {
+    const padding = measured('padding', 'em');
+    if (!bare || (barWidth === undefined && barHeight === undefined)) return padding;
+    const across = barHeight === undefined ? (padding ?? '0') : '0';
+    const along = barWidth === undefined ? (padding ?? '0') : '0';
+    return `${across} ${along}`;
+  });
+  const sized = (length: number | undefined) =>
+    length !== undefined && bare ? `${length}px` : undefined;
+  const least = (length: number | undefined, axis: 'width' | 'height') =>
+    length !== undefined
+      ? `${length}px`
+      : leastOf(measured('minSize', 'em'), bar ? undefined : reserved?.[axis]);
   const strokeColour = $derived(colourCss(look('stroke')));
   const borderWidth = $derived(
     strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
@@ -449,6 +474,123 @@
   <Node {...given} {__text} __ref={undefined} />
 {/snippet}
 
+{#snippet nodeBox()}
+  <div
+    class="sv-node {typeof font === 'string' ? fontClass(font) : ''}"
+    data-sv-node={id}
+    data-sv-kind={__over?.active ? __over.kind : __view}
+    data-sv-component={__component}
+    data-sv-slot={slot}
+    data-sv-identity={identity}
+    data-sv-around={drawnAround}
+    data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
+    data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
+    data-sv-type={__type}
+    data-sv-layout={arrangement}
+    data-sv-fill={look('fill')}
+    data-sv-stroke={look('stroke')}
+    data-sv-color={look('color')}
+    data-sv-framed={framed ? 'true' : undefined}
+    data-sv-shadow={effects.shadow}
+    data-sv-glow={effects.glow ? 'on' : undefined}
+    data-sv-fill-style={fillStyle?.style}
+    data-sv-decoration={decoration ? look('decoration') : undefined}
+    data-sv-place={places.length ? places.join(' ') : undefined}
+    class:cell={(!arrangement && !children && !__text) || __field}
+    class:text={__text}
+    style:font-size={measured('textSize', 'px')}
+    style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
+    style:color={textColour}
+    style:background-color={fillColour}
+    style:background-image={fillStyle?.css}
+    style:box-shadow={[effects.css, light.shadow].filter(Boolean).join(', ') || undefined}
+    style:outline={light.outline}
+    style:outline-offset={light.outlineOffset}
+    style:text-transform={textCase?.transform}
+    style:font-variant-caps={textCase?.caps}
+    style:text-decoration-line={__text ? decoration : undefined}
+    style:border-color={strokeColour}
+    style:border-style={strokeStyleCss(look('strokeStyle'))}
+    style:border-width={`${borderWidth}px`}
+    style:border-radius={measured('radius', 'px')}
+    style:padding={barPadding}
+    style:width={sized(barWidth)}
+    style:height={sized(barHeight)}
+    style:min-width={least(barWidth, 'width')}
+    style:min-height={least(barHeight, 'height')}
+    style:opacity={look('opacity') as number | undefined}
+  >
+    {#if free}
+      <Arranged
+        {flow}
+        form={look('form') as Form | undefined}
+        direction={look('direction') as Direction | undefined}
+        curve={look('curve') as 'straight' | 'curved' | undefined}
+        layoutSeed={look('layoutSeed') as number | undefined}
+        kind={__over?.kind ?? __view}
+        {gap}
+        scope={id ?? 'node'}
+      >
+        {@render contents()}
+      </Arranged>
+    {:else if arrangement === 'grid'}
+      <!-- data-sv-grid names the grid whose tracks the page keeps (see model/reserve.ts); align
+             places each cell in its column and row, and justify spreads the columns. -->
+      <div
+        class="sv-grid"
+        data-sv-grid={id}
+        style:gap={`${gap}em`}
+        style:align-items={alignment}
+        style:justify-items={alignment}
+        style:justify-content={justification}
+        style:grid-template-columns={trackCss(tracks?.columns)}
+        style:grid-template-rows={trackCss(tracks?.rows)}
+      >
+        {@render contents()}
+      </div>
+    {:else if arrangement}
+      <!-- data-sv-collection marks the items of one collection, so the page gives them all the
+             largest size any of them reaches (see model/reserve.ts) and they line up;
+             data-sv-overlaid, a row or column whose links are drawn over it (see LinkOverlay). -->
+      <div
+        class="items {arrangement}"
+        class:uniform={collection}
+        data-sv-collection={collection ? id : undefined}
+        data-sv-overlaid={overlaid ? '' : undefined}
+        style:gap={`${gap}em`}
+        style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
+        style:justify-items={collection
+          ? arrangement === 'column'
+            ? alignment
+            : 'center'
+          : undefined}
+        style:justify-content={justification}
+        style:width={collection && arrangement === 'row' && packed ? 'max-content' : undefined}
+        style:margin-inline-start={collection && arrangement === 'row' && justify !== 'start'
+          ? 'auto'
+          : undefined}
+        style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
+          ? 'auto'
+          : undefined}
+        style:position={excluded || overlaid ? 'relative' : undefined}
+      >
+        {@render contents()}
+        {#if overlaid}
+          <LinkOverlay axis={overlaid} />
+        {/if}
+      </div>
+    {:else if children}
+      {@render children()}
+    {:else if value !== undefined}
+      <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
+      <span class="value" style:text-decoration-line={decoration}
+        >{printed}{#if unit}<span class="unit">{unit}</span>{/if}</span
+      >
+    {/if}
+    <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
+  </div>
+{/snippet}
+
 {#snippet drawn()}
   {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
     <Overhang {overhang} side="before">
@@ -477,119 +619,21 @@
         {/each}
       </Overhang>
     {/if}
-  {:else}
+  {:else if bar}
+    <!-- A bar, in the room that keeps the largest it reaches (see lengthOf). -->
     <div
-      class="sv-node {typeof font === 'string' ? fontClass(font) : ''}"
-      data-sv-node={id}
-      data-sv-kind={__over?.active ? __over.kind : __view}
-      data-sv-component={__component}
-      data-sv-slot={slot}
-      data-sv-identity={identity}
-      data-sv-around={drawnAround}
-      data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
-      data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
-      data-sv-type={__type}
-      data-sv-layout={arrangement}
-      data-sv-fill={look('fill')}
-      data-sv-stroke={look('stroke')}
-      data-sv-color={look('color')}
-      data-sv-framed={framed ? 'true' : undefined}
-      data-sv-shadow={effects.shadow}
-      data-sv-glow={effects.glow ? 'on' : undefined}
-      data-sv-fill-style={fillStyle?.style}
-      data-sv-decoration={decoration ? look('decoration') : undefined}
-      data-sv-place={places.length ? places.join(' ') : undefined}
-      class:cell={(!arrangement && !children && !__text) || __field}
-      class:text={__text}
-      style:font-size={measured('textSize', 'px')}
-      style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
-      style:color={textColour}
-      style:background-color={fillColour}
-      style:background-image={fillStyle?.css}
-      style:box-shadow={[effects.css, light.shadow].filter(Boolean).join(', ') || undefined}
-      style:outline={light.outline}
-      style:outline-offset={light.outlineOffset}
-      style:text-transform={textCase?.transform}
-      style:font-variant-caps={textCase?.caps}
-      style:text-decoration-line={__text ? decoration : undefined}
-      style:border-color={strokeColour}
-      style:border-style={strokeStyleCss(look('strokeStyle'))}
-      style:border-width={`${borderWidth}px`}
-      style:border-radius={measured('radius', 'px')}
-      style:padding={measured('padding', 'em')}
-      style:min-width={least(measured('minSize', 'em'), reserved?.width)}
-      style:min-height={least(measured('minSize', 'em'), reserved?.height)}
-      style:opacity={look('opacity') as number | undefined}
+      class="sv-room"
+      style:display="flex"
+      style:flex-direction={standing ? 'column' : 'row'}
+      style:justify-content={standing ? 'flex-end' : 'flex-start'}
+      style:align-items="flex-start"
+      style:min-width={leastOf(undefined, reserved?.width)}
+      style:min-height={leastOf(undefined, reserved?.height)}
     >
-      {#if free}
-        <Arranged
-          {flow}
-          form={look('form') as Form | undefined}
-          direction={look('direction') as Direction | undefined}
-          curve={look('curve') as 'straight' | 'curved' | undefined}
-          layoutSeed={look('layoutSeed') as number | undefined}
-          kind={__over?.kind ?? __view}
-          {gap}
-          scope={id ?? 'node'}
-        >
-          {@render contents()}
-        </Arranged>
-      {:else if arrangement === 'grid'}
-        <!-- data-sv-grid names the grid whose tracks the page keeps (see model/reserve.ts); align
-             places each cell in its column and row, and justify spreads the columns. -->
-        <div
-          class="sv-grid"
-          data-sv-grid={id}
-          style:gap={`${gap}em`}
-          style:align-items={alignment}
-          style:justify-items={alignment}
-          style:justify-content={justification}
-          style:grid-template-columns={trackCss(tracks?.columns)}
-          style:grid-template-rows={trackCss(tracks?.rows)}
-        >
-          {@render contents()}
-        </div>
-      {:else if arrangement}
-        <!-- data-sv-collection marks the items of one collection, so the page gives them all the
-             largest size any of them reaches (see model/reserve.ts) and they line up;
-             data-sv-overlaid, a row or column whose links are drawn over it (see LinkOverlay). -->
-        <div
-          class="items {arrangement}"
-          class:uniform={collection}
-          data-sv-collection={collection ? id : undefined}
-          data-sv-overlaid={overlaid ? '' : undefined}
-          style:gap={`${gap}em`}
-          style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
-          style:justify-items={collection
-            ? arrangement === 'column'
-              ? alignment
-              : 'center'
-            : undefined}
-          style:justify-content={justification}
-          style:width={collection && arrangement === 'row' && packed ? 'max-content' : undefined}
-          style:margin-inline-start={collection && arrangement === 'row' && justify !== 'start'
-            ? 'auto'
-            : undefined}
-          style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
-            ? 'auto'
-            : undefined}
-          style:position={excluded || overlaid ? 'relative' : undefined}
-        >
-          {@render contents()}
-          {#if overlaid}
-            <LinkOverlay axis={overlaid} />
-          {/if}
-        </div>
-      {:else if children}
-        {@render children()}
-      {:else if value !== undefined}
-        <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
-        <span class="value" style:text-decoration-line={decoration}
-          >{printed}{#if unit}<span class="unit">{unit}</span>{/if}</span
-        >
-      {/if}
-      <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
+      {@render nodeBox()}
     </div>
+  {:else}
+    {@render nodeBox()}
   {/if}
   {#if eachItem && eachItem.index === itemLength - 1 && inSequence && itemEnds.after.length}
     <Overhang {overhang} side="after">

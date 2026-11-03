@@ -2460,6 +2460,42 @@ describe('props bound to a view’s value', () => {
       /fill is a look, which the design gives every kind of node/
     );
   });
+
+  it('makes a length the value times a unit of its kind, however many values it takes', () => {
+    const { design } = component(
+      '<View of="Wide" name="Bar"><Node width={this} /></View>',
+      '<Node>{wide}</Node>'
+    );
+    expect(design.space['Bar.width@unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
+    // The largest unit keeping 99, the largest Wide, within 200 pixels.
+    expect(design.starter['Bar.width@unit']).toBe(2);
+  });
+
+  it.each([
+    [
+      'a length below zero',
+      '<View of="Wide" name="Bar"><Node height={this - 50} /></View>',
+      /can be -50, below zero: a length runs from zero/
+    ],
+    [
+      'a length that is not a number',
+      '<View of="Card" name="CardBar"><Node width={this.seen} /></View>',
+      /width=\{this.seen\} is not a number/
+    ],
+    [
+      'a constant length',
+      '<View of="Card" name="CardBar"><Node width={40} /></View>',
+      /a length is the value times a unit, so it reads this/
+    ]
+  ])('refuses %s', (_, views, message) => {
+    expect(() => component(views)).toThrow(message);
+  });
+
+  it('refuses a length outside a view', () => {
+    expect(() => component('', '<Node><Node width={wide}>x</Node>{card}</Node>')).toThrow(
+      /width is a length bound to a view's value/
+    );
+  });
 });
 
 describe('grids', () => {

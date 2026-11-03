@@ -135,8 +135,8 @@ import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 import { layOutOnServer, layoutFailureMessage } from './layout.server';
-import { boundDesign, boundDomain, type Binding } from './bound-props.server';
-import { bindableProps } from './library/node/bound';
+import { boundDesign, boundDomain, boundLengthDomain, type Binding } from './bound-props.server';
+import { bindableProps, lengthProps } from './library/node/bound';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
@@ -2528,7 +2528,9 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     flow: named({ x: 0, y: 0 }, false),
     kind: null,
     row: null,
-    col: null
+    col: null,
+    width: null,
+    height: null
   },
   Pointed: {},
   Link: {
@@ -2583,6 +2585,16 @@ function checkProps(
   for (const attribute of attributes) {
     if (attribute.type !== 'Attribute' || !attribute.name) continue;
     const at = { start: sourcePosition(source, attribute.start ?? start) };
+    // A length a view binds is taken out before this (see bind), so one left is written elsewhere.
+    if (component === 'Node' && lengthProps.has(attribute.name)) {
+      problems.push(
+        new InvalidSvelteSourceError(
+          `<Node> ${attribute.name} is a length bound to a view's value, the value times a unit, as <View of="Int" name="Bar"><Node ${attribute.name}={this} /></View>: elsewhere a box sizes to its contents, at least its kind's minSize.`,
+          { code: 'unknown_prop', ...at }
+        )
+      );
+      continue;
+    }
     if (!(attribute.name in props)) {
       const named = Object.keys(props).filter((name) => name !== 'children');
       problems.push(
@@ -2906,17 +2918,31 @@ function withNodeRefs(
     return attributes.filter((attribute) => {
       const [part] = Array.isArray(attribute.value) ? attribute.value : [];
       const expression = part?.type === 'MustacheTag' ? part.expression : undefined;
-      if (!attribute.name || !bindableProps.has(attribute.name) || !expression) return true;
-      const prop = attribute.name;
+      const name = attribute.name ?? '';
+      const length = lengthProps.has(name);
+      if (!(bindableProps.has(name) || length) || !expression) return true;
+      const prop = name;
       const start = attribute.start ?? tag.start ?? 0;
-      const written = svelteSource.slice(expression.start ?? 0, expression.end ?? 0);
-      const found = boundDomain(prop, expression, written, thisType, domain);
+      const written = svelteSource
+        .slice(expression.start ?? 0, expression.end ?? 0)
+        .replaceAll(viewThis, 'this');
+      const found = (length ? boundLengthDomain : boundDomain)(
+        prop,
+        expression,
+        written,
+        thisType,
+        domain
+      );
       if ('problem' in found) {
         reject(found.problem, 'bound_prop', start);
         return false;
       }
       const other = bindings.find((binding) => binding.kind === kind && binding.prop === prop);
-      if (other && JSON.stringify(other.domain) !== JSON.stringify(found))
+      // Lengths of one kind share a unit, whatever their ranges: the unit starts from the widest.
+      if (other && length) {
+        const values = [...other.domain.values, ...found.values] as number[];
+        other.domain = { values: [Math.min(...values), Math.max(...values)], ordered: true };
+      } else if (other && JSON.stringify(other.domain) !== JSON.stringify(found))
         reject(
           `${kind} binds ${prop} to values of two kinds: one kind of node takes one option per value, so give the other node a kind of its own, as kind="Visited".`,
           'bound_prop',
@@ -3192,7 +3218,7 @@ function withNodeRefs(
   // A kind arranging no children has no gap, align, or justify to bind.
   for (const { kind, prop } of bindings) {
     const role = kinds.get(kind);
-    if (role && !roleProps[role].includes(prop as DesignProp))
+    if (role && !lengthProps.has(prop) && !roleProps[role].includes(prop as DesignProp))
       reject(
         `${kind} has no ${prop} to bind: it is a look only of a node arranging children, with a layout.`,
         'bound_prop',
