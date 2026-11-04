@@ -153,19 +153,24 @@ describe('layouts of the page', () => {
     expect(problemOf(withView(view))).toContain(message);
   });
 
-  it('keeps every offset, so problems point where they are written', () => {
-    const view =
-      '<Layout name="A" of="values, @pass">\n  <Node><Title /><Board values={values} /><Missing /></Node>\n</Layout>';
-    const source = withView(view);
-    try {
-      prepareSvelteComponent(source);
-      expect.unreachable();
-    } catch (cause) {
-      const { line, column } = cause as { line: number; column: number };
-      const lines = source.split('\n');
-      expect(lines[line - 1].slice(column - 1)).toMatch(/^<Missing/u);
+  it.each([
+    ['on one line', '<Layout name="A" of="values, @pass">'],
+    ['over several lines', '<Layout\n  name="A"\n  of="values,\n      @pass">']
+  ])(
+    'keeps every offset, an opening written %s, so problems point where they are written',
+    (_, opening) => {
+      const view = `${opening}\n  <Node><Title /><Board values={values} /><Missing /></Node>\n</Layout>`;
+      const source = withView(view);
+      try {
+        prepareSvelteComponent(source);
+        expect.unreachable();
+      } catch (cause) {
+        const { line, column } = cause as { line: number; column: number };
+        const lines = source.split('\n');
+        expect(lines[line - 1].slice(column - 1)).toMatch(/^<Missing/u);
+      }
     }
-  });
+  );
 
   it('points at a malformed closing', () => {
     const source = withView(

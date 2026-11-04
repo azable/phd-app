@@ -9,6 +9,7 @@
  * padded with spaces, and a part's closing is one longer.
  */
 
+import { fitted } from './layouts.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -315,7 +316,7 @@ export function layoutTags(source: string): {
   for (const { start, length, text } of edits)
     rewritten =
       rewritten.slice(0, start) +
-      (text.length < length ? text.padEnd(length) : text) +
+      fitted(text, rewritten.slice(start, start + length)) +
       rewritten.slice(start + length);
   // Each rewrite longer than written: on its line, where it ends as rewritten and what it adds.
   const shifts: ColumnShift[] = [];

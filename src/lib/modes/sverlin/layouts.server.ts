@@ -40,16 +40,16 @@ export function layoutNameOf(block: unknown): string | undefined {
 
 /** Where each opening or closing of a layout starts. */
 const layoutTag = /<(\/?)Layout\b/gu;
-const wellOpened = /^<Layout[ \t]+name="([A-Za-z_$][\w$]*)"[ \t]*>/u;
+const wellOpened = /^<Layout\s+name="([A-Za-z_$][\w$]*)"\s*>/u;
 const wellClosed = /^<\/Layout[ \t]*>/u;
 
 /** What is wrong with an opening that is not <Layout name="Name">, and its fix. */
 function openingProblem(line: string): string {
-  const named = /^<Layout[ \t]+name=["']?([A-Za-z_$][\w$]*)/u.exec(line);
+  const named = /^<Layout\s+name=["']?([A-Za-z_$][\w$]*)/u.exec(line);
   if (named && /\/>/u.test(line.split('>', 1)[0] + '>'))
     return `<Layout name="${named[1]}" /> holds nothing: a layout's body is its root <Node>, as <Layout name="${named[1]}"><Node>…</Node></Layout>.`;
   const written = /^<Layout[^>]*>?/u.exec(line)![0];
-  return `${written} is no layout: write <Layout name="Name">, its one prop the name, one word naming the arrangement, as <Layout name="Side">.`;
+  return `${written} is no layout: write <Layout name="Name" of="…">, named in one word after the arrangement, with the state it reads, as <Layout name="Side" of="values, i">.`;
 }
 
 /**
@@ -62,17 +62,16 @@ function rewritten(text: string): { text: string; problems: Problem[] } {
   let replaced = text;
   const replace = (start: number, written: string, tag: string) => {
     replaced =
-      replaced.slice(0, start) +
-      tag.padEnd(written.length) +
-      replaced.slice(start + written.length);
+      replaced.slice(0, start) + fitted(tag, written) + replaced.slice(start + written.length);
   };
   for (const { 1: tagClose, index: start } of text.matchAll(layoutTag)) {
     const line = text.slice(start).split('\n', 1)[0];
     if (!tagClose) {
-      const named = wellOpened.exec(line);
+      const opening = text.slice(start, tagEnd(text, start));
+      const named = wellOpened.exec(opening);
       open.push({ name: named?.[1] ?? 'opened here', start });
       if (!named) {
-        problems.push({ message: openingProblem(line), start });
+        problems.push({ message: openingProblem(opening), start });
         continue;
       }
       replace(start, named[0], `{#if ${layoutProp}.${named[1]}}`);
@@ -115,6 +114,12 @@ function tagEnd(text: string, from: number): number {
   }
   return text.length;
 }
+
+/** `text` in the place of `written`, padded to its length, keeping its line breaks. */
+export const fitted = (text: string, written: string): string =>
+  text.length > written.length
+    ? text
+    : [...written].map((character, at) => text[at] ?? (character === '\n' ? '\n' : ' ')).join('');
 
 const blank = (text: string, from: number, to: number) =>
   text.slice(0, from) + text.slice(from, to).replace(/[^\n]/gu, ' ') + text.slice(to);
