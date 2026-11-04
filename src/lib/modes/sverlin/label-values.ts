@@ -5,8 +5,8 @@
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
  * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
- * steps, taking turns in one place; `of="start"` and `of="end"` name the first step, the input as
- * given, and the last. `all(Node)`, which a pool replaced, is found, to be refused.
+ * steps, taking turns in one place; `of=":before"` and `of=":after"` name the whole run's stops,
+ * the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is found, to be refused.
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
  * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
@@ -36,7 +36,7 @@ export type LabelReference =
   | { kind: 'during'; key: string; path?: string; moment?: Moment; start: number };
 
 /** The steps an {#if when(…)} can name besides a label's runs: the first, the input as given, and the last. */
-export type Moment = 'start' | 'end';
+export type Moment = 'before' | 'after';
 /** What an {#if when(…)} naming a moment draws in, as a label's full name never is. */
 export const momentTarget = (moment: Moment): string => `#${moment}`;
 
@@ -65,13 +65,13 @@ const runsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
 const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
-const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(start|end))\s*\)/u;
+const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(before|after))\s*\)/u;
 
 /** Each <When>, <OneOf>, and their closings, and any when( written, which only the tags make. */
 const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
-const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|start|end)"\s*$/u;
+const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
 const tagsAdvice =
-  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a run of the label, or of="start" or of="end", and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
+  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a run of the label, or of=":before" or of=":after", the whole run\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
 
 /**
  * The markup with each <When> as `{#if when(…)}…{/if}` and each <OneOf> as a chain of them, no
@@ -116,7 +116,17 @@ export function whenTags(source: string): {
       continue;
     }
     if (kind === 'When' && !closing) {
-      const of = whenOf.exec(props)?.[1];
+      const written = whenOf.exec(props)?.[1];
+      if (written === 'start' || written === 'end') {
+        const stop = written === 'start' ? ':before' : ':after';
+        problems.push({
+          message: `<When of="${written}"> names no stop: the whole run's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as <When of="${stop}">.`,
+          start
+        });
+        continue;
+      }
+      // A stop is rewritten without its colon, as when(before).
+      const of = written?.replace(/^:/u, '');
       if (!of || props.trimEnd().endsWith('/')) {
         problems.push({
           message: `${whole} is no <When>: ${props.trimEnd().endsWith('/') ? 'it holds what it draws, so close it with </When>, as' : ''} ${tagsAdvice}.`,
@@ -218,8 +228,8 @@ export function markLabels(source: string): {
         index += ran[0].length - 1;
         continue;
       }
-      // when(@swap), the test of an {#if} drawing its contents in the label's runs, or when(start) or
-      // when(end) at the first or last step; one naming neither is kept as written, refused when compiled.
+      // when(@swap), the test of an {#if} drawing its contents in the label's runs, or when(before)
+      // or when(after) at the first or last step; one naming neither is kept as written, refused when compiled.
       const within = !word && rest.startsWith('when(') ? whenCall.exec(rest) : null;
       if (within) {
         const moment = within[2] as Moment | undefined;

@@ -7,19 +7,25 @@
  * Svelte sees the view, and then blanked; its steps are chosen once the run is traced (sceneSteps).
  */
 
-import type { Edges, MasterStep } from './algorithm/interpret.server';
+import {
+  beforeStop,
+  labelOfStep,
+  type Edges,
+  type MasterStep,
+  type Stop
+} from './algorithm/interpret.server';
 
 /** One scene as written. */
 export type Scene = {
   name: string;
   /** The page layout it shows. */
   layout: string;
-  /** The labels that end a step inside it, by full name. */
+  /** The stops it pauses at, by full name: a label for its :after, label:before for its :before. */
   pause?: string[];
   /** The runs of one label it steps through, all of them or the nth to begin. */
   within?: { label: string; run?: number };
-  /** One moment of its steps: the first or the last. */
-  at?: 'start' | 'end';
+  /** One of its edges: its :before, the first of its steps, or its :after, the last. */
+  at?: Stop;
   /** Shown beside its name in the controls. */
   title?: string;
   /** Passing no state and choosing no moments: one frame. */
@@ -34,7 +40,7 @@ type Problem = { message: string; start: number };
 type Inputs = { variables: readonly string[]; labels: readonly string[] };
 
 const sceneName = /^[A-Za-z][\w-]*$/u;
-const label = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
+const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
 const sceneProps = new Set(['name', 'pause', 'within', 'at', 'title']);
@@ -202,16 +208,15 @@ function sceneOf(
     );
   let pause: string[] | undefined;
   if (given.has('pause')) {
-    const labels = given
+    const stops = given
       .get('pause')!
       .split(',')
-      .map((each) => each.trim());
-    const wrong = labels.find((each) => !label.test(each));
-    if (wrong !== undefined || !labels.length)
+      .map((each) => stop.exec(each.trim()));
+    if (stops.some((each) => !each) || !stops.length)
       return fail(
-        `pause="${given.get('pause')}" names the labels that end a step in ${name}, by full name, separated by commas, as pause="@sort.merge.take, @sort.merge.rest".`
+        `pause="${given.get('pause')}" names the stops of runs where ${name} takes a step, separated by commas: a label by its full name for the end of each of its runs, as pause="@sort.merge.take", which @sort.merge.take:after also writes, and @sort.merge.take:before for just before each begins.`
       );
-    pause = labels.map((each) => each.slice(1));
+    pause = stops.map((each) => (each![2] === 'before' ? beforeStop(each![1]) : each![1]));
   }
   let within: Scene['within'];
   if (given.has('within')) {
@@ -220,14 +225,15 @@ function sceneOf(
     );
     if (!run)
       return fail(
-        `within="${given.get('within')}" names the runs of a label ${name} steps through, every run, within="@sort.merge", or the nth to begin, within="@sort.merge#1".`
+        `within="${given.get('within')}" names the runs of a label ${name} steps through, every run, within="@sort.merge", or the nth to begin, within="@sort.merge#1"; it opens on their :before and closes on their :after.`
       );
     within = { label: run[1], ...(run[2] ? { run: Number(run[2]) } : {}) };
   }
-  const at = given.get('at');
-  if (at !== undefined && at !== 'start' && at !== 'end')
+  const written = given.get('at');
+  const at = written === ':before' ? 'before' : written === ':after' ? 'after' : undefined;
+  if (written !== undefined && !at)
     return fail(
-      `at="${at}" is one moment of ${name}'s steps: at="start", its first, or at="end", its last.`
+      `at="${written}" is one edge of ${name}: at=":before", the first of its steps, or at=":after", its last.`
     );
   const title = given.get('title');
   if (title !== undefined && (!title || /[():]/u.test(title)))
@@ -289,14 +295,11 @@ function sceneOf(
   };
 }
 
-/** The label a step's name is for, as insert.swap for @insert.swap#2. */
-const labelOf = (name = '') => name.replace(/^@|#\d+$/gu, '');
-
 /**
  * The steps a scene shows, by their index among the run's, paced as it pauses with its edges (see
- * Edges in algorithm/interpret.server.ts): from its start to its end, the whole run's or that of
- * the runs of the label it is within (the nth only), with the steps it pauses at between; then the
- * first or the last where it is at one. A step drawing what the step before it drew is left out, the
+ * Edges in algorithm/interpret.server.ts): from its :before to its :after, the whole run's or those
+ * of the runs of the label it is within (the nth only), with the steps it pauses at between; then
+ * the first or the last where it is at one. A step drawing what the step before it drew is left out, the
  * code it lights included where the view places a listing (`listed`).
  */
 export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = false): number[] {
@@ -304,17 +307,20 @@ export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = 
   if (scene.within) {
     const { label, run } = scene.within;
     const ofRun = (step: MasterStep) =>
-      run === undefined ? labelOf(step.name) === label : step.name === `@${label}#${run}`;
-    const first = steps.findIndex((step) => step.edge === 'start' && ofRun(step));
-    const last = steps.findLastIndex((step) => step.edge === 'end' && ofRun(step));
+      run === undefined
+        ? labelOfStep(step.name) === label
+        : step.name?.replace(/:before$/u, '') === `@${label}#${run}`;
+    const first = steps.findIndex((step) => step.edge === 'before' && ofRun(step));
+    const last = steps.findLastIndex((step) => step.edge === 'after' && ofRun(step));
     if (first < 0 || last < 0) return [];
-    const paused = scenePauses(scene).has(label);
-    // Between the runs of every run, only what is inside one of them, and no run's own edges.
+    const pauses = scenePauses(scene);
+    // Between the runs of every run, only what is inside one of them, and of the runs' own stops
+    // only those it pauses at.
     const between = (step: MasterStep) =>
       run !== undefined ||
       (step.inside?.includes(label) &&
-        step.edge !== 'start' &&
-        !(step.edge === 'end' && labelOf(step.name) === label && !paused));
+        !(step.edge === 'before' && !pauses.has(beforeStop(label))) &&
+        !(step.edge === 'after' && labelOfStep(step.name) === label && !pauses.has(label)));
     chosen = chosen.filter(
       (index) =>
         index === first ||
@@ -322,8 +328,8 @@ export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = 
         (first < index && index < last && between(steps[index]))
     );
   }
-  if (scene.at === 'start') return chosen.slice(0, 1);
-  if (scene.at === 'end') return chosen.slice(-1);
+  if (scene.at === 'before') return chosen.slice(0, 1);
+  if (scene.at === 'after') return chosen.slice(-1);
   return chosen.filter(
     (index, at) => at === 0 || !drawnAlike(steps[chosen[at - 1]], steps[index], listed)
   );
@@ -339,18 +345,11 @@ const drawnAlike = (before: MasterStep, step: MasterStep, listed: boolean) =>
   JSON.stringify([before.state, before.held, listed && before.trail]) ===
     JSON.stringify([step.state, step.held, listed && step.trail]);
 
-/** The labels a scene pauses at: those its pause names, and no others. */
+/** The stops a scene pauses at: those its pause names, and no others. */
 export const scenePauses = (scene: Scene): Set<string> => new Set(scene.pause ?? []);
 
 /** The runs a scene is within, which open and close on a step of their own. */
 export const sceneEdges = (scene: Scene): Edges | undefined => scene.within;
-
-/**
- * A step's own name in a scene: its label's run, as @insert.swap#2, or the scene's start or end
- * where the step is only that, at a label the scene does not pause at.
- */
-export const ownName = (scene: Scene, step: MasterStep): string =>
-  step.edge && !scenePauses(scene).has(labelOf(step.name)) ? step.edge : (step.name ?? '');
 
 /**
  * How a step is labelled in a storyboard of several scenes: its scene's name, its title in
@@ -387,12 +386,13 @@ export function storyboardOf(
 ): { storyboard: Storyboard; problems: { message: string; scene: Scene }[] } {
   const problems: { message: string; scene: Scene }[] = [];
   const known = (each: string) => labels.includes(each);
-  const named = labels.map((each) => `@${each}`).join(', ');
+  const allLabels = labels.map((each) => `@${each}`).join(', ');
   const steps = scenes.flatMap((scene) => {
-    for (const each of [...(scene.pause ?? []), ...(scene.within ? [scene.within.label] : [])])
+    const named = [...(scene.pause ?? []), ...(scene.within ? [scene.within.label] : [])];
+    for (const each of named.map((one) => one.replace(/:before$/u, '')))
       if (!known(each)) {
         problems.push({
-          message: `The scene ${scene.name} names @${each}, no label of the algorithm${labels.length ? `; its labels are ${named}` : ''}.`,
+          message: `The scene ${scene.name} names @${each}, no label of the algorithm${labels.length ? `; its labels are ${allLabels}` : ''}.`,
           scene
         });
         return [];
@@ -417,7 +417,7 @@ export function storyboardOf(
     }
     const own = paced(scene);
     const chosen = sceneSteps(scene, own, listed);
-    const names = chosen.map((index) => ownName(scene, own[index]));
+    const names = chosen.map((index) => own[index].name ?? '');
     return scenes.length === 1 ? names : names.map((name) => sceneLabel(scene, name));
   });
   return { storyboard: { scenes: [...scenes], steps }, problems };

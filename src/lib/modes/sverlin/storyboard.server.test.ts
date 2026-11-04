@@ -55,8 +55,8 @@ describe('storyboards', () => {
   it('keeps the steps’ own names for one scene', async () => {
     const one = prepareSvelteComponent(storyboard(scene('name="search"')));
     const { labels } = await bundlePresentation(one, 1);
-    expect(labels[0]).toBe('start');
-    expect(labels.some((label) => label.includes(':'))).toBe(false);
+    expect(labels[0]).toBe(':before');
+    expect(labels.some((label) => /^[\w-]+ ?.*: /u.test(label))).toBe(false);
     expect(one.design.space).not.toHaveProperty('layout');
   });
 
@@ -75,35 +75,36 @@ describe('storyboards', () => {
     ]);
     const { labels } = await bundlePresentation(prepared, 1);
     const scenes = labels.map((label) => label.split(':')[0]);
-    // The whole run, the card as one frame, then the second probe again from its start.
-    expect(labels[0]).toBe('search: start');
+    // The whole run, the card as one frame, then the second probe again from its :before.
+    expect(labels[0]).toBe('search: :before');
     expect(scenes.indexOf('then')).toBe(scenes.lastIndexOf('then'));
     expect(
       scenes.slice(scenes.indexOf('then') + 1).every((name) => name === 'probe (the second probe)')
     ).toBe(true);
-    // The second probe opens on its start and closes on its end, its pick between.
+    // The second probe opens on its :before and closes on its :after, its pick between.
     expect(labels.slice(-3)).toEqual([
-      'probe (the second probe): start',
+      'probe (the second probe): @probe#2:before',
       'probe (the second probe): @probe.pick#2',
-      'probe (the second probe): end'
+      'probe (the second probe): @probe#2'
     ]);
     // Every presentation shows the source's steps.
     expect(labels).toEqual(prepared.steps);
   });
 
-  it('shows one moment of a scene, at its start or end', async () => {
+  it('shows one edge of a scene, its :before or its :after', async () => {
     const prepared = prepareSvelteComponent(
-      storyboard(scene('name="first" at="start"'), scene('name="last" at="end"'))
+      storyboard(scene('name="first" at=":before"'), scene('name="last" at=":after"'))
     );
     const { labels } = await bundlePresentation(prepared, 1);
     const whole = await bundlePresentation(
       prepareSvelteComponent(storyboard(scene('name="search"'))),
       1
     );
-    expect(labels).toEqual(['first: start', `last: ${whole.labels.at(-1)}`]);
+    expect(labels).toEqual(['first: :before', `last: ${whole.labels.at(-1)}`]);
+    expect(problemOf(storyboard(scene('name="first" at="start"')))).toContain('at=":before"');
   });
 
-  it('opens and closes each stepping scene on its start and end, its pauses between', async () => {
+  it('opens and closes each stepping scene on its :before and :after, its pauses between', async () => {
     const prepared = prepareSvelteComponent(
       storyboard(
         scene('name="whole"'),
@@ -115,17 +116,35 @@ describe('storyboards', () => {
     const { labels } = await bundlePresentation(prepared, 1);
     // No pause: the input as given and the end; within a run, just before it and just after it,
     // the run's own label adding no pause. The probe finding the target moves nothing drawn, so
-    // its end, drawing what its start drew, is left out.
+    // its :after, drawing what its :before drew, is left out.
     expect(labels).toEqual([
-      'whole: start',
-      'whole: end',
-      'first: start',
-      'first: end',
-      'picks: start',
+      'whole: :before',
+      'whole: :after',
+      'first: @probe#1:before',
+      'first: @probe#1',
+      'picks: @probe#1:before',
       'picks: @probe.pick#1',
-      'picks: end',
-      'hit: start'
+      'picks: @probe#1',
+      'hit: @probe#2:before'
     ]);
+  });
+
+  it('pauses just before each run of a label at its :before, and at its end at :after', async () => {
+    const labelsOf = async (pause: string) =>
+      (
+        await bundlePresentation(
+          prepareSvelteComponent(storyboard(scene(`name="s" pause="${pause}"`))),
+          1
+        )
+      ).labels;
+    const both = await labelsOf('@probe.right:before, @probe.right');
+    expect(both).toContain('@probe.right#1:before');
+    expect(both).toContain('@probe.right#1');
+    expect(both.indexOf('@probe.right#1:before')).toBeLessThan(both.indexOf('@probe.right#1'));
+    expect(await labelsOf('@probe.right:after')).toEqual(await labelsOf('@probe.right'));
+    expect(
+      (await labelsOf('@probe.right:before')).some((label) => /^@probe\.right#\d+$/u.test(label))
+    ).toBe(false);
   });
 
   it('paces a scene by its own pauses alone', async () => {

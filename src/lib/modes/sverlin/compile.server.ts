@@ -149,7 +149,6 @@ import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
 import {
-  ownName,
   sceneEdges,
   sceneLabel,
   scenePauses,
@@ -1388,12 +1387,12 @@ function prepareViews(
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
-          const call = `<When of="${reference.moment ?? `@${reference.path ?? ''}`}">`;
+          const call = `<When of="${reference.moment ? `:${reference.moment}` : `@${reference.path ?? ''}`}">`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(`${call} is in a view, which draws only its value: write it in a layout.`);
           else if (reference.path === undefined && !reference.moment)
             problem(
-              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a run of that label; of="start" and of="end" draw them at the first step, the input as given, and the last.'
+              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a run of that label; of=":before" and of=":after" draw them at the whole run\'s first step, the input as given, and its last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
@@ -2210,7 +2209,7 @@ export async function bundlePresentation(
     );
   const single = scenes.length === 1 && !scenes[0].frame;
   const labels = entries.map(({ scene, run, index }) => {
-    const own = ownName(scene, run.steps[index]);
+    const own = run.steps[index].name ?? '';
     return single ? own : sceneLabel(scene, own);
   });
   // Each step's placements and lit code, from its run's, by the page's states (see phasesOf).
@@ -4295,13 +4294,14 @@ function labelRuns(
 
 /** Whether a <When> draws at master step `at`: inside a run of its label, or the first or last step. */
 function atWhen(target: string, steps: readonly MasterStep[], at: number): boolean {
-  if (target === momentTarget('start')) return at === 0;
-  if (target === momentTarget('end')) return at === steps.length - 1;
+  if (target === momentTarget('before')) return at === 0;
+  if (target === momentTarget('after')) return at === steps.length - 1;
   return steps[at].inside?.includes(target) ?? false;
 }
 
 /** What a <When> names, as its `of` is written. */
-const whenText = (target: string) => (target.startsWith('#') ? target.slice(1) : `@${target}`);
+const whenText = (target: string) =>
+  target.startsWith('#') ? `:${target.slice(1)}` : `@${target}`;
 
 /**
  * The pool each reference refers into, by the path of the value with its indices as [], as

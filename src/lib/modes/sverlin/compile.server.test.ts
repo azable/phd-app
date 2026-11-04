@@ -45,7 +45,7 @@ describe('single-component Svelte compilation', () => {
       '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="S"><Node>n</Node></Layout><Layout name="Main" of="n"><Node><S />{n}</Node></Layout>'
     );
     // The input as given, then a step at each label, each named by its label and run.
-    expect(result.labels).toEqual(['start', '@run#1', '@a#1', '@b#1']);
+    expect(result.labels).toEqual([':before', '@run#1', '@a#1', '@b#1']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
   });
@@ -102,7 +102,7 @@ describe('single-component Svelte compilation', () => {
       // The scene pauses where i is set and moved, as the caption draws it, and at each
       // comparison.
       expect(bundle.labels).toEqual([
-        'start',
+        ':before',
         '@first#1',
         '@check.equal#1',
         '@next#1',
@@ -268,7 +268,7 @@ describe('single-component Svelte compilation', () => {
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
     // is no step.
-    expect(result.labels).toEqual(['start', '@start#1', '@add#1', '@add#2']);
+    expect(result.labels).toEqual([':before', '@start#1', '@add#1', '@add#2']);
     expect(result.variant['Sum.fill']).toBeDefined();
   });
 
@@ -1627,14 +1627,14 @@ describe('pauses inside a run', () => {
     const coarse = insertion.paced(new Set(['insert.compare', 'insert.swap'])).steps;
     const fine = insertion.paced(new Set(insertion.pauses.labels)).steps;
     expect(coarse.map(({ name }) => name).slice(0, 4)).toEqual([
-      'start',
+      ':before',
       '@insert.compare#1',
       '@insert.swap#1',
       '@insert.compare#2'
     ]);
     // Pausing everywhere, the loop's i is set and tested, then j's bound is tested, first.
     expect(fine.map(({ name }) => name).slice(0, 7)).toEqual([
-      'start',
+      ':before',
       '@setup#1',
       '@guard#1',
       '@insert.guard#1',
@@ -1917,21 +1917,21 @@ describe('<When of="@label">', () => {
   </Node>
 </Layout>`;
 
-  it('takes start and end for the first and the last step, start chained with a label', () => {
+  it('takes :before and :after for the first and the last step, :before chained with a label', () => {
     const prepared = prepareSvelteComponent(
       caption(
-        '<OneOf><When of="start">{@render Caption()}</When><When of="@pass">{@render Caption()}</When></OneOf><When of="end">{@render Caption()}</When>'
+        '<OneOf><When of=":before">{@render Caption()}</When><When of="@pass">{@render Caption()}</When></OneOf><When of=":after">{@render Caption()}</When>'
       )
     );
-    expect(Object.values(prepared.during ?? {})).toEqual(['#start', 'pass', '#end']);
+    expect(Object.values(prepared.during ?? {})).toEqual(['#before', 'pass', '#after']);
     // The last step ends the finishing statement, so the two would show at one step.
     expect(() =>
       prepareSvelteComponent(
         caption(
-          '<OneOf><When of="@finish">{@render Caption()}</When><When of="end">{@render Caption()}</When></OneOf>'
+          '<OneOf><When of="@finish">{@render Caption()}</When><When of=":after">{@render Caption()}</When></OneOf>'
         )
       )
-    ).toThrow('branches @finish and end would both show');
+    ).toThrow('branches @finish and :after would both show');
   });
 
   it('takes a run of statements in a row to its last, the labels inside it included', () => {

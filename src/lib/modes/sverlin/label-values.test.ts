@@ -175,13 +175,13 @@ describe('<When> and <OneOf>', () => {
     const one = '<When of="@swap"><Node>x</Node></When>';
     expect(whenTags(one).source.trimEnd()).toBe('{#if when(@swap)}<Node>x</Node>{/if}');
     const two =
-      '<OneOf>\n  <When of="@a"><Node>a</Node></When>\n  <When of="end"><Node>b</Node></When>\n</OneOf>';
+      '<OneOf>\n  <When of="@a"><Node>a</Node></When>\n  <When of=":after"><Node>b</Node></When>\n</OneOf>';
     const { source, problems } = whenTags(two);
     expect(problems).toEqual([]);
     expect(source).toHaveLength(two.length);
     expect(source.split('\n')).toHaveLength(two.split('\n').length);
     expect(source.replace(/\s+/gu, ' ').trim()).toBe(
-      '{#if when(@a)}<Node>a</Node>{:else if when(end)} <Node>b</Node>{/if}'
+      '{#if when(@a)}<Node>a</Node>{:else if when(after)} <Node>b</Node>{/if}'
     );
   });
 

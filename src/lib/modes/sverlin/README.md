@@ -129,19 +129,25 @@ scene at least.
   its layout reads no state, and `pause`, `within`, or `at` on a scene whose
   layout reads none is refused. (Until the language has runs of several inputs,
   this is how a frame is told from a step.)
+- Each run of a label has two stops: `:before`, just before its code begins, and
+  `:after`, just after it ends. The whole run has them too: its `:before` is the
+  input as given, and its `:after` the state the algorithm ends on.
 - A stepping scene steps through the whole run, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
-  `within="@sort.merge#1"`. It opens on its start, `start` in the controls: the
-  input as given, or the state just before the first run it is within begins. It
-  closes on its end, `end`: the state the algorithm ends on, or just after the
-  last run it is within ends. `pause` names, by full name and separated by
-  commas, the labels that end a step between them, as
-  `pause="@sort.merge.take"`: the scene pauses at those labels and no others,
-  and `within` only chooses which runs it shows, so a scene with no `pause`
-  shows its start and its end. A step drawing what the step before it drew is
-  left out, as a run that changes nothing drawn. `at="start"` or `at="end"`
-  shows only its start or its end. `title` is a caption beside its name in the
-  controls. Props are written as they are, never computed.
+  `within="@sort.merge#1"`. It opens on their `:before` (the first run's, for
+  every run) and closes on their `:after` (the last run's), as
+  `@sort.merge#1:before` and `@sort.merge#1` in the controls, or the whole
+  run's, `:before` and `:after`. `pause` names, separated by commas, the stops
+  where the scene takes a step between them: a label by its full name for the
+  end of each of its runs, as `pause="@sort.merge.take"`, which
+  `@sort.merge.take:after` also writes, and `@sort.merge.take:before` for just
+  before each begins; `pause="@sort.merge.take:before, @sort.merge.take"` takes
+  both. The scene pauses at those stops and no others, and `within` only chooses
+  which runs it shows, so a scene with no `pause` shows its `:before` and its
+  `:after`. A step drawing what the step before it drew is left out, as a run
+  that changes nothing drawn. `at=":before"` or `at=":after"` shows only one of
+  them. `title` is a caption beside its name in the controls. Props are written
+  as they are, never computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
@@ -329,9 +335,10 @@ label given a kind of its own.
   leading a labelled block, before its first labelled statement, need no label
   of their own, as `let min = i;` at the top of `@select{`. A label on part of a
   statement asks nothing of the code around it.
-- The page pauses where labels finish, and only there: a scene's pause at a
-  label (see Storyboard) is a step at the end of each of its runs, so a check
-  finding nothing is a step too. So label what a step can be about, as a
+- The page pauses at the stops of labels' runs, and only there: a scene's pause
+  at a label (see Storyboard) is a step at the end of each of its runs, so a
+  check finding nothing is a step too, and its pause at a label's `:before` a
+  step just before each run begins. So label what a step can be about, as a
   comparison, `@compare[values[j - 1] > key]`, and the operands it reads, and
   draw them.
 - A step shows the state just after its code, each value moving there from where
@@ -358,14 +365,15 @@ label given a kind of its own.
   declares through a view or a pointer. A name is declared once among the blocks
   in scope: a loop inside another cannot declare `j` again, while loops one
   after another can.
-- A step is named by the label whose run it ends and which run that is, the nth
-  run of that label to begin, as `@insert.swap#1` (`start` and `end` for a
-  scene's start and end, at a label it does not pause at): in a recursive
-  function, `@sort#1` ends the first call made, the outermost, at the last of
-  its steps. The name is the same in every variant, which numbers only the steps
-  it shows. A step has no text: the view says what it shows, from the recorded
-  variables, so what it should say is in the algorithm's variables, as an answer
-  is the value a search returns or where its loop stops.
+- A step is named by the stop it is at: the label whose run it ends and which
+  run that is, the nth run of that label to begin, as `@insert.swap#1`, or
+  `@insert.swap#1:before` just before that run begins, and `:before` and
+  `:after` for the whole run's: in a recursive function, `@sort#1` ends the
+  first call made, the outermost, at the last of its steps. The name is the same
+  in every variant, which numbers only the steps it shows. A step has no text:
+  the view says what it shows, from the recorded variables, so what it should
+  say is in the algorithm's variables, as an answer is the value a search
+  returns or where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value an array also holds shows a copy,
@@ -854,11 +862,12 @@ below does it.
 `<When of="@insert.swap">…</When>` draws its contents at each step inside a run
 of a label, any label: the step that ends a run and those inside it where labels
 within pause, whatever the pauses, never steps leading up to it or after it;
-elsewhere they are hidden, keeping their room. `of="start"` and `of="end"` draw
-them at the first step, the input as given, and at the last, as a note on what
-the algorithm starts from or ends with. A `<When>` names one label or moment and
-never reads the label's value (`{#if @label}` is refused); it has no `{:else}`.
-Branches that take turns share one place, as large as the largest,
+elsewhere they are hidden, keeping their room. `of=":before"` and `of=":after"`,
+the whole run's stops, draw them at the first step, the input as given, and at
+the last, as a note on what the algorithm starts from or ends with. A `<When>`
+names one label or moment and never reads the label's value (`{#if @label}` is
+refused); it has no `{:else}`. Branches that take turns share one place, as
+large as the largest,
 `<OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>`, as in bubble sort
 above; a `<OneOf>` whose branches would show at one step, as a label and one
 inside it, is refused. Text that changes from step to step in one place, as a

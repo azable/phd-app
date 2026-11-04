@@ -108,7 +108,7 @@ while @more[cur ≠ ∅]
     </When><When of="@finish">
       <FinishNote />
     </When></OneOf>
-    <When of="start">
+    <When of=":before">
       <StartNote />
     </When>
   </Node>

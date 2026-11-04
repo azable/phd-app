@@ -254,7 +254,7 @@ describe('recorded steps in the assistant context', () => {
     // scope.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
-        { name: 'start', state: {} },
+        { name: ':before', state: {} },
         { name: '@run#1', state: { last: 9 } },
         { name: '@setup#1', state: { last: 9, n: 0 } },
         { name: '@guard#1', state: { last: 9, n: 0 } },
@@ -272,7 +272,7 @@ describe('recorded steps in the assistant context', () => {
   it('gives a repair the steps of the candidate that failed, and why there are none', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
       steps: [
-        { name: 'start', state: {} },
+        { name: ':before', state: {} },
         { name: '@run#1', state: { last: 9 } },
         { name: '@setup#1', state: { last: 9, n: 0 } },
         { name: '@guard#1', state: { last: 9, n: 0 } },

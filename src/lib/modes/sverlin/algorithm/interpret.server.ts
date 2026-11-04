@@ -130,10 +130,11 @@ export type MasterStep = {
   /** The same runs, each as its label and which run of it it is, as insert#2. */
   runs?: string[];
   /**
-   * Where the step is a scene's start or end: the input as given, or the state just before a run it
-   * is within begins; the state the algorithm ends on, or just after such a run ends.
+   * Where the step is a scene's edge, a stop of the runs it is within: their :before, the input as
+   * given or the state just before such a run begins; their :after, the state the algorithm ends
+   * on or just after such a run ends.
    */
-  edge?: 'start' | 'end';
+  edge?: Stop;
   /**
    * The values labelled expressions gave at earlier steps inside the run the step ends, which it
    * shows whole, drawn from its before on.
@@ -256,10 +257,20 @@ export type FrameUnits = {
 };
 
 /**
- * The labels the page pauses at, by full name: a step at the end of each of their runs, showing
- * its own run whole; a label not paused at is passed through.
+ * The stops the page pauses at, by full name: a label, a step at the end of each of its runs (its
+ * :after), showing its own run whole; a label with :before, a step just before each of its runs
+ * begins. A label not paused at is passed through.
  */
 export type Pauses = ReadonlySet<string>;
+
+/** The two stops of a run: just before its code begins, and just after it ends. */
+export type Stop = 'before' | 'after';
+
+/** The pause at a label's :before, in Pauses. */
+export const beforeStop = (label: string): string => `${label}:before`;
+
+/** The label a step's name is for, as insert.swap for @insert.swap#2 or @insert.swap#2:before. */
+export const labelOfStep = (name = ''): string => name.replace(/^@|#\d+(?::before)?$/gu, '');
 
 /**
  * Where the page pauses, which makes the steps: the end of each run of each label in `pauses`, by
@@ -662,7 +673,7 @@ class Interpreter {
         gap: this.#log.pending
       },
       undefined,
-      { name: 'end', at: 'end' }
+      { name: ':after', at: 'after' }
     );
     const end = this.#trace.at(-1)!;
     if (
@@ -673,14 +684,14 @@ class Interpreter {
       )
     ) {
       this.#trace.pop();
-      last.edge = 'end';
+      last.edge = 'after';
     }
     if ((this.#trace[0]?.moment ?? 0) <= 0)
       for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
     this.opening = {
       moment: 0,
-      name: 'start',
-      edge: 'start',
+      name: ':before',
+      edge: 'before',
       ...opening,
       before: opening,
       gap: 0,
@@ -1601,10 +1612,12 @@ class Interpreter {
     const step = label !== undefined && this.#pauses.has(label);
     const ordinal = (this.#begun.get(label ?? '') ?? 0) + 1;
     if (label !== undefined) this.#begun.set(label, ordinal);
-    if (this.#isEdge(label, ordinal))
+    // Its :before, where the scene is within its runs or pauses there.
+    const edge = this.#isEdge(label, ordinal);
+    if (label !== undefined && (edge || this.#pauses.has(beforeStop(label))))
       this.#record(node, node, scope, this.#since ?? this.#sinceNow(node, scope), undefined, {
-        name: `@${label}#${ordinal}`,
-        at: 'start'
+        name: `@${label}#${ordinal}:before`,
+        ...(edge ? { at: 'before' as const } : {})
       });
     this.#runs.push({
       unit,
@@ -1629,7 +1642,7 @@ class Interpreter {
     const run = this.#runs.pop();
     if (!run) return;
     const edge = this.#isEdge(this.#named.get(run.unit), run.ordinal)
-      ? { name: this.#nameOf(run), at: 'end' as const }
+      ? { name: this.#nameOf(run), at: 'after' as const }
       : undefined;
     const since = run.since ?? (edge && (this.#since ?? this.#sinceNow(node, scope)));
     if (since) this.#record(run.node, node, scope, since, run, edge);
@@ -1666,7 +1679,7 @@ class Interpreter {
   /** Why a scene shows too many steps: the labels most of them end at, to pause at less. */
   #tooManySteps(): string {
     const most = [...this.#stepsAt]
-      .filter(([label]) => label !== 'end')
+      .filter(([label]) => label !== ':after')
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3);
     const counts = most.map(([label, count]) => `@${label} (${count})`).join(', ');
@@ -1686,7 +1699,7 @@ class Interpreter {
     scope: Scope,
     since: Since,
     ending?: Run,
-    edge?: { name: string; at: 'start' | 'end' }
+    stop?: { name: string; at?: Stop }
   ): void {
     // A scene's own pauses bound what it shows; pausing at every label only names the steps.
     if (!this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSourceSteps)
@@ -1724,8 +1737,8 @@ class Interpreter {
         ? single
         : undefined;
     });
-    const name = edge?.name ?? (ending ? this.#nameOf(ending) : 'end');
-    const label = name.replace(/^@|#\d+$/gu, '');
+    const name = stop?.name ?? (ending ? this.#nameOf(ending) : ':after');
+    const label = labelOfStep(name);
     this.#stepsAt.set(label, (this.#stepsAt.get(label) ?? 0) + 1);
     this.#trace.push({
       // Strictly later than the step before, though no event came between them.
@@ -1734,7 +1747,7 @@ class Interpreter {
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name,
-      ...(edge ? { edge: edge.at } : {}),
+      ...(stop?.at ? { edge: stop.at } : {}),
       ...(inside.length ? { inside, runs } : {}),
       ...after,
       ...logged,

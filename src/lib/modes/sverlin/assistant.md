@@ -48,10 +48,10 @@ does. Keep the source’s lines short, seldom over 80 characters unless a line
 cannot break, so the participant can read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: each scene of the
-storyboard pauses only at the labels its pause names, between its start and its
-end (see the guide's Storyboard), so give a first visualization, and each label
-you add, scenes that step through it sensibly. As no code runs outside a label
-(see the guide's Steps), a source has labels it rarely pauses at: a loop's
+storyboard pauses only at the stops its pause names, between its :before and its
+:after (see the guide's Storyboard), so give a first visualization, and each
+label you add, scenes that step through it sensibly. As no code runs outside a
+label (see the guide's Steps), a source has labels it rarely pauses at: a loop's
 start, test, and move, and tests whose outcome the view does not show, unless a
 step should show where the code goes next. project.runs gives each label of the
 base by name, how many times it runs and how many of those runs change what the
