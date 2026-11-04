@@ -358,7 +358,8 @@ algorithm or the view as well only where the new input reaches something they do
 not handle yet, as a search that never returns its not-found result. Never
 duplicate views, layouts, or variables to show two cases in one source: two
 cases share them. Where a case needs an input the domain’s types cannot hold, as
-weights on a graph whose edges have none, say so and offer the nearest they can.
+weights on a graph whose edges have none, change the domain to hold it, and the
+algorithm and views it reaches, and say so in the reply.
 
 Feedback may reference elements the participant selected in a presentation:
 context.selected.elements gives each one’s step, its label as the participant
