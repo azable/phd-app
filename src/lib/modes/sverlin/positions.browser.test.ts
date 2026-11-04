@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import bfs from './fixtures/bfs-queue-names.sverlin?raw';
 import dequeue from './fixtures/bfs-dequeue.sverlin?raw';
 import search from './fixtures/search-at.sverlin?raw';
@@ -26,9 +27,13 @@ afterAll(() => browser?.close());
 
 /** The page of a source built with chosen values, and the text of a kind's node at a step. */
 async function open(source: string, chosen: Record<string, string>) {
-  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-    chosen
-  });
+  const { javascript, labels } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    {
+      chosen
+    }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

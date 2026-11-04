@@ -117,8 +117,6 @@ const drawingOf = (step: number, phase: Phase) => steps.drawingOf(step, phase, l
 function mountStep(step: number, settled: (shown: Shown) => void): Shown {
   const layer = document.createElement('div');
   layer.className = 'sv-layer pending';
-  // Which of its step's two states the layer shows, for whoever looks on, as the tests do.
-  layer.dataset.svPhase = step % 2 ? 'after' : 'before';
   root.append(layer);
   const { copies, props, settings, context } = drawingOf(step, 'showing');
   const shown: Shown = { step, layer, changes: 0, copies };

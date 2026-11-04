@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingAt } from './testing/every-pause';
 import { colourCss } from './library/node/design';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -80,20 +81,14 @@ it.skipIf(!enabled)(
   'paints each region as its mark, in pills that move no text',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(insertion);
+    const prepared = prepareSvelteComponent(
+      pausingAt(
+        insertion,
+        '@insert.test.compare.left, @insert.test.compare.right, @insert.test.compare, @insert.swap.to, @insert.swap'
+      )
+    );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
-        'pause@first': 'off',
-        'pause@more': 'off',
-        'pause@next': 'off',
-        'pause@insert': 'off',
-        'pause@insert.test': 'off',
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.test.compare.left': 'on',
-        'pause@insert.test.compare.right': 'on',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.from': 'off',
-        'pause@insert.swap.to': 'on',
         'Highlight.Pointed@insert.test.compare.left.fill': 'sky-100',
         'Highlight.Pointed@insert.test.compare.right.fill': 'violet-100',
         'listing.lit.fill': 'amber-200',
@@ -160,13 +155,13 @@ it.skipIf(!enabled)(
     expect(left?.style).toMatch(/border-radius: ?999px/);
     expect(left?.style).toContain(colourCss('amber-500'));
     expect(await where()).toBeCloseTo(before ?? 0, 0);
-    // The right operand: the left one kept in its colour, the right in its own.
+    // The right operand in its own colour, a step lighting only its own run's code.
     await go(2, 'j');
     const right = await lit();
     expect(right.find(({ text, nested }) => text === 'j' && !nested)?.style).toContain(
       colourCss('violet-100')
     );
-    expect(right.find(({ text }) => text === 'j - 1')?.style).toContain(colourCss('sky-100'));
+    expect(right.some(({ text }) => text === 'j - 1')).toBe(false);
     // The comparison as a whole, its operands drawn inside it where their colours differ.
     await go(3, 'A[j - 1] > A[j]');
     const compared = await lit();
@@ -241,16 +236,9 @@ it.skipIf(!enabled)(
   'lights a place in the listing and the picture alike, hovering one outlining the others',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(search);
+    const prepared = prepareSvelteComponent(pausingAt(search, '@probe.low'));
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
-        'pause@range': 'off',
-        'pause@open': 'off',
-        'pause@probe': 'off',
-        'pause@probe.mid': 'off',
-        'pause@probe.low': 'on',
-        'pause@probe.right': 'off',
-        'pause@probe.left': 'off',
         'Arrow.Pointed@mid.fill': 'sky-200',
         'IntCell@target.fill': 'white',
         'IntCell@target.stroke': 'violet-500',

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -22,7 +23,7 @@ beforeAll(async () => {
 afterAll(() => browser?.close());
 
 it.skipIf(!enabled)(
-  'plays a step forward as the state before its code, then the state after it',
+  'plays a step forward straight to the state after its code, in one motion',
   { timeout: 120_000 },
   async () => {
     // Each step is a write of 7; the loop moving i, which the view draws, leads up to it.
@@ -53,18 +54,16 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" case="main" pause="@write"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-    const prepared = prepareSvelteComponent(source);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(source));
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
     // The loop header is labelled part by part; the write is the step, the header leading up to it.
     const second = prepared.master.find(({ name }) => name === '@write#2')!;
     expect(second.before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
     expect(second.state.values).toEqual([7, 7, 1]);
-    const { javascript } = await bundlePresentation(prepared, 1, {
-      chosen: { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' }
-    });
+    const { javascript } = await bundlePresentation(prepared, 1, {});
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -102,7 +101,7 @@ it.skipIf(!enabled)(
           .map((node) => node.innerText.trim())
           .join(' ') === '7 1 1'
     );
-    // Stepping forward shows the next step's before first, then its after.
+    // Stepping forward shows the next step's after at once, the loop moving i with it.
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 2 }, '*'));
     await page.waitForFunction(
       () =>
@@ -116,9 +115,8 @@ it.skipIf(!enabled)(
       await page.waitForTimeout(50);
     }
     expect(errors).toEqual([]);
-    // From the step before, i moving leading up to the step shows first, then the 7 its code
-    // writes.
-    expect(seen.map((values) => values.join(' '))).toEqual(['0 7 1 1', '1 7 1 1', '1 7 7 1']);
+    // From the step before, i moving and the 7 its code writes show together.
+    expect(seen.map((values) => values.join(' '))).toEqual(['0 7 1 1', '1 7 7 1']);
   }
 );
 
@@ -155,16 +153,18 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main key={key} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@pass.pick, @pass.put"><Main key={key} values={values} /></Scene>
 </Storyboard>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.
-    const whole = source.replace(
-      '@pick[const key = values[i];]\n    @put[values[i] = key;]',
-      'const key = values[i];\n    values[i] = values[0];'
-    );
+    const whole = source
+      .replace(
+        '@pick[const key = values[i];]\n    @put[values[i] = key;]',
+        'const key = values[i];\n    values[i] = values[0];'
+      )
+      .replace('pause="@pass.pick, @pass.put"', 'pause="@pass"');
     const kinds = async (text: string, chosen: Record<string, string | boolean> = {}) => {
-      const prepared = prepareSvelteComponent(text);
+      const prepared = prepareSvelteComponent(pausingEveryLabel(text));
       const { javascript } = await bundlePresentation(prepared, 1, { chosen });
       const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
       await page.setContent(sandboxDocument('', javascript, 0, 1));

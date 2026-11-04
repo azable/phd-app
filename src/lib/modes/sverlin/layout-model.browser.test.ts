@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import type { LayoutCheck, SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
 
@@ -30,7 +31,11 @@ beforeAll(async () => {
 afterAll(() => browser?.close());
 
 async function sceneOf(source: string) {
-  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+  const { javascript } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    {}
+  );
   const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   await page.route('https://sverlin.test/', (route) =>

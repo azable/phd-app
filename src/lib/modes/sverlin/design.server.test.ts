@@ -124,7 +124,7 @@ describe('variants', () => {
     expect(
       Object.keys(space)
         // A view chosen per place holds at every step, as a type's does; the rest are a place's looks.
-        .filter((key) => /@[^.]/u.test(key) && !/^(pause@|views\.|pointers\.)/u.test(key))
+        .filter((key) => /@[^.]/u.test(key) && !/^(views\.|pointers\.)/u.test(key))
         .map((key) => key.slice(key.lastIndexOf('.') + 1))
         .filter((prop) => !['unit', 'true', 'false', 'from', 'order', 'hue'].includes(prop))
         .every((prop) => ['shown', 'fill', 'stroke', 'color'].includes(prop))

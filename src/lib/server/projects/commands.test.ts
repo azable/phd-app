@@ -415,7 +415,7 @@ describe('createProject', () => {
         ? starter.payload.presentation.variant
         : undefined;
     for (const [key, value] of Object.entries(reverted.payload.shown))
-      if (!key.startsWith('pause@')) expect(value).toEqual(starterValues?.[key]);
+      expect(value).toEqual(starterValues?.[key]);
     expect(reported.appendedEvents.find((event) => event.type === 'build.requested')).toMatchObject(
       { payload: { purpose: 'variant-fallback' } }
     );

@@ -12,6 +12,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import { embeddedFontsHead } from './fonts';
 import bfs from './fixtures/bfs-dequeue.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
@@ -35,7 +36,10 @@ type Timing = { phase: string; step?: number; ms: number; waiting?: boolean; lay
  * by the server (see layout.server.ts), and collect the times it reports.
  */
 async function timingsOf(source: string) {
-  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
+  const { javascript } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
 <script>

@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -38,7 +39,11 @@ const arcs = {
 
 /** The graph's layout, in its own pixels, and where its box, curves, labels and title are drawn. */
 async function graphOf(source: string, chosen: Record<string, string | number>, step = 0) {
-  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
+  const { javascript } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    { chosen }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -183,7 +188,11 @@ it.skipIf(!enabled)(
   'lays a free layout out alike whenever its frame starts and at any frame size',
   { timeout: 180_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(dijkstra), 2, {});
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(dijkstra)),
+      2,
+      {}
+    );
     const alone = await geometryOf(javascript, 1300, 300);
     // Started before its page had a layout, its free layout was once solved for children that
     // measured empty, which then wrapped their text to fit it and kept that shape.

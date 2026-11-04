@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -52,9 +53,13 @@ it.skipIf(!enabled)(
   'shrinks a spread fill and its stroke together, frame by frame, as the pointer leaves',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-      chosen: { 'Here.Pointed.spread': 6 }
-    });
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {
+        chosen: { 'Here.Pointed.spread': 6 }
+      }
+    );
     const page = await browser!.newPage({ viewport: { width: 700, height: 320 } });
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>

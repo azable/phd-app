@@ -11,6 +11,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import { embeddedFontsHead } from './fonts';
 import manifest from './fonts/faces.json';
 import type { Geometry, SceneFrame, SceneStep } from './library';
@@ -85,7 +86,11 @@ function geometriesOf(javascript: string): Geometry[] {
 
 /** A presentation drawn soundly with the server's layout, in the frame the server gave. */
 async function drawsAsGiven(source: string, request: VariantRequest = {}): Promise<Drawn> {
-  const built = await bundlePresentation(prepareSvelteComponent(source), 1, request);
+  const built = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    request
+  );
   expect(built.layout.errors).toEqual([]);
   const given = await drawn(built.javascript);
   expect(given.steps).toHaveLength(built.labels.length);
@@ -109,7 +114,7 @@ for (const { value: font, family } of manifest.fonts) {
     { timeout: 300_000 },
     async () => {
       const source = fixtures['./fixtures/dijkstra-fields.sverlin'];
-      const keys = Object.keys(prepareSvelteComponent(source).design.space);
+      const keys = Object.keys(prepareSvelteComponent(pausingEveryLabel(source)).design.space);
       const fonts = keys.filter((key) => key.endsWith('.font'));
       const weights = keys.filter((key) => key.endsWith('.weight'));
       expect(fonts.length).toBeGreaterThan(0);
@@ -138,7 +143,7 @@ it.skipIf(!enabled)(
   { timeout: 300_000 },
   async () => {
     const { javascript } = await bundlePresentation(
-      prepareSvelteComponent(fixtures['./fixtures/bfs-cards.sverlin']),
+      prepareSvelteComponent(pausingEveryLabel(fixtures['./fixtures/bfs-cards.sverlin'])),
       1
     );
     const server = await drawn(javascript);
@@ -175,7 +180,11 @@ it.skipIf(!enabled)(
     const holds = (step: SceneStep) =>
       step.nodes.some((node) => node.id.startsWith(`${line + 1}:`));
     const request = { chosen: { 'Stacked.ratio': '4:3', 'Side.ratio': '1:1' } };
-    const { labels } = await bundlePresentation(prepareSvelteComponent(source), 1, request);
+    const { labels } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      request
+    );
     const drawn = await drawsAsGiven(source, request);
     expect(drawn.frame.width / drawn.frame.height).toBeCloseTo(4 / 3, 2);
     // The stacked scene, then the side one from the start again, which alone holds that node.

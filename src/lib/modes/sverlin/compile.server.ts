@@ -661,24 +661,6 @@ function copiesSincePrevious(
   return copies;
 }
 
-/** The algorithm as a listing in each language. */
-export function listingsOf(source: string): Record<string, Listing> {
-  const { blocks, listings: listingBlocks, cases } = extractBlocks(source);
-  if (!blocks.algorithm)
-    throw new InvalidSvelteSourceError('There is no algorithm block, so there is no listing.', {
-      code: 'missing_algorithm'
-    });
-  const domain = blocks.domain
-    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
-    : noDomain;
-  const input = firstInput(source, blocks, cases, domain);
-  const algorithm = blocks.algorithm;
-  const traced = interpretBlock(source, algorithm, (body) =>
-    traceAlgorithm(body, input, domain, {}, {}, true)
-  );
-  return listingsFrom(source, traced, algorithm, listingBlocks).listings;
-}
-
 /**
  * What each region of the source's own listings is mapped to, and whether the algorithm runs its
  * code, its steps paced as recordedTrace paces them, for the assistant to check its labels against;

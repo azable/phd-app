@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -54,9 +55,13 @@ it.skipIf(!enabled)(
   <Scene name="main" case="main"><Main i={i} j={j} values={values} /></Scene>
 </Storyboard>`;
     // Both are drawn by First unless a variant gives a place its own view, as j's here.
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-      chosen: { 'pointers.Index@j': 'Second' }
-    });
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {
+        chosen: { 'pointers.Index@j': 'Second' }
+      }
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -119,7 +124,10 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main i={i} values={values} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -181,9 +189,13 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main i={i} j={j} values={values} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-      chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
-    });
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {
+        chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
+      }
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -240,9 +252,13 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} key={key} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-      chosen: { 'views.Int@key': 'IntTally' }
-    });
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {
+        chosen: { 'views.Int@key': 'IntTally' }
+      }
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -306,7 +322,11 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {}
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -367,9 +387,13 @@ async function scanned(chosen: Record<string, string | number>) {
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-    chosen
-  });
+  const { javascript, labels } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    {
+      chosen
+    }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -495,12 +519,16 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-      chosen: {
-        'Highlight.Pointed@insert.compare.left.fill': 'sky-200',
-        'Highlight.Pointed@insert.compare.right.fill': 'violet-200'
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {
+        chosen: {
+          'Highlight.Pointed@insert.compare.left.fill': 'sky-200',
+          'Highlight.Pointed@insert.compare.right.fill': 'violet-200'
+        }
       }
-    });
+    );
     const page = await browser!.newPage({ viewport: { width: 1000, height: 500 } });
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
@@ -575,9 +603,13 @@ async function transformed(
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-    chosen
-  });
+  const { javascript, labels } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    {
+      chosen
+    }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -55,7 +56,7 @@ const list = (algorithm: string) => `<script domain>
 
 /** Each step's arrows, between the names of the nodes they join, and its nodes' text. */
 async function play(source: string, count: number) {
-  const prepared = prepareSvelteComponent(source);
+  const prepared = prepareSvelteComponent(pausingEveryLabel(source));
   const { javascript } = await bundlePresentation(prepared, 1, {});
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];

@@ -355,8 +355,8 @@ describe('design variables in the AI context', () => {
     for (const source of [bfs, bst]) {
       const { space, starter } = prepareSvelteComponent(source).design;
       const design = designVariables({ variant: starter });
-      const layout = design.variables.filter(
-        ({ variable }) => !variable.startsWith('pause@') && /\.(form|direction)$/u.test(variable)
+      const layout = design.variables.filter(({ variable }) =>
+        /\.(form|direction)$/u.test(variable)
       );
       expect(layout.length).toBeGreaterThan(0);
       for (const { variable, options } of layout)

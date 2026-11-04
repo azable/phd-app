@@ -11,6 +11,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingAt, pausingEveryLabel } from './testing/every-pause';
 import { motionDuration } from './library/motion';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -112,27 +113,18 @@ function starts(
 }
 
 it.skipIf(!enabled)(
-  'starts every move where the node was, into a step’s before and then its after, in both of two stacked frames',
+  'starts every move where the node was, or a copy where its value was, in both of two stacked frames',
   { timeout: 180_000 },
   async () => {
-    const prepared = prepareSvelteComponent(merge);
-    // Every label pauses, so each step of the trace is a step of the page, and its copies apply.
-    const pauses = Object.keys(prepared.design.space).filter((key) => key.startsWith('pause@'));
-    const master = prepared.paced(new Set(pauses.map((key) => key.slice('pause@'.length)))).steps;
-    // Copies start where the value they were copied from was (identities.server.ts): into a
-    // step's before from the step before, then into its after from its before.
-    const copies = master.map(({ before, identities }) => [
-      before?.identities?.copies ?? {},
-      identities?.copies ?? {}
-    ]);
+    // Every label pauses, so each step of the trace is a step of the page.
+    const prepared = prepareSvelteComponent(pausingEveryLabel(merge));
+    let stepCount = 0;
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
-        const { javascript } = await bundlePresentation(prepared, seed, {
-          chosen: {
-            'pointers.Position@k': 'Placed',
-            ...Object.fromEntries(pauses.map((key) => [key, 'on']))
-          }
+        const { javascript, labels } = await bundlePresentation(prepared, seed, {
+          chosen: { 'pointers.Position@k': 'Placed' }
         });
+        stepCount = labels.length;
         return sandboxDocument('', javascript, 0, seed);
       })
     );
@@ -174,15 +166,13 @@ it.skipIf(!enabled)(
             .querySelector('.sv-layer:not(.pending):not(.sv-leaving)')
             ?.setAttribute('data-checked', '')
         );
-      for (let index = 1; index < master.length; index++) {
+      for (let index = 1; index < stepCount; index++) {
         const from = await Promise.all(panes.map(placed));
         await Promise.all(panes.map(seen));
         await step(index);
-        // The step's before shows first, unless it would set nothing moving, then its after.
-        const reached = panes.map(() => false);
-        while (reached.includes(false)) {
-          for (const [pane, frame] of panes.entries()) {
-            if (reached[pane]) continue;
+        // Each step shows one layer, its after, its moves starting from the step before.
+        for (const [pane, frame] of panes.entries()) {
+          {
             await frame.waitForFunction(
               () =>
                 document.querySelector(
@@ -193,28 +183,26 @@ it.skipIf(!enabled)(
             );
             // Claimed as it is read, so a layer the page replaces at once is not marked unseen, and its
             // moves read from it, though the page has gone on to the next.
-            const name = await frame.evaluate(() => {
+            await frame.evaluate(() => {
               const layer = document.querySelector(
                 '.sv-layer:not(.pending):not(.sv-leaving):not([data-checked])'
               ) as HTMLElement;
               layer.setAttribute('data-checked', '');
               document.querySelector('[data-claimed]')?.removeAttribute('data-claimed');
               layer.setAttribute('data-claimed', '');
-              return layer.dataset.svPhase as 'before' | 'after';
             });
-            const part = name === 'before' ? 0 : 1;
+            // A value copied since the step before starts where some value it was copied from was.
+            const places = Object.values(from[pane]).map((at) => at.join());
             for (const { identity, at } of await starts(frame, '.sv-layer[data-claimed]')) {
-              const was = from[pane][identity] ?? from[pane][copies[index][part][Number(identity)]];
-              expect(
-                at,
-                `step ${index + 1} ${name}, frame ${pane + 1}, identity ${identity}`
-              ).toEqual(was);
+              const where = `step ${index + 1}, frame ${pane + 1}, identity ${identity}`;
+              const was = from[pane][identity];
+              if (was) expect(at, where).toEqual(was);
+              else expect(places, where).toContain(at.join());
             }
             await frame.evaluate(() => {
               for (const animation of document.getAnimations()) animation.finish();
             });
             from[pane] = await placed(frame);
-            if (name === 'after') reached[pane] = true;
           }
         }
       }
@@ -265,7 +253,7 @@ it.skipIf(!enabled)(
   'draws each arrow with its own step’s arrowhead while two steps are in the page',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(walk);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(walk));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 1000, height: 600 } });
     await page.setContent(
@@ -354,7 +342,7 @@ it.skipIf(!enabled)(
   'keeps every element in place as a pointer moves between collections',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(taken);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(taken));
     const { javascript } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
@@ -433,7 +421,7 @@ it.skipIf(!enabled)(
   'keeps every element in place as pointers never at one element share a slot for their labels',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(apart);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(apart));
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: { 'pointers.Index@i': 'Short', 'pointers.Index@j': 'Long' }
     });
@@ -516,7 +504,7 @@ it.skipIf(!enabled)(
   'keeps room at most 4 past an end, a pointer further out drawing nothing',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(far);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(far));
     const { javascript } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
     const errors: string[] = [];
@@ -585,7 +573,7 @@ it.skipIf(!enabled)(
   'leaves out a pointer whose view a variant hides, drawing the elements as without it',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(cursors);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(cursors));
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: { ...cursorViews, 'ICursor.shown': false, 'JCursor.shown': false }
     });
@@ -623,7 +611,7 @@ it.skipIf(!enabled)(
 
 /** The cursors merge drawn with a variant, stepped to each step: its rows' boxes and the j label. */
 async function cursorRows(chosen: Record<string, string>) {
-  const prepared = prepareSvelteComponent(cursors);
+  const prepared = prepareSvelteComponent(pausingEveryLabel(cursors));
   const { javascript } = await bundlePresentation(prepared, 1, {
     chosen: { ...cursorViews, ...chosen }
   });
@@ -698,11 +686,13 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values; const i = Position; const j = Position;</script><Case name="main" values={[1, 2]} i={0} j={1} /><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
+      pausingEveryLabel(
+        `<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values; const i = Position; const j = Position;</script><Case name="main" values={[1, 2]} i={0} j={1} /><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
 
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} j={j} /></Scene>
 </Storyboard>`
+      )
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -783,7 +773,8 @@ it.skipIf(!enabled)(
   'starts an operator’s operands, drawn by its view, at the cells they were read from',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(compared);
+    // Pausing at the comparison alone, so its first run is the step after the first.
+    const prepared = prepareSvelteComponent(pausingAt(compared, '@compare.greater'));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
     // The first step drawing the comparison, by its name in the steps the page has.
     const at = labels.findIndex((name) => name.startsWith('@compare.greater#'));
@@ -818,12 +809,9 @@ it.skipIf(!enabled)(
           ?.contentWindow?.postMessage({ type: 'sverlin:step', step: at, selection: [] }, '*'),
       at
     );
-    // Step 1's after, where its comparison is drawn: 5 and 1 lift out of their cells.
+    // Step 1, where its comparison is drawn: 5 and 1 lift out of their cells.
     await frame.waitForFunction(
-      () =>
-        document.querySelector(
-          '.sv-layer[data-sv-phase="after"]:not(.pending):not(.sv-leaving):not([data-checked])'
-        ),
+      () => document.querySelector('.sv-layer:not(.pending):not(.sv-leaving):not([data-checked])'),
       null,
       { timeout: 20_000 }
     );
@@ -875,7 +863,7 @@ async function scanCells(
   chosen: Record<string, string | number>,
   steps: readonly number[]
 ): Promise<Cell[][]> {
-  const prepared = prepareSvelteComponent(scan);
+  const prepared = prepareSvelteComponent(pausingEveryLabel(scan));
   const { javascript } = await bundlePresentation(prepared, 1, { chosen });
   const page = await browser!.newPage({ viewport: { width: 900, height: 400 } });
   await page.setContent(sandboxDocument('', javascript, 0, 1));

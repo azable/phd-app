@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import bfs from './fixtures/bfs-references.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -26,7 +27,10 @@ it.skipIf(!enabled)(
   'draws the names of the queued vertices, read through their references',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(bfs), 1);
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(bfs)),
+      1
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

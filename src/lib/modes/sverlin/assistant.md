@@ -370,10 +370,11 @@ replying, and relabel a region mapped to the wrong code or never run.
 The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),
 or the problem that stops it, with omittedSteps when not all fit. They pause at
-every label, so they hold every step a scene can show, by the same name. Check
-it against what the algorithm should do before revising the view, and use it to
-say what a step shows; name a step by its name, as @insert.swap#1, as a number
-is only where it falls in one presentation.
+the end of every label's runs, so they hold every step a scene can show by the
+same name, except a run's start, @insert.swap#1:before, the state of the step
+before it. Check it against what the algorithm should do before revising the
+view, and use it to say what a step shows; name a step by its name, as
+@insert.swap#1, as a number is only where it falls in one presentation.
 
 The algorithm and domain may be shaped for what the visualization teaches, as a
 result type (a search returning a `union(Index, NotFound)`, rather than -1 or a

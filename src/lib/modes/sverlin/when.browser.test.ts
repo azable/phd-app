@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingAt } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -60,24 +61,13 @@ const insertion = `<script domain>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
-const off = {
-  'pause@first': 'off',
-  'pause@more': 'off',
-  'pause@next': 'off',
-  'pause@insert': 'off',
-  'pause@insert.test': 'off',
-  'pause@insert.test.compare.left': 'off',
-  'pause@insert.test.compare.right': 'off',
-  'pause@insert.swap.from': 'off'
-};
-
 /**
  * Each step's captions: whether "Swap" shows and where, whether the question does and where, and the
  * board's size and the row's cells' places, sorted.
  */
-async function stepsOf(chosen: Record<string, string>, count: number, source = insertion) {
-  const prepared = prepareSvelteComponent(source);
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+async function stepsOf(pause: string, count: number, source = insertion) {
+  const prepared = prepareSvelteComponent(pausingAt(source, pause));
+  const { javascript } = await bundlePresentation(prepared, 1, {});
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -132,29 +122,13 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     // Coarse: each comparison, then each swap. "Swap" shows at the swaps alone.
-    const coarse = await stepsOf(
-      {
-        ...off,
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.to': 'off'
-      },
-      4
-    );
+    const coarse = await stepsOf('@insert.test.compare, @insert.swap', 4);
     expect(coarse.map(({ swap }) => swap)).toEqual([false, true, false, true]);
     // The caption keeps its room where hidden, so the board and its cells stay put.
     expect(new Set(coarse.map(({ board }) => board)).size).toBe(1);
     expect(new Set(coarse.map(({ cells }) => cells.join())).size).toBe(1);
     // Fine, pausing at the swap's read of A[j] too: inside the swap's run, so "Swap" shows there.
-    const fine = await stepsOf(
-      {
-        ...off,
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.to': 'on'
-      },
-      4
-    );
+    const fine = await stepsOf('@insert.test.compare, @insert.swap.to, @insert.swap', 4);
     expect(fine.map(({ swap }) => swap)).toEqual([false, true, true, false]);
   }
 );
@@ -173,16 +147,7 @@ it.skipIf(!enabled)(
         '<OneOf><When of="@insert.test.compare">{@insert.test.compare}</When><When of="@insert.swap"><Caption /></When></OneOf>'
       )
       .replaceAll('of="values, @insert.swap"', 'of="values, @insert"');
-    const steps = await stepsOf(
-      {
-        ...off,
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.to': 'off'
-      },
-      4,
-      chained
-    );
+    const steps = await stepsOf('@insert.test.compare, @insert.swap', 4, chained);
     // The question at each comparison, "Swap" at each swap, never both.
     expect(steps.map(({ asked, swap }) => [asked, swap])).toEqual([
       [true, false],

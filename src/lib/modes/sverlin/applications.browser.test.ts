@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingAt } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -74,17 +75,14 @@ const source = `<script domain>
 
 /** The caption Ask draws at a step, and whether it is hidden. */
 async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
-  const prepared = prepareSvelteComponent(source);
   // The loop headers move no value the view draws, so the steps are the comparisons and swaps.
-  const headers = Object.fromEntries(
-    ['last', 'more', 'shrink', 'sweep.first', 'sweep.inside', 'sweep.step'].map((label) => [
-      `pause@${label}`,
-      'off'
-    ])
-  );
-  const { javascript } = await bundlePresentation(prepared, 1, {
-    chosen: { ...headers, ...chosen }
-  });
+  const headers = ['last', 'more', 'shrink', 'sweep.first', 'sweep.inside', 'sweep.step'];
+  const pause = prepareSvelteComponent(source)
+    .pauses.labels.filter((label) => !headers.includes(label))
+    .map((label) => `@${label}`)
+    .join(', ');
+  const prepared = prepareSvelteComponent(pausingAt(source, pause));
+  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

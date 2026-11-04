@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import type { SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
 
@@ -89,7 +90,7 @@ for (const [path, source] of Object.entries(fixtures)) {
     `draws ${name} with each view, pointer and kind left out`,
     { timeout: 600_000 },
     async () => {
-      const prepared = prepareSvelteComponent(source);
+      const prepared = prepareSvelteComponent(pausingEveryLabel(source));
       const cases = leavingOut(prepared.design.space, prepared.design.starter);
       const failed: Record<string, string[]> = {};
       // A few pages at once: each case is its own presentation.

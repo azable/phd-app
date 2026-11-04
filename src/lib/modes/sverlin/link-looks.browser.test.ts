@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import cards from './fixtures/bfs-cards.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
@@ -30,7 +31,11 @@ const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
 
 /** A source's page built with chosen values, at a step. */
 async function open(source: string, chosen: Record<string, string | number>, step = 0) {
-  const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
+  const { javascript } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1,
+    { chosen }
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

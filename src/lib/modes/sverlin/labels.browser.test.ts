@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -27,14 +28,10 @@ const domain = `<script domain>
   const Index = index(Values);
 </script>`;
 
-/** Each step's visible nodes, as kind:text, from the first step on, pausing as chosen. */
-async function stepsOf(
-  source: string,
-  count: number,
-  chosen: Record<string, string> = {}
-): Promise<string[][]> {
-  const prepared = prepareSvelteComponent(source);
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+/** Each step's visible nodes, as kind:text, from the first step on. */
+async function stepsOf(source: string, count: number): Promise<string[][]> {
+  const prepared = prepareSvelteComponent(pausingEveryLabel(source));
+  const { javascript } = await bundlePresentation(prepared, 1, {});
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -94,17 +91,11 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@insert"><Main values={values} /></Scene>
 </Storyboard>`;
-    const keys = (
-      await stepsOf(source, 4, {
-        'pause@insert.key': 'off',
-        'pause@insert.shift': 'off',
-        'pause@first': 'off',
-        'pause@more': 'off',
-        'pause@next': 'off'
-      })
-    ).map((nodes) => nodes.find((node) => node.startsWith('Inserting')));
+    const keys = (await stepsOf(source, 4)).map((nodes) =>
+      nodes.find((node) => node.startsWith('Inserting'))
+    );
     // The page opens on the input, before any key, the node hidden whole; then one key per step.
     expect(keys).toEqual([
       undefined,
@@ -148,23 +139,11 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Main values={values} /></Scene>
 </Storyboard>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
-    const [, compare, swap, , , last] = await stepsOf(source, 6, {
-      'pause@last': 'off',
-      'pause@more': 'off',
-      'pause@shrink': 'off',
-      'pause@sweep.first': 'off',
-      'pause@sweep.inside': 'off',
-      'pause@sweep.step': 'off',
-      'pause@sweep': 'off',
-      'pause@sweep.pair': 'off',
-      'pause@sweep.pair.swap': 'accumulate',
-      'pause@sweep.pair.swap.a': 'off',
-      'pause@sweep.pair.swap.b': 'off'
-    });
+    const [, compare, swap, , , last] = await stepsOf(source, 6);
     expect(swap).toContain('Swapped:swap 5 and 1');
     // At a comparison, the caption hides whole, its text with its values.
     expect(compare.some((node) => node.startsWith('Swapped'))).toBe(false);
@@ -199,18 +178,9 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@check"><Main values={values} /></Scene>
 </Storyboard>`;
-    const checked = (
-      await stepsOf(search, 4, {
-        'pause@check.hit.at': 'off',
-        'pause@check': 'on',
-        'pause@check.hit': 'off',
-        'pause@first': 'off',
-        'pause@more': 'off',
-        'pause@next': 'off'
-      })
-    ).map((nodes) =>
+    const checked = (await stepsOf(search, 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
     // The input as given, nothing checked yet; then each check adds its cell.
@@ -245,11 +215,11 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main v={v} digits={digits} counts={counts} /></Scene>
+  <Scene name="main" case="main" pause="@count"><Main v={v} digits={digits} counts={counts} /></Scene>
 </Storyboard>`;
-    const reading = (
-      await stepsOf(counting, 4, { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' })
-    ).map((nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]);
+    const reading = (await stepsOf(counting, 4)).map(
+      (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
+    );
     // The page opens on the input as given, v not yet declared; then each digit counted.
     expect(reading).toEqual([undefined, '3', '1', '4']);
   }

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import bfs from './fixtures/bfs-neighbours.sverlin?raw';
 import cards from './fixtures/bfs-cards.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
@@ -62,29 +63,15 @@ const insertion = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@insert.test.compare, @insert.swap"><Main values={values} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
   'joins the two swapped cells with an arrow at the swap step only',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(insertion);
-    const { javascript } = await bundlePresentation(prepared, 1, {
-      chosen: {
-        'pause@first': 'off',
-        'pause@more': 'off',
-        'pause@next': 'off',
-        'pause@insert': 'off',
-        'pause@insert.test': 'off',
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.test.compare.left': 'off',
-        'pause@insert.test.compare.right': 'off',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.from': 'off',
-        'pause@insert.swap.to': 'off'
-      }
-    });
+    const prepared = prepareSvelteComponent(pausingEveryLabel(insertion));
+    const { javascript } = await bundlePresentation(prepared, 1, {});
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -193,23 +180,8 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     expect(traded).toContain('{@insert.swap.trade}');
-    const prepared = prepareSvelteComponent(traded);
-    const { javascript } = await bundlePresentation(prepared, 1, {
-      chosen: {
-        'pause@first': 'off',
-        'pause@more': 'off',
-        'pause@next': 'off',
-        'pause@insert': 'off',
-        'pause@insert.test': 'off',
-        'pause@insert.test.compare': 'accumulate',
-        'pause@insert.test.compare.left': 'off',
-        'pause@insert.test.compare.right': 'off',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.trade': 'off',
-        'pause@insert.swap.from': 'off',
-        'pause@insert.swap.to': 'off'
-      }
-    });
+    const prepared = prepareSvelteComponent(pausingEveryLabel(traded));
+    const { javascript } = await bundlePresentation(prepared, 1, {});
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -247,14 +219,10 @@ it.skipIf(!enabled)(
   async () => {
     // Bubble sort as an assistant wrote it: the arrow is among a column's children, its ends two
     // cells of the row inside it.
-    const prepared = prepareSvelteComponent(bubble);
-    const chosen = Object.fromEntries(
-      prepared.pauses.labels.map((label) => [
-        `pause@${label}`,
-        label === 'pass.pair.compare' || label === 'pass.pair.swap' ? 'accumulate' : 'off'
-      ])
+    const prepared = prepareSvelteComponent(
+      bubble.replace(/pause="[^"]*"/u, 'pause="@pass.pair.compare, @pass.pair.swap"')
     );
-    const { javascript, labels } = await bundlePresentation(prepared, 1, { chosen });
+    const { javascript, labels } = await bundlePresentation(prepared, 1, {});
     const swap = labels.indexOf('@pass.pair.swap#1');
     expect(swap).toBeGreaterThan(0);
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
@@ -297,7 +265,10 @@ it.skipIf(!enabled)(
   'joins each vertex k to its neighbours, an {#each} index a position into what it walks',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(bfs), 1);
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(bfs)),
+      1
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -332,7 +303,10 @@ it.skipIf(!enabled)(
   'keeps a node a pointer’s view is drawn around in the free layout, its links ending at it',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(list), 1);
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(list)),
+      1
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -382,7 +356,7 @@ it.skipIf(!enabled)(
   'meets a vertex drawn in a borderless column at its framed name cell, straight, curved, or wired',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(cards);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(cards));
     for (const curve of ['straight', 'curved', 'wire']) {
       const { javascript } = await bundlePresentation(prepared, 1, {
         chosen: { 'Graph.form': 'scatter', 'Graph.layoutSeed': 10, 'Graph.Link.route': curve }
@@ -438,7 +412,10 @@ it.skipIf(!enabled)(
   'draws edges to vertices drawn by their fields, the {#each} item standing for each',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(dijkstra), 1);
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(dijkstra)),
+      1
+    );
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -483,8 +460,11 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     // Eval2's BFS: "show some more steps" turned on one pause, and the graph took another form.
-    const prepared = prepareSvelteComponent(visitOrder);
-    const placed = async (seed: number, chosen: Record<string, string | number>) => {
+    const placed = async (seed: number, chosen: Record<string, string | number>, look = false) => {
+      const pause = `@init, @visit, @visit.take, ${look ? '@visit.look, ' : ''}@visit.look.add`;
+      const prepared = prepareSvelteComponent(
+        visitOrder.replace(/pause="[^"]*"/u, `pause="${pause}"`)
+      );
       const { javascript } = await bundlePresentation(prepared, seed, { chosen });
       const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
       const errors: string[] = [];
@@ -505,9 +485,9 @@ it.skipIf(!enabled)(
       await page.close();
       return positions;
     };
-    const fewer = await placed(1546190931, { 'pause@visit.look': 'off' });
+    const fewer = await placed(1546190931, {});
     expect(fewer.length).toBeGreaterThan(1);
-    expect(await placed(487362115, { 'pause@visit.look': 'on' })).toEqual(fewer);
+    expect(await placed(487362115, {}, true)).toEqual(fewer);
     // The graph's own layout seed does move it.
     expect(await placed(1546190931, { 'Graph.layoutSeed': 2 })).not.toEqual(fewer);
   }
@@ -517,7 +497,7 @@ it.skipIf(!enabled)(
   'draws the same form from the same values whatever the space, listing shown or not',
   { timeout: 120_000 },
   async () => {
-    const prepared = prepareSvelteComponent(visitOrder);
+    const prepared = prepareSvelteComponent(pausingEveryLabel(visitOrder));
     const formOf = async (language: string, width: number) => {
       const { javascript } = await bundlePresentation(prepared, 1, {
         chosen: { 'listing.language': language }
@@ -567,7 +547,11 @@ it.skipIf(!enabled)(
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(source)),
+      1,
+      {}
+    );
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -593,7 +577,11 @@ it.skipIf(!enabled)(
   'draws a grid’s links straight from cell to cell, as a heap’s edges',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(heapTree), 1, {});
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(heapTree)),
+      1,
+      {}
+    );
     const page = await browser!.newPage({ viewport: { width: 900, height: 600 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -629,7 +617,11 @@ it.skipIf(!enabled)(
   'meets each grid cell with its arrowhead’s tip, never inside the cell, however close the cells',
   { timeout: 120_000 },
   async () => {
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(heapTree), 1, {});
+    const { javascript } = await bundlePresentation(
+      prepareSvelteComponent(pausingEveryLabel(heapTree)),
+      1,
+      {}
+    );
     const page = await browser!.newPage({
       viewport: { width: 900, height: 600 },
       deviceScaleFactor: 2

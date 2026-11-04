@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { pausingEveryLabel } from './testing/every-pause';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -25,7 +26,10 @@ afterAll(() => browser?.close());
 
 /** The links each step of a source draws, shown or kept hidden: each as written, with a head or not. */
 async function linksAtEachStep(source: string) {
-  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1);
+  const { javascript, labels } = await bundlePresentation(
+    prepareSvelteComponent(pausingEveryLabel(source)),
+    1
+  );
   const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
