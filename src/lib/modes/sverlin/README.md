@@ -362,10 +362,8 @@ label given a kind of its own.
   leading a labelled block, before its first labelled statement, need no label
   of their own, as `let min = i;` at the top of `@select{`. A label on part of a
   statement asks nothing of the code around it.
-- The page pauses at the stops of labels' runs, and only there: a scene's pause
-  at a label (see Storyboard) is a step at the end of each of its runs, so a
-  check finding nothing is a step too, and its pause at a label's `:before` a
-  step just before each run begins. So label what a step can be about, as a
+- The page pauses only at the stops a scene's pause names (see Storyboard), so a
+  check finding nothing is a step too. So label what a step can be about, as a
   comparison, `@compare[values[j - 1] > key]`, and the operands it reads, and
   draw them.
 - A step shows the state just after its code, each value moving there from where
@@ -378,13 +376,10 @@ label given a kind of its own.
 - A step inside a run shows only its own part and the code leading up to it; a
   step ending a run shows its whole run, the values its labels gave inside it
   drawn and its code lit.
-- Step 0 is the input as its case gives it, before any code runs; what the
-  algorithm declares, its labels' values, and its applications appear from the
-  first step on, and the view reads a variable itself only inside a `<Node>`,
-  which hides until it is declared. What runs after the last step is a step of
-  its own when it changes or declares a value still in scope, so the end is
-  shown; variables only leaving scope make no step. `return;` stops the
-  algorithm early.
+- At a case's `:before` no code has run: what the algorithm declares, its
+  labels' values, and its applications appear from the first step on, and the
+  view reads a variable itself only inside a `<Node>`, which hides until it is
+  declared. `return;` stops the algorithm early.
 - Each step records every variable in scope, before and after its code: the
   input's, the top level's, and those of the blocks around it. A variable out of
   scope at a step is not part of it, so whatever the view draws from it is
@@ -447,7 +442,6 @@ Binary search, stopping where it finds the target:
   const Int = type('integer', { min: 0, max: 99 });
   const Values = array(Int, { max: 7 });
   const Index = index(Values);
-
 </script>
 
 <script input>
@@ -609,7 +603,7 @@ fits, as `Distances([0, 'unreached'])`, and one fitting two needs its type, as
 but not with `<` or `>`, so check the member first:
 
 ```js
-
+if (@closer[dist[v] === 'unreached' || d < dist[v]]) @relax{ dist[v] = d; }
 ```
 
 The view receives plain arrays and objects, drawn by their types' views.
@@ -635,7 +629,6 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   const ListNodes = pool(ListNode, { max: 3 });          // every ListNode
   const NodeRef = ref(ListNode);                         // always a node in it
   const Next = union(NodeRef, End);                      // a node, or the end
-
 </script>
 
 <script input>
@@ -1352,7 +1345,6 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 4 });
   const Position = index(Values);
-
 </script>
 
 <script input>
@@ -1575,7 +1567,6 @@ at marked and the queue drawn by number:
   const Slot = index(Out);
   const Adjacency = array(Out, { max: 5 });
   const Queue = array(VertexRef, { max: 5 });
-
 </script>
 
 <script input>
@@ -1635,8 +1626,4 @@ at marked and the queue drawn by number:
 <Storyboard>
   <Scene name="search" case="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>
-```
-
-```
-
 ```

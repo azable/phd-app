@@ -44,24 +44,17 @@ a box that holds a value or groups a part: give one only to the kinds where it
 does, never every kind at once, and leave text such as titles, captions and
 labels unboxed. Where views of one type say different things, as pointer views
 captioned i and j, they are not looks: choose each place’s view by what it says,
-as pointers.Position@j for the one captioned j, and never draw them at random. A
-prop a view binds to its value gives each value its look, as
-VertexCard.fill@true and VertexCard.fill@false, or for numbers in order
-LevelCell.textSize@from and LevelCell.textSize@order: keep its values told
-apart, never two of them one option, and give each a look that says what it
-means, as a seen vertex standing out from an unseen one. A length a view binds,
-as Bar.height@unit, is its pixels per unit: keep the largest value's node
-readable and the view within its frame. A kind's width and height, uniform or
-varying, keep its boxes as large as their slots or let each be its own size, and
-its xAnchor and yAnchor place a varying box, or a length, in its slot: keep
-boxes uniform where they are places in a structure, and varying where their size
-means something. A row's or column's spacing, slots or packed, keeps each child
-in its slot, or packs them a constant gap apart so a growing child moves the
-next. A pointer's expand enlarges the element it is at, painted in a row of
-slots, pushing the neighbours aside in a packed one; its scale, spread, offsetX
-and offsetY enlarge, spread or move its whole drawing where it is, taking no
-room, as a lift (offsetY -8) or a growth from the bottom (scale with the
-element's yAnchor end).
+as pointers.Position@j for the one captioned j, and never draw them at random.
+For a prop a view binds to its value (see Props bound to a view's value), keep
+its values told apart, never two of them one option, and give each a look that
+says what it means, as a seen vertex standing out from an unseen one; for a
+length, as Bar.height@unit, keep the largest value's node readable and the view
+within its frame. Keep a kind's width and height uniform where its boxes are
+places in a structure, and varying where their size means something. A pointer's
+expand enlarges the element it is at, painted in a row of slots, pushing the
+neighbours aside in a packed one; its scale, spread, offsetX and offsetY
+enlarge, spread or move its whole drawing where it is, taking no room, as a lift
+(offsetY -8) or a growth from the bottom (scale with the element's yAnchor end).
 
 What the participant asked for, choose; earlier preferences name the values each
 pair differed in, so keep a value that keeps winning. Everything else is open,
