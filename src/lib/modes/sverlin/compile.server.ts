@@ -662,15 +662,30 @@ const pausesKey = (pauses: Pauses) =>
     .join(',');
 
 /**
- * Each step as two, the state just before its code and just after it, as the page plays it: the
- * events up to the code, then the code itself. The first, step 0, the input as given, has no code,
- * so its before is its after.
+ * Each step as two, the state just before its code and just after it: the events up to the code,
+ * then the code itself. The page shows a step's after, moving there from the step on screen in one
+ * motion; the before keeps values matched across the code run between two steps (see Identities).
+ * The first, step 0, the input as given, has no code, so its before is its after.
  */
 export function phasesOf(steps: readonly MasterStep[]): MasterStep[] {
   return steps.flatMap((step, index) => [
     index === 0 ? step : { ...step, ...(step.before ?? {}) },
     step
   ]);
+}
+
+/**
+ * The values a step's after copies from the step before's after: those copied in the code run
+ * between them, at its before, and those its own code copied, each traced back to a value the step
+ * before shows, as key copied at the before and copied again into a place by the step's code.
+ */
+function copiesSincePrevious(
+  gap: Readonly<Record<number, number>> = {},
+  own: Readonly<Record<number, number>> = {}
+): Record<number, number> {
+  const copies: Record<number, number> = { ...gap };
+  for (const [copy, source] of Object.entries(own)) copies[Number(copy)] = gap[source] ?? source;
+  return copies;
 }
 
 /** The algorithm as a listing in each language. */
@@ -2358,7 +2373,10 @@ export async function bundlePresentation(
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
       __identities: { ...phase.identities?.ids, ...ownIdentities },
-      __copies: phase.identities?.copies ?? {},
+      __copies:
+        index % 2 === 1
+          ? copiesSincePrevious(phases[index - 1].identities?.copies, phase.identities?.copies)
+          : (phase.identities?.copies ?? {}),
       __refs: phase.identities?.refs ?? {},
       __frame: frames[entry.sceneIndex],
       __design: values,

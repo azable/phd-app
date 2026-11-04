@@ -178,43 +178,20 @@ function remove(shown: Shown) {
 /**
  * Show a step from the records: mount it in a hidden layer, and once its layout settles, reveal it
  * and remove the step it replaces, so neither a blank page nor an unfinished layout is ever visible.
- * Values move from where the step before showed them (see library/motion.ts); a step shown before
- * a move ends finishes it.
+ * Values move from where the step on screen showed them, in one motion (see library/motion.ts); a
+ * step shown before a move ends finishes it.
  */
 let pendingTiming: ReturnType<typeof timePass> | undefined;
 let leaving: Shown | undefined;
-// A step played forward shows its before, then its after once the moves into the before end; a
-// newer request replaces it.
-let following: object | undefined;
 
-/**
- * Show a step: forward by one, its before and then its after, once whatever the before set moving
- * has finished, or at once where nothing moved; otherwise its after at once.
- */
-function showStep(step: number) {
-  following = undefined;
-  const at = (pending ?? current)?.step;
-  if (at !== undefined && at === afterOf(step - 1)) {
-    const token = (following = {});
-    show(afterOf(step) - 1, () => {
-      void Promise.all(document.getAnimations().map((animation) => animation.finished)).then(
-        () => {
-          if (following === token) show(afterOf(step));
-        },
-        () => {
-          if (following === token) show(afterOf(step));
-        }
-      );
-    });
-  } else show(afterOf(step));
-}
+const showStep = (step: number) => show(afterOf(step));
 
-function show(step: number, shownBefore?: () => void) {
+function show(state: number) {
   if (pending) remove(pending);
   pendingTiming?.cancel();
   let mounted: Shown | undefined;
-  const timed = (pendingTiming = timePass('showing', step, () => mounted));
-  pending = mounted = mountStep(step, (shown) => {
+  const timed = (pendingTiming = timePass('showing', state, () => mounted));
+  pending = mounted = mountStep(state, (shown) => {
     if (pending !== shown) return;
     timed.done();
     if (leaving) remove(leaving);
@@ -227,7 +204,7 @@ function show(step: number, shownBefore?: () => void) {
       const { gone } = animateStep(
         before.layer,
         shown.layer,
-        step === before.step + 1 ? shown.copies : {}
+        state === before.step + 2 ? shown.copies : {}
       );
       leaving = before;
       leaveLayer(before.layer, gone, () => {
@@ -237,11 +214,6 @@ function show(step: number, shownBefore?: () => void) {
       });
     }
     current = shown;
-    if (shownBefore) {
-      shownBefore();
-      pending = undefined;
-      return;
-    }
     // The first step shown means the page is ready, so the app can take its loader away.
     if (!ready) reportTiming({ phase: 'ready', ms: Math.round(performance.now() - pageStarted) });
     if (!ready && window.parent !== window)

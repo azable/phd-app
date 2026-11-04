@@ -333,14 +333,14 @@ label given a kind of its own.
   chooses where the steps pause. So label what a step can be about, as a
   comparison, `@compare[values[j - 1] > key]`, and the operands it reads, and
   draw them.
-- A step shows a change: the state just before its code, then just after it.
-  Code not paused at, inside a label that is off or outside every label, leads
-  up to the next step, and what a label there gives, a value or an application
-  rendered at it, is drawn at that step, as a comparison not paused at is at the
-  swap it leads to. A step inside a run of a label, as in a call it makes, ends
-  that run's code so far: what it changes after is compared with the step.
-  Presentations paced differently step together, one holding its step while the
-  other shows the code between.
+- A step shows the state just after its code, each value moving there from where
+  the step on screen drew it, in one motion. Code not paused at, inside a label
+  that is off or outside every label, leads up to the next step, and what a
+  label there gives, a value or an application rendered at it, is drawn at that
+  step, as a comparison not paused at is at the swap it leads to. A step inside
+  a run of a label, as in a call it makes, ends that run's code so far: what it
+  changes after is compared with the step. Presentations paced differently step
+  together, one holding its step while the other shows the code between.
 - A label with labels inside it says what its pauses inside keep:
   `"accumulate"`, what its run has done so far, its labels' values drawn and its
   code lit, until the run finishes, so paused at the right operand the left one
