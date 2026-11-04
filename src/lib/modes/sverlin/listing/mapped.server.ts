@@ -244,12 +244,19 @@ function ownLines(
 
 /**
  * A mapped listing: its text, marked for each node with a label by the regions with that label, and
- * the problems with its labels; also what each region is mapped to, and its tokens (see Token).
+ * the problems with its labels; also what each region is mapped to, its tokens (see Token), and
+ * the labels it marks no region for.
  */
 export function mappedListing(
   block: { body: string },
   algorithm: { root: BlockStatement; labels: readonly Label[]; code: string }
-): { listing: Listing; problems: MappingProblem[]; maps: RegionMap[]; tokens: Token[] } {
+): {
+  listing: Listing;
+  problems: MappingProblem[];
+  maps: RegionMap[];
+  tokens: Token[];
+  unmarked: { full: string; name: string }[];
+} {
   const { text, regions, tokens, problems } = readRegions(block.body);
   const { root, labels, code } = algorithm;
   const own = new Map<AnyNode, string[]>();
@@ -310,15 +317,11 @@ export function mappedListing(
         block: 'listing',
         at: region.at
       });
-  // Every label is a place the page can pause, so each has a region, lit where it pauses.
+  // A label with no region lights nothing where a scene pauses at it, which the build warns of.
   const shown = new Set(regions.map(({ label }) => label));
-  for (const { full, name, at } of labels)
-    if (!shown.has(full))
-      problems.push({
-        message: `The label @${full} has no region in the listing, where the page lights it when it pauses there; mark the text its code shows as @${name}[…]${full.includes('.') ? ` inside @${full.split('.').slice(0, -1).join('.')}` : ''}, as A[@left[j - 1]] marks the j - 1 of A[j - 1].`,
-        block: 'algorithm',
-        at
-      });
+  const unmarked = labels
+    .filter(({ full }) => !shown.has(full))
+    .map(({ full, name }) => ({ full, name }));
   const maps = regions.map(({ label, start, end }) => ({
     label,
     text: text.slice(start, end),
@@ -335,6 +338,7 @@ export function mappedListing(
     },
     problems,
     maps,
-    tokens
+    tokens,
+    unmarked
   };
 }

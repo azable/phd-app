@@ -174,8 +174,9 @@ scene at least.
   `:after`. A step the view draws from exactly what it drew the step before from
   (the variables it reads, the marks held, the code lit, and each `<When>`)
   draws the same picture, so it is left out, and the build warns, naming both
-  steps. `at=":before"` or `at=":after"` shows only one of them. `title` is a
-  caption beside its name in the controls. Props are written as they are, never
+  steps, unless the step left out is the scene's own `:before` or `:after`.
+  `at=":before"` or `at=":after"` shows only one of them. `title` is a caption
+  beside its name in the controls. Props are written as they are, never
   computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
@@ -1332,12 +1333,13 @@ Mark each part of the text that should light as a region with the algorithm's
 labels, written as they are there (see Steps): `@name[text]`, nested as finely
 as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside
 another taking its name as a prefix. A `[` without a name, as in `A[i]`, is
-text, and the marks are not shown. Every region must have a label and every
-label a region, as each label is a place the page can pause, lighting its region
-there. A region holds the text of what its label marks and no more: a loop's or
-an `if`'s own line goes with its test's label or none, never inside its body's,
-as `for i = 2 to n` stays outside `@insert[…]`; a test with a line of its own
-has a label of its own, as `while (@more[Waiting(queue)])` with
+text, and the marks are not shown. Every region must have a label. A label a
+scene pauses at needs a region, lit where it pauses; without one, that step
+lights nothing and the build warns. A label no scene pauses at needs none. A
+region holds the text of what its label marks and no more: a loop's or an `if`'s
+own line goes with its test's label or none, never inside its body's, as
+`for i = 2 to n` stays outside `@insert[…]`; a test with a line of its own has a
+label of its own, as `while (@more[Waiting(queue)])` with
 `while @more[the queue is not empty]`, and the scenes' pauses decide whether to
 pause there.
 

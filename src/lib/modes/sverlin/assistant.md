@@ -41,10 +41,12 @@ after comparing it. Where cutting it down has more than one fair reading, as the
 whole tree at once against one level at a time, compare them rather than
 choosing. Each active presentation’s readability says how large it shows on a
 typical stage; one whose text would be too small to read comes back to you once,
-to show less at once. Its warnings name steps a scene leaves out, as drawing
-what the step before drew: change the pauses, or show what such a step means.
-Keep the source’s lines short, seldom over 80 characters unless a line cannot
-break, so the participant can read it in the source panel.
+to show less at once. Its warnings, as two paused steps drawing the same picture
+or a paused label lighting nothing in the listing, also come back to you once
+before the participant sees it: settle them, or send the source again where the
+step is meant, and it then shows as built. Keep the source’s lines short, seldom
+over 80 characters unless a line cannot break, so the participant can read it in
+the source panel.
 
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you

@@ -870,8 +870,9 @@ async function runSverlinAssistantTurn(
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
   const turnBrief = new Map<BriefEntry['key'], BriefEntry>();
-  // Whether a picture too large to read went back to the assistant: it does once, then shows.
-  let unreadableReturned = false;
+  // Whether a built picture went back to the assistant for a soft problem, text too small to read
+  // or warnings: one does once a turn, then the picture shows as built.
+  let softReturned = false;
 
   return runAttemptLadder(
     document,
@@ -947,7 +948,7 @@ async function runSverlinAssistantTurn(
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
-        kind: 'edits' | 'comparisons' | 'picture',
+        kind: 'edits' | 'comparisons' | 'picture' | 'warnings',
         problems: string[],
         failedSource: string,
         advice: string[] = []
@@ -955,7 +956,8 @@ async function runSverlinAssistantTurn(
         const outcome = {
           edits: 'the edits could not be applied',
           comparisons: 'the comparisons could not be built',
-          picture: 'the picture drew too large to read'
+          picture: 'the picture drew too large to read',
+          warnings: 'the picture built with warnings'
         }[kind];
         const summary = `Attempt ${attempt}: ${outcome}. ${problems.join(' ')}`;
         failureSummaries.push(summary);
@@ -994,11 +996,12 @@ async function runSverlinAssistantTurn(
           assistantReply: generatedReplyText(generation.result.reply),
           diagnostics: [
             ...problems.map((message) => ({
-              severity: 'error' as const,
+              severity: kind === 'warnings' ? ('warning' as const) : ('error' as const),
               code: {
                 edits: 'edit_not_applied',
                 comparisons: 'comparison_not_built',
-                picture: 'picture_unreadable'
+                picture: 'picture_unreadable',
+                warnings: 'picture_warning'
               }[kind],
               message,
               raw: message
@@ -1232,23 +1235,30 @@ async function runSverlinAssistantTurn(
             candidate
           );
       }
-      // A picture whose text would be too small to read on a typical stage goes back once, with an
-      // attempt left to show less at once; after that it shows as built.
-      const unreadable =
+      // A picture whose text would be too small to read on a typical stage, or one built with
+      // warnings, goes back once a turn, with an attempt left to show less at once or to settle the
+      // warnings; after that it shows as built. Readability goes first, as it stops the picture
+      // being read at all.
+      const returnable =
         candidate !== undefined &&
-        !unreadableReturned &&
+        !softReturned &&
         attempt < chatbot.config.attemptProfiles.length &&
-        batchSucceeded(built.recorded)
-          ? built.recorded.builds
-              .flatMap(({ result }) =>
-                result.ok && result.bundle.readability ? [result.bundle.readability] : []
-              )
-              .map(unreadableProblem)
-              .find((problem) => problem !== undefined)
-          : undefined;
+        batchSucceeded(built.recorded);
+      const bundles = returnable
+        ? built.recorded.builds.flatMap(({ result }) => (result.ok ? [result.bundle] : []))
+        : [];
+      const unreadable = bundles
+        .flatMap(({ readability }) => (readability ? [readability] : []))
+        .map(unreadableProblem)
+        .find((problem) => problem !== undefined);
       if (unreadable && candidate !== undefined) {
-        unreadableReturned = true;
+        softReturned = true;
         return reject('picture', [unreadable], candidate);
+      }
+      const warnings = [...new Set(bundles.flatMap(({ warnings = [] }) => warnings))];
+      if (warnings.length && candidate !== undefined) {
+        softReturned = true;
+        return reject('warnings', warnings, candidate);
       }
       if (batchSucceeded(built.recorded)) {
         // The assistant is the one author of a new or edited source: its first build stands. Only

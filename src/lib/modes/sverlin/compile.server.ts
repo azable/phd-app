@@ -271,6 +271,8 @@ export type PreparedComponent = {
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
   ownListings: string[];
+  /** Each label a scene pauses at that a listing marks no region for, told to the assistant. */
+  listingWarnings?: string[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -469,8 +471,11 @@ function listingsFrom(
   listings: Record<string, Listing>;
   maps: Record<string, RegionMap[]>;
   problems: InvalidSvelteSourceError[];
+  /** The labels a listing marks no region for. */
+  unmarked: { full: string; name: string }[];
 } {
   const listings: Record<string, Listing> = {};
+  const unmarked = new Map<string, { full: string; name: string }>();
   const maps: Record<string, RegionMap[]> = {};
   const problems: InvalidSvelteSourceError[] = [];
   for (const block of own) {
@@ -487,6 +492,7 @@ function listingsFrom(
     const mapped = mappedListing(block, traced);
     listings[block.name] = mapped.listing;
     maps[block.name] = mapped.maps;
+    for (const label of mapped.unmarked) unmarked.set(label.full, label);
     const tokens = places ? tokenProblems(mapped.tokens, places) : [];
     for (const { message, block: where, at: offset } of [...mapped.problems, ...tokens])
       problems.push(
@@ -496,8 +502,12 @@ function listingsFrom(
         })
       );
   }
-  return { listings, maps, problems };
+  return { listings, maps, problems, unmarked: [...unmarked.values()] };
 }
+
+/** What a step paused at a label with no region in the listing lights: nothing. */
+const unlitWarning = (full: string, name: string): string =>
+  `The step @${full} lights nothing in the listing: mark the text its code shows as @${name}[…]${full.includes('.') ? ` inside @${full.split('.').slice(0, -1).join('.')}` : ''}, as A[@left[j - 1]] marks the j - 1 of A[j - 1].`;
 
 /** The algorithm's steps paced as given (see Pacing), opening on step 0, the input as given. */
 
@@ -1719,6 +1729,13 @@ function prepareViews(
       );
     if (written.problems.length) throw InvalidSvelteSourceError.combine(written.problems);
     const ownListings = listingBlocks.map(({ name }) => name);
+    // A label a scene pauses at lights its region in the listing; one with none lights nothing.
+    const paused = new Set(
+      scenes.flatMap(({ pause = [] }) => pause.map((each) => each.replace(/:(before|after)$/u, '')))
+    );
+    const listingWarnings = written.unmarked
+      .filter(({ full }) => paused.has(full))
+      .map(({ full, name }) => unlitWarning(full, name));
     const listings = listing
       ? Object.fromEntries(
           Object.entries(written.listings).map(([name, { text, regions = [], tokens }]) => [
@@ -2051,6 +2068,7 @@ function prepareViews(
       serverComponent,
       master,
       ownListings,
+      ...(listingWarnings.length ? { listingWarnings } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2227,7 +2245,7 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
-  const warnings: string[] = [];
+  const warnings: string[] = [...(prepared.listingWarnings ?? [])];
   const entries = scenes.flatMap((scene, sceneIndex) => {
     const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case);
     const view = {

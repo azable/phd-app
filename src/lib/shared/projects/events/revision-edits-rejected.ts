@@ -7,7 +7,8 @@ import { eventEnvelope, positiveSchema } from './values';
 /**
  * Edits a generation returned that were not applied, and why: each one whose find text did not
  * occur exactly once; or, as `rejected` says, a vary's comparisons that could not be built as given,
- * or a built picture too large to read (see shared/readability.ts).
+ * a built picture too large to read (see shared/readability.ts), or a built picture with warnings,
+ * as a step drawing what the step before drew.
  * Nothing was built from them; the next attempt, if any, repairs them, or, where `kept` names the
  * comparisons that could be built, those were built without them.
  */
@@ -18,8 +19,8 @@ export const revisionEditsRejectedEventSchema = v.object({
     attempt: positiveSchema,
     /** The generation whose edits these were. */
     generationEventId: v.optional(positiveSchema),
-    /** What was rejected: the comparisons, the picture, or the edits where absent. */
-    rejected: v.optional(v.picklist(['comparisons', 'picture'])),
+    /** What was rejected: the comparisons, the picture, its warnings, or the edits where absent. */
+    rejected: v.optional(v.picklist(['comparisons', 'picture', 'warnings'])),
     problems: v.pipe(v.array(v.string()), v.minLength(1)),
     /** The comparisons, by number from 1, built without those rejected. */
     kept: v.optional(v.pipe(v.array(positiveSchema), v.minLength(1)))

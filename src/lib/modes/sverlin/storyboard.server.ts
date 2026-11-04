@@ -384,9 +384,11 @@ export function sceneSteps(
       !step.labelled &&
       !step.applied &&
       drawnFrom(like) === drawnFrom(index)
-    )
-      leftOut?.push({ scene, step: index, like });
-    else shown.push(index);
+    ) {
+      // A scene's edge repeating the step beside it is no one's choice, so it goes unwarned.
+      if (index !== chosen[0] && index !== chosen.at(-1))
+        leftOut?.push({ scene, step: index, like });
+    } else shown.push(index);
   }
   return shown;
 }

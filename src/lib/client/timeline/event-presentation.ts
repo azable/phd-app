@@ -153,18 +153,22 @@ const presenters = {
         ? 'Comparisons left out'
         : event.payload.rejected === 'picture'
           ? 'Picture too small to read'
-          : event.payload.rejected
-            ? 'Comparisons not built'
-            : 'Edits not applied',
+          : event.payload.rejected === 'warnings'
+            ? 'Picture with warnings'
+            : event.payload.rejected
+              ? 'Comparisons not built'
+              : 'Edits not applied',
       event.payload.problems[0] ?? 'The edits could not be placed in the source.',
       'failure',
       event.payload.kept
         ? 'Building the other comparisons…'
         : event.payload.rejected === 'picture'
           ? 'The picture drew too small to read; checking repair…'
-          : event.payload.rejected
-            ? 'Comparisons could not be built; checking repair…'
-            : 'Edits did not apply; checking repair…',
+          : event.payload.rejected === 'warnings'
+            ? 'The picture has warnings; checking repair…'
+            : event.payload.rejected
+              ? 'Comparisons could not be built; checking repair…'
+              : 'Edits did not apply; checking repair…',
       'destructive'
     ),
   'artifact.version-created': (event) =>

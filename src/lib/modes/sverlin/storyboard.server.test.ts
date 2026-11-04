@@ -362,14 +362,29 @@ describe('steps drawing the same picture', () => {
   <Scene name="scan" case="main" pause="${pause}"><Scan values={values} i={i} /></Scene>
 </Storyboard>`;
 
-  it('leaves out a step drawing exactly what the step before drew, with a warning naming both', async () => {
+  it("leaves out the scene's :after where it draws what the last pause drew, unwarned, as no pause chose it", async () => {
     const { labels, warnings } = await bundlePresentation(
       prepareSvelteComponent(linear('@compare')),
       1
     );
     expect(labels).toEqual([':before', '@compare#1', '@compare#2', '@compare#3', '@compare#4']);
+    expect(warnings).toBeUndefined();
+  });
+
+  it('leaves out a paused step drawing exactly what the step before drew, with a warning naming both', async () => {
+    const { labels, warnings } = await bundlePresentation(
+      prepareSvelteComponent(linear('@start, @compare:before')),
+      1
+    );
+    expect(labels).toEqual([
+      ':before',
+      '@start#1',
+      '@compare#2:before',
+      '@compare#3:before',
+      '@compare#4:before'
+    ]);
     expect(warnings).toEqual([
-      '@compare#4 and :after draw the same picture, so :after is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
+      '@start#1 and @compare#1:before draw the same picture, so @compare#1:before is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
     ]);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { listingMapsOf, prepareSvelteComponent } from '../compile.server';
+import { bundlePresentation, listingMapsOf, prepareSvelteComponent } from '../compile.server';
 import { readRegions } from './mapped.server';
 
 const blocks = (algorithm: string, listing: string) => `<script domain>
@@ -109,12 +109,6 @@ describe('listings of the source’s own', () => {
       'The region @size.inner[ has a dotted name: a region takes one name and nests inside the one around it, as @size[… @inner[…]].'
     ],
     [
-      'a label with no region, where a pause there would light nothing',
-      '  @size[const n = Int(@more[1]);]',
-      '@size[n]',
-      'The label @size.more has no region in the listing, where the page lights it when it pauses there; mark the text its code shows as @more[…] inside @size, as A[@left[j - 1]] marks the j - 1 of A[j - 1].'
-    ],
-    [
       'a listing named none',
       '  @size[const n = Int(1);]',
       '@size[n]',
@@ -125,6 +119,20 @@ describe('listings of the source’s own', () => {
     if (name.includes('named none'))
       source = source.replace('listing="textbook"', 'listing="none"');
     expect(() => prepareSvelteComponent(source)).toThrow(message);
+  });
+
+  it('warn of a label a scene pauses at with no region, which would light nothing, and of no other', async () => {
+    const source = blocks('  @size[const n = Int(@more[1]);]', '@size[n]');
+    const warned = await bundlePresentation(
+      prepareSvelteComponent(source.replace('case="main">', 'case="main" pause="@size.more">')),
+      1,
+      {}
+    );
+    expect(warned.warnings).toContain(
+      'The step @size.more lights nothing in the listing: mark the text its code shows as @more[…] inside @size, as A[@left[j - 1]] marks the j - 1 of A[j - 1].'
+    );
+    const unpaused = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    expect(unpaused.warnings ?? []).not.toContainEqual(expect.stringContaining('lights nothing'));
   });
 
   it('tell the assistant what each region is mapped to, and whether a step lights it', () => {

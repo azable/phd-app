@@ -3218,6 +3218,55 @@ describe('several variants from chat', () => {
     );
   });
 
+  it('sends a picture built with warnings back once, then shows it as built', async () => {
+    const repeated = [
+      '<script domain>',
+      "  const Int = type('integer', { min: 0, max: 20 });",
+      '  const Values = array(Int, { max: 5 });',
+      '  const Index = index(Values);',
+      '</script>',
+      '<script input>',
+      '  const values = Values;',
+      '  const target = Int;',
+      '</script>',
+      '<script algorithm>',
+      '  @start[let i = Index(values, 0);]',
+      '  while (@compare[values[i] !== target]) @next[i++;]',
+      '</script>',
+      '<View of="Int" name="Cell"><Node value={this} /></View>',
+      '<View of="Index" name="Mark"><Pointed /></View>',
+      '<Layout name="Scan" of="values, i">',
+      '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
+      '</Layout>',
+      '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
+      '<Storyboard>',
+      '  <Scene name="scan" case="main" pause="@start, @compare:before"><Scan values={values} i={i} /></Scene>',
+      '</Storyboard>'
+    ].join('\n');
+    const result = await attempts(
+      () => ({
+        ...generation(undefined, 'Each check.'),
+        decision: { action: 'revise', source: repeated, summary: 'Each check' }
+      }),
+      'With warnings'
+    );
+
+    const rejected = result.appendedEvents.filter(({ type }) => type === 'revision.edits-rejected');
+    expect(rejected.map(({ payload }) => payload)).toEqual([
+      expect.objectContaining({
+        rejected: 'warnings',
+        problems: [expect.stringContaining('draw the same picture')]
+      })
+    ]);
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'picture_warning', severity: 'warning' })
+    );
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
+    expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
+      true
+    );
+  });
+
   it('sends back a comparison whose sides draw alike at every step, and records where a pair differs', async () => {
     const result = await attempts(
       ({ attempt }) =>
