@@ -59,6 +59,7 @@
     throughContext,
     typeContext,
     wrappedContext,
+    type Packing,
     type Pointer
   } from '../type-context';
   import {
@@ -149,8 +150,8 @@
      * compiler, with the values each can take (see bound.ts).
      */
     __domains?: Readonly<Record<string, BoundDomain>>;
-    /** Internal: for a pointer's copy of an element, the axis the element's row packs along. */
-    __packedAlong?: 'width' | 'height';
+    /** Internal: for a pointer's copy of an element, how the element's row packs it. */
+    __packedAlong?: Packing;
     /**
      * Internal: every row and column a grid's cells can take for any input, from their coordinates'
      * types, null where they cannot be worked out (see gridExtents in bound-props.server.ts).
@@ -189,7 +190,8 @@
   // varies, or its value sizes, its own, in a slot that keeps the largest, so nothing around it
   // moves, placed by its kind's anchor. A parent packing its children along an axis keeps no slot
   // for them there: each takes its own size, and the parent the room of them all.
-  const packedAlong = untrack(() => __packedAlong ?? packingContext());
+  const packing = untrack(() => __packedAlong ?? packingContext());
+  const packedAlong = packing?.axis;
   const varies = (axis: 'width' | 'height') =>
     Boolean(__domains?.[axis]) || look(axis) === 'varying';
   const varyingWidth = $derived(varies('width'));
@@ -200,6 +202,11 @@
     !(axis === 'width' ? varyingWidth : varyingHeight) && packedAlong !== axis;
   const xAnchor = $derived(slotAnchor(look('xAnchor'), 'x', __domains));
   const yAnchor = $derived(slotAnchor(look('yAnchor'), 'y', __domains));
+  // A packed child tells its row where its kind places a box along the row, so an expansion grows
+  // from there: around its centre by default, its neighbours moving apart equally.
+  untrack(() => {
+    if (packing) packing.anchor = packing.axis === 'width' ? xAnchor : yAnchor;
+  });
   // A pointer's kind may expand the element it is at by its expand on each side. In a row that
   // packs, the box grows, taking room the row keeps for it (see packRoom); elsewhere it is paint, its
   // fill spread and its stroke drawn further out, in a room that keeps the pointer's reach wherever
@@ -404,7 +411,11 @@
       look('spacing') === 'packed' &&
       !memory?.measuring
   );
-  untrack(() => providePacking(packs ? (arrangement === 'row' ? 'width' : 'height') : undefined));
+  const ownPacking = $state<Packing>({
+    axis: untrack(() => (arrangement === 'row' ? 'width' : 'height')),
+    anchor: 'center'
+  });
+  untrack(() => providePacking(packs ? ownPacking : undefined));
   // The room a packed collection keeps for its pointers' expansions: one for each pointer that can
   // point into it, along it, and one across, at the largest expand any pointer's kind takes. While
   // the page measures it is padding at its end, so the room it keeps holds them; as a step shows,
@@ -550,6 +561,18 @@
   // any of its renders reaches, keeps its tracks and puts the room where justify says; between,
   // around, and evenly spread the tracks over it instead.
   const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
+  // A packed row keeping room for its pointers' expansions puts that room where its items' kind
+  // places a box (see Packing): around them by default, so an expanded item grows about its centre,
+  // the items before it moving back as far as those after move on.
+  const roomAt = $derived(
+    packs && packRoom
+      ? ownPacking.anchor
+      : justify === 'start'
+        ? 'flex-start'
+        : justify === 'end'
+          ? 'flex-end'
+          : 'center'
+  );
   // A collection keeps room for its type's max elements: drawn to be measured, it holds an empty
   // track for each element it lacks, which the items' equal tracks size as one of them, so the
   // node keeps that size at every step (see model/reserve.ts). A component's box is probed full.
@@ -589,7 +612,7 @@
     __id={id}
     __slot={slot}
     {...props}
-    __packedAlong={packedAlong}
+    __packedAlong={packing}
     __places={[...ownPlaces, ...((props.__places as string[] | undefined) ?? [])]}
   />
 {/snippet}
@@ -693,11 +716,13 @@
             : 'center'
           : undefined}
         style:justify-content={justification}
-        style:width={collection && arrangement === 'row' && packed ? 'max-content' : undefined}
-        style:margin-inline-start={collection && arrangement === 'row' && justify !== 'start'
+        style:width={collection && arrangement === 'row' && (packed || (packs && packRoom))
+          ? 'max-content'
+          : undefined}
+        style:margin-inline-start={collection && arrangement === 'row' && roomAt !== 'flex-start'
           ? 'auto'
           : undefined}
-        style:margin-inline-end={collection && arrangement === 'row' && justify !== 'end'
+        style:margin-inline-end={collection && arrangement === 'row' && roomAt !== 'flex-end'
           ? 'auto'
           : undefined}
         style:position={excluded || overlaid ? 'relative' : undefined}

@@ -2,9 +2,11 @@
  * Moving from one step to the next. Each step is drawn in a layer of its own, laid out before it
  * shows, so a node drawing the same value, or the same pointer, in both layers (data-sv-identity)
  * starts where it was and moves to its new place: it is drawn in place and translated back, then
- * the translation runs out. A copy of a value starts where its source was; a new value fades in,
- * unless it is part of one that moves; a value gone fades out with the layer it was in, kept over
- * the new one until then.
+ * the translation runs out. It starts the size and paint it had too, and changes to its new ones
+ * over the same time, so a box growing about its anchor grows while its neighbours make way, and a
+ * highlight passing from one value to the next fades across. A copy of a value starts where its
+ * source was; a new value fades in, unless it is part of one that moves; a value gone fades out
+ * with the layer it was in, kept over the new one until then.
  */
 
 /**
@@ -60,6 +62,99 @@ function scaleOf(element: HTMLElement, box: DOMRect): number {
   return element.offsetWidth ? box.width / element.offsetWidth : 1;
 }
 
+/** The paint a node changes between steps, each interpolated from its old value to its new. */
+const paintProperties = [
+  'backgroundColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'color',
+  'boxShadow',
+  'opacity',
+  'outlineColor',
+  'outlineWidth',
+  'outlineOffset'
+] as const;
+
+const pixels = (value: string) => Number.parseFloat(value) || 0;
+
+/** The size and paint a node shows now, copied, so later animations do not change it. */
+type Look = Record<(typeof lookProperties)[number], string>;
+
+const lookProperties = [
+  ...paintProperties,
+  'outlineStyle',
+  'width',
+  'height',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'marginRight',
+  'marginBottom'
+] as const;
+
+function snapshot(element: HTMLElement): Look {
+  const style = getComputedStyle(element);
+  return Object.fromEntries(lookProperties.map((property) => [property, style[property]])) as Look;
+}
+
+/**
+ * Keyframes taking a node's paint from what it showed before to what it shows now, or none where
+ * nothing changed. An outline appearing or going keeps one style throughout, its width running
+ * from or to 0, so it grows or shrinks instead of flipping halfway.
+ */
+function paintFrames(was: Look, is: Look): Keyframe[] | undefined {
+  const from: Keyframe = {};
+  const to: Keyframe = {};
+  for (const property of paintProperties)
+    if (was[property] !== is[property]) {
+      from[property] = was[property];
+      to[property] = is[property];
+    }
+  if (was.outlineStyle !== is.outlineStyle) {
+    const drawn = is.outlineStyle === 'none' ? was : is;
+    from.outlineStyle = to.outlineStyle = drawn.outlineStyle;
+    from.outlineWidth = was.outlineStyle === 'none' ? '0px' : was.outlineWidth;
+    to.outlineWidth = is.outlineStyle === 'none' ? '0px' : is.outlineWidth;
+    from.outlineColor = was.outlineStyle === 'none' ? 'transparent' : was.outlineColor;
+    to.outlineColor = is.outlineStyle === 'none' ? 'transparent' : is.outlineColor;
+  }
+  return Object.keys(from).length ? [from, to] : undefined;
+}
+
+/**
+ * Keyframes taking a node's box from its old size to its new, or none where it kept its size. Its
+ * margins make up the difference at every frame, so its layout keeps the new size and nothing
+ * around it reflows: its neighbours move by their own translations, and with the box translated
+ * from its old place to its new, each edge runs straight between the two, so it grows about the
+ * anchor that placed it. Its least sizes give way while it does, and what it holds is laid out
+ * afresh at each size, never scaled.
+ */
+function sizeFrames(was: Look, is: Look): Keyframe[] | undefined {
+  const width = pixels(is.width) - pixels(was.width);
+  const height = pixels(is.height) - pixels(was.height);
+  if (Math.abs(width) < still && Math.abs(height) < still) return undefined;
+  const sides = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const;
+  const from: Keyframe = {
+    width: was.width,
+    height: was.height,
+    minWidth: '0px',
+    minHeight: '0px'
+  };
+  const to: Keyframe = { width: is.width, height: is.height, minWidth: '0px', minHeight: '0px' };
+  for (const side of sides) {
+    from[side] = was[side];
+    to[side] = is[side];
+  }
+  from.marginRight = `${pixels(is.marginRight) + width}px`;
+  to.marginRight = is.marginRight;
+  from.marginBottom = `${pixels(is.marginBottom) + height}px`;
+  to.marginBottom = is.marginBottom;
+  return [from, to];
+}
+
 /**
  * Animate the change from the layer shown before to the one shown now: moves and fades in `after`,
  * and the values gone marked in `before` for leaveLayer. `copies` gives the source of each value
@@ -75,7 +170,10 @@ export function animateStep(
   const now = placedByIdentity(after);
 
   // Where each node starts, as a move from its old box on screen; new ones fade in.
-  const moves = new Map<HTMLElement, { x: number; y: number; scale: number }>();
+  const moves = new Map<
+    HTMLElement,
+    { x: number; y: number; scale: number; source: HTMLElement }
+  >();
   const appearing: HTMLElement[] = [];
   for (const [identity, placed] of now) {
     const from = old.get(identity) ?? old.get(copiedFrom(identity, copies) ?? '');
@@ -86,11 +184,21 @@ export function animateStep(
         moves.set(element, {
           x: source.box.left - box.left,
           y: source.box.top - box.top,
-          scale: scaleOf(element, box)
+          scale: scaleOf(element, box),
+          source: source.element
         });
     });
   }
 
+  // Each node's old and new size and paint, read before anything here animates, as a parent's
+  // colour animating would change what its children inherit.
+  const styles = new Map(
+    [...moves].map(([element, { source }]) => [
+      element,
+      { was: snapshot(source), is: snapshot(element) }
+    ])
+  );
+  const timing = { duration: motionDuration, easing };
   // A node inside one that moves moves with it, so it is translated only by the difference.
   for (const [element, move] of moves) {
     let outer: { x: number; y: number } | undefined;
@@ -98,11 +206,15 @@ export function animateStep(
       outer = moves.get(parent);
     const x = (move.x - (outer?.x ?? 0)) / move.scale;
     const y = (move.y - (outer?.y ?? 0)) / move.scale;
-    if (Math.abs(x) < still && Math.abs(y) < still) continue;
-    element.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], {
-      duration: motionDuration,
-      easing
-    });
+    if (Math.abs(x) >= still || Math.abs(y) >= still)
+      element.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], timing);
+    const { was, is } = styles.get(element)!;
+    const paint = paintFrames(was, is);
+    if (paint) element.animate(paint, timing);
+    // Only a node holding no other the steps match changes size: inside one that does, what it
+    // holds is placed by its new size and moves on its own.
+    const size = element.querySelector('[data-sv-identity]') ? undefined : sizeFrames(was, is);
+    if (size) element.animate(size, timing);
   }
   // A part of a value that moves, as a card's name where only the name was drawn before, rides
   // with it in view; anything else new fades in.

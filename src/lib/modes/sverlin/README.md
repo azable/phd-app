@@ -197,8 +197,13 @@ written in the view so the label is a kind of its own.
   `expand`, 0, 2, 4, or 8 pixels on each side, enlarges the element where the
   pointer is: in a row of slots it is painted, its fill spread and its stroke
   drawn further out, in room every element keeps for it, so nothing moves; in a
-  packed row it takes room, pushing the neighbours aside, the row keeping room
-  for one expansion for each pointer into it.
+  packed row it takes room, growing from where the element's kind places it
+  along the row (`xAnchor`): about its centre by default, the elements before it
+  moving back as far as those after move on; the row keeps room for one
+  expansion for each pointer into it, at its ends as that anchor says (a packed
+  column keeps it at its end). Between steps an element changes size and paint
+  as it moves, so an expansion grows and a highlight fades from one element to
+  the next.
 - Render a pointer in a layout's root itself, outside other nodes, snippets, and
   blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
   an element, a field (`{edges[e].to}`), or a label (see Views of what a step

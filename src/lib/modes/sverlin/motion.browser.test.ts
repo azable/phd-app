@@ -11,6 +11,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { motionDuration } from './library/motion';
 
 const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
@@ -796,5 +797,137 @@ it.skipIf(!enabled)(
     }
     expect(errors).toEqual([]);
     await page.close();
+  }
+);
+
+const scan = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values([7, 42, 3, 18, 25]);
+  const target = Int(18);
+</script>
+<script algorithm>
+  @start[let i = Index(0);]
+  while (@scan[values[i] !== target]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+
+/** A value's box on screen, and its fill as red, green and blue. */
+type Cell = { left: number; right: number; fill: number[] };
+
+/**
+ * The scan drawn with the variant given at each step listed, or halfway through the move into it
+ * from the step before where it is negative: each value's box, left to right, with its fill. Step 0
+ * is the input as given, before the pointer is declared; step n has the pointer at value n - 1.
+ */
+async function scanCells(
+  chosen: Record<string, string | number>,
+  steps: readonly number[]
+): Promise<Cell[][]> {
+  const prepared = prepareSvelteComponent(scan);
+  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+  const page = await browser!.newPage({ viewport: { width: 900, height: 400 } });
+  await page.setContent(sandboxDocument('', javascript, 0, 1));
+  await page.waitForFunction(() =>
+    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+  );
+  const go = (to: number) =>
+    page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), to);
+  const drawn: Cell[][] = [];
+  for (const step of steps) {
+    const halfway = step < 0;
+    await go(halfway ? -step - 1 : step);
+    await page.waitForTimeout(1500);
+    if (halfway) {
+      await go(-step);
+      await page.waitForFunction(() =>
+        document
+          .querySelector('.sv-layer:not(.pending):not(.sv-leaving)')
+          ?.getAnimations({ subtree: true })
+          .some((animation) => animation.playState === 'running')
+      );
+      await page.evaluate((at) => {
+        for (const animation of document.getAnimations()) {
+          animation.pause();
+          animation.currentTime = at;
+        }
+      }, motionDuration / 2);
+    }
+    drawn.push(
+      await page.evaluate(() => {
+        const canvas = document.createElement('canvas').getContext('2d')!;
+        const rgb = (colour: string) => {
+          canvas.clearRect(0, 0, 1, 1);
+          canvas.fillStyle = colour;
+          canvas.fillRect(0, 0, 1, 1);
+          return [...canvas.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+        };
+        const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
+        return [...layer.querySelectorAll<HTMLElement>('[data-sv-kind]')]
+          .filter((node) => node.querySelector('.value') && !node.querySelector('[data-sv-kind]'))
+          .map((node) => {
+            const box = node.getBoundingClientRect();
+            return {
+              left: box.left,
+              right: box.right,
+              fill: rgb(getComputedStyle(node).backgroundColor)
+            };
+          })
+          .sort((a, b) => a.left - b.left);
+      })
+    );
+    if (halfway) await page.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
+  }
+  await page.close();
+  return drawn;
+}
+
+const centre = (cell: Cell) => (cell.left + cell.right) / 2;
+const gaps = (cells: Cell[]) => cells.slice(1).map((cell, index) => cell.left - cells[index].right);
+
+it.skipIf(!enabled)(
+  'expands a packed row about the pointed cell, its neighbours moving apart equally',
+  { timeout: 180_000 },
+  async () => {
+    const [given, pointed, moving] = await scanCells(
+      { 'Row.spacing': 'packed', 'Here.Pointed.expand': 8 },
+      [0, 2, -3]
+    );
+    expect(pointed).toHaveLength(5);
+    // At step 2 the pointer is at the second value: it grows about its own centre, as it was
+    // unexpanded at step 0, and the values on either side move apart by as much.
+    expect(pointed[1].right - pointed[1].left).toBeGreaterThan(given[1].right - given[1].left + 4);
+    expect(centre(pointed[1])).toBeCloseTo(centre(given[1]), 0);
+    const shifts = pointed.map((cell, index) => centre(cell) - centre(given[index]));
+    expect(shifts[0]).toBeLessThan(-1);
+    for (const shift of shifts.slice(2)) expect(shift).toBeGreaterThan(1);
+    expect(-shifts[0]).toBeCloseTo(shifts[2], 0);
+    // Halfway through the pointer moving on, no two values overlap and the gaps stay equal.
+    expect(moving).toHaveLength(5);
+    const between = gaps(moving);
+    expect(Math.min(...between)).toBeGreaterThan(0);
+    expect(Math.max(...between) - Math.min(...between)).toBeLessThan(1);
+  }
+);
+
+it.skipIf(!enabled)(
+  'fades a highlight from one value to the next as the pointer moves on',
+  { timeout: 120_000 },
+  async () => {
+    const [before, halfway, after] = await scanCells({ 'Here.Pointed.expand': 4 }, [2, -3, 3]);
+    // The third value takes the highlight at step 3: halfway there, its fill lies between.
+    const [from, mid, to] = [before[2].fill, halfway[2].fill, after[2].fill];
+    expect(from).not.toEqual(to);
+    for (const [index, value] of mid.entries()) {
+      expect(value).toBeGreaterThanOrEqual(Math.min(from[index], to[index]) - 1);
+      expect(value).toBeLessThanOrEqual(Math.max(from[index], to[index]) + 1);
+    }
+    expect(mid.some((value, index) => value !== from[index] && value !== to[index])).toBe(true);
   }
 );
