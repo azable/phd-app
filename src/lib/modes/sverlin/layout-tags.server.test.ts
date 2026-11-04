@@ -11,7 +11,7 @@ const blocks = `<script domain>
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[2, 5, 7, 9, 12]} target={9} />
+</script><Case name="main" values={[2, 5, 7, 9, 12]} target={9} />
 
 <script algorithm>
   @bounds[let lo = Index(0); let hi = values.length - 1;]
@@ -34,7 +34,7 @@ const main = (body: string, of = 'values, target, lo, hi') =>
   `<Layout name="Main" of="${of}">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n    {hi}\n  </Node>\n</Layout>\n${scene(of)}`;
 /** One scene showing Main, passing the variables it declares. */
 const scene = (of: string) =>
-  `<Storyboard><Scene name="main" run="main"><Main${of
+  `<Storyboard><Scene name="main" case="main"><Main${of
     .split(', ')
     .filter((input) => input && !input.startsWith('@'))
     .map((input) => ` ${input}={${input}}`)

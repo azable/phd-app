@@ -29,7 +29,7 @@ const insertion = `<script domain>
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[5, 2, 4, 1]} />
+</script><Case name="main" values={[5, 2, 4, 1]} />
 <script algorithm>
   for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
@@ -57,7 +57,7 @@ const insertion = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 const off = {

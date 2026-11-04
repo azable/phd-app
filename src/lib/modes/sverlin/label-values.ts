@@ -5,8 +5,9 @@
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
  * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
- * steps, taking turns in one place; `of=":before"` and `of=":after"` name the whole run's stops,
- * the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is found, to be refused.
+ * steps, taking turns in one place; `of=":before"` and `of=":after"` name the stops of the case
+ * shown, the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is
+ * found, to be refused.
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
  * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
@@ -71,7 +72,7 @@ const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(befor
 const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
 const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
 const tagsAdvice =
-  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a run of the label, or of=":before" or of=":after", the whole run\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
+  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a run of the label, or of=":before" or of=":after", the case\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
 
 /**
  * The markup with each <When> as `{#if when(…)}…{/if}` and each <OneOf> as a chain of them, no
@@ -120,7 +121,7 @@ export function whenTags(source: string): {
       if (written === 'start' || written === 'end') {
         const stop = written === 'start' ? ':before' : ':after';
         problems.push({
-          message: `<When of="${written}"> names no stop: the whole run's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as <When of="${stop}">.`,
+          message: `<When of="${written}"> names no stop: the case's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as <When of="${stop}">.`,
           start
         });
         continue;

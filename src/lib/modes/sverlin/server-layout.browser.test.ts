@@ -232,7 +232,7 @@ it.skipIf(!enabled)(
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[7, 42, 3, 18]} />
+</script><Case name="main" values={[7, 42, 3, 18]} />
 <script algorithm>
   @start[let i = Index(0);]
   while (@more[i < values.length]) @next[i++;]
@@ -243,7 +243,7 @@ it.skipIf(!enabled)(
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
     const given = await drawsAsGiven(source, {
       chosen: { 'Cell.shadow': 'lifted', 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
@@ -281,7 +281,7 @@ it.skipIf(!enabled)(
 </script>
 <script input>
   const names = Names;
-</script><Run name="main" names={['A', 'BBBBBB', 'CC']} />
+</script><Case name="main" names={['A', 'BBBBBB', 'CC']} />
 <script algorithm>
   @swap[const held = names[0]; names[0] = names[2]; names[2] = held;]
 </script>
@@ -290,7 +290,7 @@ it.skipIf(!enabled)(
 <Layout name="Main" of="names"><Node>{names}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main names={names} /></Scene>
+  <Scene name="main" case="main"><Main names={names} /></Scene>
 </Storyboard>`;
     const tags = (step: SceneStep) =>
       step.nodes
@@ -336,9 +336,9 @@ it.skipIf(!enabled)(
 </script>
 <View of="Int" name="Num"><Node value={this} /></View>
 <Layout name="Main" of="a, b"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>
-<Run name="main" />
+<Case name="main" />
 <Storyboard>
-  <Scene name="main" run="main"><Main a={a} b={b} /></Scene>
+  <Scene name="main" case="main"><Main a={a} b={b} /></Scene>
 </Storyboard>`;
     const { steps } = await drawsAsGiven(source, {
       chosen: { 'Num.width': 'varying', 'Main.Pair.spacing': 'packed' }
@@ -374,7 +374,7 @@ it.skipIf(!enabled)(
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[7, 42, 3, 18, 25]} target={18} />
+</script><Case name="main" values={[7, 42, 3, 18, 25]} target={18} />
 <script algorithm>
   @start[let i = Index(0);]
   while (@scan[values[i] !== target]) @next[i++;]
@@ -385,7 +385,7 @@ it.skipIf(!enabled)(
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
     for (const chosen of [
       { 'Here.Pointed.expand': 4 },

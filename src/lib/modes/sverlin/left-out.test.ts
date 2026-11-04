@@ -11,7 +11,7 @@ const source = `<script domain>
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[3, 1]} />
+</script><Case name="main" values={[3, 1]} />
 <script algorithm>
   for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @pass{
     @pick[const v = values[i];]
@@ -34,7 +34,7 @@ const source = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main v={v} values={values} /></Scene>
+  <Scene name="main" case="main"><Main v={v} values={values} /></Scene>
 </Storyboard>`;
 
 const prepared = prepareSvelteComponent(source);

@@ -13,7 +13,7 @@ const binarySearch = (listing: string) => `<script domain>
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
+</script><Case name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
 <script algorithm>
   @run[let lo = Index(0);
   let hi = values.length - 1;]
@@ -41,7 +41,7 @@ ${listing}
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+  <Scene name="main" case="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
 </Storyboard>`;
 
 const tokened = `  @run[start:] lo = 0, hi = n - 1
@@ -61,7 +61,7 @@ const linearSearch = `<script domain>
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[4, 7, 2]} target={7} />
+</script><Case name="main" values={[4, 7, 2]} target={7} />
 <script algorithm>
   for (@setup[let i = Index(0)]; @guard[i < values.length]; @onward[i++]) @scan{
     @check[if (@cond[values[i] === target]) break;]
@@ -84,7 +84,7 @@ const linearSearch = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main i={i} target={target} values={values} /></Scene>
+  <Scene name="main" case="main"><Main i={i} target={target} values={values} /></Scene>
 </Storyboard>`;
 
 /** Each step's touched places, as the starter shows them, pausing at the labels given. */
@@ -206,7 +206,7 @@ describe('tokens naming places in a listing', () => {
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[5, 2, 4, 1]} />
+</script><Case name="main" values={[5, 2, 4, 1]} />
 <script algorithm>
   for (@setup[let i = Position(1)]; @guard[i < values.length]; @onward[i++]) @insert{
     @key[const key = values[i];]
@@ -241,7 +241,7 @@ describe('tokens naming places in a listing', () => {
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" case="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
 </Storyboard>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
     expect(steps[1]).toEqual(['@key', '@i']);

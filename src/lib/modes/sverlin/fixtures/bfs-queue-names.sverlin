@@ -84,7 +84,7 @@
   </Node>
 </Layout>
 
-<Run name="main" vertices={[
+<Case name="main" vertices={[
     { name: 'A', seen: true },
     { name: 'B', seen: false },
     { name: 'C', seen: false },
@@ -93,5 +93,5 @@
   ]} neighbours={[[1, 2], [3], [3], [4], []]} start={0} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
 </Storyboard>

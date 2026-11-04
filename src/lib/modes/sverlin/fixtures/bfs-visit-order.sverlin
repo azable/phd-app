@@ -139,7 +139,7 @@ BFS(start)
   </Node>
 </Layout>
 
-<Run name="main" vertices={[
+<Case name="main" vertices={[
     { name: 'A', seen: true },
     { name: 'B', seen: false },
     { name: 'C', seen: false },
@@ -156,5 +156,5 @@ BFS(start)
   ]} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
 </Storyboard>

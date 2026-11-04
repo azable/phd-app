@@ -35,7 +35,7 @@ const insertion = `<script domain>
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[5, 2, 4, 1]} />
+</script><Case name="main" values={[5, 2, 4, 1]} />
 <script algorithm>
   for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
@@ -62,7 +62,7 @@ const insertion = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -556,7 +556,7 @@ it.skipIf(!enabled)(
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 4 });
 </script>
-<script input>const values = Values;</script><Run name="main" values={[3, 1, 2]} />
+<script input>const values = Values;</script><Case name="main" values={[3, 1, 2]} />
 <script algorithm>@run[let n = Int(1);]</script>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row">
@@ -565,7 +565,7 @@ it.skipIf(!enabled)(
 <Layout name="Main" of="values"><Node>{values}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });

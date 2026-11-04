@@ -11,7 +11,7 @@ const blocks = `<script domain>
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[2, 5, 7, 9, 12]} target={9} />
+</script><Case name="main" values={[2, 5, 7, 9, 12]} target={9} />
 
 <script algorithm>
   @bounds[let lo = Index(0); let hi = values.length - 1;]
@@ -39,9 +39,9 @@ const blocks = `<script domain>
 const search = '<Search values={values} lo={lo} hi={hi} />';
 const storyboard = (...scenes: string[]) =>
   `${blocks}\n<Storyboard>\n${scenes.join('\n')}\n</Storyboard>`;
-// A scene showing state shows the run main, unless it names its own.
+// A scene showing state shows the case main, unless it names its own.
 const scene = (props: string, shows = search) =>
-  `  <Scene ${props}${/=\{/u.test(shows) && !/\brun=/u.test(props) ? ' run="main"' : ''}>${shows}</Scene>`;
+  `  <Scene ${props}${/=\{/u.test(shows) && !/\bcase=/u.test(props) ? ' case="main"' : ''}>${shows}</Scene>`;
 
 const problemOf = (source: string) => {
   try {
@@ -77,7 +77,7 @@ describe('storyboards', () => {
     ]);
     const { labels } = await bundlePresentation(prepared, 1);
     const scenes = labels.map((label) => label.split(':')[0]);
-    // The whole run, the card as one frame, then the second probe again from its :before.
+    // The whole case, the card as one frame, then the second probe again from its :before.
     expect(labels[0]).toBe('search: :before');
     expect(scenes.indexOf('then')).toBe(scenes.lastIndexOf('then'));
     expect(
@@ -193,7 +193,7 @@ describe('storyboards', () => {
     [
       'a within matching no run',
       storyboard(scene('name="probe" within="@probe#9"')),
-      'within="@probe#9" matches no run: in the run main, @probe runs'
+      'within="@probe#9" matches no run: in the case main, @probe runs'
     ],
     [
       'a within written as another selector',
@@ -240,18 +240,18 @@ describe('storyboards', () => {
   });
 });
 
-describe('runs', () => {
-  // The blocks with the runs given in place of the one, main.
-  const withRuns = (runs: string, ...scenes: string[]) =>
-    storyboard(...scenes).replace(/<Run name="main"[^\n]*\/>/u, runs);
+describe('cases', () => {
+  // The blocks with the cases given in place of the one, main.
+  const withCases = (cases: string, ...scenes: string[]) =>
+    storyboard(...scenes).replace(/<Case name="main"[^\n]*\/>/u, cases);
 
-  it('shows two runs, each scene paced from its own', async () => {
+  it('shows two cases, each scene paced from its own', async () => {
     const two = prepareSvelteComponent(
-      withRuns(
-        '<Run name="present" values={[2, 5, 7, 9, 12]} target={9} />\n<Run name="absent" values={[2, 5, 7, 9, 12]} target={4} />',
-        scene('name="found" run="present"'),
+      withCases(
+        '<Case name="present" values={[2, 5, 7, 9, 12]} target={9} />\n<Case name="absent" values={[2, 5, 7, 9, 12]} target={4} />',
+        scene('name="found" case="present"'),
         scene('name="card"', '<Card />'),
-        scene('name="missing" run="absent"')
+        scene('name="missing" case="absent"')
       )
     );
     const { labels } = await bundlePresentation(two, 1);
@@ -267,37 +267,40 @@ describe('runs', () => {
 
   it.each([
     [
-      'a stepping scene naming no run',
+      'a stepping scene naming no case',
       storyboard('  <Scene name="search">' + search + '</Scene>'),
-      'The scene search steps through a run, so it names it, as <Scene name="search" run="main">; the runs are main.'
+      'The scene search steps through a case, so it names it, as <Scene name="search" case="main">; the cases are main.'
     ],
     [
-      'a scene naming a run no <Run> names',
-      storyboard(scene('name="search" run="other"')),
-      'The scene search shows the run other, and no run is named other; the runs are main.'
+      'a scene naming a case no <Case> names',
+      storyboard(scene('name="search" case="other"')),
+      'The scene search shows the case other, and no case is named other; the cases are main.'
     ],
     [
-      'a run missing an input',
-      withRuns('<Run name="main" values={[2, 5]} />', scene('name="search"')),
-      'The run main gives no target: a run gives every input the input block declares, as target={…}.'
+      'a case missing an input',
+      withCases('<Case name="main" values={[2, 5]} />', scene('name="search"')),
+      'The case main gives no target: a case gives every input the input block declares, as target={…}.'
     ],
     [
-      'a run giving an input the input block does not declare',
-      withRuns('<Run name="main" values={[2, 5]} target={5} extra={1} />', scene('name="search"')),
-      'The run main gives extra, which the input block does not declare; its inputs are values, target.'
+      'a case giving an input the input block does not declare',
+      withCases(
+        '<Case name="main" values={[2, 5]} target={5} extra={1} />',
+        scene('name="search"')
+      ),
+      'The case main gives extra, which the input block does not declare; its inputs are values, target.'
     ],
     [
       'a value not of its input’s type',
-      withRuns('<Run name="main" values={[2, 500]} target={5} />', scene('name="search"')),
-      'In the run main, values: '
+      withCases('<Case name="main" values={[2, 500]} target={5} />', scene('name="search"')),
+      'In the case main, values: '
     ],
     [
-      'two runs of one name',
-      withRuns(
-        '<Run name="main" values={[2]} target={2} />\n<Run name="main" values={[3]} target={3} />',
+      'two cases of one name',
+      withCases(
+        '<Case name="main" values={[2]} target={2} />\n<Case name="main" values={[3]} target={3} />',
         scene('name="search"')
       ),
-      'Two runs are named main'
+      'Two cases are named main'
     ],
     [
       'a value in the input block',
@@ -305,8 +308,23 @@ describe('runs', () => {
       'target is given a value in the input block, which declares only its type: write const target = Int;'
     ],
     [
-      'a run on a single frame',
-      storyboard(scene('name="search"'), '  <Scene name="card" run="main"><Card /></Scene>'),
+      'a type name in a case value',
+      withCases('<Case name="main" values={[2, 5]} target={Int(5)} />', scene('name="search"')),
+      'The value of target names the type Int: a case writes each value plainly, as target={9} or target={[2, 5, 7]}'
+    ],
+    [
+      'a <Run>',
+      withCases('<Run name="main" values={[2, 5]} target={5} />', scene('name="search"')),
+      'An execution the source shows is a <Case>, not a <Run>'
+    ],
+    [
+      'a scene naming its case with run',
+      storyboard('  <Scene name="search" run="main">' + search + '</Scene>'),
+      'A <Scene> names the execution it shows with case, as case="present"'
+    ],
+    [
+      'a case on a single frame',
+      storyboard(scene('name="search"'), '  <Scene name="card" case="main"><Card /></Scene>'),
       'The scene card shows Card, which reads no state, so it is one frame'
     ]
   ])('refuses %s', (_, source, message) => {

@@ -1,10 +1,10 @@
 /**
  * The storyboard, `<Storyboard>` holding `<Scene>`s in the order they play, each nesting the one
  * layout it shows as a tag that passes it state: only scenes read state. A scene steps through the
- * run, or the runs of one label it is `within`, pausing only where its `pause` says, or shows one
+ * execution its `case` names, or the runs of one label it is `within`, pausing only where its `pause` says, or shows one
  * moment of them (`at`); a scene passing no state and choosing no
  * moments is a single frame, as a title card or a note. The storyboard is read from the text before
- * Svelte sees the view, and then blanked; its steps are chosen once the run is traced (sceneSteps).
+ * Svelte sees the view, and then blanked; its steps are chosen once the case is traced (sceneSteps).
  */
 
 import {
@@ -20,8 +20,8 @@ export type Scene = {
   name: string;
   /** The page layout it shows. */
   layout: string;
-  /** The run it shows (see runs.server.ts); a frame shows none. */
-  run?: string;
+  /** The case it shows (see cases.server.ts); a frame shows none. */
+  case?: string;
   /** The stops it pauses at, by full name: a label for its :after, label:before for its :before. */
   pause?: string[];
   /** The runs of one label it steps through, all of them or the nth to begin. */
@@ -45,11 +45,11 @@ const sceneName = /^[A-Za-z][\w-]*$/u;
 const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
-const sceneProps = new Set(['name', 'run', 'pause', 'within', 'at', 'title']);
+const sceneProps = new Set(['name', 'case', 'pause', 'within', 'at', 'title']);
 
 /** How a storyboard is written, for messages. */
 const storyboardAdvice =
-  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search" run="main"><Main values={values} lo={lo} /></Scene></Storyboard>';
+  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search" case="main"><Main values={values} lo={lo} /></Scene></Storyboard>';
 
 /** The tag a scene would write for a layout, passing every input it declares. */
 const tagOf = (layout: string, inputs: Inputs) =>
@@ -74,7 +74,7 @@ export function writtenStoryboard(
   if (!openings.length) {
     const first = [...layouts.keys()][0];
     const missing = {
-      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main" run="main">${tagOf(first, layouts.get(first)!)}</Scene></Storyboard>` : ''}.`,
+      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main" case="main">${tagOf(first, layouts.get(first)!)}</Scene></Storyboard>` : ''}.`,
       start: scanned.trimEnd().length
     };
     return { scenes: [], problems, missing };
@@ -143,7 +143,7 @@ export function writtenStoryboard(
     const props = match[1];
     if (props.trimEnd().endsWith('/')) {
       problems.push({
-        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search" run="main"><Main values={values} /></Scene>.`,
+        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search" case="main"><Main values={values} /></Scene>.`,
         start: bodyStart + at
       });
       rest = at + match[0].length;
@@ -192,9 +192,13 @@ function sceneOf(
       return fail(
         `<Scene${props}> is no scene: a scene is written <Scene name="search">…</Scene>, its props written as they are.`
       );
+    if (found[1] === 'run')
+      return fail(
+        `A <Scene> names the execution it shows with case, as case="present", the name of a <Case>: a run is one pass through a label's code, as @insert#2.`
+      );
     if (!sceneProps.has(found[1]))
       return fail(
-        `A <Scene> takes name, run, pause, within, at, and title: ${found[1]} is no prop of a scene.`
+        `A <Scene> takes name, case, pause, within, at, and title: ${found[1]} is no prop of a scene.`
       );
     if (found[4] !== undefined)
       return fail(
@@ -245,11 +249,11 @@ function sceneOf(
   const tag = /^\s*<([A-Za-z_$][\w$]*)\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>\s*$/u.exec(inner);
   if (!inner.trim())
     return fail(
-      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}" run="main"><Main values={values} /></Scene>.`
+      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}" case="main"><Main values={values} /></Scene>.`
     );
   if (!tag || !tag[2].trimEnd().endsWith('/'))
     return fail(
-      `A scene nests exactly one layout, as its tag, closed at once, as <Scene name="${name}" run="main"><Main values={values} /></Scene>: what it shows is arranged in that layout.`
+      `A scene nests exactly one layout, as its tag, closed at once, as <Scene name="${name}" case="main"><Main values={values} /></Scene>: what it shows is arranged in that layout.`
     );
   const [, layout, tagProps] = tag;
   const inputs = layouts.get(layout);
@@ -286,20 +290,30 @@ function sceneOf(
       `<${layout}> declares ${missing} among its inputs, and the scene ${name} passes none: pass it, as ${missing}={${missing}}.`
     );
   const reads = inputs.variables.length > 0 || inputs.labels.length > 0;
-  const moments = ['run', 'pause', 'within', 'at'].filter((key) => given.has(key));
+  const moments = ['case', 'pause', 'within', 'at'].filter((key) => given.has(key));
   if (!reads && moments.length)
     return fail(
-      `The scene ${name} shows ${layout}, which reads no state, so it is one frame: ${moments.join(' and ')} choose${moments.length === 1 ? 's' : ''} the steps of the run a scene shows, and it shows none. Remove ${moments.length === 1 ? 'it' : 'them'}, or show a layout reading the state.`
+      `The scene ${name} shows ${layout}, which reads no state, so it is one frame: ${moments.join(' and ')} choose${moments.length === 1 ? 's' : ''} the steps of the case a scene shows, and it shows none. Remove ${moments.length === 1 ? 'it' : 'them'}, or show a layout reading the state.`
     );
   return {
-    scene: { name, layout, run: given.get('run'), pause, within, at, title, frame: !reads, start },
+    scene: {
+      name,
+      layout,
+      case: given.get('case'),
+      pause,
+      within,
+      at,
+      title,
+      frame: !reads,
+      start
+    },
     problems
   };
 }
 
 /**
  * The steps a scene shows, by their index among the run's, paced as it pauses with its edges (see
- * Edges in algorithm/interpret.server.ts): from its :before to its :after, the whole run's or those
+ * Edges in algorithm/interpret.server.ts): from its :before to its :after, the whole case's or those
  * of the runs of the label it is within (the nth only), with the steps it pauses at between; then
  * the first or the last where it is at one. A step drawing what the step before it drew is left out, the
  * code it lights included where the view places a listing (`listed`).
@@ -412,8 +426,8 @@ export function storyboardOf(
       problems.push({
         message:
           run !== undefined && run > runs
-            ? `within="@${label}#${run}" matches no run: in the run ${scene.run}, @${label} runs ${runs} time${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
-            : `within="@${label}" matches no run: the algorithm never runs @${label} in the run ${scene.run}.`,
+            ? `within="@${label}#${run}" matches no run: in the case ${scene.case}, @${label} runs ${runs} time${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
+            : `within="@${label}" matches no run: the algorithm never runs @${label} in the case ${scene.case}.`,
         scene
       });
       return [];

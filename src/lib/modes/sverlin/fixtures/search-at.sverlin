@@ -43,8 +43,8 @@
   </Node>
 </Layout>
 
-<Run name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
+<Case name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@range, @probe.right, @probe.left"><Main lo={lo} hi={hi} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@range, @probe.right, @probe.left"><Main lo={lo} hi={hi} values={values} /></Scene>
 </Storyboard>

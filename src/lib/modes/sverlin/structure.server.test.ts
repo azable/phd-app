@@ -18,7 +18,7 @@ const list = `<script domain>
 <script input>
   const nodes = ListNodes;
   const head = NodeRef;
-</script><Run name="main" head={nodes.add(ListNode({ name: 'A', next:
+</script><Case name="main" head={nodes.add(ListNode({ name: 'A', next:
     nodes.add(ListNode({ name: 'B', next: nodes.add(ListNode({ name: 'C', next: End('end') })) }))
   }))} />
 <script algorithm>
@@ -43,7 +43,7 @@ const list = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main nodes={nodes} /></Scene>
+  <Scene name="main" case="main"><Main nodes={nodes} /></Scene>
 </Storyboard>`;
 
 const ring = `<script domain>
@@ -55,7 +55,7 @@ const ring = `<script domain>
 <script input>
   const names = Names;
   const next = Nexts;
-</script><Run name="main" names={['A', 'B', 'C', 'D']} next={[1, 2, 3, 0]} />
+</script><Case name="main" names={['A', 'B', 'C', 'D']} next={[1, 2, 3, 0]} />
 <script algorithm>
   @run[let at = Position(0);]
   @first[at = next[at];]
@@ -75,7 +75,7 @@ const ring = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main names={names} next={next} /></Scene>
+  <Scene name="main" case="main"><Main names={names} next={next} /></Scene>
 </Storyboard>`;
 
 const unlinked = `<script domain>
@@ -85,7 +85,7 @@ const unlinked = `<script domain>
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[3, 1, 2]} />
+</script><Case name="main" values={[3, 1, 2]} />
 <script algorithm>
   @run[let i = Position(0);]
   @move[i = Position(1);]
@@ -100,7 +100,7 @@ const unlinked = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 const designOf = (source: string) => prepareSvelteComponent(source).design;

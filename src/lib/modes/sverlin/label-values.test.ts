@@ -12,7 +12,7 @@ const domain = `<script domain>
 <script input>
   const values = Values;
   const target = Int;
-</script><Run name="main" values={[5, 2, 8, 1]} target={8} />`;
+</script><Case name="main" values={[5, 2, 8, 1]} target={8} />`;
 
 const insertion = `
 <script algorithm>
@@ -35,7 +35,7 @@ const prepare = (view: string, algorithm = insertion, parts = '', of = readIn(vi
     `${domain}${algorithm}\n${parts}\n<Layout name="Main" of="${of}"><Node>${view}</Node></Layout>\n${scene(of)}`
   );
 const scene = (of: string) =>
-  `<Storyboard><Scene name="main" run="main"><Main${/\bvalues\b/u.test(of) ? ' values={values}' : ''} /></Scene></Storyboard>`;
+  `<Storyboard><Scene name="main" case="main"><Main${/\bvalues\b/u.test(of) ? ' values={values}' : ''} /></Scene></Storyboard>`;
 const readIn = (view: string) => [...new Set(view.match(/\bvalues\b|@[\w.]+/gu))].join(', ');
 
 describe('labels read in the view', () => {
@@ -250,7 +250,7 @@ describe('<View>', () => {
 
   it('keeps positions after a view, in problems', () => {
     const view =
-      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int;</script><Run name="main" n={1} /><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node>{nope}</Node></Layout>\n\n<Storyboard>\n  <Scene name="main"><Main /></Scene>\n</Storyboard>';
+      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int;</script><Case name="main" n={1} /><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node>{nope}</Node></Layout>\n\n<Storyboard>\n  <Scene name="main"><Main /></Scene>\n</Storyboard>';
     let error: { code?: string; line?: number; column?: number; others: unknown[] } | undefined;
     try {
       prepareSvelteComponent(view);

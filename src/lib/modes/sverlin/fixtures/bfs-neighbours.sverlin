@@ -57,7 +57,7 @@
   </Node>
 </Layout>
 
-<Run name="main" vertices={[
+<Case name="main" vertices={[
     { name: 'A', seen: true },
     { name: 'B', seen: false },
     { name: 'C', seen: false },
@@ -66,5 +66,5 @@
   ]} out={[[1, 2], [3], [3], [4], []]} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>

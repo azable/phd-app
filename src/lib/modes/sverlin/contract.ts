@@ -64,10 +64,10 @@ export const linearSearchSource = `<script domain>
   </Node>
 </Layout>
 
-<Run name="main" values={[3, 8, 5, 2, 7]} target={2} />
+<Case name="main" values={[3, 8, 5, 2, 7]} target={2} />
 
 <Storyboard>
-  <Scene name="search" run="main" pause="@first, @check.equal, @next, @run">
+  <Scene name="search" case="main" pause="@first, @check.equal, @next, @run">
     <Main values={values} i={i} found={found} target={target} />
   </Scene>
 </Storyboard>`;

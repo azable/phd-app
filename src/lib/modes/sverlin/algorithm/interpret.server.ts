@@ -194,7 +194,7 @@ export const algorithmLimits = {
 /** The name a label's applications are kept under, as the view reads the label: `@insert.compare` as `ℓinsertˑcompare`. */
 export const labelApplication = (full: string): string => `ℓ${full.replaceAll('.', 'ˑ')}`;
 
-/** Interpret an input block, as one run gives it (see runs.server.ts), into the state it starts from. */
+/** Interpret an input block, as one case gives it (see cases.server.ts), into the state it starts from. */
 export function interpretInput(body: string, domain: DomainRegistry = noDomain): TypedState {
   const { root, offset } = parseBlock(body, 'input', domain);
   return new Interpreter(root, offset, { kind: 'input', domain, code: body }).bindings();

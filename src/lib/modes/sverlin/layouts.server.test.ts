@@ -5,7 +5,7 @@ import layouts from './fixtures/bubble-layouts.sverlin?raw';
 
 /** The fixture's view with its page layouts replaced. */
 const withView = (view: string) =>
-  `${layouts.slice(0, layouts.indexOf('<Layout name="Stacked"'))}${view}\n${/<Run\b[^\n]*\/>/u.exec(layouts)?.[0] ?? ''}`;
+  `${layouts.slice(0, layouts.indexOf('<Layout name="Stacked"'))}${view}\n${/<Case\b[^\n]*\/>/u.exec(layouts)?.[0] ?? ''}`;
 
 const problemOf = (source: string) => {
   try {

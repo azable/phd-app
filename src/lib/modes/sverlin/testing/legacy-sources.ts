@@ -261,10 +261,10 @@ function withStoryboard(text: string): string {
   // A layout reading no state is one frame, which pauses nowhere.
   const labels = page[2] ? labelNames(text) : [];
   const pause = labels.length ? ` pause="${labels.join(', ')}"` : '';
-  // A layout reading state, variables or labels, shows a run.
-  const run = page[2] ? ' run="main"' : '';
-  const runs = page[2] && !/<Run\b/u.test(text) ? '\n<Run name="main" />' : '';
-  return `${text}${runs}\n<Storyboard><Scene name="main"${run}${pause}><${page[1]}${passed} /></Scene></Storyboard>`;
+  // A layout reading state, variables or labels, shows a case.
+  const shown = page[2] ? ' case="main"' : '';
+  const cases = page[2] && !/<Case\b/u.test(text) ? '\n<Case name="main" />' : '';
+  return `${text}${cases}\n<Storyboard><Scene name="main"${shown}${pause}><${page[1]}${passed} /></Scene></Storyboard>`;
 }
 
 export { convert as currentForm, stateNamesOf };

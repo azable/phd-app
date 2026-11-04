@@ -30,8 +30,8 @@ Design). A plain `<script>`, or one with any other attribute, is refused.
 1. `<script domain>`: the types, atomic and the arrays, records, and unions
    built from them (see Atomic types; Arrays, records, and unions).
 2. `<script input>`: the inputs, each declared with its domain type and no
-   value, as `const values = Values;`; each run gives them their values (see
-   Runs).
+   value, as `const values = Values;`; each case gives them their values (see
+   Cases).
 3. `<script algorithm>`: the algorithm. It starts from the input variables, may
    update them and declare more, may declare functions (see Loops and
    functions), and labels the code its steps are about (see Steps). It runs
@@ -92,8 +92,8 @@ layout, a view, or a node with a `kind`.
 
 - Page layouts differ in how they arrange what they draw or which they draw,
   never only in look, which is the variant's; each scene shows one, so a second
-  is for a scene that needs another arrangement, as a whole run side by side and
-  one merge stacked. A node's `layout` prop arranges its children.
+  is for a scene that needs another arrangement, as a whole sort side by side
+  and one merge stacked. A node's `layout` prop arranges its children.
 - Draw every value of a domain type through a view of its type, as `{target}`,
   and every position through a pointer; the markup around them arranges, labels,
   and explains. A node of text and renders with no `layout` reads as a line of
@@ -107,26 +107,28 @@ layout, a view, or a node with a `kind`.
 - How anything looks is the design's, never the algorithm's; what a step shows
   is read from the algorithm's values and labels (see Steps).
 
-## Runs
+## Cases
 
-A `<Run>` is one execution of the algorithm: it is named, and gives every input
-the input block declares a value of its type, written as a plain value the type
-reads, as an array's elements or a record's fields.
+A `<Case>` is one execution of the algorithm: it is named, and gives every input
+the input block declares a value of its type, written plainly, as a number, a
+text, an array's elements or a record's fields; the input's type gives it its
+type, so a value names no type: `target={9}`, never `target={Int(9)}`.
 
 ```svelte
-<Run name="present" values={[2, 5, 7, 9, 12]} target={9} />
-<Run name="absent" values={[2, 5, 7, 9, 12]} target={4} />
+<Case name="present" values={[2, 5, 7, 9, 12]} target={9} />
+<Case name="absent" values={[2, 5, 7, 9, 12]} target={4} />
 ```
 
-- Runs are written at the top level, beside the storyboard, before it. A run's
-  name is one word that may hold digits and dashes, and no two runs share one.
-- A run gives every input, and nothing else; a value that is not of its input's
-  type is refused, naming the run and the input.
+- Cases are written at the top level, beside the storyboard, before it. A case's
+  name is one word that may hold digits and dashes, and no two cases share one.
+- A case gives every input, and nothing else; a value that is not of its input's
+  type is refused, naming the case and the input.
 - The room each node keeps comes from the types, so a layout keeps its place and
-  size in every run.
-- A pool starts empty in every run, so a run gives it no value: the algorithm
-  adds its nodes, or a run adds them in the value of a reference input it gives,
-  as `head={nodes.add(ListNode({ name: 'A', next: End('end') }))}`.
+  size in every case.
+- A pool starts empty in every case, so a case gives it no value: the algorithm
+  adds its nodes, or a case adds them in the value of a reference input it
+  gives, as `head={nodes.add(ListNode({ name: 'A', next: End('end') }))}`. What
+  `.add(…)` is given is the one place a case names a type: the record it adds.
 
 ## Storyboard
 
@@ -138,8 +140,8 @@ scene at least.
 
 ```svelte
 <Storyboard>
-  <Scene name="sort" run="main"><Arrays values={values} from={from} /></Scene>
-  <Scene name="one-merge" run="main" within="@sort.merge#1" pause="@sort.merge.take">
+  <Scene name="sort" case="main"><Arrays values={values} from={from} /></Scene>
+  <Scene name="one-merge" case="main" within="@sort.merge#1" pause="@sort.merge.take">
     <Arrays values={values} from={from} />
   </Scene>
   <Scene name="then"><Note /></Scene>
@@ -147,20 +149,22 @@ scene at least.
 ```
 
 - A scene is a stepping scene if it passes state, and a single frame otherwise,
-  as a title card or a note between runs: its layout reads no state, and `run`,
-  `pause`, `within`, or `at` on a scene whose layout reads none is refused.
-- A stepping scene names the run it shows, as `run="present"` (see Runs); one
-  naming none, or a run no `<Run>` names, is refused. Its stops, `within`,
-  `pause` and `at` are those of that run, and two scenes may show two runs.
+  as a title card or a note between cases: its layout reads no state, and
+  `case`, `pause`, `within`, or `at` on a scene whose layout reads none is
+  refused.
+- A stepping scene names the case it shows, as `case="present"` (see Cases); one
+  naming none, or a case no `<Case>` names, is refused. Its stops, `within`,
+  `pause` and `at` are those of that case, and two scenes may show two cases.
 - Each run of a label has two stops: `:before`, just before its code begins, and
-  `:after`, just after it ends. The whole run has them too: its `:before` is the
-  input as its run gives it, and its `:after` the state the algorithm ends on.
-- A stepping scene steps through the whole run, or the runs of one label
+  `:after`, just after it ends. The whole case has them too: its `:before` is
+  the input as the case gives it, and its `:after` the state the algorithm ends
+  on.
+- A stepping scene steps through the whole case, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
   `within="@sort.merge#1"`. It opens on their `:before` (the first run's, for
   every run) and closes on their `:after` (the last run's), as
   `@sort.merge#1:before` and `@sort.merge#1` in the controls, or the whole
-  run's, `:before` and `:after`. `pause` names, separated by commas, the stops
+  case's, `:before` and `:after`. `pause` names, separated by commas, the stops
   where the scene takes a step between them: a label by its full name for the
   end of each of its runs, as `pause="@sort.merge.take"`, which
   `@sort.merge.take:after` also writes, and `@sort.merge.take:before` for just
@@ -374,7 +378,7 @@ label given a kind of its own.
 - A step inside a run shows only its own part and the code leading up to it; a
   step ending a run shows its whole run, the values its labels gave inside it
   drawn and its code lit.
-- Step 0 is the input as its run gives it, before any code runs; what the
+- Step 0 is the input as its case gives it, before any code runs; what the
   algorithm declares, its labels' values, and its applications appear from the
   first step on, and the view reads a variable itself only inside a `<Node>`,
   which hides until it is declared. What runs after the last step is a step of
@@ -392,7 +396,7 @@ label given a kind of its own.
 - A step is named by the stop it is at: the label whose run it ends and which
   run that is, the nth run of that label to begin, as `@insert.swap#1`, or
   `@insert.swap#1:before` just before that run begins, and `:before` and
-  `:after` for the whole run's: in a recursive function, `@sort#1` ends the
+  `:after` for the whole case's: in a recursive function, `@sort#1` ends the
   first call made, the outermost, at the last of its steps. The name is the same
   in every variant, which numbers only the steps it shows. A step has no text:
   the view says what it shows, from the recorded variables, so what it should
@@ -479,10 +483,10 @@ Binary search, stopping where it finds the target:
   </Node>
 </Layout>
 
-<Run name="main" values={[2, 5, 8, 12, 16, 23, 38]} target={23} />
+<Case name="main" values={[2, 5, 8, 12, 16, 23, 38]} target={23} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -564,8 +568,8 @@ heap stored in an array.
 
 Make one by calling its name with literals, which take their types from it:
 `Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
-`Vertex`, a `Vertex`, and a `Weight`; a run gives an input the literal alone,
-which takes the input's type, as `values={[3, 8, 5]}` (see Runs). A literal
+`Vertex`, a `Vertex`, and a `Weight`; a case gives an input the literal alone,
+which takes the input's type, as `values={[3, 8, 5]}` (see Cases). A literal
 written into an element or field takes its type, as `dist[v] = 0`, and one
 pushed the array's element type, as `queue.push(3)`; an array or object literal
 anywhere else is an error. A record has exactly its fields.
@@ -668,20 +672,20 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   </Node>
 </Layout>
 
-<Run name="main" head={nodes.add(ListNode({ name: 'A', next:
+<Case name="main" head={nodes.add(ListNode({ name: 'A', next:
     nodes.add(ListNode({ name: 'B', next:
       nodes.add(ListNode({ name: 'C', next: End('end') })) })) }))} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
+  <Scene name="main" case="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
 </Storyboard>
 ```
 
 - The input declares the pool, `const nodes = ListNodes;`, once, and it starts
-  empty in every run: a record type has one pool, so a reference to it always
+  empty in every case: a record type has one pool, so a reference to it always
   points there, and the algorithm makes none. `nodes.add(ListNode({ … }))` adds
   a node and gives it, a reference wherever the type expects one, as a `next`
-  field, written nested, as the run here gives `head`. The algorithm adds one
+  field, written nested, as the case here gives `head`. The algorithm adds one
   the same way, as `head = nodes.add(ListNode({ name: v, next: head }))`, and a
   function adding one takes the pool as a parameter,
   `insert(nodes, root, value)`. An add past `max` is an error, and so is a
@@ -833,10 +837,10 @@ place:
   </Node>
 </Layout>
 
-<Run name="main" values={[5, 1, 4, 2, 3]} />
+<Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -893,7 +897,7 @@ below does it.
 of a label, any label: the step that ends a run and those inside it where labels
 within pause, whatever the pauses, never steps leading up to it or after it;
 elsewhere they are hidden, keeping their room. `of=":before"` and `of=":after"`,
-the whole run's stops, draw them at the first step, the input as given, and at
+the whole case's stops, draw them at the first step, the input as given, and at
 the last, as a note on what the algorithm starts from or ends with. A `<When>`
 names one label or moment and never reads the label's value (`{#if @label}` is
 refused); it has no `{:else}`. Branches that take turns share one place, as
@@ -1398,10 +1402,10 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   </Node>
 </Layout>
 
-<Run name="main" values={[5, 2, 4, 1]} />
+<Case name="main" values={[5, 2, 4, 1]} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -1620,7 +1624,7 @@ at marked and the queue drawn by number:
   </Node>
 </Layout>
 
-<Run name="main" vertices={[
+<Case name="main" vertices={[
     { name: 'A', seen: true },
     { name: 'B', seen: false },
     { name: 'C', seen: false },
@@ -1629,7 +1633,7 @@ at marked and the queue drawn by number:
   ]} out={[[1, 2], [3], [3], [4], []]} />
 
 <Storyboard>
-  <Scene name="search" run="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="search" case="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>
 ```
 

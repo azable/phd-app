@@ -99,7 +99,7 @@
   </Node>
 </Layout>
 
-<Run name="main" vertices={[
+<Case name="main" vertices={[
     { name: 'A', distance: 0, done: false },
     { name: 'B', distance: 99, done: false },
     { name: 'C', distance: 99, done: false },
@@ -116,5 +116,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" run="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
 </Storyboard>

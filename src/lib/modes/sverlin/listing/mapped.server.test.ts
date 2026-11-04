@@ -10,7 +10,7 @@ const blocks = (algorithm: string, listing: string) => `<script domain>
 </script>
 <script input>
   const values = Values;
-</script><Run name="main" values={[2, 1]} />
+</script><Case name="main" values={[2, 1]} />
 <script algorithm>
 ${algorithm}
 </script>
@@ -26,7 +26,7 @@ ${listing}
 </Layout>
 
 <Storyboard>
-  <Scene name="main" run="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 const insertion = blocks(
