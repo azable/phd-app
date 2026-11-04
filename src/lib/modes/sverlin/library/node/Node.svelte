@@ -678,7 +678,9 @@
   // grid, and their links never move their children: they are drawn over them (see LinkOverlay).
   const free = $derived(arrangement === 'free');
   const overlaid = $derived(
-    __links && (arrangement === 'row' || arrangement === 'column') ? arrangement : undefined
+    __links && (arrangement === 'row' || arrangement === 'column' || arrangement === 'grid')
+      ? arrangement
+      : undefined
   );
 </script>
 
@@ -778,8 +780,13 @@
         style:justify-content={justification}
         style:grid-template-columns={trackCss(tracks?.columns)}
         style:grid-template-rows={trackCss(tracks?.rows)}
+        data-sv-overlaid={overlaid ? '' : undefined}
+        style:position={overlaid ? 'relative' : undefined}
       >
         {@render contents()}
+        {#if overlaid}
+          <LinkOverlay axis="grid" />
+        {/if}
       </div>
     {:else if arrangement}
       <!-- data-sv-collection marks the items of one collection, so the page gives them all the

@@ -2829,6 +2829,8 @@ function gridProblems(markup: unknown, source: string): InvalidSvelteSourceError
         );
       return walk(tag.children, written);
     }
+    // A link takes no room, so a grid may hold links among the cells they join.
+    if (inGrid && tag.type === 'InlineComponent' && tag.name === 'Link') return;
     if (inGrid) {
       const shown =
         (tag.type === 'Text' && tag.data?.trim()) ||

@@ -1,5 +1,5 @@
 /**
- * The links of a node laid out in a row or column, drawn over it (see LinkOverlay.svelte): routed
+ * The links of a node laid out in a row, column or grid, drawn over it (see LinkOverlay.svelte): routed
  * between the boxes of the elements their ends name, and the room they draw past its children,
  * which its padding grows to hold. Read the same whether the node is mounted or a step's markup laid
  * out on the layout model (see model/reserve.ts).
@@ -26,11 +26,17 @@ export type OverlayRoute<E> = {
 };
 
 /**
- * Route the links a row or column holds, each between the boxes of the elements its ends name,
- * inside the host: an arc that clears the boxes between and around them, over ends side by side or
- * to the right of ends one above the other, or a wire round them; its label on its middle.
+ * Route the links a row, column or grid holds, each between the boxes of the elements its ends name,
+ * inside the host: in a row or column an arc that clears the boxes between and around them, over
+ * ends side by side or to the right of ends one above the other; in a grid, whose cells sit in two
+ * directions, a straight line from cell to cell, as a free layout draws them; or a wire round them;
+ * its label on its middle.
  */
-export function routeOverlay<E>(read: Reader<E>, host: E, axis: 'row' | 'column'): OverlayRoute<E> {
+export function routeOverlay<E>(
+  read: Reader<E>,
+  host: E,
+  axis: 'row' | 'column' | 'grid'
+): OverlayRoute<E> {
   // Where an element is laid out in the host, in its own units.
   const boxOf = (element: E): Box => {
     const { x, y, width, height } = read.boxIn(element, host);
@@ -125,7 +131,7 @@ export function routeOverlay<E>(read: Reader<E>, host: E, axis: 'row' | 'column'
         : Math.max(from.right - from.left, to.right - to.left);
       const low = Math.min(0.8, extent / Math.hypot(wide, tall));
       const order =
-        route === 'straight'
+        route === 'straight' || axis === 'grid'
           ? [0]
           : across
             ? [...new Set([low, Math.min(0.8, low * 1.5), 0.8, 1.1])].map(

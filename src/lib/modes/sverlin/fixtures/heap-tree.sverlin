@@ -1,0 +1,41 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Heap = collection(Int, { max: 7 });
+  const Slot = index(Heap);
+</script>
+
+<script input>
+  const heap = Heap([12, 40, 7, 55, 31, 68, 23]);
+</script>
+
+<script algorithm>
+  for (@first[let i = Slot(1)]; @more[i < heap.length]; @next[i++]) @insert{
+    @start[let k = i;]
+    while (@up[k > 0 && heap[Slot(Math.floor((k - 1) / 2))] < heap[k]]) @sift{
+      @parent[const p = Slot(Math.floor((k - 1) / 2));]
+      @swap[const moved = heap[k]; heap[k] = heap[p]; heap[p] = moved;]
+      @climb[k = p;]
+    }
+  }
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Heap" name="Both">
+  <Node layout="column">
+    <Node layout="row">{#each this as v}{v}{/each}</Node>
+    <Node layout="grid">
+      {#each this as v, k}
+        <Node
+          row={Math.floor(Math.log2(k + 1))}
+          col={(2 * (k + 1 - 2 ** Math.floor(Math.log2(k + 1))) + 1) * 2 ** (2 - Math.floor(Math.log2(k + 1))) - 1}
+        >{v}</Node>
+        <Link from={k} to={2 * k + 1} />
+        <Link from={k} to={2 * k + 2} />
+      {/each}
+    </Node>
+  </Node>
+</View>
+
+<Layout name="Main">
+  <Node>{heap}</Node>
+</Layout>

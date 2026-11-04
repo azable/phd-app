@@ -1349,6 +1349,12 @@ cell by `row` and `col`, usually loop indices or positions:
 
 - A grid holds only nodes placed by `row` and `col`, from any number of
   `{#each}` and `{#if}` blocks, in any order; a value or text goes inside one.
+- It may also hold `<Link>`s among its cells, each drawn straight from cell to
+  cell, its ends often computed from the index: a heap drawn as a tree places
+  slot `k` by its depth and joins it to its children,
+  `<Link from={k} to={2 * k + 1} />` and `<Link from={k} to={2 * k + 2} />`. A
+  link belongs to the cells it joins, so it stays while values move through
+  them.
 - A coordinate no node uses is a gap, as the corner above the headers, a
   triangle of comparisons per pass, or a sparse adjacency matrix placing each
   edge at `row={e.from} col={e.to}`: no placeholder nodes.
@@ -1394,11 +1400,12 @@ a labelled expression computed; never in a pointer view, which draws inside the
 element it marks. They take no space; give the node a `layout`, `"free"` for a
 linked structure or `"row"` or `"column"`, unless it holds a collection's
 `{#each}`, which runs as the collection. Only a free layout places its children
-by their links; in a row or column links are drawn over the children, which stay
-where they would be without them, each arcing over ends side by side or beside
-ends one above the other, clear of the boxes. Each link is selectable, as a node
-is, and its look, how it runs and its heads, is its kind's (see Design), never a
-prop, as `Arrow.Link` for a link in `Arrow`.
+by their links; in a row, column or grid links are drawn over the children,
+which stay where they would be without them: in a row or column each arcs over
+ends side by side or beside ends one above the other, clear of the boxes, and in
+a grid each runs straight from cell to cell, as a heap's edges (see Grid). Each
+link is selectable, as a node is, and its look, how it runs and its heads, is
+its kind's (see Design), never a prop, as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the

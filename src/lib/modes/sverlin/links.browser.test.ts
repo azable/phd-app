@@ -12,6 +12,7 @@ import bfs from './fixtures/bfs-neighbours.sverlin?raw';
 import cards from './fixtures/bfs-cards.sverlin?raw';
 import bubble from './fixtures/bubble-arrow.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
+import heapTree from './fixtures/heap-tree.sverlin?raw';
 import list from './fixtures/list-markers.sverlin?raw';
 import visitOrder from './fixtures/bfs-visit-order.sverlin?raw';
 
@@ -576,5 +577,41 @@ it.skipIf(!enabled)(
     expect(errors).toEqual([]);
     // 0→1 and 1→2; the last cell's 2→3 runs past the three values, so it draws nothing.
     expect(ends).toEqual(['values[0]->values[1]', 'values[1]->values[2]']);
+  }
+);
+
+it.skipIf(!enabled)(
+  'draws a grid’s links straight from cell to cell, as a heap’s edges',
+  { timeout: 120_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(heapTree), 1, {});
+    const page = await browser!.newPage({ viewport: { width: 900, height: 600 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) .sv-grid svg.links path')
+    );
+    await page.waitForTimeout(500);
+    // How far each link's middle lies off the straight line between its ends.
+    const bends = await page.evaluate(() =>
+      [
+        ...document.querySelectorAll<SVGPathElement>(
+          '.sv-layer:not(.pending):not(.sv-leaving) .sv-grid svg.links path.link'
+        )
+      ]
+        .filter((path) => path.getTotalLength() > 1)
+        .map((path) => {
+          const length = path.getTotalLength();
+          const [a, m, b] = [0, length / 2, length].map((at) => path.getPointAtLength(at));
+          const run = Math.hypot(b.x - a.x, b.y - a.y);
+          return Math.abs((b.x - a.x) * (a.y - m.y) - (a.x - m.x) * (b.y - a.y)) / run;
+        })
+    );
+    await page.close();
+    expect(errors).toEqual([]);
+    // Six edges, root to leaves, and none of them arcs.
+    expect(bends.length).toBe(6);
+    for (const bend of bends) expect(bend).toBeLessThan(0.5);
   }
 );

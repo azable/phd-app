@@ -217,7 +217,7 @@ function sizer(options: ReserveOptions) {
     });
   }
 
-  // A row or column holding links keeps room for what they draw past its children in its padding
+  // A row, column or grid holding links keeps room for what they draw past its children in its padding
   // (see node/overlay.ts), worked out once for all alike; while it is, it is laid out without it.
   const rooms = new Map<string, Sides>();
   const rooming = new Set<ModelElement>();
@@ -228,7 +228,7 @@ function sizer(options: ReserveOptions) {
     if (!room) {
       rooming.add(host);
       const model = layOutAlone(at, host);
-      const axis = classesOf(host).includes('row') ? 'row' : 'column';
+      const axis = overlayAxis(host);
       const { children, reached } = routeOverlay(layoutReader(at, model), host, axis);
       rooming.delete(host);
       const [top, right, bottom, left] = at.styled.get(host)?.look.padding ?? [0, 0, 0, 0];
@@ -759,7 +759,7 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
       );
     }
     if (attributes['data-sv-overlaid'] !== undefined) {
-      const axis = classesOf(element).includes('row') ? 'row' : 'column';
+      const axis = overlayAxis(element);
       const route = routeOverlay(model.layoutReader(at, laid), element, axis);
       parts.push(placed(left, top, (place) => ['links', place, route.lines], false));
       for (const { label, middle } of route.labels)
@@ -955,4 +955,10 @@ export function drawnText(value: unknown): string {
       );
     return inner;
   });
+}
+
+/** How an overlaid host lays out its children, which says how its links run (see node/overlay.ts). */
+function overlayAxis(host: ModelElement): 'row' | 'column' | 'grid' {
+  const classes = classesOf(host);
+  return classes.includes('sv-grid') ? 'grid' : classes.includes('row') ? 'row' : 'column';
 }

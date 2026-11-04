@@ -1,5 +1,5 @@
 <!--
-  The links of a node laid out in a row or column, drawn over it. They take no part in placing its
+  The links of a node laid out in a row, column or grid, drawn over it. They take no part in placing its
   children: the node places them as it would without links, and each link is drawn afterwards
   between the boxes of the elements its ends name, inside the node, as an arc that clears the boxes
   between and around them, over ends side by side or to the right of ends one above the other, or
@@ -13,7 +13,7 @@
   import { overlayRoom, routeOverlay, type Sides } from './overlay';
   import { mountedReader, type Reader } from './reader';
 
-  let { axis }: { axis: 'row' | 'column' } = $props();
+  let { axis }: { axis: 'row' | 'column' | 'grid' } = $props();
 
   let svg = $state<SVGSVGElement>();
   let drawn = $state<Line[]>([]);

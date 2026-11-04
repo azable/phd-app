@@ -14,6 +14,7 @@ import { linearSearchSource } from './contract';
 import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
+import heapTree from './fixtures/heap-tree.sverlin?raw';
 import listMarkers from './fixtures/list-markers.sverlin?raw';
 import { buildVariant } from './design.server';
 
@@ -2738,6 +2739,11 @@ describe('grids', () => {
     );
     expect(prepared.design.space['Table.justify']).toBeDefined();
     expect(prepared.design.space['Table.Header.fill']).toBeDefined();
+  });
+
+  it('holds links among the cells it places, their ends computed from the index', () => {
+    const { component } = prepareSvelteComponent(heapTree);
+    expect(component).toContain('__toIn');
   });
 
   it.each([
