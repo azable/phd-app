@@ -2,6 +2,7 @@
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag, out: Out });
+  const Vertices = pool(Vertex, { max: 5 });
   const VertexRef = ref(Vertex);
   const Out = collection(VertexRef, { max: 2 });
   const Slot = index(Out);
@@ -10,11 +11,12 @@
 </script>
 
 <script input>
-  const e = VertexRef(Vertex({ name: 'E', seen: false, out: [] }));
-  const d = VertexRef(Vertex({ name: 'D', seen: false, out: [e] }));
-  const b = VertexRef(Vertex({ name: 'B', seen: false, out: [d] }));
-  const c = VertexRef(Vertex({ name: 'C', seen: false, out: [d] }));
-  const a = VertexRef(Vertex({ name: 'A', seen: true, out: [b, c] }));
+  const vertices = Vertices();
+  const e = VertexRef(vertices.add(Vertex({ name: 'E', seen: false, out: [] })));
+  const d = VertexRef(vertices.add(Vertex({ name: 'D', seen: false, out: [e] })));
+  const b = VertexRef(vertices.add(Vertex({ name: 'B', seen: false, out: [d] })));
+  const c = VertexRef(vertices.add(Vertex({ name: 'C', seen: false, out: [d] })));
+  const a = VertexRef(vertices.add(Vertex({ name: 'A', seen: true, out: [b, c] })));
 </script>
 
 <script algorithm>
@@ -39,15 +41,15 @@
   <Node layout="column">{this.name}{this.seen}<Node kind="OutField">{#each this.out as w}<Link to={w} />{/each}</Node></Node>
 </View>
 <View of="VertexRef" name="Marked"><Pointed /></View>
-<Layout name="Graph">
-  <Node layout="free">{#each all(Vertex) as v}{v}{/each}</Node>
+<Layout name="Graph" of="vertices">
+  <Node layout="free">{#each vertices as v}{v}{/each}</Node>
 </Layout>
 
 <Layout name="Line" of="queue"><Node>queue: {#each queue as q}{q.name}{/each}</Node></Layout>
 
-<Layout name="Main" of="current, queue, @visit.look.check.next">
+<Layout name="Main" of="vertices, current, queue, @visit.look.check.next">
   <Node>
-    <Graph />
+    <Graph vertices={vertices} />
     <Line queue={queue} />
     {current}
     {@visit.look.check.next}
@@ -55,5 +57,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main current={current} queue={queue} /></Scene>
+  <Scene name="main"><Main vertices={vertices} current={current} queue={queue} /></Scene>
 </Storyboard>

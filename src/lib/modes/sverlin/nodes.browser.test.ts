@@ -1,6 +1,6 @@
 /**
  * Nodes and references drawn in a real browser: a node's next as an arrow from the node its view
- * draws, the end drawn by its own view, and a node nothing refers to leaving the page. Run with
+ * draws, the end drawn by its own view, and a node nothing refers to staying in its pool. Run with
  * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
@@ -26,12 +26,14 @@ const list = (algorithm: string) => `<script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
+  const ListNodes = pool(ListNode, { max: 3 });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
 <script input>
-  const head = NodeRef(ListNode({ name: 'A', next:
-    NodeRef(ListNode({ name: 'B', next: NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
+  const nodes = ListNodes();
+  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next: nodes.add(ListNode({ name: 'C', next: End('end') })) })) })));
 </script>
 <script algorithm>${algorithm}</script>
 <View of="Name" name="NameCell"><Node value={this} /></View>
@@ -39,16 +41,16 @@ const list = (algorithm: string) => `<script domain>
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<Layout name="Heap"><Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node></Layout>
+<Layout name="List" of="nodes"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="nodes">
   <Node>
-    <Heap />
+    <List nodes={nodes} />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main /></Scene>
+  <Scene name="main"><Main nodes={nodes} /></Scene>
 </Storyboard>`;
 
 /** Each step's arrows, between the names of the nodes they join, and its nodes' text. */
@@ -156,14 +158,14 @@ it.skipIf(!enabled)(
 );
 
 it.skipIf(!enabled)(
-  'leaves out a node nothing refers to any more',
+  'keeps a node nothing refers to any more in its pool, its own link still drawn',
   { timeout: 120_000 },
   async () => {
     const steps = await play(list(`@unlink[head.next = head.next.next;]`), 2);
     expect(steps[0].nodes).toEqual(['A', 'B', 'C ∅']);
-    expect(steps[1].nodes).toEqual(['A', 'C ∅']);
-    expect(steps[1].arrows).toEqual(['A→C']);
+    expect(steps[1].nodes).toEqual(['A', 'B', 'C ∅']);
+    expect(steps[1].arrows).toEqual(['A→C', 'B→C']);
     // Drawn from A's field to C, not along the route B's link to C had.
-    expect(steps[1].attached).toEqual(['A→C']);
+    expect(steps[1].attached).toEqual(['A→C', 'B→C']);
   }
 );

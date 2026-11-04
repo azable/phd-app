@@ -2,19 +2,21 @@
   const Name = type(['A', 'B', 'C', 'D']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
+  const ListNodes = pool(ListNode, { max: 4 });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 
 </script>
 
 <script input>
-  const head = NodeRef(ListNode({ name: 'A', next:
-    NodeRef(ListNode({ name: 'B', next:
-      NodeRef(ListNode({ name: 'C', next:
-        NodeRef(ListNode({ name: 'D', next: End('end') }))
+  const nodes = ListNodes();
+  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next:
+      nodes.add(ListNode({ name: 'C', next:
+        nodes.add(ListNode({ name: 'D', next: End('end') }))
       }))
     }))
-  }));
+  })));
 </script>
 
 <script algorithm>
@@ -67,9 +69,9 @@ while @more[cur ≠ ∅]
   <Node>Reverse a singly linked list</Node>
 </Layout>
 
-<Layout name="Heap">
+<Layout name="Nodes" of="nodes">
   <Node layout="free">
-    {#each all(ListNode) as node}
+    {#each nodes as node}
       {node}
     {/each}
   </Node>
@@ -112,24 +114,24 @@ while @more[cur ≠ ∅]
   </Node>
 </Layout>
 
-<Layout name="Diagram" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Diagram" of="nodes, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="column">
-    <Heap />
+    <Nodes nodes={nodes} />
     <StepNote />
   </Node>
 </Layout>
 
-<Layout name="Board" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Board" of="nodes, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="row">
     <Listing />
-    <Diagram />
+    <Diagram nodes={nodes} />
   </Node>
 </Layout>
 
-<Layout name="Main" of="prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Main" of="nodes, prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node>
     <Title />
-    <Board />
+    <Board nodes={nodes} />
     {prev}
     {cur}
     {after}
@@ -137,5 +139,5 @@ while @more[cur ≠ ∅]
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main prev={prev} cur={cur} after={after} /></Scene>
+  <Scene name="main"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
 </Storyboard>

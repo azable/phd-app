@@ -58,9 +58,7 @@ import {
 import type { AtomRegistry } from './algorithm/atoms.server';
 import {
   definesType,
-  heapKey,
-  isHeapKey,
-  heapRecords,
+  isPool,
   noDomain,
   operatorNames,
   typeNames,
@@ -833,7 +831,17 @@ function prepareViews(
             })
         )
       );
-    const { source: marked, references, heaps } = markLabels(viewed.source);
+    const { source: marked, references, allReads } = markLabels(viewed.source);
+    if (allReads.length)
+      throw InvalidSvelteSourceError.combine(
+        allReads.map(
+          ({ record, start }) =>
+            new InvalidSvelteSourceError(
+              `all(${record}) is no more: keep the ${record}s in a pool, as const ${record}s = pool(${record}, { max: 8 }); in the domain and const nodes = ${record}s(); in the input, add each with nodes.add(${record}({ … })), and give the pool to a layout as any input, as <Layout name="Nodes" of="nodes">{#each nodes as n}{n}{/each}</Layout>.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
     // Svelte reads typed snippet parameters only in TypeScript; an empty script after the view says
     // so without moving anything the view's positions name. A view with a script of its own is
     // parsed as written, so the script is reported below.
@@ -1148,16 +1156,6 @@ function prepareViews(
         `"${library}" names a library component; choose another variable name.`,
         at(library, blocks.input, blocks.algorithm)
       );
-    // Each record a reference refers to has a heap, its live nodes, which the view reads as all(Node).
-    const nodeRecords = heapRecords(domain);
-    const unknownHeap = heaps.find(({ record }) => !nodeRecords.has(record));
-    if (unknownHeap)
-      throw new InvalidSvelteSourceError(
-        nodeRecords.size
-          ? `all(${unknownHeap.record}) draws every live node of a record a reference refers to, and ${unknownHeap.record} is not one; the domain's are ${[...nodeRecords.keys()].map((record) => `all(${record})`).join(', ')}.`
-          : `all(${unknownHeap.record}) draws every live node of a record a reference refers to, as all(Node) for const NodeRef = ref(Node);, and the domain has none.`,
-        { code: 'view_component', start: sourcePosition(source, unknownHeap.start) }
-      );
     // Each layout reads only the state it declares (see layout-tags.server.ts).
     const undeclared = layoutReadProblems(
       (ast.html as { children?: unknown[] }).children ?? [],
@@ -1179,7 +1177,6 @@ function prepareViews(
             })
         )
       );
-    stateNames.push(...[...nodeRecords.keys()].map(heapKey));
     const components = checkComponents(
       found.components,
       found.pointers,
@@ -1601,7 +1598,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), runs(@label) and all(Node); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p) and runs(@label); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -1610,7 +1607,7 @@ function prepareViews(
       source,
       domain,
       variableTypes(master),
-      pointedInto(master)
+      pointedInto(master, domain)
     );
     if (positions.problems.length)
       throw InvalidSvelteSourceError.combine(
@@ -1910,7 +1907,7 @@ function prepareViews(
         slotted,
         pointers.removals,
         placeSlots,
-        referencesOf(master),
+        referencesOf(master, domain),
         positions.targets,
         unresolvedEnds
       ),
@@ -3897,11 +3894,7 @@ function endTypesOf(domain: DomainRegistry): string[] {
     if (structure.kind !== 'union') continue;
     const toNode = structure.members.some((member) => {
       const index = domain.atoms[member]?.index;
-      return (
-        index !== undefined &&
-        domain.structures[index]?.kind === 'collection' &&
-        index.startsWith('ȟ')
-      );
+      return index !== undefined && isPool(domain, index);
     });
     if (toNode)
       for (const member of structure.members)
@@ -4333,14 +4326,15 @@ function atWhen(target: string, steps: readonly MasterStep[], at: number): boole
 const whenText = (target: string) => (target.startsWith('#') ? target.slice(1) : `@${target}`);
 
 /**
- * The heap each reference refers into, by the path of the value with its indices as [], as
- * `queue[]` into `ȟVertex`, gathered over the steps given (see slotInsertions).
+ * The pool each reference refers into, by the path of the value with its indices as [], as
+ * `queue[]` into `vertices`, gathered over the steps given (see slotInsertions).
  */
-function referencesOf(steps: readonly MasterStep[]): Map<string, string> {
+function referencesOf(steps: readonly MasterStep[], domain: DomainRegistry): Map<string, string> {
   const references = new Map<string, string>();
   for (const step of steps)
     for (const [path, target] of Object.entries(step.targets ?? {}))
-      if (isHeapKey(target)) references.set(path.replace(/\[\d+\]/gu, '[]'), target);
+      if (isPool(domain, step.types?.[target]))
+        references.set(path.replace(/\[\d+\]/gu, '[]'), target);
   return references;
 }
 
@@ -4354,12 +4348,15 @@ function variableTypes(steps: readonly MasterStep[]): Map<string, string> {
 }
 
 /** The collections positions of each position type point into, as the steps record them. */
-function pointedInto(steps: readonly MasterStep[]): Map<string, Set<string>> {
+function pointedInto(
+  steps: readonly MasterStep[],
+  domain: DomainRegistry
+): Map<string, Set<string>> {
   const pointed = new Map<string, Set<string>>();
   for (const step of steps)
     for (const [path, target] of Object.entries(step.targets ?? {})) {
       const type = step.types?.[path];
-      if (type && !isHeapKey(target))
+      if (type && !isPool(domain, step.types?.[target]))
         pointed.set(type, (pointed.get(type) ?? new Set()).add(target));
     }
   return pointed;

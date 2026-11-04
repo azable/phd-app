@@ -11,15 +11,21 @@ import { noAtoms, type AtomRegistry } from './atoms.server';
 export type UnionType = { kind: 'union'; name: string; members: readonly string[] };
 export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record<string, string>> };
 /**
- * A collection of one element type, holding at most `max` elements, which every collection the
- * domain declares gives, as collection(Int, { max: 8 }); a record's heap has none.
+ * A collection of one element type, holding at most `max` elements, as collection(Int, { max: 8 });
+ * or a pool (`pool`), pool(Node, { max: 6 }): the nodes of a record type, unordered, reached only
+ * by reference, which the algorithm adds to it.
  */
-export type CollectionType = { kind: 'collection'; name: string; element: string; max?: number };
+export type CollectionType = {
+  kind: 'collection';
+  name: string;
+  element: string;
+  max?: number;
+  pool?: true;
+};
 /**
  * A reference to an element of a collection type, as in ref(Queue): it reads as the element, and
  * stays with it wherever it moves, pointing at nothing once it is gone. A reference to a record
- * type, as in ref(Node), refers to a node wherever it is (`heap`): its collection is the record's
- * heap, every live node of it (see heapKey).
+ * type, as in ref(Node), refers to a node of that record's pool (`heap`), its collection.
  */
 export type RefType = {
   kind: 'ref';
@@ -54,19 +60,18 @@ export type DomainRegistry = {
   operators?: Readonly<Record<string, OperatorType>>;
 };
 
-/**
- * The name of a record's heap, every live node of it in the order they were made, as a step records
- * it and the view reads it, written `all(Node)`; it is also the heap's collection type.
- */
-export const heapKey = (record: string): string => `ȟ${record}`;
-export const isHeapKey = (name: string): boolean => name.startsWith('ȟ');
+/** Whether a type is a pool, as Nodes for const Nodes = pool(Node, { max: 6 }). */
+export function isPool(domain: DomainRegistry, type: string | undefined): boolean {
+  const structure = type ? domain.structures[type] : undefined;
+  return structure?.kind === 'collection' && !!structure.pool;
+}
 
-/** The records a reference refers to as nodes, each with the first such reference type. */
-export function heapRecords(domain: DomainRegistry): Map<string, string> {
-  const records = new Map<string, string>();
+/** Each record that has a pool, with that pool's type. */
+export function pooledRecords(domain: DomainRegistry): Map<string, CollectionType> {
+  const records = new Map<string, CollectionType>();
   for (const structure of Object.values(domain.structures))
-    if (structure.kind === 'ref' && structure.heap && !records.has(structure.element))
-      records.set(structure.element, structure.name);
+    if (structure.kind === 'collection' && structure.pool)
+      records.set(structure.element, structure);
   return records;
 }
 
@@ -80,9 +85,7 @@ export function operatorNames(domain: DomainRegistry): string[] {
 
 /** Every type name a domain defines. */
 export function typeNames(domain: DomainRegistry): string[] {
-  return [...Object.keys(domain.atoms), ...Object.keys(domain.structures)].filter(
-    (name) => !isHeapKey(name)
-  );
+  return [...Object.keys(domain.atoms), ...Object.keys(domain.structures)];
 }
 
 /** Whether a domain defines a type by this name. */

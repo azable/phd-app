@@ -95,7 +95,7 @@ describe('union, record, and collection definitions', () => {
     expect(() => interpretDomain(body)).toThrow(message);
   });
 
-  it('takes types in any order, a record referring to its own kind through a reference', () => {
+  it('takes types in any order, a record referring to its own kind through a reference into its pool', () => {
     const later = interpretDomain(
       'const A = collection(B, { max: 8 }); const B = type("integer", { min: -100, max: 1000 });'
     );
@@ -106,20 +106,40 @@ describe('union, record, and collection definitions', () => {
       const Next = union(NodeRef, End);
       const Name = type(['A', 'B']);
       const End = type(['end']);
+      const Nodes = pool(Node, { max: 6 });
     `);
     expect(nodes.structures.NodeRef).toEqual({
       kind: 'ref',
       name: 'NodeRef',
-      collection: 'ȟNode',
+      collection: 'Nodes',
       element: 'Node',
       heap: true
     });
-    // The heap of a record a reference refers to is a collection of its nodes.
-    expect(nodes.structures['ȟNode']).toEqual({
+    expect(nodes.structures.Nodes).toEqual({
       kind: 'collection',
-      name: 'ȟNode',
-      element: 'Node'
+      name: 'Nodes',
+      element: 'Node',
+      max: 6,
+      pool: true
     });
+  });
+
+  it('refuses a reference to a record with no pool, a pool of values, and a second pool', () => {
+    const records = `const Node = record({ name: Name }); const Name = type(['A', 'B']);`;
+    expect(() => interpretDomain(`${records} const NodeRef = ref(Node);`)).toThrow(
+      'A NodeRef refers to a Node in its pool, so declare the pool, as const Nodes = pool(Node, { max: 8 });, the most Nodes it ever holds.'
+    );
+    expect(() => interpretDomain(`${records} const Names = pool(Name, { max: 4 });`)).toThrow(
+      'A pool holds the nodes of a record type, and Name is not one'
+    );
+    expect(() => interpretDomain(`${records} const Nodes = pool(Node);`)).toThrow(
+      'pool() takes one record type and its most nodes, as in pool(Node, { max: 8 }).'
+    );
+    expect(() =>
+      interpretDomain(
+        `${records} const Nodes = pool(Node, { max: 4 }); const More = pool(Node, { max: 4 });`
+      )
+    ).toThrow('Node already has a pool, Nodes: a record has one pool');
   });
 });
 

@@ -275,17 +275,13 @@ function writtenLinks(
   });
 }
 
-/** The collections a free layout's {#each} blocks walk by name, as `vertices` or `all(Node)`. */
+/** The collections a free layout's {#each} blocks walk by name, as `vertices`. */
 function walkedCollections(nodes: readonly Node[], state: ReadonlySet<string>): string[] {
   return nodes.flatMap((node) => {
     if (node.type === 'SnippetBlock') return [];
     const over = node.type === 'EachBlock' ? node.expression : undefined;
     const walked =
-      over?.type === 'Identifier' && over.name && state.has(over.name)
-        ? [over.name]
-        : over && heapOf(over)
-          ? [heapOf(over) as string]
-          : [];
+      over?.type === 'Identifier' && over.name && state.has(over.name) ? [over.name] : [];
     return [
       ...walked,
       ...walkedCollections(node.children ?? [], state),
@@ -293,15 +289,6 @@ function walkedCollections(nodes: readonly Node[], state: ReadonlySet<string>): 
     ];
   });
 }
-
-/** The heap `all(Node)` walks, ȟNode, as the state holds it. */
-const heapOf = (expression: Expression): string | undefined =>
-  expression.type === 'CallExpression' &&
-  expression.callee?.type === 'Identifier' &&
-  expression.callee.name === 'all' &&
-  expression.arguments?.[0]?.type === 'Identifier'
-    ? `ȟ${expression.arguments[0].name}`
-    : undefined;
 
 /** Every way the {#each} blocks around a link bind their names at a step. */
 function* bindings(
@@ -326,7 +313,7 @@ function* bindings(
   }
 }
 
-/** A value of the markup read from the trace: names, fields, elements, numbers, and all(Node). */
+/** A value of the markup read from the trace: names, fields, elements, and numbers. */
 function read(
   expression: Expression,
   env: ReadonlyMap<string, Read>,
@@ -342,10 +329,6 @@ function read(
         : undefined;
     case 'Literal':
       return typeof expression.value === 'number' ? { value: expression.value } : undefined;
-    case 'CallExpression': {
-      const heap = heapOf(expression);
-      return heap ? { value: step.state[heap], path: heap } : undefined;
-    }
     case 'MemberExpression': {
       const object = expression.object && read(expression.object, env, step, state);
       const key = expression.computed
@@ -371,7 +354,7 @@ function endOf(end: Read, step: MasterStep): string | undefined {
   return target ? `${target}[${end.value}]` : undefined;
 }
 
-/** The value at a path such as `ȟNode[2].next` or `adjacency[0][1]` in a step's state. */
+/** The value at a path such as `nodes[2].next` or `adjacency[0][1]` in a step's state. */
 function valueAt(state: Readonly<Record<string, unknown>>, path: string): unknown {
   const parts = path.match(/[^.[\]]+/gu) ?? [];
   let value: unknown = state;

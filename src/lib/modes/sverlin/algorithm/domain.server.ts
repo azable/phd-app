@@ -8,18 +8,13 @@ import type { AnyNode, CallExpression, Expression, Pattern } from 'acorn';
 import { atomBases, type AtomBase, type AtomType } from './atoms.server';
 import { AlgorithmError, domainFunctions } from './block.server';
 import { parseBlock } from './parse.server';
-import {
-  heapKey,
-  type DomainRegistry,
-  type OperatorType,
-  type StructureType
-} from './structures.server';
+import { type DomainRegistry, type OperatorType, type StructureType } from './structures.server';
 
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
- * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from other types
- * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge, { max: 8 })`).
+ * enumeration (`type(['♠', '♥'])`); a union, record, collection, or pool is built from other types
+ * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge, { max: 8 })`, `pool(Node, { max: 6 })`).
  * Declarations may come in any order: the block is read for its names first, then each definition,
  * so a record can refer to its own kind through a reference declared after it; a type holding
  * itself other than through a reference or an index would be infinite, and is refused.
@@ -73,7 +68,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });.`
+          `Define ${name} with type(...), union(...), record({...}), collection(...), pool(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });.`
         );
       if (kind === 'binop' || kind === 'unop')
         fail(
@@ -98,20 +93,13 @@ export function interpretDomain(body: string): DomainRegistry {
     defining.add(name);
     if (kind === 'index') atoms[name] = defineIndex(name, call);
     else if (kind === 'ref') structures[name] = defineRef(name, call);
+    else if (kind === 'pool') structures[name] = definePool(name, call);
     else if (kind !== 'type')
       structures[name] = defineStructure(name, kind as StructureType['kind'], call);
     else atoms[name] = defineAtom(name, call);
     defining.delete(name);
   };
   for (const name of declared.keys()) if (isType(name)) defineType(name);
-  // A record's heap, every live node of it, is a collection the steps record and the view reads.
-  for (const structure of Object.values(structures))
-    if (structure.kind === 'ref' && structure.heap && !(structure.collection in structures))
-      structures[structure.collection] = {
-        kind: 'collection',
-        name: structure.collection,
-        element: structure.element
-      };
   for (const name of declared.keys()) if (isType(name)) checkFinite(name);
   return { atoms, structures, operators };
 
@@ -223,8 +211,19 @@ export function interpretDomain(body: string): DomainRegistry {
     if (args.length !== 1)
       fail(call, 'ref() takes one collection or record type, as in ref(Queue) or ref(Node).');
     const target = defined(args[0], 'A reference’s type');
-    if (kindOf(target) === 'record')
-      return { kind: 'ref', name, collection: heapKey(target), element: target, heap: true };
+    if (kindOf(target) === 'record') {
+      const pool = [...declared].find(
+        ([, { kind, call: declaration }]) =>
+          kind === 'pool' &&
+          (declaration.arguments[0] as { name?: string } | undefined)?.name === target
+      );
+      if (!pool)
+        return fail(
+          call,
+          `A ${name} refers to a ${target} in its pool, so declare the pool, as const ${target}s = pool(${target}, { max: 8 });, the most ${target}s it ever holds.`
+        );
+      return { kind: 'ref', name, collection: pool[0], element: target, heap: true };
+    }
     if (kindOf(target) !== 'collection')
       fail(
         args[0],
@@ -238,6 +237,54 @@ export function interpretDomain(body: string): DomainRegistry {
         `ref() refers to elements that are single values, and ${target} holds ${elementName}s; refer to one of its fields' collections, use an index(${target}), or refer to a node with ref(${elementName}).`
       );
     return { kind: 'ref', name, collection: target, element: elementName };
+  }
+
+  /**
+   * A pool of a record type's nodes, as in pool(Node, { max: 6 }): unordered, reached only by
+   * reference, holding at most max nodes, which the algorithm adds to it. A record has one pool, so
+   * a reference to it always points into that one.
+   */
+  function definePool(name: string, call: CallExpression): StructureType {
+    const args = call.arguments as Expression[];
+    const record = args[0]?.type === 'Identifier' ? args[0].name : 'Node';
+    const form = `pool(${record}, { max: 8 })`;
+    if (args.length !== 2 || args[1].type !== 'ObjectExpression')
+      fail(call, `pool() takes one record type and its most nodes, as in ${form}.`);
+    const element = defined(args[0], 'A pool’s record type');
+    if (kindOf(element) !== 'record')
+      fail(
+        args[0],
+        `A pool holds the nodes of a record type, and ${element} is not one; keep values in a collection, as collection(${element}, { max: 8 }).`
+      );
+    const [first] = [...declared].find(
+      ([, { kind, call: declaration }]) =>
+        kind === 'pool' &&
+        (declaration.arguments[0] as { name?: string } | undefined)?.name === element
+    )!;
+    if (first !== name)
+      fail(
+        call,
+        `${element} already has a pool, ${first}: a record has one pool, so a reference to a ${element} always points into it.`
+      );
+    const properties = (args[1] as { properties: AnyNode[] }).properties;
+    const property = properties.find(
+      (each) =>
+        each.type === 'Property' &&
+        each.key.type === 'Identifier' &&
+        (each.key as { name: string }).name === 'max'
+    );
+    for (const each of properties)
+      if (each !== property)
+        fail(each, `A pool's only option is max, its most nodes, as in ${form}.`);
+    const max = property
+      ? literalValue((property as unknown as { value: Expression }).value)
+      : undefined;
+    if (typeof max !== 'number' || !Number.isInteger(max) || max < 1)
+      fail(
+        property ?? args[1],
+        `A pool's max is a whole number of at least 1, the most nodes it ever holds, as in ${form}.`
+      );
+    return { kind: 'collection', name, element, max: max as number, pool: true };
   }
 
   function defineStructure(

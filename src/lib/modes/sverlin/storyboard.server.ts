@@ -30,8 +30,8 @@ export type Scene = {
 };
 
 type Problem = { message: string; start: number };
-/** What a layout reads: the variables and labels it declares, and whether it reads the heap. */
-type Inputs = { variables: readonly string[]; labels: readonly string[]; heap?: boolean };
+/** What a layout reads: the variables and labels it declares. */
+type Inputs = { variables: readonly string[]; labels: readonly string[] };
 
 const sceneName = /^[A-Za-z][\w-]*$/u;
 const label = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
@@ -277,7 +277,7 @@ function sceneOf(
     return fail(
       `<${layout}> declares ${missing} among its inputs, and the scene ${name} passes none: pass it, as ${missing}={${missing}}.`
     );
-  const reads = inputs.variables.length > 0 || inputs.labels.length > 0 || Boolean(inputs.heap);
+  const reads = inputs.variables.length > 0 || inputs.labels.length > 0;
   const moments = ['pause', 'within', 'at'].filter((key) => given.has(key));
   if (!reads && moments.length)
     return fail(

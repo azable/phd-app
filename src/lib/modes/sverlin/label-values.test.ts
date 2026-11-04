@@ -56,7 +56,7 @@ describe('labels read in the view', () => {
 
   it('are an attribute’s value only inside a tag, so text before a label may end in =', async () => {
     const text = '<Node>current key = {v}</Node>';
-    expect(markLabels(text)).toEqual({ source: text, references: [], heaps: [] });
+    expect(markLabels(text)).toEqual({ source: text, references: [], allReads: [] });
     const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(

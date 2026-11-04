@@ -184,28 +184,9 @@ export function layoutTags(source: string): {
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
   }));
-  // A layout reading the heap, all(ListNode), itself or through the layouts it draws, reads state
-  // it declares none of, as the heap is the algorithm's.
-  const bodyOf = (layout: DeclaredLayout) => scanned.slice(layout.body.start, layout.body.end);
-  const heap = new Set([...byName.values()].filter((each) => /\ball\s*\(/u.test(bodyOf(each))));
-  for (let grown = true; grown; ) {
-    grown = false;
-    for (const each of byName.values())
-      if (
-        !heap.has(each) &&
-        [...heap].some(({ name: drawn }) =>
-          new RegExp(`<${drawn.replace('$', '\\$')}\\b`, 'u').test(bodyOf(each))
-        )
-      ) {
-        heap.add(each);
-        grown = true;
-      }
-  }
   const storyboard = writtenStoryboard(
     scanned,
-    new Map(
-      [...byName].map(([each, layout]) => [each, { ...layout.inputs, heap: heap.has(layout) }])
-    )
+    new Map([...byName].map(([each, layout]) => [each, layout.inputs]))
   );
   problems.push(...storyboard.problems);
   const unshown: Problem[] = storyboard.missing ? [storyboard.missing] : [];

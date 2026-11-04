@@ -317,37 +317,37 @@ describe('free layouts', () => {
   const graph = prepareSvelteComponent(bfs).design;
 
   it('give the kind arranging one its form, direction, curve, and layout seed', () => {
-    expect(tree.space['Heap.form']).toEqual(forms);
-    expect(tree.space['Heap.curve']).toEqual(['straight', 'curved']);
-    expect(tree.space['Heap.layoutSeed']).toContain(1);
+    expect(tree.space['Tree.form']).toEqual(forms);
+    expect(tree.space['Tree.curve']).toEqual(['straight', 'curved']);
+    expect(tree.space['Tree.layoutSeed']).toContain(1);
     expect(tree.starter).toMatchObject({
-      'Heap.form': 'natural',
-      'Heap.curve': 'straight',
-      'Heap.layoutSeed': 1
+      'Tree.form': 'natural',
+      'Tree.curve': 'straight',
+      'Tree.layoutSeed': 1
     });
     // The tree's flow sets the way it runs; a graph with none runs right unless a variant says.
-    expect(Object.hasOwn(tree.space, 'Heap.direction')).toBe(false);
+    expect(Object.hasOwn(tree.space, 'Tree.direction')).toBe(false);
     expect(graph.space['Graph.direction']).toEqual(['down', 'right']);
     expect(graph.starter['Graph.direction']).toBe('right');
     // Rows and columns have no such look.
     expect(Object.keys(space).filter((key) => key.endsWith('.form'))).toEqual([]);
-    expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Heap.form']);
+    expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Tree.form']);
   });
 
   it('keep the layout of the variant built on unless a value changes it', () => {
-    const base = { ...tree.starter, 'Heap.form': 'wave', 'Heap.layoutSeed': 7 };
+    const base = { ...tree.starter, 'Tree.form': 'wave', 'Tree.layoutSeed': 7 };
     const paced = buildVariant(tree.space, tree.starter, { base, chosen: {} }, 99).values;
-    expect(paced).toMatchObject({ 'Heap.form': 'wave', 'Heap.layoutSeed': 7 });
+    expect(paced).toMatchObject({ 'Tree.form': 'wave', 'Tree.layoutSeed': 7 });
     const contrasted = buildVariant(
       tree.space,
       tree.starter,
-      { base, chosen: { 'Heap.form': 'snake' } },
+      { base, chosen: { 'Tree.form': 'snake' } },
       99
     ).values;
-    expect(contrasted).toMatchObject({ 'Heap.form': 'snake', 'Heap.layoutSeed': 7 });
+    expect(contrasted).toMatchObject({ 'Tree.form': 'snake', 'Tree.layoutSeed': 7 });
     // A form that is none of them is refused, naming them.
     expect(() =>
-      buildVariant(tree.space, tree.starter, { chosen: { 'Heap.form': 'spiral' } }, 1)
+      buildVariant(tree.space, tree.starter, { chosen: { 'Tree.form': 'spiral' } }, 1)
     ).toThrow(DesignValueError);
   });
 

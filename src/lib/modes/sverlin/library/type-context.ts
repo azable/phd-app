@@ -268,7 +268,7 @@ export function insideView(): boolean {
  * component it renders; undefined for a value that is not one, such as i + 1 (see node/Slot.svelte).
  */
 /**
- * The element of the state the nearest node around draws, as ȟListNode[2] for a node's view: a
+ * The element of the state the nearest node around draws, as nodes[2] for a node's view: a
  * link with no from starts there, inside pointers drawn around it too.
  */
 export function provideDrawn(element: string): void {

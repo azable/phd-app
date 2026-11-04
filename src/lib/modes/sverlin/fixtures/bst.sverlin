@@ -2,6 +2,7 @@
   const Int = type('integer', { min: 0, max: 99 });
   const Name = type(['end']);
   const TreeNode = record({ key: Int, left: Next, right: Next });
+  const TreeNodes = pool(TreeNode, { max: 9 });
   const NodeRef = ref(TreeNode);
   const Next = union(NodeRef, Name);
   const Values = collection(Int, { max: 9 });
@@ -11,29 +12,30 @@
 
 <script input>
   const values = Values([8, 3, 10, 1, 6, 14, 4, 7, 13]);
-  const root = NodeRef(TreeNode({
+  const nodes = TreeNodes();
+  const root = NodeRef(nodes.add(TreeNode({
     key: values[0],
     left: Next(Name('end')),
     right: Next(Name('end'))
-  }));
+  })));
 </script>
 
 <script algorithm>
-  function insert(node, value) @insert{
+  function insert(nodes, node, value) @insert{
     if (@direction[value < node.key]) {
       if (@leftChild[node.left !== 'end']) {
-        @descend[insert(node.left, value);]
-      } else @attach[node.left = NodeRef(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
+        @descend[insert(nodes, node.left, value);]
+      } else @attach[node.left = nodes.add(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
     } else {
       if (@rightChild[node.right !== 'end']) {
-        @descend[insert(node.right, value);]
-      } else @attach[node.right = NodeRef(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
+        @descend[insert(nodes, node.right, value);]
+      } else @attach[node.right = nodes.add(TreeNode({ key: value, left: Next(Name('end')), right: Next(Name('end')) }));]
     }
   }
 
   for (@first[let i = Index(1)]; @more[i < values.length]; @advance[i++]) @sequence{
     const value = @pick[values[i]];
-    insert(root, value);
+    insert(nodes, root, value);
   }
 </script>
 
@@ -50,23 +52,23 @@
   </Node>
 </View>
 <Layout name="Title"><Node>Binary search tree insertion</Node></Layout>
-<Layout name="Heap">
+<Layout name="Tree" of="nodes">
   <Node layout="free" flow="y">
-    {#each all(TreeNode) as node}{node}{/each}
+    {#each nodes as node}{node}{/each}
   </Node>
 </Layout>
 <Layout name="Status" of="@sequence.pick">
   <Node>Insert next value {@sequence.pick}</Node>
 </Layout>
 
-<Layout name="Main" of="@sequence.pick">
+<Layout name="Main" of="nodes, @sequence.pick">
   <Node>
     <Title />
-    <Heap />
+    <Tree nodes={nodes} />
     <Status />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main /></Scene>
+  <Scene name="main"><Main nodes={nodes} /></Scene>
 </Storyboard>

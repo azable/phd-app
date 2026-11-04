@@ -1899,17 +1899,19 @@ describe('places', () => {
   });
 });
 
-describe('nodes and references', () => {
+describe('pools and references', () => {
   const domain = `<script domain>
   const Name = type(['A', 'B', 'C']);
   const Flag = type('boolean');
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
+  const ListNodes = pool(ListNode, { max: 2 });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
 <script input>
-  const head = NodeRef(ListNode({ name: 'A', next: NodeRef(ListNode({ name: 'B', next: End('end') })) }));
+  const nodes = ListNodes();
+  const head = NodeRef(nodes.add(ListNode({ name: 'A', next: nodes.add(ListNode({ name: 'B', next: End('end') })) })));
 </script>
 <script algorithm>
   @run[let prev = Next(End('end'));
@@ -1924,16 +1926,16 @@ describe('nodes and references', () => {
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
 <View of="NodeRef" name="Here"><Pointed /></View>`;
-  const heap = `<Layout name="Heap"><Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node></Layout><Layout name="Main" of="cur"><Node><Heap />{cur}</Node></Layout>`;
+  const list = `<Layout name="List" of="nodes"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout><Layout name="Main" of="nodes, cur"><Node><List nodes={nodes} />{cur}</Node></Layout>`;
   const box = `<View of="ListNode" name="NodeBox"><Node layout="row">{this.name}<Link to={this.next} /></Node></View>`;
 
-  it('draws every live node with all(…), a reference as a pointer, and the end through its view', () => {
-    const prepared = prepareSvelteComponent(`${domain}\n${box}\n${heap}`);
+  it('draws every node of a pool, a reference as a pointer, and the end through its view', () => {
+    const prepared = prepareSvelteComponent(`${domain}\n${box}\n${list}`);
     expect(prepared.design.space['views.ListNode']).toEqual(['NodeBox', 'none']);
     expect(prepared.design.space['pointers.NodeRef']).toEqual(['Here', 'none']);
     // The end a link to no node gives is drawn with its type's view, a choice of its own.
     expect(prepared.design.space['views.End']).toEqual(['EndMark', 'none']);
-    expect(prepared.master.at(-1)!.state['ȟListNode']).toEqual([
+    expect(prepared.master.at(-1)!.state.nodes).toEqual([
       { name: 'B', next: 1 },
       { name: 'A', next: 'end' }
     ]);
@@ -1941,9 +1943,9 @@ describe('nodes and references', () => {
 
   it.each([
     [
-      'all(…) of a record no reference refers to',
-      `${box}\n{#snippet Heap()}<Node layout="free">{#each all(Name) as n}{n}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Heap()}</Node></Layout>`,
-      /all\(Name\) draws every live node of a record a reference refers to, and Name is not one/
+      'all(…), naming the pool that replaced it',
+      `${box}\n<Layout name="Main"><Node layout="free">{#each all(ListNode) as n}{n}{/each}</Node></Layout>`,
+      'all(ListNode) is no more: keep the ListNodes in a pool, as const ListNodes = pool(ListNode, { max: 8 }); in the domain and const nodes = ListNodes(); in the input'
     ],
     [
       'a link with no from outside a view',
@@ -2268,10 +2270,10 @@ describe('the bundle', () => {
 });
 
 describe('references read in the view', () => {
-  it('read a field through a reference from its node in the heap', () => {
+  it('read a field through a reference from its node in its pool', () => {
     // queue holds references to vertices; q.name reads the name of the vertex q refers to.
     const prepared = prepareSvelteComponent(bfsReferences);
-    expect(prepared.component).toContain("$$props['ȟVertex'][$.get(q)].name");
+    expect(prepared.component).toContain('$$props.vertices[$.get(q)].name');
   });
 
   it('refuse a reference to a node drawn as a value, its place in the heap', () => {

@@ -897,8 +897,8 @@ export function slotInsertions(
   /** The code of the place of each render at one, by where it starts (see Place). */
   places: ReadonlyMap<number, string> = new Map(),
   /**
-   * The heap each reference refers into, by the path of the value (its indices as []), as
-   * `queue[]` into `ȟVertex`: a field read through one in the markup reads its node (see heapKey).
+   * The pool each reference refers into, by the path of the value (its indices as []), as
+   * `queue[]` into `vertices`: a field read through one in the markup reads its node.
    */
   references: ReadonlyMap<string, string> = new Map(),
   /**
@@ -933,7 +933,7 @@ export function slotInsertions(
   const readThrough = (node: Part | undefined): ReturnType<typeof atCall> =>
     node?.type === 'MemberExpression' ? readThrough(node.object as Part) : atCall(node);
   // The path of the value an expression reads, its indices as [], through a reference its node's
-  // place in the heap, as `ȟVertex[].name` for q.name with q an item of a queue of references.
+  // place in its pool, as `vertices[].name` for q.name with q an item of a queue of references.
   const patternOf = (
     node: Part | undefined,
     locals: ReadonlyMap<string, Local>
@@ -965,7 +965,7 @@ export function slotInsertions(
     return pattern === undefined ? undefined : references.get(pattern);
   };
   // An expression's text with each field read through a reference reading its node, as
-  // ȟVertex[q].name for q.name.
+  // vertices[q].name for q.name.
   const followedText = (node: Part, locals: ReadonlyMap<string, Local>): string => {
     const read = atCall(node);
     if (read) return `${read.target}[${followedText(read.argument, locals)}]`;

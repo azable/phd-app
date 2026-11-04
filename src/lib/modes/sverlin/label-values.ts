@@ -6,19 +6,17 @@
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
  * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
  * steps, taking turns in one place; `of="start"` and `of="end"` name the first step, the input as
- * given, and the last. Beside them, `all(Node)` is every live node of a record a reference refers
- * to, its heap.
+ * given, and the last. `all(Node)`, which a pool replaced, is found, to be refused.
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
  * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
  * when(@b)}` in place of the tags between them (see whenTags); then `@swap.a` as `ℓswapˑa`,
  * `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal, @inner)` as `ǂEqualˑˑinner` and
- * spaces, `all(Node)` as `ȟNode` and spaces, and `when(@swap)` as `ʬswap` and spaces. The page is
+ * spaces, and `when(@swap)` as `ʬswap` and spaces. The page is
  * given each as a prop of that name.
  */
 
 import { spanOf } from './algorithm/parse.server';
-import { heapKey, isHeapKey } from './algorithm/structures.server';
 import type { Label } from './algorithm/labels.server';
 
 const label = 'ℓ';
@@ -59,7 +57,6 @@ export function written(name: string): string {
     const [operator, path] = name.slice(1).split(dot + dot);
     return `applied(${operator}${path ? `, @${path.replaceAll(dot, '.')}` : ''})`;
   }
-  if (isHeapKey(name)) return `all(${name.slice(1)})`;
   return name.replaceAll(viewThis, 'this');
 }
 
@@ -176,15 +173,16 @@ export function whenTags(source: string): {
 
 /**
  * The markup with each label reference rewritten as an identifier of the same length, and the
- * references. Only inside `{…}` and outside strings; `{@render …}` and the other tags are no labels.
+ * references, and each `all(Node)`, left as written. Only inside `{…}` and outside strings;
+ * `{@render …}` and the other tags are no labels.
  */
 export function markLabels(source: string): {
   source: string;
   references: LabelReference[];
-  heaps: { record: string; start: number }[];
+  allReads: { record: string; start: number }[];
 } {
   const references: LabelReference[] = [];
-  const heaps: { record: string; start: number }[] = [];
+  const allReads: { record: string; start: number }[] = [];
   let out = '';
   let depth = 0;
   let quote: string | undefined;
@@ -241,10 +239,7 @@ export function markLabels(source: string): {
         references.push({ kind: 'during', key: '', start: index });
       const every = !word ? allCall.exec(rest) : null;
       if (every) {
-        heaps.push({ record: every[1], start: index });
-        out += pad(heapKey(every[1]), every[0].length);
-        index += every[0].length - 1;
-        continue;
+        allReads.push({ record: every[1], start: index });
       }
       const made = !word ? appliedCall.exec(rest) : null;
       if (made) {
@@ -275,7 +270,7 @@ export function markLabels(source: string): {
     }
     out += char;
   }
-  return { source: out, references, heaps };
+  return { source: out, references, allReads };
 }
 
 /** Where a label's code is in the algorithm block's body, for applications made inside it. */

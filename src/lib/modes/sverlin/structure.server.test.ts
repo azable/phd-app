@@ -11,13 +11,15 @@ const list = `<script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });
+  const ListNodes = pool(ListNode, { max: 3 });
   const NodeRef = ref(ListNode);
   const Next = union(NodeRef, End);
 </script>
 <script input>
-  const head = NodeRef(ListNode({ name: 'A', next:
-    NodeRef(ListNode({ name: 'B', next: NodeRef(ListNode({ name: 'C', next: End('end') })) }))
-  }));
+  const nodes = ListNodes();
+  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next: nodes.add(ListNode({ name: 'C', next: End('end') })) }))
+  })));
 </script>
 <script algorithm>
   @run[let cur = Next(head);]
@@ -30,18 +32,18 @@ const list = `<script domain>
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<Layout name="Heap">
-  <Node layout="free">{#each all(ListNode) as node}{node}{/each}</Node>
+<Layout name="List" of="nodes">
+  <Node layout="free">{#each nodes as node}{node}{/each}</Node>
 </Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="nodes">
   <Node>
-    <Heap />
+    <List nodes={nodes} />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main /></Scene>
+  <Scene name="main"><Main nodes={nodes} /></Scene>
 </Storyboard>`;
 
 const ring = `<script domain>
@@ -105,11 +107,11 @@ const designOf = (source: string) => prepareSvelteComponent(source).design;
 
 describe('free layout structures', () => {
   it('follow a record’s reference field, as a linked list’s next', () => {
-    expect(designOf(list).structures).toEqual({ Heap: 'path' });
+    expect(designOf(list).structures).toEqual({ List: 'path' });
   });
 
   it('follow every field a view of a reference draws, as a tree’s left and right', () => {
-    expect(designOf(bst).structures).toEqual({ Heap: 'tree' });
+    expect(designOf(bst).structures).toEqual({ Tree: 'tree' });
   });
 
   it('follow a position each element’s link reads, closing a ring', () => {
@@ -145,7 +147,7 @@ describe('free layout structures', () => {
 
   it('are none where nothing links the elements, or the links change from step to step', () => {
     expect(designOf(unlinked).structures).toEqual({ Cells: 'none' });
-    expect(designOf(reversal).structures).toEqual({ Heap: 'none' });
+    expect(designOf(reversal).structures).toEqual({ Nodes: 'none' });
   });
 
   it('start each layout natural, running the way its structure does, with every form offered', () => {

@@ -36,10 +36,8 @@ import { readLabels, type Label, type LabelProblem } from './labels.server';
 import { parseBlock, spanOf } from './parse.server';
 import { rawOperation, hiddenProblem, unwrappedNumber, type RawContext } from './raw.server';
 import {
-  heapKey,
-  heapRecords,
-  isHeapKey,
   noDomain,
+  pooledRecords,
   type CollectionType,
   type DomainRegistry,
   type RecordType,
@@ -183,8 +181,7 @@ export const algorithmLimits = {
   maximumCallDepth: 100,
   maximumCollectionLength: 10_000,
   maximumStringLength: 10_000,
-  maximumTraceValues: 200_000,
-  maximumLiveNodes: 64
+  maximumTraceValues: 200_000
 } as const;
 
 /** The name a label's applications are kept under, as the view reads the label: `@insert.compare` as `ℓinsertˑcompare`. */
@@ -463,17 +460,13 @@ class Interpreter {
   readonly #atoms: AtomRegistry;
   /** The record or collection type of every array and object an input or algorithm made. */
   readonly #shapes = new WeakMap<object, RecordType | CollectionType>();
-  /** The records a reference refers to as nodes, each with the reference type that names it. */
-  readonly #heaps: ReadonlyMap<string, string>;
-  /** Every node of each such record, in the order made, live or not. */
-  readonly #made = new Map<string, object[]>();
-  /** Each record's heap, one array kept across steps so it keeps its identity. */
-  readonly #heapArrays = new Map<string, object[]>();
-  /** Each live node's place in its heap at the last step recorded. */
-  #heapIndex = new Map<object, number>();
-  /** The node whose fields a step is recording, as its heap's element, not as a reference. */
+  /** The records that have a pool, each with its pool type. */
+  readonly #heaps: ReadonlyMap<string, CollectionType>;
+  /** Each record's pool, its nodes in the order added: the one array the pool's variable holds. */
+  readonly #made = new Map<string, ObjectValue[]>();
+  /** The node whose fields a step is recording, as its pool's element, not as a reference. */
   #expanding: object | undefined;
-  /** While an input's nodes are rebuilt, each heap's nodes by their place in it. */
+  /** While an input's pools are rebuilt, each pool's nodes by their place in it. */
   #restoring: Map<string, ObjectValue[]> | undefined;
   readonly #trace: MasterStep[] = [];
   /** The state just after the input, before any of the algorithm runs, which a page opens on. */
@@ -570,7 +563,7 @@ class Interpreter {
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
     this.#atoms = this.#domain.atoms;
-    this.#heaps = heapRecords(this.#domain);
+    this.#heaps = pooledRecords(this.#domain);
     const atomTypes = Object.values(this.#atoms);
     this.#raw = {
       text: (node) => {
@@ -589,37 +582,43 @@ class Interpreter {
     // Input values become ordinary top-level variables the algorithm may update, keeping types.
     const initialTypes = options.initial?.types ?? {};
     const initialTargets = options.initial?.targets ?? {};
-    // An input's nodes come as each record's heap, the references to them as places in it.
+    // An input's pools come as their nodes, the references to them as places in them.
     this.#restoring = new Map();
-    for (const record of this.#heaps.keys()) {
-      const key = heapKey(record);
-      const recorded = options.initial?.state?.[key];
-      const nodes = (Array.isArray(recorded) ? recorded : []).map(() => {
+    const pools = new Map<string, string>();
+    for (const [record, pool] of this.#heaps) {
+      const name = Object.keys(options.initial?.state ?? {}).find(
+        (each) => initialTypes[each] === pool.name
+      );
+      const recorded = name ? options.initial?.state?.[name] : undefined;
+      if (!name || !Array.isArray(recorded)) continue;
+      const nodes = recorded.map(() => {
         const node = Object.create(null) as ObjectValue;
         this.#shapes.set(node, this.#domain.structures[record] as RecordType);
         return node;
       });
+      this.#shapes.set(nodes, pool);
       this.#restoring.set(record, nodes);
-      this.#made.set(record, [...nodes]);
+      this.#made.set(record, nodes);
+      pools.set(name, record);
     }
-    for (const [record, nodes] of this.#restoring) {
-      const recorded = options.initial?.state?.[heapKey(record)] as Record<string, TraceValue>[];
-      nodes.forEach((node, index) => {
+    for (const [name, record] of pools) {
+      const recorded = options.initial?.state?.[name] as Record<string, TraceValue>[];
+      this.#restoring.get(record)!.forEach((node, index) => {
         for (const [field, item] of Object.entries(recorded[index] ?? {}))
           node[field] = this.#fromTrace(
             item,
-            `${heapKey(record)}[${index}].${field}`,
+            `${name}[${index}].${field}`,
             initialTypes,
             initialTargets
           );
       });
     }
-    const initial = Object.entries(options.initial?.state ?? {}).filter(
-      ([name]) => !isHeapKey(name)
-    );
+    const initial = Object.entries(options.initial?.state ?? {});
     for (const [name, value] of initial)
       this.#topLevel.bindings.set(name, {
-        value: this.#fromTrace(value, name, initialTypes, initialTargets),
+        value: pools.has(name)
+          ? this.#made.get(pools.get(name)!)!
+          : this.#fromTrace(value, name, initialTypes, initialTargets),
         constant: false,
         type: options.initial?.declared?.[name] ?? initialTypes[name],
         ...(initialTargets[name] ? { target: initialTargets[name] } : {})
@@ -728,8 +727,10 @@ class Interpreter {
     const targets: Record<string, string> = {};
     const placed: Placed[] = [];
     const inScope = this.#inScope(scope);
-    const live = this.#liveNodes([...inScope, ...recorded], node);
+    const live = this.#pools();
     for (const [name, binding] of [...inScope, ...recorded]) {
+      // A pool is recorded below, under the variable that holds it, wherever a step is.
+      if (this.#isPool(binding.value)) continue;
       state[name] = this.#snapshot(binding.value, node, name, {
         types,
         targets,
@@ -764,16 +765,11 @@ class Interpreter {
         if (element) placed.push([name, binding.value as object, 'ref', element]);
       }
     }
-    // Each record's heap, its live nodes in the order they were made, each drawn whole; a node a
-    // field or variable refers to is recorded as its place in it.
-    for (const [record, nodes] of live) {
-      const key = heapKey(record);
-      const array = this.#heapArrays.get(record) ?? [];
-      this.#heapArrays.set(record, array);
-      array.length = 0;
-      array.push(...nodes);
-      types[key] = key;
-      placed.push([key, array, 'shared']);
+    // Each pool, its nodes in the order they were added, each drawn whole; a node a field or
+    // variable refers to is recorded as its place in it.
+    for (const [key, nodes] of live) {
+      types[key] = this.#shapes.get(nodes)!.name;
+      placed.push([key, nodes, 'shared']);
       state[key] = nodes.map((each, index) => {
         this.#expanding = each;
         try {
@@ -798,37 +794,35 @@ class Interpreter {
     };
   }
 
-  /**
-   * Each record's live nodes, in the order they were made: those a variable in scope, a collection,
-   * or a live node refers to. Its heap's places are kept for the step's references to them.
-   */
-  #liveNodes(bindings: readonly [string, Binding][], node: AnyNode): Map<string, object[]> {
-    const reached = new Set<object>();
-    const visit = (value: Value): void => {
-      if (value === null || typeof value !== 'object' || value instanceof Atom) return;
-      if (value === mathMarker || reached.has(value)) return;
-      reached.add(value);
-      if (Array.isArray(value)) value.forEach(visit);
-      else Object.values(value).forEach(visit);
-    };
-    for (const [, binding] of bindings) visit(binding.value);
-    // A node a caller holds is live inside the call too, though out of the call's scope.
-    for (const caller of this.#callers)
-      for (let block: Scope | undefined = caller; block; block = block.parent)
-        for (const binding of block.bindings.values()) visit(binding.value);
-    const live = new Map<string, object[]>();
-    this.#heapIndex = new Map();
-    for (const record of this.#heaps.keys()) {
-      const nodes = (this.#made.get(record) ?? []).filter((each) => reached.has(each));
-      if (nodes.length > algorithmLimits.maximumLiveNodes)
-        this.#fail(
-          node,
-          `There are more than ${algorithmLimits.maximumLiveNodes} live ${record}s; check for a loop that keeps making them.`
-        );
-      nodes.forEach((each, index) => this.#heapIndex.set(each, index));
-      live.set(record, nodes);
+  /** Each pool by the top-level variable holding it, as the scenes give it to layouts. */
+  #pools(): Map<string, ObjectValue[]> {
+    const pools = new Map<string, ObjectValue[]>();
+    for (const nodes of this.#made.values()) {
+      const name = this.#poolName(nodes);
+      if (name) pools.set(name, nodes);
     }
-    return live;
+    return pools;
+  }
+
+  #poolName(nodes: ObjectValue[]): string | undefined {
+    for (const [name, binding] of this.#topLevel.bindings) if (binding.value === nodes) return name;
+  }
+
+  /** The first reference type to a record, which a step records a reference to its node as. */
+  #refTo(record: string): string | undefined {
+    return Object.values(this.#domain.structures).find(
+      (structure) => structure.kind === 'ref' && structure.heap && structure.element === record
+    )?.name;
+  }
+
+  /** Why a pool has no element at a place, and how its nodes are reached instead. */
+  #unordered(nodes: ObjectValue[]): string {
+    const pool = this.#shapes.get(nodes) as CollectionType;
+    return `A ${pool.name} has no order, so it has no places to read or write: add a node with .add(${pool.element}({ … })), which gives a reference to it, and reach its nodes through references.`;
+  }
+
+  #isPool(value: Value): value is ObjectValue[] {
+    return Array.isArray(value) && !!(this.#shapes.get(value) as CollectionType | undefined)?.pool;
   }
 
   /**
@@ -954,6 +948,8 @@ class Interpreter {
   #construct(node: CallExpression, typeName: string, scope: Scope): Value {
     if (this.#atoms[typeName]?.index && node.arguments.length === 2)
       return this.#position(node, this.#atoms[typeName], scope);
+    const pool = this.#domain.structures[typeName];
+    if (pool?.kind === 'collection' && pool.pool) return this.#newPool(node, pool);
     if (node.arguments.length !== 1 || node.arguments[0].type === 'SpreadElement')
       this.#fail(node, `${typeName}(...) takes exactly one value.`);
     let argument = this.#expression(node.arguments[0] as Expression, scope);
@@ -981,6 +977,46 @@ class Interpreter {
     const problem = atomProblem(type, value);
     if (problem) this.#fail(node, problem);
     return new Atom(type, value as string | number | boolean);
+  }
+
+  /**
+   * A record's one pool, empty, as in const nodes = Nodes(); in the input: the algorithm adds its
+   * nodes with nodes.add(Node({ … })).
+   */
+  #newPool(node: CallExpression, pool: CollectionType): ObjectValue[] {
+    if (node.arguments.length)
+      this.#fail(
+        node,
+        `${pool.name}() takes nothing: a pool starts empty, and nodes.add(${pool.element}({ … })) adds a node to it.`
+      );
+    if (this.#kind !== 'input')
+      this.#fail(
+        node,
+        `Make the ${pool.name} in the input, as const nodes = ${pool.name}();, so every step draws it.`
+      );
+    if (this.#made.has(pool.element))
+      this.#fail(
+        node,
+        `There is one ${pool.name}, ${this.#poolName(this.#made.get(pool.element)!) ?? 'made already'}: a record has one pool.`
+      );
+    const nodes: ObjectValue[] = [];
+    this.#shapes.set(nodes, pool);
+    this.#made.set(pool.element, nodes);
+    return nodes;
+  }
+
+  /** nodes.add(Node({ … })): adds a node to its pool, at most the pool's max, and gives it. */
+  #add(node: CallExpression, nodes: ObjectValue[], pool: CollectionType, args: Value[]): Value {
+    if (args.length !== 1)
+      this.#fail(node, `.add(…) takes one ${pool.element}, as in .add(${pool.element}({ … })).`);
+    const record = this.#domain.structures[pool.element] as RecordType;
+    const added = this.#asRecord(args[0], record, node.arguments[0] ?? node, `An added node`);
+    if (nodes.includes(added)) return added;
+    this.#withinMax(pool, nodes.length + 1, node, `another .add(…)`);
+    nodes.push(added);
+    const place = this.#places.get(nodes);
+    if (place !== undefined) this.#emit('write', node, { place, method: 'push' });
+    return added;
   }
 
   /**
@@ -1064,7 +1100,7 @@ class Interpreter {
   #asRef(value: Value, ref: RefType, node: AnyNode): Value {
     if (ref.heap) {
       const record = this.#domain.structures[ref.element] as RecordType;
-      return this.#asRecord(value, record, node, `A ${ref.name}`);
+      return this.#inPool(this.#asRecord(value, record, node, `A ${ref.name}`), ref, node);
     }
     const held = [...this.#topLevel.bindings.values()].some(
       ({ value: collection }) =>
@@ -1078,6 +1114,17 @@ class Interpreter {
         `A ${ref.name} refers to an element of a ${ref.collection}, so make it from one, as in ${ref.name}(${this.#collectionsOf({ name: ref.name, base: 'integer', index: ref.collection })[0] ?? 'queue'}[0]).`
       );
     return value;
+  }
+
+  /** A reference to a node refers to one its pool holds, which the algorithm added to it. */
+  #inPool(value: ObjectValue, ref: RefType, node: AnyNode): ObjectValue {
+    if (this.#made.get(ref.element)?.includes(value)) return value;
+    const pool = this.#made.get(ref.element);
+    const name = (pool && this.#poolName(pool)) ?? 'nodes';
+    return this.#fail(
+      node,
+      `A ${ref.name} refers to a ${ref.element} in its pool, ${ref.collection}: add the ${ref.element} to the pool first, which gives the reference, as ${name}.add(${ref.element}({ … })).`
+    );
   }
 
   #asAtom(value: Value, type: AtomType, node: AnyNode, path: string): Atom {
@@ -1110,6 +1157,13 @@ class Interpreter {
           (ref?.kind === 'ref' && !!ref.heap && shape?.name === ref.element)
         );
       });
+      const ref = union.members
+        .map((member) => this.#domain.structures[member])
+        .find(
+          (each): each is RefType =>
+            each?.kind === 'ref' && !!each.heap && shape?.name === each.element
+        );
+      if (fits && ref) return this.#inPool(value as ObjectValue, ref, node);
       if (fits) return value;
       return this.#fail(node, `${path} must be a ${members}, not ${kind(value)}.`);
     }
@@ -1157,12 +1211,6 @@ class Interpreter {
       made[field] = this.#convert(value[field], record.fields[field], node, `${path}.${field}`);
     }
     this.#shapes.set(made, record);
-    // A node is live once made, while something refers to it.
-    if (this.#heaps.has(record.name)) {
-      const nodes = this.#made.get(record.name) ?? [];
-      this.#made.set(record.name, nodes);
-      nodes.push(made);
-    }
     return made;
   }
 
@@ -1806,14 +1854,17 @@ class Interpreter {
       return value.value;
     }
     const shape = value !== null && typeof value === 'object' ? this.#shapes.get(value) : undefined;
-    // A node is drawn in its record's heap; anywhere else, as a reference, it is its place there.
-    const ref = shape?.kind === 'record' ? this.#heaps.get(shape.name) : undefined;
-    if (ref && value !== this.#expanding) {
-      types[path] = ref;
-      targets[path] = heapKey((shape as RecordType).name);
-      return this.#heapIndex.get(value as object) ?? null;
+    // A node is drawn in its pool; anywhere else, as a reference, it is its place there.
+    const pool = shape?.kind === 'record' ? this.#made.get(shape.name) : undefined;
+    if (pool && value !== this.#expanding) {
+      const ref = this.#refTo(shape!.name);
+      if (ref) types[path] = ref;
+      const name = this.#poolName(pool);
+      if (name) targets[path] = name;
+      const index = pool.indexOf(value as ObjectValue);
+      return index >= 0 ? index : null;
     }
-    // Only the heap's element itself is drawn whole; a field referring back to it is a reference.
+    // Only the pool's element itself is drawn whole; a field referring back to it is a reference.
     if (value === this.#expanding) this.#expanding = undefined;
     if (shape) {
       types[path] = shape.name;
@@ -2038,6 +2089,7 @@ class Interpreter {
         this.#fail(target, `"${target.name}" must be declared with let before it is assigned.`);
       if (binding.constant)
         this.#fail(target, `"${target.name}" is a constant; declare it with let to change it.`);
+      if (this.#isPool(binding.value)) this.#fail(target, this.#unordered(binding.value));
       return {
         type: binding.type,
         get: () => binding.value,
@@ -2063,6 +2115,7 @@ class Interpreter {
         : undefined;
     const prepare = (value: Value) =>
       slot ? this.#convert(value, slot, target, targetName(target)) : value;
+    if (this.#isPool(object)) this.#fail(target, this.#unordered(object));
     if (Array.isArray(object)) {
       const type = slot;
       if (typeof key !== 'number' || !Number.isInteger(key))
@@ -2145,6 +2198,7 @@ class Interpreter {
     }
     if (Array.isArray(object) || typeof object === 'string') {
       if (key === 'length') return this.#readAt(this.#lengthOf(object, node), object, key);
+      if (this.#isPool(object)) this.#fail(node, this.#unordered(object));
       if (typeof key === 'number' && Number.isInteger(key) && Array.isArray(object)) {
         if (key >= 0 && key < object.length) return this.#readAt(object[key], object, key);
         return this.#fail(
@@ -2218,6 +2272,14 @@ class Interpreter {
     }
     if (!Array.isArray(object)) this.#fail(callee, `.${name}() is only available on arrays.`);
     const collection = this.#shapes.get(object) as CollectionType | undefined;
+    if (collection?.pool) {
+      if (name !== 'add')
+        this.#fail(
+          callee,
+          `A pool has no order, so it has no .${name}(): add a node with .add(${collection.element}({ … })), and reach its nodes through references.`
+        );
+      return this.#add(node, object as ObjectValue[], collection, args);
+    }
     if (name === 'push' || name === 'unshift') {
       const added = `an item added by ${targetName(callee.object as Expression)}.${name}()`;
       // Items take the collection's element type, as an element assigned by index does.
@@ -2599,7 +2661,7 @@ class Interpreter {
     if (collection?.max !== undefined && length > collection.max)
       this.#fail(
         node,
-        `${collection.name} holds at most ${collection.max} elements, and ${what} would hold ${length}: give ${collection.name} a larger max, as collection(${collection.element}, { max: ${length} }).`
+        `${collection.name} holds at most ${collection.max} elements, and ${what} would hold ${length}: give ${collection.name} a larger max, as ${collection.pool ? 'pool' : 'collection'}(${collection.element}, { max: ${length} }).`
       );
   }
 

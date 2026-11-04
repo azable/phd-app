@@ -124,11 +124,11 @@ scene at least.
 </Storyboard>
 ```
 
-- A scene is a stepping scene if it passes state, shows a layout reading
-  `all(…)`, or has `pause`, `within`, or `at`, and a single frame otherwise, as
-  a title card or a note between runs: its layout reads no state, and `pause`,
-  `within`, or `at` on a scene whose layout reads none is refused. (Until the
-  language has runs of several inputs, this is how a frame is told from a step.)
+- A scene is a stepping scene if it passes state, or has `pause`, `within`, or
+  `at`, and a single frame otherwise, as a title card or a note between runs:
+  its layout reads no state, and `pause`, `within`, or `at` on a scene whose
+  layout reads none is refused. (Until the language has runs of several inputs,
+  this is how a frame is told from a step.)
 - A stepping scene steps through the whole run, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
   `within="@sort.merge#1"`, ending at the step that ends it. `pause` names, by
@@ -159,12 +159,12 @@ takes no value: `this` in a layout is an error, as it has no value of its own.
 The node showing the value shows the type's unit too. Define views at the top
 level, never inside a layout or a node, and end each `</View>` its line, putting
 what follows on the next. A view reads only `this`, types, other views, labels
-(`@…`), the library's components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`,
-and the names its `{#each}` blocks and `{@const}` tags declare: never the input
-or algorithm variables, a pointer apart, and never browser globals such as
-`window` or `self`. How two values relate is drawn where both are in scope, in
-the view holding them or by a pointer; a layout reads the input and algorithm
-variables it declares.
+(`@…`), the library's components, `Math`, `at(p)`, `runs(@label)`, and the names
+its `{#each}` blocks and `{@const}` tags declare: never the input or algorithm
+variables, a pointer apart, and never browser globals such as `window` or
+`self`. How two values relate is drawn where both are in scope, in the view
+holding them or by a pointer; a layout reads the input and algorithm variables
+it declares.
 
 A value in braces is drawn by its type's view: in the markup's text, `{key}`,
 with `key` an `Int`, draws the view `views.Int` chooses, among every view of
@@ -519,9 +519,11 @@ order, each as a top-level `const`:
   `record({ from: Vertex, to: Vertex, weight: Weight })`;
 - a union, a value of one of several types, `union(Distance, Unreached)`;
 - a position in a collection, `index(Values)`;
+- a pool of the nodes of a record type, unordered, with the most it ever holds,
+  `pool(ListNode, { max: 6 })` (see Pools and references);
 - a reference to an element of a collection of single values, staying with it as
-  it moves, `ref(Queue)`, or to a node of a record type, wherever it is,
-  `ref(ListNode)` (see Nodes and references).
+  it moves, `ref(Queue)`, or to a node in a pool, `ref(ListNode)` (see Pools and
+  references).
 
 Make one by calling its name with literals, which take their types from it:
 `Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
@@ -570,31 +572,35 @@ but not with `<` or `>`, so check the member first:
 
 The view receives plain arrays and objects, drawn by their types' views.
 
-## Nodes and references
+## Pools and references
 
 A node of a linked list, a tree, or a graph is a record referring to others of
-its kind, as `struct Node { char name; struct Node *next; }` in C. A reference
-to a record type, `ref(ListNode)`, is that pointer: it refers to a node wherever
-it is, and always to one. "No node" is a value of a type of its own, joined to
-the reference with a union, so a field that may end says so, and the end is
-drawn and varied as any value is. A record holding itself other than through a
-reference or an index would never end, and is refused. A list reversed, the
-nodes `prev` and `cur` refer to both marked:
+its kind, as `struct Node { char name; struct Node *next; }` in C. The nodes of
+a record type live in its pool, `pool(ListNode, { max: 6 })`, which holds at
+most `max` of them, in no order: no node has a place in it, so a pool has no
+`nodes[0]`, `push`, or `sort`. A reference to the record type, `ref(ListNode)`,
+is the pointer: it refers to a node of the pool, and always to one. "No node" is
+a value of a type of its own, joined to the reference with a union, so a field
+that may end says so, and the end is drawn and varied as any value is. A record
+holding itself other than through a reference or an index would never end, and
+is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 
 ```svelte
 <script domain>
   const Name = type(['A', 'B', 'C']);
   const End = type(['end']);
   const ListNode = record({ name: Name, next: Next });  // Next is defined below
-  const NodeRef = ref(ListNode);                         // always a node
+  const ListNodes = pool(ListNode, { max: 3 });          // every ListNode
+  const NodeRef = ref(ListNode);                         // always a node in it
   const Next = union(NodeRef, End);                      // a node, or the end
 
 </script>
 
 <script input>
-  const head = NodeRef(ListNode({ name: 'A', next:
-    NodeRef(ListNode({ name: 'B', next:
-      NodeRef(ListNode({ name: 'C', next: End('end') })) })) }));
+  const nodes = ListNodes();
+  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next:
+      nodes.add(ListNode({ name: 'C', next: End('end') })) })) })));
 </script>
 
 <script algorithm>
@@ -614,26 +620,32 @@ nodes `prev` and `cur` refer to both marked:
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
 <View of="NodeRef" name="Here"><Pointed /></View>
-<Layout name="Heap">
-  <Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>
+<Layout name="List" of="nodes">
+  <Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node>
 </Layout>
 
-<Layout name="Stacked" of="prev, cur">
+<Layout name="Stacked" of="nodes, prev, cur">
   <Node>
-    <Heap />
+    <List nodes={nodes} />
     {prev}
     {cur}
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Stacked prev={prev} cur={cur} /></Scene>
+  <Scene name="main"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
 </Storyboard>
 ```
 
-- `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
-  one variable each, as the graph under Link; the algorithm makes one the same
-  way, as `head = NodeRef(ListNode({ name: v, next: head }))`. A cycle is the
+- The input makes the pool, empty, `const nodes = ListNodes();`, once: a record
+  type has one pool, so a reference to it always points there, and the algorithm
+  makes none. `nodes.add(ListNode({ … }))` adds a node and gives it, a reference
+  wherever the type expects one, as a `next` field; written nested, as here, or
+  one variable each, as `const c = NodeRef(nodes.add(ListNode({ … })));`. The
+  algorithm adds one the same way, as
+  `head = nodes.add(ListNode({ name: v, next: head }))`, and a function adding
+  one takes the pool as a parameter, `insert(nodes, root, value)`. An add past
+  `max` is an error, and so is a reference to a node never added. A cycle is the
   algorithm's to make.
 - A field is read and written through a reference, `cur.next = prev`; a value of
   another type is refused, and reading or writing one through the end is a
@@ -642,12 +654,12 @@ nodes `prev` and `cur` refer to both marked:
   layout reads a field through a reference too, from the node it refers to, as
   `{#each queue as q}{q.name}{/each}`; a view drawing a reference itself as a
   value is refused, as it would show the node's place.
-- A node lives while something refers to it: a variable in scope, a collection,
-  or a live node. `all(ListNode)` is every live node, in the order made, drawn
-  as a collection, each through the record's view; one no longer referred to
-  fades out, and a node keeps its identity as its links change, so it stays put.
-  A step records a reference as its node's place, so a circular list stays
-  finite. At most 64 nodes of a type are live at once.
+- The pool is a value as any input is: a scene passes it to a layout, which
+  declares it, and `{#each nodes as n}` draws every node, each through the
+  record's view, in a free layout that places them by their links. A node stays
+  in the pool to the end, keeping its identity as its links change, so it stays
+  put; one nothing refers to any more is still drawn. A step records a reference
+  as its node's place in the pool, so a circular list stays finite.
 - `<Link to={n.next} />` with no `from`, in a node of the record's view, leaves
   that node for the node the field refers to, and the free layout around the
   nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
@@ -663,10 +675,9 @@ nodes `prev` and `cur` refer to both marked:
   link draws the end with its type's view (`views.End`, as `EndMark`'s ∅). A
   pointer view of the reference, as `Here`, marks the node a variable refers to,
   and draws nothing at the end.
-- References suit nodes made, linked, and dropped as the algorithm runs; where
-  it does arithmetic on places, or the structure is an array (an array-based
-  tree, a graph over a fixed list of vertices), keep a position instead,
-  `index(Nodes)`.
+- References suit nodes added and linked as the algorithm runs; where it does
+  arithmetic on places, or the structure is an array (an array-based tree, a
+  graph over a fixed list of vertices), keep a position instead, `index(Nodes)`.
 - A view reads through a position with `at(p)`, the element it points at in the
   collection it points into, as
   `<View of="VertexRef" name="VertexName">{at(this).name}</View>`; a layout may
@@ -1454,7 +1465,7 @@ participant liked ("keep this layout but …"), vary that kind's `form`,
 
 `<Link from={edge.from} to={edge.to} />` draws a link between two nodes. Put
 links among the children of the node whose children they join, or in a view
-rendered there, as of an edge, of a node (see Nodes and references), or of what
+rendered there, as of an edge, of a node (see Pools and references), or of what
 a labelled expression computed; never in a pointer view, which draws inside the
 element it marks. They take no space; give the node a `layout`, `"free"` for a
 linked structure or `"row"` or `"column"`, unless it holds a collection's

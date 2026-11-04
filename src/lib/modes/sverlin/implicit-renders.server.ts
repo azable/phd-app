@@ -193,13 +193,11 @@ export function implicitRenders(
             );
         }
       if (part.type === 'EachBlock') {
-        // all(Node), written ȟNode by then, lists the live nodes of a record.
         const name = part.expression?.type === 'Identifier' ? (part.expression.name ?? '') : '';
         const list = structures[typeOf(part.expression, local) ?? ''];
         const ran = runsPaths.get(name);
-        const element = name.startsWith('ȟ')
-          ? name.slice(1)
-          : ran !== undefined
+        const element =
+          ran !== undefined
             ? one(labelTypes(ran))
             : list?.kind === 'collection'
               ? list.element

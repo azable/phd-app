@@ -42,10 +42,10 @@ describe('pointers', () => {
 describe('keyed references', () => {
   it('keep a short key as written, and a long one as a hash, so different ends stay apart', () => {
     expect(keyedRef('3:5', 'a->b')).toBe('3:5@a-%3Eb');
-    const one = keyedRef('3:5', 'ȟListNode[1]->ȟListNode[0]');
-    const other = keyedRef('3:5', 'ȟListNode[1]->ȟListNode[2]');
+    const one = keyedRef('3:5', 'nodes[1]->nodes[0]');
+    const other = keyedRef('3:5', 'nodes[1]->nodes[2]');
     expect(one).toMatch(/^3:5@~[0-9a-z]+$/u);
     expect(one).not.toBe(other);
-    expect(keyedRef('3:5', 'ȟListNode[1]->ȟListNode[0]')).toBe(one);
+    expect(keyedRef('3:5', 'nodes[1]->nodes[0]')).toBe(one);
   });
 });

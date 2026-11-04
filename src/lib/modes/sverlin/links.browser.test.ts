@@ -345,7 +345,7 @@ it.skipIf(!enabled)(
     const gaps = () =>
       page.evaluate((layer) => {
         const boxes = [...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-slot]`)]
-          .filter((node) => /^ȟListNode\[\d+\]$/u.test(node.dataset.svSlot ?? ''))
+          .filter((node) => /^nodes\[\d+\]$/u.test(node.dataset.svSlot ?? ''))
           .map((node) => node.getBoundingClientRect());
         const distance = (x: number, y: number) =>
           Math.min(
