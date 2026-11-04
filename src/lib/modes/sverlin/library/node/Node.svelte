@@ -37,6 +37,7 @@
     overhangContext,
     provideOverhang,
     elementSlot,
+    pointedContext,
     pointerAroundContext,
     pointerIdentityContext,
     placeContext,
@@ -63,15 +64,20 @@
     type Pointer
   } from '../type-context';
   import {
+    addedReach,
+    anchorOrigin,
     boxEffects,
     caseCss,
     colourCss,
     decorationCss,
     fillStyleCss,
+    kindKey,
     lookUp,
+    offsetReach,
     paintProps,
     paintReach,
     placedKind,
+    scaleReach,
     strokeStyleCss,
     widerReach
   } from './design';
@@ -216,24 +222,23 @@
   const expanded = $derived(expandOf(look('expand')));
   // Paint round the box takes no room of its own, so the box sits in a room keeping its largest
   // reach on each side in any state: its own kind's shadow and glow, and a pointer's at it, active
-  // or not, with the pointer's expansion where it is painted. So no paint lies over a neighbour or
-  // past the drawing's edge, and nothing moves as a pointer comes and goes.
-  const reach = untrack(() => {
+  // or not, with the pointer's spread and its expansion where it is painted. So no paint lies over
+  // a neighbour or past the drawing's edge, and nothing moves as a pointer comes and goes.
+  const paintedReach = untrack(() => {
     const own = paintReach(
       lookUp(design, __view, placed, 'shadow'),
       lookUp(design, __view, placed, 'glow')
     );
     if (!__over) return own;
     const of = (prop: string) => lookUp(design, __over.kind, __over.placed, prop);
-    const spreads = packedAlong === undefined ? expandOf(of('expand')) : 0;
+    const spreads =
+      (packedAlong === undefined ? expandOf(of('expand')) : 0) + expandOf(of('spread'));
     return widerReach(own, paintReach(of('shadow'), of('glow'), spreads));
   });
-  const reaches = reach.top > 0 || reach.right > 0 || reach.bottom > 0 || reach.left > 0;
-  const reachPadding = reaches
-    ? `${reach.top}px ${reach.right}px ${reach.bottom}px ${reach.left}px`
-    : undefined;
   const growth = $derived(packedAlong === undefined ? 0 : expanded);
-  const spread = $derived(packedAlong === undefined ? expanded : 0);
+  // The box's fill spread and its stroke drawn further out: a pointer's spread, and its expansion
+  // where it is painted, one drawing for both.
+  const spread = $derived((packedAlong === undefined ? expanded : 0) + expandOf(look('spread')));
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -379,6 +384,58 @@
   });
   const leastOf = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
+  // A pointer's transforms move and scale its whole drawing, the marks round the element with it:
+  // they are drawn on the outermost node its view draws around the element (the element itself,
+  // where the view is a <Pointed> alone), only where the pointer is, scaled from that node's
+  // anchors. They take no room, so that node's room keeps their reach in every state: an offset's
+  // distance, and a scale's growth of the node's kept size, which the page learns from the layout
+  // memory and the measuring pass works out from the same size (see data-sv-scale in reserve.ts).
+  const transformer = untrack(() => {
+    if (drawnAround === undefined) return undefined;
+    if (__over) return __over;
+    const kind = kindKey(__view.split('.')[0], 'Pointed');
+    return {
+      kind,
+      placed: placedKind(placeContext(), kind),
+      active: pointedContext()?.active ?? false
+    };
+  });
+  const transformOf = (prop: string): number => {
+    const value = transformer ? lookUp(design, transformer.kind, transformer.placed, prop) : 0;
+    return typeof value === 'number' ? value : 0;
+  };
+  const scaled = untrack(() => Math.max(1, transformOf('scale')));
+  const anchorsOf = () => ({ x: xAnchor, y: yAnchor });
+  const reach = untrack(() => {
+    const moved = addedReach(
+      paintedReach,
+      offsetReach(transformOf('offsetX'), transformOf('offsetY'))
+    );
+    return reserved && scaled > 1 && !memory?.measuring
+      ? addedReach(moved, scaleReach(scaled, anchorsOf(), reserved))
+      : moved;
+  });
+  const reaches =
+    scaled > 1 || reach.top > 0 || reach.right > 0 || reach.bottom > 0 || reach.left > 0;
+  const reachPadding = reaches
+    ? `${reach.top}px ${reach.right}px ${reach.bottom}px ${reach.left}px`
+    : undefined;
+  // Measuring knows no kept sizes yet, so the room says how it scales, and the layout model adds
+  // the scale's reach from the size its node keeps.
+  const scaleRoom = untrack(() =>
+    scaled > 1 && memory?.measuring ? `${scaled} ${anchorsOf().x} ${anchorsOf().y}` : undefined
+  );
+  const transform = $derived.by(() => {
+    if (!transformer?.active) return undefined;
+    const x = transformOf('offsetX');
+    const y = transformOf('offsetY');
+    const parts = [
+      x || y ? `translate(${x}px, ${y}px)` : '',
+      scaled > 1 ? `scale(${scaled})` : ''
+    ].filter(Boolean);
+    return parts.length ? parts.join(' ') : undefined;
+  });
+  const transformOrigin = $derived(transform ? anchorOrigin(anchorsOf()) : undefined);
   const unit = $derived(__type ? types?.unit(__type) : undefined);
   // A number type draws every value with its places, as 3.00, so values line up and keep one width.
   const decimals = $derived(__type ? types?.places?.(__type) : undefined);
@@ -681,6 +738,8 @@
     style:min-width={grown(least(valueWidth, 'width'))}
     style:min-height={grown(least(valueHeight, 'height'))}
     style:opacity={look('opacity') as number | undefined}
+    style:transform
+    style:transform-origin={transformOrigin}
   >
     {#if free}
       <Arranged
@@ -792,6 +851,7 @@
       round it for the paint it reaches past it with (see reach). -->
     <div
       class="sv-room"
+      data-sv-scale={scaleRoom}
       style:padding={reachPadding}
       style:display="flex"
       style:justify-content={xAnchor}

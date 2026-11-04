@@ -191,19 +191,30 @@ written in the view so the label is a kind of its own.
 - `<Pointed>` takes no props and is written in the pointer view itself, not a
   snippet inside it. Where the pointer is, the element is drawn in the pointer's
   kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke colour,
-  opacity, text colour, shadow, glow, fill style, decoration, expand) shows only
-  there, the rest of its look in every slot, so every slot keeps one size; a
-  stroke keeps its width in every slot, drawn in no colour where none shows.
-  `expand`, 0, 2, 4, or 8 pixels on each side, enlarges the element where the
-  pointer is: in a row of slots it is painted, its fill spread and its stroke
-  drawn further out, in room every element keeps for it, so nothing moves; in a
-  packed row it takes room, growing from where the element's kind places it
-  along the row (`xAnchor`): about its centre by default, the elements before it
-  moving back as far as those after move on; the row keeps room for one
-  expansion for each pointer into it, at its ends as that anchor says (a packed
-  column keeps it at its end). Between steps an element changes size and paint
-  as it moves, so an expansion grows and a highlight fades from one element to
-  the next.
+  opacity, text colour, shadow, glow, fill style, decoration, expand and the
+  transforms below) shows only there, the rest of its look in every slot, so
+  every slot keeps one size; a stroke keeps its width in every slot, drawn in no
+  colour where none shows. `expand`, 0, 2, 4, or 8 pixels on each side, enlarges
+  the element where the pointer is: in a row of slots it is painted, its fill
+  spread and its stroke drawn further out, in room every element keeps for it,
+  so nothing moves; in a packed row it takes room, growing from where the
+  element's kind places it along the row (`xAnchor`): about its centre by
+  default, the elements before it moving back as far as those after move on; the
+  row keeps room for one expansion for each pointer into it, at its ends as that
+  anchor says (a packed column keeps it at its end). Between steps an element
+  changes size and paint as it moves, so an expansion grows and a highlight
+  fades from one element to the next.
+- A pointer's kind transforms what it is at, where it is, taking no room:
+  `scale` (1, 1.1, 1.2, or 1.3) draws it larger from the element's anchors
+  (`xAnchor`, `yAnchor`), so with `yAnchor` end it grows upward, its bottom
+  level with the rest; `spread` (0, 2, 4, or 6 pixels) draws its fill and stroke
+  further out on every side, its text unchanged, as a painted `expand` is;
+  `offsetX` and `offsetY` (−12 to 12 pixels, in steps of 4) draw it moved,
+  negative being left or up, as a lift of `offsetY` −8. A scale and an offset
+  move the pointer's whole drawing, the marks round `<Pointed>` with the
+  element. Every element keeps room for their reach in every state, so nothing
+  is painted over or cut off and nothing moves; between steps an element grows,
+  shrinks and rises as the pointer comes and goes.
 - Render a pointer in a layout's root itself, outside other nodes, snippets, and
   blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
   an element, a field (`{edges[e].to}`), or a label (see Views of what a step

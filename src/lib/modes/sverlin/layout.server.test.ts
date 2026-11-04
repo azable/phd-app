@@ -186,6 +186,37 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     expect(lifted.height - plain.height).toBeCloseTo(6, 0);
   }, 60_000);
 
+  it('keeps room round each box for how far a pointer moves or scales it, in every state', async () => {
+    const sizes = async (chosen: Record<string, string | number>) => {
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
+while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+        chosen: { 'Row.gap': 0, ...chosen }
+      });
+      expect(layout.errors).toEqual([]);
+      const prefix = 'window.__sverlinGeometry=';
+      const [given] = JSON.parse(
+        javascript.slice(prefix.length, javascript.indexOf(';\n'))
+      ) as Geometry[];
+      const components = new Map(given.components);
+      return { row: components.get('Row')!, cell: components.get('Cell')! };
+    };
+    const plain = await sizes({});
+    // A lift of 8 keeps 8 above every cell, at it or not, so nothing moves as it passes.
+    const lifted = await sizes({ 'Here.Pointed.offsetY': -8 });
+    expect(lifted.row.width).toBeCloseTo(plain.row.width, 0);
+    expect(lifted.row.height - plain.row.height).toBeCloseTo(8, 0);
+    // A scale of 1.2 from the cell's bottom grows it upward only, and from its centre sideways:
+    // a fifth of its height above, a tenth of its width each side, of each of the three cells.
+    const grown = await sizes({ 'Here.Pointed.scale': 1.2, 'Cell.yAnchor': 'end' });
+    const { width, height } = plain.cell;
+    expect(grown.row.height - plain.row.height).toBe(Math.ceil(0.2 * height));
+    expect(grown.row.width - plain.row.width).toBe(3 * 2 * Math.ceil(Math.ceil(0.2 * width) / 2));
+  }, 60_000);
+
   it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
     const box = async (cell: string) => {
       const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = collection(Int, { max: 2 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main"><Node>{values}</Node></Layout>`;

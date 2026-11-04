@@ -511,3 +511,163 @@ it.skipIf(!enabled)(
     expect(lit.size).toBe(2);
   }
 );
+
+type Placed = { top: number; bottom: number; left: number; right: number };
+
+/**
+ * Each step of a linear search, its cells and the pointer's marks as drawn, with the chosen
+ * looks and pointer view, and the page's fit, from an unpointed cell's box against its own size.
+ */
+async function transformed(
+  chosen: Record<string, string | number>,
+  pointer = '<Pointed />'
+): Promise<{
+  fit: number;
+  steps: { cells: (Placed & { pointed: boolean })[]; marks: Placed[]; row: Placed }[];
+}> {
+  const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values([7, 42, 3, 18, 25]);
+  const target = Int(18);
+</script>
+<script algorithm>
+  @start[let i = Index(0);]
+  while (@scan[values[i] !== target]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here">${pointer}</View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+    chosen
+  });
+  const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setContent(sandboxDocument('', javascript, 0, 1));
+  await page.waitForFunction(() =>
+    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+  );
+  let fit = 1;
+  const steps = [];
+  for (let step = 0; step < labels.length; step++) {
+    await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
+    await page.waitForTimeout(1500);
+    const drawn = await page.evaluate(() => {
+      const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+      const placed = (element: Element) => {
+        const { top, bottom, left, right } = element.getBoundingClientRect();
+        return { top, bottom, left, right };
+      };
+      const nodes = [...document.querySelectorAll<HTMLElement>(`${layer} .value`)]
+        .filter((value) => getComputedStyle(value).visibility !== 'hidden')
+        .map((value) => value.closest<HTMLElement>('.sv-node')!);
+      const plain = nodes.find((node) => node.dataset.svKind === 'Cell');
+      return {
+        fit: plain ? plain.getBoundingClientRect().height / plain.offsetHeight : 1,
+        cells: nodes.map((node) => ({
+          ...placed(node),
+          pointed: node.dataset.svKind === 'Here.Pointed'
+        })),
+        marks: [...document.querySelectorAll(`${layer} [data-sv-kind="Here.Mark"]`)]
+          .filter((mark) => getComputedStyle(mark).visibility !== 'hidden')
+          .map(placed),
+        row: placed(document.querySelector(`${layer} [data-sv-kind="Row"]`)!)
+      };
+    });
+    fit = drawn.fit;
+    steps.push({ cells: drawn.cells, marks: drawn.marks, row: drawn.row });
+  }
+  await page.close();
+  expect(errors).toEqual([]);
+  return { fit, steps };
+}
+
+/** Whether two boxes overlap by more than rounding. */
+const overlapping = (a: Placed, b: Placed) =>
+  Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+  Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+
+it.skipIf(!enabled)(
+  'lifts the pointed cell by its offset, into room every cell keeps, moving nothing else',
+  { timeout: 120_000 },
+  async () => {
+    const { fit, steps } = await transformed({ 'Here.Pointed.offsetY': -8 });
+    const pointedSteps = steps.filter(({ cells }) => cells.some((cell) => cell.pointed));
+    expect(pointedSteps.length).toBeGreaterThan(1);
+    for (const { cells } of pointedSteps) {
+      const pointed = cells.find((cell) => cell.pointed)!;
+      const others = cells.filter((cell) => !cell.pointed);
+      // The pointed cell drawn 8px higher than the rest, which all keep one line.
+      expect(new Set(others.map((cell) => cell.top.toFixed(1))).size).toBe(1);
+      expect(others[0].top - pointed.top).toBeCloseTo(8 * fit, 0);
+      for (const cell of others) expect(overlapping(cell, pointed)).toBe(false);
+    }
+    // The row keeps one box, the lift's room included, at every step.
+    expect(
+      new Set(steps.map(({ row }) => `${row.top.toFixed(1)},${row.bottom.toFixed(1)}`)).size
+    ).toBe(1);
+    expect(
+      Math.min(...steps.flatMap(({ cells }) => cells.map((cell) => cell.top)))
+    ).toBeGreaterThanOrEqual(steps[0].row.top - 0.5);
+  }
+);
+
+it.skipIf(!enabled)(
+  'scales the pointed cell from its anchors, its bottom level with the rest at yAnchor end',
+  { timeout: 120_000 },
+  async () => {
+    const { steps } = await transformed({ 'Here.Pointed.scale': 1.2, 'Cell.yAnchor': 'end' });
+    const pointedSteps = steps.filter(({ cells }) => cells.some((cell) => cell.pointed));
+    expect(pointedSteps.length).toBeGreaterThan(1);
+    for (const { cells } of pointedSteps) {
+      const pointed = cells.find((cell) => cell.pointed)!;
+      const others = cells.filter((cell) => !cell.pointed);
+      expect(pointed.bottom).toBeCloseTo(others[0].bottom, 0);
+      expect((pointed.bottom - pointed.top) / (others[0].bottom - others[0].top)).toBeCloseTo(
+        1.2,
+        1
+      );
+      for (const cell of others) expect(overlapping(cell, pointed)).toBe(false);
+    }
+  }
+);
+
+it.skipIf(!enabled)(
+  'moves a pointer’s marks with the cell it lifts',
+  { timeout: 120_000 },
+  async () => {
+    const view = '<Node layout="column"><Pointed /><Node kind="Mark">▲</Node></Node>';
+    const still = await transformed({}, view);
+    const lifted = await transformed({ 'Here.Pointed.offsetY': -8 }, view);
+    const at = (steps: typeof still.steps) =>
+      steps.find(({ cells, marks }) => marks.length && cells.some((cell) => cell.pointed))!;
+    const before = at(still.steps);
+    const after = at(lifted.steps);
+    const gap = (step: typeof before) =>
+      step.marks[0].top - step.cells.find((cell) => cell.pointed)!.bottom;
+    // The mark keeps its place under the cell, both lifted by 8 together.
+    expect(gap(after)).toBeCloseTo(gap(before), 0);
+    const rest = (step: typeof before) => step.cells.find((cell) => !cell.pointed)!.top;
+    expect(rest(after) - after.marks[0].top - (rest(before) - before.marks[0].top)).toBeCloseTo(
+      8 * lifted.fit,
+      0
+    );
+  }
+);
+
+it.skipIf(!enabled)(
+  'spreads the pointed cell as paint, drawn as an expansion is, moving no cell',
+  { timeout: 120_000 },
+  async () => {
+    const steps = await scanned({ 'Here.Pointed.spread': 6 });
+    for (let index = 0; index < 5; index++)
+      expect(new Set(steps.map(({ cells }) => cells[index].left.toFixed(1))).size).toBe(1);
+    expect(steps.some(({ cells }) => cells.some((cell) => / 6px/u.test(cell.shadow)))).toBe(true);
+    expect(steps.some(({ cells }) => cells.some((cell) => cell.outline === '6px'))).toBe(true);
+  }
+);

@@ -167,6 +167,65 @@ export const widerReach = (a: Reach, b: Reach): Reach => ({
   left: Math.max(a.left, b.left)
 });
 
+/** Two reaches one beyond the other, as paint round a box the box is then moved with. */
+export const addedReach = (a: Reach, b: Reach): Reach => ({
+  top: a.top + b.top,
+  right: a.right + b.right,
+  bottom: a.bottom + b.bottom,
+  left: a.left + b.left
+});
+
+/**
+ * A pointer's transforms of what it is at, all paint, taking no room: its whole drawing scaled
+ * from its anchors and moved, the marks round the element with it, and the box spread.
+ */
+export const transformProps = ['scale', 'spread', 'offsetX', 'offsetY'] as const;
+
+/** How far an offset moves a drawing past its room on each side, negative being up or left. */
+export function offsetReach(offsetX: unknown, offsetY: unknown): Reach {
+  const x = typeof offsetX === 'number' ? offsetX : 0;
+  const y = typeof offsetY === 'number' ? offsetY : 0;
+  return {
+    top: Math.max(0, -y),
+    right: Math.max(0, x),
+    bottom: Math.max(0, y),
+    left: Math.max(0, -x)
+  };
+}
+
+/**
+ * How far a drawing scaled from its anchors grows past its box of the size given on each side:
+ * all of it away from an anchor at the start or end, half each way from the centre, rounded up to
+ * whole pixels so the room holds it.
+ */
+export function scaleReach(
+  scale: unknown,
+  anchors: { x: string; y: string },
+  size: { width: number; height: number }
+): Reach {
+  const factor = typeof scale === 'number' && scale > 1 ? scale - 1 : 0;
+  const grown = (length: number, anchor: string): [number, number] => {
+    const total = Math.ceil(factor * length);
+    if (anchor === 'start' || anchor === 'flex-start') return [0, total];
+    if (anchor === 'end' || anchor === 'flex-end') return [total, 0];
+    return [Math.ceil(total / 2), Math.ceil(total / 2)];
+  };
+  const [left, right] = grown(size.width, anchors.x);
+  const [top, bottom] = grown(size.height, anchors.y);
+  return { top, right, bottom, left };
+}
+
+/** Where a drawing scaled from its anchors stays put, as a CSS transform-origin. */
+export function anchorOrigin(anchors: { x: string; y: string }): string {
+  const at = (anchor: string, start: string, end: string) =>
+    anchor === 'start' || anchor === 'flex-start'
+      ? start
+      : anchor === 'end' || anchor === 'flex-end'
+        ? end
+        : 'center';
+  return `${at(anchors.x, 'left', 'right')} ${at(anchors.y, 'top', 'bottom')}`;
+}
+
 /** A drawn fill's style, as the image over its colour, or undefined for solid. */
 export function fillStyleCss(name: unknown): { style: 'hatched'; css: string } | undefined {
   if (name === 'hatched') {
@@ -210,7 +269,8 @@ const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 /**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
  * pixels; whether a box takes its slot's width and height or its own, and where its own sits in
- * the slot; whether a row or column places its children in their slots or packs them; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
+ * the slot; whether a row or column places its children in their slots or packs them; how a pointer
+ * scales, spreads and moves what it is at; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
  * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
  * how a link runs, as its layout's arrows or its own way, and the heads at its ends.
  */
@@ -234,6 +294,10 @@ export const propOptions = {
   gap: spacing,
   spacing: ['slots', 'packed'],
   expand: [0, 2, 4, 8],
+  scale: [1, 1.1, 1.2, 1.3],
+  spread: [0, 2, 4, 6],
+  offsetX: [-12, -8, -4, 0, 4, 8, 12],
+  offsetY: [-12, -8, -4, 0, 4, 8, 12],
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
@@ -381,7 +445,8 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   pointed: [
     ...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)),
     'overflow',
-    'expand'
+    'expand',
+    ...transformProps
   ],
   link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'route', 'head', 'headSize']
 };
@@ -419,11 +484,13 @@ export function optionsOf(
  * step to step or render to render, a pointer at a node, a place, a listing's lit region, sets
  * only paint; every other prop is its kind's in every slot and at every step, so slots keep one
  * size. A pointer's paint shows only where it is, its other props in every slot it can point at.
- * `expand` is paint, taking room only in a packed row, which keeps room for it.
+ * `expand` is paint, taking room only in a packed row, which keeps room for it; a pointer's
+ * transforms (transformProps) are paint, drawn over the room kept for their reach.
  */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
   'expand',
+  ...transformProps,
   'stroke',
   'strokeStyle',
   'opacity',
@@ -563,7 +630,11 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     minSize: 2.5,
     ...plainStyle,
     overflow: 'shown',
-    expand: 0
+    expand: 0,
+    scale: 1,
+    spread: 0,
+    offsetX: 0,
+    offsetY: 0
   },
   link: {
     shown: true,

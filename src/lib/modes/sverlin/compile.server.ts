@@ -2616,7 +2616,11 @@ const designProps = new Set([
   'xAnchor',
   'yAnchor',
   'spacing',
-  'expand'
+  'expand',
+  'scale',
+  'spread',
+  'offsetX',
+  'offsetY'
 ]);
 
 /**

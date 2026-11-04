@@ -57,10 +57,21 @@ function copiedFrom(
   return copied === undefined ? undefined : `${copied}${below}`;
 }
 
-/** How much an element is scaled on screen, by the frame's fit and any ancestor's. */
+/** How much an element is scaled on screen, by the frame's fit, any ancestor's and its own. */
 function scaleOf(element: HTMLElement, box: DOMRect): number {
   return element.offsetWidth ? box.width / element.offsetWidth : 1;
 }
+
+/** How much an element's own transform scales it, as a pointer's scale does (see Node). */
+function ownScale(element: HTMLElement): number {
+  const transform = getComputedStyle(element).transform;
+  if (!transform || transform === 'none') return 1;
+  const matrix = new DOMMatrixReadOnly(transform);
+  return Math.hypot(matrix.a, matrix.b) || 1;
+}
+
+/** Scales this close to one are rounding, not a change of size. */
+const unscaled = 0.01;
 
 /** The paint a node changes between steps, each interpolated from its old value to its new. */
 const paintProperties = [
@@ -170,23 +181,40 @@ export function animateStep(
   const now = placedByIdentity(after);
 
   // Where each node starts, as a move from its old box on screen; new ones fade in.
+  // A node shown at another scale than before, as one a pointer scales or no longer does, starts at
+  // its old scale too, so it grows or shrinks as it moves.
   const moves = new Map<
     HTMLElement,
-    { x: number; y: number; scale: number; source: HTMLElement }
+    { x: number; y: number; scale: number; grown: number; source: HTMLElement }
   >();
   const appearing: HTMLElement[] = [];
   for (const [identity, placed] of now) {
     const from = old.get(identity) ?? old.get(copiedFrom(identity, copies) ?? '');
     placed.forEach(({ element, box }, index) => {
       const source = from?.[Math.min(index, from.length - 1)];
-      if (!source) appearing.push(element);
-      else
-        moves.set(element, {
-          x: source.box.left - box.left,
-          y: source.box.top - box.top,
-          scale: scaleOf(element, box),
-          source: source.element
-        });
+      if (!source) return appearing.push(element);
+      const grown = scaleOf(source.element, source.box) / scaleOf(element, box);
+      const resized = Math.abs(grown - 1) >= unscaled;
+      // Scaled about its transform origin, which keeps its place in the box, then moved so the box
+      // starts exactly where the old one was.
+      const [originX, originY] = getComputedStyle(element)
+        .transformOrigin.split(' ')
+        .map((length) => Number.parseFloat(length));
+      const origin = {
+        x: box.left + (element.offsetWidth ? originX / element.offsetWidth : 0.5) * box.width,
+        y: box.top + (element.offsetHeight ? originY / element.offsetHeight : 0.5) * box.height
+      };
+      moves.set(element, {
+        x: resized
+          ? source.box.left - origin.x - grown * (box.left - origin.x)
+          : source.box.left - box.left,
+        y: resized
+          ? source.box.top - origin.y - grown * (box.top - origin.y)
+          : source.box.top - box.top,
+        scale: scaleOf(element, box) / ownScale(element),
+        grown: resized ? grown : 1,
+        source: source.element
+      });
     });
   }
 
@@ -206,7 +234,15 @@ export function animateStep(
       outer = moves.get(parent);
     const x = (move.x - (outer?.x ?? 0)) / move.scale;
     const y = (move.y - (outer?.y ?? 0)) / move.scale;
-    if (Math.abs(x) >= still || Math.abs(y) >= still)
+    if (move.grown !== 1)
+      element.animate(
+        [
+          { translate: `${x}px ${y}px`, scale: `${move.grown}` },
+          { translate: '0 0', scale: '1' }
+        ],
+        timing
+      );
+    else if (Math.abs(x) >= still || Math.abs(y) >= still)
       element.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], timing);
     const { was, is } = styles.get(element)!;
     const paint = paintFrames(was, is);
