@@ -366,7 +366,7 @@ export function traceAlgorithm(
   const { root, offset, code } = parsed;
   const labelled = stepLabels(parsed, complete);
   const [problem] = labelled.problems;
-  if (problem) throw new AlgorithmError(problem.message, problem.at);
+  if (problem) throw new AlgorithmError(problem.message, problem.at, true);
   // The values each labelled expression gives are kept, for views drawing them (labels as values).
   const captured = new Map<AnyNode, string[]>();
   for (const { full, nodes, statement } of labelled.labels)

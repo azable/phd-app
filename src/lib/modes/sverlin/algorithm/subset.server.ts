@@ -32,7 +32,7 @@ export function checkSubset(
     )
   );
   const reject = (node: AnyNode, message: string): never => {
-    throw new AlgorithmError(message, offset(node));
+    throw new AlgorithmError(message, offset(node), true);
   };
   const visit = (node: AnyNode, ancestors: readonly AnyNode[]): void => {
     const parent = ancestors.at(-1);

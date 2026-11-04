@@ -2754,14 +2754,53 @@ type AttemptFailure = { source: string; diagnostics: readonly Problem[] };
 type Problem = { code?: string; message: string };
 
 /**
+ * The stage of the build that finds a problem, by its code, in the order a build checks: the source
+ * as written (its blocks, labels, and views), then running the algorithm on each case, then the
+ * listing, then laying out the steps. A later stage runs only once the earlier ones pass, so its
+ * problems were hidden until then. Codes from outside the build have none.
+ */
+const buildStages: Record<string, number> = {
+  js_parse_error: 0,
+  import: 0,
+  missing_algorithm: 0,
+  sverlin_block: 0,
+  algorithm_written: 0,
+  name_clash: 0,
+  reserved_prop: 0,
+  unknown_prop: 0,
+  invalid_prop: 0,
+  design_value: 0,
+  view_case: 1,
+  algorithm_error: 1,
+  listing_label: 2,
+  link_placement: 3,
+  layout_failed: 3,
+  too_large: 3,
+  too_many_steps: 3
+};
+const buildStage = (code: string | undefined): number | undefined =>
+  code === undefined
+    ? undefined
+    : (buildStages[code] ?? (code.startsWith('view_') ? 0 : undefined));
+
+/**
  * Whether a failed repair wandered from the attempt it repaired rather than converging: none of
- * that attempt's problems recur, and new ones appear. A repair that still has a problem it was
- * asked to fix is stuck on it, which a higher effort may solve, and is not wandering.
+ * that attempt's problems recur, and new ones appear from the same stage of the build or an earlier
+ * one. A repair that still has a problem it was asked to fix is stuck on it, which a higher effort
+ * may solve, and is not wandering; nor is one whose new problems all come from a later stage than
+ * every problem it fixed, which only passing those let the build find.
  */
 export function repairWandered(previous: AttemptFailure, repair: AttemptFailure): boolean {
   const key = ({ code, message }: Problem) => `${code ?? ''}\n${stableMessage(message)}`;
   const before = new Set(previous.diagnostics.map(key));
-  return repair.diagnostics.length > 0 && !repair.diagnostics.some((d) => before.has(key(d)));
+  if (!repair.diagnostics.length || repair.diagnostics.some((d) => before.has(key(d))))
+    return false;
+  const fixed = previous.diagnostics.map(({ code }) => buildStage(code));
+  const found = repair.diagnostics.map(({ code }) => buildStage(code));
+  const reached = fixed.every((stage) => stage !== undefined)
+    ? Math.max(...(fixed as number[]))
+    : undefined;
+  return !(reached !== undefined && found.every((stage) => stage !== undefined && stage > reached));
 }
 
 /**
@@ -2803,7 +2842,8 @@ function sourceRewritten(previous: string, source: string): number {
  * so, each with a different problem, the fourth after 97 s). The ladder stops escalating, keeping
  * the current version and saying why, once two repairs have wandered, or one that also rewrote
  * most of the source (more than half its lines new), starting over rather than repairing. One
- * wander is allowed, as fixing a problem often reveals the next; a repair stuck on the same
+ * wander is allowed, as fixing a problem often reveals the next, and new problems from a later
+ * stage of the build are progress, not wandering (see repairWandered); a repair stuck on the same
  * problem keeps the higher efforts and the fallback. A project with no version of its own yet has
  * nothing to keep, so a doomed ladder there skips to the simpler fallback instead of stopping.
  */

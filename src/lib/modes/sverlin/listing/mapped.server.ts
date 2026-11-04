@@ -243,6 +243,25 @@ function ownLines(
 }
 
 /**
+ * Why a region names no label, and its fix: where the code has a label of the same name elsewhere,
+ * as a for header's parts beside its body's label, where that label is; otherwise to label the code.
+ */
+function unlabelledRegion(full: string, labels: readonly Label[]): string {
+  const parts = full.split('.');
+  const name = parts.at(-1) ?? full;
+  const around = parts.slice(0, -1).join('.');
+  const same = labels.find((label) => label.name === name);
+  if (!same)
+    return `The listing's region @${full} is labelled on no code; label the code it shows the same way, with @${name}[…] around it${around ? ` inside @${around}` : ''}.`;
+  const body = labels.find((label) => label.full === around);
+  const beside =
+    body && body.parent === same.parent && same.start < body.start
+      ? `, as a for header's parts sit beside its body's label, not inside it; move the region out of @${body.name}[…]`
+      : `; mark the region where @${same.full} is`;
+  return `The listing's region @${full} names no label: the code's @${name} is @${same.full}${beside}.`;
+}
+
+/**
  * A mapped listing: its text, marked for each node with a label by the regions with that label, and
  * the problems with its labels; also what each region is mapped to, its tokens (see Token), and
  * the labels it marks no region for.
@@ -313,7 +332,7 @@ export function mappedListing(
   for (const region of regions)
     if (!used.has(region.label))
       problems.push({
-        message: `The listing's region @${region.label} is labelled on no code; label the code it shows the same way, with @${region.label.split('.').at(-1)}[…] around it${region.label.includes('.') ? ` inside @${region.label.split('.').slice(0, -1).join('.')}` : ''}.`,
+        message: unlabelledRegion(region.label, labels),
         block: 'listing',
         at: region.at
       });

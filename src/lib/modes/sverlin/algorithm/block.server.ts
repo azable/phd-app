@@ -50,10 +50,13 @@ export type Span = { start: number; end: number };
 export class AlgorithmError extends Error {
   readonly offset?: number;
   readonly end?: number;
+  /** Whether the problem is in the code as written, found before any of it runs. */
+  readonly written: boolean;
 
-  constructor(message: string, at?: number | Span) {
+  constructor(message: string, at?: number | Span, written = false) {
     super(message);
     this.name = 'AlgorithmError';
+    this.written = written;
     if (typeof at === 'number') this.offset = at;
     else if (at) {
       this.offset = at.start;

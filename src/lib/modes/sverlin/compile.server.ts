@@ -463,7 +463,7 @@ export function recordedTrace(source: string): MasterStep[] {
  */
 function listingsFrom(
   source: string,
-  traced: ReturnType<typeof traceAlgorithm>,
+  traced: Pick<ReturnType<typeof traceAlgorithm>, 'root' | 'labels' | 'code'>,
   algorithm: Block,
   own: readonly ListingBlock[],
   places?: readonly string[]
@@ -503,6 +503,32 @@ function listingsFrom(
       );
   }
   return { listings, maps, problems, unmarked: [...unmarked.values()] };
+}
+
+/**
+ * The listings' problems from the algorithm's labels alone, without running it, for a build that
+ * fails before it checks them, so they are told together; none where the domain or the algorithm
+ * does not parse, as its labels are then unknown.
+ */
+function listingProblemsAlone(
+  source: string,
+  blocks: Partial<Record<BlockKind | 'design', Block>>,
+  own: readonly ListingBlock[]
+): InvalidSvelteSourceError[] {
+  const algorithm = blocks.algorithm;
+  if (!own.length || !algorithm) return [];
+  try {
+    const domain = blocks.domain
+      ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+      : noDomain;
+    const parsed = interpretBlock(source, algorithm, (body) =>
+      parseBlock(body, 'algorithm', domain)
+    );
+    const { labels } = stepLabels(parsed);
+    return listingsFrom(source, { ...parsed, labels }, algorithm, own).problems;
+  } catch {
+    return [];
+  }
 }
 
 /** What a step paused at a label with no region in the listing lights: nothing. */
@@ -792,9 +818,11 @@ function prepareViews(
   unshown: readonly InvalidSvelteSourceError[] = []
 ): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
+  let listingAlone = (): InvalidSvelteSourceError[] => [];
   try {
     const extracted = extractBlocks(source);
     const { blocks, listings: listingBlocks } = extracted;
+    listingAlone = () => listingProblemsAlone(source, blocks, listingBlocks);
     // <When> and <OneOf> become {#if when(…)} chains no longer than written, and the labels the
     // markup reads identifiers of the same length (see label-values.ts).
     const asIfs = whenTags(extracted.svelteSource);
@@ -2166,9 +2194,11 @@ function prepareViews(
             cause instanceof Error ? cause.message : String(cause),
             cause
           );
-    throw viewProblems.length && !viewProblems.includes(error)
-      ? InvalidSvelteSourceError.combine([error, ...viewProblems])
-      : error;
+    const told = new Set([error, ...error.others].map(({ message }) => message));
+    const more = [...(viewProblems.includes(error) ? [] : viewProblems), ...listingAlone()].filter(
+      ({ message }) => !told.has(message)
+    );
+    throw more.length ? InvalidSvelteSourceError.combine([error, ...error.others, ...more]) : error;
   }
 }
 
@@ -2745,7 +2775,7 @@ function interpretBlock<T>(source: string, block: Block, run: (body: string) => 
     const at = (offset: number | undefined) =>
       offset === undefined ? undefined : sourcePosition(source, block.offset + offset);
     throw new InvalidSvelteSourceError(cause.message, {
-      code: 'algorithm_error',
+      code: cause.written ? 'algorithm_written' : 'algorithm_error',
       start: at(cause.offset),
       end: at(cause.end)
     });

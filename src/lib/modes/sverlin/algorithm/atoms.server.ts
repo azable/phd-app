@@ -98,7 +98,9 @@ export function combinedType(
   if (!left || !right) return left ?? right;
   if (refines(left, right, atoms)) return left;
   if (refines(right, left, atoms)) return right;
-  throw new Error(`${left.name} and ${right.name} cannot be combined.`);
+  throw new Error(
+    `${left.name} and ${right.name} cannot be combined: convert one where they meet, writing the other's type around it, as a + ${left.name}(b) where b is a ${right.name}.`
+  );
 }
 
 /**

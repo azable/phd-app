@@ -103,6 +103,12 @@ describe('listings of the source’s own', () => {
       "The listing's region @spare is labelled on no code"
     ],
     [
+      "a for header's parts marked inside its body's label",
+      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }',
+      '@pass[for @first[i = 1] @more[to n] @next[step 1]\n  @look[v = A[i]]]',
+      "The listing's region @pass.first names no label: the code's @first is @first, as a for header's parts sit beside its body's label, not inside it; move the region out of @pass[…]."
+    ],
+    [
       'a region with a dotted name',
       '  @size[const n = Int(1);]',
       '@size[n] @size.inner[m]',
@@ -119,6 +125,20 @@ describe('listings of the source’s own', () => {
     if (name.includes('named none'))
       source = source.replace('listing="textbook"', 'listing="none"');
     expect(() => prepareSvelteComponent(source)).toThrow(message);
+  });
+
+  it("tell a listing's problems with those of an earlier stage, as the algorithm failing to run", () => {
+    let messages: string[] = [];
+    try {
+      prepareSvelteComponent(blocks('  @size[const n = missing;]', '@size[n] @spare[m]'));
+    } catch (cause) {
+      const error = cause as Error & { others: Error[] };
+      messages = [error, ...error.others].map(({ message }) => message);
+    }
+    expect(messages).toEqual([
+      expect.stringContaining('"missing" is not defined'),
+      expect.stringContaining("The listing's region @spare is labelled on no code")
+    ]);
   });
 
   it('warn of a label a scene pauses at with no region, which would light nothing, and of no other', async () => {

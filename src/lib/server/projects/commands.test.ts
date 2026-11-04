@@ -1430,6 +1430,30 @@ describe('submitProjectFeedback', () => {
       expect(repairWandered(missing('Cell'), other)).toBe(true);
     });
 
+    it('takes problems a later stage of the build finds as progress, not wandering', async () => {
+      const { repairWandered } = await import('./commands');
+      const failed = (...codes: string[]) => ({
+        source: '',
+        diagnostics: codes.map((code, index) => ({ code, message: `Problem ${index} of ${code}.` }))
+      });
+      // Labels and views, then the algorithm's types, then the listing, as one source showed.
+      const written = failed('algorithm_written', 'view_kinds', 'view_text');
+      const run = failed('algorithm_error');
+      const listing = failed('listing_label', 'listing_label');
+      expect(repairWandered(written, run)).toBe(false);
+      expect(repairWandered(run, listing)).toBe(false);
+      // A new problem of the same stage, or an earlier one, is still wandering.
+      expect(repairWandered(run, failed('algorithm_error'))).toBe(false);
+      expect(
+        repairWandered(run, {
+          source: '',
+          diagnostics: [{ code: 'algorithm_error', message: 'Another.' }]
+        })
+      ).toBe(true);
+      expect(repairWandered(listing, failed('view_text'))).toBe(true);
+      expect(repairWandered(written, failed('edit_not_applied'))).toBe(true);
+    });
+
     it('keeps repairing one stuck on a problem, or revealing one new one, to success', async () => {
       const result = await submit('unclosed', 'unclosed', 'twice', 'working');
       expect(failures(result.appendedEvents)).toHaveLength(3);

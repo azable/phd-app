@@ -37,7 +37,7 @@ export function parseBlock(
         : { code: body, markers: [], problems: [], parameterTypes: new Map() as ParameterTypes };
   const { code, markers, problems, parameterTypes } = read;
   const [problem] = problems;
-  if (problem) throw new AlgorithmError(problem.message, problem.at);
+  if (problem) throw new AlgorithmError(problem.message, problem.at, true);
   try {
     program = parse(`${wrapperPrefix}${code}\n}`, { ecmaVersion: 2022, sourceType: 'script' });
   } catch (cause) {
@@ -51,7 +51,8 @@ export function parseBlock(
       at !== undefined && code[at] === ':' && /[\w$]\s*$/u.test(code.slice(0, at))
         ? "Type annotations are written only on an operator's parameters, as (q: Queue, x: Letter) => …"
         : message.replace(/\s*\(\d+:\d+\)$/u, ''),
-      at
+      at,
+      true
     );
   }
   const root = (program.body[0] as FunctionDeclaration).body;

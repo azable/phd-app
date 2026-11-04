@@ -357,7 +357,9 @@ label given a kind of its own.
   `for (@start[let i = Index(values, 0)]; @more[i < values.length]; @next[i++]) @scan{`:
   the start runs once, the test before each pass and once more at the end, its
   last value false, and the move after each pass, before the next test, so
-  `@scan#1`, then `@next#1`, then `@more#2`.
+  `@scan#1`, then `@next#1`, then `@more#2`. The header's labels sit beside the
+  body's, not inside it: inside `@visit`, they are `visit.start`, `visit.more`
+  and `visit.next`, never `visit.scan.start`, and a listing marks them so.
 - A label inside another takes its name as a prefix: `@shift[…]` inside
   `@insert{` is `insert.shift`. A label around statements in a row runs from the
   first to the last, the labels inside it included:
