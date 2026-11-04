@@ -31,10 +31,10 @@ const list = (algorithm: string) => `<script domain>
   const Next = union(NodeRef, End);
 </script>
 <script input>
-  const nodes = ListNodes();
-  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
-    nodes.add(ListNode({ name: 'B', next: nodes.add(ListNode({ name: 'C', next: End('end') })) })) })));
-</script>
+  const nodes = ListNodes;
+  const head = NodeRef;
+</script><Run name="main" head={nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next: nodes.add(ListNode({ name: 'C', next: End('end') })) })) }))} />
 <script algorithm>${algorithm}</script>
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
@@ -50,7 +50,7 @@ const list = (algorithm: string) => `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main nodes={nodes} /></Scene>
+  <Scene name="main" run="main"><Main nodes={nodes} /></Scene>
 </Storyboard>`;
 
 /** Each step's arrows, between the names of the nodes they join, and its nodes' text. */

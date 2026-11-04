@@ -12,15 +12,9 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', seen: true },
-    { name: 'B', seen: false },
-    { name: 'C', seen: false },
-    { name: 'D', seen: false },
-    { name: 'E', seen: false }
-  ]);
-  const neighbours = Adjacency([[1, 2], [3], [3], [4], []]);
-  const start = VertexRef(0);
+  const vertices = Vertices;
+  const neighbours = Adjacency;
+  const start = VertexRef;
 </script>
 
 <script algorithm>
@@ -110,6 +104,14 @@ while @more[the queue is not empty]
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]} neighbours={[[1, 2], [3], [3], [4], []]} start={0} />
+
 <Storyboard>
-  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main start={start} current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main start={start} current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
 </Storyboard>

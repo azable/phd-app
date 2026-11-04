@@ -125,9 +125,9 @@ it.skipIf(!enabled)(
   const Partners = array(Position, { max: 8 });
 </script>
 <script input>
-  const values = Values([3, 1, 4, 1]);
-  const partner = Partners([1, 0, 3, 2]);
-</script>
+  const values = Values;
+  const partner = Partners;
+</script><Run name="main" values={[3, 1, 4, 1]} partner={[1, 0, 3, 2]} />
 <script algorithm>
   @start[let i = Position(0);]
   @next[i = Position(1);]
@@ -146,7 +146,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} partner={partner} /></Scene>
+  <Scene name="main" run="main"><Main values={values} partner={partner} /></Scene>
 </Storyboard>`;
     const { steps, errors } = await linksAtEachStep(pairs);
     for (const step of steps)

@@ -29,9 +29,9 @@ const source = `<script domain>
 </script>
 
 <script input>
-  const values = Values([7, 42, 3, 18, 25]);
-  const target = Int(18);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[7, 42, 3, 18, 25]} target={18} />
 
 <script algorithm>
   @start[let i = Index(0);]
@@ -45,7 +45,7 @@ const source = `<script domain>
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(

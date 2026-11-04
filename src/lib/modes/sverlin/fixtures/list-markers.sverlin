@@ -9,14 +9,8 @@
 </script>
 
 <script input>
-  const nodes = ListNodes();
-  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
-    nodes.add(ListNode({ name: 'B', next:
-      nodes.add(ListNode({ name: 'C', next:
-        nodes.add(ListNode({ name: 'D', next: End('end') }))
-      }))
-    }))
-  })));
+  const nodes = ListNodes;
+  const head = NodeRef;
 </script>
 
 <script algorithm>
@@ -138,6 +132,14 @@ while @more[cur ≠ ∅]
   </Node>
 </Layout>
 
+<Run name="main" head={nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next:
+      nodes.add(ListNode({ name: 'C', next:
+        nodes.add(ListNode({ name: 'D', next: End('end') }))
+      }))
+    }))
+  }))} />
+
 <Storyboard>
-  <Scene name="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
+  <Scene name="main" run="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
 </Storyboard>

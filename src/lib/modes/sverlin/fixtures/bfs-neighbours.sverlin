@@ -12,14 +12,8 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', seen: true },
-    { name: 'B', seen: false },
-    { name: 'C', seen: false },
-    { name: 'D', seen: false },
-    { name: 'E', seen: false }
-  ]);
-  const out = Adjacency([[1, 2], [3], [3], [4], []]);
+  const vertices = Vertices;
+  const out = Adjacency;
 </script>
 
 <script algorithm>
@@ -63,6 +57,14 @@
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]} out={[[1, 2], [3], [3], [4], []]} />
+
 <Storyboard>
-  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>

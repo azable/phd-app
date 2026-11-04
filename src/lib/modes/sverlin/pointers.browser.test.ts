@@ -31,8 +31,8 @@ it.skipIf(!enabled)(
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   @start[const i = Index(1);
   const j = Index(0);]
@@ -51,7 +51,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main i={i} j={j} values={values} /></Scene>
+  <Scene name="main" run="main"><Main i={i} j={j} values={values} /></Scene>
 </Storyboard>`;
     // Both are drawn by First unless a variant gives a place its own view, as j's here.
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
@@ -97,8 +97,8 @@ it.skipIf(!enabled)(
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   @start[const i = Index(2);]
 </script>
@@ -117,7 +117,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main i={i} values={values} /></Scene>
+  <Scene name="main" run="main"><Main i={i} values={values} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
@@ -160,8 +160,8 @@ it.skipIf(!enabled)(
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   @start[const i = Index(1);
   const j = Index(0);]
@@ -179,7 +179,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main i={i} j={j} values={values} /></Scene>
+  <Scene name="main" run="main"><Main i={i} j={j} values={values} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
@@ -220,8 +220,8 @@ it.skipIf(!enabled)(
   const Values = array(Int, { max: 8 });
 </script>
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   @start[const key = Int(3);]
 </script>
@@ -238,7 +238,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} key={key} /></Scene>
+  <Scene name="main" run="main"><Main values={values} key={key} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'views.Int@key': 'IntTally' }
@@ -283,8 +283,8 @@ it.skipIf(!enabled)(
   const Position = index(Values);
 </script>
 <script input>
-  const values = Values([42, 3, 815, 26, 9]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[42, 3, 815, 26, 9]} />
 <script algorithm>
   @start[let i = Position(0);]
   while (@more[i < values.length]) @step{
@@ -304,7 +304,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
@@ -352,9 +352,9 @@ async function scanned(chosen: Record<string, string | number>) {
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([7, 42, 3, 18, 25]);
-  const target = Int(18);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[7, 42, 3, 18, 25]} target={18} />
 <script algorithm>
   @start[let i = Index(0);]
   while (@scan[values[i] !== target]) @next[i++;]
@@ -365,7 +365,7 @@ async function scanned(chosen: Record<string, string | number>) {
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen
@@ -459,8 +459,8 @@ it.skipIf(!enabled)(
 </script>
 
 <script input>
-  const values = Values([5, 2, 8, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 2, 8, 1, 4]} />
 
 <script algorithm>
   for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @insert{
@@ -493,7 +493,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: {
@@ -560,9 +560,9 @@ async function transformed(
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([7, 42, 3, 18, 25]);
-  const target = Int(18);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[7, 42, 3, 18, 25]} target={18} />
 <script algorithm>
   @start[let i = Index(0);]
   while (@scan[values[i] !== target]) @next[i++;]
@@ -573,7 +573,7 @@ async function transformed(
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen

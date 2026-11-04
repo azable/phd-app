@@ -9,8 +9,8 @@ const blocks = (algorithm: string, listing: string) => `<script domain>
   const Position = index(Values);
 </script>
 <script input>
-  const values = Values([2, 1]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[2, 1]} />
 <script algorithm>
 ${algorithm}
 </script>
@@ -26,7 +26,7 @@ ${listing}
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 const insertion = blocks(

@@ -6,7 +6,7 @@
 </script>
 
 <script input>
-  const values = Values([5, 1, 4, 2, 3]);
+  const values = Values;
 </script>
 
 <script algorithm>
@@ -56,6 +56,8 @@
   </Node>
 </Layout>
 
+<Run name="main" values={[5, 1, 4, 2, 3]} />
+
 <Storyboard>
-  <Scene name="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Main values={values} /></Scene>
+  <Scene name="main" run="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Main values={values} /></Scene>
 </Storyboard>

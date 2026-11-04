@@ -5,7 +5,7 @@
 </script>
 
 <script input>
-  const heap = Heap([12, 40, 7, 55, 31, 68, 23]);
+  const heap = Heap;
 </script>
 
 <script algorithm>
@@ -40,6 +40,8 @@
   <Node>{heap}</Node>
 </Layout>
 
+<Run name="main" heap={[12, 40, 7, 55, 31, 68, 23]} />
+
 <Storyboard>
-  <Scene name="main" pause="@insert.sift.swap"><Main heap={heap} /></Scene>
+  <Scene name="main" run="main" pause="@insert.sift.swap"><Main heap={heap} /></Scene>
 </Storyboard>

@@ -126,7 +126,7 @@ describe('pools and references', () => {
     );
     expect(() => run(`const n = nodes[0];`)).toThrow('A Nodes has no order');
     expect(() => run(`nodes.push(head);`)).toThrow('A pool has no order, so it has no .push()');
-    expect(() => run(`const more = Nodes();`)).toThrow('Make the Nodes in the input');
+    expect(() => run(`const more = Nodes();`)).toThrow('Declare the Nodes in the input');
     expect(() => interpretInput(`${list} const again = Nodes();`, domain)).toThrow(
       'There is one Nodes, nodes: a record has one pool.'
     );

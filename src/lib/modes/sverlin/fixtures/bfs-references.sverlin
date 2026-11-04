@@ -11,12 +11,12 @@
 </script>
 
 <script input>
-  const vertices = Vertices();
-  const e = VertexRef(vertices.add(Vertex({ name: 'E', seen: false, out: [] })));
-  const d = VertexRef(vertices.add(Vertex({ name: 'D', seen: false, out: [e] })));
-  const b = VertexRef(vertices.add(Vertex({ name: 'B', seen: false, out: [d] })));
-  const c = VertexRef(vertices.add(Vertex({ name: 'C', seen: false, out: [d] })));
-  const a = VertexRef(vertices.add(Vertex({ name: 'A', seen: true, out: [b, c] })));
+  const vertices = Vertices;
+  const e = VertexRef;
+  const d = VertexRef;
+  const b = VertexRef;
+  const c = VertexRef;
+  const a = VertexRef;
 </script>
 
 <script algorithm>
@@ -56,6 +56,8 @@
   </Node>
 </Layout>
 
+<Run name="main" e={vertices.add(Vertex({ name: 'E', seen: false, out: [] }))} d={vertices.add(Vertex({ name: 'D', seen: false, out: [e] }))} b={vertices.add(Vertex({ name: 'B', seen: false, out: [d] }))} c={vertices.add(Vertex({ name: 'C', seen: false, out: [d] }))} a={vertices.add(Vertex({ name: 'A', seen: true, out: [b, c] }))} />
+
 <Storyboard>
-  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main vertices={vertices} current={current} queue={queue} /></Scene>
+  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main vertices={vertices} current={current} queue={queue} /></Scene>
 </Storyboard>

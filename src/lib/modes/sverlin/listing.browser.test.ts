@@ -29,8 +29,8 @@ const insertion = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const values = Values([5, 2, 4, 1]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 2, 4, 1]} />
 <script algorithm>
   for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
@@ -73,7 +73,7 @@ const insertion = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -198,9 +198,9 @@ const search = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const values = Values([3, 8, 15, 23, 42, 57, 71]);
-  const target = Int(42);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
 <script algorithm>
   @range[let lo = Index(0);
   let hi = values.length - 1;]
@@ -234,7 +234,7 @@ const search = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+  <Scene name="main" run="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(

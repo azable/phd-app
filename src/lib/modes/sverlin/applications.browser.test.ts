@@ -33,8 +33,8 @@ const source = `<script domain>
 </script>
 
 <script input>
-  const values = Values([5, 1, 4, 2, 3]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4, 2, 3]} />
 
 <script algorithm>
   for (@last[let end = values.length]; @more[Index(1) < end]; @shrink[end--]) @sweep{
@@ -69,7 +69,7 @@ const source = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 /** The caption Ask draws at a step, and whether it is hidden. */

@@ -8,15 +8,9 @@
 </script>
 
 <script input>
-  const x = Word('GATC');
-  const y = Word('ATGC');
-  const t = Table([
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0]
-  ]);
+  const x = Word;
+  const y = Word;
+  const t = Table;
 </script>
 
 <script algorithm>
@@ -47,6 +41,14 @@
   <Node><Lcs y={y} x={x} t={t} /></Node>
 </Layout>
 
+<Run name="main" x={'GATC'} y={'ATGC'} t={[
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ]} />
+
 <Storyboard>
-  <Scene name="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
+  <Scene name="main" run="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
 </Storyboard>

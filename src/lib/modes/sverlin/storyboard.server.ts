@@ -20,6 +20,8 @@ export type Scene = {
   name: string;
   /** The page layout it shows. */
   layout: string;
+  /** The run it shows (see runs.server.ts); a frame shows none. */
+  run?: string;
   /** The stops it pauses at, by full name: a label for its :after, label:before for its :before. */
   pause?: string[];
   /** The runs of one label it steps through, all of them or the nth to begin. */
@@ -43,11 +45,11 @@ const sceneName = /^[A-Za-z][\w-]*$/u;
 const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
-const sceneProps = new Set(['name', 'pause', 'within', 'at', 'title']);
+const sceneProps = new Set(['name', 'run', 'pause', 'within', 'at', 'title']);
 
 /** How a storyboard is written, for messages. */
 const storyboardAdvice =
-  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search"><Main values={values} lo={lo} /></Scene></Storyboard>';
+  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search" run="main"><Main values={values} lo={lo} /></Scene></Storyboard>';
 
 /** The tag a scene would write for a layout, passing every input it declares. */
 const tagOf = (layout: string, inputs: Inputs) =>
@@ -72,7 +74,7 @@ export function writtenStoryboard(
   if (!openings.length) {
     const first = [...layouts.keys()][0];
     const missing = {
-      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main">${tagOf(first, layouts.get(first)!)}</Scene></Storyboard>` : ''}.`,
+      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main" run="main">${tagOf(first, layouts.get(first)!)}</Scene></Storyboard>` : ''}.`,
       start: scanned.trimEnd().length
     };
     return { scenes: [], problems, missing };
@@ -141,7 +143,7 @@ export function writtenStoryboard(
     const props = match[1];
     if (props.trimEnd().endsWith('/')) {
       problems.push({
-        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search"><Main values={values} /></Scene>.`,
+        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search" run="main"><Main values={values} /></Scene>.`,
         start: bodyStart + at
       });
       rest = at + match[0].length;
@@ -192,7 +194,7 @@ function sceneOf(
       );
     if (!sceneProps.has(found[1]))
       return fail(
-        `A <Scene> takes name, pause, within, at, and title: ${found[1]} is no prop of a scene.`
+        `A <Scene> takes name, run, pause, within, at, and title: ${found[1]} is no prop of a scene.`
       );
     if (found[4] !== undefined)
       return fail(
@@ -243,11 +245,11 @@ function sceneOf(
   const tag = /^\s*<([A-Za-z_$][\w$]*)\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>\s*$/u.exec(inner);
   if (!inner.trim())
     return fail(
-      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}"><Main values={values} /></Scene>.`
+      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}" run="main"><Main values={values} /></Scene>.`
     );
   if (!tag || !tag[2].trimEnd().endsWith('/'))
     return fail(
-      `A scene nests exactly one layout, as its tag, closed at once, as <Scene name="${name}"><Main values={values} /></Scene>: what it shows is arranged in that layout.`
+      `A scene nests exactly one layout, as its tag, closed at once, as <Scene name="${name}" run="main"><Main values={values} /></Scene>: what it shows is arranged in that layout.`
     );
   const [, layout, tagProps] = tag;
   const inputs = layouts.get(layout);
@@ -284,13 +286,13 @@ function sceneOf(
       `<${layout}> declares ${missing} among its inputs, and the scene ${name} passes none: pass it, as ${missing}={${missing}}.`
     );
   const reads = inputs.variables.length > 0 || inputs.labels.length > 0;
-  const moments = ['pause', 'within', 'at'].filter((key) => given.has(key));
+  const moments = ['run', 'pause', 'within', 'at'].filter((key) => given.has(key));
   if (!reads && moments.length)
     return fail(
       `The scene ${name} shows ${layout}, which reads no state, so it is one frame: ${moments.join(' and ')} choose${moments.length === 1 ? 's' : ''} the steps of the run a scene shows, and it shows none. Remove ${moments.length === 1 ? 'it' : 'them'}, or show a layout reading the state.`
     );
   return {
-    scene: { name, layout, pause, within, at, title, frame: !reads, start },
+    scene: { name, layout, run: given.get('run'), pause, within, at, title, frame: !reads, start },
     problems
   };
 }
@@ -379,7 +381,7 @@ export type Storyboard = {
  */
 export function storyboardOf(
   scenes: readonly Scene[],
-  master: readonly MasterStep[],
+  masterOf: (scene: Scene) => readonly MasterStep[],
   labels: readonly string[],
   paced: (scene: Scene) => readonly MasterStep[],
   listed = false
@@ -399,6 +401,7 @@ export function storyboardOf(
       }
     if (scene.frame) return [sceneLabel(scene, undefined)];
     const within = scene.within;
+    const master = masterOf(scene);
     const runsWithin = (step: MasterStep) =>
       within?.run === undefined
         ? step.inside?.includes(within?.label ?? '')
@@ -409,8 +412,8 @@ export function storyboardOf(
       problems.push({
         message:
           run !== undefined && run > runs
-            ? `within="@${label}#${run}" matches no run: @${label} runs ${runs} time${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
-            : `within="@${label}" matches no run: the algorithm never runs @${label} with this input.`,
+            ? `within="@${label}#${run}" matches no run: in the run ${scene.run}, @${label} runs ${runs} time${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
+            : `within="@${label}" matches no run: the algorithm never runs @${label} in the run ${scene.run}.`,
         scene
       });
       return [];

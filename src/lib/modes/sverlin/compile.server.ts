@@ -149,6 +149,13 @@ import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
 import {
+  inputDeclarations,
+  runAdvice,
+  runInputBody,
+  runsOf,
+  type writtenRuns
+} from './runs.server';
+import {
   sceneEdges,
   sceneLabel,
   scenePauses,
@@ -269,7 +276,7 @@ export type PreparedComponent = {
    * their types, as each names a step of its own, and what each step lights in each listing. Made
    * once per way of pausing.
    */
-  paced: (pauses: Pauses, edges?: Edges) => PacedSteps;
+  paced: (pauses: Pauses, edges?: Edges, run?: string) => PacedSteps;
   /** The scenes the presentation plays, in order (see storyboard.server.ts). */
   storyboard: Storyboard;
   /**
@@ -423,18 +430,20 @@ function viewSteps(source: string): MasterStep[] | undefined {
 export function recordedTrace(source: string): MasterStep[] {
   const shown = viewSteps(source);
   if (shown) return shown;
-  const { blocks } = extractBlocks(source);
-  if (!blocks.algorithm)
+  const { blocks, runs } = extractBlocks(source);
+  const algorithm = blocks.algorithm;
+  if (!algorithm)
     throw new InvalidSvelteSourceError('There is no algorithm block, so there are no steps.', {
       code: 'missing_algorithm'
     });
   const domain = blocks.domain
     ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
     : noDomain;
-  const input = blocks.input
-    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
-    : { state: {}, types: {} };
-  return paced(source, blocks.algorithm, input, domain).steps;
+  // Each run's steps in turn; with no run yet, the algorithm's from no input.
+  const inputs = runInputs(source, blocks, runs, domain);
+  return (inputs.length ? inputs : [{ input: { state: {}, types: {} } }]).flatMap(
+    ({ input }) => paced(source, algorithm, input, domain).steps
+  );
 }
 
 /**
@@ -489,16 +498,15 @@ function listingsFrom(
  */
 function earlyTyping(
   source: string,
-  blocks: Partial<Record<BlockKind | 'design', Block>>
+  blocks: Partial<Record<BlockKind | 'design', Block>>,
+  runs: ReturnType<typeof writtenRuns>
 ): (ViewTyping & { labelOperators: Record<string, OperatorType> }) | undefined {
   if (!blocks.algorithm) return undefined;
   try {
     const domain = blocks.domain
       ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
       : noDomain;
-    const input = blocks.input
-      ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
-      : { state: {}, types: {} };
+    const input = firstInput(source, blocks, runs, domain);
     // Every label's values are kept, so a label read in the markup has its type.
     const algorithm = blocks.algorithm;
     const labels = interpretBlock(
@@ -655,7 +663,7 @@ function copiesSincePrevious(
 
 /** The algorithm as a listing in each language. */
 export function listingsOf(source: string): Record<string, Listing> {
-  const { blocks, listings: listingBlocks } = extractBlocks(source);
+  const { blocks, listings: listingBlocks, runs } = extractBlocks(source);
   if (!blocks.algorithm)
     throw new InvalidSvelteSourceError('There is no algorithm block, so there is no listing.', {
       code: 'missing_algorithm'
@@ -663,9 +671,7 @@ export function listingsOf(source: string): Record<string, Listing> {
   const domain = blocks.domain
     ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
     : noDomain;
-  const input = blocks.input
-    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
-    : { state: {}, types: {} };
+  const input = firstInput(source, blocks, runs, domain);
   const algorithm = blocks.algorithm;
   const traced = interpretBlock(source, algorithm, (body) =>
     traceAlgorithm(body, input, domain, {}, {}, true)
@@ -681,14 +687,12 @@ export function listingsOf(source: string): Record<string, Listing> {
 export function listingMapsOf(
   source: string
 ): Record<string, (RegionMap & { lit: boolean })[]> | undefined {
-  const { blocks, listings: listingBlocks } = extractBlocks(source);
+  const { blocks, listings: listingBlocks, runs } = extractBlocks(source);
   if (!listingBlocks.length || !blocks.algorithm) return undefined;
   const domain = blocks.domain
     ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
     : noDomain;
-  const input = blocks.input
-    ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
-    : { state: {}, types: {} };
+  const input = firstInput(source, blocks, runs, domain);
   const run = paced(source, blocks.algorithm, input, domain);
   const traced = { ...run, steps: viewSteps(source) ?? run.steps };
   const { listings, maps } = listingsFrom(source, traced, blocks.algorithm, listingBlocks);
@@ -817,7 +821,7 @@ function prepareViews(
         allReads.map(
           ({ record, start }) =>
             new InvalidSvelteSourceError(
-              `all(${record}) is no more: keep the ${record}s in a pool, as const ${record}s = pool(${record}, { max: 8 }); in the domain and const nodes = ${record}s(); in the input, add each with nodes.add(${record}({ … })), and give the pool to a layout as any input, as <Layout name="Nodes" of="nodes">{#each nodes as n}{n}{/each}</Layout>.`,
+              `all(${record}) is no more: keep the ${record}s in a pool, as const ${record}s = pool(${record}, { max: 8 }); in the domain and const nodes = ${record}s; in the input, add each with nodes.add(${record}({ … })), and give the pool to a layout as any input, as <Layout name="Nodes" of="nodes">{#each nodes as n}{n}{/each}</Layout>.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -864,7 +868,7 @@ function prepareViews(
       );
     // A value in braces draws its type's view, as a render of that type, and a union's value its
     // member's, through a view added after the authored ones (see implicit-renders.server.ts).
-    const early = earlyTyping(source, blocks);
+    const early = earlyTyping(source, blocks, extracted.runs);
     // Only the labels a view is typed by draw through a view (see withLabelOperators).
     const typedBy = new Set(
       findComponents(ast.html as Parameters<typeof findComponents>[0])
@@ -1361,9 +1365,24 @@ function prepareViews(
         `${shared[0]} is rendered at a label and at a variable both named ${shared[0].slice(shared[0].indexOf('@'))}, but a place's name says which: rename the label.`,
         { code: 'view_label' }
       );
-    const input = blocks.input
-      ? interpretBlock(source, blocks.input, (body) => interpretInput(body, domain))
-      : { state: {}, types: {} };
+    const runInputsOf = runInputs(source, blocks, extracted.runs, domain);
+    const input = runInputsOf[0]?.input ?? { state: {}, types: {} };
+    // Each scene that steps shows one run, named.
+    const runNames = runInputsOf.map(({ name }) => name);
+    const unrun = scenes.flatMap((scene) => {
+      if (scene.frame || (scene.run !== undefined && runNames.includes(scene.run))) return [];
+      const runs = runNames.length
+        ? `; the runs are ${runNames.join(', ')}`
+        : `, and the source has none: ${runAdvice}`;
+      return [
+        new InvalidSvelteSourceError(
+          scene.run === undefined
+            ? `The scene ${scene.name} steps through a run, so it names it, as <Scene name="${scene.name}" run="${runNames[0] ?? 'present'}">${runs}.`
+            : `The scene ${scene.name} shows the run ${scene.run}, and no run is named ${scene.run}${runs}.`,
+          { code: 'view_storyboard', start: scene.position }
+        )
+      ];
+    });
     const algorithm = blocks.algorithm;
     // The labels the markup reads, each resolved to one of the algorithm's; their problems wait for
     // the labels' own, which the first trace reports.
@@ -1496,8 +1515,18 @@ function prepareViews(
       // The labels a view typed by the label draws, whose operands and result each step keeps.
       applications: new Set(operatorNames(domain).filter(isLabelKey).map(labelOfOperator))
     };
-    const traced = paced(source, algorithm, input, domain, pacing, keep);
-    const master = traced.steps;
+    // Each run traced pausing at every label; what holds for every step holds over all of them.
+    const tracedRuns = runInputsOf.map(({ name, input }) => ({
+      name,
+      traced: paced(source, algorithm, input, domain, pacing, keep)
+    }));
+    const traced = tracedRuns[0]?.traced ?? paced(source, algorithm, input, domain, pacing, keep);
+    const master = tracedRuns.length
+      ? tracedRuns.flatMap(({ traced }) => traced.steps)
+      : traced.steps;
+    const masterOf = (run?: string) =>
+      (tracedRuns.find(({ name }) => name === run) ?? tracedRuns[0])?.traced.steps ?? traced.steps;
+    const inputOf = (run?: string) => runInputsOf.find(({ name }) => name === run)?.input ?? input;
     const runs = labelRuns(master, {
       state: new Set(
         [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
@@ -1604,28 +1633,31 @@ function prepareViews(
     // bounded only as the source's (algorithmLimits); a scene pausing so is held to what one
     // presentation shows, by tracing it as a scene.
     const tracedBy = new Map<string, MasterStep[]>();
-    const tracedSteps = (pauses: Pauses, edges?: Edges): MasterStep[] => {
-      const key = pausesKey(pauses, edges);
+    const tracedSteps = (pauses: Pauses, edges?: Edges, run?: string): MasterStep[] => {
+      const key = `${run ?? ''}|${pausesKey(pauses, edges)}`;
       const made = tracedBy.get(key);
       if (made) return made;
       const steps =
-        key === pausesKey(new Set(labelNames)) && master.length <= algorithmLimits.maximumSteps + 1
-          ? master
-          : paced(source, algorithm, input, domain, { ...pacing, pauses, edges }, keep).steps;
+        pausesKey(pauses, edges) === pausesKey(new Set(labelNames)) &&
+        masterOf(run).length <= algorithmLimits.maximumSteps + 1
+          ? masterOf(run)
+          : paced(source, algorithm, inputOf(run), domain, { ...pacing, pauses, edges }, keep)
+              .steps;
       tracedBy.set(key, steps);
       return steps;
     };
     const { storyboard, problems: sceneProblems } = storyboardOf(
       scenes,
-      master,
+      (scene) => masterOf(scene.run),
       labelNames,
-      (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene)),
+      (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene), scene.run),
       Boolean(listing)
     );
     // Reported once the view's own problems are cleared, which may be why nothing is shown.
-    if ((unshown.length || sceneProblems.length) && !viewProblems.length)
+    if ((unshown.length || unrun.length || sceneProblems.length) && !viewProblems.length)
       throw InvalidSvelteSourceError.combine([
         ...unshown,
+        ...unrun,
         ...sceneProblems.map(
           ({ message, scene }) =>
             new InvalidSvelteSourceError(message, {
@@ -1968,11 +2000,11 @@ function prepareViews(
     );
     // The steps each way of pausing makes, with what follows from them, made once each.
     const pacedBy = new Map<string, PacedSteps>();
-    const pacedSteps = (pauses: Pauses, edges?: Edges): PacedSteps => {
-      const key = pausesKey(pauses, edges);
+    const pacedSteps = (pauses: Pauses, edges?: Edges, run?: string): PacedSteps => {
+      const key = `${run ?? ''}|${pausesKey(pauses, edges)}`;
       const made = pacedBy.get(key);
       if (made) return made;
-      const steps = tracedSteps(pauses, edges);
+      const steps = tracedSteps(pauses, edges, run);
       const result: PacedSteps = {
         steps,
         // By the page's states, each step's before and after (see phasesOf).
@@ -2181,7 +2213,7 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   const entries = scenes.flatMap((scene, sceneIndex) => {
-    const run = prepared.paced(scenePauses(scene), sceneEdges(scene));
+    const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.run);
     return (scene.frame ? [0] : sceneSteps(scene, run.steps, Boolean(prepared.listings))).map(
       (index) => ({
         scene,
@@ -2517,7 +2549,7 @@ const scriptOpening = /<script\b([^>]*)>/giu;
 const svelteAttributes =
   /^(?:\s+(?:lang\s*=\s*(["'])(?:ts|js|typescript|javascript)\1|module|context\s*=\s*(["'])module\2))*\s*$/iu;
 const blockAdvice =
-  '<script domain> for the types, <script input> for the starting data, <script algorithm> for the algorithm, and <script listing="name"> for a listing';
+  '<script domain> for the types, <script input> for the inputs by type, <script algorithm> for the algorithm, and <script listing="name"> for a listing';
 
 /** A listing of the source's own: its name, its text, where the text starts, and the block. */
 type ListingBlock = Block & { name: string; start: number };
@@ -2528,6 +2560,8 @@ function extractBlocks(source: string): {
   // A design block is found only to say that sources have none.
   blocks: Partial<Record<BlockKind | 'design', Block>>;
   listings: ListingBlock[];
+  /** The runs written in the markup, which are blanked from it (see runs.server.ts). */
+  runs: ReturnType<typeof writtenRuns>;
 } {
   const blocks: Partial<Record<BlockKind | 'design', Block>> = {};
   let svelteSource = source;
@@ -2568,7 +2602,95 @@ function extractBlocks(source: string): {
       { code: 'sverlin_block', start: sourcePosition(source, opening.index) }
     );
   }
-  return { svelteSource, blocks, listings };
+  const runs = runsOf(svelteSource);
+  for (const { start, end } of runs.tags)
+    svelteSource =
+      svelteSource.slice(0, start) +
+      svelteSource.slice(start, end).replace(/[^\n]/gu, ' ') +
+      svelteSource.slice(end);
+  return { svelteSource, blocks, listings, runs };
+}
+
+/** One run's name and the input it gives the algorithm. */
+type RunInput = { name: string; input: TypedState };
+
+/**
+ * The input each run gives, in the order the runs are written: the input block's types applied to
+ * the run's values (see runs.server.ts), each checked against its type. Problems in a run are
+ * reported at the run, naming it and the input.
+ */
+function runInputs(
+  source: string,
+  blocks: Partial<Record<BlockKind | 'design', Block>>,
+  runs: ReturnType<typeof writtenRuns>,
+  domain: DomainRegistry
+): RunInput[] {
+  const at = (offset: number) => sourcePosition(source, offset);
+  const problems = runs.problems.map(
+    ({ message, start }) =>
+      new InvalidSvelteSourceError(message, { code: 'view_run', start: at(start) })
+  );
+  const block = blocks.input;
+  const declared = block ? inputDeclarations(block.body) : { inputs: [], problems: [] };
+  for (const { message, at: offset } of declared.problems)
+    problems.push(
+      new InvalidSvelteSourceError(message, {
+        code: 'algorithm_error',
+        start: at((block?.offset ?? 0) + offset)
+      })
+    );
+  if (problems.length) throw InvalidSvelteSourceError.combine(problems);
+  const pool = (type: string) => isPool(domain, type);
+  const given = declared.inputs.filter(({ type }) => !pool(type));
+  const inputs: RunInput[] = [];
+  for (const run of runs.runs) {
+    const fail = (message: string, offset = run.start) =>
+      problems.push(new InvalidSvelteSourceError(message, { code: 'view_run', start: at(offset) }));
+    const missing = given.filter(({ name }) => !run.values.some(({ input }) => input === name));
+    if (missing.length) {
+      fail(
+        `The run ${run.name} gives no ${missing.map(({ name }) => name).join(' or ')}: a run gives every input the input block declares, as ${missing.map(({ name }) => `${name}={…}`).join(' ')}.`
+      );
+      continue;
+    }
+    const extra = run.values.find(({ input }) => !given.some(({ name }) => name === input));
+    if (extra) {
+      const poolInput = declared.inputs.find(({ name }) => name === extra.input);
+      fail(
+        poolInput
+          ? `The run ${run.name} gives ${extra.input}, a pool, which starts empty in every run: the algorithm adds its nodes, as ${extra.input}.add(…).`
+          : `The run ${run.name} gives ${extra.input}, which the input block does not declare${given.length ? `; its inputs are ${given.map(({ name }) => name).join(', ')}` : ''}.`,
+        extra.start
+      );
+      continue;
+    }
+    const written = runInputBody(block?.body ?? '', declared.inputs, run, pool);
+    try {
+      inputs.push({ name: run.name, input: interpretInput(written.body, domain) });
+    } catch (cause) {
+      if (!(cause instanceof AlgorithmError)) throw cause;
+      const span = written.spans.find(
+        ({ from, end }) =>
+          cause.offset !== undefined && cause.offset >= from && cause.offset <= end + 1
+      );
+      fail(
+        `In the run ${run.name}${span ? `, ${span.input}` : ''}: ${cause.message}`,
+        span ? span.source + Math.max(0, (cause.offset ?? span.start) - span.start) : run.start
+      );
+    }
+  }
+  if (problems.length) throw InvalidSvelteSourceError.combine(problems);
+  return inputs;
+}
+
+/** The first run's input, for what reads one execution only: the listings and the first typing. */
+function firstInput(
+  source: string,
+  blocks: Partial<Record<BlockKind | 'design', Block>>,
+  runs: ReturnType<typeof writtenRuns>,
+  domain: DomainRegistry
+): TypedState {
+  return runInputs(source, blocks, runs, domain)[0]?.input ?? { state: {}, types: {} };
 }
 
 /** Interpret one block, reporting failures at their position in the authored source. */

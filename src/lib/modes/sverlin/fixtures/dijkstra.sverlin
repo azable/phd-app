@@ -14,23 +14,9 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', distance: 0, done: false },
-    { name: 'B', distance: 99, done: false },
-    { name: 'C', distance: 99, done: false },
-    { name: 'D', distance: 99, done: false },
-    { name: 'E', distance: 99, done: false }
-  ]);
+  const vertices = Vertices;
 
-  const edges = Edges([
-    { from: 0, to: 1, weight: 4 },
-    { from: 0, to: 2, weight: 1 },
-    { from: 2, to: 1, weight: 2 },
-    { from: 2, to: 3, weight: 5 },
-    { from: 1, to: 3, weight: 1 },
-    { from: 1, to: 4, weight: 7 },
-    { from: 3, to: 4, weight: 3 }
-  ]);
+  const edges = Edges;
 </script>
 
 <script algorithm>
@@ -113,6 +99,22 @@
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', distance: 0, done: false },
+    { name: 'B', distance: 99, done: false },
+    { name: 'C', distance: 99, done: false },
+    { name: 'D', distance: 99, done: false },
+    { name: 'E', distance: 99, done: false }
+  ]} edges={[
+    { from: 0, to: 1, weight: 4 },
+    { from: 0, to: 2, weight: 1 },
+    { from: 2, to: 1, weight: 2 },
+    { from: 2, to: 3, weight: 5 },
+    { from: 1, to: 3, weight: 1 },
+    { from: 1, to: 4, weight: 7 },
+    { from: 3, to: 4, weight: 3 }
+  ]} />
+
 <Storyboard>
-  <Scene name="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" run="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
 </Storyboard>

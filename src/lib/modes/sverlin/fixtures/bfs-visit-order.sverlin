@@ -13,22 +13,8 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', seen: true },
-    { name: 'B', seen: false },
-    { name: 'C', seen: false },
-    { name: 'D', seen: false },
-    { name: 'E', seen: false },
-    { name: 'F', seen: false }
-  ]);
-  const adjacency = Adjacency([
-    [1, 2],
-    [3, 4],
-    [4],
-    [5],
-    [5],
-    []
-  ]);
+  const vertices = Vertices;
+  const adjacency = Adjacency;
 </script>
 
 <script algorithm>
@@ -153,6 +139,22 @@ BFS(start)
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false },
+    { name: 'F', seen: false }
+  ]} adjacency={[
+    [1, 2],
+    [3, 4],
+    [4],
+    [5],
+    [5],
+    []
+  ]} />
+
 <Storyboard>
-  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
+  <Scene name="main" run="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
 </Storyboard>

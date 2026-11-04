@@ -69,8 +69,8 @@ it.skipIf(!enabled)(
   async () => {
     const source = `${domain}
 <script input>
-  const values = Values([5, 2, 8, 1]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 2, 8, 1]} />
 <script algorithm>
   for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @insert{
     const key = @key[values[i]];
@@ -94,7 +94,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
     const keys = (
       await stepsOf(source, 4, {
@@ -121,8 +121,8 @@ it.skipIf(!enabled)(
   async () => {
     const source = `${domain}
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   for (@last[let end = values.length]; @more[Index(1) < end]; @shrink[end--]) @sweep{
     for (@first[let i = Index(1)]; @inside[i < end]; @step[i++]) @pair{
@@ -148,7 +148,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
@@ -179,9 +179,9 @@ it.skipIf(!enabled)(
   async () => {
     const search = `${domain}
 <script input>
-  const values = Values([3, 8, 5, 2]);
-  const target = Int(5);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[3, 8, 5, 2]} target={5} />
 <script algorithm>
   for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @check{
     if (@hit[values[@at[i]] === target]) break;
@@ -199,7 +199,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
     const checked = (
       await stepsOf(search, 4, {
@@ -224,9 +224,9 @@ it.skipIf(!enabled)(
   const At = index(Digits);
 </script>
 <script input>
-  const digits = Digits([3, 1, 4]);
-  const counts = Counts([0, 0, 0, 0, 0]);
-</script>
+  const digits = Digits;
+  const counts = Counts;
+</script><Run name="main" digits={[3, 1, 4]} counts={[0, 0, 0, 0, 0]} />
 <script algorithm>
   for (@first[let v = At(0)]; @more[v < digits.length]; @next[v++]) @count{ counts[digits[v]]++; }
 </script>
@@ -245,7 +245,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main v={v} digits={digits} counts={counts} /></Scene>
+  <Scene name="main" run="main"><Main v={v} digits={digits} counts={counts} /></Scene>
 </Storyboard>`;
     const reading = (
       await stepsOf(counting, 4, { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' })

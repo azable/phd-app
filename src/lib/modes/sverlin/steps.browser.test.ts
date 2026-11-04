@@ -33,8 +33,8 @@ it.skipIf(!enabled)(
   const Flag = type('boolean');
 </script>
 <script input>
-  const values = Values([1, 1, 1]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[1, 1, 1]} />
 <script algorithm>
   for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {
     @write[values[i] = 7;]
@@ -53,7 +53,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
@@ -133,8 +133,8 @@ it.skipIf(!enabled)(
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([3, 1]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[3, 1]} />
 <script algorithm>
   for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @pass{
     @pick[const key = values[i];]
@@ -155,7 +155,7 @@ it.skipIf(!enabled)(
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main key={key} values={values} /></Scene>
+  <Scene name="main" run="main"><Main key={key} values={values} /></Scene>
 </Storyboard>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.

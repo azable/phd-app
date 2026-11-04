@@ -22,9 +22,9 @@ const merge = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const left = Values([1, 4, 7]);
-  const right = Values([2, 3, 9]);
-</script>
+  const left = Values;
+  const right = Values;
+</script><Run name="main" left={[1, 4, 7]} right={[2, 3, 9]} />
 <script algorithm>
   @start[let merged = Values([]);
   let i = Position(left, 0);
@@ -57,7 +57,7 @@ const merge = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main i={i} j={j} k={k} left={left} right={right} merged={merged} /></Scene>
+  <Scene name="main" run="main"><Main i={i} j={j} k={k} left={left} right={right} merged={merged} /></Scene>
 </Storyboard>`;
 
 let browser: Browser | undefined;
@@ -234,9 +234,9 @@ const walk = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const vertices = Names(['A', 'B', 'C']);
-  const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
-</script>
+  const vertices = Names;
+  const edges = Edges;
+</script><Run name="main" vertices={['A', 'B', 'C']} edges={[{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]} />
 <script algorithm>
   @step[for (@first[let e = EdgeIndex(0)]; @more[e < edges.length]; @next[e++]) {}]
 </script>
@@ -258,7 +258,7 @@ const walk = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main e={e} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" run="main"><Main e={e} vertices={vertices} edges={edges} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -315,9 +315,9 @@ const taken = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const left = Values([1, 4, 6]);
-  const right = Values([2, 3, 5]);
-</script>
+  const left = Values;
+  const right = Values;
+</script><Run name="main" left={[1, 4, 6]} right={[2, 3, 5]} />
 <script algorithm>
   @start[let i = Index(left, 0);
   let j = Index(right, 0);
@@ -347,7 +347,7 @@ const taken = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main left={left} right={right} take={take} /></Scene>
+  <Scene name="main" run="main"><Main left={left} right={right} take={take} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -402,8 +402,8 @@ const apart = `<script domain>
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([1, 4, 6, 2]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[1, 4, 6, 2]} />
 <script algorithm>
   @start[let i = Index(0);
   let j = Index(2);]
@@ -426,7 +426,7 @@ const apart = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} j={j} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} j={j} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -491,8 +491,8 @@ const far = `<script domain>
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([3, 8]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[3, 8]} />
 <script algorithm>
   @start[let i = Index(0);]
   @far[i = 7;]
@@ -509,7 +509,7 @@ const far = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -698,10 +698,10 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
+      `<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values; const i = Position; const j = Position;</script><Run name="main" values={[1, 2]} i={0} j={1} /><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} j={j} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} j={j} /></Scene>
 </Storyboard>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
@@ -752,8 +752,8 @@ const compared = `<script domain>
   const Flag = type('boolean');
 </script>
 <script input>
-  const values = Values([5, 1, 4]);
-</script>
+  const values = Values;
+</script><Run name="main" values={[5, 1, 4]} />
 <script algorithm>
   for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @compare{
     if (@greater[values[i - 1] > values[i]]) @swap{
@@ -776,7 +776,7 @@ const compared = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} /></Scene>
+  <Scene name="main" run="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
 it.skipIf(!enabled)(
@@ -847,9 +847,9 @@ const scan = `<script domain>
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([7, 42, 3, 18, 25]);
-  const target = Int(18);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[7, 42, 3, 18, 25]} target={18} />
 <script algorithm>
   @start[let i = Index(0);]
   while (@scan[values[i] !== target]) @next[i++;]
@@ -860,7 +860,7 @@ const scan = `<script domain>
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" run="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
 
 /** A value's box on screen, and its fill as red, green and blue. */

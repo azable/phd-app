@@ -5,7 +5,7 @@
 </script>
 
 <script input>
-  const values = Values([6, 2, 9, 4, 0, 7]);
+  const values = Values;
 </script>
 
 <script algorithm>
@@ -29,6 +29,8 @@
   <Node><Bars values={values} />{j}</Node>
 </Layout>
 
+<Run name="main" values={[6, 2, 9, 4, 0, 7]} />
+
 <Storyboard>
-  <Scene name="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main j={j} values={values} /></Scene>
+  <Scene name="main" run="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main j={j} values={values} /></Scene>
 </Storyboard>

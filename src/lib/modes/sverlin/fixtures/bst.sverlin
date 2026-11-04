@@ -11,13 +11,9 @@
 </script>
 
 <script input>
-  const values = Values([8, 3, 10, 1, 6, 14, 4, 7, 13]);
-  const nodes = TreeNodes();
-  const root = NodeRef(nodes.add(TreeNode({
-    key: values[0],
-    left: Next(Name('end')),
-    right: Next(Name('end'))
-  })));
+  const values = Values;
+  const nodes = TreeNodes;
+  const root = NodeRef;
 </script>
 
 <script algorithm>
@@ -69,6 +65,12 @@
   </Node>
 </Layout>
 
+<Run name="main" values={[8, 3, 10, 1, 6, 14, 4, 7, 13]} root={nodes.add(TreeNode({
+    key: values[0],
+    left: Next(Name('end')),
+    right: Next(Name('end'))
+  }))} />
+
 <Storyboard>
-  <Scene name="main" pause="@insert.attach, @sequence.pick"><Main nodes={nodes} /></Scene>
+  <Scene name="main" run="main" pause="@insert.attach, @sequence.pick"><Main nodes={nodes} /></Scene>
 </Storyboard>

@@ -12,15 +12,9 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', seen: true },
-    { name: 'B', seen: false },
-    { name: 'C', seen: false },
-    { name: 'D', seen: false },
-    { name: 'E', seen: false }
-  ]);
+  const vertices = Vertices;
   // Each edge listed from both its ends.
-  const neighbours = Adjacency([[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]);
+  const neighbours = Adjacency;
 </script>
 
 <script algorithm>
@@ -78,6 +72,14 @@
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]} neighbours={[[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]} />
+
 <Storyboard>
-  <Scene name="main" pause="@init, @visit.take, @visit.look.add"><Main vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" run="main" pause="@init, @visit.take, @visit.look.add"><Main vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
 </Storyboard>

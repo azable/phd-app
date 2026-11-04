@@ -29,8 +29,9 @@ Design). A plain `<script>`, or one with any other attribute, is refused.
 
 1. `<script domain>`: the types, atomic and the arrays, records, and unions
    built from them (see Atomic types; Arrays, records, and unions).
-2. `<script input>`: the fixed starting data, declared with `const` or `let`, as
-   `const values = Values([3, 8, 5]);`; every value has a domain type.
+2. `<script input>`: the inputs, each declared with its domain type and no
+   value, as `const values = Values;`; each run gives them their values (see
+   Runs).
 3. `<script algorithm>`: the algorithm. It starts from the input variables, may
    update them and declare more, may declare functions (see Loops and
    functions), and labels the code its steps are about (see Steps). It runs
@@ -106,6 +107,27 @@ layout, a view, or a node with a `kind`.
 - How anything looks is the design's, never the algorithm's; what a step shows
   is read from the algorithm's values and labels (see Steps).
 
+## Runs
+
+A `<Run>` is one execution of the algorithm: it is named, and gives every input
+the input block declares a value of its type, written as a plain value the type
+reads, as an array's elements or a record's fields.
+
+```svelte
+<Run name="present" values={[2, 5, 7, 9, 12]} target={9} />
+<Run name="absent" values={[2, 5, 7, 9, 12]} target={4} />
+```
+
+- Runs are written at the top level, beside the storyboard, before it. A run's
+  name is one word that may hold digits and dashes, and no two runs share one.
+- A run gives every input, and nothing else; a value that is not of its input's
+  type is refused, naming the run and the input.
+- The room each node keeps comes from the types, so a layout keeps its place and
+  size in every run.
+- A pool starts empty in every run, so a run gives it no value: the algorithm
+  adds its nodes, or a run adds them in the value of a reference input it gives,
+  as `head={nodes.add(ListNode({ name: 'A', next: End('end') }))}`.
+
 ## Storyboard
 
 The view ends with a `<Storyboard>` of the scenes the presentation plays, in
@@ -116,22 +138,23 @@ scene at least.
 
 ```svelte
 <Storyboard>
-  <Scene name="sort"><Arrays values={values} from={from} /></Scene>
-  <Scene name="one-merge" within="@sort.merge#1" pause="@sort.merge.take">
+  <Scene name="sort" run="main"><Arrays values={values} from={from} /></Scene>
+  <Scene name="one-merge" run="main" within="@sort.merge#1" pause="@sort.merge.take">
     <Arrays values={values} from={from} />
   </Scene>
   <Scene name="then"><Note /></Scene>
 </Storyboard>
 ```
 
-- A scene is a stepping scene if it passes state, or has `pause`, `within`, or
-  `at`, and a single frame otherwise, as a title card or a note between runs:
-  its layout reads no state, and `pause`, `within`, or `at` on a scene whose
-  layout reads none is refused. (Until the language has runs of several inputs,
-  this is how a frame is told from a step.)
+- A scene is a stepping scene if it passes state, and a single frame otherwise,
+  as a title card or a note between runs: its layout reads no state, and `run`,
+  `pause`, `within`, or `at` on a scene whose layout reads none is refused.
+- A stepping scene names the run it shows, as `run="present"` (see Runs); one
+  naming none, or a run no `<Run>` names, is refused. Its stops, `within`,
+  `pause` and `at` are those of that run, and two scenes may show two runs.
 - Each run of a label has two stops: `:before`, just before its code begins, and
   `:after`, just after it ends. The whole run has them too: its `:before` is the
-  input as given, and its `:after` the state the algorithm ends on.
+  input as its run gives it, and its `:after` the state the algorithm ends on.
 - A stepping scene steps through the whole run, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
   `within="@sort.merge#1"`. It opens on their `:before` (the first run's, for
@@ -351,12 +374,13 @@ label given a kind of its own.
 - A step inside a run shows only its own part and the code leading up to it; a
   step ending a run shows its whole run, the values its labels gave inside it
   drawn and its code lit.
-- Step 0 is the input as given, before any code runs; what the algorithm
-  declares, its labels' values, and its applications appear from the first step
-  on, and the view reads a variable itself only inside a `<Node>`, which hides
-  until it is declared. What runs after the last step is a step of its own when
-  it changes or declares a value still in scope, so the end is shown; variables
-  only leaving scope make no step. `return;` stops the algorithm early.
+- Step 0 is the input as its run gives it, before any code runs; what the
+  algorithm declares, its labels' values, and its applications appear from the
+  first step on, and the view reads a variable itself only inside a `<Node>`,
+  which hides until it is declared. What runs after the last step is a step of
+  its own when it changes or declares a value still in scope, so the end is
+  shown; variables only leaving scope make no step. `return;` stops the
+  algorithm early.
 - Each step records every variable in scope, before and after its code: the
   input's, the top level's, and those of the blocks around it. A variable out of
   scope at a step is not part of it, so whatever the view draws from it is
@@ -423,8 +447,8 @@ Binary search, stopping where it finds the target:
 </script>
 
 <script input>
-  const values = Values([2, 5, 8, 12, 16, 23, 38]);
-  const target = Int(23);
+  const values = Values;
+  const target = Int;
 </script>
 
 <script algorithm>
@@ -455,8 +479,10 @@ Binary search, stopping where it finds the target:
   </Node>
 </Layout>
 
+<Run name="main" values={[2, 5, 8, 12, 16, 23, 38]} target={23} />
+
 <Storyboard>
-  <Scene name="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
+  <Scene name="main" run="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -538,10 +564,11 @@ heap stored in an array.
 
 Make one by calling its name with literals, which take their types from it:
 `Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
-`Vertex`, a `Vertex`, and a `Weight`. A literal written into an element or field
-takes its type, as `dist[v] = 0`, and one pushed the array's element type, as
-`queue.push(3)`; an array or object literal anywhere else is an error. A record
-has exactly its fields.
+`Vertex`, a `Vertex`, and a `Weight`; a run gives an input the literal alone,
+which takes the input's type, as `values={[3, 8, 5]}` (see Runs). A literal
+written into an element or field takes its type, as `dist[v] = 0`, and one
+pushed the array's element type, as `queue.push(3)`; an array or object literal
+anywhere else is an error. A record has exactly its fields.
 
 An array never holds more than its `max`: an input longer, a
 `Values.ofLength(n, …)` with `n` past it, or a `push` or `unshift` that would
@@ -608,10 +635,8 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 </script>
 
 <script input>
-  const nodes = ListNodes();
-  const head = NodeRef(nodes.add(ListNode({ name: 'A', next:
-    nodes.add(ListNode({ name: 'B', next:
-      nodes.add(ListNode({ name: 'C', next: End('end') })) })) })));
+  const nodes = ListNodes;
+  const head = NodeRef;
 </script>
 
 <script algorithm>
@@ -643,21 +668,24 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   </Node>
 </Layout>
 
+<Run name="main" head={nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next:
+      nodes.add(ListNode({ name: 'C', next: End('end') })) })) }))} />
+
 <Storyboard>
-  <Scene name="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
+  <Scene name="main" run="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
 </Storyboard>
 ```
 
-- The input makes the pool, empty, `const nodes = ListNodes();`, once: a record
-  type has one pool, so a reference to it always points there, and the algorithm
-  makes none. `nodes.add(ListNode({ … }))` adds a node and gives it, a reference
-  wherever the type expects one, as a `next` field; written nested, as here, or
-  one variable each, as `const c = NodeRef(nodes.add(ListNode({ … })));`. The
-  algorithm adds one the same way, as
-  `head = nodes.add(ListNode({ name: v, next: head }))`, and a function adding
-  one takes the pool as a parameter, `insert(nodes, root, value)`. An add past
-  `max` is an error, and so is a reference to a node never added. A cycle is the
-  algorithm's to make.
+- The input declares the pool, `const nodes = ListNodes;`, once, and it starts
+  empty in every run: a record type has one pool, so a reference to it always
+  points there, and the algorithm makes none. `nodes.add(ListNode({ … }))` adds
+  a node and gives it, a reference wherever the type expects one, as a `next`
+  field, written nested, as the run here gives `head`. The algorithm adds one
+  the same way, as `head = nodes.add(ListNode({ name: v, next: head }))`, and a
+  function adding one takes the pool as a parameter,
+  `insert(nodes, root, value)`. An add past `max` is an error, and so is a
+  reference to a node never added. A cycle is the algorithm's to make.
 - A field is read and written through a reference, `cur.next = prev`; a value of
   another type is refused, and reading or writing one through the end is a
   mistake at that step ("cur is an End ("end"), so it has no next"). A variable
@@ -767,7 +795,7 @@ place:
 </script>
 
 <script input>
-  const values = Values([5, 1, 4, 2, 3]);
+  const values = Values;
 </script>
 
 <script algorithm>
@@ -805,8 +833,10 @@ place:
   </Node>
 </Layout>
 
+<Run name="main" values={[5, 1, 4, 2, 3]} />
+
 <Storyboard>
-  <Scene name="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
+  <Scene name="main" run="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -1322,7 +1352,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </script>
 
 <script input>
-  const values = Values([5, 2, 4, 1]);
+  const values = Values;
 </script>
 
 <script algorithm>
@@ -1368,8 +1398,10 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
   </Node>
 </Layout>
 
+<Run name="main" values={[5, 2, 4, 1]} />
+
 <Storyboard>
-  <Scene name="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" run="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -1543,14 +1575,8 @@ at marked and the queue drawn by number:
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A', seen: true },
-    { name: 'B', seen: false },
-    { name: 'C', seen: false },
-    { name: 'D', seen: false },
-    { name: 'E', seen: false }
-  ]);
-  const out = Adjacency([[1, 2], [3], [3], [4], []]);
+  const vertices = Vertices;
+  const out = Adjacency;
 </script>
 
 <script algorithm>
@@ -1594,8 +1620,16 @@ at marked and the queue drawn by number:
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false }
+  ]} out={[[1, 2], [3], [3], [4], []]} />
+
 <Storyboard>
-  <Scene name="search" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="search" run="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>
 ```
 

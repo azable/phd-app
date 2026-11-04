@@ -194,7 +194,7 @@ export const algorithmLimits = {
 /** The name a label's applications are kept under, as the view reads the label: `@insert.compare` as `ℓinsertˑcompare`. */
 export const labelApplication = (full: string): string => `ℓ${full.replaceAll('.', 'ˑ')}`;
 
-/** Interpret the input block into the fixed initial state shared by every presentation. */
+/** Interpret an input block, as one run gives it (see runs.server.ts), into the state it starts from. */
 export function interpretInput(body: string, domain: DomainRegistry = noDomain): TypedState {
   const { root, offset } = parseBlock(body, 'input', domain);
   return new Interpreter(root, offset, { kind: 'input', domain, code: body }).bindings();
@@ -1016,7 +1016,7 @@ class Interpreter {
   }
 
   /**
-   * A record's one pool, empty, as in const nodes = Nodes(); in the input: the algorithm adds its
+   * A record's one pool, empty, as const nodes = Nodes; in the input declares it: the algorithm adds its
    * nodes with nodes.add(Node({ … })).
    */
   #newPool(node: CallExpression, pool: CollectionType): ObjectValue[] {
@@ -1028,7 +1028,7 @@ class Interpreter {
     if (this.#kind !== 'input')
       this.#fail(
         node,
-        `Make the ${pool.name} in the input, as const nodes = ${pool.name}();, so every step draws it.`
+        `Declare the ${pool.name} in the input, as const nodes = ${pool.name};, so every step draws it.`
       );
     if (this.#made.has(pool.element))
       this.#fail(

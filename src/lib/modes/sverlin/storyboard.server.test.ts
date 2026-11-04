@@ -9,9 +9,9 @@ const blocks = `<script domain>
 </script>
 
 <script input>
-  const values = Values([2, 5, 7, 9, 12]);
-  const target = Int(9);
-</script>
+  const values = Values;
+  const target = Int;
+</script><Run name="main" values={[2, 5, 7, 9, 12]} target={9} />
 
 <script algorithm>
   @bounds[let lo = Index(0); let hi = values.length - 1;]
@@ -39,7 +39,9 @@ const blocks = `<script domain>
 const search = '<Search values={values} lo={lo} hi={hi} />';
 const storyboard = (...scenes: string[]) =>
   `${blocks}\n<Storyboard>\n${scenes.join('\n')}\n</Storyboard>`;
-const scene = (props: string, shows = search) => `  <Scene ${props}>${shows}</Scene>`;
+// A scene showing state shows the run main, unless it names its own.
+const scene = (props: string, shows = search) =>
+  `  <Scene ${props}${/=\{/u.test(shows) && !/\brun=/u.test(props) ? ' run="main"' : ''}>${shows}</Scene>`;
 
 const problemOf = (source: string) => {
   try {
@@ -191,7 +193,7 @@ describe('storyboards', () => {
     [
       'a within matching no run',
       storyboard(scene('name="probe" within="@probe#9"')),
-      'within="@probe#9" matches no run: @probe runs'
+      'within="@probe#9" matches no run: in the run main, @probe runs'
     ],
     [
       'a within written as another selector',
@@ -232,6 +234,80 @@ describe('storyboards', () => {
       'a layout shown by a scene and drawn by another',
       `${blocks}<Layout name="Both" of="values, lo, hi"><Node>${search}</Node></Layout>\n<Storyboard>\n${scene('name="a"')}\n${scene('name="b"', '<Both values={values} lo={lo} hi={hi} />')}\n</Storyboard>`,
       'Search is shown by a scene, so it arranges the whole page, and is drawn inside another layout too'
+    ]
+  ])('refuses %s', (_, source, message) => {
+    expect(problemOf(source)).toContain(message);
+  });
+});
+
+describe('runs', () => {
+  // The blocks with the runs given in place of the one, main.
+  const withRuns = (runs: string, ...scenes: string[]) =>
+    storyboard(...scenes).replace(/<Run name="main"[^\n]*\/>/u, runs);
+
+  it('shows two runs, each scene paced from its own', async () => {
+    const two = prepareSvelteComponent(
+      withRuns(
+        '<Run name="present" values={[2, 5, 7, 9, 12]} target={9} />\n<Run name="absent" values={[2, 5, 7, 9, 12]} target={4} />',
+        scene('name="found" run="present"'),
+        scene('name="card"', '<Card />'),
+        scene('name="missing" run="absent"')
+      )
+    );
+    const { labels } = await bundlePresentation(two, 1);
+    expect(labels[0]).toBe('found: :before');
+    expect(labels).toContain('card');
+    // The absent target takes three probes, the present one two.
+    expect(labels.filter((label) => label.startsWith('missing: '))).toEqual([
+      'missing: :before',
+      'missing: :after'
+    ]);
+    expect(two.steps).toEqual(labels);
+  });
+
+  it.each([
+    [
+      'a stepping scene naming no run',
+      storyboard('  <Scene name="search">' + search + '</Scene>'),
+      'The scene search steps through a run, so it names it, as <Scene name="search" run="main">; the runs are main.'
+    ],
+    [
+      'a scene naming a run no <Run> names',
+      storyboard(scene('name="search" run="other"')),
+      'The scene search shows the run other, and no run is named other; the runs are main.'
+    ],
+    [
+      'a run missing an input',
+      withRuns('<Run name="main" values={[2, 5]} />', scene('name="search"')),
+      'The run main gives no target: a run gives every input the input block declares, as target={…}.'
+    ],
+    [
+      'a run giving an input the input block does not declare',
+      withRuns('<Run name="main" values={[2, 5]} target={5} extra={1} />', scene('name="search"')),
+      'The run main gives extra, which the input block does not declare; its inputs are values, target.'
+    ],
+    [
+      'a value not of its input’s type',
+      withRuns('<Run name="main" values={[2, 500]} target={5} />', scene('name="search"')),
+      'In the run main, values: '
+    ],
+    [
+      'two runs of one name',
+      withRuns(
+        '<Run name="main" values={[2]} target={2} />\n<Run name="main" values={[3]} target={3} />',
+        scene('name="search"')
+      ),
+      'Two runs are named main'
+    ],
+    [
+      'a value in the input block',
+      storyboard(scene('name="search"')).replace('const target = Int;', 'const target = Int(9);'),
+      'target is given a value in the input block, which declares only its type: write const target = Int;'
+    ],
+    [
+      'a run on a single frame',
+      storyboard(scene('name="search"'), '  <Scene name="card" run="main"><Card /></Scene>'),
+      'The scene card shows Card, which reads no state, so it is one frame'
     ]
   ])('refuses %s', (_, source, message) => {
     expect(problemOf(source)).toContain(message);

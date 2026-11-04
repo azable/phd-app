@@ -24,21 +24,9 @@
 </script>
 
 <script input>
-  const vertices = Vertices([
-    { name: 'A' },
-    { name: 'B' },
-    { name: 'C' },
-    { name: 'D' },
-    { name: 'E' }
-  ]);
-  const source = VertexRef(0);
-  const adjacency = Adjacency([
-    [{ to: 1, weight: 4 }, { to: 2, weight: 2 }],
-    [{ to: 0, weight: 4 }, { to: 2, weight: 1 }, { to: 3, weight: 5 }],
-    [{ to: 0, weight: 2 }, { to: 1, weight: 1 }, { to: 3, weight: 8 }, { to: 4, weight: 10 }],
-    [{ to: 1, weight: 5 }, { to: 2, weight: 8 }, { to: 4, weight: 2 }],
-    [{ to: 2, weight: 10 }, { to: 3, weight: 2 }]
-  ]);
+  const vertices = Vertices;
+  const source = VertexRef;
+  const adjacency = Adjacency;
 </script>
 
 <script algorithm>
@@ -150,6 +138,20 @@ while @moreRounds[round ≤ number of vertices]
   </Node>
 </Layout>
 
+<Run name="main" vertices={[
+    { name: 'A' },
+    { name: 'B' },
+    { name: 'C' },
+    { name: 'D' },
+    { name: 'E' }
+  ]} source={0} adjacency={[
+    [{ to: 1, weight: 4 }, { to: 2, weight: 2 }],
+    [{ to: 0, weight: 4 }, { to: 2, weight: 1 }, { to: 3, weight: 5 }],
+    [{ to: 0, weight: 2 }, { to: 1, weight: 1 }, { to: 3, weight: 8 }, { to: 4, weight: 10 }],
+    [{ to: 1, weight: 5 }, { to: 2, weight: 8 }, { to: 4, weight: 2 }],
+    [{ to: 2, weight: 10 }, { to: 3, weight: 2 }]
+  ]} />
+
 <Storyboard>
-  <Scene name="main" pause="@unknown, @initial, @round.firstVertex, @round.nextVertex, @round.settle.mark, @round.settle.edge.relax"><Main v={v} vertices={vertices} source={source} distances={distances} previous={previous} visited={visited} adjacency={adjacency} /></Scene>
+  <Scene name="main" run="main" pause="@unknown, @initial, @round.firstVertex, @round.nextVertex, @round.settle.mark, @round.settle.edge.relax"><Main v={v} vertices={vertices} source={source} distances={distances} previous={previous} visited={visited} adjacency={adjacency} /></Scene>
 </Storyboard>

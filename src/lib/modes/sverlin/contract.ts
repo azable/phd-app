@@ -15,8 +15,8 @@ export const linearSearchSource = `<script domain>
   const Index = index(Values);
 </script>
 <script input>
-  const values = Values([3, 8, 5, 2, 7]);
-  const target = Int(2);
+  const values = Values;
+  const target = Int;
 </script>
 <script algorithm>
   function search(a, target) {
@@ -64,8 +64,10 @@ export const linearSearchSource = `<script domain>
   </Node>
 </Layout>
 
+<Run name="main" values={[3, 8, 5, 2, 7]} target={2} />
+
 <Storyboard>
-  <Scene name="search" pause="@first, @check.equal, @next, @run">
+  <Scene name="search" run="main" pause="@first, @check.equal, @next, @run">
     <Main values={values} i={i} found={found} target={target} />
   </Scene>
 </Storyboard>`;

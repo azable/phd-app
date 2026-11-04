@@ -6,8 +6,8 @@
 </script>
 
 <script input>
-  const a = Table([[1, 2], [3, 4]]);
-  const b = Table([[5, 6], [7, 8]]);
+  const a = Table;
+  const b = Table;
 </script>
 
 <script algorithm>
@@ -31,6 +31,8 @@
   <Node layout="row">{a}{b}</Node>
 </Layout>
 
+<Run name="main" a={[[1, 2], [3, 4]]} b={[[5, 6], [7, 8]]} />
+
 <Storyboard>
-  <Scene name="main" pause="@scale.grow, @scale.copy"><Main a={a} b={b} /></Scene>
+  <Scene name="main" run="main" pause="@scale.grow, @scale.copy"><Main a={a} b={b} /></Scene>
 </Storyboard>
