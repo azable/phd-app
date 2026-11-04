@@ -17,7 +17,7 @@ const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
 const merge = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -226,10 +226,10 @@ it.skipIf(!enabled)(
 
 const walk = `<script domain>
   const Name = type(['A', 'B', 'C']);
-  const Names = collection(Name, { max: 8 });
+  const Names = array(Name, { max: 8 });
   const Vertex = index(Names);
   const Edge = record({ from: Vertex, to: Vertex });
-  const Edges = collection(Edge, { max: 8 });
+  const Edges = array(Edge, { max: 8 });
   const EdgeIndex = index(Edges);
   const Flag = type('boolean');
 </script>
@@ -309,7 +309,7 @@ it.skipIf(!enabled)(
 
 const taken = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
   const Take = record({ from: Index });
   const Flag = type('boolean');
@@ -398,7 +398,7 @@ it.skipIf(!enabled)(
 
 const apart = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -487,7 +487,7 @@ it.skipIf(!enabled)(
 
 const far = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -698,7 +698,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
+      `<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
 
 <Storyboard>
   <Scene name="main"><Main values={values} i={i} j={j} /></Scene>
@@ -747,7 +747,7 @@ it.skipIf(!enabled)(
 
 const compared = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
@@ -843,7 +843,7 @@ it.skipIf(!enabled)(
 
 const scan = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 6 });
+  const Values = array(Int, { max: 6 });
   const Index = index(Values);
 </script>
 <script input>

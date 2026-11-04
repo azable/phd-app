@@ -4,7 +4,7 @@ import { prepareSvelteComponent } from './compile.server';
 
 const blocks = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 7 });
+  const Values = array(Int, { max: 7 });
   const Index = index(Values);
 </script>
 

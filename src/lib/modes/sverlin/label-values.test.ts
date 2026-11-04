@@ -6,7 +6,7 @@ import { markLabels, viewTags, whenTags } from './label-values';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -156,7 +156,7 @@ describe('a for … of variable', () => {
   it('refers to the element it is at, as a reference does', () => {
     const counting = interpretDomain(`
       const Digit = type('integer', { min: 0, max: 9 });
-      const Digits = collection(Digit, { max: 8 });
+      const Digits = array(Digit, { max: 8 });
     `);
     const input = interpretInput('const digits = Digits([3, 1, 4]);', counting);
     const steps = traceAlgorithm(

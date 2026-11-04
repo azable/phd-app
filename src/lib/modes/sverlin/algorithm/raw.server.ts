@@ -87,17 +87,17 @@ export function hiddenProblem(
   text: (node: AnyNode) => string
 ): string | undefined {
   if (operation === 'template')
-    return `${text(node)}: the algorithm builds no text; a word is a collection of characters, as const Word = collection(Char, { max: 12 });, and a caption joins text in the view.`;
+    return `${text(node)}: the algorithm builds no text; a word is an array of characters, as const Word = array(Char, { max: 12 });, and a caption joins text in the view.`;
   if (operation.startsWith('.') && loopingMethods.has(operation.slice(1)))
     return `${text(node)}: .${operation.slice(1)}() does a whole loop in one step, which nothing can show or count; write the loop, labelling its steps, as for (@start[let k = Index(values, 0)]; @more[k < values.length]; @next[k++]) @look{ … }.`;
   if ((operation === '+' || operation === '+=') && operands.some((value) => isText(value)))
-    return `${text(node)}: the algorithm joins no text; a word is a collection of characters, joined element by element in a loop, and a caption joins text in the view.`;
+    return `${text(node)}: the algorithm joins no text; a word is an array of characters, joined element by element in a loop, and a caption joins text in the view.`;
   if (
     (operation === '===' || operation === '!==') &&
     operands.length === 2 &&
     operands.every((value) => Array.isArray(value))
   )
-    return `${text(node)}: === on two collections compares which collection each is, not what they hold; compare them element by element in a loop.`;
+    return `${text(node)}: === on two arrays compares which array each is, not what they hold; compare them element by element in a loop.`;
   return undefined;
 }
 

@@ -1,7 +1,7 @@
 <script domain>
   const Int = type('integer', { min: 0, max: 999 });
-  const Row = collection(Int, { max: 2 });
-  const Table = collection(Row, { max: 2 });
+  const Row = array(Int, { max: 2 });
+  const Table = array(Row, { max: 2 });
   const Index = index(Table);
 </script>
 

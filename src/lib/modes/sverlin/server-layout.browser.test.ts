@@ -227,7 +227,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 4 });
+  const Values = array(Int, { max: 4 });
   const Index = index(Values);
 </script>
 <script input>
@@ -277,7 +277,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Name = type(['A', 'BBBBBB', 'CC']);
-  const Names = collection(Name, { max: 3 });
+  const Names = array(Name, { max: 3 });
 </script>
 <script input>
   const names = Names(['A', 'BBBBBB', 'CC']);
@@ -368,7 +368,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 6 });
+  const Values = array(Int, { max: 6 });
   const Index = index(Values);
 </script>
 <script input>

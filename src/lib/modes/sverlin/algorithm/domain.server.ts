@@ -13,8 +13,8 @@ import { type DomainRegistry, type OperatorType, type StructureType } from './st
 /**
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
- * enumeration (`type(['♠', '♥'])`); a union, record, collection, or pool is built from other types
- * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge, { max: 8 })`, `pool(Node, { max: 6 })`).
+ * enumeration (`type(['♠', '♥'])`); a union, record, array, or pool is built from other types
+ * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `array(Edge, { max: 8 })`, `pool(Node, { max: 6 })`).
  * Declarations may come in any order: the block is read for its names first, then each definition,
  * so a record can refer to its own kind through a reference declared after it; a type holding
  * itself other than through a reference or an index would be infinite, and is refused.
@@ -68,16 +68,22 @@ export function interpretDomain(body: string): DomainRegistry {
       if (!kind || !domainFunctions.has(kind))
         fail(
           declarator as AnyNode,
-          `Define ${name} with type(...), union(...), record({...}), collection(...), pool(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });.`
+          `Define ${name} with type(...), union(...), record({...}), array(...), pool(...), index(...), or ref(...), as in const ${name} = type('integer', { min: 0, max: 9 });.`
         );
       if (kind === 'binop' || kind === 'unop')
         fail(
           declarator as AnyNode,
           `The domain declares types, not operations: compute in the algorithm as JavaScript does, as a > b or i + 1, and label what a view draws, as @compare[a > b], drawn by a view typed by the label, as <View of="@compare" name="Ask">…</View>.`
         );
+      if (kind === 'collection')
+        fail(
+          declarator as AnyNode,
+          `collection(…) is now array(…), elements in order at positions 0, 1, 2, …: write const ${name} = array(${(init as CallExpression).arguments[0]?.type === 'Identifier' ? ((init as CallExpression).arguments[0] as { name: string }).name : 'Int'}, { max: 8 });.`
+        );
       if (declared.has(name)) fail(declarator as AnyNode, `"${name}" is already defined.`);
+      // An array is a collection type inside, as it is to the interpreter and the view.
       declared.set(name, {
-        kind: kind as string,
+        kind: kind === 'array' ? 'collection' : (kind as string),
         call: init as CallExpression,
         node: declarator as AnyNode
       });
@@ -192,10 +198,10 @@ export function interpretDomain(body: string): DomainRegistry {
    */
   function defineIndex(name: string, call: CallExpression): AtomType {
     const args = call.arguments as Expression[];
-    if (args.length !== 1) fail(call, 'index() takes one collection type, as in index(Values).');
-    const collection = defined(args[0], 'An index’s collection type');
+    if (args.length !== 1) fail(call, 'index() takes one array type, as in index(Values).');
+    const collection = defined(args[0], 'An index’s array type');
     if (kindOf(collection) !== 'collection')
-      fail(args[0], `index() points into a collection type, and ${collection} is not one.`);
+      fail(args[0], `index() points into an array type, and ${collection} is not one.`);
     defineType(collection);
     const max = (structures[collection] as { max?: number } | undefined)?.max;
     return { name, base: 'integer', index: collection, min: -1, max };
@@ -209,7 +215,7 @@ export function interpretDomain(body: string): DomainRegistry {
   function defineRef(name: string, call: CallExpression): StructureType {
     const args = call.arguments as Expression[];
     if (args.length !== 1)
-      fail(call, 'ref() takes one collection or record type, as in ref(Queue) or ref(Node).');
+      fail(call, 'ref() takes one array or record type, as in ref(Queue) or ref(Node).');
     const target = defined(args[0], 'A reference’s type');
     if (kindOf(target) === 'record') {
       const pool = [...declared].find(
@@ -227,14 +233,14 @@ export function interpretDomain(body: string): DomainRegistry {
     if (kindOf(target) !== 'collection')
       fail(
         args[0],
-        `ref() refers to a node of a record type, or to an element of a collection type, and ${target} is neither.`
+        `ref() refers to a node of a record type, or to an element of an array type, and ${target} is neither.`
       );
     const element = (declared.get(target)!.call.arguments as Expression[])[0];
     const elementName = element?.type === 'Identifier' ? element.name : '';
     if (kindOf(elementName) !== 'atom')
       fail(
         args[0],
-        `ref() refers to elements that are single values, and ${target} holds ${elementName}s; refer to one of its fields' collections, use an index(${target}), or refer to a node with ref(${elementName}).`
+        `ref() refers to elements that are single values, and ${target} holds ${elementName}s; refer to one of its fields' arrays, use an index(${target}), or refer to a node with ref(${elementName}).`
       );
     return { kind: 'ref', name, collection: target, element: elementName };
   }
@@ -254,7 +260,7 @@ export function interpretDomain(body: string): DomainRegistry {
     if (kindOf(element) !== 'record')
       fail(
         args[0],
-        `A pool holds the nodes of a record type, and ${element} is not one; keep values in a collection, as collection(${element}, { max: 8 }).`
+        `A pool holds the nodes of a record type, and ${element} is not one; keep values in an array, as array(${element}, { max: 8 }).`
       );
     const [first] = [...declared].find(
       ([, { kind, call: declaration }]) =>
@@ -303,10 +309,10 @@ export function interpretDomain(body: string): DomainRegistry {
       return { kind, name, members };
     }
     if (kind === 'collection') {
-      const form = `collection(${args[0]?.type === 'Identifier' ? args[0].name : 'Edge'}, { max: 8 })`;
+      const form = `array(${args[0]?.type === 'Identifier' ? args[0].name : 'Edge'}, { max: 8 })`;
       if (args.length < 1 || args.length > 2 || (args[1] && args[1].type !== 'ObjectExpression'))
-        fail(call, `collection() takes one element type and its most elements, as in ${form}.`);
-      const element = defined(args[0], 'A collection’s element type');
+        fail(call, `array() takes one element type and its most elements, as in ${form}.`);
+      const element = defined(args[0], 'An array’s element type');
       const options = args[1] as Expression | undefined;
       const property =
         options?.type === 'ObjectExpression'
@@ -320,7 +326,7 @@ export function interpretDomain(body: string): DomainRegistry {
       if (options?.type === 'ObjectExpression')
         for (const each of options.properties as AnyNode[])
           if (each !== property)
-            fail(each, `A collection's only option is max, its most elements, as in ${form}.`);
+            fail(each, `An array's only option is max, its most elements, as in ${form}.`);
       const max = property
         ? literalValue((property as unknown as { value: Expression }).value)
         : undefined;
@@ -330,7 +336,7 @@ export function interpretDomain(body: string): DomainRegistry {
           `Give ${name} its max, the most elements it ever holds, as in const ${name} = ${form};. Every type must have a known, finite set of values, so the view keeps room for the longest ${name}: choose the least max that fits the largest input you mean to show.`
         );
       if (typeof max !== 'number' || !Number.isInteger(max) || max < 1)
-        fail(property!, `A collection's max is a whole number of at least 1, as in ${form}.`);
+        fail(property!, `An array's max is a whole number of at least 1, as in ${form}.`);
       return { kind, name, element, max: max as number };
     }
     const [shape] = args;

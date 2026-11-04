@@ -1,7 +1,7 @@
 /**
  * Domain types built from other types: a union holds a value of one of its members, a record has
- * named fields of given types, and a collection holds elements of one type. With the atomic types
- * they make up a component's domain; every input and algorithm value belongs to one of them.
+ * named fields of given types, and an array or a pool holds elements of one type. With the atomic
+ * types they make up a component's domain; every input and algorithm value belongs to one of them.
  */
 
 import type { Expression } from 'acorn';
@@ -11,9 +11,9 @@ import { noAtoms, type AtomRegistry } from './atoms.server';
 export type UnionType = { kind: 'union'; name: string; members: readonly string[] };
 export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record<string, string>> };
 /**
- * A collection of one element type, holding at most `max` elements, as collection(Int, { max: 8 });
- * or a pool (`pool`), pool(Node, { max: 6 }): the nodes of a record type, unordered, reached only
- * by reference, which the algorithm adds to it.
+ * A collection of one element type: an array, its elements in order at positions, holding at most
+ * `max`, as array(Int, { max: 8 }); or a pool (`pool`), pool(Node, { max: 6 }): the nodes of a
+ * record type, unordered, reached only by reference, which the algorithm adds to it.
  */
 export type CollectionType = {
   kind: 'collection';

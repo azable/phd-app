@@ -10,9 +10,9 @@ const domain = interpretDomain(`
   const Count = type('integer', { min: -100, max: 1000 });
   const Dist = union(Distance, Unreached);
   const Edge = record({ from: Vertex, to: Vertex, weight: Weight });
-  const Edges = collection(Edge, { max: 8 });
-  const Distances = collection(Dist, { max: 8 });
-  const Queue = collection(Vertex, { max: 8 });
+  const Edges = array(Edge, { max: 8 });
+  const Distances = array(Dist, { max: 8 });
+  const Queue = array(Vertex, { max: 8 });
   const Either = union(Distance, Count);
 `);
 
@@ -57,23 +57,28 @@ describe('union, record, and collection definitions', () => {
     ['records without fields', 'const A = record({});', /at least one field/],
     ['record fields that are not types', 'const A = record({ x: 3 });', /must name a type/],
     [
-      'collections of several types',
-      'const B = type("integer", { min: -100, max: 1000 }); const A = collection(B, B);',
+      'collection(…), now array(…)',
+      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B, { max: 4 });',
+      'collection(…) is now array(…), elements in order at positions 0, 1, 2, …: write const A = array(B, { max: 8 });.'
+    ],
+    [
+      'arrays of several types',
+      'const B = type("integer", { min: -100, max: 1000 }); const A = array(B, B);',
       /one element type/
     ],
     [
-      'collections without a max',
-      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B);',
-      /Give A its max, the most elements it ever holds, as in const A = collection\(B, \{ max: 8 \}\)/
+      'arrays without a max',
+      'const B = type("integer", { min: 0, max: 9 }); const A = array(B);',
+      /Give A its max, the most elements it ever holds, as in const A = array\(B, \{ max: 8 \}\)/
     ],
     [
       'a max that is not a whole number of at least 1',
-      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B, { max: 0 });',
+      'const B = type("integer", { min: 0, max: 9 }); const A = array(B, { max: 0 });',
       /max is a whole number of at least 1/
     ],
     [
-      'other collection options',
-      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B, { max: 4, min: 1 });',
+      'other array options',
+      'const B = type("integer", { min: 0, max: 9 }); const A = array(B, { max: 4, min: 1 });',
       /only option is max/
     ],
     [
@@ -82,8 +87,8 @@ describe('union, record, and collection definitions', () => {
       /Node holds itself \(Node → Node\)/
     ],
     [
-      'a record holding itself through a union and a collection',
-      'const N = type(["a"]); const End = type(["end"]); const Kids = collection(Node, { max: 8 }); const Next = union(Kids, End); const Node = record({ name: N, kids: Next });',
+      'a record holding itself through a union and an array',
+      'const N = type(["a"]); const End = type(["end"]); const Kids = array(Node, { max: 8 }); const Next = union(Kids, End); const Node = record({ name: N, kids: Next });',
       /Kids holds itself|Node holds itself/
     ],
     [
@@ -97,7 +102,7 @@ describe('union, record, and collection definitions', () => {
 
   it('takes types in any order, a record referring to its own kind through a reference into its pool', () => {
     const later = interpretDomain(
-      'const A = collection(B, { max: 8 }); const B = type("integer", { min: -100, max: 1000 });'
+      'const A = array(B, { max: 8 }); const B = type("integer", { min: -100, max: 1000 });'
     );
     expect(later.structures.A).toEqual({ kind: 'collection', name: 'A', element: 'B', max: 8 });
     const nodes = interpretDomain(`
@@ -205,7 +210,7 @@ describe('values made by collection and record types', () => {
       'const q = Queue([1]); const d = Distances(q);',
       /must be a Distances, not a Queue/
     ],
-    ['plain arrays', 'const q = [Vertex(1)];', /Arrays are made by a collection type/],
+    ['plain arrays', 'const q = [Vertex(1)];', /Arrays are made by an array type/],
     ['plain objects', 'const e = { from: Vertex(1) };', /Objects are made by a record type/]
   ])('rejects %s', (_name, statement, message) => {
     expect(() => last(`${statement}`)).toThrow(message);
@@ -218,7 +223,7 @@ describe('values made by collection and record types', () => {
       ).state.q
     ).toEqual([0, 0]);
     expect(() => last('const q = Vertex(1) === 1 ? [Vertex(1)] : Queue([]);')).toThrow(
-      /Arrays are made by a collection type/
+      /Arrays are made by an array type/
     );
   });
 

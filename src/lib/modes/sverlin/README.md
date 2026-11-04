@@ -27,8 +27,8 @@ in a subset of JavaScript (see The subset), followed by a script-free Svelte
 view. Only the algorithm block is required, and there is no design block (see
 Design). A plain `<script>`, or one with any other attribute, is refused.
 
-1. `<script domain>`: the types, atomic and the collections, records, and unions
-   built from them (see Atomic types; Collections, records, and unions).
+1. `<script domain>`: the types, atomic and the arrays, records, and unions
+   built from them (see Atomic types; Arrays, records, and unions).
 2. `<script input>`: the fixed starting data, declared with `const` or `let`, as
    `const values = Values([3, 8, 5]);`; every value has a domain type.
 3. `<script algorithm>`: the algorithm. It starts from the input variables, may
@@ -170,9 +170,9 @@ A value in braces is drawn by its type's view: in the markup's text, `{key}`,
 with `key` an `Int`, draws the view `views.Int` chooses, among every view of
 `Int` and `none`. The braces are Svelte's, holding a value; what they draw is
 Sverlin's, the type of the value deciding: a view's parameter by its annotation,
-an `{#each}` item by its collection, a field by its record, a variable or a
-label by what the steps record it holding. A value without a domain type, as a
-loop's own index, is text, and a value shown as plain text is a node's value,
+an `{#each}` item by its array, a field by its record, a variable or a label by
+what the steps record it holding. A value without a domain type, as a loop's own
+index, is text, and a value shown as plain text is a node's value,
 `<Node value={key} />`. A union's value is drawn by the view of the member it
 holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
 of its own; one member drawn as a pointer, as a position beside `'none'`, marks
@@ -189,21 +189,21 @@ tick. In the view a type's name is its view, never a constructor: draw values
 the state holds, and a loop's own index, `k` in `{#each list as v, k}`, as text,
 `{k}`.
 
-A view of a collection or record draws its parts through their types' views:
+A view of an array or record draws its parts through their types' views:
 
 ```svelte
 <View of="Values" name="Items"><Node>{#each this as v}{v}{/each}</Node></View>
 <View of="Vertex" name="VertexCard"><Node layout="column">{this.name}{this.seen}</Node></View>
 ```
 
-A node whose only child is an `{#each}` holds a collection: its items sit on
-equal tracks, as large as the largest, in a row unless it sets `layout`, and a
-collection inside another runs across it, as rows in a column. Put a title for a
-collection in a node around it, not beside the `{#each}`. Every view is measured
-for every input its type allows, so its box keeps one size and nothing moves
-between steps or inputs: with every value of its type where there are few, else
-the widest, and with each `{#if}`, `<When>`, and `<OneOf>` in it going each way,
-whatever its values say, so a branch no input here takes still has room.
+A node whose only child is an `{#each}` holds an array: its items sit on equal
+tracks, as large as the largest, in a row unless it sets `layout`, and an array
+inside another runs across it, as rows in a column. Put a title for an array in
+a node around it, not beside the `{#each}`. Every view is measured for every
+input its type allows, so its box keeps one size and nothing moves between steps
+or inputs: with every value of its type where there are few, else the widest,
+and with each `{#if}`, `<When>`, and `<OneOf>` in it going each way, whatever
+its values say, so a branch no input here takes still has room.
 
 So a test of which member a union holds that reads inside it in a branch is an
 error, as `{#if this.next !== 'end'}{this.next.name}{/if}`: measured going the
@@ -220,12 +220,12 @@ A test reading a value without reading inside a member, as `{#if this.seen}` or
 `{#if this > 2}`, is measured either way as it is.
 
 An item's track is as large as the largest any item reaches at any step, so what
-makes one item large makes every item large: in a collection of groups, the
-group holding the whole input gives each one-value group room for all of it, and
-the picture grows with the number of items times the largest. Keep the items
-alike in size: draw a group that grows, or a list inside each item, only where
-it is small, show one level or part at a time rather than every one at once, and
-keep a varying count of values in one collection of its own.
+makes one item large makes every item large: in an array of groups, the group
+holding the whole input gives each one-value group room for all of it, and the
+picture grows with the number of items times the largest. Keep the items alike
+in size: draw a group that grows, or a list inside each item, only where it is
+small, show one level or part at a time rather than every one at once, and keep
+a varying count of values in one array of its own.
 
 ## Pointers
 
@@ -273,7 +273,7 @@ label given a kind of its own.
   (`views.Index`). A pointer in a layout another layout draws by its tag draws
   nothing and keeps no room.
 - The page draws the pointer around the element wherever that is drawn. Every
-  element keeps room for the pointers that can point into its collection, and a
+  element keeps room for the pointers that can point into its array, and a
   position shown past an end gets a slot there, so nothing moves as pointers
   move. Pointers at one element nest, the one rendered last outermost; pointers
   never at the same element at the same step share one slot, so an element keeps
@@ -374,9 +374,9 @@ label given a kind of its own.
   where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
-  the same value. A variable holding a value a collection also holds shows a
-  copy, as insertion sort's `key`, which keeps its place once the collection's
-  is overwritten and moves back into the row when put down. A value copied to a
+  the same value. A variable holding a value an array also holds shows a copy,
+  as insertion sort's `key`, which keeps its place once the array's is
+  overwritten and moves back into the row when put down. A value copied to a
   second place, as `values[j] = values[j - 1]`, starts where its source was, as
   do a label view's operands, lifting out of their cells into its caption (a
   computed operand fades in); a value written anew fades in; one no longer held
@@ -389,33 +389,33 @@ The algorithm's loops and branches are JavaScript's: `for`, `while`,
 part of a `for` header labelled (see Steps). End a loop with `break` or `return`
 where it has what it looks for, rather than a flag its test reads, and walk only
 what each step is about, as a vertex's own neighbours rather than every edge.
-`for … of` is refused, as its header walks a collection in a way no label can
-split: walk it with an index, its start, test, and move labelled, and read the
-element at the index, as
+`for … of` is refused, as its header walks an array in a way no label can split:
+walk it with an index, its start, test, and move labelled, and read the element
+at the index, as
 `for (@first[let k = Slot(around, 0)]; @another[Within(k, Count(around))]; @step[k = Step(k)]) @look{ const w = around[k]; … }`,
 where `Slot = index(Neighbours)` and `around` is the list declared before the
-loop. A position names the collection it points into, as `Slot(around, 0)`,
-where that is not the only one of its type at the top level, and draws as a
-pointer into it: with a pointer view of `Position`, `{i}` marks the cell `i`
-points at as an index loop walks `digits`.
+loop. A position names the array it points into, as `Slot(around, 0)`, where
+that is not the only one of its type at the top level, and draws as a pointer
+into it: with a pointer view of `Position`, `{i}` marks the cell `i` points at
+as an index loop walks `digits`.
 
 A function is declared at the top level of the algorithm block, as
 `function search(a, target) { ... }`, and sees only its parameters: give it the
-collections it works on, and it changes them in place. Each call gives its
-parameters values of the types the first call gave them. `return i;` gives a
-value back. A position into a collection the call was given points into the
-caller's, and is drawn on that collection wherever the view draws it under its
-top-level name. A function may call itself. A step inside a call records the
-call's variables, its parameters among them, and the top level's; the caller's
-are out of scope there, so with recursion a step shows the innermost call's. A
-parameter hides a top-level variable of the same name.
+arrays it works on, and it changes them in place. Each call gives its parameters
+values of the types the first call gave them. `return i;` gives a value back. A
+position into an array the call was given points into the caller's, and is drawn
+on that array wherever the view draws it under its top-level name. A function
+may call itself. A step inside a call records the call's variables, its
+parameters among them, and the top level's; the caller's are out of scope there,
+so with recursion a step shows the innermost call's. A parameter hides a
+top-level variable of the same name.
 
 Binary search, stopping where it finds the target:
 
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 7 });
+  const Values = array(Int, { max: 7 });
   const Index = index(Values);
 
 </script>
@@ -488,8 +488,8 @@ own, never from another: `type(Int, …)` is refused.
 
 Every type has a known, finite set of values, so a view can be drawn for each:
 choose ranges holding every value the algorithm reaches, as a count up to the
-input's length; a position's range is its collection's (see Collections,
-records, and unions). Type names cannot be variable names.
+input's length; a position's range is its array's (see Arrays, records, and
+unions). Type names cannot be variable names.
 
 Every number, boolean, and text a variable, element, or field holds is typed,
 made with a type's name, as `const target = Int(8);` or `Index(values, 0)`.
@@ -502,64 +502,73 @@ element or field does: after `let found = Found(false);`,
 `found = values[i] === target` stores a `Found`, and `found = Count(1)` is an
 error; one made by a union, `let d = Dist(0);`, holds any member.
 
-A word is a collection of characters, as
-`const Word = collection(Char, { max: 12 });` with
-`const Char = type(['A', 'C', 'G', 'T']);`, written in the input as text,
+A word is an array of characters, as `const Word = array(Char, { max: 12 });`
+with `const Char = type(['A', 'C', 'G', 'T']);`, written in the input as text,
 `Word('GATTACA')`; there is no text type to search, join, or copy in one step.
 
-## Collections, records, and unions
+## Arrays, records, and unions
 
 Every array and object is made by a type defined in the domain block, in any
 order, each as a top-level `const`:
 
-- a collection of one type with the most elements it ever holds, its `max`,
-  `collection(Int, { max: 8 })`, and of collections for a table,
-  `collection(Values, { max: 6 })`;
+- an array of one type with the most elements it ever holds, its `max`,
+  `array(Int, { max: 8 })`, and of arrays for a table,
+  `array(Values, { max: 6 })`;
 - a record with named fields,
   `record({ from: Vertex, to: Vertex, weight: Weight })`;
 - a union, a value of one of several types, `union(Distance, Unreached)`;
-- a position in a collection, `index(Values)`;
+- a position in an array, `index(Values)`;
 - a pool of the nodes of a record type, unordered, with the most it ever holds,
   `pool(ListNode, { max: 6 })` (see Pools and references);
-- a reference to an element of a collection of single values, staying with it as
-  it moves, `ref(Queue)`, or to a node in a pool, `ref(ListNode)` (see Pools and
+- a reference to an element of an array of single values, staying with it as it
+  moves, `ref(Queue)`, or to a node in a pool, `ref(ListNode)` (see Pools and
   references).
+
+An array and a pool both hold values of one type, at most `max`, and differ in
+order. An array's elements are in order at positions 0, 1, 2, …: it is read and
+written by position, `values[i]`, grows and shrinks at its ends with `push`,
+`pop`, `shift`, and `unshift`, and is drawn in that order, as a row of cells. A
+pool's nodes have no order and no positions: the algorithm adds one with
+`nodes.add(…)`, reaches it only through a reference, and a free layout places it
+by its links. Keep values in an array, and the nodes of a linked list, a tree,
+or a graph in a pool, unless the algorithm does arithmetic on their places, as a
+heap stored in an array.
 
 Make one by calling its name with literals, which take their types from it:
 `Values([3, 8, 5])`, or `Edges([{ from: 0, to: 1, weight: 4 }])`, its fields a
 `Vertex`, a `Vertex`, and a `Weight`. A literal written into an element or field
-takes its type, as `dist[v] = 0`, and one pushed the collection's element type,
-as `queue.push(3)`; an array or object literal anywhere else is an error. A
-record has exactly its fields.
+takes its type, as `dist[v] = 0`, and one pushed the array's element type, as
+`queue.push(3)`; an array or object literal anywhere else is an error. A record
+has exactly its fields.
 
-A collection never holds more than its `max`: an input longer, a
+An array never holds more than its `max`: an input longer, a
 `Values.ofLength(n, …)` with `n` past it, or a `push` or `unshift` that would
 pass it, is an error. The view keeps room for `max` elements at every step, so
 changing the input moves nothing; the frame shrinks the whole view to fit that
 room, so choose the least `max` that fits the largest input you mean to show, as
 the input's length, or a queue's most at once.
 
-A position is a whole number from -1 to its collection's `max`: 0 to length - 1
-point at an element of its collection, the others nowhere, as the length after a
-loop ends, or -1 before its start. Reading or writing outside the collection is
-an error, except that writing at the length adds one. The view keeps room past
-an end for the positions its pointers draw, at most 4 places; a position nothing
-draws keeps none. A position is bound to its collection when declared:
-`Index(0)` points into the only `Values`, and with several, name it, as
-`Index(left, 0)`; the binding stays, so `k = i + j` keeps `k` in its collection.
-One stored in a record or collection keeps where it came from
-(`Take({ from: j })`, `i + 1`, `const at = take.from;`), and a number stored
-there points into the only collection of its type, or the one named, as
-`Take({ from: Index(left, 0) })`. To point at a cell of a grid, hold the row in
-a variable: `let row = paths[r];` is the row itself, so `ColIndex(row, 1)`
-points into `paths`, and `NextRow(row, paths[r])` moves it.
+A position is a whole number from -1 to its array's `max`: 0 to length - 1 point
+at an element of its array, the others nowhere, as the length after a loop ends,
+or -1 before its start. Reading or writing outside the array is an error, except
+that writing at the length adds one. The view keeps room past an end for the
+positions its pointers draw, at most 4 places; a position nothing draws keeps
+none. A position is bound to its array when declared: `Index(0)` points into the
+only `Values`, and with several, name it, as `Index(left, 0)`; the binding
+stays, so `k = i + j` keeps `k` in its array. One stored in a record or array
+keeps where it came from (`Take({ from: j })`, `i + 1`,
+`const at = take.from;`), and a number stored there points into the only array
+of its type, or the one named, as `Take({ from: Index(left, 0) })`. To point at
+a cell of a grid, hold the row in a variable: `let row = paths[r];` is the row
+itself, so `ColIndex(row, 1)` points into `paths`, and `NextRow(row, paths[r])`
+moves it.
 
 A reference, as `const front = Front(queue[0]);`, reads as its element. Where a
-position stays at its place as the collection changes, a reference stays with
-its element, after `queue = Rest(queue)` or a sort; once the element has left
-the collection it refers to nothing, and its pointer draws nothing, keeping its
-room. It follows an element of a collection of its own type, even when the same
-value is also a field elsewhere. Use a position to step to a neighbour.
+position stays at its place as the array changes, a reference stays with its
+element, after `queue = Rest(queue)` or a sort; once the element has left the
+array it refers to nothing, and its pointer draws nothing, keeping its room. It
+follows an element of an array of its own type, even when the same value is also
+a field elsewhere. Use a position to step to a neighbour.
 
 A union value is always one of its members: a literal becomes the member it
 fits, as `Distances([0, 'unreached'])`, and one fitting two needs its type, as
@@ -679,7 +688,7 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   arithmetic on places, or the structure is an array (an array-based tree, a
   graph over a fixed list of vertices), keep a position instead, `index(Nodes)`.
 - A view reads through a position with `at(p)`, the element it points at in the
-  collection it points into, as
+  array it points into, as
   `<View of="VertexRef" name="VertexName">{at(this).name}</View>`; a layout may
   too. With `VertexRef = index(Vertices)`, `at(p)` is a `Vertex` and
   `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and a record of
@@ -698,15 +707,15 @@ The algorithm computes as JavaScript does, on typed values:
 
 - arithmetic keeps its operands' type, `Int + Int` an `Int`, and a typed value
   with a plain number the typed one, so `i + 1` is still an `Index` into the
-  collection `i` points into; a result outside the type's range is an error at
-  that line;
+  array `i` points into; a result outside the type's range is an error at that
+  line;
 - two different types do not mix: convert one where they meet, as
   `distance + Int(edge.weight)`;
 - a comparison is a plain `true` or `false`, read by a condition; declared into
   a variable it takes the domain's one boolean type, or the type written around
   it, as `const hit = Found(values[i] === target);`;
-- `values.length` is the collection's position type where the domain declares
-  one for it, the position just past its last element;
+- `values.length` is the array's position type where the domain declares one for
+  it, the position just past its last element;
 - `Math` and division give a plain number, whole or not depending on the values,
   so the type it should be is written around it where it is computed:
   `Index(values, Math.floor((lo + hi) / 2))`.
@@ -714,17 +723,17 @@ The algorithm computes as JavaScript does, on typed values:
 Nothing hides a loop, so every step of the work can be shown and counted:
 
 - one-element actions are allowed: reading or writing an element or field,
-  `.length`, and `push`, `pop`, `shift`, and `unshift`, which change the
-  collection in place, so it and its elements keep their identities;
+  `.length`, and `push`, `pop`, `shift`, and `unshift`, which change the array
+  in place, so it and its elements keep their identities;
 - a search, a copy, or work across every element in one call is refused
   (`.indexOf`, `.includes`, `.find`, `.some`, `.every`, `.slice`, `.map`,
   `.join`, `.sort`, `.reverse`, a spread `...a`): write the loop, labelling its
   steps;
 - text is not joined with `+` nor built from a template, and `===` between two
-  collections is refused, as it compares which collection each is: compare
-  element by element;
-- a new collection of a given length is made with its type, its every element
-  the value given, as `Values.ofLength(values.length, Int(0))`, then filled in a
+  arrays is refused, as it compares which array each is: compare element by
+  element;
+- a new array of a given length is made with its type, its every element the
+  value given, as `Values.ofLength(values.length, Int(0))`, then filled in a
   labelled loop, as merge sort's scratch array is.
 
 A rearrangement is plain writes labelled as one step, as a swap through a
@@ -751,7 +760,7 @@ place:
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 5 });
+  const Values = array(Int, { max: 5 });
   const Index = index(Values);
 </script>
 
@@ -963,35 +972,35 @@ Every kind of node has these props, each with a fixed set of options:
   slot, left to right and top to bottom, and so say which edges of boxes side by
   side line up. A `<Pointed>` kind has none of these. Uniform suits a place, as
   a cell of an array; varying a node whose size or shape means something, as a
-  tag hugging a name, or a collection whose box shows its length, not its `max`
-  (a collection's kind starts anchored at `start` along its axis, so the slots
-  in use never move as it grows).
+  tag hugging a name, or an array whose box shows its length, not its `max` (an
+  array's kind starts anchored at `start` along its axis, so the slots in use
+  never move as it grows).
 
-A kind arranging its children, with a `layout`, a collection, or links, also has
+A kind arranging its children, with a `layout`, an array, or links, also has
 `spacing`, slots (each child in its slot, a `gap` between slots) or packed (each
 at its own size along the row or column, a `gap` between them, so a growing
 child moves the next; the node itself keeps room for every child's largest, and
 for its pointers' `expand`, so nothing outside it moves), `gap` (as `padding`),
 `align` (start, center, or end, across) and `justify` (start, center, end,
-between, around, or evenly, along; for a grid, see Grid); where a collection's
-node has more room than its tracks need, `justify` start, center, or end puts
-the room after, around, or before them, and between, around, or evenly spreads
-the tracks over it; a collection's kind starts at center where every value of
-its type keeps one length through the run, as an array being sorted, and at
-start where one grows or shrinks, as a queue, so no element moves as another
-comes or goes. Positions past a collection's ends are drawn in end slots, kept
-only as far as drawn positions go: a collection's kind has `overflow`, included
-(end slots are tracks of its box) or excluded (they hang outside, so centring it
-centres its elements), and a `<Pointed>` kind too, shown (drawn past the ends)
-or hidden (nothing there, keeping no room). A link's kind has `shown`, `stroke`,
-`strokeWidth`, `opacity`, and `strokeStyle`; `route`, `layout` (as its layout's
-arrows run, the start), `straight`, `curved` (each arrow choosing its own side
-and how far to bow round what is in its way), or `wire` (straight runs turning
-only at right angles, round the boxes, side by side apart); `head`, the mark at
-each end a link points to, `none`, `arrow` (a filled triangle), `open` (an
-outlined one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none` where
-every link of the kind is a two-way line and `arrow` otherwise; and `headSize`,
-6, 9 (the start), 12, or 16 pixels. A label's look is its own nodes' kind.
+between, around, or evenly, along; for a grid, see Grid); where an array's node
+has more room than its tracks need, `justify` start, center, or end puts the
+room after, around, or before them, and between, around, or evenly spreads the
+tracks over it; an array's kind starts at center where every value of its type
+keeps one length through the run, as an array being sorted, and at start where
+one grows or shrinks, as a queue, so no element moves as another comes or goes.
+Positions past an array's ends are drawn in end slots, kept only as far as drawn
+positions go: an array's kind has `overflow`, included (end slots are tracks of
+its box) or excluded (they hang outside, so centring it centres its elements),
+and a `<Pointed>` kind too, shown (drawn past the ends) or hidden (nothing
+there, keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`,
+`opacity`, and `strokeStyle`; `route`, `layout` (as its layout's arrows run, the
+start), `straight`, `curved` (each arrow choosing its own side and how far to
+bow round what is in its way), or `wire` (straight runs turning only at right
+angles, round the boxes, side by side apart); `head`, the mark at each end a
+link points to, `none`, `arrow` (a filled triangle), `open` (an outlined one),
+`vee`, `dot`, `diamond`, or `bar`, which starts at `none` where every link of
+the kind is a two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the
+start), 12, or 16 pixels. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -1041,8 +1050,8 @@ algorithm runs, must fit the prop's options: a colour tells apart its colours,
 not: group it in the expression, as `opacity={this > 50}` or
 `textSize={Math.floor(this / 25)}`. A constant look stays the design's, so a
 bound prop reads `this`, or a name read from it: an `{#each}` item, of its
-collection's element type, as `fill={v.seen}` in `{#each this.vertices as v}`,
-its index, of the collection's position type (one before it to its `max`), and a
+array's element type, as `fill={v.seen}` in `{#each this.vertices as v}`, its
+index, of the array's position type (one before it to its `max`), and a
 `{@const}` name of a field. In a view of a label, `this.left`, `this.right`,
 `this.value`, or a labelled call's parameters have the type the algorithm's runs
 gave them; an operand of no type, a plain number as the `2` in `@small[n < 2]`,
@@ -1187,17 +1196,17 @@ variables:
 
 ## The subset
 
-- Allowed: numbers, strings, booleans, and the collections and records their
-  types make; `if`, `for`, `while`, `do ... while`, each test and each part of a
-  `for` header labelled, not `for … of`; `break`, `continue`, and functions at
-  the top level of the algorithm block (see Loops and functions); `&&`, `||`,
-  `??`, and `? :`; writes with `=`; JavaScript's operators on values, `++`,
-  `+=`, `.length`, `push`, `pop`, `shift`, `unshift`, `Type.ofLength(n, x)`, and
+- Allowed: numbers, strings, booleans, and the arrays and records their types
+  make; `if`, `for`, `while`, `do ... while`, each test and each part of a `for`
+  header labelled, not `for … of`; `break`, `continue`, and functions at the top
+  level of the algorithm block (see Loops and functions); `&&`, `||`, `??`, and
+  `? :`; writes with `=`; JavaScript's operators on values, `++`, `+=`,
+  `.length`, `push`, `pop`, `shift`, `unshift`, `Type.ofLength(n, x)`, and
   `Math.abs/ceil/floor/max/min/pow/round/sign/sqrt/trunc` and `Math.PI` inside a
   type (see Computing).
 - Not allowed: `null` and `undefined`, other functions, such as arrow functions
   and functions inside blocks, anything that hides a loop (searches, copies,
-  spreads, whole-collection methods), text joined with `+` or templates, `new`,
+  spreads, whole-array methods), text joined with `+` or templates, `new`,
   classes, `this`, `==`, string methods, other globals, and array or object
   literals except inside a type or `.push`/`.unshift`, or assigned to an element
   or field.
@@ -1309,7 +1318,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 4 });
+  const Values = array(Int, { max: 4 });
   const Position = index(Values);
 
 </script>
@@ -1374,8 +1383,8 @@ A node is one of three things:
   own node does with its value;
 - content: `<Node>any text or markup</Node>` shows its children, for titles,
   explanations, captions, indices, and pointer names, and with `layout` arranges
-  them, as a view of a collection arranges its elements' views; without
-  `layout`, children flow as ordinary text;
+  them, as a view of an array arranges its elements' views; without `layout`,
+  children flow as ordinary text;
 - a shape: `<Node />` has no value or children, and draws only its box, for
   marks such as dots, sized by its kind's padding and least size.
 
@@ -1431,10 +1440,10 @@ cell by `row` and `col`, usually loop indices or positions:
 - Two cells at one coordinate at one step is an error at that step.
 - Every column is as wide as its widest cell and every row as tall as its
   tallest at any step, and there are as many as the coordinates' types allow, an
-  `{#each}` index up to its collection's `max`, so a table filling in, or drawn
-  for a longer input, never moves: a column no cell here reaches keeps room for
-  one, unless no value of its coordinate can place one there. A grid in a view
-  sizes them over every value of its type too, one set every copy shares, so two
+  `{#each}` index up to its array's `max`, so a table filling in, or drawn for a
+  longer input, never moves: a column no cell here reaches keeps room for one,
+  unless no value of its coordinate can place one there. A grid in a view sizes
+  them over every value of its type too, one set every copy shares, so two
   tables drawn by one view line up column for column.
 - The grid's kind has `gap`, between columns and rows; `align`, where each cell
   sits in its column and row; and `justify`, how the columns spread where the
@@ -1468,34 +1477,34 @@ links among the children of the node whose children they join, or in a view
 rendered there, as of an edge, of a node (see Pools and references), or of what
 a labelled expression computed; never in a pointer view, which draws inside the
 element it marks. They take no space; give the node a `layout`, `"free"` for a
-linked structure or `"row"` or `"column"`, unless it holds a collection's
-`{#each}`, which runs as the collection. Only a free layout places its children
-by their links; in a row, column or grid links are drawn over the children,
-which stay where they would be without them: in a row or column each arcs over
-ends side by side or beside ends one above the other, clear of the boxes, and in
-a grid each runs straight from cell to cell, as a heap's edges (see Grid). Each
-link is selectable, as a node is, and its look, how it runs and its heads, is
-its kind's (see Design), never a prop, as `Arrow.Link` for a link in `Arrow`.
+linked structure or `"row"` or `"column"`, unless it holds an array's `{#each}`,
+which runs as the array. Only a free layout places its children by their links;
+in a row, column or grid links are drawn over the children, which stay where
+they would be without them: in a row or column each arcs over ends side by side
+or beside ends one above the other, clear of the boxes, and in a grid each runs
+straight from cell to cell, as a heap's edges (see Grid). Each link is
+selectable, as a node is, and its look, how it runs and its heads, is its kind's
+(see Design), never a prop, as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the
-  node holding its whole `{#each}` item), the index of an `{#each}` over a
-  collection among them, as `k` in `{#each vertices as v, k}`, or arithmetic of
-  one such index and numbers, as `to={2 * k + 1}` for a heap's child, which
-  draws no link at a step where it runs past the collection's ends; labels
-  giving positions, as `@insert.swap.from`. An end naming no element, as a
-  number or text written in the view or arithmetic of two indices, fails the
-  build. In a view of an element, a link with no `from` starts at the node
-  drawing that element, as a node's `next`. An arrow meets what is seen of its
-  end: a node with no stroke or fill of its own is met at the bordered or filled
-  boxes inside it, as a vertex's name cell rather than the column holding it and
-  its caption, unless reaching them would cross that other content: an arrow
-  down from a vertex with captions under it leaves just below what is drawn
-  under it at that step, its captions or a pointer's label, in line with its
-  name cell, not below room kept for a label shown only at other steps. An arrow
-  coming in aslant passes the empty corner of a caption wider than the name cell
-  to meet the cell, and crosses a pointer's fill round the vertex, so it keeps
-  its place from step to step.
+  node holding its whole `{#each}` item), the index of an `{#each}` over an
+  array among them, as `k` in `{#each vertices as v, k}`, or arithmetic of one
+  such index and numbers, as `to={2 * k + 1}` for a heap's child, which draws no
+  link at a step where it runs past the array's ends; labels giving positions,
+  as `@insert.swap.from`. An end naming no element, as a number or text written
+  in the view or arithmetic of two indices, fails the build. In a view of an
+  element, a link with no `from` starts at the node drawing that element, as a
+  node's `next`. An arrow meets what is seen of its end: a node with no stroke
+  or fill of its own is met at the bordered or filled boxes inside it, as a
+  vertex's name cell rather than the column holding it and its caption, unless
+  reaching them would cross that other content: an arrow down from a vertex with
+  captions under it leaves just below what is drawn under it at that step, its
+  captions or a pointer's label, in line with its name cell, not below room kept
+  for a label shown only at other steps. An arrow coming in aslant passes the
+  empty corner of a caption wider than the name cell to meet the cell, and
+  crosses a pointer's fill round the vertex, so it keeps its place from step to
+  step.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
@@ -1526,12 +1535,12 @@ at marked and the queue drawn by number:
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag });
-  const Vertices = collection(Vertex, { max: 5 });
+  const Vertices = array(Vertex, { max: 5 });
   const VertexRef = index(Vertices);
-  const Out = collection(VertexRef, { max: 2 });
+  const Out = array(VertexRef, { max: 2 });
   const Slot = index(Out);
-  const Adjacency = collection(Out, { max: 5 });
-  const Queue = collection(VertexRef, { max: 5 });
+  const Adjacency = array(Out, { max: 5 });
+  const Queue = array(VertexRef, { max: 5 });
 
 </script>
 

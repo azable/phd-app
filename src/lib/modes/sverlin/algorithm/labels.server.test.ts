@@ -5,7 +5,7 @@ import { readMarkers } from './labels.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Flag = type('boolean');
 `);
 const labelsOf = (body: string) =>

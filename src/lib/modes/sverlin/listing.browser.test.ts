@@ -24,7 +24,7 @@ afterAll(() => browser?.close());
 
 const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -193,7 +193,7 @@ it.skipIf(!enabled)(
 
 const search = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
   const Flag = type('boolean');
 </script>

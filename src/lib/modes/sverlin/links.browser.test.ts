@@ -30,7 +30,7 @@ afterAll(() => browser?.close());
 
 const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
 </script>
 <script input>
@@ -554,7 +554,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 4 });
+  const Values = array(Int, { max: 4 });
 </script>
 <script input>const values = Values([3, 1, 2]);</script>
 <script algorithm>@run[let n = Int(1);]</script>

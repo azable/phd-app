@@ -23,7 +23,7 @@ afterAll(() => browser?.close());
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>`;
 
@@ -219,8 +219,8 @@ it.skipIf(!enabled)(
     const counting = `<script domain>
   const Digit = type('integer', { min: 0, max: 9 });
   const Count = type('integer', { min: 0, max: 9 });
-  const Digits = collection(Digit, { max: 8 });
-  const Counts = collection(Count, { max: 8 });
+  const Digits = array(Digit, { max: 8 });
+  const Counts = array(Count, { max: 8 });
   const At = index(Digits);
 </script>
 <script input>

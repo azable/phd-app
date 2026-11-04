@@ -9,17 +9,17 @@
   const VisitedFlag = type('boolean');
 
   const Vertex = record({ name: Name });
-  const Vertices = collection(Vertex, { max: 5 });
+  const Vertices = array(Vertex, { max: 5 });
   const VertexRef = index(Vertices);
   const Choice = union(VertexRef, None);
-  const Distances = collection(Dist, { max: 5 });
-  const Previous = collection(PreviousName, { max: 5 });
-  const Visited = collection(VisitedFlag, { max: 5 });
+  const Distances = array(Dist, { max: 5 });
+  const Previous = array(PreviousName, { max: 5 });
+  const Visited = array(VisitedFlag, { max: 5 });
 
   const Neighbour = record({ to: VertexRef, weight: Weight });
-  const Neighbours = collection(Neighbour, { max: 4 });
+  const Neighbours = array(Neighbour, { max: 4 });
   const Slot = index(Neighbours);
-  const Adjacency = collection(Neighbours, { max: 5 });
+  const Adjacency = array(Neighbours, { max: 5 });
 
 </script>
 

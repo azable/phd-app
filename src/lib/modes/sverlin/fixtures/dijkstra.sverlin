@@ -5,10 +5,10 @@
   const Flag = type('boolean');
 
   const Vertex = record({ name: Name, distance: Int, done: Flag });
-  const Vertices = collection(Vertex, { max: 5 });
+  const Vertices = array(Vertex, { max: 5 });
   const VertexIndex = index(Vertices);
   const Edge = record({ from: VertexIndex, to: VertexIndex, weight: Weight });
-  const Edges = collection(Edge, { max: 7 });
+  const Edges = array(Edge, { max: 7 });
   const EdgeIndex = index(Edges);
 
 </script>

@@ -64,7 +64,7 @@ export function checkSubset(
           reject(
             node,
             node.type === 'ArrayExpression'
-              ? 'Arrays are made by a collection type: define one in the domain block, such as const Queue = collection(Vertex, { max: 8 });, and write Queue([...]). A literal can also be given to an operator, whose types it takes, or written into an element or field, as in cell.items = [...].'
+              ? 'Arrays are made by an array type: define one in the domain block, such as const Queue = array(Vertex, { max: 8 });, and write Queue([...]). A literal can also be given to an operator, whose types it takes, or written into an element or field, as in cell.items = [...].'
               : 'Objects are made by a record type: define one in the domain block, such as const Edge = record({ from: Vertex, to: Vertex });, and write Edge({ ... }). A literal can also be given to an operator, whose types it takes, or written into an element or field, as in edges[0] = { ... }.'
           );
         break;
@@ -264,7 +264,7 @@ export function checkSubset(
     } else {
       reject(
         node,
-        `${name}() is not available; only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on a collection can be called.`
+        `${name}() is not available; only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on an array can be called.`
       );
     }
   };

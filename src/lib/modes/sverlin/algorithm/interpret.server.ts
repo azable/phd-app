@@ -1285,7 +1285,7 @@ class Interpreter {
   #noValue(node: AnyNode, path: string, typeName?: string): never {
     return this.#fail(
       node,
-      `${path} would have no value: it was taken from an empty collection, or past its end. There is no null: ${typeName ? `a ${typeName} is needed here; ` : ''}for "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
+      `${path} would have no value: it was taken from an empty array, or past its end. There is no null: ${typeName ? `a ${typeName} is needed here; ` : ''}for "nothing yet", use a value of a type that says so, such as Index(-1), or Unreached('unreached') in a union.`
     );
   }
 
@@ -1306,7 +1306,7 @@ class Interpreter {
     if (typeof plain.value === 'object')
       this.#fail(
         node,
-        `${plain.path} would be a plain ${Array.isArray(plain.value) ? 'array' : 'object'}, but input and algorithm values must have a domain type. Make it with a collection or record type defined in the domain block, as in Queue([...]) with const Queue = collection(Vertex, { max: 8 });, or Edge({ ... }) with const Edge = record({ from: Vertex, to: Vertex });.`
+        `${plain.path} would be a plain ${Array.isArray(plain.value) ? 'array' : 'object'}, but input and algorithm values must have a domain type. Make it with an array or record type defined in the domain block, as in Queue([...]) with const Queue = array(Vertex, { max: 8 });, or Edge({ ... }) with const Edge = record({ from: Vertex, to: Vertex });.`
       );
     const shown =
       typeof plain.value === 'string' ? JSON.stringify(plain.value) : String(plain.value);
@@ -2124,7 +2124,7 @@ class Interpreter {
       if (key < 0 || key > object.length)
         this.#fail(
           target,
-          `${targetName(target)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}, so write at 0 to ${object.length}, where ${object.length} adds one.`
+          `${targetName(target)} is outside the array: it has ${object.length} element${object.length === 1 ? '' : 's'}, so write at 0 to ${object.length}, where ${object.length} adds one.`
         );
       return {
         type,
@@ -2203,7 +2203,7 @@ class Interpreter {
         if (key >= 0 && key < object.length) return this.#readAt(object[key], object, key);
         return this.#fail(
           node,
-          `${targetName(node)} is outside the collection: it has ${object.length} element${object.length === 1 ? '' : 's'}${object.length ? `, at 0 to ${object.length - 1}` : ''}.`
+          `${targetName(node)} is outside the array: it has ${object.length} element${object.length === 1 ? '' : 's'}${object.length ? `, at 0 to ${object.length - 1}` : ''}.`
         );
       }
       if (typeof key === 'number' && Number.isInteger(key) && key >= 0)
@@ -2255,7 +2255,7 @@ class Interpreter {
     if (callee.type !== 'MemberExpression' || callee.computed || node.optional)
       this.#fail(
         node,
-        'Only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on a collection can be called.'
+        'Only the algorithm’s functions, the domain’s types, Math, and push, pop, shift and unshift on an array can be called.'
       );
     const object = this.#expression(callee.object as Expression, scope);
     const name = (callee.property as { name: string }).name;
@@ -2661,7 +2661,7 @@ class Interpreter {
     if (collection?.max !== undefined && length > collection.max)
       this.#fail(
         node,
-        `${collection.name} holds at most ${collection.max} elements, and ${what} would hold ${length}: give ${collection.name} a larger max, as ${collection.pool ? 'pool' : 'collection'}(${collection.element}, { max: ${length} }).`
+        `${collection.name} holds at most ${collection.max} elements, and ${what} would hold ${length}: give ${collection.name} a larger max, as ${collection.pool ? 'pool' : 'array'}(${collection.element}, { max: ${length} }).`
       );
   }
 

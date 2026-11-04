@@ -11,6 +11,7 @@ export const domainFunctions: ReadonlySet<string> = new Set([
   'type',
   'union',
   'record',
+  'array',
   'collection',
   'pool',
   'index',

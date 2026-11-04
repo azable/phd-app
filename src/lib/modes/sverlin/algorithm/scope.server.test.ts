@@ -4,9 +4,9 @@ import { interpretAlgorithm, interpretDomain } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
-  const Table = collection(Values, { max: 8 });
+  const Table = array(Values, { max: 8 });
   const RowIndex = index(Table);
   const Flag = type('boolean');
 `);

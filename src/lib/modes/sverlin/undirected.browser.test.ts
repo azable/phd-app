@@ -120,9 +120,9 @@ it.skipIf(!enabled)(
   async () => {
     const pairs = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
-  const Partners = collection(Position, { max: 8 });
+  const Partners = array(Position, { max: 8 });
 </script>
 <script input>
   const values = Values([3, 1, 4, 1]);

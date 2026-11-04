@@ -11,7 +11,7 @@ const types = `
   const Weight = type('integer', { unit: 'kg', min: -100, max: 100 });
   const Suit = type(['♠', '♥', '♦', '♣']);
   const Grade = type([1, 2, 3]);
-  const Ints = collection(Int, { max: 8 });
+  const Ints = array(Int, { max: 8 });
   const Person = record({ height: Height });
 `;
 const domain = interpretDomain(types);
@@ -150,7 +150,7 @@ describe('typed values', () => {
     [
       'collections compared',
       'const a = Ints([1]); const b = Ints([1]); const c = a === b;',
-      /compares which collection/
+      /compares which array/
     ]
   ])('rejects %s', (_name, body, message) => {
     expect(() => last(body)).toThrow(message);

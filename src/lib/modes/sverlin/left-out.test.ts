@@ -6,7 +6,7 @@ import { hiddenAt, siteOf } from './left-out';
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>

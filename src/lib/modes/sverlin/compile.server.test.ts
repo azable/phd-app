@@ -210,7 +210,7 @@ describe('single-component Svelte compilation', () => {
   it('reports plain input and algorithm values at their authored line and column', async () => {
     await expect(
       compileSvelteComponent(
-        '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int, { max: 8 });</script>\n<script input>\n  const values = Values([3, "x"]);\n</script>\n<script algorithm>\n  @run[let i = 0;]\n\n</script>'
+        '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 });</script>\n<script input>\n  const values = Values([3, "x"]);\n</script>\n<script algorithm>\n  @run[let i = 0;]\n\n</script>'
       )
     ).rejects.toMatchObject({
       code: 'algorithm_error',
@@ -277,7 +277,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = collection(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values([4, 9]);</script>\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum" of="total, values"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main" of="total, values"><Node><Sum total={total} values={values} /></Node></Layout>',
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values([4, 9]);</script>\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum" of="total, values"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main" of="total, values"><Node><Sum total={total} values={values} /></Node></Layout>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
@@ -288,7 +288,7 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Name">i</Node></Node></View>\n<View of="Position" name="Mark"><Pointed /></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="i, values, j"><Node><Cells values={values} />{i}<Note /><Pair values={values} i={i} j={j} /></Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Name">i</Node></Node></View>\n<View of="Position" name="Mark"><Pointed /></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="i, values, j"><Node><Cells values={values} />{i}<Note /><Pair values={values} i={i} j={j} /></Node></Layout>`
     );
     expect(kindsOf(design.space)).toEqual(
       [
@@ -360,7 +360,7 @@ describe('single-component Svelte compilation', () => {
   it('rejects a <Pointed> and a node of one kind', () => {
     expect(() =>
       prepareSvelteComponent(
-        `<script domain>const Int = type([1, 3]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Pointed">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}<Node value={v} />{/each}</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}</Node></Layout>`
+        `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Pointed">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}<Node value={v} />{/each}</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}</Node></Layout>`
       )
     ).toThrow(/Arrow\.Pointed is the kind of a <\w+> and of another kind of tag/);
   });
@@ -440,7 +440,7 @@ describe('single-component Svelte compilation', () => {
     const source = (link: string) =>
       `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 4 });
+  const Values = array(Int, { max: 4 });
 </script>
 <script input>const values = Values([3, 1, 2]);</script>
 <script algorithm>@run[let n = Int(1);]</script>
@@ -493,7 +493,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('refuses a name the view reads that nothing gives it, where it is written', () => {
     const source = (markup: string) =>
-      `<script domain>const Int = type([1, 3]); const Values = collection(Int, { max: 8 });</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
+      `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 });</script><script input>const values = Values([1, 3]);</script><script algorithm>@run[let i = Int(1);]</script>\n{#snippet V()}${markup}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source('<Node>{valeus.length}</Node>'))).toThrow(
       expect.objectContaining({
         code: 'view_name',
@@ -564,7 +564,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('shows the source’s own listing where the view places a <Listing />, lit per step', async () => {
     const source = [
-      '<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script>',
+      '<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script>',
       '<script input>const values = Values([3, 8]);</script>',
       '<script algorithm>@loop[let last = Index(1); for (@from[let i = Index(0)]; @more[i < values.length]; @step[i++]) { last = i; }]</script>',
       '<script listing="code">for @loop[@from[i = 1] @more[to n] @step[step 1]]</script>',
@@ -635,7 +635,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('draws nested collections with nested {#each} blocks, and no longer takes items', async () => {
     const source = (view: string) =>
-      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = collection(Int, { max: 8 }); const Grid = collection(Row, { max: 8 });</script><script input>const grid = Grid([[1, 2], [3, 4]]);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n${view}`;
+      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Row = array(Int, { max: 8 }); const Grid = array(Row, { max: 8 });</script><script input>const grid = Grid([[1, 2], [3, 4]]);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n${view}`;
     const result = await compileSvelteComponent(
       source(
         '<Layout name="Rows" of="grid"><Node layout="column">{#each grid as row}<Node>{#each row as v}{v}{/each}</Node>{/each}</Node></Layout><Layout name="Main" of="grid"><Node><Rows grid={grid} /></Node></Layout>'
@@ -656,7 +656,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('marks the node showing a view’s own value with its type, for its unit', async () => {
     const source = (view: string, more = '') =>
-      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = collection(Height, { max: 8 });</script><script input>const people = People([150, 170]);</script><script algorithm></script>${view}\n{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
+      `<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Height = type("integer", { min: -100, max: 1000, unit: "cm" }); const People = array(Height, { max: 8 });</script><script input>const people = People([150, 170]);</script><script algorithm></script>${view}\n{#snippet Everyone()}<Node>{#each people as person}{person}{/each}</Node>{/snippet}<Layout name="Main"><Node>{@render Everyone()}${more}</Node></Layout>`;
     const view =
       '<View of="Height" name="HeightView"><Node layout="column"><Node value={this} /><Node>tall</Node></Node></View>';
     const prepared = prepareSvelteComponent(source(view));
@@ -740,7 +740,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('tags links like nodes, and marks the nodes and roots they join', () => {
     const algorithm =
-      '<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>';
+      '<script domain>const Int = type([1, 2]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>';
     const nested = prepareSvelteComponent(
       `${algorithm}\n{#snippet Pair()}<Node layout="free">\n  {#each values as v}{v}{/each}\n  {#if true}<Link from={i} to={j} />{/if}\n</Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
     );
@@ -803,7 +803,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 
   it('identifies the source by its steps, whatever the view and input', async () => {
     const source = (values: string, view: string) =>
-      `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 });</script><script input>const values = Values(${values});</script><script algorithm>@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
+      `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 });</script><script input>const values = Values(${values});</script><script algorithm>@reverse[const t = values[0]; values[0] = values[1]; values[1] = t;]</script>{#snippet V()}${view}{/snippet}<Layout name="Main"><Node>{@render V()}</Node></Layout>`;
     const signature = async (values: string, view: string) =>
       (await compileSvelteComponent(source(values, view))).stepSignature;
     const first = await signature(
@@ -834,7 +834,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 describe('pointers', () => {
   /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
   const view = (parts: string, renders = '') =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n${parts}\n<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n${parts}\n<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
 
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
@@ -950,7 +950,7 @@ describe('typed view components', () => {
 
   it('orders components after those they render', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Row = collection(Int, { max: 4 });</script><script algorithm>@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script><View of="Row" name="Search"><Node layout="row">{#each this as value}{value}{/each}</Node></View>\n<View of="Int" name="Plain"><Node value={this} /></View>\n<View of="Int" name="Boxed"><Node layout="row"><Node value={this} /></Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Row = array(Int, { max: 4 });</script><script algorithm>@start[let values = Row([1, 3]);] @grow[values = Row([1, 3, 1]);]</script><View of="Row" name="Search"><Node layout="row">{#each this as value}{value}{/each}</Node></View>\n<View of="Int" name="Plain"><Node value={this} /></View>\n<View of="Int" name="Boxed"><Node layout="row"><Node value={this} /></Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>`
     );
     expect(prepared.components.map(({ name }) => name)).toEqual(['Plain', 'Boxed', 'Search']);
     // Plain and Boxed show their value, so they take every value; Search only passes its values to
@@ -973,7 +973,7 @@ describe('typed view components', () => {
 
   it('measures the root with every value of what it reads for placement', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = collection(Int, { max: 8 });</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script><View of="Int" name="IntView"><Node value={this} /></View>\n<Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="target, values, i"><Node>{target}<Cells values={values} i={i} /></Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = array(Int, { max: 8 });</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script><View of="Int" name="IntView"><Node value={this} /></View>\n<Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="target, values, i"><Node>{target}<Cells values={values} i={i} /></Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
@@ -983,7 +983,7 @@ describe('typed view components', () => {
 
   it('measures a position with every place its type holds, one before its collection to its max', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Values = collection(Int, { max: 5 }); const Position = index(Values);</script><script input>const values = Values([1, 3, 1]);</script><script algorithm>@start[let i = Position(-1);] @move[i = Position(0);]</script><Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="values, i"><Node><Cells values={values} i={i} /></Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 5 }); const Position = index(Values);</script><script input>const values = Values([1, 3, 1]);</script><script algorithm>@start[let i = Position(-1);] @move[i = Position(0);]</script><Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="values, i"><Node><Cells values={values} i={i} /></Node></Layout>`
     );
     expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3, 4, 5] }
@@ -992,7 +992,7 @@ describe('typed view components', () => {
 
   it('draws every domain type with its widest values when all of them would be too many', () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = collection(Count, { max: 3 }); const Grid = collection(Row, { max: 2 });</script><script algorithm>@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script><View of="Count" name="C"><Node value={this} /></View>\n<View of="Ratio" name="R"><Node value={this} /></View>\n<View of="Mark" name="M"><Node value={this} /></View>\n<View of="Pair" name="P"><Node>{this.a}{this.b}</Node></View>\n<View of="Grid" name="G"><Node layout="column">{#each this as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node></View>\n<Layout name="Main" of="r"><Node>{r}</Node></Layout>`
+      `<script domain>const Count = type("integer", { min: 0, max: 999 }); const Ratio = type("number", { min: 0, max: 1, places: 3 }); const Mark = type(["x", "yes"]); const Slot = union(Count, Mark); const Pair = record({ a: Count, b: Mark }); const Row = array(Count, { max: 3 }); const Grid = array(Row, { max: 2 });</script><script algorithm>@run[let r = Ratio(0.125); let g = Grid([[1, 2], [3]]);]</script><View of="Count" name="C"><Node value={this} /></View>\n<View of="Ratio" name="R"><Node value={this} /></View>\n<View of="Mark" name="M"><Node value={this} /></View>\n<View of="Pair" name="P"><Node>{this.a}{this.b}</Node></View>\n<View of="Grid" name="G"><Node layout="column">{#each this as row}<Node>{#each row as count}{count}{/each}</Node>{/each}</Node></View>\n<Layout name="Main" of="r"><Node>{r}</Node></Layout>`
     );
     expect(Object.fromEntries(prepared.components.map(({ name, cases }) => [name, cases]))).toEqual(
       {
@@ -1159,7 +1159,7 @@ describe('typed view components', () => {
 
 describe('scope', () => {
   const source = (markup: string) =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 }); const Position = index(Values); const Flag = type("boolean");</script><script input>const values = Values([5, 2]);</script><script algorithm>for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n${markup}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Position = index(Values); const Flag = type("boolean");</script><script input>const values = Values([5, 2]);</script><script algorithm>for (@from[let i = Position(1)]; @more[i < values.length]; @step[i++]) {\n  @key[const key = values[i];]\n}\n@done[const done = Flag(true);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n${markup}`;
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
@@ -1215,7 +1215,7 @@ describe('scope', () => {
 
 describe('views', () => {
   it('are only drawn with {@render}, never called to make a value', () => {
-    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 }); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm></script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Index" name="IndexLabel"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v, k}{v}{Index(k)}{/each}</Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>`;
+    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm></script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Index" name="IndexLabel"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v, k}{v}{Index(k)}{/each}</Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>`;
     expect(() => prepareSvelteComponent(source)).toThrow(
       'Index(…) is a view, which only draws: write {value}'
     );
@@ -1251,7 +1251,7 @@ describe('views of what a step computed', () => {
   const bubble = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 
   // walking the collection
@@ -1377,7 +1377,7 @@ describe('views of what a step computed', () => {
 describe('pauses at labels', () => {
   const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -1635,7 +1635,7 @@ describe('pauses accumulate', () => {
     // The pauses-at-labels source, whose listing marks every label.
     `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -1833,7 +1833,7 @@ describe('pauses accumulate', () => {
 
 describe('places', () => {
   const source = (view: string, algorithm = '@run[let i = Index(1); let key = Int(2);]') =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = collection(Int, { max: 8 }); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm>${algorithm}</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntTally"><Node>{'•'.repeat(this)}</Node></View>\n{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
+    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Index = index(Values);</script><script input>const values = Values([5, 2]);</script><script algorithm>${algorithm}</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntTally"><Node>{'•'.repeat(this)}</Node></View>\n{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}${view}`;
 
   it('refuses a view rendered by its own name, naming its type', () => {
     expect(() =>
@@ -1874,7 +1874,7 @@ describe('places', () => {
 
   it('draws a union value by its member’s view, refusing a view of the union', () => {
     const union = (views: string) =>
-      `<script domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = collection(Dist, { max: 8 });</script><script input>const dists = Dists([0, "none"]);</script><script algorithm>@run[const d = dists[1];]</script>${views}\n<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
+      `<script domain>const Steps = type("integer", { min: 0, max: 9 }); const None = type(["none"]); const Dist = union(Steps, None); const Dists = array(Dist, { max: 8 });</script><script input>const dists = Dists([0, "none"]);</script><script algorithm>@run[const d = dists[1];]</script>${views}\n<Layout name="Main"><Node>{#each dists as d}{d}{/each}</Node></Layout>`;
     const prepared = prepareSvelteComponent(
       union(
         '<View of="Steps" name="StepsCell"><Node value={this} /></View>\n<View of="None" name="NoneMark"><Node>–</Node></View>'
@@ -1960,7 +1960,7 @@ describe('pools and references', () => {
 describe('the view reaching the code only through labels', () => {
   const swaps = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -2056,7 +2056,7 @@ describe('the view reaching the code only through labels', () => {
 describe('<When of="@label">', () => {
   const caption = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -2174,7 +2174,7 @@ describe('<When of="@label">', () => {
 describe('<OneOf> branches', () => {
   const chain = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Flag = type('boolean');
 </script>
@@ -2294,11 +2294,11 @@ describe('at(p), the element a position points at', () => {
   const Name = type(['A', 'B', 'C']);
   const Seen = type('boolean');
   const Vertex = record({ name: Name, seen: Seen });
-  const Vertices = collection(Vertex, { max: 8 });
+  const Vertices = array(Vertex, { max: 8 });
   const VertexRef = index(Vertices);
-  const Queue = collection(VertexRef, { max: 8 });
+  const Queue = array(VertexRef, { max: 8 });
   const Edge = record({ from: VertexRef, to: VertexRef });
-  const Edges = collection(Edge, { max: 8 });
+  const Edges = array(Edge, { max: 8 });
   const Int = type('integer', { min: 0, max: 9 });${more}
 </script>
 <script input>
@@ -2499,7 +2499,7 @@ describe('props bound to a view’s value', () => {
 
   it('binds a position, its values one before its collection to its max', () => {
     const { design } = prepareSvelteComponent(
-      `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 2 }); const Position = index(Values);</script><script input>const values = Values([4, 7]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Position" name="Faded"><Node opacity={this}>{this}</Node></View>\n<View of="Position" name="PositionText"><Node value={this} /></View>\n<Layout name="Main" of="values, i"><Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node></Layout>`
+      `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 2 }); const Position = index(Values);</script><script input>const values = Values([4, 7]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Position" name="Faded"><Node opacity={this}>{this}</Node></View>\n<View of="Position" name="PositionText"><Node value={this} /></View>\n<Layout name="Main" of="values, i"><Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node></Layout>`
     );
     // -1 to 2, four values, one to each of opacity's four options.
     expect(design.space['Faded.opacity@from']).toEqual([0.25]);
@@ -2580,7 +2580,7 @@ describe('props bound to a view’s value', () => {
 
   it('types an {#each} item by its collection’s element and its index by the position type', () => {
     const { design } = prepareSvelteComponent(
-      `<script domain>const Flag = type('boolean'); const Vertex = record({ seen: Flag }); const Vertices = collection(Vertex, { max: 2 }); const Position = index(Vertices); const Graph = record({ vertices: Vertices });</script><script input>const graph = Graph({ vertices: [{ seen: false }, { seen: true }] });</script><script algorithm>@run[let done = Flag(false);]</script><View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Graph" name="Drawing"><Node layout="row">{#each this.vertices as v, j}<Node kind="Dot" fill={v.seen} opacity={j}>x</Node>{/each}</Node></View>\n<Layout name="Main" of="graph, done"><Node>{graph}{done}</Node></Layout>`
+      `<script domain>const Flag = type('boolean'); const Vertex = record({ seen: Flag }); const Vertices = array(Vertex, { max: 2 }); const Position = index(Vertices); const Graph = record({ vertices: Vertices });</script><script input>const graph = Graph({ vertices: [{ seen: false }, { seen: true }] });</script><script algorithm>@run[let done = Flag(false);]</script><View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Graph" name="Drawing"><Node layout="row">{#each this.vertices as v, j}<Node kind="Dot" fill={v.seen} opacity={j}>x</Node>{/each}</Node></View>\n<Layout name="Main" of="graph, done"><Node>{graph}{done}</Node></Layout>`
     );
     expect(design.starter).toMatchObject({
       'Drawing.Dot.fill@false': 'neutral-200',
@@ -2593,7 +2593,7 @@ describe('props bound to a view’s value', () => {
   describe('a label’s operands', () => {
     const labelled = (bound: string, than = 'Level(2)') =>
       prepareSvelteComponent(
-        `<script domain>const Level = type('integer', { min: 0, max: 3 }); const Levels = collection(Level, { max: 3 }); const Position = index(Levels);</script><script input>const levels = Levels([3, 1, 2]);</script><script algorithm>@start[let i = Position(0);]\nwhile (@more[i < levels.length]) @step{ if (@test[levels[i] > ${than}]) @big[i++;] else @small[i++;] }</script><View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<View of="@step.test" name="Ask"><Node ${bound}>is {this.left} more than {this.right}?</Node></View>\n<Layout name="Main"><Node><Node>{#each levels as v}{v}{/each}</Node>{@step.test}{i}</Node></Layout>`
+        `<script domain>const Level = type('integer', { min: 0, max: 3 }); const Levels = array(Level, { max: 3 }); const Position = index(Levels);</script><script input>const levels = Levels([3, 1, 2]);</script><script algorithm>@start[let i = Position(0);]\nwhile (@more[i < levels.length]) @step{ if (@test[levels[i] > ${than}]) @big[i++;] else @small[i++;] }</script><View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<View of="@step.test" name="Ask"><Node ${bound}>is {this.left} more than {this.right}?</Node></View>\n<Layout name="Main"><Node><Node>{#each levels as v}{v}{/each}</Node>{@step.test}{i}</Node></Layout>`
       );
 
     it('binds an operand by the type its runs gave it', () => {
@@ -2644,7 +2644,7 @@ describe('slots and boxes', () => {
   it('starts a collection where its first item is, and its items centred only where its length never changes', () => {
     const collections = (algorithm: string) =>
       prepareSvelteComponent(
-        `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 6 }); const Queue = collection(Int, { max: 6 });</script><script input>const values = Values([1, 2, 3]); const queue = Queue([1]);</script><script algorithm>${algorithm}</script><View of="Int" name="Cell"><Node value={this} /></View>
+        `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 6 }); const Queue = array(Int, { max: 6 });</script><script input>const values = Values([1, 2, 3]); const queue = Queue([1]);</script><script algorithm>${algorithm}</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Line"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Main"><Node layout="column"><Node layout="row" kind="Fixed">{#each values as v}{v}{/each}</Node><Node layout="column" kind="Growing">{#each queue as v}{v}{/each}</Node>{values}</Node></Layout>`
       ).design.starter;

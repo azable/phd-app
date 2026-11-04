@@ -27,7 +27,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -93,7 +93,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -156,7 +156,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -217,7 +217,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
 </script>
 <script input>
   const values = Values([5, 1, 4]);
@@ -279,7 +279,7 @@ it.skipIf(!enabled)(
     // A cell that lays out its value from its start: a stroke appearing inside it would push it.
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 999 });
-  const Values = collection(Int, { max: 5 });
+  const Values = array(Int, { max: 5 });
   const Position = index(Values);
 </script>
 <script input>
@@ -348,7 +348,7 @@ type Drawn = { left: number; right: number; text: string; shadow: string };
 async function scanned(chosen: Record<string, string | number>) {
   const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 6 });
+  const Values = array(Int, { max: 6 });
   const Index = index(Values);
 </script>
 <script input>
@@ -454,7 +454,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 5 });
+  const Values = array(Int, { max: 5 });
   const Index = index(Values);
 </script>
 
@@ -556,7 +556,7 @@ async function transformed(
 }> {
   const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 6 });
+  const Values = array(Int, { max: 6 });
   const Index = index(Values);
 </script>
 <script input>

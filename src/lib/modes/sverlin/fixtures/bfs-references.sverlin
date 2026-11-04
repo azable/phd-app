@@ -4,9 +4,9 @@
   const Vertex = record({ name: Name, seen: Flag, out: Out });
   const Vertices = pool(Vertex, { max: 5 });
   const VertexRef = ref(Vertex);
-  const Out = collection(VertexRef, { max: 2 });
+  const Out = array(VertexRef, { max: 2 });
   const Slot = index(Out);
-  const Queue = collection(VertexRef, { max: 2 });
+  const Queue = array(VertexRef, { max: 2 });
 
 </script>
 

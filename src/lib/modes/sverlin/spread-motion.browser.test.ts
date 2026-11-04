@@ -24,7 +24,7 @@ afterAll(() => browser?.close());
 
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 6 });
+  const Values = array(Int, { max: 6 });
   const Index = index(Values);
 </script>
 

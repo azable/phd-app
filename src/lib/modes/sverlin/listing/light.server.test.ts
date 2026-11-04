@@ -12,7 +12,7 @@ import { mappedListing } from './mapped.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Index = index(Values);
   const Flag = type('boolean');
 `);

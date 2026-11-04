@@ -5,10 +5,10 @@ import { interpretDomain, traceAlgorithm, type Pacing } from './interpret.server
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Count = type('integer', { min: 0, max: 99 });
-  const Counts = collection(Count, { max: 8 });
-  const Table = collection(Counts, { max: 8 });
+  const Counts = array(Count, { max: 8 });
+  const Table = array(Counts, { max: 8 });
   const Flag = type('boolean');
 `);
 

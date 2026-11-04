@@ -11,7 +11,7 @@ import {
 
 // Input and algorithm values all have domain types; these tests share a small domain.
 const atoms = interpretDomain(
-  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000, places: 2 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int, { max: 10000 }); const Reals = collection(Real, { max: 8 }); const Grid = collection(Ints, { max: 8 }); const Point = record({ x: Int, y: Int });" +
+  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000, places: 2 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = array(Int, { max: 10000 }); const Reals = array(Real, { max: 8 }); const Grid = array(Ints, { max: 8 }); const Point = record({ x: Int, y: Int });" +
     // The algorithm computes nothing itself: these are its operators.
     ``
 );
@@ -112,7 +112,7 @@ describe('algorithm interpretation', () => {
       'const o = Point({ x: 1, y: 2 }); const n = Int(o - 1);',
       /found an object/
     ],
-    ['plain arrays', 'const a = [Int(1)];', /Arrays are made by a collection type/],
+    ['plain arrays', 'const a = [Int(1)];', /Arrays are made by an array type/],
     ['plain objects', 'const o = { x: Int(1) };', /Objects are made by a record type/]
   ])('rejects %s', (_name, body, message) => {
     expect(() => interpretAlgorithm(body)).toThrow(message);

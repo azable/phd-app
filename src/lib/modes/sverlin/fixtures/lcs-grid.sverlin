@@ -1,9 +1,9 @@
 <script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Char = type(['A', 'C', 'G', 'T']);
-  const Word = collection(Char, { max: 4 });
-  const Row = collection(Int, { max: 5 });
-  const Table = collection(Row, { max: 5 });
+  const Word = array(Char, { max: 4 });
+  const Row = array(Int, { max: 5 });
+  const Table = array(Row, { max: 5 });
   const Count = type('integer', { min: 0, max: 5 });
 </script>
 

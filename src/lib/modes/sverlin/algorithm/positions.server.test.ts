@@ -10,14 +10,14 @@ import {
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int, { max: 8 });
+  const Values = array(Int, { max: 8 });
   const Position = index(Values);
   const Name = type(['A', 'B', 'C']);
-  const Names = collection(Name, { max: 8 });
+  const Names = array(Name, { max: 8 });
   const VertexRef = index(Names);
   const Weight = type('integer', { min: 0, max: 9 });
   const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
-  const Edges = collection(Edge, { max: 8 });
+  const Edges = array(Edge, { max: 8 });
   const Flag = type('boolean');
 `);
 const run = (body: string, pacing?: Pacing) =>
@@ -88,7 +88,7 @@ describe('positions', () => {
   it('come from collections that never hold more than their type’s max', () => {
     const nine = '[1, 2, 3, 4, 5, 6, 7, 8, 9]';
     expect(() => run(`const values = Values(${nine});`)).toThrow(
-      'Values holds at most 8 elements, and Values([…]) would hold 9: give Values a larger max, as collection(Int, { max: 9 }).'
+      'Values holds at most 8 elements, and Values([…]) would hold 9: give Values a larger max, as array(Int, { max: 9 }).'
     );
     expect(() => run('const values = Values.ofLength(9, Int(0));')).toThrow(
       /Values\.ofLength\(9, …\) would hold 9/
@@ -128,9 +128,9 @@ describe('positions', () => {
   describe('keep their collection wherever they are stored', () => {
     const stored = interpretDomain(`
       const Int = type('integer', { min: 0, max: 9 });
-      const Values = collection(Int, { max: 8 });
+      const Values = array(Int, { max: 8 });
       const Position = index(Values);
-      const Positions = collection(Position, { max: 8 });
+      const Positions = array(Position, { max: 8 });
       const Take = record({ from: Position });
     `);
 
@@ -197,12 +197,12 @@ describe('positions', () => {
     [
       'reading outside the collection',
       'const values = Values([3, 8]); let i = Position(0); i = 2; const x = values[i];',
-      'values[i] is outside the collection: it has 2 elements, at 0 to 1.'
+      'values[i] is outside the array: it has 2 elements, at 0 to 1.'
     ],
     [
       'writing past its length',
       'const values = Values([3, 8]); let i = Position(0); i = 3; values[i] = 1;',
-      'values[i] is outside the collection: it has 2 elements, so write at 0 to 2, where 2 adds one.'
+      'values[i] is outside the array: it has 2 elements, so write at 0 to 2, where 2 adds one.'
     ],
     [
       'more than one collection to point into',
@@ -229,11 +229,11 @@ describe('positions', () => {
       'const Int = type([1]); const P = index(Int);',
       /Int is not one/
     ],
-    ['no type', 'const P = index();', /index\(\) takes one collection type/],
+    ['no type', 'const P = index();', /index\(\) takes one array type/],
     [
       'options',
-      'const One = type([1]); const Ints = collection(One, { max: 8 }); const P = index(Ints, { reach: 2 });',
-      /index\(\) takes one collection type/
+      'const One = type([1]); const Ints = array(One, { max: 8 }); const P = index(Ints, { reach: 2 });',
+      /index\(\) takes one array type/
     ]
   ])('are defined in the domain, rejecting %s', (_name, body, message) => {
     expect(() => interpretDomain(body)).toThrow(message);

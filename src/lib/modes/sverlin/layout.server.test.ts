@@ -162,7 +162,7 @@ describe('laying out on the server', () => {
 
   it('keeps room round each box for the paint it reaches past it with, in every state', async () => {
     const size = async (shadow: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
 while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
@@ -192,7 +192,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps room round each box for how far a pointer moves or scales it, in every state', async () => {
     const sizes = async (chosen: Record<string, string | number>) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
 while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
@@ -227,7 +227,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
     const box = async (cell: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = collection(Int, { max: 2 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = array(Int, { max: 2 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>
 
 <Storyboard>
   <Scene name="main"><Main values={values} /></Scene>
@@ -251,7 +251,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a grid’s columns for every coordinate its type allows, not only those the input reaches', async () => {
     const tracks = async (col: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 5 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node layout="grid">{#each values as v, i}<Node row={0} col={${col}}>{v}</Node>{/each}</Node></Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 5 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node layout="grid">{#each values as v, i}<Node row={0} col={${col}}>{v}</Node>{/each}</Node></Node></Layout>
 
 <Storyboard>
   <Scene name="main"><Main values={values} /></Scene>
@@ -276,7 +276,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a collection’s room at its type’s max, whatever the input’s length', async () => {
     const widest = async (max: number, input: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: ${max} });</script><script input>const values = Values(${input});</script><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: ${max} });</script><script input>const values = Values(${input});</script><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>
 
 <Storyboard>
   <Scene name="main"><Main values={values} /></Scene>
@@ -314,8 +314,8 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
   it('gives a grid in a view one set of tracks, its widest over every value, that every copy shares', async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 999 });
-  const Row = collection(Int, { max: 2 });
-  const Table = collection(Row, { max: 2 });
+  const Row = array(Int, { max: 2 });
+  const Table = array(Row, { max: 2 });
 </script>
 <script input>
   const a = Table([[1, 2], [3, 4]]);

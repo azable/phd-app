@@ -2,13 +2,13 @@
   const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
   const Seen = type('boolean');
   const Vertex = record({ name: Name, seen: Seen });
-  const Vertices = collection(Vertex, { max: 6 });
+  const Vertices = array(Vertex, { max: 6 });
   const VertexRef = index(Vertices);
-  const Neighbours = collection(VertexRef, { max: 2 });
+  const Neighbours = array(VertexRef, { max: 2 });
   const Slot = index(Neighbours);
-  const Adjacency = collection(Neighbours, { max: 6 });
-  const Queue = collection(VertexRef, { max: 3 });
-  const VisitOrder = collection(VertexRef, { max: 6 });
+  const Adjacency = array(Neighbours, { max: 6 });
+  const Queue = array(VertexRef, { max: 3 });
+  const VisitOrder = array(VertexRef, { max: 6 });
 
 </script>
 
