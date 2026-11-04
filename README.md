@@ -428,7 +428,10 @@ devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it
 to a local Chrome or Chromium executable.
 `pnpm run export:data -- --scope projects --project PROJECT_ID` selects one
 project. Exports include complete Timelines, versioned study definitions, and
-interaction telemetry where available; see
+interaction telemetry where available, and each `project.json` lists its
+presentations by the names the page shows them by, as `3fa2c1/Misty-Falcon-09`
+(the source's hash, then its values), which the copy button beside a name, or
+Alt+Shift+C for the presentation shown, copies to paste elsewhere; see
 [`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Each time a
 Sverlin presentation first shows a step, or is still not showing one after 10
 seconds, the browser reports how it loaded: the time per layout phase, where its

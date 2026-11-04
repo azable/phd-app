@@ -1,11 +1,13 @@
 <script lang="ts">
   /**
    * A presentation named in an assistant's message: choosing it views it, Shift-choosing compares
-   * it; on hover or focus, its code button shows its source and + adds it to the feedback.
+   * it; on hover or focus, its copy button copies its name, its code button shows its source and +
+   * adds it to the feedback.
    */
   import CodeIcon from '@lucide/svelte/icons/code';
 
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
+  import CopyName from '$lib/client/visualization/CopyName.svelte';
   import type { CandidateId } from '$lib/client/visualization/presentation-history';
 
   import MessageContent from './MessageContent.svelte';
@@ -64,12 +66,13 @@
   >
     <CandidateIdPill {...candidate} title={tooltip} />
   </button>
-  {#if onSource || onAdd}
+  {#if candidate.values}
     <!-- Above the pill, out of the text's way; its padding bridges the gap so hover reaches it. -->
     <span
       class="pointer-events-none absolute bottom-full left-1/2 z-20 -translate-x-1/2 pb-1 opacity-0 transition-opacity group-focus-within/pill:pointer-events-auto group-focus-within/pill:opacity-100 group-hover/pill:pointer-events-auto group-hover/pill:opacity-100"
     >
       <span class="flex items-center gap-0.5 rounded-md border bg-popover p-0.5 shadow-md">
+        <CopyName name={`${candidate.source}/${candidate.values}`} />
         {#if onSource}
           <button
             type="button"

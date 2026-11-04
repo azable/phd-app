@@ -20,6 +20,8 @@
   import { Spinner } from '$lib/client/components/ui/spinner';
 
   import CandidateIdPill from '$lib/client/visualization/CandidateIdPill.svelte';
+  import { copyText, isCopyNameShortcut } from '$lib/client/visualization/copy-text';
+  import CopyName from '$lib/client/visualization/CopyName.svelte';
   import { sourceId, type CandidateId } from '$lib/client/visualization/presentation-history';
   import { locateElement } from '$lib/modes/sverlin/element-ref';
 
@@ -287,7 +289,21 @@
   function updateDraft(source: string) {
     draft = source;
   }
+
+  // The names of the presentations shown, to copy and paste into a chat: Alt+Shift+C copies them.
+  const shownNames = $derived(
+    drawnSources.flatMap(({ candidate }) =>
+      candidate ? [`${candidate.source}/${candidate.values}`] : []
+    )
+  );
+  function copyShownNames(event: KeyboardEvent) {
+    if (!isCopyNameShortcut(event) || !shownNames.length) return;
+    event.preventDefault();
+    void copyText(shownNames.join(', '));
+  }
 </script>
+
+<svelte:window onkeydown={copyShownNames} />
 
 <section
   class={['flex min-h-0 flex-col border-t p-2', chosen || failed ? 'flex-1' : 'max-h-[38vh]']}
@@ -353,7 +369,9 @@
           <CandidateIdPill {...sourceId(chosen.sourceHash)} />
         {:else}
           {#each drawnSources as { candidate, label } (label ?? 'shown')}
-            {#if candidate}<CandidateIdPill {...candidate} {label} />{/if}
+            {#if candidate}<CandidateIdPill {...candidate} {label} /><CopyName
+                name={`${candidate.source}/${candidate.values}`}
+              />{/if}
           {:else}
             <CandidateIdPill {...sourceId(artifact.content.sha256)} />
           {/each}

@@ -5,6 +5,7 @@
  * shows or changes, `<!-- parent: name -->`, naming the earlier example it changes (without a
  * parent it starts a tree of its own), `<!-- variant: {"Here.shown": false} -->`, values to build
  * it with, and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
+ * Each presentation it shows is named, by the name the page shows it by, in .demo/names.json.
  * Only the dev server serves it.
  */
 
@@ -21,6 +22,7 @@ import { projectOperationExecutor } from '$lib/server/projects/operations';
 import { projectRepository } from '$lib/server/projects/repository';
 import { createProjectSkeleton, draftEvent } from '$lib/server/projects/service';
 import { withoutHeader } from '$lib/server/dev-demo-header';
+import { withExampleNames } from '$lib/server/dev-demo-names';
 import type { DesignValues } from '$lib/shared/presentations';
 import { projectCommandSchema, type ProjectDocument } from '$lib/shared/projects/model';
 
@@ -30,6 +32,8 @@ const flushMarker = path.join(folder, 'flush');
 const stateFile = path.join(folder, 'state.json');
 // The source of each example saved to the demo project, by name, so a later one can name its parent.
 const sourcesFile = path.join(folder, 'sources.json');
+// Each presentation the demo showed, by the name the page shows it by, with its example's name.
+const namesFile = path.join(folder, 'names.json');
 // A note posted after an example: markdown on one line, longer than a summary may be.
 const noteSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(2000));
 
@@ -52,6 +56,7 @@ async function sync(ownerUserId: string): Promise<string> {
   if (projectId && (await exists(flushMarker))) {
     await database().delete(schema.projects).where(eq(schema.projects.id, projectId));
     await rm(sourcesFile, { force: true });
+    await rm(namesFile, { force: true });
     projectId = undefined;
   }
   await rm(flushMarker, { force: true });
@@ -108,6 +113,12 @@ async function saveWaiting(projectId: string): Promise<void> {
       command: command.output
     });
     await finished(projectId, operationId, document.events.length);
+    await recordNames(
+      projectId,
+      operationId,
+      document.events.length,
+      name.replace(/\.svelte$/u, '')
+    );
     if (note !== undefined) await postNote(projectId, name, note);
   }
 }
@@ -128,6 +139,26 @@ async function postNote(projectId: string, name: string, text: string): Promise<
       payload: { severity: 'info', message: note.output }
     })
   ]);
+}
+
+/** Record the names of the presentations an example's save showed, by the example's name. */
+async function recordNames(
+  projectId: string,
+  operationId: string,
+  after: number,
+  example: string
+): Promise<void> {
+  let names: Record<string, string> = {};
+  try {
+    names = JSON.parse(await readFile(namesFile, 'utf8')) as Record<string, string>;
+  } catch {
+    // No presentation named yet.
+  }
+  const events = await projectRepository.eventsAfter(projectId, after);
+  await writeFile(
+    namesFile,
+    JSON.stringify(withExampleNames(names, events, operationId, example), null, 2)
+  );
 }
 
 async function savedSources(): Promise<Record<string, string>> {

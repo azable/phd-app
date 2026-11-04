@@ -20,6 +20,7 @@ import {
   activeProjectOperation,
   pendingAssistantTurnRequests
 } from '$lib/shared/projects/operations';
+import { namedPresentations } from '$lib/shared/presentation-names';
 import type { VisualizationMode } from '$lib/shared/presentations';
 import type { StudyDefinition } from '$lib/shared/study/definition';
 import { projectStudyFlow, type StudyFlow } from '$lib/shared/study/projection';
@@ -608,6 +609,8 @@ export async function writeDataExport(
       mode: project.mode,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
+      // Each presentation by the name the page shows it by, as 3fa2c1/Misty-Falcon-09, to find it.
+      presentations: namedPresentations(project.document.events),
       document: project.document
     });
   }
