@@ -810,8 +810,8 @@ The design space is every variable of a component's look, found in its markup:
   `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard.fill@true` or
-  `LevelCell.textSize@from`, or a length's unit and anchor, as `Bar.height@unit`
-  and `Bar.height@anchor` (see Props bound to a view's value).
+  `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
+  bound to a view's value).
 
 A view's or snippet's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
@@ -862,26 +862,40 @@ Every kind of node has these props, each with a fixed set of options:
 - `decoration`: none, underline, or strike, a line under or through its own
   text, not its child nodes'; `case`: normal, uppercase, or small-caps (lower
   case as small capitals) for its own text, a value's unit keeping its own.
+- `width` and `height`: uniform or varying. Every box keeps a slot, the room it
+  needs at its largest over every step and value, which never changes; uniform
+  draws the box as wide or tall as its slot, the same whatever the value, and
+  varying at the size of what it holds at each step, the slot keeping the rest,
+  so a varying box changes size in its slot and nothing around it moves.
+  `xAnchor` and `yAnchor`, start, center, or end, place a varying box in its
+  slot, left to right and top to bottom, and so say which edges of boxes side by
+  side line up. A `<Pointed>` kind has none of these. Uniform suits a place, as
+  a cell of an array; varying a node whose size or shape means something, as a
+  tag hugging a name, or a collection whose box shows its length, not its `max`
+  (anchored at `start`, so the slots in use never move).
 
 A kind arranging its children, with a `layout`, a collection, or links, also has
-`gap` (as `padding`), `align` (start, center, or end, across) and `justify`
-(start, center, end, between, around, or evenly, along; for a grid, see Grid);
-where a collection's node has more room than its tracks need, `justify` start,
-center, or end puts the room after, around, or before them, and between, around,
-or evenly spreads the tracks over it. Positions past a collection's ends are
-drawn in end slots, kept only as far as drawn positions go: a collection's kind
-has `overflow`, included (end slots are tracks of its box) or excluded (they
-hang outside, so centring it centres its elements), and a `<Pointed>` kind too,
-shown (drawn past the ends) or hidden (nothing there, keeping no room). A link's
-kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and `strokeStyle`;
-`route`, `layout` (as its layout's arrows run, the start), `straight`, `curved`
-(each arrow choosing its own side and how far to bow round what is in its way),
-or `wire` (straight runs turning only at right angles, round the boxes, side by
-side apart); `head`, the mark at each end a link points to, `none`, `arrow` (a
-filled triangle), `open` (an outlined one), `vee`, `dot`, `diamond`, or `bar`,
-which starts at `none` where every link of the kind is a two-way line and
-`arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16 pixels. A label's
-look is its own nodes' kind.
+`spacing`, slots (each child in its slot, a `gap` between slots) or packed (each
+at its own size along the row or column, a `gap` between them, so a growing
+child moves the next; the node itself keeps room for every child's largest, so
+nothing outside it moves), `gap` (as `padding`), `align` (start, center, or end,
+across) and `justify` (start, center, end, between, around, or evenly, along;
+for a grid, see Grid); where a collection's node has more room than its tracks
+need, `justify` start, center, or end puts the room after, around, or before
+them, and between, around, or evenly spreads the tracks over it. Positions past
+a collection's ends are drawn in end slots, kept only as far as drawn positions
+go: a collection's kind has `overflow`, included (end slots are tracks of its
+box) or excluded (they hang outside, so centring it centres its elements), and a
+`<Pointed>` kind too, shown (drawn past the ends) or hidden (nothing there,
+keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`,
+and `strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
+`straight`, `curved` (each arrow choosing its own side and how far to bow round
+what is in its way), or `wire` (straight runs turning only at right angles,
+round the boxes, side by side apart); `head`, the mark at each end a link points
+to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
+`diamond`, or `bar`, which starts at `none` where every link of the kind is a
+two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16
+pixels. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -964,11 +978,15 @@ has no values to bind: give it a type where the algorithm computes it, as
   exactly its length, so 0 draws only its border; one holding a label is the
   longer of the two. It sits in a room as long as its type's largest value,
   which keeps that room wherever it is drawn, a pointer on it or not, so nothing
-  around it moves; the node itself is only its length. Where in the room is a
-  variable of the kind along each bound length, as `Bar.height@anchor`: `start`
-  (the top, or the left), `center`, or `end`, starting at `end` for `height`, so
-  the nodes of a kind stand on one baseline, and `start` for `width`. Anywhere
-  else a box sizes to its contents, at least its kind's `minSize`.
+  around it moves; the node itself is only its length. A bound axis has no
+  `width` or `height` variable, its size being the value; the kind's anchor
+  along it places the node in its room, starting at `end` for `height`
+  (`Bar.yAnchor`), so the nodes of a kind stand on one baseline, and `start` for
+  `width` (`Bar.xAnchor`). A kind sizes an axis by its value in all its nodes or
+  none: a kind passes to the nodes inside it, so give the node sized by its
+  value a kind of its own, as
+  `<Node layout="column"><Node kind="Length" height={this} />{this.name}</Node>`.
+  Anywhere else a box sizes to its contents, at least its kind's `minSize`.
 
 ```svelte
 <View of="Vertex" name="VertexCard">

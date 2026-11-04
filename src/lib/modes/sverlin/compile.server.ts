@@ -1965,42 +1965,48 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           // After the marks' places, which the regions' fall back to.
           ...Object.entries(listingRegionFallbacks(regionLabels, labelMarks))
         ]),
-        space: {
-          ...designSpace(
-            kinds,
-            chosen,
-            listing,
-            ownListings,
-            pointerChosen,
-            {
-              kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-              choices: Object.values(placeChoices)
-            },
-            layoutDesign
-          ),
-          ...listingRegionSpace(regionLabels),
-          ...placesSpace,
-          ...pauseSpace(labelNames, leaves),
-          ...boundDesign(bindings).space
-        },
-        starter: {
-          ...starterVariant(
-            kinds,
-            chosen,
-            listing,
-            ownListings,
-            pointerChosen,
-            {
-              kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
-              choices: Object.values(placeChoices)
-            },
-            layoutDesign
-          ),
-          ...regionStarter,
-          ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
-          ...starterPauses(labelNames, runs),
-          ...boundDesign(bindings).starter
-        }
+        space: withoutBoundSizes(
+          {
+            ...designSpace(
+              kinds,
+              chosen,
+              listing,
+              ownListings,
+              pointerChosen,
+              {
+                kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+                choices: Object.values(placeChoices)
+              },
+              layoutDesign
+            ),
+            ...listingRegionSpace(regionLabels),
+            ...placesSpace,
+            ...pauseSpace(labelNames, leaves),
+            ...boundDesign(bindings).space
+          },
+          bindings
+        ),
+        starter: withoutBoundSizes(
+          {
+            ...starterVariant(
+              kinds,
+              chosen,
+              listing,
+              ownListings,
+              pointerChosen,
+              {
+                kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+                choices: Object.values(placeChoices)
+              },
+              layoutDesign
+            ),
+            ...regionStarter,
+            ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
+            ...starterPauses(labelNames, runs),
+            ...boundDesign(bindings).starter
+          },
+          bindings
+        )
       },
       ...(listings ? { listings } : {}),
       ...(Object.keys(tokenPlaces).length ? { tokenPlaces } : {}),
@@ -2554,6 +2560,20 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
 /** A link's looks, the variables of its kind, as Graph.Link.route. */
 const linkLooks = new Set(['curve', 'route', 'head', 'headSize']);
 
+/**
+ * A design without the width or height variable of a kind whose nodes size that axis by their value:
+ * there the size is the value, and the kind's anchor places it.
+ */
+function withoutBoundSizes<T>(
+  design: Record<string, T>,
+  bindings: readonly { kind: string; prop: string }[]
+): Record<string, T> {
+  const bound = new Set(
+    bindings.filter(({ prop }) => lengthProps.has(prop)).map(({ kind, prop }) => `${kind}.${prop}`)
+  );
+  return Object.fromEntries(Object.entries(design).filter(([key]) => !bound.has(key)));
+}
+
 /** Props that set a look, which belongs to the design, not the markup. */
 const designProps = new Set([
   'shape',
@@ -2576,7 +2596,10 @@ const designProps = new Set([
   'glow',
   'fillStyle',
   'decoration',
-  'case'
+  'case',
+  'xAnchor',
+  'yAnchor',
+  'spacing'
 ]);
 
 /**
@@ -2621,7 +2644,7 @@ function checkProps(
                   : attribute.name === 'size'
                     ? `<${component}> takes no size: its text's size is textSize, in pixels, a look the design gives every kind of node, not the markup, as the variable ${kind}.textSize.`
                     : component === 'Node' && attribute.name === 'anchor'
-                      ? `<Node> takes no anchor: where a node sized by its value sits in its room is a look the design gives its kind, not the markup, as the variable ${kind}.height@anchor (start, center or end) for a node bound by height={…}.`
+                      ? `<Node> takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables ${kind}.xAnchor and ${kind}.yAnchor (start, center or end).`
                       : component === 'Link' && linkLooks.has(attribute.name)
                         ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
                         : designProps.has(attribute.name)
@@ -3279,6 +3302,19 @@ function withNodeRefs(
         `${kind} has no ${prop} to bind: it is a look only of a node arranging children, with a layout.`,
         'bound_prop',
         tags.find((entry) => entry.view === kind)?.start
+      );
+  }
+  // A kind sizes an axis by its value in every node of it or in none: the others would need the
+  // width or height variable the bound ones have not.
+  for (const { kind, prop } of bindings.filter(({ prop }) => lengthProps.has(prop))) {
+    const unbound = tags.find(
+      (entry) => entry.view === kind && entry.name === 'Node' && !domains.get(entry.start)?.[prop]
+    );
+    if (unbound)
+      reject(
+        `${kind} binds ${prop} in one node and not another: one kind of node either sizes by its value or not, so give the node sized by its value a kind of its own, as <Node kind="Length" ${prop}={…} />.`,
+        'bound_prop',
+        unbound.start
       );
   }
   for (const start of listings) {

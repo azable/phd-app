@@ -148,25 +148,36 @@ export function boundLength(
     : undefined;
 }
 
-/** Where a node sized by its value sits along that length in its room: its start (top or left), centre, or end. */
+/**
+ * Where a box smaller than its slot sits in it, along one axis: its start (top or left), centre,
+ * or end.
+ */
 export const anchors = ['start', 'center', 'end'] as const;
 
-/** The variable placing a node sized by its value in its room, as Bar.height@anchor. */
-export const anchorKey = (kind: string, prop: string): string => `${kind}.${prop}@anchor`;
+/** The variable placing a kind's boxes along an axis, as Bar.yAnchor. */
+export const anchorKey = (kind: string, axis: 'x' | 'y'): string => `${kind}.${axis}Anchor`;
 
-/** The anchor before the design gives one: standing on the bottom, or from the left. */
-export const starterAnchor = (prop: string): (typeof anchors)[number] =>
-  prop === 'height' ? 'end' : 'start';
+/**
+ * The anchor a binding starts its kind at: a box sized by its height stands on its slot's bottom,
+ * one sized by its width starts at its left.
+ */
+export const boundAnchor = (prop: string): { axis: 'x' | 'y'; anchor: (typeof anchors)[number] } =>
+  prop === 'height' ? { axis: 'y', anchor: 'end' } : { axis: 'x', anchor: 'start' };
 
-/** A bound length's anchor, by the design's variable of its kind, as flexbox places it. */
-export function boundAnchor(
-  design: Readonly<Record<string, unknown>>,
-  kind: string,
-  prop: string
+/**
+ * A box's anchor along an axis, its kind's variable as flexbox places it; before the design gives
+ * one, where a binding starts it, or centred.
+ */
+export function slotAnchor(
+  chosen: unknown,
+  axis: 'x' | 'y',
+  bound: { width?: unknown; height?: unknown } | undefined
 ): 'flex-start' | 'center' | 'flex-end' {
-  const anchor = design[anchorKey(kind, prop)];
-  const placed = anchors.includes(anchor as (typeof anchors)[number])
-    ? (anchor as (typeof anchors)[number])
-    : starterAnchor(prop);
+  const size = axis === 'x' ? 'width' : 'height';
+  const placed = anchors.includes(chosen as (typeof anchors)[number])
+    ? (chosen as (typeof anchors)[number])
+    : bound?.[size]
+      ? boundAnchor(size).anchor
+      : 'center';
   return placed === 'center' ? 'center' : placed === 'end' ? 'flex-end' : 'flex-start';
 }

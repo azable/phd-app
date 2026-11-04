@@ -636,6 +636,19 @@ export function sequenceContext(): boolean | undefined {
   return getContext<boolean | undefined>('sverlin:sequence');
 }
 
+/**
+ * The axis a node's children are packed along, where its kind's spacing is packed: there each
+ * child takes its own size along it, not its slot's, so a growing child moves its neighbours; the
+ * node itself keeps the room of every child's largest, so nothing outside it moves.
+ */
+export function providePacking(axis: 'width' | 'height' | undefined): void {
+  setContext('sverlin:packing', axis);
+}
+
+export function packingContext(): 'width' | 'height' | undefined {
+  return getContext<'width' | 'height' | undefined>('sverlin:packing');
+}
+
 /** The cells a grid holds at this step, by row and col, so two at one coordinate are found. */
 export function provideGrid(cells: Set<string> | undefined): void {
   setContext('sverlin:grid', cells);

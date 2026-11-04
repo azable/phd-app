@@ -51,8 +51,13 @@ LevelCell.textSize@from and LevelCell.textSize@order: keep its values told
 apart, never two of them one option, and give each a look that says what it
 means, as a seen vertex standing out from an unseen one. A length a view binds,
 as Bar.height@unit, is its pixels per unit: keep the largest value's node
-readable and the view within its frame; Bar.height@anchor places each such node
-in its room, at start, center, or end, the nodes of a kind always sharing it.
+readable and the view within its frame. A kind's width and height, uniform or
+varying, keep its boxes as large as their slots or let each be its own size, and
+its xAnchor and yAnchor place a varying box, or a length, in its slot: keep
+boxes uniform where they are places in a structure, and varying where their size
+means something. A row's or column's spacing, slots or packed, keeps each child
+in its slot, or packs them a constant gap apart so a growing child moves the
+next.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go, except labels whose runs all draw nothing new, which start

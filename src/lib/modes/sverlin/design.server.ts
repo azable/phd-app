@@ -346,6 +346,12 @@ const fits = (space: DesignSpace, key: string, value: unknown) =>
 /** Explain a chosen value the space cannot take. */
 function unfit(space: DesignSpace, key: string, value: unknown): string {
   if (!Object.hasOwn(space, key)) {
+    // A size the view binds to its value has no variable of its own; its kind's anchor places it.
+    if (/\.(width|height)$/u.test(key) && Object.hasOwn(space, `${key}@unit`)) {
+      const kind = kindOf(key);
+      const axis = key.endsWith('.width') ? 'width' : 'height';
+      return `${kind}'s ${axis} is bound to its value in the view, ${axis}={…}, so it has no ${axis} variable; ${kind}.${axis === 'width' ? 'x' : 'y'}Anchor places it.`;
+    }
     if (key.startsWith('pause@')) {
       const pauses = Object.keys(space).filter((other) => other.startsWith('pause@'));
       return `The design has no variable ${key}; a pause names a label by its full name, and its pauses are ${pauses.join(', ') || 'none'}.`;
@@ -480,16 +486,9 @@ const kept = new Set<string>([
   'decoration'
 ]);
 const colourProps = new Set<string>(['fill', 'stroke', 'color']);
-const lengthProps = new Set<string>([
-  'strokeWidth',
-  'textSize',
-  'padding',
-  'radius',
-  'gap',
-  // A bound length's unit, as Bar.width@unit.
-  'width',
-  'height'
-]);
+const lengthProps = new Set<string>(['strokeWidth', 'textSize', 'padding', 'radius', 'gap']);
+/** How a box sits in its slot, and how a row spaces its children: drawn afresh for each kind. */
+const slotProps = new Set<string>(['width', 'height', 'xAnchor', 'yAnchor', 'spacing']);
 
 /**
  * A fresh value for every variable, keeping the variant's equalities: variables of one prop that
@@ -506,7 +505,10 @@ function randomised(
   const frames = framedKinds(space);
   for (const [key, value] of Object.entries(values)) {
     if (frames.has(kindOf(key))) continue;
-    const group = `${propOf(key)}=${JSON.stringify(value)}`;
+    const group =
+      slotProps.has(propOf(key)) && !key.includes('@')
+        ? key
+        : `${propOf(key)}=${JSON.stringify(value)}`;
     groups.set(group, [...(groups.get(group) ?? []), key]);
   }
   const drawn: Record<string, DesignValue> = {};
@@ -534,8 +536,8 @@ function drawOne(
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
   if (prop.startsWith('pause@') || kept.has(prop) || framedKinds(space).has(kindOf(key)))
     return value;
-  // A bound prop's hue, the way its options run, or where a node sized by its value sits in its room is drawn afresh.
-  if (['@hue', '@order', '@anchor'].some((end) => key.endsWith(end))) return pick(options);
+  // A bound prop's hue and the way its options run are drawn afresh; a length's unit stays near.
+  if (['@hue', '@order'].some((end) => key.endsWith(end))) return pick(options);
   if (colourProps.has(prop)) {
     const parts = typeof value === 'string' ? colourParts(value) : undefined;
     if (!parts) return value;
@@ -545,7 +547,7 @@ function drawOne(
       )
     );
   }
-  if (lengthProps.has(prop)) {
+  if (key.endsWith('@unit') || lengthProps.has(prop)) {
     if (value === 0) return value;
     const at = options.indexOf(value);
     return pick(options.slice(Math.max(1, at - 2), at + 3).filter((option) => option !== 0));

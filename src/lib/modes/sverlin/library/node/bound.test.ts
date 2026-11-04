@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { boundAnchor, boundLength, boundLook, shadesFor } from './bound';
+import { boundLength, boundLook, shadesFor, slotAnchor } from './bound';
 
 describe('bound props', () => {
   it('give each value of an unordered domain its own variable’s option', () => {
@@ -43,10 +43,11 @@ describe('bound props', () => {
     expect(boundLength({}, 'Bar', 'height', 3)).toBeUndefined();
   });
 
-  it('place a node sized by its value in its room by its kind’s anchor, standing or from the left by default', () => {
-    expect(boundAnchor({}, 'Bar', 'height')).toBe('flex-end');
-    expect(boundAnchor({}, 'Bar', 'width')).toBe('flex-start');
-    expect(boundAnchor({ 'Bar.height@anchor': 'start' }, 'Bar', 'height')).toBe('flex-start');
-    expect(boundAnchor({ 'Bar.height@anchor': 'center' }, 'Bar', 'height')).toBe('center');
+  it('place a box in its slot by its kind’s anchor, a length standing or from the left until set', () => {
+    expect(slotAnchor(undefined, 'y', { height: {} })).toBe('flex-end');
+    expect(slotAnchor(undefined, 'x', { width: {} })).toBe('flex-start');
+    expect(slotAnchor(undefined, 'x', undefined)).toBe('center');
+    expect(slotAnchor('start', 'y', { height: {} })).toBe('flex-start');
+    expect(slotAnchor('end', 'x', undefined)).toBe('flex-end');
   });
 });

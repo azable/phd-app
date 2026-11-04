@@ -687,8 +687,8 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       code: 'design_value',
       message: expect.stringContaining('One.radius cannot be 3')
     });
-    await expect(bundlePresentation(prepared, 3, { chosen: { 'One.width': 2 } })).rejects.toThrow(
-      'One has no prop width'
+    await expect(bundlePresentation(prepared, 3, { chosen: { 'One.depth': 2 } })).rejects.toThrow(
+      'One has no prop depth'
     );
   });
 
@@ -2503,9 +2503,12 @@ describe('props bound to a view’s value', () => {
     expect(design.space['Bar.width@unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
     // The largest unit keeping 99, the largest Wide, within 200 pixels.
     expect(design.starter['Bar.width@unit']).toBe(2);
-    // From the left, as width runs, until the design places it otherwise.
-    expect(design.space['Bar.width@anchor']).toEqual(['start', 'center', 'end']);
-    expect(design.starter['Bar.width@anchor']).toBe('start');
+    // From the left, as width runs, until the design places it otherwise; the width is the value,
+    // so the kind has no width variable, and a variant naming one is told why.
+    expect(design.space['Bar.xAnchor']).toEqual(['start', 'center', 'end']);
+    expect(design.starter['Bar.xAnchor']).toBe('start');
+    expect(design.space['Bar.width']).toBeUndefined();
+    expect(design.space['Bar.height']).toEqual(['uniform', 'varying']);
   });
 
   it.each([
@@ -2568,8 +2571,79 @@ describe('props bound to a view’s value', () => {
     expect(() =>
       component('<View of="Wide" name="Bar"><Node height={this} anchor="start" /></View>')
     ).toThrow(
-      /takes no anchor: where a node sized by its value sits in its room is a look the design gives/
+      /takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables Bar.xAnchor and Bar.yAnchor/
     );
+  });
+});
+
+describe('slots and boxes', () => {
+  const source = (views: string, page: string) =>
+    `<script domain>const Wide = type('integer', { min: 0, max: 99 });</script><script algorithm>@run[let wide = Wide(5);]</script>${views}\n<Layout name="Main"><Node>${page}</Node></Layout>`;
+
+  it('gives every kind a width and height, its slot’s or its own, and anchors, a row its spacing', () => {
+    const { design } = prepareSvelteComponent(
+      source(
+        '<View of="Wide" name="WideText"><Node value={this} /></View>',
+        '<Node layout="row" kind="Pair">{wide}{wide}</Node>'
+      )
+    );
+    expect(design.space['WideText.width']).toEqual(['uniform', 'varying']);
+    expect(design.space['WideText.yAnchor']).toEqual(['start', 'center', 'end']);
+    expect(design.starter).toMatchObject({
+      'WideText.width': 'uniform',
+      'WideText.height': 'uniform',
+      'WideText.xAnchor': 'center',
+      'WideText.yAnchor': 'center',
+      'Main.Pair.spacing': 'slots'
+    });
+    expect(design.space['Main.Pair.spacing']).toEqual(['slots', 'packed']);
+    expect(design.space['WideText.spacing']).toBeUndefined();
+  });
+
+  it('has no variable for an axis the view sizes by its value, and says why when one is chosen', async () => {
+    const prepared = prepareSvelteComponent(
+      source('<View of="Wide" name="Bar"><Node height={this} /></View>', '{wide}')
+    );
+    expect(prepared.design.space['Bar.height']).toBeUndefined();
+    expect(prepared.design.starter['Bar.yAnchor']).toBe('end');
+    await expect(
+      bundlePresentation(prepared, 1, { chosen: { 'Bar.height': 'varying' } })
+    ).rejects.toThrow(
+      "Bar's height is bound to its value in the view, height={…}, so it has no height variable; Bar.yAnchor places it."
+    );
+  }, 60_000);
+
+  it('refuses a kind sizing an axis by its value in one node and not another', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        source(
+          '<View of="Wide" name="Bar"><Node layout="column"><Node height={this} /></Node></View>',
+          '{wide}'
+        )
+      )
+    ).toThrow(
+      'Bar binds height in one node and not another: one kind of node either sizes by its value or not, so give the node sized by its value a kind of its own, as <Node kind="Length" height={…} />.'
+    );
+    // A kind passes to the nodes inside it, so the node sized by its value takes its own.
+    const { design } = prepareSvelteComponent(
+      source(
+        '<View of="Wide" name="Bar"><Node layout="column"><Node kind="Length" height={this} /></Node></View>',
+        '{wide}'
+      )
+    );
+    expect(design.space['Bar.Length.height']).toBeUndefined();
+    expect(design.space['Bar.height']).toEqual(['uniform', 'varying']);
+  });
+
+  it('refuses where a box sits, or how a row spaces, written in the markup', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        source(
+          '<View of="Wide" name="WideText"><Node value={this} xAnchor="start" /></View>',
+          '{wide}'
+        )
+      )
+    ).toThrow(/xAnchor is a look/);
   });
 });
 

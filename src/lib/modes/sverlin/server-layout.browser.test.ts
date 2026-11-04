@@ -185,7 +185,7 @@ it.skipIf(!enabled)(
 // A node sized by its value draws its own length, the value times its kind's unit, in a room
 // keeping the largest it reaches, also where a pointer draws it again; the room is never the node.
 it.skipIf(!enabled)(
-  'draws each bar its value long, standing or hanging by its anchor, a pointer on it or not',
+  'draws each node sized by its height its value long, standing or hanging by its kind’s anchor, a pointer on it or not',
   { timeout: 300_000 },
   async () => {
     const source = fixtures['./fixtures/bars.sverlin'];
@@ -198,7 +198,7 @@ it.skipIf(!enabled)(
       ['end', (box: { y: number; height: number }) => box.y + box.height],
       ['start', (box: { y: number }) => box.y]
     ] as const) {
-      const given = await drawsAsGiven(source, { chosen: { 'Bar.height@anchor': anchor } });
+      const given = await drawsAsGiven(source, { chosen: { 'Bar.yAnchor': anchor } });
       // At step 1 the pointer j is on the first Bar, which it draws again.
       const drawnBars = bars(given.steps[1]);
       expect(drawnBars[0].kind).toBe('Here.Pointed');
@@ -210,5 +210,90 @@ it.skipIf(!enabled)(
       expect(pixels[5]).toBe(112);
       expect(new Set(drawnBars.map(({ box }) => Math.round(edge(box))))).toHaveLength(1);
     }
+  }
+);
+
+// A box varying in width takes its own size in a slot keeping the largest, so its slot, and every
+// box beside it, stays put; its kind's anchor says which edge lines up.
+it.skipIf(!enabled)(
+  'draws a varying box its own size in an unchanged slot, placed by its anchor',
+  { timeout: 300_000 },
+  async () => {
+    const source = `<script domain>
+  const Name = type(['A', 'BBBBBB', 'CC']);
+  const Names = collection(Name, { max: 3 });
+</script>
+<script input>
+  const names = Names(['A', 'BBBBBB', 'CC']);
+</script>
+<script algorithm>
+  @swap[const held = names[0]; names[0] = names[2]; names[2] = held;]
+</script>
+<View of="Name" name="Tag"><Node value={this} /></View>
+<View of="Names" name="Row"><Node layout="row">{#each this as n}{n}{/each}</Node></View>
+<Layout name="Main"><Node>{names}</Node></Layout>`;
+    const tags = (step: SceneStep) =>
+      step.nodes
+        .filter((node) => node.kind === 'Tag')
+        .toSorted((a, b) => a.box.x - b.box.x)
+        .map(({ box }) => box);
+    const uniform = tags((await drawsAsGiven(source)).steps[0]);
+    expect(new Set(uniform.map(({ width }) => Math.round(width))).size).toBe(1);
+    const left = (
+      await drawsAsGiven(source, {
+        chosen: { 'Tag.width': 'varying', 'Tag.xAnchor': 'start' }
+      })
+    ).steps;
+    for (const step of left) {
+      const boxes = tags(step);
+      expect(new Set(boxes.map(({ width }) => Math.round(width))).size).toBeGreaterThan(1);
+      // Left edges where the uniform boxes began: each slot unchanged.
+      expect(boxes.map(({ x }) => Math.round(x))).toEqual(uniform.map(({ x }) => Math.round(x)));
+    }
+    const right = tags(
+      (await drawsAsGiven(source, { chosen: { 'Tag.width': 'varying', 'Tag.xAnchor': 'end' } }))
+        .steps[0]
+    );
+    expect(right.map(({ x, width }) => Math.round(x + width))).toEqual(
+      uniform.map(({ x, width }) => Math.round(x + width))
+    );
+  }
+);
+
+// A row packing its children places each at its own size, a constant gap apart, so a growing child
+// moves the next; the row keeps the room of each child's largest, so it never changes size.
+it.skipIf(!enabled)(
+  'packs a row’s children at their own sizes, the row itself keeping one size',
+  { timeout: 300_000 },
+  async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 999 });
+</script>
+<script algorithm>
+  @start[let a = Int(1);
+  let b = Int(5);]
+  @grow[a = Int(100);]
+</script>
+<View of="Int" name="Num"><Node value={this} /></View>
+<Layout name="Main"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>`;
+    const { steps } = await drawsAsGiven(source, {
+      chosen: { 'Num.width': 'varying', 'Main.Pair.spacing': 'packed' }
+    });
+    const shown = steps.filter(
+      (step) => step.nodes.filter(({ kind }) => kind === 'Num').length === 2
+    );
+    expect(shown.length).toBeGreaterThan(1);
+    const pair = shown.map((step) => step.nodes.find(({ kind }) => kind === 'Main.Pair')!.box);
+    expect(new Set(pair.map(({ width }) => Math.round(width))).size).toBe(1);
+    const gaps = shown.map((step) => {
+      const [first, second] = step.nodes
+        .filter(({ kind }) => kind === 'Num')
+        .toSorted((a, b) => a.box.x - b.box.x)
+        .map(({ box }) => box);
+      return { gap: Math.round(second.x - (first.x + first.width)), second: Math.round(second.x) };
+    });
+    // One gap throughout, so b moves when a grows.
+    expect(new Set(gaps.map(({ gap }) => gap)).size).toBe(1);
+    expect(new Set(gaps.map(({ second }) => second)).size).toBeGreaterThan(1);
   }
 );

@@ -173,7 +173,8 @@ const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
- * pixels; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
+ * pixels; whether a box takes its slot's width and height or its own, and where its own sits in
+ * the slot; whether a row or column places its children in their slots or packs them; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
  * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
  * how a link runs, as its layout's arrows or its own way, and the heads at its ends.
  */
@@ -190,7 +191,12 @@ export const propOptions = {
   padding: spacing,
   radius: [0, 2, 4, 6, 8, 12, 999],
   minSize: [0, 1, 1.5, 2, 2.5, 3, 4],
+  width: ['uniform', 'varying'],
+  height: ['uniform', 'varying'],
+  xAnchor: ['start', 'center', 'end'],
+  yAnchor: ['start', 'center', 'end'],
   gap: spacing,
+  spacing: ['slots', 'packed'],
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
@@ -302,6 +308,10 @@ const nodeProps: readonly DesignProp[] = [
   'padding',
   'radius',
   'minSize',
+  'width',
+  'height',
+  'xAnchor',
+  'yAnchor',
   'shadow',
   'glow',
   'fillStyle',
@@ -309,12 +319,23 @@ const nodeProps: readonly DesignProp[] = [
   'case'
 ];
 
+/** How a box sits in its slot, which a <Pointed> drawn round its element does not have. */
+const slotProps: ReadonlySet<DesignProp> = new Set(['width', 'height', 'xAnchor', 'yAnchor']);
+
+/** The starter's slot: every box as large as its slot, so equal boxes line up. */
+const uniformSlot = {
+  width: 'uniform',
+  height: 'uniform',
+  xAnchor: 'center',
+  yAnchor: 'center'
+} satisfies Partial<Record<DesignProp, string>>;
+
 /** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
-  container: [...nodeProps, 'gap', 'align', 'justify', 'overflow'],
+  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
   value: nodeProps,
   text: nodeProps,
-  pointed: [...nodeProps.filter((prop) => prop !== 'shown'), 'overflow'],
+  pointed: [...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)), 'overflow'],
   link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'route', 'head', 'headSize']
 };
 
@@ -428,9 +449,11 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     radius: 0,
     minSize: 0,
     ...plainStyle,
+    ...uniformSlot,
     gap: 0.5,
     align: 'center',
     justify: 'start',
+    spacing: 'slots',
     overflow: 'included'
   },
   value: {
@@ -447,7 +470,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     padding: 0.375,
     radius: 8,
     minSize: 2.5,
-    ...plainStyle
+    ...plainStyle,
+    ...uniformSlot
   },
   text: {
     shown: true,
@@ -463,7 +487,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     padding: 0,
     radius: 0,
     minSize: 0,
-    ...plainStyle
+    ...plainStyle,
+    ...uniformSlot
   },
   pointed: {
     fill: 'amber-100',

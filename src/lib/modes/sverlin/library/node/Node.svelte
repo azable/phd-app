@@ -48,6 +48,8 @@
     providePointerIdentity,
     provideCollectionLayout,
     provideSequence,
+    providePacking,
+    packingContext,
     provideGrid,
     gridContext,
     collectionLayoutContext,
@@ -70,7 +72,7 @@
     placedKind,
     strokeStyleCss
   } from './design';
-  import { boundAnchor, boundLength, boundLook, type BoundDomain } from './bound';
+  import { boundLength, boundLook, slotAnchor, type BoundDomain } from './bound';
   import { fontClass } from '../fonts';
   import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
@@ -160,8 +162,13 @@
   // A pointer drawing this node again gives its paint where it is, and its other props everywhere;
   // a render at a place gives its own where the variant sets them (see placedKind).
   const placed = untrack(() => placedKind(placeContext(), __view));
+  // How a box sits in its slot is its own kind's, wherever a pointer draws it again.
+  const slotProps = new Set(['width', 'height', 'xAnchor', 'yAnchor']);
   const look = (prop: string): unknown => {
-    const over = __over && (__over.active || !paintProps.has(prop)) ? __over : undefined;
+    const over =
+      __over && !slotProps.has(prop) && (__over.active || !paintProps.has(prop))
+        ? __over
+        : undefined;
     if (over) return lookUp(design, over.kind, over.placed, prop);
     // A prop the view binds takes the option its value maps to, where the design gives one.
     const domain = __domains?.[prop];
@@ -170,20 +177,26 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
-  // A length the view binds, as width={this}: its value times its kind's unit, in pixels. A node
-  // sized by its value draws that length in a room that keeps the largest it reaches, so nothing
-  // around it moves, at its kind's anchor along each bound length: one sized by height stands on
-  // the room's bottom unless the design hangs it from the top or centres it.
+  // A length the view binds, as width={this}: its value times its kind's unit, in pixels.
   const lengthOf = (prop: 'width' | 'height') =>
     __domains?.[prop] ? boundLength(design, __view, prop, bound[`__bound_${prop}`]) : undefined;
   const valueWidth = $derived(lengthOf('width'));
   const valueHeight = $derived(lengthOf('height'));
-  const sizedByValue = untrack(() => Boolean(__domains?.width || __domains?.height));
-  const sizedByHeight = untrack(() => Boolean(__domains?.height));
-  const alongAnchor = $derived(boundAnchor(design, __view, sizedByHeight ? 'height' : 'width'));
-  const acrossAnchor = $derived(
-    sizedByHeight && __domains?.width ? boundAnchor(design, __view, 'width') : 'flex-start'
-  );
+  // A box takes its slot's width and height, the largest it reaches, or along an axis its kind
+  // varies, or its value sizes, its own, in a slot that keeps the largest, so nothing around it
+  // moves, placed by its kind's anchor. A parent packing its children along an axis keeps no slot
+  // for them there: each takes its own size, and the parent the room of them all.
+  const packedAlong = packingContext();
+  const varies = (axis: 'width' | 'height') =>
+    Boolean(__domains?.[axis]) || look(axis) === 'varying';
+  const varyingWidth = $derived(varies('width'));
+  const varyingHeight = $derived(varies('height'));
+  const slotWidth = $derived(varyingWidth && packedAlong !== 'width');
+  const slotHeight = $derived(varyingHeight && packedAlong !== 'height');
+  const keepsSlot = (axis: 'width' | 'height') =>
+    !(axis === 'width' ? varyingWidth : varyingHeight) && packedAlong !== axis;
+  const xAnchor = $derived(slotAnchor(look('xAnchor'), 'x', __domains));
+  const yAnchor = $derived(slotAnchor(look('yAnchor'), 'y', __domains));
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -367,6 +380,15 @@
     if (arrangement) provideSequence(arrangement === 'row' || arrangement === 'column');
     if (collection) provideCollectionLayout(arrangement);
   });
+  // Packing applies as a step shows; while the page measures, children keep their slots, so this
+  // node's room is every child's largest.
+  const packs = untrack(
+    () =>
+      (arrangement === 'row' || arrangement === 'column') &&
+      look('spacing') === 'packed' &&
+      !memory?.measuring
+  );
+  untrack(() => providePacking(packs ? (arrangement === 'row' ? 'width' : 'height') : undefined));
   // A grid's child is placed in the cell its row and col name, one to a coordinate at each step;
   // the nodes inside it are no grid's children. A grid keeps the tracks the page worked out over
   // every step (see LayoutMemory), so it never moves as it fills in.
@@ -419,7 +441,7 @@
   const least = (length: number | undefined, axis: 'width' | 'height') =>
     length !== undefined
       ? `${length}px`
-      : leastOf(measured('minSize', 'em'), sizedByValue ? undefined : reserved?.[axis]);
+      : leastOf(measured('minSize', 'em'), keepsSlot(axis) ? reserved?.[axis] : undefined);
   const strokeColour = $derived(colourCss(look('stroke')));
   const borderWidth = $derived(
     strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
@@ -588,7 +610,7 @@
              data-sv-overlaid, a row or column whose links are drawn over it (see LinkOverlay). -->
       <div
         class="items {arrangement}"
-        class:uniform={collection}
+        class:uniform={collection && !packs}
         data-sv-collection={collection ? id : undefined}
         data-sv-overlaid={overlaid ? '' : undefined}
         style:gap={`${gap}em`}
@@ -656,16 +678,15 @@
         {/each}
       </Overhang>
     {/if}
-  {:else if sizedByValue}
-    <!-- A node sized by its value, in the room that keeps the largest it reaches (see lengthOf). -->
+  {:else if slotWidth || slotHeight}
+    <!-- A box of its own size in the slot that keeps the largest it reaches (see varies). -->
     <div
       class="sv-room"
       style:display="flex"
-      style:flex-direction={sizedByHeight ? 'column' : 'row'}
-      style:justify-content={alongAnchor}
-      style:align-items={acrossAnchor}
-      style:min-width={leastOf(undefined, reserved?.width)}
-      style:min-height={leastOf(undefined, reserved?.height)}
+      style:justify-content={xAnchor}
+      style:align-items={yAnchor}
+      style:min-width={slotWidth ? leastOf(undefined, reserved?.width) : undefined}
+      style:min-height={slotHeight ? leastOf(undefined, reserved?.height) : undefined}
     >
       {@render nodeBox()}
     </div>
