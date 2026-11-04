@@ -121,15 +121,17 @@ it.skipIf(!enabled)(
   'shows its contents at the steps inside a run of the label, keeping their room elsewhere',
   { timeout: 120_000 },
   async () => {
-    // Coarse: each comparison, then each swap. "Swap" shows at the swaps alone.
+    // Coarse: each comparison, then each swap. "Swap" shows at the swaps alone. The first
+    // comparison draws what the input as given drew, as the board draws no comparison, so it is
+    // left out and the steps open on the first swap.
     const coarse = await stepsOf('@insert.test.compare, @insert.swap', 4);
-    expect(coarse.map(({ swap }) => swap)).toEqual([false, true, false, true]);
+    expect(coarse.map(({ swap }) => swap)).toEqual([true, false, true, false]);
     // The caption keeps its room where hidden, so the board and its cells stay put.
     expect(new Set(coarse.map(({ board }) => board)).size).toBe(1);
     expect(new Set(coarse.map(({ cells }) => cells.join())).size).toBe(1);
     // Fine, pausing at the swap's read of A[j] too: inside the swap's run, so "Swap" shows there.
     const fine = await stepsOf('@insert.test.compare, @insert.swap.to, @insert.swap', 4);
-    expect(fine.map(({ swap }) => swap)).toEqual([false, true, true, false]);
+    expect(fine.map(({ swap }) => swap)).toEqual([true, true, false, true]);
   }
 );
 
