@@ -321,8 +321,7 @@ export function arrangeChildren<E>(
             x1: reached.start.x,
             y1: reached.start.y,
             x2: reached.end.x,
-            y2: reached.end.y,
-            middle: { x: edge.middle.x + reached.drift.x, y: edge.middle.y + reached.drift.y }
+            y2: reached.end.y
           }
         : edge;
     });
