@@ -160,9 +160,15 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     ...step.nodes.flatMap((node) => node.runs ?? []),
     ...(step.error ? [errorText(step.error)] : [])
   ]);
+  // The icon face holds nothing but icons, each in the Private Use Area: a text with none skips it.
+  const icons = new Set(
+    manifest.faces.filter(({ family }) => family === manifest.iconFamily).map(({ file }) => file)
+  );
   const chains = texts.map(({ text, font, fontWeight }) => ({
     text,
-    files: faceFiles(font, fontWeight)
+    files: faceFiles(font, fontWeight).filter(
+      (file) => !icons.has(file) || /[\uE000-\uF8FF]/u.test(text)
+    )
   }));
   for (let depth = 0; chains.some(({ files }) => depth < files.length); depth++) {
     const needed = chains

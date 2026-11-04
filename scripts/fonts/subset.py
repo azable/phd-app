@@ -83,6 +83,57 @@ FACES = {
 }
 # Second in every font list, for the characters some text face lacks.
 FALLBACK = Face("Vis Symbols", "dejavu", "DejaVu Sans 2.37")
+# Third in every font list: the icons a view binds to its value, as <Node icon={this} />, each at
+# Lucide's own code point in the Private Use Area, which no other face has.
+ICONS = Face("Vis Icons", "lucide", "Lucide 0.563.0")
+# The icons the design offers, in the order a binding's values start on them: shapes and marks a
+# state reads as first, then things, arrows and signs.
+ICON_NAMES = [
+    "circle",
+    "circle-dot",
+    "circle-check",
+    "circle-x",
+    "circle-alert",
+    "circle-question-mark",
+    "check",
+    "x",
+    "flag",
+    "star",
+    "target",
+    "map-pin",
+    "lock",
+    "lock-open",
+    "eye",
+    "eye-off",
+    "search",
+    "hourglass",
+    "play",
+    "pause",
+    "ban",
+    "zap",
+    "key",
+    "house",
+    "crown",
+    "trophy",
+    "heart",
+    "skull",
+    "bug",
+    "flame",
+    "snowflake",
+    "sparkles",
+    "link",
+    "unlink",
+    "arrow-up",
+    "arrow-down",
+    "arrow-left",
+    "arrow-right",
+    "plus",
+    "minus",
+    "infinity",
+    "user",
+]
+# An icon's size, of the em, and its advance: Lucide draws on the whole em, larger than a digit.
+ICON_SCALE = 0.85
 WEIGHTS = {400: "Regular", 700: "Bold"}
 
 
@@ -97,6 +148,7 @@ def source(sources: dict, role: str, weight: int) -> TTFont:
         "comic-neue": f"share/fonts/truetype/ComicNeue-{WEIGHTS[weight]}.ttf",
         "zilla-slab": f"share/fonts/truetype/ZillaSlab-{WEIGHTS[weight]}.ttf",
         "dejavu": "ttf/DejaVuSans.ttf" if weight == 400 else "ttf/DejaVuSans-Bold.ttf",
+        "lucide": "share/fonts/truetype/Lucide.ttf",
     }
     return TTFont(sources[role] / names[role])
 
@@ -208,6 +260,29 @@ def digits_centre(font: TTFont) -> float:
     return (min(box[1] for box in boxes) + max(box[3] for box in boxes)) / 2
 
 
+def icons(font: TTFont, centre: float) -> tuple[TTFont, dict[str, int]]:
+    """Lucide's icons in ICON_NAMES, by their glyph names, scaled to ICON_SCALE and centred on
+    `centre` (of the em), the text faces' digits' centre, with a line box as tall as Inter's about it,
+    so an icon in a line of text sits on the digits' middle and grows no line."""
+    cmap = font.getBestCmap()
+    codes = {name: code for code, name in cmap.items()}
+    missing = [name for name in ICON_NAMES if name not in codes]
+    if missing:
+        raise SystemExit(f"Lucide has no {', '.join(missing)}")
+    upem = font["head"].unitsPerEm
+    glyf, hmtx = font["glyf"], font["hmtx"]
+    shift = centre * upem - upem * ICON_SCALE / 2
+    for name in ICON_NAMES:
+        glyph = glyf[name]
+        glyph.coordinates.scale((ICON_SCALE, ICON_SCALE))
+        glyph.coordinates.translate((0, shift))
+        glyph.recalcBounds(glyf)
+        hmtx[name] = (round(upem * ICON_SCALE), glyph.xMin)
+    hhea = font["hhea"]
+    hhea.ascent, hhea.descent, hhea.lineGap = round((centre + 0.6) * upem), round((centre - 0.6) * upem), 0
+    return font, {name: codes[name] for name in ICON_NAMES}
+
+
 def main() -> None:
     out = Path(sys.argv[1])
     sources = {key: Path(value) for key, value in (arg.split("=", 1) for arg in sys.argv[2:])}
@@ -227,17 +302,26 @@ def main() -> None:
         missing = (covered(font) & CHARACTERS) - text_coverage[weight]
         fallback = finish(font, FALLBACK.family, weight, FALLBACK.origin, missing)
         save(fallback, out / f"symbols-{weight}")
-    write_manifest(out)
+    inter = source(sources, "inter", 400)
+    centre = digits_centre(lining(inter)) / inter["head"].unitsPerEm
+    for weight in WEIGHTS:
+        font, codes = icons(source(sources, ICONS.source, weight), centre)
+        save(finish(font, ICONS.family, weight, ICONS.origin, set(codes.values())), out / f"icons-{weight}")
+    write_manifest(out, codes)
 
 
-def write_manifest(out: Path) -> None:
+def write_manifest(out: Path, icon_codes: dict[str, int]) -> None:
     """The design's fonts, as the page, the design and the PDF export take them; the faces, in the
-    order a family list tries them; and a version naming these very files."""
+    order a family list tries them; the icons, each by its code point; and a version naming these
+    very files."""
     fonts = [
         {"value": role, "family": face.family, "fallbacks": face.fallbacks, "pdf": face.pdf}
         for role, face in FACES.items()
     ]
-    families = {role: face.family for role, face in FACES.items()} | {"symbols": FALLBACK.family}
+    families = {role: face.family for role, face in FACES.items()} | {
+        "symbols": FALLBACK.family,
+        "icons": ICONS.family,
+    }
     faces = [
         {"file": f"{role}-{weight}", "family": family, "weight": weight}
         for role, family in families.items()
@@ -251,6 +335,8 @@ def write_manifest(out: Path) -> None:
         "version": digest.hexdigest()[:16],
         "fonts": fonts,
         "fallback": FALLBACK.family,
+        "iconFamily": ICONS.family,
+        "icons": {name: f"{code:04X}" for name, code in icon_codes.items()},
         "faces": faces,
     }
     (out / "faces.json").write_text(json.dumps(manifest, indent=2) + "\n")

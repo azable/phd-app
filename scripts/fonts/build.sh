@@ -12,4 +12,5 @@ nix-shell -p 'python3.withPackages (p: [ p.fonttools p.brotli ])' --run "python3
   atkinson=$(source_of atkinson-hyperlegible-next) \
   comic-neue=$(source_of comic-neue) \
   zilla-slab=$(source_of zilla-slab) \
+  lucide=$(source_of lucide) \
   dejavu=$(dirname "$(readlink -f node_modules/dejavu-fonts-ttf/package.json)")"

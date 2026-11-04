@@ -49,10 +49,16 @@ describe('faceFiles', () => {
   });
 
   it('takes the embedded faces a font list starts with, at the weight drawn, then DejaVu', () => {
-    expect(faceFiles(fontList('serif'), 400)).toEqual(['serif-400', 'symbols-400', 'DejaVuSerif']);
+    expect(faceFiles(fontList('serif'), 400)).toEqual([
+      'serif-400',
+      'symbols-400',
+      'icons-400',
+      'DejaVuSerif'
+    ]);
     expect(faceFiles(fontList('casual'), 700)).toEqual([
       'casual-700',
       'symbols-700',
+      'icons-700',
       'DejaVuSans-Bold'
     ]);
     expect(faceFiles(`"Vis Mono", "Vis Symbols", monospace`, 600)).toEqual([

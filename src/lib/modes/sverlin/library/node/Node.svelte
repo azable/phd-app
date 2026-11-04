@@ -82,7 +82,7 @@
     widerReach
   } from './design';
   import { boundLength, boundLook, slotAnchor, type BoundDomain } from './bound';
-  import { fontClass } from '../fonts';
+  import { fontClass, iconGlyph } from '../fonts';
   import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
   import type { Align, Justify, Layout, Primitive } from './props';
@@ -189,6 +189,12 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
+  // The icon the view binds, as icon={this}: its value's, wherever a pointer draws it again.
+  const icon = $derived(
+    __domains?.icon
+      ? iconGlyph(boundLook(design, __view, 'icon', bound.__bound_icon, __domains.icon))
+      : undefined
+  );
   // A length the view binds, as width={this}: its value times its kind's unit, in pixels.
   const lengthOf = (prop: 'width' | 'height') =>
     __domains?.[prop] ? boundLength(design, __view, prop, bound[`__bound_${prop}`]) : undefined;
@@ -825,12 +831,16 @@
         {/if}
       </div>
     {:else if children}
-      {@render children()}
+      {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}{@render children()}
     {:else if value !== undefined}
       <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
-      <span class="value" style:text-decoration-line={decoration}
+      {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}<span
+        class="value"
+        style:text-decoration-line={decoration}
         >{printed}{#if unit}<span class="unit">{unit}</span>{/if}</span
       >
+    {:else if icon}
+      <span class="icon" aria-hidden="true">{icon}</span>
     {/if}
     <!-- A node with no value, items, or children is a shape alone, such as a dot. -->
   </div>

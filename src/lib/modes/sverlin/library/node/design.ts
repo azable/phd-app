@@ -4,7 +4,7 @@
  * ../../design.server.ts); the page reads a variant's values through them.
  */
 
-import { fontValues } from '../fonts';
+import { fontValues, iconNames } from '../fonts';
 import { directions, forms } from './forms';
 import { headShapes, headSizes } from './heads';
 
@@ -313,7 +313,8 @@ export const propOptions = {
   route: ['layout', 'straight', 'curved', 'wire'],
   head: headShapes,
   headSize: headSizes,
-  layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1)
+  layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
+  icon: iconNames
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;

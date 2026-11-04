@@ -9,7 +9,7 @@ import { geometryFor, geometryVersion, type Geometry } from './library/geometry'
 import { parseSheet } from './library/model/css';
 import { layOut } from './library/model/layout';
 import type { ModelElement } from './library/model/tree';
-import { fontList } from './library/fonts';
+import { fontList, iconGlyph, iconNames } from './library/fonts';
 import { layOutOnServer } from './layout.server';
 import { differingSteps } from '$lib/shared/differing-steps';
 import { smallestReadableText } from '$lib/shared/readability';
@@ -378,6 +378,14 @@ describe('text measured on the server', () => {
     expect(measure.missing.size).toBe(0);
     measure.width('🙂', sans);
     expect([...measure.missing]).toEqual(['🙂']);
+  });
+
+  it('draws an icon in the embedded icon face, each the same advance, as the page does', () => {
+    const measure = serverMeasure();
+    const font = `normal 700 20px ${fontList('sans')}`;
+    for (const name of iconNames)
+      expect(measure.width(iconGlyph(name) ?? '', font)).toBeCloseTo(17, 5);
+    expect(measure.missing.size).toBe(0);
   });
 
   it('measures a case through the layout model as the page draws it', () => {

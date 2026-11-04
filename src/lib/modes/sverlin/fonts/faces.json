@@ -1,5 +1,5 @@
 {
-  "version": "170bba28fdcd2780",
+  "version": "ba18914e038ce9bf",
   "fonts": [
     {
       "value": "sans",
@@ -39,6 +39,51 @@
     }
   ],
   "fallback": "Vis Symbols",
+  "iconFamily": "Vis Icons",
+  "icons": {
+    "circle": "E076",
+    "circle-dot": "E345",
+    "circle-check": "E226",
+    "circle-x": "E084",
+    "circle-alert": "E077",
+    "circle-question-mark": "E082",
+    "check": "E06C",
+    "x": "E1B2",
+    "flag": "E0D1",
+    "star": "E176",
+    "target": "E180",
+    "map-pin": "E111",
+    "lock": "E10B",
+    "lock-open": "E10C",
+    "eye": "E0BA",
+    "eye-off": "E0BB",
+    "search": "E151",
+    "hourglass": "E296",
+    "play": "E13C",
+    "pause": "E12E",
+    "ban": "E051",
+    "zap": "E1B4",
+    "key": "E0FD",
+    "house": "E0F5",
+    "crown": "E1D6",
+    "trophy": "E373",
+    "heart": "E0F2",
+    "skull": "E221",
+    "bug": "E20C",
+    "flame": "E0D2",
+    "snowflake": "E165",
+    "sparkles": "E412",
+    "link": "E102",
+    "unlink": "E19C",
+    "arrow-up": "E04A",
+    "arrow-down": "E042",
+    "arrow-left": "E048",
+    "arrow-right": "E049",
+    "plus": "E13D",
+    "minus": "E11C",
+    "infinity": "E1E7",
+    "user": "E19F"
+  },
   "faces": [
     {
       "file": "sans-400",
@@ -108,6 +153,16 @@
     {
       "file": "symbols-700",
       "family": "Vis Symbols",
+      "weight": 700
+    },
+    {
+      "file": "icons-400",
+      "family": "Vis Icons",
+      "weight": 400
+    },
+    {
+      "file": "icons-700",
+      "family": "Vis Icons",
       "weight": 700
     }
   ]

@@ -1119,6 +1119,18 @@ has no values to bind: give it a type where the algorithm computes it, as
   nodes inside it, so give the node sized by its value a kind of its own, as
   `<Node layout="column"><Node kind="Length" height={this} />{this.name}</Node>`.
   Anywhere else a box sizes to its contents, at least its kind's `minSize`.
+- `icon` draws an icon for each value, bound only in a view, as
+  `<View of="State" name="StateMark"><Node icon={this} /></View>`: each value
+  has a variable of its own whatever its type's order, as `StateMark.icon@done`,
+  starting on distinct icons. The icon is drawn before the node's value or text,
+  in its colour and size, or alone in a node with neither; a node arranging
+  children has none. Its options: `circle`, `circle-dot`, `circle-check`,
+  `circle-x`, `circle-alert`, `circle-question-mark`, `check`, `x`, `flag`,
+  `star`, `target`, `map-pin`, `lock`, `lock-open`, `eye`, `eye-off`, `search`,
+  `hourglass`, `play`, `pause`, `ban`, `zap`, `key`, `house`, `crown`, `trophy`,
+  `heart`, `skull`, `bug`, `flame`, `snowflake`, `sparkles`, `link`, `unlink`,
+  `arrow-up`, `arrow-down`, `arrow-left`, `arrow-right`, `plus`, `minus`,
+  `infinity`, `user`.
 
 ```svelte
 <View of="Vertex" name="VertexCard">
@@ -1429,8 +1441,9 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `kind`: a kind of its own within its view or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
   root node is its frame and takes none.
-- A look, inside a view, as an expression of its value, as `fill={this.seen}`
-  (see Props bound to a view's value); anywhere else a look is its kind's.
+- A look, inside a view, as an expression of its value, as `fill={this.seen}`,
+  or an icon, as `icon={this}` (see Props bound to a view's value); anywhere
+  else a look is its kind's, and a node has no icon.
 - `width` and `height`, inside a view, as an expression of its value, as
   `height={this}`: a length, the value times its kind's unit (see Props bound to
   a view's value); nowhere else.

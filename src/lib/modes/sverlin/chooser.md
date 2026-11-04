@@ -50,11 +50,13 @@ its values told apart, never two of them one option, and give each a look that
 says what it means, as a seen vertex standing out from an unseen one; for a
 length, as Bar.height@unit, keep the largest value's node readable and the view
 within its frame. Keep a kind's width and height uniform where its boxes are
-places in a structure, and varying where their size means something. A pointer's
-expand enlarges the element it is at, painted in a row of slots, pushing the
-neighbours aside in a packed one; its scale, spread, offsetX and offsetY
-enlarge, spread or move its whole drawing where it is, taking no room, as a lift
-(offsetY -8) or a growth from the bottom (scale with the element's yAnchor end).
+places in a structure, and varying where their size means something. Give each
+value's icon one that reads as that value, as circle-check for done, never one
+suggesting another. A pointer's expand enlarges the element it is at, painted in
+a row of slots, pushing the neighbours aside in a packed one; its scale, spread,
+offsetX and offsetY enlarge, spread or move its whole drawing where it is,
+taking no room, as a lift (offsetY -8) or a growth from the bottom (scale with
+the element's yAnchor end).
 
 What the participant asked for, choose; earlier preferences name the values each
 pair differed in, so keep a value that keeps winning. Everything else is open,

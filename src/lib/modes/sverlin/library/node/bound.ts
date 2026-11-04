@@ -36,8 +36,15 @@ export const bindableProps: ReadonlySet<string> = new Set<DesignProp>([
   'case',
   'gap',
   'align',
-  'justify'
+  'justify',
+  'icon'
 ]);
+
+/**
+ * Props a view may bind but that no kind has unbound, each value of the binding taking its own
+ * option, whatever order its type gives: an icon is drawn only for a value it stands for.
+ */
+export const valueOnlyProps: ReadonlySet<string> = new Set(['icon']);
 
 /** Props whose options run in order, which an ordered domain maps onto in order. */
 export const orderedProps: ReadonlySet<string> = new Set([

@@ -143,7 +143,8 @@ import {
   type Binding,
   type Scope
 } from './bound-props.server';
-import { bindableProps, lengthProps } from './library/node/bound';
+import { bindableProps, lengthProps, valueOnlyProps } from './library/node/bound';
+import { iconNames } from './library/fonts';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
@@ -2896,11 +2897,13 @@ function checkProps(
                       ? `<Node> takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables ${kind}.xAnchor and ${kind}.yAnchor (start, center or end).`
                       : component === 'Link' && linkLooks.has(attribute.name)
                         ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
-                        : designProps.has(attribute.name)
-                          ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the view or layout it is in, or the one it names, and its look is a variable of that kind.`
-                          : named.length
-                            ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
-                            : `<${component}> takes no props.`,
+                        : component === 'Node' && valueOnlyProps.has(attribute.name)
+                          ? `<Node> ${attribute.name} stands for a view's value, each value's ${attribute.name} the design's: bind it in a view, as <View of="State" name="StateMark"><Node ${attribute.name}={this} /></View>, and the design picks one of ${iconNames.join(', ')} for each value.`
+                          : designProps.has(attribute.name)
+                            ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the view or layout it is in, or the one it names, and its look is a variable of that kind.`
+                            : named.length
+                              ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
+                              : `<${component}> takes no props.`,
           { code: 'unknown_prop', ...at }
         )
       );
@@ -3582,6 +3585,15 @@ function withNodeRefs(
   // A kind arranging no children has no gap, align, or justify to bind.
   for (const { kind, prop } of bindings) {
     const role = kinds.get(kind);
+    if (valueOnlyProps.has(prop)) {
+      if (role === 'container')
+        reject(
+          `${kind} arranges children, and an ${prop} is drawn in a node of a value or of text: put it in a node of its own, as <Node kind="Mark" ${prop}={…} />.`,
+          'bound_prop',
+          tags.find((entry) => entry.view === kind)?.start
+        );
+      continue;
+    }
     if (role && !lengthProps.has(prop) && !roleProps[role].includes(prop as DesignProp))
       reject(
         `${kind} has no ${prop} to bind: it is a look only of a node arranging children, with a layout.`,

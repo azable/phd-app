@@ -7,17 +7,19 @@ text in the very same files, so a layout worked out on the server
 out itself. There is a text face for each of the design's `font` values, and a
 fallback face for the characters any of them lacks (`∅`, `✓`, arrows,
 mathematical operators, and Greek in the faces without it), second in every font
-list:
+list, and an icon face, third, for the icons a view binds to its value
+(`<Node icon={this} />`):
 
-| Family      | Design `font` | Subset of                        | Licence                                             |
-| ----------- | ------------- | -------------------------------- | --------------------------------------------------- |
-| Vis Sans    | `sans`        | Inter 4.1                        | [OFL 1.1](LICENSE-Inter.txt)                        |
-| Vis Serif   | `serif`       | Source Serif 4.005               | [OFL 1.1](LICENSE-SourceSerif.md)                   |
-| Vis Mono    | `mono`        | JetBrains Mono NL 2.304          | [OFL 1.1](LICENSE-JetBrainsMono.txt)                |
-| Vis Legible | `legible`     | Atkinson Hyperlegible Next 2.001 | [OFL 1.1](LICENSE-AtkinsonHyperlegibleNext.txt)     |
-| Vis Casual  | `casual`      | Comic Neue 2.51                  | [OFL 1.1](LICENSE-ComicNeue.txt)                    |
-| Vis Slab    | `slab`        | Zilla Slab 1.002                 | [OFL 1.1](LICENSE-ZillaSlab.txt)                    |
-| Vis Symbols | (fallback)    | DejaVu Sans 2.37                 | [Bitstream Vera, public domain](LICENSE-DejaVu.txt) |
+| Family      | Design `font` | Subset of                        | Licence                                               |
+| ----------- | ------------- | -------------------------------- | ----------------------------------------------------- |
+| Vis Sans    | `sans`        | Inter 4.1                        | [OFL 1.1](LICENSE-Inter.txt)                          |
+| Vis Serif   | `serif`       | Source Serif 4.005               | [OFL 1.1](LICENSE-SourceSerif.md)                     |
+| Vis Mono    | `mono`        | JetBrains Mono NL 2.304          | [OFL 1.1](LICENSE-JetBrainsMono.txt)                  |
+| Vis Legible | `legible`     | Atkinson Hyperlegible Next 2.001 | [OFL 1.1](LICENSE-AtkinsonHyperlegibleNext.txt)       |
+| Vis Casual  | `casual`      | Comic Neue 2.51                  | [OFL 1.1](LICENSE-ComicNeue.txt)                      |
+| Vis Slab    | `slab`        | Zilla Slab 1.002                 | [OFL 1.1](LICENSE-ZillaSlab.txt)                      |
+| Vis Symbols | (fallback)    | DejaVu Sans 2.37                 | [Bitstream Vera, public domain](LICENSE-DejaVu.txt)   |
+| Vis Icons   | (icons)       | Lucide 0.563.0                   | [ISC, MIT for icons from Feather](LICENSE-Lucide.txt) |
 
 Each comes in regular (400) and bold (700), the weights the design draws. The
 mono face is JetBrains Mono's NL cut, without ligatures, so `!=` and `->` read
@@ -37,7 +39,11 @@ advances, and given one set of vertical metrics every platform reads alike. Its
 digits are its lining figures, all of one height (Zilla Slab's own are
 old-style, each at its own height, and the page selects no figure features), and
 its line is centred on them, its height kept, so a number sits in the middle of
-the node around it in every font. The same sources make the same files. The
+the node around it in every font. The icon face holds only `ICON_NAMES` in
+`subset.py`, each at Lucide's own code point in the Private Use Area, found by
+its glyph name, scaled to 0.85 of the em with that advance, and centred on
+Inter's digits in a line as tall as Inter's, so an icon beside a number grows no
+line; `faces.json` lists them by name. The same sources make the same files. The
 `.woff2` files are the page's, the `.ttf` files the server's, the same glyphs
 and metrics.
 

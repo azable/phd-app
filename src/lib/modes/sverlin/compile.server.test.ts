@@ -21,6 +21,7 @@ import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import heapTree from './fixtures/heap-tree.sverlin?raw';
 import listMarkers from './fixtures/list-markers.sverlin?raw';
 import { buildVariant } from './design.server';
+import { iconNames } from './library/fonts';
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
 const kindsOf = (space: Record<string, unknown>) =>
@@ -2283,6 +2284,37 @@ describe('props bound to a view’s value', () => {
     prepareSvelteComponent(
       `${domain}${algorithm}<View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Wide" name="WideText"><Node value={this} /></View>\n${views}\n<Layout name="Main">${page}</Layout>`
     );
+
+  describe('icons', () => {
+    const withState = (views: string) =>
+      prepareSvelteComponent(
+        `${domain.replace('</script>', " const State = type(['open', 'done']);</script>")}<script algorithm>@run[let state = State('open');]</script>${views}\n<Layout name="Main"><Node>{state}</Node></Layout>`
+      );
+
+    it('gives each value its own icon, an enumeration unordered, starting on distinct icons', () => {
+      const { design } = withState('<View of="State" name="StateMark"><Node icon={this} /></View>');
+      expect(design.space['StateMark.icon@open']).toEqual(iconNames);
+      expect(design.starter).toMatchObject({
+        'StateMark.icon@open': 'circle',
+        'StateMark.icon@done': 'circle-dot'
+      });
+      expect(design.space['StateMark.icon@from']).toBeUndefined();
+    });
+
+    it('refuses an icon written as it is, the design choosing each value’s', () => {
+      expect(() =>
+        withState('<View of="State" name="StateMark"><Node icon="flag" /></View>')
+      ).toThrow(/icon stands for a view's value[\s\S]*circle, circle-dot/);
+    });
+
+    it('refuses an icon on a node arranging children', () => {
+      expect(() =>
+        withState(
+          '<View of="State" name="StateMark"><Node layout="row" icon={this}><Node>{this}</Node></Node></View>'
+        )
+      ).toThrow(/arranges children, and an icon is drawn in a node of a value or of text/);
+    });
+  });
 
   it('gives each value of an unordered domain its own option, false the plainest', () => {
     const { design } = component(

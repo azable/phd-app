@@ -23,6 +23,7 @@ import {
   orders,
   unitKey,
   valueKey,
+  valueOnlyProps,
   type BoundDomain,
   type BoundValue
 } from './library/node/bound';
@@ -319,7 +320,7 @@ export function boundDomain(
     ? unique(found).toSorted((a, b) => (a as number) - (b as number))
     : (declared ??
       (found.every((value) => typeof value === 'boolean') ? [false, true] : unique(found)));
-  const ordered = numbers || declared !== undefined;
+  const ordered = !valueOnlyProps.has(prop) && (numbers || declared !== undefined);
   const capacity = boundCapacity(prop, ordered);
   if (ordered && !orderedProps.has(prop) && !colourProps.has(prop))
     return {
