@@ -339,8 +339,12 @@ label given a kind of its own.
   `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code
   already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`.
   A name is one word, without dots, and the algorithm runs as if the marks were
-  spaces. A labelled loop runs its code once per pass; a label on a function's
-  body runs once per call, recursive calls included.
+  spaces.
+- A run of a label is one execution of the code it marks, from where it begins
+  to where it ends: one evaluation of an expression, one pass of a loop's body,
+  one call of a function, recursive calls included. Runs nest, a run ends early
+  at a `break` or `return`, and code that does not execute has no run. `@x#n` is
+  the nth run of `x` to begin.
 - No code runs outside a label. Every statement of the algorithm, at its top
   level and in each function's body, is inside a label, as
   `@run[const found = search(values, target);]`. Every test of an `if`, `while`,
@@ -389,14 +393,13 @@ label given a kind of its own.
   among the blocks in scope: a loop inside another cannot declare `j` again,
   while loops one after another can.
 - A step is named by the stop it is at: the label whose run it ends and which
-  run that is, the nth run of that label to begin, as `@insert.swap#1`, or
-  `@insert.swap#1:before` just before that run begins, and `:before` and
-  `:after` for the whole case's: in a recursive function, `@sort#1` ends the
-  first call made, the outermost, at the last of its steps. The name is the same
-  in every variant, which numbers only the steps it shows. A step has no text:
-  the view says what it shows, from the recorded variables, so what it should
-  say is in the algorithm's variables, as an answer is the value a search
-  returns or where its loop stops.
+  run that is, as `@insert.swap#1`, or `@insert.swap#1:before` just before that
+  run begins, and `:before` and `:after` for the whole case's: in a recursive
+  function, `@sort#1` ends the first call made, the outermost, at the last of
+  its steps. The name is the same in every variant, which numbers only the steps
+  it shows. A step has no text: the view says what it shows, from the recorded
+  variables, so what it should say is in the algorithm's variables, as an answer
+  is the value a search returns or where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value an array also holds shows a copy,
