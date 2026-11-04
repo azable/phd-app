@@ -111,6 +111,41 @@ function snapshot(element: HTMLElement): Look {
   return Object.fromEntries(lookProperties.map((property) => [property, style[property]])) as Look;
 }
 
+/** A shadow list's shadows, split at the commas between them, not those inside a colour. */
+function shadows(list: string): string[] {
+  if (list === 'none') return [];
+  const found: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < list.length; at++) {
+    if (list[at] === '(') depth++;
+    else if (list[at] === ')') depth--;
+    else if (list[at] === ',' && depth === 0) {
+      found.push(list.slice(start, at).trim());
+      start = at + 1;
+    }
+  }
+  return [...found, list.slice(start).trim()];
+}
+
+/** A shadow drawn as a sharp ring round the box, a spread with no offset or blur, as `0 0 0 6px`. */
+const ring = /^(.*?)\s*0px 0px 0px (-?[\d.]+)px$/u;
+
+/**
+ * A shadow list with the rings the other list draws and this one does not, at no spread: a ring
+ * appearing or going then grows from the box or shrinks into it in its own colour, where
+ * interpolating with none would fade it out. Other shadows, as a lifted or soft one, still fade.
+ */
+function withRings(list: string, other: string): string {
+  const own = shadows(list);
+  const missing = shadows(other)
+    .slice(own.length)
+    .map((shadow) => ring.exec(shadow))
+    .filter((match) => match !== null)
+    .map((match) => `${match[1]} 0px 0px 0px 0px`);
+  return [...own, ...missing].join(', ') || 'none';
+}
+
 /**
  * Keyframes taking a node's paint from what it showed before to what it shows now, or none where
  * nothing changed. An outline appearing or going keeps one style throughout, its width running
@@ -124,6 +159,10 @@ function paintFrames(was: Look, is: Look): Keyframe[] | undefined {
       from[property] = was[property];
       to[property] = is[property];
     }
+  if (was.boxShadow !== is.boxShadow) {
+    from.boxShadow = withRings(was.boxShadow, is.boxShadow);
+    to.boxShadow = withRings(is.boxShadow, was.boxShadow);
+  }
   if (was.outlineStyle !== is.outlineStyle) {
     const drawn = is.outlineStyle === 'none' ? was : is;
     from.outlineStyle = to.outlineStyle = drawn.outlineStyle;

@@ -1,7 +1,7 @@
 /**
  * A pointer's painted spread shrinking as the pointer leaves: its fill and its stroke, both shadows,
  * shrink together frame by frame, the stroke never lagging behind in whole pixels as an outline's
- * offset would. Run with `pnpm run test:browser`.
+ * offset would, nor fading: it keeps its colour as it shrinks into the box. Run with `pnpm run test:browser`.
  */
 
 import { chromium, type Browser } from 'playwright-core';
@@ -58,9 +58,10 @@ it.skipIf(!enabled)(
     );
     await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
     await page.waitForTimeout(2500);
-    // Each frame's spreads of the cell the pointer leaves: [fill, stroke], and its outline's style.
+    // Each frame's spreads and colours of the cell the pointer leaves, [fill, stroke], and its
+    // outline's style.
     const frames = await page.evaluate(async () => {
-      const found: { spreads: number[]; outline: string }[] = [];
+      const found: { spreads: number[]; colours: string[]; outline: string }[] = [];
       const start = performance.now();
       window.postMessage({ type: 'sverlin:step', step: 2 }, '*');
       while (performance.now() - start < 600) {
@@ -71,10 +72,16 @@ it.skipIf(!enabled)(
         );
         if (!cell) continue;
         const style = getComputedStyle(cell);
-        const spreads = [
-          ...style.boxShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px/g)
-        ].map((shadow) => Number(shadow[4]));
-        found.push({ spreads, outline: style.outlineStyle });
+        const shadows = [
+          ...style.boxShadow.matchAll(
+            /([a-z]+\([^)]*\)) (-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px/g
+          )
+        ];
+        found.push({
+          spreads: shadows.map((shadow) => Number(shadow[5])),
+          colours: shadows.map((shadow) => shadow[1]),
+          outline: style.outlineStyle
+        });
       }
       return found;
     });
@@ -89,8 +96,10 @@ it.skipIf(!enabled)(
       expect(outline).toBe('none');
       expect(spreads[1]).toBeGreaterThan(spreads[0]);
     }
-    // The stroke moves at every frame the fill does, never holding a whole pixel.
+    // The stroke moves at every frame the fill does, never holding a whole pixel, and keeps its
+    // colour throughout, shrinking into the box rather than fading.
     for (let at = 1; at < shrinking.length; at++)
       expect(shrinking[at].spreads[1]).toBeLessThan(shrinking[at - 1].spreads[1]);
+    expect(new Set(shrinking.map(({ colours }) => colours[1])).size).toBe(1);
   }
 );
