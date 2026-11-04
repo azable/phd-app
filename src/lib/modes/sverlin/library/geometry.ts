@@ -15,7 +15,7 @@ import type { Layouts } from './steps';
 type Size = { width: number; height: number };
 
 /** Raised whenever what geometry holds, or how it is read, changes. */
-export const geometryVersion = 4;
+export const geometryVersion = 5;
 
 export type Geometry = {
   version: number;

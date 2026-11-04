@@ -371,13 +371,21 @@ function sizer(options: ReserveOptions) {
   }
   /**
    * Widen a grid's kept tracks to hold every cell of these drawings of it: each column as wide as
-   * the widest cell it holds and each row as tall as the tallest, as many as the largest coordinate.
+   * the widest cell it holds and each row as tall as the tallest. A track no drawn cell reaches that
+   * its coordinates' types allow (data-sv-extent) is as large as the largest drawn, room for a cell
+   * another input puts there; one they rule out is a gap. Where those types are not known, the
+   * tracks are those the drawn cells reach.
    */
   function widenTracks(grid: string, drawn: readonly { at: Read; element: ModelElement }[]) {
     const kept = memory.tracks.get(grid);
     const columns = [...(kept?.columns ?? [])];
     const rows = [...(kept?.rows ?? [])];
-    for (const { at, element } of drawn)
+    const allowed = [new Set<number>(), new Set<number>()];
+    for (const { at, element } of drawn) {
+      const given = String(element.attributes['data-sv-extent'] ?? '').split(',');
+      given.forEach((every, axis) => {
+        for (const index of every.split(' ').filter(Boolean)) allowed[axis]?.add(Number(index));
+      });
       for (const cell of elementsOf(element)) {
         const row = Number(cell.attributes['data-sv-row']);
         const column = Number(cell.attributes['data-sv-col']);
@@ -386,9 +394,17 @@ function sizer(options: ReserveOptions) {
         columns[column] = Math.max(columns[column] ?? 0, width);
         rows[row] = Math.max(rows[row] ?? 0, height);
       }
+    }
+    const filled = (tracks: (number | undefined)[], allowed: ReadonlySet<number>) => {
+      const largest = Math.max(0, ...tracks.map((size) => size ?? 0));
+      return Array.from(
+        { length: Math.max(tracks.length, ...[...allowed].map((index) => index + 1)) },
+        (_, index) => tracks[index] ?? (allowed.has(index) ? largest : 0)
+      );
+    };
     memory.tracks.set(grid, {
-      columns: Array.from(columns, (width) => width ?? 0),
-      rows: Array.from(rows, (height) => height ?? 0)
+      columns: filled(columns, allowed[1]),
+      rows: filled(rows, allowed[0])
     });
   }
 

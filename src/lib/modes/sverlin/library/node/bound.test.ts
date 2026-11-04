@@ -43,7 +43,7 @@ describe('bound props', () => {
     expect(boundLength({}, 'Bar', 'height', 3)).toBeUndefined();
   });
 
-  it('place a bar in its room by its kind’s anchor, standing or from the left by default', () => {
+  it('place a node sized by its value in its room by its kind’s anchor, standing or from the left by default', () => {
     expect(boundAnchor({}, 'Bar', 'height')).toBe('flex-end');
     expect(boundAnchor({}, 'Bar', 'width')).toBe('flex-start');
     expect(boundAnchor({ 'Bar.height@anchor': 'start' }, 'Bar', 'height')).toBe('flex-start');

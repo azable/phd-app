@@ -50,9 +50,9 @@ VertexCard.fill@true and VertexCard.fill@false, or for numbers in order
 LevelCell.textSize@from and LevelCell.textSize@order: keep its values told
 apart, never two of them one option, and give each a look that says what it
 means, as a seen vertex standing out from an unseen one. A length a view binds,
-as Bar.height@unit, is its pixels per unit: keep the largest bar readable and
-the view within its frame; Bar.height@anchor places each bar in its room, at
-start, center, or end, the bars of a kind always sharing it.
+as Bar.height@unit, is its pixels per unit: keep the largest value's node
+readable and the view within its frame; Bar.height@anchor places each such node
+in its room, at start, center, or end, the nodes of a kind always sharing it.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go, except labels whose runs all draw nothing new, which start

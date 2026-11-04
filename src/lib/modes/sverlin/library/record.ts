@@ -34,6 +34,8 @@ export type Sizing = {
     name: string;
     cases: unknown[];
     range?: { min: number; max: number; places?: number };
+    /** Its tests, each drawn going each way (see branchInsertions in components.server.ts). */
+    branches?: number;
   }[];
   placements: { path: string; step: number; values: unknown[] }[];
 };
@@ -100,7 +102,8 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
   const drawMarkup = (
     step: number,
     extra?: Record<string, unknown>,
-    substituted?: StepState
+    substituted?: StepState,
+    quiet = false
   ): ModelElement | undefined => {
     try {
       const { head, body } = options.render(
@@ -113,7 +116,7 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
         }
       return readMarkup(body, layer);
     } catch (cause) {
-      if (!substituted) report(cause, step);
+      if (!substituted && !quiet) report(cause, step);
       return undefined;
     }
   };
@@ -163,22 +166,36 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     ancestors: options.ancestors,
     memory
   });
-  // A typed component is drawn once with each value of its type it is sized by, and its root keeps
-  // the largest box it reaches: every value has room, whether or not this trace ever shows it.
+  // A typed component is drawn once with each value of its type it is sized by, each way its tests
+  // can go, and its root keeps the largest box it reaches: every value and branch has room, whether
+  // or not this trace ever shows it. A way its tests cannot go together, as one reading what another
+  // rules out, fails to draw and is passed over; only if every way fails is the failure told.
   // Components come after those they render, whose boxes they are drawn with.
-  for (const { name, cases, range } of sizing.components) {
-    const probe = (values: unknown[]) => {
-      const markup = drawMarkup(0, { __probe: { component: name, cases: values } });
-      if (!markup) return undefined;
+  for (const { name, cases, range, branches = 0 } of sizing.components) {
+    const ways = Array.from({ length: 2 ** branches }, (_, way) =>
+      branches
+        ? Array.from({ length: branches }, (_, test) => Boolean((way >> test) & 1))
+        : undefined
+    );
+    const probe = (values: unknown[], way?: boolean[]) => {
+      const markup = drawMarkup(
+        0,
+        { __probe: { component: name, cases: values, branches: way } },
+        undefined,
+        way !== undefined
+      );
+      if (!markup) return { drawn: false };
       const { box, font } = probeComponent(
         withLines(markup, layouts.lines),
         name,
         reserveOptions()
       );
       if (box) layouts.components.set(name, box);
-      return font;
+      return { drawn: true, font };
     };
-    const font = probe(cases);
+    const drawn = ways.map((way) => probe(cases, way));
+    if (branches && !drawn.some((way) => way.drawn)) probe(cases);
+    const font = drawn.find((way) => way.font)?.font;
     // Digits differ in width in most fonts, and the font is drawn per presentation, so a range too
     // large to draw whole is drawn again with the integer that prints widest in the value's font.
     if (range && font) {
@@ -188,7 +205,7 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
         (character) => measure.width(character, font),
         range.places
       );
-      if (!cases.includes(widest)) probe([widest]);
+      if (!cases.includes(widest)) for (const way of ways) probe([widest], way);
     }
   }
   const reservation = reserveSizes(drawings, reserveOptions());

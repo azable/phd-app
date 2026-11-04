@@ -75,6 +75,7 @@ import {
   isPart,
   eachScope,
   probeMarkup,
+  branchInsertions,
   pointerCalls,
   probeValues,
   positionReads,
@@ -139,6 +140,8 @@ import {
   boundDesign,
   boundDomain,
   boundLengthDomain,
+  gridExtents,
+  memberTestRead,
   typeOfPath,
   type Binding,
   type Scope
@@ -1782,6 +1785,19 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       );
     const slotted = new Map<number, string[]>();
     const tagged = withInsertions(svelteSource, [
+      ...branchInsertions(found.components),
+      // A grid's rows and columns for any input, from its coordinates' types (see gridExtents).
+      ...[
+        ...gridExtents(
+          ast.html,
+          domain,
+          variableTypes(master),
+          new Map(found.components.map(({ name, type }) => [name, type]))
+        )
+      ].map(([start, extent]) => ({
+        at: start + '<Node'.length,
+        text: ` __extent={${JSON.stringify(extent)}}`
+      })),
       ...insertions,
       ...pointers.removals,
       ...implicitInsertions(
@@ -2605,7 +2621,7 @@ function checkProps(
                   : attribute.name === 'size'
                     ? `<${component}> takes no size: its text's size is textSize, in pixels, a look the design gives every kind of node, not the markup, as the variable ${kind}.textSize.`
                     : component === 'Node' && attribute.name === 'anchor'
-                      ? `<Node> takes no anchor: where a bar sits in its room is a look the design gives the bar's kind, not the markup, as the variable ${kind}.height@anchor (start, center or end) for a bar bound by height={…}.`
+                      ? `<Node> takes no anchor: where a node sized by its value sits in its room is a look the design gives its kind, not the markup, as the variable ${kind}.height@anchor (start, center or end) for a node bound by height={…}.`
                       : component === 'Link' && linkLooks.has(attribute.name)
                         ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
                         : designProps.has(attribute.name)
@@ -3105,6 +3121,22 @@ function withNodeRefs(
           walk(child, around, inNode, view, page, names);
       walk(tag.children, around, inNode, view, page, inner);
       return;
+    }
+    // A test of which member a union holds, read inside in a branch, would meet the member it kept
+    // out when every branch is measured; each member's own view draws it instead.
+    if (tag.type === 'IfBlock' && scope && domain) {
+      const found = memberTestRead(tag as never, scope, domain);
+      if (found) {
+        const text = (node: { start?: number; end?: number } | undefined) =>
+          svelteSource.slice(node?.start ?? 0, node?.end ?? 0).replaceAll(viewThis, 'this');
+        const tested = text(found.tested as never);
+        const views = found.members.map((member) => `<View of="${member}" name="…">…</View>`);
+        reject(
+          `{#if ${text(tag.expression as never)}} tests which member ${tested} holds and reads inside it: give each member its own view, as ${views.slice(0, -1).join(', ')} and ${views.at(-1)}, and write {${tested}}, which draws the one it holds.`,
+          'view_component',
+          tag.start
+        );
+      }
     }
     // A {@const} name of a path's value has that path's type, for the nodes after it.
     if (tag.type === 'ConstTag' && scope) {

@@ -151,8 +151,24 @@ A node whose only child is an `{#each}` holds a collection: its items sit on
 equal tracks, as large as the largest, in a row unless it sets `layout`, and a
 collection inside another runs across it, as rows in a column. Put a title for a
 collection in a node around it, not beside the `{#each}`. Every view is measured
-with every value its type allows, so its box keeps one size and nothing moves
-between steps.
+for every input its type allows, so its box keeps one size and nothing moves
+between steps or inputs: with every value of its type where there are few, else
+the widest, and with each `{#if}`, `<When>`, and `<OneOf>` in it going each way,
+whatever its values say, so a branch no input here takes still has room.
+
+So a test of which member a union holds that reads inside it in a branch is an
+error, as `{#if this.next !== 'end'}{this.next.name}{/if}`: measured going the
+other way, it would read inside the end. Give each member its own view, and draw
+the union, which draws the member it holds:
+
+```svelte
+<View of="NodeRef" name="Then"><Node>then {this.name}</Node></View>
+<View of="End" name="Last"><Node>(last)</Node></View>
+<View of="ListNode" name="Card"><Node>{this.name}{this.next}</Node></View>
+```
+
+A test reading a value without reading inside a member, as `{#if this.seen}` or
+`{#if this > 2}`, is measured either way as it is.
 
 An item's track is as large as the largest any item reaches at any step, so what
 makes one item large makes every item large: in a collection of groups, the
@@ -940,19 +956,19 @@ has no values to bind: give it a type where the algorithm computes it, as
   it differently need kinds of their own (`kind="Visited"`). A bound prop that
   sizes a box keeps the box at its largest over every step, as every box does.
 - `width` and `height` are lengths, bound only in a view: the value times a unit
-  of the node's kind, from zero, as `<Node height={this} />`, a bar. Any number
-  of values fits, but none below zero. The unit, in pixels per unit, is a
-  variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or 24), starting at
-  the largest that keeps the type's largest value within 200 pixels, and every
-  node of the kind shares it. A bar holding nothing is exactly its length, so 0
-  draws only its border; one holding a label is the longer of the two. It sits
-  in a room as long as its type's largest value, which keeps that room wherever
-  it is drawn, a pointer on it or not, so nothing around it moves; the bar
-  itself is only its length. Where in the room is a variable of the kind along
-  each bound length, as `Bar.height@anchor`: `start` (the top, or the left),
-  `center`, or `end`, starting at `end` for `height`, so bars stand on one
-  baseline, and `start` for `width`. Anywhere else a box sizes to its contents,
-  at least its kind's `minSize`.
+  of the node's kind, from zero, as `<Node height={this} />`, a node sized by
+  its value. Any number of values fits, but none below zero. The unit, in pixels
+  per unit, is a variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or
+  24), starting at the largest that keeps the type's largest value within 200
+  pixels, and every node of the kind shares it. Such a node holding nothing is
+  exactly its length, so 0 draws only its border; one holding a label is the
+  longer of the two. It sits in a room as long as its type's largest value,
+  which keeps that room wherever it is drawn, a pointer on it or not, so nothing
+  around it moves; the node itself is only its length. Where in the room is a
+  variable of the kind along each bound length, as `Bar.height@anchor`: `start`
+  (the top, or the left), `center`, or `end`, starting at `end` for `height`, so
+  the nodes of a kind stand on one baseline, and `start` for `width`. Anywhere
+  else a box sizes to its contents, at least its kind's `minSize`.
 
 ```svelte
 <View of="Vertex" name="VertexCard">
@@ -1278,10 +1294,12 @@ cell by `row` and `col`, usually loop indices or positions:
   edge at `row={e.from} col={e.to}`: no placeholder nodes.
 - Two cells at one coordinate at one step is an error at that step.
 - Every column is as wide as its widest cell and every row as tall as its
-  tallest at any step, as many as the largest coordinate any step uses, so a
-  table filling in never moves. A grid in a view sizes them over every value of
-  its type too, one set every copy shares, so two tables drawn by one view line
-  up column for column.
+  tallest at any step, and there are as many as the coordinates' types allow, an
+  `{#each}` index up to its collection's `max`, so a table filling in, or drawn
+  for a longer input, never moves: a column no cell here reaches keeps room for
+  one, unless no value of its coordinate can place one there. A grid in a view
+  sizes them over every value of its type too, one set every copy shares, so two
+  tables drawn by one view line up column for column.
 - The grid's kind has `gap`, between columns and rows; `align`, where each cell
   sits in its column and row; and `justify`, how the columns spread where the
   grid has more room than they need.

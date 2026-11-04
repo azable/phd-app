@@ -1348,15 +1348,55 @@ function patternNames(pattern: unknown): string[] {
 
 /**
  * Markup appended to the view so the page can render a component for given arguments: under the
- * reserved prop __probe, every case of one component, each a list of arguments.
+ * reserved prop __probe, every case of one component, each a list of arguments, with the way each
+ * of its tests goes (see branchInsertions).
  */
 export function probeMarkup(signatures: ComponentSignatures): string {
   return Object.entries(signatures)
     .map(
       ([name]) =>
-        `{#if __probe?.component === '${name}'}{#each __probe.cases as __case}{@render ${name}(__case)}{/each}{/if}`
+        `{#if __probe?.component === '${name}'}{#each __probe.cases as __case}{@render ${name}(__case, __probe.branches)}{/each}{/if}`
     )
     .join('');
+}
+
+/** The test of each {#if} and {:else if} in a view, <When> and <OneOf> among them, in source order. */
+function branchTests(view: SvelteNode): { start: number; end: number }[] {
+  const tests: { start: number; end: number }[] = [];
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    const node = value as Record<string, unknown> & { type?: string };
+    const test = node.expression as { start?: number; end?: number } | undefined;
+    if (node.type === 'IfBlock' && test?.start !== undefined && test.end !== undefined)
+      tests.push({ start: test.start, end: test.end });
+    for (const [key, child] of Object.entries(node))
+      if (key !== 'parent' && key !== 'expression') walk(child);
+  };
+  walk(view.children);
+  return tests.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * A view sized for every input, not only the one run: while it is measured, each of its tests is
+ * made to go each way, whatever its values say, so every branch it could draw is measured (see
+ * componentProbes); shown, each test reads its values. The view takes the ways as a second
+ * argument, which only measuring gives; a test inside an {#each} goes one way for every item at
+ * once, as the items share their tracks.
+ */
+export function branchInsertions(views: readonly { node: SvelteNode }[]): Insertion[] {
+  return views.flatMap(({ node }) => {
+    const parameter = node.parameters?.[0] as { end?: number } | undefined;
+    const tests = branchTests(node);
+    if (parameter?.end === undefined || !tests.length) return [];
+    return [
+      { at: parameter.end, text: ', __b' },
+      ...tests.flatMap(({ start, end }, index) => [
+        { at: start, text: `(__b ? __b[${index}] : (` },
+        { at: end, text: '))' }
+      ])
+    ];
+  });
 }
 
 /** The components that view each type, in source order. */
@@ -1375,10 +1415,13 @@ export type ComponentProbe = {
    * draws it with the integer in the range that prints widest in the font the value is drawn in.
    */
   range?: { min: number; max: number; places?: number };
+  /** Its tests, each drawn going each way, so every branch it could draw is measured. */
+  branches?: number;
 };
 
-// A component's cases are drawn in one pass of the page; this bounds them, so a pass stays about as
-// quick as a step's.
+// A component's cases are drawn in one pass of the page for each way its tests can go; this bounds
+// them all together, so sizing a component stays about as quick as a step (a case costs about a
+// millisecond of server layout, measured on 4 November 2026).
 const maximumCases = 256;
 
 /** The values a parameter is drawn with: every value, when there are few enough, and the widest. */
@@ -1388,8 +1431,10 @@ type Steps = readonly { state: TraceState; types: TypeMap }[];
 
 /**
  * The view's components, each after the components it renders, directly or through a type's name
- * choosing among them, so their boxes are known when it is drawn; with the values to draw it with.
- * A component with more cases than a pass can draw is a problem.
+ * choosing among them, so their boxes are known when it is drawn; with the values to draw it with
+ * and its tests (see branchInsertions). Every value is drawn where every value with every way its
+ * tests go stays within the limit, and otherwise the widest: each test going each way covers what
+ * else a value could change. A component with more cases than that is a problem.
  */
 export function componentProbes(
   found: { name: string; start: number; node: SvelteNode }[],
@@ -1424,8 +1469,12 @@ export function componentProbes(
     const parameter = node.parameters?.[0]?.name ?? '';
     const single = onlyViewed(valueUses(node.children, new Set([parameter]), views));
     const values = valuesOf(type, parameter, single);
+    const branches = branchTests(node).length;
+    const ways = 2 ** branches;
     const cases =
-      values && (values.every?.length ?? Infinity) <= maximumCases ? values.every : values?.widest;
+      values && (values.every?.length ?? Infinity) * ways <= maximumCases
+        ? values.every
+        : values?.widest;
     const atom = domain.atoms[type];
     const range =
       (atom?.base === 'integer' || (atom?.base === 'number' && atom.places !== undefined)) &&
@@ -1436,11 +1485,13 @@ export function componentProbes(
       !single(parameter)
         ? { min: atom.min!, max: atom.max!, ...(atom.places ? { places: atom.places } : {}) }
         : undefined;
-    if (cases && cases.length <= maximumCases)
-      probes.push({ name, cases, ...(range ? { range } : {}) });
+    if (cases && cases.length * ways <= maximumCases)
+      probes.push({ name, cases, ...(range ? { range } : {}), ...(branches ? { branches } : {}) });
     else
       problems.push({
-        message: `${name} would be drawn with ${cases?.length ?? 'too many'} values of ${type} to size it, more than the ${maximumCases} a component can take. Give ${type} fewer values, or draw its parts with components of their own.`,
+        message: branches
+          ? `${name} would be drawn ${cases ? cases.length * ways : 'too many'} times to size it, with ${cases?.length ?? 'too many'} values of ${type} each way its ${branches} tests can go, more than the ${maximumCases} a component can take. Give ${type} fewer values, or draw the parts its tests decide with components of their own.`
+          : `${name} would be drawn with ${cases?.length ?? 'too many'} values of ${type} to size it, more than the ${maximumCases} a component can take. Give ${type} fewer values, or draw its parts with components of their own.`,
         start: found.find((component) => component.name === name)?.start ?? 0
       });
   }

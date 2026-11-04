@@ -148,7 +148,7 @@ describe('laying out on the server', () => {
     expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
   }, 60_000);
 
-  it('keeps a bar’s room at its type’s largest value times its unit', async () => {
+  it('keeps the room of a node sized by its value at its type’s largest value times its unit', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/bars.sverlin', 'utf8');
     const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
@@ -158,6 +158,47 @@ describe('laying out on the server', () => {
     ) as Geometry[];
     // Values up to 9 at the starter's 16 pixels per unit: 144 pixels, whatever the input reaches.
     expect(new Map(given.components).get('Bar')?.height).toBe(144);
+  }, 60_000);
+
+  it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
+    const box = async (cell: string) => {
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = collection(Int, { max: 2 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main"><Node>{values}</Node></Layout>`;
+      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      expect(layout.errors).toEqual([]);
+      const prefix = 'window.__sverlinGeometry=';
+      const [given] = JSON.parse(
+        javascript.slice(prefix.length, javascript.indexOf(';\n'))
+      ) as Geometry[];
+      return new Map(given.components).get('Cell')!;
+    };
+    const plain = await box('<Node layout="row"><Node value={this} /></Node>');
+    // No input value is 7, and 0 to 999 is too many to draw each: only the branch's being measured
+    // either way gives it room.
+    const lucky = await box(
+      '<Node layout="row"><Node value={this} />{#if this === 7}<Node>lucky</Node>{/if}</Node>'
+    );
+    expect(lucky.width).toBeGreaterThan(plain.width + 20);
+  }, 60_000);
+
+  it('keeps a grid’s columns for every coordinate its type allows, not only those the input reaches', async () => {
+    const tracks = async (col: string) => {
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 5 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell"><Node value={this} /></View>\n<Layout name="Main"><Node><Node layout="grid">{#each values as v, i}<Node row={0} col={${col}}>{v}</Node>{/each}</Node></Node></Layout>`;
+      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      expect(layout.errors).toEqual([]);
+      const prefix = 'window.__sverlinGeometry=';
+      const [given] = JSON.parse(
+        javascript.slice(prefix.length, javascript.indexOf(';\n'))
+      ) as Geometry[];
+      return given.tracks[0][1];
+    };
+    // Two values drawn, but i runs to the max's 4: five columns, each room for a cell.
+    const plain = await tracks('i');
+    expect(plain.columns).toHaveLength(5);
+    expect(new Set(plain.columns).size).toBe(1);
+    // Only even columns can hold a cell, so the odd ones stay gaps.
+    const even = await tracks('2 * i');
+    expect(even.columns).toHaveLength(9);
+    expect(even.columns.filter((width, index) => index % 2 === 1 && width > 0)).toEqual([]);
   }, 60_000);
 
   it('keeps a collection’s room at its type’s max, whatever the input’s length', async () => {

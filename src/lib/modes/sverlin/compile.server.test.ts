@@ -14,6 +14,7 @@ import { linearSearchSource } from './contract';
 import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
+import listMarkers from './fixtures/list-markers.sverlin?raw';
 import { buildVariant } from './design.server';
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
@@ -2502,7 +2503,7 @@ describe('props bound to a view’s value', () => {
     expect(design.space['Bar.width@unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
     // The largest unit keeping 99, the largest Wide, within 200 pixels.
     expect(design.starter['Bar.width@unit']).toBe(2);
-    // A bar from the left, as width runs, until the design places it otherwise.
+    // From the left, as width runs, until the design places it otherwise.
     expect(design.space['Bar.width@anchor']).toEqual(['start', 'center', 'end']);
     expect(design.starter['Bar.width@anchor']).toBe('start');
   });
@@ -2566,7 +2567,9 @@ describe('props bound to a view’s value', () => {
   it('refuses an anchor written in the markup', () => {
     expect(() =>
       component('<View of="Wide" name="Bar"><Node height={this} anchor="start" /></View>')
-    ).toThrow(/takes no anchor: where a bar sits in its room is a look the design gives/);
+    ).toThrow(
+      /takes no anchor: where a node sized by its value sits in its room is a look the design gives/
+    );
   });
 });
 
@@ -2610,5 +2613,35 @@ describe('grids', () => {
     ]
   ])('refuses %s', (_name, grid, message) => {
     expect(() => table(grid)).toThrow(message);
+  });
+});
+
+describe('tests of a union in a view', () => {
+  const withBox = (box: string) =>
+    listMarkers.replace(
+      /<View of="ListNode" name="NodeBox">[\s\S]*?\n<\/View>/u,
+      `<View of="ListNode" name="NodeBox">\n  ${box}\n</View>`
+    );
+
+  it('refuses one that tests which member a union holds and reads inside it', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        withBox(
+          `<Node layout="row">{this.name}{#if this.next !== 'end'}<Node><Link to={this.next} />{this.next.name}</Node>{/if}</Node>`
+        )
+      )
+    ).toThrow(
+      `{#if this.next !== 'end'} tests which member this.next holds and reads inside it: give each member its own view, as <View of="NodeRef" name="…">…</View> and <View of="End" name="…">…</View>, and write {this.next}, which draws the one it holds.`
+    );
+  });
+
+  it('keeps one that tests a union without reading inside it, or reads a value it tests', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        withBox(
+          `<Node layout="row">{this.name}{#if this.next !== 'end'}<Node><Link to={this.next} /></Node>{/if}{#if this.name === 'A'}<Node>first</Node>{/if}</Node>`
+        )
+      )
+    ).not.toThrow();
   });
 });

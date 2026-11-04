@@ -534,7 +534,7 @@ function drawOne(
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
   if (prop.startsWith('pause@') || kept.has(prop) || framedKinds(space).has(kindOf(key)))
     return value;
-  // A bound prop's hue, the way its options run, or where a bar sits in its room is drawn afresh.
+  // A bound prop's hue, the way its options run, or where a node sized by its value sits in its room is drawn afresh.
   if (['@hue', '@order', '@anchor'].some((end) => key.endsWith(end))) return pick(options);
   if (colourProps.has(prop)) {
     const parts = typeof value === 'string' ? colourParts(value) : undefined;

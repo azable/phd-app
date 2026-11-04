@@ -7,7 +7,7 @@
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 import type { DesignSpace, DesignValue } from './design.server';
-import { isLabelKey, untypedBoolean, written as writtenName } from './label-values';
+import { isLabelKey, untypedBoolean, viewThis, written as writtenName } from './label-values';
 import {
   anchorKey,
   anchors,
@@ -234,6 +234,61 @@ function untypedProblem(prop: string, written: string, path: Node, scope: Scope)
 const nameable = (value: BoundValue) =>
   typeof value === 'boolean' || /^[A-Za-z0-9_-]+$/u.test(String(value));
 
+/** A path as written from a name, as this.next, or undefined for anything else. */
+function pathKey(node: unknown): string | undefined {
+  const part = node as Node | undefined;
+  if (part?.type === 'Identifier') return part.name as string;
+  if (part?.type !== 'MemberExpression' || part.computed) return undefined;
+  const owner = pathKey(part.object);
+  return owner && `${owner}.${(part.property as { name?: string }).name}`;
+}
+
+/**
+ * Where an {#if} tests which member a union holds, by comparing it with a value, as
+ * `this.next !== 'end'`, and reads inside it in a branch, as `this.next.name`: measured, each
+ * branch is drawn whatever the test says (see branchInsertions in components.server.ts), so the
+ * read would meet the member the test kept out. The tested path and its union's members.
+ */
+export function memberTestRead(
+  ifBlock: Node,
+  scope: Scope,
+  domain: DomainRegistry
+): { tested: Node; members: readonly string[] } | undefined {
+  const tests: Node[] = [];
+  const collect = (node: unknown) => {
+    const part = node as Node | undefined;
+    if (part?.type === 'LogicalExpression') [part.left, part.right].forEach(collect);
+    else if (part?.type === 'UnaryExpression' && part.operator === '!') collect(part.argument);
+    else if (
+      part?.type === 'BinaryExpression' &&
+      ['===', '!==', '==', '!='].includes(part.operator as string)
+    )
+      tests.push(
+        ...([part.left, part.right] as Node[]).filter(
+          (side, index, both) => both[1 - index].type === 'Literal'
+        )
+      );
+  };
+  collect(ifBlock.expression);
+  const reads = (node: unknown, key: string): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some((item) => reads(item, key));
+    const part = node as Node;
+    if (part.type === 'MemberExpression' && pathKey(part.object) === key) return true;
+    return Object.entries(part).some(
+      ([name, child]) => name !== 'parent' && name !== 'metadata' && reads(child, key)
+    );
+  };
+  for (const tested of tests) {
+    const type = typeOfPath(tested, scope, domain);
+    const union = type === undefined ? undefined : domain.structures[type];
+    const key = pathKey(tested);
+    if (union?.kind === 'union' && key && reads([ifBlock.children, ifBlock.else], key))
+      return { tested, members: union.members };
+  }
+  return undefined;
+}
+
 /**
  * The values a prop bound to `expression`, reading names in `scope`, can take, in order, or why it
  * cannot be bound: numbers, and an enumeration's words in their declared order, keep their order
@@ -390,4 +445,104 @@ export function boundDesign(bindings: readonly Binding[]): {
     starter[keys.from] = firsts[Math.floor((firsts.length - 1) / 2)];
   }
   return { space, starter };
+}
+
+/**
+ * Each grid's rows and columns for any input, by where its tag starts: every row and every col its
+ * cells can take, from the types of what their coordinates read, an {#each} index running from 0 to
+ * its collection's max - 1. Null where a coordinate's values cannot be worked out, so that grid
+ * keeps only the tracks the run's cells reach.
+ */
+export function gridExtents(
+  markup: unknown,
+  domain: DomainRegistry,
+  variables: Scope,
+  views: Scope
+): Map<number, [number[] | null, number[] | null]> {
+  const atoms: Record<string, AtomType> = { ...domain.atoms };
+  const extended: DomainRegistry = { ...domain, atoms };
+  const extents = new Map<number, [number[] | null, number[] | null]>();
+  const inEach = (each: Node, scope: Scope): Scope => {
+    const inner = new Map(scope);
+    const collection = typeOfPath(each.expression as Node, scope, extended);
+    const structure = collection === undefined ? undefined : extended.structures[collection];
+    if (structure?.kind !== 'collection') return inner;
+    const context = each.context as Node | undefined;
+    if (context?.type === 'Identifier') inner.set(context.name as string, structure.element);
+    if (typeof each.index === 'string' && structure.max !== undefined) {
+      const index = `${structure.name} index`;
+      atoms[index] ??= { name: index, base: 'integer', min: 0, max: structure.max - 1 };
+      inner.set(each.index, index);
+    }
+    return inner;
+  };
+  const coordinate = (cell: Node, name: string, scope: Scope): number[] | undefined => {
+    const attribute = (cell.attributes as Node[] | undefined)?.find((each) => each.name === name);
+    const [part] = Array.isArray(attribute?.value) ? (attribute.value as Node[]) : [];
+    const expression =
+      part?.type === 'MustacheTag'
+        ? (part.expression as Node)
+        : part?.type === 'Text'
+          ? { type: 'Literal', value: Number(part.data) }
+          : undefined;
+    const values = expression && valuesOf(expression, scope, extended);
+    return values?.length && values.every((value) => typeof value === 'number')
+      ? (values as number[])
+      : undefined;
+  };
+  const isGrid = (node: Node) =>
+    node.type === 'InlineComponent' &&
+    node.name === 'Node' &&
+    (node.attributes as Node[] | undefined)?.some(
+      (attribute) =>
+        attribute.name === 'layout' &&
+        Array.isArray(attribute.value) &&
+        (attribute.value as Node[])[0]?.data === 'grid'
+    );
+  // The rows and cols a grid's cells can take, through the blocks between it and them.
+  const cells = (
+    node: unknown,
+    scope: Scope,
+    found: { row?: number[]; col?: number[] }[]
+  ): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => cells(child, scope, found));
+    const part = node as Node;
+    if (part.type === 'EachBlock') {
+      cells(part.children, inEach(part, scope), found);
+      return cells(part.else, scope, found);
+    }
+    if (part.type === 'IfBlock' || part.type === 'ElseBlock') {
+      cells(part.children, scope, found);
+      return cells(part.else, scope, found);
+    }
+    if (part.type === 'InlineComponent' && part.name === 'Node')
+      found.push({ row: coordinate(part, 'row', scope), col: coordinate(part, 'col', scope) });
+  };
+  const every = (found: { row?: number[]; col?: number[] }[], axis: 'row' | 'col') =>
+    found.length && found.every((cell) => cell[axis] !== undefined)
+      ? [...new Set(found.flatMap((cell) => cell[axis]!))].sort((a, b) => a - b)
+      : null;
+  const walk = (node: unknown, scope: Scope): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, scope));
+    const part = node as Node;
+    if (part.type === 'SnippetBlock') {
+      const view = views.get((part.expression as Node | undefined)?.name as string);
+      return walk(part.children, view === undefined ? scope : new Map([[viewThis, view]]));
+    }
+    if (part.type === 'EachBlock') {
+      walk(part.children, inEach(part, scope));
+      return walk(part.else, scope);
+    }
+    if (isGrid(part)) {
+      const found: { row?: number[]; col?: number[] }[] = [];
+      cells(part.children, scope, found);
+      extents.set(part.start as number, [every(found, 'row'), every(found, 'col')]);
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata') walk(child, scope);
+  };
+  walk(markup, variables);
+  return extents;
 }

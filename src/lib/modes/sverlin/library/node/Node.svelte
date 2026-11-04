@@ -97,6 +97,7 @@
     __itemAt,
     __items,
     __places,
+    __extent,
     __domains,
     ...bound
   }: {
@@ -145,6 +146,11 @@
      * compiler, with the values each can take (see bound.ts).
      */
     __domains?: Readonly<Record<string, BoundDomain>>;
+    /**
+     * Internal: every row and column a grid's cells can take for any input, from their coordinates'
+     * types, null where they cannot be worked out (see gridExtents in bound-props.server.ts).
+     */
+    __extent?: readonly [readonly number[] | null, readonly number[] | null];
     [bound: `__bound_${string}`]: unknown;
   } = $props();
 
@@ -164,19 +170,19 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
-  // A length the view binds, as width={this}: its value times its kind's unit, in pixels. A bar
-  // draws its length in a room that keeps the largest it reaches, so nothing around it moves, at
-  // its kind's anchor along each bound length: a vertical bar stands on the room's bottom unless the
-  // design hangs it from the top or centres it.
+  // A length the view binds, as width={this}: its value times its kind's unit, in pixels. A node
+  // sized by its value draws that length in a room that keeps the largest it reaches, so nothing
+  // around it moves, at its kind's anchor along each bound length: one sized by height stands on
+  // the room's bottom unless the design hangs it from the top or centres it.
   const lengthOf = (prop: 'width' | 'height') =>
     __domains?.[prop] ? boundLength(design, __view, prop, bound[`__bound_${prop}`]) : undefined;
-  const barWidth = $derived(lengthOf('width'));
-  const barHeight = $derived(lengthOf('height'));
-  const bar = untrack(() => Boolean(__domains?.width || __domains?.height));
-  const standing = untrack(() => Boolean(__domains?.height));
-  const alongAnchor = $derived(boundAnchor(design, __view, standing ? 'height' : 'width'));
+  const valueWidth = $derived(lengthOf('width'));
+  const valueHeight = $derived(lengthOf('height'));
+  const sizedByValue = untrack(() => Boolean(__domains?.width || __domains?.height));
+  const sizedByHeight = untrack(() => Boolean(__domains?.height));
+  const alongAnchor = $derived(boundAnchor(design, __view, sizedByHeight ? 'height' : 'width'));
   const acrossAnchor = $derived(
-    standing && __domains?.width ? boundAnchor(design, __view, 'width') : 'flex-start'
+    sizedByHeight && __domains?.width ? boundAnchor(design, __view, 'width') : 'flex-start'
   );
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
@@ -398,14 +404,14 @@
     const setting = look(prop);
     return typeof setting === 'number' ? `${setting}${unit}` : undefined;
   };
-  // A bar holding nothing is its length along it, with no padding there, so 0 draws no length; one
-  // holding a label is as long as the larger of the two.
+  // A node sized by its value and holding nothing is its length along it, with no padding there, so
+  // 0 draws no length; one holding a label is as long as the larger of the two.
   const bare = $derived(!children && value === undefined && !__items);
-  const barPadding = $derived.by(() => {
+  const valuePadding = $derived.by(() => {
     const padding = measured('padding', 'em');
-    if (!bare || (barWidth === undefined && barHeight === undefined)) return padding;
-    const across = barHeight === undefined ? (padding ?? '0') : '0';
-    const along = barWidth === undefined ? (padding ?? '0') : '0';
+    if (!bare || (valueWidth === undefined && valueHeight === undefined)) return padding;
+    const across = valueHeight === undefined ? (padding ?? '0') : '0';
+    const along = valueWidth === undefined ? (padding ?? '0') : '0';
     return `${across} ${along}`;
   });
   const sized = (length: number | undefined) =>
@@ -413,7 +419,7 @@
   const least = (length: number | undefined, axis: 'width' | 'height') =>
     length !== undefined
       ? `${length}px`
-      : leastOf(measured('minSize', 'em'), bar ? undefined : reserved?.[axis]);
+      : leastOf(measured('minSize', 'em'), sizedByValue ? undefined : reserved?.[axis]);
   const strokeColour = $derived(colourCss(look('stroke')));
   const borderWidth = $derived(
     strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
@@ -540,11 +546,11 @@
     style:border-style={strokeStyleCss(look('strokeStyle'))}
     style:border-width={`${borderWidth}px`}
     style:border-radius={measured('radius', 'px')}
-    style:padding={barPadding}
-    style:width={sized(barWidth)}
-    style:height={sized(barHeight)}
-    style:min-width={least(barWidth, 'width')}
-    style:min-height={least(barHeight, 'height')}
+    style:padding={valuePadding}
+    style:width={sized(valueWidth)}
+    style:height={sized(valueHeight)}
+    style:min-width={least(valueWidth, 'width')}
+    style:min-height={least(valueHeight, 'height')}
     style:opacity={look('opacity') as number | undefined}
   >
     {#if free}
@@ -566,6 +572,7 @@
       <div
         class="sv-grid"
         data-sv-grid={gridKey}
+        data-sv-extent={__extent?.map((every) => every?.join(' ') ?? '').join(',')}
         style:gap={`${gap}em`}
         style:align-items={alignment}
         style:justify-items={alignment}
@@ -617,7 +624,7 @@
         >{printed}{#if unit}<span class="unit">{unit}</span>{/if}</span
       >
     {/if}
-    <!-- A node with no value, items, or children is a shape alone, such as a dot or a bar. -->
+    <!-- A node with no value, items, or children is a shape alone, such as a dot. -->
   </div>
 {/snippet}
 
@@ -649,12 +656,12 @@
         {/each}
       </Overhang>
     {/if}
-  {:else if bar}
-    <!-- A bar, in the room that keeps the largest it reaches (see lengthOf). -->
+  {:else if sizedByValue}
+    <!-- A node sized by its value, in the room that keeps the largest it reaches (see lengthOf). -->
     <div
       class="sv-room"
       style:display="flex"
-      style:flex-direction={standing ? 'column' : 'row'}
+      style:flex-direction={sizedByHeight ? 'column' : 'row'}
       style:justify-content={alongAnchor}
       style:align-items={acrossAnchor}
       style:min-width={leastOf(undefined, reserved?.width)}

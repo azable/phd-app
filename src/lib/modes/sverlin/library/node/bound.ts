@@ -124,7 +124,7 @@ export function boundLook(
 
 /**
  * Lengths a view binds, as `<Node width={this} />`: the value times a unit of the node's kind, from
- * zero, so a bar's length is its value. Any number of values fits, so these are the one exception
+ * zero, so the node's length is its value. Any number of values fits, so these are the one exception
  * to a domain fitting its prop's options.
  */
 export const lengthProps: ReadonlySet<string> = new Set(['width', 'height']);
@@ -148,13 +148,13 @@ export function boundLength(
     : undefined;
 }
 
-/** Where a bar sits along its length in its room: its start (top or left), centre, or end. */
+/** Where a node sized by its value sits along that length in its room: its start (top or left), centre, or end. */
 export const anchors = ['start', 'center', 'end'] as const;
 
-/** The variable placing a length's bar in its room, as Bar.height@anchor. */
+/** The variable placing a node sized by its value in its room, as Bar.height@anchor. */
 export const anchorKey = (kind: string, prop: string): string => `${kind}.${prop}@anchor`;
 
-/** A bar's anchor before the design gives one: standing on the bottom, or from the left. */
+/** The anchor before the design gives one: standing on the bottom, or from the left. */
 export const starterAnchor = (prop: string): (typeof anchors)[number] =>
   prop === 'height' ? 'end' : 'start';
 
