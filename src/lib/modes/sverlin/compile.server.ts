@@ -109,8 +109,6 @@ import {
 } from './design.server';
 import {
   hiddenAt,
-  inWritten,
-  inWrittenSource,
   leftOutModel,
   leftOutSites,
   outsideNodes,
@@ -738,8 +736,8 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
   if (Buffer.byteLength(written, 'utf8') > maximumSourceBytes) {
     throw new InvalidSvelteSourceError('The Svelte component is too large.', { code: 'too_large' });
   }
-  // Views become the snippets they stand for (see viewTags), each closing longer than written, so
-  // positions and sites name the source as written (see inWrittenSource).
+  // Views become the snippets they stand for (see viewTags), every line kept, and every line and
+  // column but a closing's own, so positions and sites name the source as written.
   const tags = viewTags(written);
   if (tags.problems.length)
     throw InvalidSvelteSourceError.combine(
@@ -751,10 +749,7 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
           })
       )
     );
-  return inWrittenSource(tags.source, written, tags.authoredOffset, () => ({
-    ...prepareViews(tags.source, tags.views),
-    source: written
-  }));
+  return { ...prepareViews(tags.source, tags.views), source: written };
 }
 
 /** prepareSvelteComponent for a source whose views are snippets, each starting at an offset of `viewStarts`. */
@@ -2003,7 +1998,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         ? cause
         : new InvalidSvelteSourceError(
             cause instanceof Error ? cause.message : String(cause),
-            svelteIssueAsWritten(source, cause)
+            cause
           );
     throw viewProblems.length && !viewProblems.includes(error)
       ? InvalidSvelteSourceError.combine([error, ...viewProblems])
@@ -2429,23 +2424,7 @@ function interpretBlock<T>(source: string, block: Block, run: (body: string) => 
   }
 }
 
-/** A Svelte error, its start and end positions in the source as written (see inWrittenSource). */
-function svelteIssueAsWritten(source: string, cause: unknown): unknown {
-  type At = { line?: unknown; column?: unknown } | undefined;
-  const issue = cause as { code?: unknown; start?: At; end?: At } | undefined;
-  const lineStarts = [0, ...[...source.matchAll(/\n/gu)].map(({ index }) => index + 1)];
-  const moved = (at: At) =>
-    typeof at?.line === 'number' && typeof at.column === 'number'
-      ? sourcePosition(source, (lineStarts[at.line - 1] ?? 0) + at.column)
-      : at;
-  return issue && { code: issue.code, start: moved(issue.start), end: moved(issue.end) };
-}
-
-function sourcePosition(
-  rewrittenSource: string,
-  rewrittenOffset: number
-): { line: number; column: number } {
-  const { source, offset } = inWritten(rewrittenSource, rewrittenOffset);
+function sourcePosition(source: string, offset: number): { line: number; column: number } {
   const before = source.slice(0, offset);
   const lineStart = before.lastIndexOf('\n') + 1;
   return { line: before.split('\n').length, column: offset - lineStart };

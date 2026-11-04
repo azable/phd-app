@@ -162,7 +162,7 @@ describe('laying out on the server', () => {
 
   it('keeps a collection’s room at its type’s max, whatever the input’s length', async () => {
     const widest = async (max: number, input: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: ${max} });</script><script input>const values = Values(${input});</script><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View><Layout name="Main"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>`;
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: ${max} });</script><script input>const values = Values(${input});</script><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>`;
       const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
       const prefix = 'window.__sverlinGeometry=';

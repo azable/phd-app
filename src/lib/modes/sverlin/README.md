@@ -106,11 +106,12 @@ props are written as they are, never computed, and it takes no others. A snippet
 takes no value: one with a parameter is an error, and so is `this` in a part of
 the page or the root, which has no value of its own. The node showing the value
 shows the type's unit too. Define views at the top level, never inside a part, a
-layout, or a node. A view reads only `this`, types, other views, labels (`@…`),
-the library's components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`, and the
-names its `{#each}` blocks and `{@const}` tags declare: never the input or
-algorithm variables, a pointer apart, and never browser globals such as `window`
-or `self`. How two values relate is drawn where both are in scope, in the view
+layout, or a node, and end each `</View>` its line, putting what follows on the
+next. A view reads only `this`, types, other views, labels (`@…`), the library's
+components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`, and the names its
+`{#each}` blocks and `{@const}` tags declare: never the input or algorithm
+variables, a pointer apart, and never browser globals such as `window` or
+`self`. How two values relate is drawn where both are in scope, in the view
 holding them or by a pointer; a part of the page or the root also reads the
 input and algorithm variables.
 

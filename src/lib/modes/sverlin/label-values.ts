@@ -389,16 +389,15 @@ const viewName = /^[A-Za-z_$][\w$]*$/u;
 /**
  * The source with each view, `<View of="Int" name="Bar">…</View>`, as the snippet it stands for,
  * `{#snippet Bar(this: Int)}…{/snippet}`, and the problems: a view written otherwise, not at the top
- * level, or as a snippet taking a value. The opening is no longer than written, padded with spaces,
- * and every line stays in place; each closing is three longer, so `authoredOffset` gives where an
- * offset in the source returned is in the source as written.
+ * level, or as a snippet taking a value, or with anything after its closing on that line. The
+ * opening is no longer than written, padded with spaces, and every line stays in place; a closing is
+ * three longer, but ends its line, so every position outside it keeps its line and column.
  */
 export function viewTags(source: string): {
   source: string;
   problems: { message: string; start: number }[];
   /** Where each view's snippet starts in the source returned. */
   views: number[];
-  authoredOffset: (offset: number) => number;
 } {
   const problems: { message: string; start: number }[] = [];
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
@@ -428,6 +427,14 @@ export function viewTags(source: string): {
       }
       edits.push({ start, length: whole.length, text: '{/snippet}' });
       open = undefined;
+      const after = start + whole.length;
+      const lineEnd = scanned.indexOf('\n', after);
+      const rest = scanned.slice(after, lineEnd < 0 ? undefined : lineEnd);
+      if (rest.trim())
+        problems.push({
+          message: '</View> ends its line: put what follows on the next line.',
+          start: after + rest.length - rest.trimStart().length
+        });
       continue;
     }
     if (open) {
@@ -488,30 +495,13 @@ export function viewTags(source: string): {
     });
   let out = '';
   let at = 0;
-  const shifts: { from: number; to: number; by: number }[] = [];
   const views: number[] = [];
   for (const { start, length, text, view } of edits) {
-    const padded = text.padEnd(length);
     out += source.slice(at, start);
     if (view) views.push(out.length);
-    out += padded;
+    out += text.padEnd(length);
     at = start + length;
-    if (padded.length !== length)
-      shifts.push({ from: out.length - padded.length, to: out.length, by: padded.length - length });
   }
   out += source.slice(at);
-  return {
-    source: out,
-    problems,
-    views,
-    authoredOffset: (offset) => {
-      let by = 0;
-      for (const shift of shifts) {
-        if (offset < shift.from) break;
-        if (offset < shift.to) return shift.from - by;
-        by += shift.by;
-      }
-      return offset - by;
-    }
-  };
+  return { source: out, problems, views };
 }

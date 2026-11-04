@@ -193,17 +193,39 @@ describe('<When> and <OneOf>', () => {
 });
 
 describe('<View>', () => {
-  it('becomes the snippet it stands for, every line in place and offsets mapped back', () => {
+  it('becomes the snippet it stands for, every line and every position outside a closing in place', () => {
     const written =
-      '<View of="Int" name="Bar"><Node length={this} /></View> {x}\n<View of="@a.b" name="Ask">\n  {this.left}\n</View>';
-    const { source, problems, views, authoredOffset } = viewTags(written);
+      '<View of="Int" name="Bar"><Node value={this} /></View>\n{x}\n<View of="@a.b" name="Ask">\n  {this.left}\n</View>';
+    const { source, problems, views } = viewTags(written);
     expect(problems).toEqual([]);
     expect(source).toBe(
-      '{#snippet Bar(this: Int)} <Node length={this} />{/snippet} {x}\n{#snippet Ask(this: @a.b)} \n  {this.left}\n{/snippet}'
+      '{#snippet Bar(this: Int)} <Node value={this} />{/snippet}\n{x}\n{#snippet Ask(this: @a.b)} \n  {this.left}\n{/snippet}'
     );
     expect(views).toEqual([0, source.indexOf('{#snippet Ask')]);
+    const lineAndColumn = (text: string, at: number) => {
+      const before = text.slice(0, at);
+      return [before.split('\n').length, at - before.lastIndexOf('\n')];
+    };
     for (const text of ['{this}', '{x}', '{this.left}'])
-      expect(authoredOffset(source.indexOf(text))).toBe(written.indexOf(text));
+      expect(lineAndColumn(source, source.indexOf(text))).toEqual(
+        lineAndColumn(written, written.indexOf(text))
+      );
+  });
+
+  it('ends its line', () => {
+    const written = '<View of="Int" name="Bar"><Node value={this} /></View>  {x}\n';
+    expect(viewTags(written).problems).toEqual([
+      {
+        message: '</View> ends its line: put what follows on the next line.',
+        start: written.indexOf('{x}')
+      }
+    ]);
+    expect(
+      viewTags('<View of="Int" name="Bar"><Node value={this} /></View>  \n{x}').problems
+    ).toEqual([]);
+    expect(
+      viewTags('<View of="Int" name="Bar"><Node value={this} /></View><!-- note -->').problems
+    ).toEqual([]);
   });
 
   it('is refused as a snippet taking a value, unclosed, or with other props', () => {
@@ -220,9 +242,9 @@ describe('<View>', () => {
     expect(problem('</View>')).toEqual([expect.stringContaining('This </View> closes no view')]);
   });
 
-  it('keeps positions after a view on its line, in problems', () => {
+  it('keeps positions after a view, in problems', () => {
     const view =
-      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View><Layout name="Main"><Node>{nope}</Node></Layout>';
+      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node>{nope}</Node></Layout>';
     let error: { code?: string; line?: number; column?: number; others: unknown[] } | undefined;
     try {
       prepareSvelteComponent(view);
@@ -232,6 +254,6 @@ describe('<View>', () => {
     const unknown = [error, ...(error?.others ?? [])].find(
       (problem) => (problem as typeof error)?.code === 'view_name'
     );
-    expect(unknown).toMatchObject({ line: 2, column: view.split('\n')[1].indexOf('nope') + 1 });
+    expect(unknown).toMatchObject({ line: 3, column: view.split('\n')[2].indexOf('nope') + 1 });
   });
 });
