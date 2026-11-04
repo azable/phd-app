@@ -110,16 +110,10 @@ describe('listings of the source’s own', () => {
       "The listing's region @spare is labelled on no code"
     ],
     [
-      "a for header's parts marked inside its body's label",
-      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }',
-      '@pass[for @first[i = 1] @more[to n] @next[step 1]\n  @look[v = A[i]]]',
-      "The listing's region @pass.first names no label: the code's @first is @first, as a for header's parts sit beside its body's label, not inside it; move the region out of @pass[…]."
-    ],
-    [
-      'a region with a dotted name',
-      '  @size[const n = Int(1);]',
-      '@size[n] @size.inner[m]',
-      'The region @size.inner[ has a dotted name: a region takes one name and nests inside the one around it, as @size[… @inner[…]].'
+      'a short name that more than one label has',
+      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }\n  for (@again[let k = Position(0)]; @still[k < values.length]; @step[k++]) @back{\n    @look[const w = values[k];]\n  }',
+      'for @first[i] @more[i] @next[i] @look[v] for @again[k] @still[k] @step[k] @back[w]',
+      "The listing's region @look could be @pass.look or @back.look: write the full name of the one it marks, as @pass.look[…]."
     ],
     [
       'a listing named none',
@@ -132,6 +126,26 @@ describe('listings of the source’s own', () => {
     if (name.includes('named none'))
       source = source.replace('listing="textbook"', 'listing="none"');
     expect(() => prepareSvelteComponent(source)).toThrow(message);
+  });
+
+  it.each([
+    ['by its full name', '@first[i] @more[n] @next[i] @pass.look[v = A[i]]'],
+    ['by its short name, the only label with it', '@first[i] @more[n] @next[i] @look[v = A[i]]'],
+    [
+      'nested in the regions of the labels around it',
+      '@first[i] @more[n] @next[i] @pass[@look[v = A[i]]]'
+    ],
+    [
+      "marked inside its body's label, a for header's parts",
+      '@pass[for @first[i] @more[n] @next[i] @look[v = A[i]]]'
+    ]
+  ])('name a label %s', (_, listing) => {
+    const algorithm =
+      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }';
+    const maps = listingMapsOf(blocks(algorithm, listing));
+    expect(maps?.textbook.map(({ label }) => label)).toEqual(
+      expect.arrayContaining(['first', 'more', 'next', 'pass.look'])
+    );
   });
 
   it("tell a listing's problems with those of an earlier stage, as the algorithm failing to run", () => {

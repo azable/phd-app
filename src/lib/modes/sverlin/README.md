@@ -1331,20 +1331,30 @@ The text is a `<script listing="textbook">` block; with several,
 `listing.language` chooses which one a presentation shows, the first in the
 starter, or `none`.
 
-Mark each part of the text that should light as a region with the algorithm's
-labels, written as they are there (see Steps): `@name[text]`, nested as finely
-as needed, as `while @test[@bound[j > 0] and @cmp[A[j] > key]]`, a region inside
-another taking its name as a prefix. A `[` without a name, as in `A[i]`, is
-text, and the marks are not shown. Write `<`, `>` and `&` as they are: a listing
-needs no escaping, and an escape such as `&lt;` is refused. Every region must
-have a label. A label a scene pauses at needs a region, lit where it pauses;
-without one, that step lights nothing and the build warns. A label no scene
-pauses at needs none. A region holds the text of what its label marks and no
-more: a loop's or an `if`'s own line goes with its test's label or none, never
-inside its body's, as `for i = 2 to n` stays outside `@insert[…]`; a test with a
-line of its own has a label of its own, as `while (@more[Waiting(queue)])` with
-`while @more[the queue is not empty]`, and the scenes' pauses decide whether to
-pause there.
+Mark each part of the text that should light as a region, `@name[text]`. A
+region names one of the algorithm's labels (see Steps). A label's full name is
+the chain of labels around it in the algorithm: `@test` inside `@pair{` inside
+`@pass{` is `@pass.pair.test`. A region names a label in one of three ways:
+
+- by its full name, `@pass.pair.test[…]`;
+- by its short name, `@test[…]`, when no other label has that name;
+- by nesting inside regions of the labels around it,
+  `@pass[… @pair[… @test[…]]]`.
+
+A short name that more than one label has is refused, and the message names
+them. A `for` header's labels sit beside its body's label, not inside it (see
+Steps). Regions nest as finely as needed, for example
+`while @test[@bound[j > 0] and @cmp[A[j] > key]]`. A `[` without a name, as in
+`A[i]`, is text, and the marks are not shown. Write `<`, `>` and `&` as they
+are: a listing needs no escaping, and an escape such as `&lt;` is refused. Every
+region must have a label. A label a scene pauses at needs a region, lit where it
+pauses; without one, that step lights nothing and the build warns. A label no
+scene pauses at needs none. A region holds the text of what its label marks and
+no more: a loop's or an `if`'s own line goes with its test's label or none,
+never inside its body's, as `for i = 2 to n` stays outside `@insert[…]`; a test
+with a line of its own has a label of its own, as
+`while (@more[Waiting(queue)])` with `while @more[the queue is not empty]`, and
+the scenes' pauses decide whether to pause there.
 
 - Only the code of labels the steps pause at lights, all in one look: a step's
   label's region with the code inside it; other code stays dark, so label what

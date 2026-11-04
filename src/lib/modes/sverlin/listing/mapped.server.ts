@@ -31,8 +31,7 @@ export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; 
 /** What each region is mapped to: the source each node with its label has, by line. */
 export type RegionMap = { label: string; text: string; sources: { text: string; line: number }[] };
 
-const regionOpen = /^@([A-Za-z_$][\w$]*)\[/u;
-const dottedOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\[/u;
+const regionOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\[/u;
 const tokenOpen = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u;
 /**
  * The text a listing shows, without its region and token marks and the indentation its lines
@@ -108,15 +107,6 @@ export function readRegions(body: string): {
       continue;
     }
     const opening = source[index] === '@' ? regionOpen.exec(source.slice(index)) : null;
-    const dotted = source[index] === '@' ? dottedOpen.exec(source.slice(index)) : null;
-    if (dotted) {
-      const names = dotted[1].split('.');
-      problems.push({
-        message: `The region @${dotted[1]}[ has a dotted name: a region takes one name and nests inside the one around it, as @${names.slice(0, -1).join('[… @')}[… @${names.at(-1)}[…]${']'.repeat(names.length - 1)}.`,
-        block: 'listing',
-        at: characters[index].at
-      });
-    }
     if (opening) {
       const outer = prefix();
       open.push({
@@ -250,6 +240,43 @@ function ownLines(
 }
 
 /**
+ * Each region named by the label it stands for: the one its name as written means, with the regions
+ * around it, where a label has that full name; else the one label whose full name ends with it, or
+ * with its last parts, the fewest dropped from the front. A name that more labels end with is a
+ * problem naming them; one no label ends with is left for unlabelledRegion.
+ */
+function resolveRegions(
+  regions: Region[],
+  labels: readonly Label[]
+): { problems: MappingProblem[]; unclear: Set<Region> } {
+  const problems: MappingProblem[] = [];
+  const unclear = new Set<Region>();
+  for (const region of regions) {
+    const parts = region.label.split('.');
+    for (let dropped = 0; dropped < parts.length; dropped++) {
+      const name = parts.slice(dropped).join('.');
+      const exact = labels.find(({ full }) => full === name);
+      const ending = exact ? [exact] : labels.filter(({ full }) => full.endsWith(`.${name}`));
+      if (ending.length === 1) {
+        region.label = ending[0].full;
+        break;
+      }
+      if (ending.length > 1) {
+        const names = ending.map(({ full }) => `@${full}`);
+        problems.push({
+          message: `The listing's region @${name} could be ${names.slice(0, -1).join(', ')} or ${names.at(-1)}: write the full name of the one it marks, as ${names[0]}[…].`,
+          block: 'listing',
+          at: region.at
+        });
+        unclear.add(region);
+        break;
+      }
+    }
+  }
+  return { problems, unclear };
+}
+
+/**
  * Why a region names no label, and its fix: where the code has a label of the same name elsewhere,
  * as a for header's parts beside its body's label, where that label is; otherwise to label the code.
  */
@@ -285,6 +312,8 @@ export function mappedListing(
 } {
   const { text, regions, tokens, problems } = readRegions(block.body);
   const { root, labels, code } = algorithm;
+  const resolved = resolveRegions(regions, labels);
+  problems.push(...resolved.problems);
   const own = new Map<AnyNode, string[]>();
   for (const { full, nodes } of labels)
     for (const node of nodes) own.set(node, [...(own.get(node) ?? []), full]);
@@ -337,7 +366,7 @@ export function mappedListing(
   };
   root.body.forEach((statement) => visit(statement, []));
   for (const region of regions)
-    if (!used.has(region.label))
+    if (!used.has(region.label) && !resolved.unclear.has(region))
       problems.push({
         message: unlabelledRegion(region.label, labels),
         block: 'listing',
