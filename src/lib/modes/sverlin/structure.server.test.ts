@@ -43,9 +43,9 @@ const list = `<script domain>
 
 const ring = `<script domain>
   const Name = type(['A', 'B', 'C', 'D']);
-  const Names = collection(Name);
+  const Names = collection(Name, { max: 8 });
   const Position = index(Names);
-  const Nexts = collection(Position);
+  const Nexts = collection(Position, { max: 8 });
 </script>
 <script input>
   const names = Names(['A', 'B', 'C', 'D']);
@@ -71,7 +71,7 @@ const ring = `<script domain>
 
 const unlinked = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Position = index(Values);
 </script>
 <script input>

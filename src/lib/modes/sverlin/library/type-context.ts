@@ -35,6 +35,8 @@ export type TypeContext = {
   heldBy(name: string): ReadonlySet<number> | undefined;
   /** How many elements the collection at a path holds, as values or paths[1]. */
   lengthOf(path: string): number | undefined;
+  /** The most elements the collection at a path can hold, its type's max. */
+  maxLengthOf?(path: string): number | undefined;
   /**
    * How far before the start and past the end of a collection variable any step records a position
    * bound to it, at a path (as take.from, or edges[2].to for any edge's) or at all: the end slots

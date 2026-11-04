@@ -261,6 +261,8 @@ export type PreparedComponent = {
   /** The source's identity, from its steps, shared by its presentations however they are paced. */
   signature: string;
   atoms: AtomRegistry;
+  /** The most elements each collection type holds, by name, the room its collections keep. */
+  lengths: Record<string, number>;
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
   /**
@@ -1917,6 +1919,13 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       steps,
       signature: stepSignature(steps),
       atoms,
+      lengths: Object.fromEntries(
+        Object.values(domain.structures).flatMap((structure) =>
+          structure.kind === 'collection' && structure.max !== undefined
+            ? [[structure.name, structure.max]]
+            : []
+        )
+      ),
       components: probes,
       design: {
         views: chosen,
@@ -2195,7 +2204,8 @@ export async function bundlePresentation(
     JSON.stringify({
       components: prepared.components,
       placements: paced.placements,
-      listing
+      listing,
+      lengths: prepared.lengths
     })
   );
   const output = result.outputFiles.find(({ path }) => path.endsWith('entry.js')) as OutputFile;

@@ -1449,8 +1449,8 @@ function combinations(fields: (ProbeValues | undefined)[]): unknown[][] | undefi
 }
 
 /**
- * The values of each domain type. A collection is filled to the longest of its type in the trace,
- * with each value of its element type in turn: rows and columns are widest when full, and
+ * The values of each domain type. A collection is filled to its type's max, or a record's heap to
+ * the longest of it in the trace, with each value of its element type in turn: rows and columns are widest when full, and
  * the items in them keep their components' boxes, so which value is where does not change the size.
  * A part of the value at a path that `single` names is drawn with one value: it is passed only to
  * views, which keep their boxes whichever value they show.
@@ -1479,11 +1479,11 @@ export function probeValues(
     if (type === 'boolean' && !domain.atoms[type])
       return { every: [true, false], widest: [true, false] };
     const atom = domain.atoms[type];
-    // A position runs over the longest collection of its type in the trace, and as far past its
-    // ends as the trace records one.
+    // A position runs from -1 to its collection's max, as its type does; one into a heap, over
+    // the longest of it in the trace, and as far past its ends as the trace records one.
     if (atom) {
       const values = [...(seen.get(type) ?? [])];
-      if (!atom.index) return atomValues(atom, values);
+      if (!atom.index || atom.max !== undefined) return atomValues(atom, values);
       const ends = (values as number[]).concat(0, (longest.get(atom.index) ?? 1) - 1);
       return atomValues({ ...atom, min: Math.min(...ends), max: Math.max(...ends) }, values);
     }
@@ -1491,7 +1491,7 @@ export function probeValues(
     switch (structure?.kind) {
       case 'collection': {
         const element = valuesOf(structure.element, `${path}[]`, single);
-        const length = longest.get(type) ?? 0;
+        const length = structure.max ?? longest.get(type) ?? 0;
         const fill = (values: unknown[]) =>
           values.map((value) => Array.from({ length }, () => value));
         return (

@@ -941,6 +941,7 @@ class Interpreter {
     if (!Number.isInteger(count) || count < 0)
       this.#fail(node, `${typeName}.ofLength(…) takes a whole length, not ${count}.`);
     this.#checkLength(count, node);
+    this.#withinMax(structure, count, node, `${typeName}.ofLength(${count}, …)`);
     this.#charge(node, count);
     return this.#convert(
       Array.from({ length: count }, () => fill),
@@ -1172,6 +1173,12 @@ class Interpreter {
     if (shape === collection) return value;
     if (shape)
       return this.#fail(node, `${path} must be a ${collection.name}, not a ${shape.name}.`);
+    this.#withinMax(
+      collection,
+      value.length,
+      node,
+      path === collection.name ? `${path}([…])` : path
+    );
     const made = value.map((item, index) =>
       this.#convert(item, collection.element, node, `${path}[${index}]`)
     );
@@ -1251,7 +1258,7 @@ class Interpreter {
     if (typeof plain.value === 'object')
       this.#fail(
         node,
-        `${plain.path} would be a plain ${Array.isArray(plain.value) ? 'array' : 'object'}, but input and algorithm values must have a domain type. Make it with a collection or record type defined in the domain block, as in Queue([...]) with const Queue = collection(Vertex);, or Edge({ ... }) with const Edge = record({ from: Vertex, to: Vertex });.`
+        `${plain.path} would be a plain ${Array.isArray(plain.value) ? 'array' : 'object'}, but input and algorithm values must have a domain type. Make it with a collection or record type defined in the domain block, as in Queue([...]) with const Queue = collection(Vertex, { max: 8 });, or Edge({ ... }) with const Edge = record({ from: Vertex, to: Vertex });.`
       );
     const shown =
       typeof plain.value === 'string' ? JSON.stringify(plain.value) : String(plain.value);
@@ -2229,6 +2236,12 @@ class Interpreter {
     switch (name) {
       case 'push':
         this.#checkLength(object.length + args.length, node);
+        this.#withinMax(
+          collection,
+          object.length + args.length,
+          node,
+          targetName(callee.object as Expression)
+        );
         return object.push(...args);
       case 'pop':
         return object.pop();
@@ -2236,6 +2249,12 @@ class Interpreter {
         return object.shift();
       case 'unshift':
         this.#checkLength(object.length + args.length, node);
+        this.#withinMax(
+          collection,
+          object.length + args.length,
+          node,
+          targetName(callee.object as Expression)
+        );
         return object.unshift(...args);
       case 'slice': {
         const part = object.slice(
@@ -2568,6 +2587,20 @@ class Interpreter {
     if (shape && (shape.kind === 'record' || shape.kind === 'collection'))
       this.#shapes.set(made, shape);
     return made;
+  }
+
+  /** A collection may hold at most its type's max elements, as a number may not pass its type's. */
+  #withinMax(
+    collection: CollectionType | undefined,
+    length: number,
+    node: AnyNode,
+    what: string
+  ): void {
+    if (collection?.max !== undefined && length > collection.max)
+      this.#fail(
+        node,
+        `${collection.name} holds at most ${collection.max} elements, and ${what} would hold ${length}: give ${collection.name} a larger max, as collection(${collection.element}, { max: ${length} }).`
+      );
   }
 
   #checkLength(length: number, node: AnyNode): void {

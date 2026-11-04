@@ -103,7 +103,8 @@ export function combinedType(
 
 /**
  * Wrap a computed number in a numeric type. A result that is no longer whole leaves an integer
- * type and stays untyped; a result outside the type's range is an error.
+ * type and stays untyped, as does a position's past its range, as lo + hi on the way to a middle,
+ * which no position holds until it is one; any other result outside the type's range is an error.
  */
 export function numericResult(
   type: AtomType | undefined,
@@ -112,6 +113,7 @@ export function numericResult(
 ): Atom | number {
   if (!type) return value;
   if (type.base === 'integer' && !Number.isInteger(value)) return value;
+  if (type.index && atomProblem(type, value)) return value;
   value = entering(type, value) as number;
   const problem = atomProblem(type, value);
   if (problem) throw new Error(problem);

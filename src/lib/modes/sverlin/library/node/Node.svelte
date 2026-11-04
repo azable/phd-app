@@ -438,6 +438,17 @@
   // any of its renders reaches, keeps its tracks and puts the room where justify says; between,
   // around, and evenly spread the tracks over it instead.
   const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
+  // A collection keeps room for its type's max elements: drawn to be measured, it holds an empty
+  // track for each element it lacks, which the items' equal tracks size as one of them, so the
+  // node keeps that size at every step (see model/reserve.ts). A component's box is probed full.
+  const spares = $derived(
+    collection && memory?.measuring && !insideBox && __items
+      ? Math.max(
+          0,
+          (types?.maxLengthOf?.(types.pathOf(__items) ?? '') ?? 0) - (__items.length ?? 0)
+        )
+      : 0
+  );
   // A collection whose overflow is excluded hangs its end slots outside its box (see Overhang).
   const excluded = $derived(collection && look('overflow') === 'excluded');
   untrack(() => {
@@ -575,6 +586,9 @@
         style:position={excluded || overlaid ? 'relative' : undefined}
       >
         {@render contents()}
+        {#each { length: spares } as _, index (index)}
+          <div class="spare" aria-hidden="true"></div>
+        {/each}
         {#if overlaid}
           <LinkOverlay axis={overlaid} />
         {/if}

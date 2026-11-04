@@ -28,7 +28,7 @@ it.skipIf(!enabled)(
     // Each step is a write of 7; the loop moving i, which the view draws, leads up to it.
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
   const Flag = type('boolean');
 </script>
@@ -121,7 +121,7 @@ it.skipIf(!enabled)(
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Flag = type('boolean');
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>

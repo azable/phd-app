@@ -29,7 +29,7 @@ afterAll(() => browser?.close());
 
 const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Position = index(Values);
 </script>
 <script input>

@@ -10,9 +10,9 @@ const domain = interpretDomain(`
   const Count = type('integer', { min: -100, max: 1000 });
   const Dist = union(Distance, Unreached);
   const Edge = record({ from: Vertex, to: Vertex, weight: Weight });
-  const Edges = collection(Edge);
-  const Distances = collection(Dist);
-  const Queue = collection(Vertex);
+  const Edges = collection(Edge, { max: 8 });
+  const Distances = collection(Dist, { max: 8 });
+  const Queue = collection(Vertex, { max: 8 });
   const Either = union(Distance, Count);
 `);
 
@@ -34,7 +34,12 @@ describe('union, record, and collection definitions', () => {
       name: 'Edge',
       fields: { from: 'Vertex', to: 'Vertex', weight: 'Weight' }
     });
-    expect(domain.structures.Edges).toEqual({ kind: 'collection', name: 'Edges', element: 'Edge' });
+    expect(domain.structures.Edges).toEqual({
+      kind: 'collection',
+      name: 'Edges',
+      element: 'Edge',
+      max: 8
+    });
   });
 
   it.each([
@@ -57,13 +62,28 @@ describe('union, record, and collection definitions', () => {
       /one element type/
     ],
     [
+      'collections without a max',
+      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B);',
+      /Give A its max, the most elements it ever holds, as in const A = collection\(B, \{ max: 8 \}\)/
+    ],
+    [
+      'a max that is not a whole number of at least 1',
+      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B, { max: 0 });',
+      /max is a whole number of at least 1/
+    ],
+    [
+      'other collection options',
+      'const B = type("integer", { min: 0, max: 9 }); const A = collection(B, { max: 4, min: 1 });',
+      /only option is max/
+    ],
+    [
       'a record holding itself',
       'const N = type(["a"]); const Node = record({ name: N, next: Node });',
       /Node holds itself \(Node → Node\)/
     ],
     [
       'a record holding itself through a union and a collection',
-      'const N = type(["a"]); const End = type(["end"]); const Kids = collection(Node); const Next = union(Kids, End); const Node = record({ name: N, kids: Next });',
+      'const N = type(["a"]); const End = type(["end"]); const Kids = collection(Node, { max: 8 }); const Next = union(Kids, End); const Node = record({ name: N, kids: Next });',
       /Kids holds itself|Node holds itself/
     ],
     [
@@ -77,9 +97,9 @@ describe('union, record, and collection definitions', () => {
 
   it('takes types in any order, a record referring to its own kind through a reference', () => {
     const later = interpretDomain(
-      'const A = collection(B); const B = type("integer", { min: -100, max: 1000 });'
+      'const A = collection(B, { max: 8 }); const B = type("integer", { min: -100, max: 1000 });'
     );
-    expect(later.structures.A).toEqual({ kind: 'collection', name: 'A', element: 'B' });
+    expect(later.structures.A).toEqual({ kind: 'collection', name: 'A', element: 'B', max: 8 });
     const nodes = interpretDomain(`
       const Node = record({ name: Name, next: Next });
       const NodeRef = ref(Node);

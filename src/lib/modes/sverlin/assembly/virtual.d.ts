@@ -44,6 +44,8 @@ declare module 'virtual:components' {
     range?: { min: number; max: number; places?: number };
   }[];
   export const placements: { path: string; step: number; values: unknown[] }[];
+  /** The most elements each collection type holds, by name. */
+  export const lengths: Record<string, number>;
   /** The listing in the variant's language, and what each step lights, if the view places one. */
   export const listing: {
     text: string;

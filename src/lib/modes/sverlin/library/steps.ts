@@ -94,7 +94,12 @@ export type Steps = {
   ) => StepDrawing;
 };
 
-export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepListing): Steps {
+export function stepsOf(
+  states: readonly unknown[],
+  atoms: Atoms,
+  listing: StepListing,
+  lengths: Readonly<Record<string, number>> = {}
+): Steps {
   // Each step is two states, the one before its code runs and the one after (see phasesOf in
   // compile.server.ts): step k is states 2k and 2k + 1. The page rests on a step's after.
   const stepCount = states.length / 2;
@@ -293,6 +298,10 @@ export function stepsOf(states: readonly unknown[], atoms: Atoms, listing: StepL
             lengthOf: (path: string) => {
               const collection = containers.get(path);
               return Array.isArray(collection) ? collection.length : undefined;
+            },
+            maxLengthOf: (path: string) => {
+              const type = types[path];
+              return type === undefined ? undefined : lengths[type];
             },
             parent: (typeName: string) => atoms[typeName]?.parent,
             unit: unitOf,

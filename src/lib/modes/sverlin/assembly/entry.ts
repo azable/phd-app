@@ -29,10 +29,10 @@ import {
 } from 'sverlin';
 import Main from 'virtual:component';
 import atoms from 'virtual:atoms';
-import { listing } from 'virtual:components';
+import { lengths, listing } from 'virtual:components';
 import packed from 'virtual:trace';
 
-const steps = stepsOf(unpackStates(packed), atoms, listing);
+const steps = stepsOf(unpackStates(packed), atoms, listing, lengths);
 const { stepCount } = steps;
 
 // The page theme every node draws on: colour tokens, the canvas, and spacing for the page itself.

@@ -11,7 +11,7 @@ import {
 
 // Input and algorithm values all have domain types; these tests share a small domain.
 const atoms = interpretDomain(
-  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000, places: 2 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int); const Reals = collection(Real); const Grid = collection(Ints); const Point = record({ x: Int, y: Int });" +
+  "const Int = type('integer', { min: -100, max: 1000 }); const Real = type('number', { min: -100, max: 1000, places: 2 }); const Flag = type('boolean'); const Text = type(['x', 'pair', 'yes']); const Ints = collection(Int, { max: 10000 }); const Reals = collection(Real, { max: 8 }); const Grid = collection(Ints, { max: 8 }); const Point = record({ x: Int, y: Int });" +
     // The algorithm computes nothing itself: these are its operators.
     ``
 );

@@ -3,9 +3,9 @@
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag, out: Out });
   const VertexRef = ref(Vertex);
-  const Out = collection(VertexRef);
+  const Out = collection(VertexRef, { max: 2 });
   const Slot = index(Out);
-  const Queue = collection(VertexRef);
+  const Queue = collection(VertexRef, { max: 2 });
 
 </script>
 

@@ -4,7 +4,7 @@ import { interpretAlgorithm, interpretDomain } from './interpret.server';
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Front = ref(Values);
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);
@@ -69,7 +69,7 @@ describe('references', () => {
     ],
     [
       'a collection of records',
-      'const Int = type([1]); const Pair = record({ a: Int }); const Pairs = collection(Pair); const R = ref(Pairs);',
+      'const Int = type([1]); const Pair = record({ a: Int }); const Pairs = collection(Pair, { max: 8 }); const R = ref(Pairs);',
       /ref\(\) refers to elements that are single values, and Pairs holds Pairs/
     ]
   ])('are defined in the domain, rejecting %s', (_name, body, message) => {
@@ -81,11 +81,11 @@ describe('references to positions', () => {
   it('refer to the element of their collection, not a field holding the same value', () => {
     const graph = interpretDomain(`
       const Name = type(['A', 'B', 'C']);
-      const Names = collection(Name);
+      const Names = collection(Name, { max: 8 });
       const Vertex = index(Names);
       const Edge = record({ from: Vertex, to: Vertex });
-      const Edges = collection(Edge);
-      const Queue = collection(Vertex);
+      const Edges = collection(Edge, { max: 8 });
+      const Queue = collection(Vertex, { max: 8 });
       const Front = ref(Queue);
     `);
     const [step] = interpretAlgorithm(

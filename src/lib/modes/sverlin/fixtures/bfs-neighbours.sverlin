@@ -2,12 +2,12 @@
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag });
-  const Vertices = collection(Vertex);
+  const Vertices = collection(Vertex, { max: 5 });
   const VertexRef = index(Vertices);
-  const Out = collection(VertexRef);
+  const Out = collection(VertexRef, { max: 2 });
   const Slot = index(Out);
-  const Adjacency = collection(Out);
-  const Queue = collection(VertexRef);
+  const Adjacency = collection(Out, { max: 5 });
+  const Queue = collection(VertexRef, { max: 2 });
 
 </script>
 

@@ -87,7 +87,7 @@ export function hiddenProblem(
   text: (node: AnyNode) => string
 ): string | undefined {
   if (operation === 'template')
-    return `${text(node)}: the algorithm builds no text; a word is a collection of characters, as const Word = collection(Char);, and a caption joins text in the view.`;
+    return `${text(node)}: the algorithm builds no text; a word is a collection of characters, as const Word = collection(Char, { max: 12 });, and a caption joins text in the view.`;
   if (operation.startsWith('.') && loopingMethods.has(operation.slice(1)))
     return `${text(node)}: .${operation.slice(1)}() does a whole loop in one step, which nothing can show or count; write the loop, labelling its steps, as for (@start[let k = Index(values, 0)]; @more[k < values.length]; @next[k++]) @look{ … }.`;
   if ((operation === '+' || operation === '+=') && operands.some((value) => isText(value)))

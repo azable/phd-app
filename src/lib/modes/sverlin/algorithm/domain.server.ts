@@ -19,7 +19,7 @@ import {
  * Read the domain block's type definitions. Nothing is predefined: an atomic type is a primitive
  * kind with its range (`type('integer', { min: 0, max: 9 })`), a refinement of a defined type (`type(Int, { unit: 'cm' })`), or an
  * enumeration (`type(['♠', '♥'])`); a union, record, or collection is built from other types
- * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge)`).
+ * (`union(Distance, Unreached)`, `record({ from: Vertex, to: Vertex })`, `collection(Edge, { max: 8 })`).
  * Declarations may come in any order: the block is read for its names first, then each definition,
  * so a record can refer to its own kind through a reference declared after it; a type holding
  * itself other than through a reference or an index would be infinite, and is refused.
@@ -198,8 +198,9 @@ export function interpretDomain(body: string): DomainRegistry {
   }
 
   /**
-   * A position in a collection type, as in index(Values): any whole number, of which 0 to its
-   * collection's length - 1 point at an element.
+   * A position in a collection type, as in index(Values): a whole number from -1 to its
+   * collection's max, each element and one past either end, of which 0 to its collection's
+   * length - 1 point at an element.
    */
   function defineIndex(name: string, call: CallExpression): AtomType {
     const args = call.arguments as Expression[];
@@ -207,7 +208,9 @@ export function interpretDomain(body: string): DomainRegistry {
     const collection = defined(args[0], 'An index’s collection type');
     if (kindOf(collection) !== 'collection')
       fail(args[0], `index() points into a collection type, and ${collection} is not one.`);
-    return { name, base: 'integer', index: collection };
+    defineType(collection);
+    const max = (structures[collection] as { max?: number } | undefined)?.max;
+    return { name, base: 'integer', index: collection, min: -1, max };
   }
 
   /**
@@ -253,9 +256,35 @@ export function interpretDomain(body: string): DomainRegistry {
       return { kind, name, members };
     }
     if (kind === 'collection') {
-      if (args.length !== 1)
-        fail(call, 'collection() takes one element type, as in collection(Edge).');
-      return { kind, name, element: defined(args[0], 'A collection’s element type') };
+      const form = `collection(${args[0]?.type === 'Identifier' ? args[0].name : 'Edge'}, { max: 8 })`;
+      if (args.length < 1 || args.length > 2 || (args[1] && args[1].type !== 'ObjectExpression'))
+        fail(call, `collection() takes one element type and its most elements, as in ${form}.`);
+      const element = defined(args[0], 'A collection’s element type');
+      const options = args[1] as Expression | undefined;
+      const property =
+        options?.type === 'ObjectExpression'
+          ? (options.properties as AnyNode[]).find(
+              (each) =>
+                each.type === 'Property' &&
+                each.key.type === 'Identifier' &&
+                (each.key as { name: string }).name === 'max'
+            )
+          : undefined;
+      if (options?.type === 'ObjectExpression')
+        for (const each of options.properties as AnyNode[])
+          if (each !== property)
+            fail(each, `A collection's only option is max, its most elements, as in ${form}.`);
+      const max = property
+        ? literalValue((property as unknown as { value: Expression }).value)
+        : undefined;
+      if (!property)
+        fail(
+          options ?? call,
+          `Give ${name} its max, the most elements it ever holds, as in const ${name} = ${form};. Every type must have a known, finite set of values, so the view keeps room for the longest ${name}: choose the least max that fits the largest input you mean to show.`
+        );
+      if (typeof max !== 'number' || !Number.isInteger(max) || max < 1)
+        fail(property!, `A collection's max is a whole number of at least 1, as in ${form}.`);
+      return { kind, name, element, max: max as number };
     }
     const [shape] = args;
     if (args.length !== 1 || shape.type !== 'ObjectExpression')

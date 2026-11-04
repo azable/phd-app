@@ -22,7 +22,7 @@ import {
 } from 'sverlin';
 import MainServer from 'virtual:component-server';
 import atoms from 'virtual:atoms';
-import { components, listing, placements } from 'virtual:components';
+import { components, lengths, listing, placements } from 'virtual:components';
 import packed from 'virtual:trace';
 
 type Host = {
@@ -42,7 +42,7 @@ const scope = globalThis as unknown as {
 // nothing inside the frame is laid out by; the isolate has no window.
 scope.window ??= { innerWidth: 1200, innerHeight: 800 };
 
-const steps = stepsOf(unpackStates(packed), atoms, listing);
+const steps = stepsOf(unpackStates(packed), atoms, listing, lengths);
 // Every step shares the variant, and so the frame's ratio.
 const ratio = (steps.states[0] as { __frame?: { ratio?: string } } | undefined)?.__frame?.ratio;
 

@@ -11,7 +11,7 @@ export const sverlinStarter = {
 /** A small self-contained algorithm example for administrator projects. */
 export const linearSearchSource = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 5 });
   const Index = index(Values);
 </script>
 <script input>

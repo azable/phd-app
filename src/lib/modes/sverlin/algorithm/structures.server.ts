@@ -10,7 +10,11 @@ import { noAtoms, type AtomRegistry } from './atoms.server';
 
 export type UnionType = { kind: 'union'; name: string; members: readonly string[] };
 export type RecordType = { kind: 'record'; name: string; fields: Readonly<Record<string, string>> };
-export type CollectionType = { kind: 'collection'; name: string; element: string };
+/**
+ * A collection of one element type, holding at most `max` elements, which every collection the
+ * domain declares gives, as collection(Int, { max: 8 }); a record's heap has none.
+ */
+export type CollectionType = { kind: 'collection'; name: string; element: string; max?: number };
 /**
  * A reference to an element of a collection type, as in ref(Queue): it reads as the element, and
  * stays with it wherever it moves, pointing at nothing once it is gone. A reference to a record

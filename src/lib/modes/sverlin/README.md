@@ -327,7 +327,7 @@ Binary search, stopping where it finds the target:
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 7 });
   const Index = index(Values);
 
 </script>
@@ -396,7 +396,8 @@ own, never from another: `type(Int, …)` is refused.
 
 Every type has a known, finite set of values, so a view can be drawn for each:
 choose ranges holding every value the algorithm reaches, as a count up to the
-input's length; positions need none. Type names cannot be variable names.
+input's length; a position's range is its collection's (see Collections,
+records, and unions). Type names cannot be variable names.
 
 Every number, boolean, and text a variable, element, or field holds is typed,
 made with a type's name, as `const target = Int(8);` or `Index(values, 0)`.
@@ -409,7 +410,8 @@ element or field does: after `let found = Found(false);`,
 `found = values[i] === target` stores a `Found`, and `found = Count(1)` is an
 error; one made by a union, `let d = Dist(0);`, holds any member.
 
-A word is a collection of characters, as `const Word = collection(Char);` with
+A word is a collection of characters, as
+`const Word = collection(Char, { max: 12 });` with
 `const Char = type(['A', 'C', 'G', 'T']);`, written in the input as text,
 `Word('GATTACA')`; there is no text type to search, join, or copy in one step.
 
@@ -418,8 +420,9 @@ A word is a collection of characters, as `const Word = collection(Char);` with
 Every array and object is made by a type defined in the domain block, in any
 order, each as a top-level `const`:
 
-- a collection of one type, `collection(Int)`, and of collections for a table,
-  `collection(Values)`;
+- a collection of one type with the most elements it ever holds, its `max`,
+  `collection(Int, { max: 8 })`, and of collections for a table,
+  `collection(Values, { max: 6 })`;
 - a record with named fields,
   `record({ from: Vertex, to: Vertex, weight: Weight })`;
 - a union, a value of one of several types, `union(Distance, Unreached)`;
@@ -435,16 +438,24 @@ takes its type, as `dist[v] = 0`, and one pushed the collection's element type,
 as `queue.push(3)`; an array or object literal anywhere else is an error. A
 record has exactly its fields.
 
-A position is any whole number: 0 to length - 1 point at an element of its
-collection, others nowhere, as the length after a loop ends. Reading or writing
-outside the collection is an error, except that writing at the length adds one.
-The view keeps room past an end for the positions its pointers draw, at most 4
-places; a position nothing draws keeps none. A position is bound to its
-collection when declared: `Index(0)` points into the only `Values`, and with
-several, name it, as `Index(left, 0)`; the binding stays, so `k = i + j` keeps
-`k` in its collection. One stored in a record or collection keeps where it came
-from (`Take({ from: j })`, `i + 1`, `const at = take.from;`), and a number
-stored there points into the only collection of its type, or the one named, as
+A collection never holds more than its `max`: an input longer, a
+`Values.ofLength(n, …)` with `n` past it, or a `push` or `unshift` that would
+pass it, is an error. The view keeps room for `max` elements at every step, so
+changing the input moves nothing; the frame shrinks the whole view to fit that
+room, so choose the least `max` that fits the largest input you mean to show, as
+the input's length, or a queue's most at once.
+
+A position is a whole number from -1 to its collection's `max`: 0 to length - 1
+point at an element of its collection, the others nowhere, as the length after a
+loop ends, or -1 before its start. Reading or writing outside the collection is
+an error, except that writing at the length adds one. The view keeps room past
+an end for the positions its pointers draw, at most 4 places; a position nothing
+draws keeps none. A position is bound to its collection when declared:
+`Index(0)` points into the only `Values`, and with several, name it, as
+`Index(left, 0)`; the binding stays, so `k = i + j` keeps `k` in its collection.
+One stored in a record or collection keeps where it came from
+(`Take({ from: j })`, `i + 1`, `const at = take.from;`), and a number stored
+there points into the only collection of its type, or the one named, as
 `Take({ from: Index(left, 0) })`. To point at a cell of a grid, hold the row in
 a variable: `let row = paths[r];` is the row itself, so `ColIndex(row, 1)`
 points into `paths`, and `NextRow(row, paths[r])` moves it.
@@ -634,7 +645,7 @@ place:
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 5 });
   const Index = index(Values);
 </script>
 
@@ -1141,7 +1152,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 ```svelte
 <script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 4 });
   const Position = index(Values);
 
 </script>
@@ -1340,12 +1351,12 @@ at marked and the queue drawn by number:
   const Name = type(['A', 'B', 'C', 'D', 'E']);
   const Flag = type('boolean');
   const Vertex = record({ name: Name, seen: Flag });
-  const Vertices = collection(Vertex);
+  const Vertices = collection(Vertex, { max: 5 });
   const VertexRef = index(Vertices);
-  const Out = collection(VertexRef);
+  const Out = collection(VertexRef, { max: 2 });
   const Slot = index(Out);
-  const Adjacency = collection(Out);
-  const Queue = collection(VertexRef);
+  const Adjacency = collection(Out, { max: 5 });
+  const Queue = collection(VertexRef, { max: 5 });
 
 </script>
 

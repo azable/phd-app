@@ -11,7 +11,7 @@ const types = `
   const Weight = type('integer', { unit: 'kg', min: -100, max: 100 });
   const Suit = type(['♠', '♥', '♦', '♣']);
   const Grade = type([1, 2, 3]);
-  const Ints = collection(Int);
+  const Ints = collection(Int, { max: 8 });
   const Person = record({ height: Height });
 `;
 const domain = interpretDomain(types);

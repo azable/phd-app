@@ -4,7 +4,7 @@ import { declaredNames, interpretDomain, traceAlgorithm, type Pacing } from './i
 
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 99 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
   const Flag = type('boolean');
 `);
@@ -142,7 +142,7 @@ describe('loops', () => {
     const loops = `
       @start[const values = Values([1, 2, 3, 4, 5]);
       let last = Index(0);]
-      @down[for (let i = Index(4); (Index(-1) < i); i = (i - 2)) {
+      @down[for (let i = Index(5); (Index(-1) < i); i = (i - 2)) {
         last = i;
       }]
       for (let j = Index(0); (j < values.length); j++) {
@@ -155,7 +155,7 @@ describe('loops', () => {
     const trace = run(loops, {
       pauses: new Map(['start', 'down', 'take'].map((label) => [label, 'on']))
     });
-    expect(trace.slice(1, 4).map(({ state }) => state.last)).toEqual([4, 2, 0]);
+    expect(trace.slice(1, 4).map(({ state }) => state.last)).toEqual([5, 3, 1]);
     expect(trace.slice(4).map(({ state }) => state.j)).toEqual([0, 2, 4]);
   });
 

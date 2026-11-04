@@ -160,6 +160,22 @@ describe('laying out on the server', () => {
     expect(new Map(given.components).get('Bar')?.height).toBe(144);
   }, 60_000);
 
+  it('keeps a collection’s room at its type’s max, whatever the input’s length', async () => {
+    const widest = async (max: number, input: string) => {
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: ${max} });</script><script input>const values = Values(${input});</script><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View><Layout name="Main"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>`;
+      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      expect(layout.errors).toEqual([]);
+      const prefix = 'window.__sverlinGeometry=';
+      const [given] = JSON.parse(
+        javascript.slice(prefix.length, javascript.indexOf(';\n'))
+      ) as Geometry[];
+      return Math.max(...given.reserved.map(([, size]) => size.width));
+    };
+    const four = await widest(8, '[1, 2, 3, 4]');
+    expect(await widest(8, '[1, 2, 3, 4, 5, 6, 7, 8]')).toBe(four);
+    expect(await widest(4, '[1, 2, 3, 4]')).toBeLessThan(four);
+  }, 60_000);
+
   it('keeps each grid column and row at its largest, and refuses two cells at one coordinate', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/lcs-grid.sverlin', 'utf8');
     const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);

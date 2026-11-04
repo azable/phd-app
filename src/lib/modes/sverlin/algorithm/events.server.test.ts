@@ -6,7 +6,7 @@ import { interpretAlgorithm, interpretDomain, traceAlgorithm } from './interpret
 const domain = interpretDomain(`
   const Int = type('integer', { min: 0, max: 9999 });
   const Flag = type('boolean');
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 1000 });
   const Index = index(Values);
 `);
 const run = (body: string) => interpretAlgorithm(body, undefined, domain);

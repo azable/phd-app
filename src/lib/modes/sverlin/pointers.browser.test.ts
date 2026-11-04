@@ -27,7 +27,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -89,7 +89,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -148,7 +148,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
   const Index = index(Values);
 </script>
 <script input>
@@ -205,7 +205,7 @@ it.skipIf(!enabled)(
   async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 8 });
 </script>
 <script input>
   const values = Values([5, 1, 4]);

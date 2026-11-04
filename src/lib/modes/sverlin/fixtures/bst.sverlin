@@ -4,7 +4,7 @@
   const TreeNode = record({ key: Int, left: Next, right: Next });
   const NodeRef = ref(TreeNode);
   const Next = union(NodeRef, Name);
-  const Values = collection(Int);
+  const Values = collection(Int, { max: 9 });
   const Index = index(Values);
 
 </script>
