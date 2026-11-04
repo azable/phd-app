@@ -48,6 +48,14 @@ step is meant, and it then shows as built. Keep the source’s lines short, seld
 over 80 characters unless a line cannot break, so the participant can read it in
 the source panel.
 
+An invariant of the algorithm can divide the picture into parts, for example the
+sorted part of insertion sort, or the cells a binary search still considers.
+Draw each part as a kind of its own, for example
+`{#if k < sorted}`…`{:else}`…`{/if}`, so the design can grey out the other part.
+A scene that pauses at the top-level loop, between passes, shows the invariant
+grow. Where the participant has not asked for this, offer it as an alternative
+to compare with the plain picture.
+
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you
 add, steps through sensibly. As no code runs outside a label (see the guide's
