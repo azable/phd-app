@@ -37,8 +37,8 @@ const source = `<script domain>
 </script>
 
 <script algorithm>
-  for (let end = values.length; (Index(1) < end); end--) @sweep{
-    for (let i = Index(1); (i < end); i++) @pair{
+  for (@last[let end = values.length]; @more[Index(1) < end]; @shrink[end--]) @sweep{
+    for (@first[let i = Index(1)]; @inside[i < end]; @step[i++]) @pair{
       if (@test[(values[i - 1]) > values[i]]) @swap{
         const moved = values[i - 1];
         values[i - 1] = values[i];
@@ -50,8 +50,8 @@ const source = `<script domain>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
-<View of="Greater" name="Ask">
-  <Node>is {this.a} > {this.b}? {this.value}</Node>
+<View of="@sweep.pair.test" name="Ask">
+  <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
 {#snippet Title()}<Node>Bubble sort</Node>{/snippet}
 {#snippet Board()}
@@ -71,7 +71,16 @@ const source = `<script domain>
 /** The caption Ask draws at a step, and whether it is hidden. */
 async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
   const prepared = prepareSvelteComponent(source);
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
+  // The loop headers move no value the view draws, so the steps are the comparisons and swaps.
+  const headers = Object.fromEntries(
+    ['last', 'more', 'shrink', 'sweep.first', 'sweep.inside', 'sweep.step'].map((label) => [
+      `pause@${label}`,
+      'off'
+    ])
+  );
+  const { javascript } = await bundlePresentation(prepared, 1, {
+    chosen: { ...headers, ...chosen }
+  });
   const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -103,10 +112,11 @@ it.skipIf(!enabled)(
     // Step 0 is the input as given, step 1 the first comparison, step 2 its swap.
     expect((await captionAt(0))?.hidden).toBe('true');
     const first = await captionAt(1);
-    expect(first?.text).toMatch(/^is 5 > 1 ?\? yes$/u);
+    // A comparison gives a plain boolean, drawn as text (see the guide's Views of what a step computed).
+    expect(first?.text).toMatch(/^is 5 > 1 ?\? true$/u);
     expect(first?.hidden).toBeUndefined();
     expect((await captionAt(2))?.hidden).toBe('true');
-    // With Greater's view hidden, the comparisons are no steps and nothing draws them.
-    expect(await captionAt(1, { 'views.Greater': 'none' })).toBeNull();
+    // With the comparison's view hidden, nothing draws it.
+    expect(await captionAt(1, { 'views.@sweep.pair.test': 'none' })).toBeNull();
   }
 );

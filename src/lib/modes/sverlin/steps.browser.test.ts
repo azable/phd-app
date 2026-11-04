@@ -36,7 +36,7 @@ it.skipIf(!enabled)(
   const values = Values([1, 1, 1]);
 </script>
 <script algorithm>
-  for (let i = Index(0); (i < values.length); i++) {
+  for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {
     @write[values[i] = 7;]
   }
 </script>
@@ -54,9 +54,13 @@ it.skipIf(!enabled)(
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
-    expect(prepared.master[2].before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
-    expect(prepared.master[2].state.values).toEqual([7, 7, 1]);
-    const { javascript } = await bundlePresentation(prepared, 1);
+    // The loop header is labelled part by part; the write is the step, the header leading up to it.
+    const second = prepared.master.find(({ name }) => name === '@write#2')!;
+    expect(second.before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
+    expect(second.state.values).toEqual([7, 7, 1]);
+    const { javascript } = await bundlePresentation(prepared, 1, {
+      chosen: { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' }
+    });
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -128,7 +132,7 @@ it.skipIf(!enabled)(
   const values = Values([3, 1]);
 </script>
 <script algorithm>
-  for (let i = Index(0); (i < values.length); i++) @pass{
+  for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @pass{
     @pick[const key = values[i];]
     @put[values[i] = key;]
   }

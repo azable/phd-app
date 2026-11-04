@@ -36,9 +36,9 @@ const insertion = `<script domain>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script algorithm>
-  for (let i = Position(1); (i < values.length); i++) @insert{
+  for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
-    while ((Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+    while (@test[(Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]]) @swap{
       const moved = values[@from[j - 1]];
       values[j - 1] = values[@to[j]];
       values[j] = moved;
@@ -67,10 +67,14 @@ it.skipIf(!enabled)(
     const prepared = prepareSvelteComponent(insertion);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
+        'pause@first': 'off',
+        'pause@more': 'off',
+        'pause@next': 'off',
         'pause@insert': 'off',
-        'pause@insert.compare': 'accumulate',
-        'pause@insert.compare.left': 'off',
-        'pause@insert.compare.right': 'off',
+        'pause@insert.test': 'off',
+        'pause@insert.test.compare': 'accumulate',
+        'pause@insert.test.compare.left': 'off',
+        'pause@insert.test.compare.right': 'off',
         'pause@insert.swap': 'accumulate',
         'pause@insert.swap.from': 'off',
         'pause@insert.swap.to': 'off'
@@ -158,46 +162,46 @@ it.skipIf(!enabled)(
   }
 );
 
-// A swap as an operation, whose view, rendered among the cells, brings its link in.
+// The swapped pair as a labelled expression of its two positions, whose view, rendered among the
+// cells, brings its link in.
 const traded = insertion
-  .replace(
-    '',
-    `
-  const Pair = record({ a: Position, b: Position });`
-  )
   .replace(
     `      const moved = values[@from[j - 1]];
       values[j - 1] = values[@to[j]];
       values[j] = moved;
       j--;`,
-    `      values = @trade[Values([...v.slice(0, (Pair({ ((j - 1)), j })).a), values[(Pair({ ((j - 1)), j })).b], values[(Pair({ ((j - 1)), j })).a], ...v.slice((Pair({ ((j - 1)), j })).b + 1)])];
+    `      if (@trade[j - 1 < j]) {}
+      const moved = values[@from[j - 1]];
+      values[j - 1] = values[@to[j]];
+      values[j] = moved;
       j--;`
   )
-  .replace(
-    '    <Link from={@insert.swap.from} to={@insert.swap.to} />',
-    '    {@render Values([...v.slice(0, at.a), @insert.swap.trade[at.b], @insert.swap.trade[at.a], ...v.slice(at.b + 1)])}'
-  )
+  .replace('    <Link from={@insert.swap.from} to={@insert.swap.to} />', '    {@insert.swap.trade}')
   .replace(
     '{#snippet Cells()}',
-    '<View of="Swap" name="Trade"><Link from={this.at.a} to={this.at.b} /></View>\n{#snippet Cells()}'
+    '<View of="@insert.swap.trade" name="Trade"><Link from={this.left} to={this.right} /></View>\n{#snippet Cells()}'
   );
 
 it.skipIf(!enabled)(
   'lays out the link an operator’s view brings in among the cells, at its steps only',
   { timeout: 120_000 },
   async () => {
-    expect(traded).toContain(
-      '{@render Values([...v.slice(0, at.a), @insert.swap.trade[at.b], @insert.swap.trade[at.a], ...v.slice(at.b + 1)])}'
-    );
+    expect(traded).toContain('{@insert.swap.trade}');
     const prepared = prepareSvelteComponent(traded);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
+        'pause@first': 'off',
+        'pause@more': 'off',
+        'pause@next': 'off',
         'pause@insert': 'off',
-        'pause@insert.compare': 'accumulate',
-        'pause@insert.compare.left': 'off',
-        'pause@insert.compare.right': 'off',
+        'pause@insert.test': 'off',
+        'pause@insert.test.compare': 'accumulate',
+        'pause@insert.test.compare.left': 'off',
+        'pause@insert.test.compare.right': 'off',
         'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.trade': 'off'
+        'pause@insert.swap.trade': 'off',
+        'pause@insert.swap.from': 'off',
+        'pause@insert.swap.to': 'off'
       }
     });
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });

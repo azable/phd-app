@@ -32,9 +32,9 @@ const insertion = `<script domain>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script algorithm>
-  for (let i = Position(1); (i <= values.length); i++) @insert{
+  for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
-    while ((Position(0) <= j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+    while (@test[(Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]]) @swap{
       const moved = values[@from[j - 1]];
       values[j - 1] = values[@to[j]];
       values[j] = moved;
@@ -43,13 +43,15 @@ const insertion = `<script domain>
   }
 </script>
 <script listing="code">
-  for i = 1 to length(A) - 1
+  @first[i = 1]
+  while @more[i < length(A)]
     @insert[j = i
-    while j > 0 and @compare[A[@left[j - 1]] > A[@right[j]]]
+    while @test[j > 0 and @compare[A[@left[j - 1]] > A[@right[j]]]]
       @swap[moved = A[@from[j - 1]]
       A[j - 1] = A[@to[j]]
       A[j] = moved
       j = j - 1]]
+    @next[i = i + 1]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Highlight"><Pointed /></View>
@@ -63,8 +65,8 @@ const insertion = `<script domain>
 <Layout name="Main">
   <Node>
     {@render Board()}
-    {@insert.compare.left}
-    {@insert.compare.right}
+    {@insert.test.compare.left}
+    {@insert.test.compare.right}
     {@insert.swap.from}
     {@insert.swap.to}
   </Node>
@@ -77,15 +79,19 @@ it.skipIf(!enabled)(
     const prepared = prepareSvelteComponent(insertion);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
+        'pause@first': 'off',
+        'pause@more': 'off',
+        'pause@next': 'off',
         'pause@insert': 'off',
-        'pause@insert.compare': 'accumulate',
-        'pause@insert.compare.left': 'on',
-        'pause@insert.compare.right': 'on',
+        'pause@insert.test': 'off',
+        'pause@insert.test.compare': 'accumulate',
+        'pause@insert.test.compare.left': 'on',
+        'pause@insert.test.compare.right': 'on',
         'pause@insert.swap': 'accumulate',
         'pause@insert.swap.from': 'off',
         'pause@insert.swap.to': 'on',
-        'Highlight.Pointed@insert.compare.left.fill': 'sky-100',
-        'Highlight.Pointed@insert.compare.right.fill': 'violet-100',
+        'Highlight.Pointed@insert.test.compare.left.fill': 'sky-100',
+        'Highlight.Pointed@insert.test.compare.right.fill': 'violet-100',
         'listing.lit.fill': 'amber-200',
         'listing.lit.stroke': 'amber-500',
         'listing.lit.strokeWidth': 1,
@@ -192,8 +198,8 @@ const search = `<script domain>
   const target = Int(42);
 </script>
 <script algorithm>
-  let lo = Index(0);
-  let hi = values.length - 1;
+  @range[let lo = Index(0);
+  let hi = values.length - 1;]
   while (@open[lo <= hi]) @probe{
     const mid = @mid[Index(Math.floor((lo + hi) / 2))];
     if (@low[values[mid] < target]) @right[lo = mid + 1;]
@@ -201,6 +207,7 @@ const search = `<script domain>
   }
 </script>
 <script listing="pseudocode">
+  @range[$lo[lo] = 0, $hi[hi] = length(A) - 1]
   while @open[$lo[lo] <= $hi[hi]]
     @probe[@mid[$mid[mid] = (lo + hi) / 2]
     if @low[$mid[A[mid]] < $target[target]]
@@ -229,6 +236,7 @@ it.skipIf(!enabled)(
     const prepared = prepareSvelteComponent(search);
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
+        'pause@range': 'off',
         'pause@open': 'off',
         'pause@probe': 'off',
         'pause@probe.mid': 'off',

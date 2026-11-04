@@ -129,7 +129,7 @@ it.skipIf(!enabled)(
   const partner = Partners([1, 0, 3, 2]);
 </script>
 <script algorithm>
-  let i = Position(0);
+  @start[let i = Position(0);]
   @next[i = Position(1);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>

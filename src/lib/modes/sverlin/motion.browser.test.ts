@@ -29,8 +29,8 @@ const merge = `<script domain>
   @start[let merged = Values([]);
   let i = Position(left, 0);
   let j = Position(right, 0);]
-  while ((i < left.length) || (j < right.length)) {
-    @take[if ((j === right.length) || ((i < left.length) && (left[i] < right[j]))) {
+  while (@more[(i < left.length) || (j < right.length)]) {
+    @take[if (@fromLeft[(j === right.length) || ((i < left.length) && (left[i] < right[j]))]) {
       merged.push(left[i]);
       i++;
     } else {
@@ -112,7 +112,9 @@ it.skipIf(!enabled)(
   { timeout: 180_000 },
   async () => {
     const prepared = prepareSvelteComponent(merge);
-    const master = prepared.master;
+    // Every label pauses, so each step of the trace is a step of the page, and its copies apply.
+    const pauses = Object.keys(prepared.design.space).filter((key) => key.startsWith('pause@'));
+    const master = prepared.paced(new Set(pauses.map((key) => key.slice('pause@'.length)))).steps;
     // Copies start where the value they were copied from was (identities.server.ts): into a
     // step's before from the step before, then into its after from its before.
     const copies = master.map(({ before, identities }) => [
@@ -122,7 +124,10 @@ it.skipIf(!enabled)(
     const frames = await Promise.all(
       [1, 2].map(async (seed) => {
         const { javascript } = await bundlePresentation(prepared, seed, {
-          chosen: { 'pointers.Position@k': 'Placed' }
+          chosen: {
+            'pointers.Position@k': 'Placed',
+            ...Object.fromEntries(pauses.map((key) => [key, 'on']))
+          }
         });
         return sandboxDocument('', javascript, 0, seed);
       })
@@ -229,7 +234,7 @@ const walk = `<script domain>
   const edges = Edges([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 0, to: 2 }]);
 </script>
 <script algorithm>
-  @step[for (let e = EdgeIndex(0); (e < edges.length); e++) {}]
+  @step[for (@first[let e = EdgeIndex(0)]; @more[e < edges.length]; @next[e++]) {}]
 </script>
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Edge" name="Arrow"><Link from={this.from} to={this.to} /></View>
@@ -253,7 +258,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(walk);
-    const { javascript } = await bundlePresentation(prepared, 1);
+    const { javascript, labels } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 1000, height: 600 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:1000px;height:600px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
@@ -270,7 +275,7 @@ it.skipIf(!enabled)(
     await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
       timeout: 60_000
     });
-    for (let index = 1; index < prepared.master.length; index++) {
+    for (let index = 1; index < labels.length; index++) {
       await step(index);
       // A fragment reference finds the first element with its id in the page. Checked once both
       // steps are in the page, waited for as an object, as a count of 0 would read as not yet.
@@ -309,8 +314,8 @@ const taken = `<script domain>
   @start[let i = Index(left, 0);
   let j = Index(right, 0);
   let take = Take({ from: j });]
-  @step[while ((i < left.length) && (j < right.length)) {
-    if ((left[i] < right[j])) {
+  @step[while (@more[(i < left.length) && (j < right.length)]) {
+    if (@less[left[i] < right[j]]) {
       take = Take({ from: i });
       i++;
     } else {
@@ -474,7 +479,7 @@ const far = `<script domain>
 </script>
 <script algorithm>
   @start[let i = Index(0);]
-  @far[i = 9;]
+  @far[i = 7;]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
@@ -722,8 +727,8 @@ const compared = `<script domain>
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  for (let i = Index(1); (i < values.length); i++) @compare{
-    if (((values[i - 1]) > values[i])) @swap{
+  for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @compare{
+    if (@greater[values[i - 1] > values[i]]) @swap{
       const moved = values[i - 1];
       values[i - 1] = values[i];
       values[i] = moved;
@@ -731,9 +736,9 @@ const compared = `<script domain>
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Greater" name="Ask"><Node>{this.a} vs {this.b}</Node></View>
+<View of="@compare.greater" name="Ask"><Node>{this.left} vs {this.right}</Node></View>
 {#snippet Board()}
-  <Node layout="column"><Node>{#each values as v}{v}{/each}</Node>{@compare}</Node>
+  <Node layout="column"><Node>{#each values as v}{v}{/each}</Node>{@compare.greater}</Node>
 {/snippet}
 
 <Layout name="Main">
@@ -747,10 +752,12 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(compared);
-    const [, first] = prepared.master;
-    const operands = first.applied!.Greater[0].identities!;
+    const { javascript, labels } = await bundlePresentation(prepared, 1);
+    // The first step drawing the comparison, by its name in the steps the page has.
+    const at = labels.findIndex((name) => name.startsWith('@compare.greater#'));
+    const first = prepared.master.find(({ name }) => name === labels[at])!;
+    const operands = first.applied!['ℓcompareˑgreater'][0].identities!;
     const copies = first.identities!.copies;
-    const { javascript } = await bundlePresentation(prepared, 1);
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -772,10 +779,12 @@ it.skipIf(!enabled)(
     await frame.evaluate(() =>
       document.querySelector('.sv-layer:not(.pending)')?.setAttribute('data-checked', '')
     );
-    await page.evaluate(() =>
-      document
-        .querySelector('iframe')
-        ?.contentWindow?.postMessage({ type: 'sverlin:step', step: 1, selection: [] }, '*')
+    await page.evaluate(
+      (at) =>
+        document
+          .querySelector('iframe')
+          ?.contentWindow?.postMessage({ type: 'sverlin:step', step: at, selection: [] }, '*'),
+      at
     );
     // Step 1's after, where its comparison is drawn: 5 and 1 lift out of their cells.
     await frame.waitForFunction(
@@ -789,7 +798,7 @@ it.skipIf(!enabled)(
     const moving = Object.fromEntries(
       (await starts(frame)).map(({ identity, at }) => [identity, at])
     );
-    for (const operand of [operands.a, operands.b]) {
+    for (const operand of [operands.left, operands.right]) {
       expect(copies[operand], `operand ${operand} is a copy`).toBeDefined();
       expect(moving[String(operand)], `operand ${operand} starts at its cell`).toEqual(
         from[String(copies[operand])]

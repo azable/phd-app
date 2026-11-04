@@ -34,8 +34,8 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  const i = Index(1);
-  const j = Index(0);
+  @start[const i = Index(1);
+  const j = Index(0);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="First"><Pointed /></View>
@@ -96,7 +96,7 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  const i = Index(2);
+  @start[const i = Index(2);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
@@ -155,8 +155,8 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  const i = Index(1);
-  const j = Index(0);
+  @start[const i = Index(1);
+  const j = Index(0);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Highlight"><Pointed /></View>
@@ -211,7 +211,7 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  const key = Int(3);
+  @start[const key = Int(3);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Int" name="IntTally"><Node>{'•'.repeat(this)}</Node></View>

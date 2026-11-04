@@ -72,10 +72,10 @@ it.skipIf(!enabled)(
   const values = Values([5, 2, 8, 1]);
 </script>
 <script algorithm>
-  for (let i = Index(1); (i < values.length); i++) @insert{
+  for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @insert{
     const key = @key[values[i]];
     let j = i;
-    while ((Index(0) < j) && ((values[j - 1]) > key)) {
+    while (@shift[(Index(0) < j) && ((values[j - 1]) > key)]) {
       values[j] = values[j - 1];
       j--;
     }
@@ -92,9 +92,15 @@ it.skipIf(!enabled)(
     {@render Inserting()}
   </Node>
 </Layout>`;
-    const keys = (await stepsOf(source, 4, { 'pause@insert.key': 'off' })).map((nodes) =>
-      nodes.find((node) => node.startsWith('Inserting'))
-    );
+    const keys = (
+      await stepsOf(source, 4, {
+        'pause@insert.key': 'off',
+        'pause@insert.shift': 'off',
+        'pause@first': 'off',
+        'pause@more': 'off',
+        'pause@next': 'off'
+      })
+    ).map((nodes) => nodes.find((node) => node.startsWith('Inserting')));
     // The page opens on the input, before any key, the node hidden whole; then one key per step.
     expect(keys).toEqual([
       undefined,
@@ -114,8 +120,8 @@ it.skipIf(!enabled)(
   const values = Values([5, 1, 4]);
 </script>
 <script algorithm>
-  for (let end = values.length; (Index(1) < end); end--) @sweep{
-    for (let i = Index(1); (i < end); i++) @pair{
+  for (@last[let end = values.length]; @more[Index(1) < end]; @shrink[end--]) @sweep{
+    for (@first[let i = Index(1)]; @inside[i < end]; @step[i++]) @pair{
       if (@test[(values[i - 1]) > values[i]]) @swap{
         const moved = @a[values[i - 1]];
         values[i - 1] = @b[values[i]];
@@ -127,7 +133,7 @@ it.skipIf(!enabled)(
 <View of="Int" name="IntCell"><Node value={this} /></View>
 {#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
 {#snippet Swapped()}<Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node>{/snippet}
-<View of="Greater" name="Ask"><Node>is {this.a} > {this.b}?</Node></View>
+<View of="@sweep.pair.test" name="Ask"><Node>is {this.left} > {this.right}?</Node></View>
 
 <Layout name="Main">
   <Node>
@@ -139,6 +145,12 @@ it.skipIf(!enabled)(
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
     const [, compare, swap, , , last] = await stepsOf(source, 6, {
+      'pause@last': 'off',
+      'pause@more': 'off',
+      'pause@shrink': 'off',
+      'pause@sweep.first': 'off',
+      'pause@sweep.inside': 'off',
+      'pause@sweep.step': 'off',
       'pause@sweep': 'off',
       'pause@sweep.pair': 'off',
       'pause@sweep.pair.swap': 'accumulate',
@@ -154,7 +166,7 @@ it.skipIf(!enabled)(
 );
 
 it.skipIf(!enabled)(
-  'mark every cell a search has checked so far, and point from a for … of variable',
+  'mark every cell a search has checked so far, and point from a loop variable',
   { timeout: 120_000 },
   async () => {
     const search = `${domain}
@@ -163,8 +175,8 @@ it.skipIf(!enabled)(
   const target = Int(5);
 </script>
 <script algorithm>
-  for (let i = Index(0); (i < values.length); i++) @check{
-    if ((values[@at[i]] === target)) break;
+  for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @check{
+    if (@hit[values[@at[i]] === target]) break;
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
@@ -174,10 +186,19 @@ it.skipIf(!enabled)(
 <Layout name="Main">
   <Node>
     {@render Cells()}
-    {#each runs(@check.at) as p}{p}{/each}
+    {#each runs(@check.hit.at) as p}{p}{/each}
   </Node>
 </Layout>`;
-    const checked = (await stepsOf(search, 4, { 'pause@check.at': 'off' })).map((nodes) =>
+    const checked = (
+      await stepsOf(search, 4, {
+        'pause@check.hit.at': 'off',
+        'pause@check': 'on',
+        'pause@check.hit': 'off',
+        'pause@first': 'off',
+        'pause@more': 'off',
+        'pause@next': 'off'
+      })
+    ).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
     // The input as given, nothing checked yet; then each check adds its cell.
@@ -188,14 +209,14 @@ it.skipIf(!enabled)(
   const Count = type('integer', { min: 0, max: 9 });
   const Digits = collection(Digit, { max: 8 });
   const Counts = collection(Count, { max: 8 });
-  const At = ref(Digits);
+  const At = index(Digits);
 </script>
 <script input>
   const digits = Digits([3, 1, 4]);
   const counts = Counts([0, 0, 0, 0, 0]);
 </script>
 <script algorithm>
-  for (const v of digits) @count{ counts[v]++; }
+  for (@first[let v = At(0)]; @more[v < digits.length]; @next[v++]) @count{ counts[digits[v]]++; }
 </script>
 <View of="Digit" name="DigitCell"><Node value={this} /></View>
 <View of="Count" name="CountCell"><Node value={this} /></View>
@@ -210,9 +231,9 @@ it.skipIf(!enabled)(
     {v}
   </Node>
 </Layout>`;
-    const reading = (await stepsOf(counting, 4)).map(
-      (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
-    );
+    const reading = (
+      await stepsOf(counting, 4, { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' })
+    ).map((nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]);
     // The page opens on the input as given, v not yet declared; then each digit counted.
     expect(reading).toEqual([undefined, '3', '1', '4']);
   }

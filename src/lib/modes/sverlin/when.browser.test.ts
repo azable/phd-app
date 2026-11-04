@@ -31,9 +31,9 @@ const insertion = `<script domain>
   const values = Values([5, 2, 4, 1]);
 </script>
 <script algorithm>
-  for (let i = Position(1); (i < values.length); i++) @insert{
+  for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
     let j = i;
-    while ((Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]) @swap{
+    while (@test[(Position(0) < j) && @compare[(values[@left[j - 1]]) > values[@right[j]]]]) @swap{
       const moved = values[@from[j - 1]];
       values[j - 1] = values[@to[j]];
       values[j] = moved;
@@ -57,9 +57,13 @@ const insertion = `<script domain>
 </Layout>`;
 
 const off = {
+  'pause@first': 'off',
+  'pause@more': 'off',
+  'pause@next': 'off',
   'pause@insert': 'off',
-  'pause@insert.compare.left': 'off',
-  'pause@insert.compare.right': 'off',
+  'pause@insert.test': 'off',
+  'pause@insert.test.compare.left': 'off',
+  'pause@insert.test.compare.right': 'off',
   'pause@insert.swap.from': 'off'
 };
 
@@ -127,7 +131,7 @@ it.skipIf(!enabled)(
     const coarse = await stepsOf(
       {
         ...off,
-        'pause@insert.compare': 'accumulate',
+        'pause@insert.test.compare': 'accumulate',
         'pause@insert.swap': 'accumulate',
         'pause@insert.swap.to': 'off'
       },
@@ -141,7 +145,7 @@ it.skipIf(!enabled)(
     const fine = await stepsOf(
       {
         ...off,
-        'pause@insert.compare': 'accumulate',
+        'pause@insert.test.compare': 'accumulate',
         'pause@insert.swap': 'accumulate',
         'pause@insert.swap.to': 'on'
       },
@@ -158,16 +162,16 @@ it.skipIf(!enabled)(
     const chained = insertion
       .replace(
         '{#snippet Caption()}',
-        '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="Greater" name="Ask"><Node>Is {this.a} greater than {this.b}? {this.value}</Node></View>\n{#snippet Caption()}'
+        '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="@insert.test.compare" name="Ask"><Node>Is {this.left} greater than {this.right}? {this.value}</Node></View>\n{#snippet Caption()}'
       )
       .replace(
         '<When of="@insert.swap">{@render Caption()}</When>',
-        '<OneOf><When of="@insert.compare">{@insert.compare}</When><When of="@insert.swap">{@render Caption()}</When></OneOf>'
+        '<OneOf><When of="@insert.test.compare">{@insert.test.compare}</When><When of="@insert.swap">{@render Caption()}</When></OneOf>'
       );
     const steps = await stepsOf(
       {
         ...off,
-        'pause@insert.compare': 'accumulate',
+        'pause@insert.test.compare': 'accumulate',
         'pause@insert.swap': 'accumulate',
         'pause@insert.swap.to': 'off'
       },
