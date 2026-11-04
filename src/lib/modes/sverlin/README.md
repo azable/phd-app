@@ -942,9 +942,10 @@ included, as `CurrentCaption` and `NeighbourCaption` inside two pointer views,
 never `Caption` in both; a layout is not named as a type, and a tag names a
 layout, so every kind is known before the view runs. A `kind` is written as it
 is, one capitalised word, never computed; nodes of one view or layout naming the
-same kind are one kind, and it is named apart from every view, layout, and type.
-A kind written on several nodes, as each header cell, is one kind, so they look
-alike.
+same kind are one kind, and it is named apart from every view and layout. Name a
+kind after what the node is, never after a type: with a type `Distance`, write
+`kind="DistanceLabel"`, not `kind="Distance"`. A kind written on several nodes,
+as each header cell, is one kind, so they look alike.
 
 Every kind of node has these props, each with a fixed set of options:
 

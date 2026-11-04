@@ -1365,7 +1365,92 @@ describe('views of what a step computed', () => {
             '<View of="@sweep.pair.test.never" name="Tell"><Node>{this.value}</Node></View>\n<View of="Flag" name="FlagWord"'
           )
       )
-    ).toThrow('which labels no expression any step evaluates');
+    ).toThrow('whose expression no step of the case evaluates');
+  });
+
+  const pairs = (algorithm: string, label: string) => `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = array(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+<script algorithm>
+${algorithm}
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="${label}" name="Line"><Node>{this.left}, {this.right}: {this.value}</Node></View>
+<Layout name="Main" of="values, ${label}"><Node>{values}{${label}}</Node></Layout>
+<Case name="main" values={[1, 2, 4, 7, 9]} target={11} />
+<Storyboard>
+  <Scene name="scan" case="main"><Main values={values} /></Scene>
+</Storyboard>`;
+  const walk = (
+    body: string
+  ) => `  @start[let left = Index(values, 0); let right = Index(values, values.length - 1);]
+  while (@room[left < right]) @pair{
+${body}
+    @move[left++;]
+  }`;
+
+  it.each([
+    ['a declaration', walk('    const sum = @sum[values[left] + values[right]];'), '@pair.sum'],
+    [
+      'a condition',
+      walk('    if (@hit[values[left] + values[right] === target]) @found{ break; }'),
+      '@pair.hit'
+    ],
+    ['an expression statement', walk('    @check[values[left] < target];'), '@pair.check'],
+    [
+      'a function',
+      `  function small(v, t) @small{
+    if (@low[v < t]) @yes{ return true; }
+    @no[return false;]
+  }
+  @start[let k = Index(values, 0);]
+  while (@more[k < values.length]) @each{
+    @ask[small(values[k], target);]
+    @next[k++;]
+  }`,
+      '@small.low'
+    ]
+  ])(
+    'views what a labelled expression in %s computed, its operands and result',
+    async (_, algorithm, label) => {
+      const built = await bundlePresentation(
+        prepareSvelteComponent(pairs(algorithm, label)),
+        1,
+        {}
+      );
+      expect(built.labels.length).toBeGreaterThan(1);
+    }
+  );
+
+  it('says why a label types no view: no such label, a statement, or the algorithm failing', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        pairs(walk('    const sum = @sum[values[left] + values[right]];'), '@sum')
+      )
+    ).toThrow('no label is named: a label inside another is named by both');
+    expect(() =>
+      prepareSvelteComponent(
+        pairs(walk('    @add[const sum = values[left] + values[right];]'), '@pair.add')
+      )
+    ).toThrow('marks a statement, not an expression');
+    // The algorithm's own problem, a statement in no label beside the others, comes first.
+    expect(() =>
+      prepareSvelteComponent(
+        pairs(
+          walk(
+            '    const sum = @sum[values[left] + values[right]];\n    if (sum > 99) left = right;'
+          ),
+          '@pair.sum'
+        )
+      )
+    ).toThrow('is in @pair but in none of the labels beside it');
   });
 });
 

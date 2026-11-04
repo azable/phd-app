@@ -496,13 +496,17 @@ function listingsFrom(
 
 /**
  * The domain and a first trace, which give the types of the values the markup draws (see
- * implicit-renders.server.ts); none where a block fails, whose problem the build reports in turn.
+ * implicit-renders.server.ts); where a block fails, why, which the build reports in turn, or at once
+ * where a view typed by a label needs the trace.
  */
 function earlyTyping(
   source: string,
   blocks: Partial<Record<BlockKind | 'design', Block>>,
   cases: ReturnType<typeof writtenCases>
-): (ViewTyping & { labelOperators: Record<string, OperatorType> }) | undefined {
+):
+  | (ViewTyping & { labelOperators: Record<string, OperatorType> })
+  | { failure: unknown }
+  | undefined {
   if (!blocks.algorithm) return undefined;
   try {
     const domain = blocks.domain
@@ -532,8 +536,8 @@ function earlyTyping(
       labels,
       steps
     };
-  } catch {
-    return undefined;
+  } catch (failure) {
+    return { failure };
   }
 }
 
@@ -852,7 +856,8 @@ function prepareViews(
       );
     // A value in braces draws its type's view, as a render of that type, and a union's value its
     // member's, through a view added after the authored ones (see implicit-renders.server.ts).
-    const early = earlyTyping(source, blocks, extracted.cases);
+    const typed = earlyTyping(source, blocks, extracted.cases);
+    const early = typed && !('failure' in typed) ? typed : undefined;
     // Only the labels a view is typed by draw through a view (see withLabelOperators).
     const typedBy = new Set(
       findComponents(ast.html as Parameters<typeof findComponents>[0])
@@ -1052,6 +1057,8 @@ function prepareViews(
     // A view typed by a label sees the labelled expression as an operator named by it (see
     // withLabelOperators), its operands and result the fields the first trace recorded.
     const labelViews = new Set(found.components.map(({ type }) => type).filter(isLabelKey));
+    // Without a trace no label has fields: the algorithm's own problem comes first.
+    if (labelViews.size && typed && 'failure' in typed) throw typed.failure;
     const domain: DomainRegistry = {
       ...declaredDomain,
       operators: Object.fromEntries(
@@ -1061,10 +1068,9 @@ function prepareViews(
     for (const name of labelViews)
       if (!domain.operators?.[name])
         viewProblems.push(
-          new InvalidSvelteSourceError(
-            `A view takes ${asWritten(name)}, which labels no expression the algorithm evaluates: type a view by a label on an expression, as @compare[a > b], whose operands and result it draws.`,
-            { code: 'view_component' }
-          )
+          new InvalidSvelteSourceError(`A view takes ${labelViewProblem(name, typing?.labels)}`, {
+            code: 'view_component'
+          })
         );
     const { atoms } = domain;
     // A reference to a node shows as its place in the heap, no value a participant can read.
@@ -1151,7 +1157,8 @@ function prepareViews(
       viewing,
       stateNames,
       stateNames,
-      source
+      source,
+      typing?.labels
     );
     const views = viewsOf(components);
     // A type is rendered by name, as in {@render Int(value)}, and draws the view of it the variant
@@ -3634,6 +3641,27 @@ function withNodeRefs(
 }
 
 /**
+ * Why a label types no view, completing "<View> takes …": no label has its name, it marks a
+ * statement or block, or the case never evaluates it.
+ */
+function labelViewProblem(type: string, labels: readonly Label[] | undefined): string {
+  const written = asWritten(type);
+  const label = labels?.find(({ full }) => `@${full}` === written);
+  const expression = 'label an expression, as @compare[a > b], whose operands and result it draws';
+  if (labels && !label) {
+    const names = labels.map(({ full }) => `@${full}`);
+    return `${written}, which no label is named: a label inside another is named by both, as @pair.sum for @sum inside @pair; the labels are ${names.slice(0, 12).join(', ')}${names.length > 12 ? ', …' : ''}.`;
+  }
+  const marksExpression =
+    label &&
+    label.nodes.length === 1 &&
+    (!label.statement || label.nodes[0].type === 'ExpressionStatement');
+  if (label && !marksExpression)
+    return `${written}, which marks a statement, not an expression, so it computes no value to draw: ${expression}.`;
+  return `${written}, whose expression no step of the case evaluates, so there is nothing to draw: ${expression} that the case reaches.`;
+}
+
+/**
  * Check the view's components: their types are domain types, their names are free, and they read
  * only their value and other components, never the input or algorithm's variables. Gives each
  * component's type.
@@ -3644,7 +3672,8 @@ function checkComponents(
   domain: DomainRegistry,
   stateNames: readonly string[],
   props: readonly string[],
-  source: string
+  source: string,
+  labels?: readonly Label[]
 ): ComponentSignatures {
   const signatures: ComponentSignatures = {};
   for (const { name, start, type, node } of found) {
@@ -3652,7 +3681,7 @@ function checkComponents(
     if (!definesType(domain, type))
       throw new InvalidSvelteSourceError(
         isLabelKey(type)
-          ? `${name} takes ${asWritten(type)}, which labels no expression any step evaluates: a view typed by a label draws what its expression computed, so label an expression the input reaches, as @compare[a > b].`
+          ? `${name} takes ${labelViewProblem(type, labels)}`
           : `${name}'s type ${type} is not a type; define it in the domain block, or use one that is.`,
         at
       );

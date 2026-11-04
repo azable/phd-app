@@ -372,11 +372,20 @@ export function traceAlgorithm(
   for (const { full, nodes, statement } of labelled.labels)
     if (!statement && nodes.length === 1 && keep.labels?.has(full))
       captured.set(nodes[0], [...(captured.get(nodes[0]) ?? []), full]);
-  // A labelled expression a view typed by its label draws: its operands and result, kept as an application.
+  // A labelled expression a view typed by its label draws: its operands and result, kept as an
+  // application; a label around a whole expression statement, as @compare[a < b];, marks its
+  // expression.
   const applying = new Map<AnyNode, string[]>();
-  for (const { full, nodes, statement } of labelled.labels)
-    if (!statement && nodes.length === 1 && keep.applications?.has(full))
-      applying.set(nodes[0], [...(applying.get(nodes[0]) ?? []), full]);
+  for (const { full, nodes, statement } of labelled.labels) {
+    if (nodes.length !== 1 || !keep.applications?.has(full)) continue;
+    const [node] = nodes;
+    const expression = !statement
+      ? node
+      : node.type === 'ExpressionStatement'
+        ? (node as AnyNode & { expression: AnyNode }).expression
+        : undefined;
+    if (expression) applying.set(expression, [...(applying.get(expression) ?? []), full]);
+  }
   const named = new Map<Unit, string>();
   const holding = new Map<string, Unit>();
   for (const label of labelled.labels) {
