@@ -66,3 +66,7 @@
     <Status />
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>

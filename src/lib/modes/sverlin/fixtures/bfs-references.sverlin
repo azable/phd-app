@@ -53,3 +53,7 @@
     {@visit.look.check.next}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main current={current} queue={queue} /></Scene>
+</Storyboard>

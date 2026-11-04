@@ -11,7 +11,6 @@ import {
   placeGhosts,
   setDrawnValues,
   tagGhosts,
-  unchosenLayouts,
   unchosenViews,
   viewMarkers
 } from './drawn-values';
@@ -190,13 +189,13 @@ describe('variant markers', () => {
     expect(listed.slice((listing?.at ?? 0) - '<Listing'.length, listing?.at)).toBe('<Listing');
   });
 
-  it('puts a layout’s frame in its root’s chip, and greys the layouts no variant shows', () => {
+  it('puts a layout’s frame in its root’s chip', () => {
     const laid =
       '<Layout name="Side">\n  <Node layout="row"><Title /></Node>\n</Layout>\n<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>';
     const shown = [
       {
         seed: 1,
-        variant: { layout: 'Side', 'Side.ratio': '16:9', 'Side.gap': 1, 'Stacked.ratio': '4:3' },
+        variant: { 'Side.ratio': '16:9', 'Side.gap': 1, 'Stacked.ratio': '4:3' },
         kinds: { '2:3': ['Side'], '5:3': ['Stacked'] }
       }
     ];
@@ -204,9 +203,6 @@ describe('variant markers', () => {
     const [side, stacked] = tagGhosts(state, shown);
     expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
     expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
-    expect(unchosenLayouts(state, shown).map(({ from, to }) => laid.slice(from, to))).toEqual([
-      '<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>'
-    ]);
   });
 
   it('shows each label’s pauses after its mark, by its full name', () => {

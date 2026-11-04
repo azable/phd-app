@@ -2,7 +2,7 @@
  * Test support: a source written with snippets as parts, {@render Part()}, and page layouts that
  * declare nothing, as Sverlin was written before layouts took inputs, rewritten in the current form:
  * parts as layouts declaring the state they read, renders as their tags, snippets nested in a view or
- * part as kinds, and every page layout declaring what it reads. For tests that build sources from
+ * part as kinds, every page layout declaring what it reads, and a storyboard showing the first. For tests that build sources from
  * pieces, where inputs cannot be written beforehand.
  */
 
@@ -95,6 +95,7 @@ function snippetEnd(text: string, from: number): number {
 
 function convert(text: string, extraState: string[] = []): string {
   if (!/\{#snippet|\{@render|<Layout\b/u.test(text)) return text;
+  if (/<Storyboard\b/u.test(text)) return text;
   const state = stateNamesOf(text, extraState);
   // 1. Nested snippets inside views: inline at each render, as kind.
   for (let guard = 0; guard < 50; guard++) {
@@ -216,7 +217,23 @@ function convert(text: string, extraState: string[] = []): string {
       return `<Layout name="${name}"${declared && !declared.declared ? ofText(declared) : ''}${space}>`;
     }
   );
-  return text;
+  return withStoryboard(text);
+}
+
+/** The source with a storyboard showing its first page layout, where it has none. */
+function withStoryboard(text: string): string {
+  if (/<Storyboard\b/u.test(text)) return text;
+  const page = [
+    ...text.matchAll(/<Layout\s+name="([A-Za-z_$][\w$]*)"(?:\s+of="([^"]*)")?\s*>/gu)
+  ].find(([, name]) => !new RegExp(`<${name.replace('$', '\\$')}\\b`, 'u').test(text));
+  if (!page) return text;
+  const passed = (page[2] ?? '')
+    .split(',')
+    .map((input) => input.trim())
+    .filter((input) => input && !input.startsWith('@'))
+    .map((input) => ` ${input}={${input}}`)
+    .join('');
+  return `${text}\n<Storyboard><Scene name="main"><${page[1]}${passed} /></Scene></Storyboard>`;
 }
 
 export { convert as currentForm, stateNamesOf };

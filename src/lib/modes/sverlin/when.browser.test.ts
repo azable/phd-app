@@ -54,7 +54,11 @@ const insertion = `<script domain>
   <Node>
     <Board values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 const off = {
   'pause@first': 'off',

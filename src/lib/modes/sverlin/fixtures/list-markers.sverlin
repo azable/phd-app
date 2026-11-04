@@ -135,3 +135,7 @@ while @more[cur ≠ ∅]
     {after}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main prev={prev} cur={cur} after={after} /></Scene>
+</Storyboard>

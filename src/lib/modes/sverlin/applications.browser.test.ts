@@ -66,7 +66,11 @@ const source = `<script domain>
     <Title />
     <Board values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 /** The caption Ask draws at a step, and whether it is hidden. */
 async function captionAt(step: number, chosen: Record<string, unknown> = {}) {

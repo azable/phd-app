@@ -42,7 +42,11 @@ const source = `<script domain>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
 
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'shrinks a spread fill and its stroke together, frame by frame, as the pointer leaves',

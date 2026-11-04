@@ -39,3 +39,7 @@
 <Layout name="Main" of="heap">
   <Node>{heap}</Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main heap={heap} /></Scene>
+</Storyboard>

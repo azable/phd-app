@@ -1,14 +1,14 @@
 /**
  * Layouts, `<Layout name="Name">…</Layout>`: each an arrangement of the whole page, its body one root
  * <Node>, the frame. Svelte has no such tag, so before the view is parsed each becomes
- * `{#if __L.Name}…{/if}`, no longer, drawn only where the variant's layout is Name (the prop __L
+ * `{#if __L.Name}…{/if}`, no longer, drawn only at the steps of a scene showing Name (the prop __L
  * holds it), and its root's tags are blanked, so what the root holds is the page's top level, and
  * every check of the top level holds for it. Every source declares at least one layout.
  */
 
 import type { FrameLayout } from './library/node/props';
 
-/** The prop holding the layout shown, as { Stacked: true }. */
+/** The prop holding the layout a step's scene shows, as { Stacked: true }. */
 export const layoutProp = '__L';
 
 /** One layout of the page: its name, and its root's row or column and tag, by its offset. */

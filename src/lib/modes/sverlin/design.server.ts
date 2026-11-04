@@ -96,13 +96,9 @@ export type DesignPlaces = {
 const placePropsOf = ({ role }: DesignKind) =>
   roleProps[role].filter((prop) => placeProps.has(prop));
 
-/**
- * The layout shown, never none, and each layout's frame, as Stacked.ratio, of the page's layouts by
- * name, the first shown where a variant names none.
- */
+/** Each page layout's frame, as Stacked.ratio, by the layout's name; the scenes say which shows. */
 function layoutSpace(names: readonly string[]): DesignSpace {
   return {
-    layout: [...names],
     ...Object.fromEntries(
       names.flatMap((name) =>
         Object.entries(frameOptions).map(([prop, options]) => [`${name}.${prop}`, options])
@@ -113,7 +109,6 @@ function layoutSpace(names: readonly string[]): DesignSpace {
 
 function layoutStarter(names: readonly string[]): Record<string, DesignValue> {
   return {
-    layout: names[0],
     ...Object.fromEntries(
       names.flatMap((name) =>
         Object.keys(frameOptions).map((prop) => [
@@ -272,7 +267,7 @@ function asPause(space: DesignSpace, key: string, value: unknown): unknown {
 /**
  * Every variable of a source: each type's views, each position type's pointer views where it is
  * rendered as a pointer, a listing's if the view places one (its languages the source's own listings
- * first, then the library's), each kind's props, each place's, and the layout shown and each
+ * first, then the library's), each kind's props, each place's, and each
  * layout's frame, after the kinds, as a layout's kind holds the nodes its body writes too.
  */
 export function designSpace(
@@ -392,7 +387,6 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
                 (other) =>
                   !other.startsWith('views.') &&
                   !other.startsWith('pointers.') &&
-                  other !== 'layout' &&
                   !other.startsWith('pause@') &&
                   !other.startsWith('listing.')
               )
@@ -478,11 +472,11 @@ export function buildVariant(
 
 /**
  * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card.fill@true,
- * views for a choice of views (views.Int, pointers.Index) or of layouts, and the variable itself for
+ * views for a choice of views (views.Int, pointers.Index), and the variable itself for
  * the pauses.
  */
 function propOf(key: string): string {
-  if (key.startsWith('views.') || key.startsWith('pointers.') || key === 'layout') return 'views';
+  if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
   if (key.startsWith('pause@')) return key;
   return key.slice(key.lastIndexOf('.') + 1).replace(/@.*/u, '');
 }

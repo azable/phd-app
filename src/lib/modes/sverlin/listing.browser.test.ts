@@ -70,7 +70,11 @@ const insertion = `<script domain>
     {@insert.swap.from}
     {@insert.swap.to}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'paints each region as its mark, in pills that move no text',
@@ -227,7 +231,11 @@ const search = `<script domain>
     {hi}
     {mid}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'lights a place in the listing and the picture alike, hovering one outlining the others',

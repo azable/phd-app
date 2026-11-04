@@ -55,8 +55,9 @@ Sverlin's own constructs are capitalised tags, as `<Node>`, `<View>`,
 attribute. `{#snippet}` and `{@render}` are refused: what one would draw is a
 layout, a view, or a node with a `kind`.
 
-- The top level holds views and at least one layout: every source declares its
-  layouts, and one without is refused. A layout,
+- The top level holds views, at least one layout, and the storyboard (see
+  Storyboard): every source declares its layouts, and one without is refused. A
+  layout,
   `<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>`,
   names its inputs in `of`, the input and algorithm variables and labels it
   reads, as `values` and `@insert.compare`, and reads nothing else: a variable
@@ -70,14 +71,14 @@ layout, a view, or a node with a `kind`.
   A tag is closed at once, `/>`, and a layout drawn inside itself is refused. A
   tag in a node of text and values is drawn inline, as a value is, as
   `<Node>Searching for <Target target={target} /> in the list</Node>`.
-- A layout no other layout draws arranges the whole page: its body is one root
-  `<Node>`, the frame (see Page frame), which holds values, layout tags, with
-  `{#if}` and `{#each}` around them, a `<Listing />`, and nodes arranging them,
-  and is selectable as the whole page. Its only prop is `layout`, `row` or
-  `column` (the start), how it arranges what it holds. A layout's name is its
-  nodes' kind, so a layout drawn on several pages looks alike on each, and it is
-  measured over every value its inputs' types allow. Draw the layouts in the
-  root rather than one layout holding the whole page.
+- A layout a scene shows (see Storyboard) arranges the whole page: its body is
+  one root `<Node>`, the frame (see Page frame), which holds values, layout
+  tags, with `{#if}` and `{#each}` around them, a `<Listing />`, and nodes
+  arranging them, and is selectable as the whole page. Its only prop is
+  `layout`, `row` or `column` (the start), how it arranges what it holds. A
+  layout's name is its nodes' kind, so a layout drawn on several pages looks
+  alike on each, and it is measured over every value its inputs' types allow.
+  Draw the layouts in the root rather than one layout holding the whole page.
 
 ```svelte
 <Layout name="Side" of="values, lo, hi">
@@ -88,13 +89,10 @@ layout, a view, or a node with a `kind`.
 </Layout>
 ```
 
-- The variant shows one page layout, its `layout` variable (see Design), the
-  first where nothing chooses another. Declare another where the request leaves
-  open how the page is arranged or what it holds, as the board and the range
-  side by side or stacked, or the page with a listing against one without; page
-  layouts, as views, differ in how they arrange what they draw or which they
-  draw, never only in look, which is the variant's. A node's `layout` prop
-  arranges its children.
+- Page layouts differ in how they arrange what they draw or which they draw,
+  never only in look, which is the variant's; each scene shows one, so a second
+  is for a scene that needs another arrangement, as a whole run side by side and
+  one merge stacked. A node's `layout` prop arranges its children.
 - Draw every value of a domain type through a view of its type, as `{target}`,
   and every position through a pointer; the markup around them arranges, labels,
   and explains. A node of text and renders with no `layout` reads as a line of
@@ -107,6 +105,48 @@ layout, a view, or a node with a `kind`.
   label's name: "the target is further right", not "low is true".
 - How anything looks is the design's, never the algorithm's; what a step shows
   is read from the algorithm's values and labels (see Steps).
+
+## Storyboard
+
+The view ends with a `<Storyboard>` of the scenes the presentation plays, in
+order; one without is refused. Each `<Scene>` is named, its title in the
+controls, and nests one layout, as its tag, passing it state: only scenes read
+state, so every layout reads only what it is given, and every source has one
+scene at least.
+
+```svelte
+<Storyboard>
+  <Scene name="sort"><Arrays values={values} from={from} /></Scene>
+  <Scene name="one-merge" within="@sort.merge#1" pause="@sort.merge.take">
+    <Arrays values={values} from={from} />
+  </Scene>
+  <Scene name="then"><Note /></Scene>
+</Storyboard>
+```
+
+- A scene is a stepping scene if it passes state, shows a layout reading
+  `all(…)`, or has `pause`, `within`, or `at`, and a single frame otherwise, as
+  a title card or a note between runs: its layout reads no state, and `pause`,
+  `within`, or `at` on a scene whose layout reads none is refused. (Until the
+  language has runs of several inputs, this is how a frame is told from a step.)
+- A stepping scene steps through the whole run, or the runs of one label
+  `within` names: every run, `within="@sort.merge"`, or the nth to begin,
+  `within="@sort.merge#1"`, ending at the step that ends it. `pause` names, by
+  full name and separated by commas, the labels that end a step in it, as
+  `pause="@sort.merge.take"`, in place of the variant's `pause@` variables; the
+  label it is within always ends one. `at="start"` or `at="end"` shows only its
+  first or its last step. `title` is a caption beside its name in the controls.
+  Props are written as they are, never computed.
+- Scenes play in order, each from its first step's state. A scene going back in
+  the run, to before where the stepping scene before it ended, is a rewind,
+  marked ↺ beside its name in the controls, as a merge shown again in detail
+  after the whole sort.
+- A layout a scene shows keeps its place and size in every scene that shows it:
+  every node keeps the largest room it reaches at any step of any scene, and a
+  free layout is laid out once over them all, so nothing moves between scenes.
+- A scene naming no layout the source declares, a label that is none of the
+  algorithm's, or a run its label never has, a scene that shows no step, and a
+  storyboard showing more steps than a presentation can are refused.
 
 ## Views of types
 
@@ -412,6 +452,10 @@ Binary search, stopping where it finds the target:
     {hi}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
+</Storyboard>
 ```
 
 Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; in the root
@@ -581,6 +625,10 @@ nodes `prev` and `cur` refer to both marked:
     {cur}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Stacked prev={prev} cur={cur} /></Scene>
+</Storyboard>
 ```
 
 - `NodeRef(ListNode({ … }))` refers to a new node, written nested, as here, or
@@ -734,6 +782,10 @@ place:
     <Board values={values} />
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Stacked values={values} /></Scene>
+</Storyboard>
 ```
 
 Paused at both, a comparison reads "is 5 > 1? true", its operands lifting out of
@@ -819,8 +871,6 @@ The design space is every variable of a component's look, found in its markup:
   ending, so a label added later changes no saved variant: `"accumulate"`,
   `"on"`, or `"off"`, one with no labels inside it only `"on"` or `"off"` (see
   Steps).
-- `layout`, the layout shown: every layout the source declares, never `none`
-  (see View).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
   node a layout writes beside what it draws, as a row in its root, is of its
@@ -1155,20 +1205,22 @@ offer views that draw each reading.
 
 Every view sits in a page frame, a canvas laid out at a fixed logical width
 (1200 pixels) and scaled to fit, so every presentation renders identically
-whatever the pane size. The frame is the root `<Node>` of the layout shown, and
-its values are that layout's: its ratio is `Stacked.ratio` (fit, 16:9, 4:3, 3:2,
-1:1, 3:4, or 9:16), fit in the starter, taking the shape of what it holds
-between 16:9 and 9:16; keep fit unless the participant asks for another shape.
-It lays out what its root holds in the root's `layout`, a column or a row,
-`Stacked.gap` apart, spread and aligned by `Stacked.justify` and
-`Stacked.align`, as between to put a title at the top and a note at the bottom,
-with `Stacked.padding` inside its edge. Use its width: lay sequences out across
-it rather than down it. Participants select nodes by clicking or dragging a box,
-to point at them in feedback, and the whole page by clicking the frame's empty
-space; they scroll to zoom, drag with the middle button or with Space held to
-pan, and double-click empty space to reset, and the view is kept as they step
-through. Every node is selectable, so draw each thing a participant might want
-to point at, such as a cell, a pointer name, or a caption, as a node of its own.
+whatever the pane size. The frame is the root `<Node>` of the layout a scene
+shows, and its values are that layout's, so each scene's layout keeps its own,
+though the presentation keeps the first scene's ratio throughout: its ratio is
+`Stacked.ratio` (fit, 16:9, 4:3, 3:2, 1:1, 3:4, or 9:16), fit in the starter,
+taking the shape of what it holds between 16:9 and 9:16; keep fit unless the
+participant asks for another shape. It lays out what its root holds in the
+root's `layout`, a column or a row, `Stacked.gap` apart, spread and aligned by
+`Stacked.justify` and `Stacked.align`, as between to put a title at the top and
+a note at the bottom, with `Stacked.padding` inside its edge. Use its width: lay
+sequences out across it rather than down it. Participants select nodes by
+clicking or dragging a box, to point at them in feedback, and the whole page by
+clicking the frame's empty space; they scroll to zoom, drag with the middle
+button or with Space held to pan, and double-click empty space to reset, and the
+view is kept as they step through. Every node is selectable, so draw each thing
+a participant might want to point at, such as a cell, a pointer name, or a
+caption, as a node of its own.
 
 ### Listing
 
@@ -1297,6 +1349,10 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
     {j}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+</Storyboard>
 ```
 
 ## Node
@@ -1520,14 +1576,9 @@ at marked and the queue drawn by number:
   </Node>
 </Layout>
 
-<Layout name="Side" of="current, vertices, out, queue, @visit.look.check.next">
-  <Node layout="row">
-    <Graph vertices={vertices} out={out} />
-    <QueueLine queue={queue} />
-    {current}
-    {@visit.look.check.next}
-  </Node>
-</Layout>
+<Storyboard>
+  <Scene name="search"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+</Storyboard>
 ```
 
 ```

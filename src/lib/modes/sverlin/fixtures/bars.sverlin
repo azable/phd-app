@@ -28,3 +28,7 @@
 <Layout name="Main" of="j, values">
   <Node><Bars values={values} />{j}</Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main j={j} values={values} /></Scene>
+</Storyboard>

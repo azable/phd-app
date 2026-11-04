@@ -270,8 +270,8 @@ describe('single-component Svelte compilation', () => {
     const withoutModuleScript = await compileSvelteComponent(
       '<script algorithm></script><Layout name="X"><Node>x</Node></Layout><Layout name="Main"><Node><X /></Node></Layout>'
     );
-    // The input as given (here none), then the algorithm's one step, its end.
-    expect(withoutModuleScript.labels).toEqual(['start', 'end']);
+    // Its one scene reads no state, so it is one frame, named by the scene.
+    expect(withoutModuleScript.labels).toEqual(['main']);
     expect(withoutModuleScript.javascript).toContain('sv-node');
   });
 
@@ -868,7 +868,7 @@ describe('pointers', () => {
     expect(both.design.renders).toMatchObject({
       [siteOf('{i}')]: 'views.Position',
       // The root's own {i}, after the caption's tag passing it.
-      [siteOf('{i}', source.lastIndexOf('{i}'))]: 'pointers.Position'
+      [siteOf('{i}', source.indexOf('<At i={i} />') + '<At i={i} />'.length)]: 'pointers.Position'
     });
     expect(both.component).toContain('__sverlinPointers');
     // With only pointer views, the type's choice is its pointers variable all the same.

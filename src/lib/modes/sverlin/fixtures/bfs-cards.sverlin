@@ -109,3 +109,7 @@ while @more[the queue is not empty]
     {current}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main start={start} current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+</Storyboard>

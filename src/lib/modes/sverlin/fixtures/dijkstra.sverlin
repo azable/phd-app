@@ -112,3 +112,7 @@
     {e}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+</Storyboard>

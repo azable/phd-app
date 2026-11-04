@@ -91,7 +91,11 @@ it.skipIf(!enabled)(
     <Cells values={values} />
     <Inserting />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
     const keys = (
       await stepsOf(source, 4, {
         'pause@insert.key': 'off',
@@ -141,7 +145,11 @@ it.skipIf(!enabled)(
     {@sweep.pair.test}
     <Swapped />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
     const [, compare, swap, , , last] = await stepsOf(source, 6, {
@@ -188,7 +196,11 @@ it.skipIf(!enabled)(
     <Cells values={values} />
     {#each runs(@check.hit.at) as p}{p}{/each}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
     const checked = (
       await stepsOf(search, 4, {
         'pause@check.hit.at': 'off',
@@ -230,7 +242,11 @@ it.skipIf(!enabled)(
     <CountRow counts={counts} />
     {v}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main v={v} digits={digits} counts={counts} /></Scene>
+</Storyboard>`;
     const reading = (
       await stepsOf(counting, 4, { 'pause@first': 'off', 'pause@more': 'off', 'pause@next': 'off' })
     ).map((nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]);

@@ -30,7 +30,11 @@ const source = `<script domain>
     {@compare.right}
     {@compare.swap.held}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`;
 
 /** The text each region covers. */
 const named = (text: string) =>
@@ -73,7 +77,11 @@ describe('references in messages', () => {
     {@render Index(@rise.compare.left)}
     {@render Index(@fall.compare.left)}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`;
     const at = (label: string) => referenceRanges(twice, label).map(({ from }) => from);
     const all = (text: string) =>
       [...twice.matchAll(new RegExp(text.replace(/[.[]/gu, '\\$&'), 'gu'))].map(
@@ -193,7 +201,11 @@ describe('code in an error message', () => {
   <Node>
     {@render Highlight(@left)}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`;
   const code = (text: string, inSource = dotted) =>
     codeIn(inSource, text).flatMap((span) => (span.code ? [span.text] : []));
 

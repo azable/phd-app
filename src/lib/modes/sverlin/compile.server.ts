@@ -152,6 +152,14 @@ import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
+import {
+  sceneLabel,
+  scenePauses,
+  sceneSteps,
+  storyboardOf,
+  type Scene,
+  type Storyboard
+} from './storyboard.server';
 import { withColumnShifts, writtenColumn } from './written-columns';
 import {
   implicitInsertions,
@@ -265,10 +273,13 @@ export type PreparedComponent = {
    * each step lights in each listing. Made once per way of pausing.
    */
   paced: (pauses: Pauses | ReadonlySet<string>) => PacedSteps;
+  /** The scenes the presentation plays, in order (see storyboard.server.ts). */
+  storyboard: Storyboard;
   /**
-   * Every step the source can show, in run order, by name (see MasterStep.name): the master's, with
-   * the end, which a variant pausing at fewer labels may keep where the master
-   * does not. Every variant's steps are some of these, by name, which is how they line up.
+   * Every step the source can show, in the order its storyboard plays them, by label (see
+   * storyboardOf): the master's in each scene, with the end, which a variant pausing at fewer labels
+   * may keep where the master does not. Every variant's steps are some of these, by label, which is
+   * how they line up.
    */
   steps: string[];
   /** The source's identity, from its steps, shared by its presentations however they are paced. */
@@ -616,15 +627,6 @@ function paced(
   return { ...run, steps: [run.opening, ...run.steps] };
 }
 
-/**
- * Every step a source can show, from the master's (see PreparedComponent.steps): a variant pausing
- * at fewer labels ends on a step of its own where its last step differs from the master's.
- */
-function sourceSteps(master: readonly MasterStep[]): string[] {
-  const steps = master.map(({ name }, index) => name ?? `Step ${index + 1}`);
-  return steps.at(-1) === 'end' ? steps : [...steps, 'end'];
-}
-
 /** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
 export const pauseKey = (label: string): string => `pause@${label}`;
 
@@ -774,8 +776,22 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
           })
       )
     );
+  // What no scene shows, and each scene's place, as written, for problems found once it runs.
+  const unshown = laid.unshown.map(
+    ({ message, start }) =>
+      new InvalidSvelteSourceError(message, {
+        code: 'view_storyboard',
+        start: sourcePosition(written, start)
+      })
+  );
+  const scenes = laid.scenes.map((scene) => ({
+    ...scene,
+    position: sourcePosition(written, scene.start)
+  }));
   return {
-    ...withColumnShifts(laid.shifts, () => prepareViews(tags.source, tags.views, laid.layouts)),
+    ...withColumnShifts(laid.shifts, () =>
+      prepareViews(tags.source, tags.views, laid.layouts, scenes, unshown)
+    ),
     source: written
   };
 }
@@ -784,7 +800,9 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
 function prepareViews(
   source: string,
   viewStarts: readonly number[],
-  declaredLayouts: readonly DeclaredLayout[] = []
+  declaredLayouts: readonly DeclaredLayout[] = [],
+  scenes: readonly Scene[] = [],
+  unshown: readonly InvalidSvelteSourceError[] = []
 ): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
@@ -1503,7 +1521,6 @@ function prepareViews(
     };
     const traced = paced(source, algorithm, input, domain, pacing, keep);
     const master = traced.steps;
-    const steps = sourceSteps(master);
     const runs = labelRuns(master, {
       state: new Set(
         [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
@@ -1608,6 +1625,20 @@ function prepareViews(
     const labelNames = traced.labels.map(({ full }) => full);
     const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
     const leaves = new Set(labelNames.filter((label) => !parents.has(label)));
+    const { storyboard, problems: sceneProblems } = storyboardOf(scenes, master, labelNames);
+    // Reported once the view's own problems are cleared, which may be why nothing is shown.
+    if ((unshown.length || sceneProblems.length) && !viewProblems.length)
+      throw InvalidSvelteSourceError.combine([
+        ...unshown,
+        ...sceneProblems.map(
+          ({ message, scene }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_storyboard',
+              start: scene.position
+            })
+        )
+      ]);
+    const steps = storyboard.steps;
     // Pausing at every label, the finest the steps go, whose states those of any other pauses are
     // among, each accumulating, which holds the most; where that outruns the limit, the starter's.
     let finest: MasterStep[] = [];
@@ -2002,6 +2033,7 @@ function prepareViews(
       ownListings,
       pauses: { labels: labelNames, leaves: [...leaves], runs },
       paced: pacedSteps,
+      storyboard,
       steps,
       signature: stepSignature(steps),
       atoms,
@@ -2150,8 +2182,10 @@ export async function bundlePresentation(
     throw new InvalidSvelteSourceError(cause.message, { code: 'design_value' });
   }
   const { values } = variant;
-  const frame = frameSettings(design, values);
-  const layoutShown = { [layoutProp]: { [frame.name]: true } };
+  const { scenes } = prepared.storyboard;
+  const frames = scenes.map(({ layout }) => frameSettings(design, values, layout));
+  // The presentation keeps one size: the first scene's layout's ratio.
+  const frame = frames[0];
   // Each type rendered by name draws the view the variant chose for it.
   const views = Object.fromEntries([
     ...Object.keys(design.views).map((type) => [type, values[viewKey(type)]]),
@@ -2170,9 +2204,61 @@ export async function bundlePresentation(
       pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
     )
   ]);
-  // The steps paced as the variant pauses.
-  const paced = prepared.paced(pausesOf(prepared.pauses, values));
-  const master = paced.steps;
+  // Each scene's steps, paced as it pauses, in storyboard order; a frame is the input as given,
+  // which its layout does not read. Each step keeps its run and where it is in it, for what its
+  // run has given so far.
+  const pauses = pausesOf(prepared.pauses, values);
+  const leaves = new Set(prepared.pauses.leaves);
+  const entries = scenes.flatMap((scene, sceneIndex) => {
+    const run = prepared.paced(
+      scene.frame ? pauses : scenePauses(scene, pauses, (labels) => pausing(labels, leaves))
+    );
+    return (scene.frame ? [0] : sceneSteps(scene, run.steps)).map((index) => ({
+      scene,
+      sceneIndex,
+      run,
+      index
+    }));
+  });
+  const master = entries.map(({ scene, run, index }) =>
+    scene.frame
+      ? {
+          ...run.steps[0],
+          name: undefined,
+          labelled: undefined,
+          applied: undefined,
+          held: undefined
+        }
+      : run.steps[index]
+  );
+  if (master.length > algorithmLimits.maximumSteps + 1)
+    throw new InvalidSvelteSourceError(
+      `The storyboard shows ${master.length} steps in this variant, more than the ${algorithmLimits.maximumSteps + 1} a presentation can: show fewer scenes, scenes within fewer runs, or pause at fewer labels.`,
+      { code: 'too_many_steps' }
+    );
+  const single = scenes.length === 1 && !scenes[0].frame;
+  const labels = entries.map(({ scene, run, index }) => {
+    const own = run.steps[index].name ?? `Step ${index + 1}`;
+    return single ? own : sceneLabel(scene, scene.rewind, own);
+  });
+  // Each step's placements and lit code, from its run's, by the page's states (see phasesOf).
+  const placements = entries.flatMap(({ scene, run, index }, at) =>
+    scene.frame
+      ? []
+      : run.placements.flatMap((placement) =>
+          Math.floor(placement.step / 2) === index
+            ? [{ ...placement, step: at * 2 + (placement.step % 2) }]
+            : []
+        )
+  );
+  const lit = Object.fromEntries(
+    Object.keys(entries[0]?.run.lit ?? {}).map((language) => [
+      language,
+      entries.map(({ scene, run, index }) =>
+        scene.frame ? { current: [], earlier: [] } : run.lit[language][index]
+      )
+    ])
+  );
   // The page shows each step as two states, before its code and after it (see phasesOf). Each
   // carries its atomic types, the page frame, and the variant for the view, under keys no variable
   // can use; a variable out of scope at one stands in hidden (__absent).
@@ -2211,12 +2297,16 @@ export async function bundlePresentation(
     // after, where it gave one; else one from another step stands in hidden. Each label's values
     // so far, and each operator's applications so far, are lists, there at every step.
     const step = Math.floor(index / 2);
-    const sofar = master.slice(0, step + 1);
+    const entry = entries[step];
+    const position = entry.scene.frame ? 0 : entry.index;
+    const sofar = entry.scene.frame ? [master[step]] : entry.run.steps.slice(0, position + 1);
     const at = (path: string, key: string) => key + path.slice('value'.length);
     for (const [key, { label, sample }] of Object.entries(prepared.labelled ?? {})) {
       if (isRunsKey(key)) {
         const list = sofar.flatMap((past, which) =>
-          which < step || index % 2 === 1 || index === 0 ? (past.labelled?.[label] ?? []) : []
+          which < position || index % 2 === 1 || position === 0
+            ? (past.labelled?.[label] ?? [])
+            : []
         );
         ownApplied[key] = list.map((run) => run.state.value);
         list.forEach((run, k) => {
@@ -2242,10 +2332,12 @@ export async function bundlePresentation(
     // A <When>'s label: there where the step is inside one of its runs, else hidden, its
     // contents keeping their room.
     for (const [key, label] of Object.entries(prepared.during ?? {}))
-      (atWhen(label, master, step) ? ownApplied : standIn.state)[key] = true;
+      (!entry.scene.frame && atWhen(label, entry.run.steps, position) ? ownApplied : standIn.state)[
+        key
+      ] = true;
     for (const [key, history] of Object.entries(prepared.histories ?? {})) {
       const list = sofar.flatMap((past, which) =>
-        (which < step || index % 2 === 1 || index === 0
+        (which < position || index % 2 === 1 || position === 0
           ? (past.applied?.[history.operator] ?? [])
           : []
         ).filter((application) => within(application, history))
@@ -2264,14 +2356,14 @@ export async function bundlePresentation(
       ...ownApplied,
       ...views,
       ...pointerViews,
-      ...layoutShown,
+      [layoutProp]: { [entry.scene.layout]: true },
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
       __absent: Object.keys(standIn.state),
       __identities: { ...phase.identities?.ids, ...ownIdentities },
       __copies: phase.identities?.copies ?? {},
       __refs: phase.identities?.refs ?? {},
-      __frame: frame,
+      __frame: frames[entry.sceneIndex],
       __design: values,
       __leftOut: [...leftOut.nodes, ...leftOut.renders],
       __hiddenSites: prepared.leftOut
@@ -2286,7 +2378,7 @@ export async function bundlePresentation(
         : []
     };
   });
-  const listing = shownListing(prepared, values, paced.lit);
+  const listing = shownListing(prepared, values, lit);
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
     prepared.component,
@@ -2295,7 +2387,7 @@ export async function bundlePresentation(
     JSON.stringify(prepared.atoms),
     JSON.stringify({
       components: prepared.components,
-      placements: paced.placements,
+      placements,
       listing,
       lengths: prepared.lengths
     })
@@ -2335,7 +2427,7 @@ export async function bundlePresentation(
   return {
     javascript,
     layout,
-    labels: master.map(({ name }, index) => name ?? `Step ${index + 1}`),
+    labels,
     steps: prepared.steps,
     stepSignature: prepared.signature,
     variant: values,
@@ -2386,15 +2478,15 @@ export function shownListing(
 }
 
 /**
- * The frame of the layout a variant shows, the first where it names none: its kind's values, as
- * Stacked.ratio, its root's row or column, and its name and root's tag, where the source declares
- * layouts; only that layout is drawn.
+ * The frame of a page layout, as a scene shows it: its kind's values in the variant, as
+ * Stacked.ratio, its root's row or column, and its name and root's tag; only that layout is drawn.
  */
 export function frameSettings(
   design: Pick<PreparedComponent['design'], 'layouts'>,
-  values: Readonly<Record<string, DesignValue>>
+  values: Readonly<Record<string, DesignValue>>,
+  layout: string
 ): FrameSettings {
-  const shown = design.layouts.find(({ name }) => name === values.layout) ?? design.layouts[0];
+  const shown = design.layouts.find(({ name }) => name === layout) ?? design.layouts[0];
   const own = (prop: string) => values[`${shown.name}.${prop}`];
   return {
     ratio: own('ratio') as FrameSettings['ratio'],

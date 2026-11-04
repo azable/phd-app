@@ -31,7 +31,6 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
   if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
   if (variable.startsWith('pause@')) return { family: 'pacing', impact: 0.6 };
-  if (variable === 'layout') return { family: 'arrangement', impact: 0.8 };
   const prop = variable.slice(variable.lastIndexOf('.') + 1);
   switch (prop) {
     case 'form':

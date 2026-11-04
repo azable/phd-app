@@ -55,3 +55,7 @@
     </When>
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>

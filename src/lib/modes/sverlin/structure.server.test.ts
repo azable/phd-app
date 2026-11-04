@@ -38,7 +38,11 @@ const list = `<script domain>
   <Node>
     <Heap />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`;
 
 const ring = `<script domain>
   const Name = type(['A', 'B', 'C', 'D']);
@@ -66,7 +70,11 @@ const ring = `<script domain>
   <Node>
     <Ring names={names} next={next} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main names={names} next={next} /></Scene>
+</Storyboard>`;
 
 const unlinked = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -87,7 +95,11 @@ const unlinked = `<script domain>
   <Node>
     <Cells values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 const designOf = (source: string) => prepareSvelteComponent(source).design;
 

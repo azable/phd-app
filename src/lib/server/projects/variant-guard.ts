@@ -25,8 +25,8 @@ const hiddenAtMost = 0.5;
 /**
  * What a source draws, by name: what each view, each layout another draws by its tag, and each kind
  * a node names draws (`snippets`, as the compiler makes each of them a snippet), what the page
- * layouts' roots draw (`root`), and what each page layout's root draws, the picture being the
- * layout's a variant shows.
+ * layouts' roots draw (`root`), and what each page layout's root draws, the picture being every
+ * page the storyboard shows.
  */
 export type PictureTree = {
   snippets: Map<string, string[]>;
@@ -90,9 +90,8 @@ function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): 
     sizes.set(name, total);
     return total;
   };
-  // The layout shown, the first where the variant names none.
-  const shown = tree.layouts.get(String(variant.layout)) ?? [...tree.layouts.values()][0] ?? [];
-  return shown.reduce((sum, name) => sum + size(name, []), 0);
+  // Every page layout, as the storyboard's scenes show each in turn.
+  return [...tree.layouts.values()].flat().reduce((sum, name) => sum + size(name, []), 0);
 }
 
 /** The snippet a kind's shown variable hides: the last kind in its path, before any place. */

@@ -166,13 +166,31 @@ export function presentationStepLabels(presentation: RenderablePresentation): st
 
 /**
  * A Sverlin step's name, the same however its steps pause: a label's full name and which run of it
- * the step ends, the nth of that label's runs to begin, as @insert.swap#1, or start or end.
+ * the step ends, the nth of that label's runs to begin, as @insert.swap#1, or start or end; in a
+ * storyboard of several scenes, after its scene (see sceneOfLabel), as one-merge ↺: @sort.merge#1.
  */
 export const stepNameSchema = v.pipe(
   v.string(),
   v.maxLength(200),
-  v.regex(/^(?:start|end|@[\w.]+#\d+)$/u)
+  v.regex(/^(?:[A-Za-z][\w-]*(?: ↺)?(?: \([^():]*\))?: )?(?:start|end|@[\w.]+#\d+)$/u)
 );
+
+/**
+ * The scene a Sverlin step's label names, in a storyboard of several: its name, whether it goes back
+ * in the run (↺), its title, and the step's own name, none for a single frame.
+ */
+export function sceneOfLabel(
+  label: string | undefined
+): { scene: string; rewind: boolean; title?: string; step?: string } | undefined {
+  const parts = /^([A-Za-z][\w-]*)( ↺)?(?: \(([^():]*)\))?(?:: (.+))?$/u.exec(label ?? '');
+  if (!parts || (parts[4] === undefined && /^(?:start|end)$/u.test(parts[1]))) return undefined;
+  return {
+    scene: parts[1],
+    rewind: Boolean(parts[2]),
+    ...(parts[3] ? { title: parts[3] } : {}),
+    ...(parts[4] ? { step: parts[4] } : {})
+  };
+}
 
 /** Whether a step's label is its name. */
 export const isStepName = (label: string | undefined): label is string =>

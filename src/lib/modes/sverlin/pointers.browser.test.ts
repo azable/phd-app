@@ -48,7 +48,11 @@ it.skipIf(!enabled)(
     {i}
     {j}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main i={i} j={j} values={values} /></Scene>
+</Storyboard>`;
     // Both are drawn by First unless a variant gives a place its own view, as j's here.
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'pointers.Index@j': 'Second' }
@@ -110,7 +114,11 @@ it.skipIf(!enabled)(
     <At i={i} />
     {i}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main i={i} values={values} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
@@ -168,7 +176,11 @@ it.skipIf(!enabled)(
     {i}
     {j}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main i={i} j={j} values={values} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
     });
@@ -223,7 +235,11 @@ it.skipIf(!enabled)(
     <Cells values={values} />
     <Key key={key} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} key={key} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'views.Int@key': 'IntTally' }
     });
@@ -285,7 +301,11 @@ it.skipIf(!enabled)(
 <View of="Position" name="Here"><Pointed /></View>
 <Layout name="Main" of="values, i">
   <Node>{values}{i}</Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
@@ -342,7 +362,11 @@ async function scanned(chosen: Record<string, string | number>) {
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen
   });
@@ -466,7 +490,11 @@ it.skipIf(!enabled)(
     {@insert.compare.left}
     {@insert.compare.right}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: {
         'Highlight.Pointed@insert.compare.left.fill': 'sky-200',
@@ -542,7 +570,11 @@ async function transformed(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here">${pointer}</View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen
   });

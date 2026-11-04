@@ -9,6 +9,7 @@
  * padded with spaces, and a part's closing is one longer.
  */
 
+import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
 /** One layout as declared: its name, its inputs, whether a tag renders it, and where it is. */
@@ -103,6 +104,13 @@ export function layoutTags(source: string): {
   problems: Problem[];
   /** Where a rewrite made a line longer, for positions to name the source as written. */
   shifts: ColumnShift[];
+  /** The storyboard's scenes, in the order they play. */
+  scenes: Scene[];
+  /**
+   * A missing storyboard, reported after the view's own problems, as a source being written often
+   * lacks its storyboard first.
+   */
+  unshown: Problem[];
 } {
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
   const scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, blank);
@@ -176,6 +184,31 @@ export function layoutTags(source: string): {
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
   }));
+  // A layout reading the heap, all(ListNode), itself or through the layouts it draws, reads state
+  // it declares none of, as the heap is the algorithm's.
+  const bodyOf = (layout: DeclaredLayout) => scanned.slice(layout.body.start, layout.body.end);
+  const heap = new Set([...byName.values()].filter((each) => /\ball\s*\(/u.test(bodyOf(each))));
+  for (let grown = true; grown; ) {
+    grown = false;
+    for (const each of byName.values())
+      if (
+        !heap.has(each) &&
+        [...heap].some(({ name: drawn }) =>
+          new RegExp(`<${drawn.replace('$', '\\$')}\\b`, 'u').test(bodyOf(each))
+        )
+      ) {
+        heap.add(each);
+        grown = true;
+      }
+  }
+  const storyboard = writtenStoryboard(
+    scanned,
+    new Map(
+      [...byName].map(([each, layout]) => [each, { ...layout.inputs, heap: heap.has(layout) }])
+    )
+  );
+  problems.push(...storyboard.problems);
+  const unshown: Problem[] = storyboard.missing ? [storyboard.missing] : [];
   const containing = (at: number) => declared.find(({ body }) => at >= body.start && at < body.end);
   const edits: { start: number; length: number; text: string }[] = [];
   const renders = new Map<string, Set<string>>();
@@ -260,6 +293,21 @@ export function layoutTags(source: string): {
         start: layout.start
       });
   }
+  // A layout a scene shows arranges the whole page, so no other layout draws it.
+  const shown = new Set(storyboard.scenes.map(({ layout }) => layout));
+  if (storyboard.range)
+    for (const layout of declared)
+      if (layout.part && shown.has(layout.name))
+        problems.push({
+          message: `${layout.name} is shown by a scene, so it arranges the whole page, and is drawn inside another layout too: show it by scenes only, or draw it by tags only.`,
+          start: layout.start
+        });
+  if (storyboard.range)
+    edits.push({
+      start: storyboard.range.start,
+      length: storyboard.range.end - storyboard.range.start,
+      text: blank(scanned.slice(storyboard.range.start, storyboard.range.end))
+    });
   for (const layout of declared) {
     const { opening } = layout;
     if (layout.part) {
@@ -321,7 +369,9 @@ export function layoutTags(source: string): {
       }
     })),
     problems,
-    shifts
+    shifts,
+    scenes: storyboard.scenes,
+    unshown
   };
 }
 

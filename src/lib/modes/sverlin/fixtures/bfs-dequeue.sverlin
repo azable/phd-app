@@ -95,3 +95,7 @@
     <Taken current={current} />
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main vertices={vertices} neighbours={neighbours} queue={queue} current={current} /></Scene>
+</Storyboard>

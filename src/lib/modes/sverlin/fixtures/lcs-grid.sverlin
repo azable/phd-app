@@ -46,3 +46,7 @@
 <Layout name="Main" of="y, x, t">
   <Node><Lcs y={y} x={x} t={t} /></Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main y={y} x={x} t={t} /></Scene>
+</Storyboard>

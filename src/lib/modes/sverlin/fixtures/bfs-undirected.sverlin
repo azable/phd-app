@@ -77,3 +77,7 @@
     <QueueLine queue={queue} />
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+</Storyboard>

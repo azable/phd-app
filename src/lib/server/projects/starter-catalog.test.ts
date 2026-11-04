@@ -13,8 +13,8 @@ describe('starter catalog', () => {
   it('offers only developer-owned, buildable components', async () => {
     expect(listProjectTemplates().map(({ id }) => id)).toEqual(['blank', 'linear-search']);
     const blank = resolveProjectTemplate({ templateId: 'blank' });
-    // The input as given (here none), then the blank source's one step.
-    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['start', 'end']);
+    // The blank source's one scene reads no state: one frame, named by the scene.
+    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['main']);
     expect(
       (await compileSvelteComponent(getProjectTemplate('linear-search').source)).labels
     ).toHaveLength(10);

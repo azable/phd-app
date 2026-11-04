@@ -38,7 +38,11 @@ ${listing}
     {hi}
     {mid}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+</Storyboard>`;
 
 const tokened = `  @run[start:] lo = 0, hi = n - 1
   while @open[$lo[lo] <= $hi[hi]]
@@ -77,7 +81,11 @@ const linearSearch = `<script domain>
     <Node><Goal target={target} /><Cells values={values} /></Node>
     {i}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main i={i} target={target} values={values} /></Scene>
+</Storyboard>`;
 
 /** Each step's touched places, as the starter shows them, pausing at the labels given. */
 function touched(source: string, pauses: readonly string[]) {
@@ -230,7 +238,11 @@ describe('tokens naming places in a listing', () => {
     {i}
     {j}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+</Storyboard>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
     expect(steps[1]).toEqual(['@key', '@i']);
     expect(steps[2]).toEqual(['@j']);

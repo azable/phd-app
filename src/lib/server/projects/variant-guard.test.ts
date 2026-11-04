@@ -32,7 +32,7 @@ describe('pictureTree', () => {
     expect(tree.snippets.get('SearchView')).toContain('Answer');
   });
 
-  it('measures the picture by the layout a variant shows, never hiding a layout’s own nodes', () => {
+  it('measures the picture by every page layout, never hiding a layout’s own nodes', () => {
     const laid = pictureTree(`<Layout name="Title"><Node>t</Node></Layout>
 <Layout name="Cells"><Node>c</Node></Layout>
 <Layout name="Note"><Node>n</Node></Layout>
@@ -41,12 +41,10 @@ describe('pictureTree', () => {
 <Layout name="Bare"><Node layout="row"><Node><Board /></Node></Node></Layout>`);
     expect(laid.layouts.get('Stacked')).toEqual(['Title', 'Board']);
     expect(laid.layouts.get('Bare')).toEqual(['Board']);
-    // Hiding the title hides a quarter of the stacked page, and nothing of the bare one.
-    expect(hiddenShare(laid, { layout: 'Stacked' }, [['Title.shown', false]])).toBeCloseTo(1 / 4);
-    expect(hiddenShare(laid, { layout: 'Bare' }, [['Title.shown', false]])).toBe(0);
-    const guard = { tree: laid, base: { layout: 'Bare' }, settled: {} };
+    // Hiding the title hides one of the seven nodes the two pages draw, the stacked page's.
+    expect(hiddenShare(laid, {}, [['Title.shown', false]])).toBeCloseTo(1 / 7);
+    const guard = { tree: laid, base: {}, settled: {} };
     expect(allowedChange(guard, 'Bare.shown', false)).toBe(false);
-    expect(allowedChange(guard, 'layout', 'Stacked')).toBe(true);
   });
 
   it('reads the kinds a view’s nodes name as what it draws', () => {
@@ -88,7 +86,7 @@ describe('allowedComparisonSide', () => {
 <Layout name="Cells"><Node>c</Node></Layout>
 <Layout name="Board"><Node><Cells /><Note /></Node></Layout>
 <Layout name="Stacked"><Node><Title /><Board /></Node></Layout>`);
-  const guard = { tree: page, base: { layout: 'Stacked' }, settled: {} };
+  const guard = { tree: page, base: {}, settled: {} };
 
   it('lets the assistant compare a top-level title with and without, which a chooser may not hide', () => {
     expect(allowedComparisonSide(guard, { 'Title.shown': false })).toBe(true);

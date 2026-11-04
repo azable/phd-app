@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script algorithm>\n</script>\n<Layout name="Title"><Node>Start your visualization</Node></Layout>\n<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>\n'
+    '<script algorithm>\n</script>\n<Layout name="Title"><Node>Start your visualization</Node></Layout>\n<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>\n<Storyboard>\n  <Scene name="main"><Stacked /></Scene>\n</Storyboard>\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
@@ -62,4 +62,8 @@ export const linearSearchSource = `<script domain>
     <Checking i={i} />
     <Result target={target} found={found} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="search"><Main values={values} i={i} found={found} target={target} /></Scene>
+</Storyboard>`;

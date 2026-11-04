@@ -29,12 +29,13 @@ const insertion = `
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>`;
 
-/** A source of the algorithm and its parts, its one layout holding `view`. */
-/** The view in a layout reading what it names, values and labels, or `of`. */
+/** The view in a layout reading what it names, values and labels, or `of`, its one scene. */
 const prepare = (view: string, algorithm = insertion, parts = '', of = readIn(view)) =>
   prepareSvelteComponent(
-    `${domain}${algorithm}\n${parts}\n<Layout name="Main" of="${of}"><Node>${view}</Node></Layout>`
+    `${domain}${algorithm}\n${parts}\n<Layout name="Main" of="${of}"><Node>${view}</Node></Layout>\n${scene(of)}`
   );
+const scene = (of: string) =>
+  `<Storyboard><Scene name="main"><Main${/\bvalues\b/u.test(of) ? ' values={values}' : ''} /></Scene></Storyboard>`;
 const readIn = (view: string) => [...new Set(view.match(/\bvalues\b|@[\w.]+/gu))].join(', ');
 
 describe('labels read in the view', () => {
@@ -60,7 +61,7 @@ describe('labels read in the view', () => {
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n<Layout name="Inserting" of="@insert.key"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main" of="@insert.key"><Node><Inserting /></Node></Layout>`
+        `${domain}${insertion}\n<Layout name="Inserting" of="@insert.key"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main" of="@insert.key"><Node><Inserting /></Node></Layout>\n${scene('')}`
       )
     ).resolves.toBeDefined();
   });
@@ -249,7 +250,7 @@ describe('<View>', () => {
 
   it('keeps positions after a view, in problems', () => {
     const view =
-      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node>{nope}</Node></Layout>';
+      '<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>\n<View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node>{nope}</Node></Layout>\n\n<Storyboard>\n  <Scene name="main"><Main /></Scene>\n</Storyboard>';
     let error: { code?: string; line?: number; column?: number; others: unknown[] } | undefined;
     try {
       prepareSvelteComponent(view);

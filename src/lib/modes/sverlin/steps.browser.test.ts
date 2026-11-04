@@ -50,7 +50,11 @@ it.skipIf(!enabled)(
     <Cells values={values} />
     <At i={i} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
     const prepared = prepareSvelteComponent(source);
     // Step 0 is the input as given, before any of the algorithm runs.
     expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
@@ -148,7 +152,11 @@ it.skipIf(!enabled)(
     <Key key={key} />
     <Cells values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main key={key} values={values} /></Scene>
+</Storyboard>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.
     const whole = source.replace(

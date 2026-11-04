@@ -6,7 +6,7 @@
  * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
  * a place, as {@render Index(@left)}, a chip opening that place's own values. A layout's root's chip
  * holds its frame. After each label's mark in the algorithm, where its steps pause. Views of a type
- * and layouts that no shown presentation's variant chose are greyed out, and so are nodes every
+ * that no shown presentation's variant chose are greyed out, and so are nodes every
  * shown presentation left out (see left-out.ts).
  *
  * @packageDocumentation
@@ -152,34 +152,6 @@ export function unchosenViews(
     }
   }
   return [...unchosen.values()].sort((a, b) => a.from - b.from);
-}
-
-/**
- * The layouts no shown presentation drew, each from its <Layout to the end of its </Layout>, while
- * every shown presentation recorded its layout.
- */
-export function unchosenLayouts(
-  state: EditorState,
-  presentations: readonly DrawnPresentation[]
-): UnchosenView[] {
-  const chosen = presentations.map(({ variant }) => variant?.layout);
-  if (!chosen.length || !chosen.every((name) => typeof name === 'string')) return [];
-  const doc = state.doc.toString();
-  const picked = [...new Set(chosen)].join(' and ');
-  return [...doc.matchAll(/<Layout[ \t]+name="([A-Za-z_$][\w$]*)"[^>]*>/gu)].flatMap((match) => {
-    const close = /<\/Layout\s*>/gu;
-    close.lastIndex = match.index;
-    const end = close.exec(doc);
-    return chosen.includes(match[1]) || !end
-      ? []
-      : [
-          {
-            from: match.index,
-            to: end.index + end[0].length,
-            title: `Not drawn: layout is ${picked}`
-          }
-        ];
-  });
 }
 
 /**
@@ -918,7 +890,6 @@ const drawnField = StateField.define<DrawnState>({
           open: next.open.filter((at) => ghosts.some((tag) => tag.at === at)),
           unchosen: [
             ...unchosenViews(transaction.state, effect.value.presentations),
-            ...unchosenLayouts(transaction.state, effect.value.presentations),
             ...leftOutNodes(transaction.state, effect.value.presentations)
           ].sort((a, b) => a.from - b.from)
         };

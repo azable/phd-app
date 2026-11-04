@@ -30,3 +30,7 @@
 <Layout name="Main" of="a, b">
   <Node layout="row">{a}{b}</Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main a={a} b={b} /></Scene>
+</Storyboard>

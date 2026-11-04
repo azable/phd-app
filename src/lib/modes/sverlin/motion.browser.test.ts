@@ -54,7 +54,11 @@ const merge = `<script domain>
     {j}
     {k}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main i={i} j={j} k={k} left={left} right={right} merged={merged} /></Scene>
+</Storyboard>`;
 
 let browser: Browser | undefined;
 beforeAll(async () => {
@@ -251,7 +255,11 @@ const walk = `<script domain>
     <Graph vertices={vertices} edges={edges} />
     {e}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main e={e} vertices={vertices} edges={edges} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'draws each arrow with its own step’s arrowhead while two steps are in the page',
@@ -336,7 +344,11 @@ const taken = `<script domain>
     {right}
     {take.from}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main left={left} right={right} take={take} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'keeps every element in place as a pointer moves between collections',
@@ -411,7 +423,11 @@ const apart = `<script domain>
     {i}
     {j}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} j={j} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'keeps every element in place as pointers never at one element share a slot for their labels',
@@ -490,7 +506,11 @@ const far = `<script domain>
     {values}
     {i}
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'keeps room at most 4 past an end, a pointer further out drawing nothing',
@@ -547,6 +567,10 @@ const cursors = taken
     `<View of="Index" name="ICursor"><Node layout="column"><Node kind="IName">i</Node><Pointed /></Node></View>
 <View of="Index" name="JCursor"><Node layout="column"><Node kind="JName">j</Node><Pointed /></Node></View>
 <Layout name="Main" of="left, right, take, i, j">`
+  )
+  .replace(
+    '<Main left={left} right={right} take={take} />',
+    '<Main left={left} right={right} take={take} i={i} j={j} />'
   )
   .replace(
     '{take.from}',
@@ -674,7 +698,11 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>`
+      `<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} j={j} /></Scene>
+</Storyboard>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -745,7 +773,11 @@ const compared = `<script domain>
   <Node>
     <Board values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'starts an operator’s operands, drawn by its view, at the cells they were read from',
@@ -825,7 +857,11 @@ const scan = `<script domain>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
 
 /** A value's box on screen, and its fill as red, green and blue. */
 type Cell = { left: number; right: number; fill: number[] };

@@ -45,7 +45,11 @@ const list = (algorithm: string) => `<script domain>
   <Node>
     <Heap />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`;
 
 /** Each step's arrows, between the names of the nodes they join, and its nodes' text. */
 async function play(source: string, count: number) {

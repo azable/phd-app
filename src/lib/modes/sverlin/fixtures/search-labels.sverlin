@@ -40,3 +40,7 @@
     {hi}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="main"><Main target={target} lo={lo} hi={hi} values={values} /></Scene>
+</Storyboard>

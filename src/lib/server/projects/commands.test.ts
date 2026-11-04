@@ -1309,14 +1309,15 @@ describe('submitProjectFeedback', () => {
         '<Node>two</Node>',
         '<Node>three</Node>',
         node,
-        `</Node>${close}`
+        `</Node>${close}`,
+        '<Storyboard><Scene name="main"><Main /></Scene></Storyboard>'
       ].join('\n');
     const sources = {
       unclosed: lines('</Layout'),
       twice: lines('</Layout>', '<Layout name="Shown"><Node>again</Node></Layout>'),
       unknown: lines('</Layout>', '', '<Node><Missing /></Node>'),
       rewritten:
-        '<script algorithm></script>\n<Layout name="Main">\n<Node><Gone /></Node>\n</Layout>',
+        '<script algorithm></script>\n<Layout name="Main">\n<Node><Gone /></Node>\n</Layout>\n\n<Storyboard>\n  <Scene name="main"><Main /></Scene>\n</Storyboard>',
       working: lines('</Layout>')
     };
     // Each explains a difficulty, as the simpler fallback must; the others' are dropped.
@@ -2226,7 +2227,11 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script algorithm></script><Layout name="Shown"><Node>${source}</Node></Layout>\n<Layout name="Main"><Node><Shown /></Node></Layout>`,
+              : `<script algorithm></script><Layout name="Shown"><Node>${source}</Node></Layout>\n<Layout name="Main"><Node><Shown /></Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main /></Scene>
+</Storyboard>`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -3187,7 +3192,8 @@ describe('several variants from chat', () => {
       '<script algorithm></script>',
       '<Layout name="Main"><Node layout="row">',
       ...Array.from({ length: 150 }, (_, index) => `<Node>cell ${index}</Node>`),
-      '</Node></Layout>'
+      '</Node></Layout>',
+      '<Storyboard><Scene name="main"><Main /></Scene></Storyboard>'
     ].join('\n');
     const result = await attempts(
       () => ({

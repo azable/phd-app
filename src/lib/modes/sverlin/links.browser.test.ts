@@ -59,7 +59,11 @@ const insertion = `<script domain>
   <Node>
     <Cells values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 it.skipIf(!enabled)(
   'joins the two swapped cells with an arrow at the swap step only',
@@ -558,7 +562,11 @@ it.skipIf(!enabled)(
 <View of="Values" name="Row">
   <Node layout="row">{#each this as v, k}{v}<Link from={k} to={k + 1} />{/each}</Node>
 </View>
-<Layout name="Main" of="values"><Node>{values}</Node></Layout>`;
+<Layout name="Main" of="values"><Node>{values}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];

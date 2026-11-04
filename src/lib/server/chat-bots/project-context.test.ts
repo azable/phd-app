@@ -336,17 +336,15 @@ describe('design variables in the AI context', () => {
     expect(design.options['listing.places']).toEqual(['none', 'fill', 'underline', 'outline']);
   });
 
-  it('offers the layouts as the layout shown, and each frame its options', () => {
+  it('offers each layout’s frame its options', () => {
     const design = designVariables({
       variant: {
-        layout: 'Side',
         'Side.ratio': '16:9',
         'Stacked.ratio': '4:3'
       }
     });
     const options = (key: string) =>
       design.variables.find(({ variable }) => variable === key)?.options;
-    expect(options('layout')).toEqual(['Side', 'Stacked']);
     expect(options('Side.ratio')).toBe('ratio');
     expect(design.options.ratio).toContain('4:3');
   });

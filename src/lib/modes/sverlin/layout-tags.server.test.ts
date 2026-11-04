@@ -31,7 +31,14 @@ const blocks = `<script domain>
 
 const target = '<Layout name="Target" of="target"><Node>{target}</Node></Layout>\n';
 const main = (body: string, of = 'values, target, lo, hi') =>
-  `<Layout name="Main" of="${of}">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n    {hi}\n  </Node>\n</Layout>`;
+  `<Layout name="Main" of="${of}">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n    {hi}\n  </Node>\n</Layout>\n${scene(of)}`;
+/** One scene showing Main, passing the variables it declares. */
+const scene = (of: string) =>
+  `<Storyboard><Scene name="main"><Main${of
+    .split(', ')
+    .filter((input) => input && !input.startsWith('@'))
+    .map((input) => ` ${input}={${input}}`)
+    .join('')} /></Scene></Storyboard>`;
 
 const problemOf = (view: string) => {
   try {

@@ -143,7 +143,11 @@ it.skipIf(!enabled)(
   <Node>
     <Cells values={values} partner={partner} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} partner={partner} /></Scene>
+</Storyboard>`;
     const { steps, errors } = await linksAtEachStep(pairs);
     for (const step of steps)
       expect(step).toEqual([

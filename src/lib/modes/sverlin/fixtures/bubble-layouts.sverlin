@@ -64,3 +64,8 @@
     {@pass.pair.compare.right}
   </Node>
 </Layout>
+
+<Storyboard>
+  <Scene name="stacked"><Stacked values={values} /></Scene>
+  <Scene name="side"><Side values={values} /></Scene>
+</Storyboard>

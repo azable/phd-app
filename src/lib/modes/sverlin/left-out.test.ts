@@ -31,7 +31,11 @@ const source = `<script domain>
     <Both v={v} values={values} />
     <Cells values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main v={v} values={values} /></Scene>
+</Storyboard>`;
 
 const prepared = prepareSvelteComponent(source);
 const siteIn = (text: string) => (written: string) => siteOf(text, text.indexOf(written));
@@ -141,7 +145,7 @@ describe('left out', () => {
   });
 
   it('hide a node reading a variable itself until it is declared, as at step 0', () => {
-    // A part reads found itself: allowed, as found is out of scope only before its declaration,
+    // A layout reads found itself: allowed, as found is out of scope only before its declaration,
     // and its node hides where found is absent, as at step 0, the input as given.
     const reading = source
       .replace('for (@setup[let i', '@start[let found = Flag(false);]\n  for (@setup[let i')
@@ -150,7 +154,8 @@ describe('left out', () => {
         '<Layout name="Status" of="found"><Node>{#if found}found{:else}looking{/if}</Node></Layout>'
       )
       .replace('<Layout name="Main" of="v, values">', '<Layout name="Main" of="v, values, found">')
-      .replace('<Title />', '<Status found={found} />');
+      .replace('<Title />', '<Status found={found} />')
+      .replace('<Main v={v} values={values} />', '<Main v={v} values={values} found={found} />');
     const built = prepareSvelteComponent(reading);
     const status = nodeIn(reading)('Status');
     expect(hiddenIn(built, ['found'])).toContain(status);

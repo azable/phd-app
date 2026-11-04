@@ -23,7 +23,11 @@ ${listing}
     <Listing />
     <Cells values={values} />
   </Node>
-</Layout>`;
+</Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} /></Scene>
+</Storyboard>`;
 
 const insertion = blocks(
   `  for (@first[let i = Position(1)]; @more[i < values.length]; @next[i++]) {

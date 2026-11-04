@@ -21,7 +21,12 @@
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
   import type { ProjectCommandInput } from '$lib/shared/projects/model';
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
-  import { isStepName, type PresentationLayout } from '$lib/shared/presentations';
+  import {
+    isStepName,
+    isSverlinPresentation,
+    sceneOfLabel,
+    type PresentationLayout
+  } from '$lib/shared/presentations';
   import { elidedName } from '$lib/client/artifacts/source-references';
   import { projectQuestions } from '$lib/shared/projects/questions';
   import { nearestDifference, stepRanges } from '$lib/shared/differing-steps';
@@ -216,9 +221,19 @@
   const stepCount = $derived(playbackContext.stepCount);
   // The step's name, its label elided at the start as chat pills are (@…compare.left#3); in
   // developer view only, as participants follow the step's number.
+  // The scene the step is in, where a Sverlin storyboard has several: its name, ↺ where it goes back
+  // in the run, and its title.
+  const scene = $derived.by(() =>
+    visible.length && visible.every(({ presentation }) => isSverlinPresentation(presentation))
+      ? sceneOfLabel(playbackContext.frames[step]?.label)
+      : undefined
+  );
+  const sceneText = $derived(
+    scene && `${scene.scene}${scene.rewind ? ' ↺' : ''}${scene.title ? ` — ${scene.title}` : ''}`
+  );
   const stepName = $derived.by(() => {
     if (!session.developerView) return undefined;
-    const label = playbackContext.frames[step]?.label;
+    const label = scene ? scene.step : playbackContext.frames[step]?.label;
     return isStepName(label) ? label : undefined;
   });
   const shownStepName = $derived.by(() => {
@@ -366,11 +381,14 @@
       <div class="flex w-72 min-w-0 flex-col items-center">
         <span
           class="w-full truncate text-center text-sm whitespace-nowrap text-muted-foreground"
-          title={stepName}
+          title={[sceneText, stepName].filter(Boolean).join(': ') || undefined}
         >
-          {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if shownStepName}<span
+          {stepCount ? `Step ${step + 1} of ${stepCount}` : 'No steps'}{#if sceneText}<span
               class="mx-1">·</span
-            ><code class="font-mono text-xs">{shownStepName}</code>{/if}
+            ><span class="text-foreground" data-replay-region="scene-name">{sceneText}</span
+            >{/if}{#if shownStepName}<span class="mx-1">·</span><code class="font-mono text-xs"
+              >{shownStepName}</code
+            >{/if}
         </span>
         {#if differsAt?.length}
           <!-- Where the pair differs, the only steps worth comparing, and a jump to the nearest, its

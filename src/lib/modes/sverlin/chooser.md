@@ -79,17 +79,17 @@ pauses as any other open choice, by these rules.
 What the participant asked for, a look or a pacing, choose; earlier preferences
 name the values each pair differed in, so keep a value that keeps winning.
 Everything else is open, and yours to explore across the conversation: views,
-the layout shown (`layout`, as the parts side by side or stacked, each layout
-with its own frame, whose ratio stays fit unless the participant asks for
-another shape), colours, shapes, spacing, shadows, glows, fill styles, text
-case, a free layout’s form, pacing, and what is shown at all (a listing or none,
-as listing.language none; a type’s view or none; a kind’s shown false), so some
-designs show an element others leave out, keeping shown what the participant
-asked for, and the participant sees real alternatives rather than one design
-repeated. A pair is also a question, so choose it to learn the most from the
-participant’s answer: from the conversation and earlier preferences, judge which
-open choices are still uncertain and likely to matter to them, as a listing or
-none, or coarse or fine steps, and make the two variants differ in those few and
-stay alike elsewhere, so their preference says which they prefer. Do not
-contrast what earlier preferences have settled or what they have shown they do
-not mind; move on to other choices in later pairs.
+each layout's frame (the source's scenes fix which layout shows when; a frame's
+ratio stays fit unless the participant asks for another shape), colours, shapes,
+spacing, shadows, glows, fill styles, text case, a free layout’s form, pacing,
+and what is shown at all (a listing or none, as listing.language none; a type’s
+view or none; a kind’s shown false), so some designs show an element others
+leave out, keeping shown what the participant asked for, and the participant
+sees real alternatives rather than one design repeated. A pair is also a
+question, so choose it to learn the most from the participant’s answer: from the
+conversation and earlier preferences, judge which open choices are still
+uncertain and likely to matter to them, as a listing or none, or coarse or fine
+steps, and make the two variants differ in those few and stay alike elsewhere,
+so their preference says which they prefer. Do not contrast what earlier
+preferences have settled or what they have shown they do not mind; move on to
+other choices in later pairs.

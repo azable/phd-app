@@ -21,9 +21,12 @@ describe('layouts of the page', () => {
   const prepared = prepareSvelteComponent(layouts);
   const { space, starter } = prepared.design;
 
-  it('offers every layout, never none, the first to start with', () => {
-    expect(space.layout).toEqual(['Stacked', 'Side']);
-    expect(starter.layout).toBe('Stacked');
+  it('offers no choice of layout, the scenes saying which shows when', () => {
+    expect(space).not.toHaveProperty('layout');
+    expect(prepared.storyboard.scenes.map(({ name, layout }) => [name, layout])).toEqual([
+      ['stacked', 'Stacked'],
+      ['side', 'Side']
+    ]);
   });
 
   it('gives each layout its frame as a kind, with the nodes its body writes', () => {
@@ -46,27 +49,22 @@ describe('layouts of the page', () => {
     ]);
   });
 
-  it('draws the frame of the layout shown, arranged as its root says', async () => {
+  it('draws the frame of the layout a scene shows, arranged as its root says', async () => {
     const built = await bundlePresentation(prepared, 1, {
-      chosen: { layout: 'Side', 'Side.ratio': '4:3', 'Stacked.gap': 2 }
+      chosen: { 'Side.ratio': '4:3', 'Stacked.gap': 2 }
     });
-    expect(frameSettings(prepared.design, built.variant)).toMatchObject({
+    expect(frameSettings(prepared.design, built.variant, 'Side')).toMatchObject({
       ratio: '4:3',
       gap: 1,
       layout: 'row',
       name: 'Side'
     });
-    expect(frameSettings(prepared.design, { ...built.variant, layout: 'Stacked' })).toMatchObject({
+    expect(frameSettings(prepared.design, built.variant, 'Stacked')).toMatchObject({
       ratio: 'fit',
       gap: 2,
       layout: 'column',
       name: 'Stacked'
     });
-    // A variant lacking the layout shows the first.
-    const without = Object.fromEntries(
-      Object.entries(built.variant).filter(([key]) => key !== 'layout')
-    );
-    expect(frameSettings(prepared.design, without).name).toBe('Stacked');
   });
 
   it('refuses a source without layouts, naming the fix', () => {
@@ -76,15 +74,13 @@ describe('layouts of the page', () => {
     );
   });
 
-  it('draws layouts afresh at random, keeping each frame', async () => {
-    const drawn = new Set<unknown>();
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+  it('draws each layout afresh at random, keeping each frame', async () => {
+    for (const seed of [1, 2, 3]) {
       const { variant } = await bundlePresentation(prepared, seed, { randomise: true });
-      drawn.add(variant.layout);
+      expect(variant).not.toHaveProperty('layout');
       expect(variant['Side.ratio']).toBe('fit');
       expect(variant['Stacked.padding']).toBe(1.5);
     }
-    expect(drawn).toEqual(new Set(['Stacked', 'Side']));
   });
 
   it.each([

@@ -932,10 +932,6 @@ export function designVariables(
     | undefined
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
-  // The layouts, by their frames, as Stacked.ratio: the options of the layout shown.
-  const layouts = Object.keys(presentation?.variant ?? {})
-    .filter((key) => key.endsWith('.ratio'))
-    .map((key) => key.slice(0, -'.ratio'.length));
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
     // A place's own choice, as views.Int@swap.held or views.Ask.Int@g.a, has its type's options.
@@ -968,19 +964,16 @@ export function designVariables(
       // A label with no labels inside it reads accumulating as on.
       pause: ['accumulate', 'on', 'off']
     };
-    const layout = key === 'layout';
-    if (!view && !pointer && !layout && Object.hasOwn(known, set)) options[set] = known[set];
+    if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
     return {
       variable: key,
       options: view
         ? [...(presentation?.views?.[view] ?? []), 'none']
         : pointer
           ? [...(presentation?.pointers?.[pointer] ?? []), 'none']
-          : layout
-            ? layouts
-            : key === 'listing.language' && presentation?.listings?.length
-              ? [...presentation.listings, ...listingOptions['listing.language']]
-              : set,
+          : key === 'listing.language' && presentation?.listings?.length
+            ? [...presentation.listings, ...listingOptions['listing.language']]
+            : set,
       value,
       ...(origin ? { origin } : {})
     };

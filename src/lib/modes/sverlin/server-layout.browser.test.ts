@@ -165,21 +165,23 @@ it.skipIf(!enabled)(
 );
 
 it.skipIf(!enabled)(
-  'draws only the layout a variant shows, in its own frame',
+  'draws the layout each scene shows, the presentation keeping the first scene’s ratio',
   { timeout: 300_000 },
   async () => {
     const source = fixtures['./fixtures/bubble-layouts.sverlin'];
     // The node the Side layout writes beside what it draws, by its tag's line.
     const line = source.split('\n').findIndex((text) => text.includes('<Node><Title /></Node>'));
     expect(line).toBeGreaterThan(0);
-    const holds = (steps: SceneStep[]) =>
-      steps.some((step) => step.nodes.some((node) => node.id.startsWith(`${line + 1}:`)));
-    const side = await drawsAsGiven(source, { chosen: { layout: 'Side', 'Side.ratio': '4:3' } });
-    expect(side.frame.width / side.frame.height).toBeCloseTo(4 / 3, 2);
-    expect(holds(side.steps)).toBe(true);
-    const stacked = await drawsAsGiven(source, { chosen: { 'Side.ratio': '4:3' } });
-    expect(stacked.frame.width / stacked.frame.height).toBeCloseTo(16 / 9, 2);
-    expect(holds(stacked.steps)).toBe(false);
+    const holds = (step: SceneStep) =>
+      step.nodes.some((node) => node.id.startsWith(`${line + 1}:`));
+    const request = { chosen: { 'Stacked.ratio': '4:3', 'Side.ratio': '1:1' } };
+    const { labels } = await bundlePresentation(prepareSvelteComponent(source), 1, request);
+    const drawn = await drawsAsGiven(source, request);
+    expect(drawn.frame.width / drawn.frame.height).toBeCloseTo(4 / 3, 2);
+    // The stacked scene, then the side one going back to the start, which alone holds that node.
+    const side = labels.map((label) => label.startsWith('side ↺: '));
+    expect(side).toContain(true);
+    expect(drawn.steps.map(holds)).toEqual(side);
   }
 );
 
@@ -238,7 +240,11 @@ it.skipIf(!enabled)(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
     const given = await drawsAsGiven(source, {
       chosen: { 'Cell.shadow': 'lifted', 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
     });
@@ -281,7 +287,11 @@ it.skipIf(!enabled)(
 </script>
 <View of="Name" name="Tag"><Node value={this} /></View>
 <View of="Names" name="Row"><Node layout="row">{#each this as n}{n}{/each}</Node></View>
-<Layout name="Main" of="names"><Node>{names}</Node></Layout>`;
+<Layout name="Main" of="names"><Node>{names}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main names={names} /></Scene>
+</Storyboard>`;
     const tags = (step: SceneStep) =>
       step.nodes
         .filter((node) => node.kind === 'Tag')
@@ -325,7 +335,11 @@ it.skipIf(!enabled)(
   @grow[a = Int(100);]
 </script>
 <View of="Int" name="Num"><Node value={this} /></View>
-<Layout name="Main" of="a, b"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>`;
+<Layout name="Main" of="a, b"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main a={a} b={b} /></Scene>
+</Storyboard>`;
     const { steps } = await drawsAsGiven(source, {
       chosen: { 'Num.width': 'varying', 'Main.Pair.spacing': 'packed' }
     });
@@ -368,7 +382,11 @@ it.skipIf(!enabled)(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+
+<Storyboard>
+  <Scene name="main"><Main values={values} i={i} /></Scene>
+</Storyboard>`;
     for (const chosen of [
       { 'Here.Pointed.expand': 4 },
       { 'Here.Pointed.expand': 4, 'Row.spacing': 'packed' }
