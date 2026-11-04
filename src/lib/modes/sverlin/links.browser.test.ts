@@ -615,3 +615,72 @@ it.skipIf(!enabled)(
     for (const bend of bends) expect(bend).toBeLessThan(0.5);
   }
 );
+
+it.skipIf(!enabled)(
+  'meets each grid cell with its arrowhead’s tip, never inside the cell, however close the cells',
+  { timeout: 120_000 },
+  async () => {
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(heapTree), 1, {});
+    const page = await browser!.newPage({
+      viewport: { width: 900, height: 600 },
+      deviceScaleFactor: 2
+    });
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) .sv-grid svg.links path')
+    );
+    await page.waitForTimeout(500);
+    // For each head, how far its tip lies inside the nearest cell (0 outside it), and how far from
+    // that cell's border.
+    const tips = await page.evaluate(() => {
+      const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
+      const cells = [...layer.querySelectorAll<HTMLElement>('.sv-grid .sv-node')]
+        .filter((node) => node.querySelector(':scope > .value'))
+        .map((node) => node.getBoundingClientRect());
+      return [...layer.querySelectorAll<SVGPathElement>('.sv-grid svg.links path[marker-end]')].map(
+        (path) => {
+          const svg = path.ownerSVGElement!;
+          const matrix = path.getScreenCTM()!;
+          const onScreen = (at: number) => {
+            const point = path.getPointAtLength(at);
+            const screen = svg.createSVGPoint();
+            screen.x = point.x;
+            screen.y = point.y;
+            return screen.matrixTransform(matrix);
+          };
+          const length = path.getTotalLength();
+          const [back, end] = [onScreen(Math.max(0, length - 0.5)), onScreen(length)];
+          const run = Math.hypot(end.x - back.x, end.y - back.y) || 1;
+          const marker = document.querySelector(path.getAttribute('marker-end')!.slice(4, -1))!;
+          const size = Number(marker.getAttribute('markerWidth')) * Math.hypot(matrix.a, matrix.b);
+          const tip = {
+            x: end.x + ((end.x - back.x) / run) * size,
+            y: end.y + ((end.y - back.y) / run) * size
+          };
+          const gap = (box: DOMRect) =>
+            Math.hypot(
+              Math.max(box.left - tip.x, 0, tip.x - box.right),
+              Math.max(box.top - tip.y, 0, tip.y - box.bottom)
+            );
+          const target = cells.reduce((best, box) => (gap(box) < gap(best) ? box : best));
+          const inside =
+            gap(target) === 0
+              ? Math.min(
+                  tip.x - target.left,
+                  target.right - tip.x,
+                  tip.y - target.top,
+                  target.bottom - tip.y
+                )
+              : 0;
+          return { inside, off: gap(target) };
+        }
+      );
+    });
+    await page.close();
+    expect(tips.length).toBe(6);
+    for (const { inside, off } of tips) {
+      expect(inside).toBeLessThanOrEqual(1);
+      expect(off).toBeLessThanOrEqual(1);
+    }
+  }
+);

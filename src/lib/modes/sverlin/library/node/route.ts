@@ -271,7 +271,11 @@ function cubicAt(a: Point, b: Point, c: Point, d: Point, t: number): Point {
   };
 }
 
-/** Where the line from a box's centre towards a point leaves the box. */
+/**
+ * Where the line from a box's centre towards a point leaves the box: on its edge even where the
+ * point lies inside it, as a curve's control point does between boxes close together, so a line
+ * never starts or ends inside a box and a head stopped short of the edge meets it with its tip.
+ */
 function exitPoint(box: Box, toward: Point): Point {
   const cx = (box.left + box.right) / 2;
   const cy = (box.top + box.bottom) / 2;
@@ -282,7 +286,7 @@ function exitPoint(box: Box, toward: Point): Point {
     dx === 0 ? Infinity : (box.right - box.left) / 2 / Math.abs(dx),
     dy === 0 ? Infinity : (box.bottom - box.top) / 2 / Math.abs(dy)
   );
-  return { x: cx + dx * Math.min(scale, 1), y: cy + dy * Math.min(scale, 1) };
+  return { x: cx + dx * scale, y: cy + dy * scale };
 }
 
 /**
