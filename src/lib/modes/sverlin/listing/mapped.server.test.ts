@@ -51,6 +51,13 @@ const insertion = blocks(
 );
 
 describe('listings of the source’s own', () => {
+  it('refuse an HTML escape, which would show as written', () => {
+    const { problems } = readRegions('while @test[j &gt; 0]');
+    expect(problems.map(({ message }) => message)).toEqual([
+      'The listing writes &gt;, which shows as it is written: write > itself; a listing needs no escaping.'
+    ]);
+  });
+
   it('show their text without region marks, a [ that opens none staying text', () => {
     const { text, regions } = readRegions('  x = @first[A[i]] + @second[@inner[B]]');
     expect(text).toBe('x = A[i] + B');

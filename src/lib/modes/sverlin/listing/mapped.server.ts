@@ -69,6 +69,13 @@ export function readRegions(body: string): {
   const regions: Region[] = [];
   const tokens: Token[] = [];
   const problems: MappingProblem[] = [];
+  // A listing's text is shown as written, so an HTML escape would show as itself.
+  for (const match of body.matchAll(/&(lt|gt|amp|le|ge|ne|quot|#\d+|#x[\da-f]+);/giu))
+    problems.push({
+      message: `The listing writes ${match[0]}, which shows as it is written: write ${({ lt: '<', gt: '>', amp: '&', le: '≤', ge: '≥', ne: '≠', quot: '"' } as Record<string, string>)[match[1].toLowerCase()] ?? 'the character'} itself; a listing needs no escaping.`,
+      block: 'listing',
+      at: match.index ?? 0
+    });
   type Opened =
     | { label: string; start: number; at: number }
     | { place: string; start: number; at: number; inside: boolean }

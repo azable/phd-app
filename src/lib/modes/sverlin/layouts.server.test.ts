@@ -49,6 +49,16 @@ describe('layouts of the page', () => {
     ]);
   });
 
+  it('keeps every line under a layout opening written over several lines, so tags name their lines', () => {
+    const opening = layouts.match(/<Layout name="Side"[^>]*>/u)![0];
+    const spread = layouts.replace(
+      opening,
+      opening.replace('<Layout name=', '<Layout\n  name=').replace(' of=', '\n  of=')
+    );
+    const line = spread.split('\n').findIndex((text) => text.includes('<Node layout="row">'));
+    expect(prepareSvelteComponent(spread).design.tags[`${line + 1}:3`]).toEqual(['Side']);
+  });
+
   it('draws the frame of the layout a scene shows, arranged as its root says', async () => {
     const built = await bundlePresentation(prepared, 1, {
       chosen: { 'Side.ratio': '4:3', 'Stacked.gap': 2 }

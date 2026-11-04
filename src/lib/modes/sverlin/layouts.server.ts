@@ -116,10 +116,25 @@ function tagEnd(text: string, from: number): number {
 }
 
 /** `text` in the place of `written`, padded to its length, keeping its line breaks. */
-export const fitted = (text: string, written: string): string =>
-  text.length > written.length
-    ? text
-    : [...written].map((character, at) => text[at] ?? (character === '\n' ? '\n' : ' ')).join('');
+export function fitted(text: string, written: string): string {
+  const lines = written.split('\n');
+  if (lines.length > 1) {
+    // Over several lines, the words go into them in turn, each line kept to its length, so every
+    // line after stays where it was written.
+    const words = text.split(' ');
+    const placed: string[] = lines.map(() => '');
+    let line = 0;
+    for (const word of words) {
+      const joined = placed[line] ? `${placed[line]} ${word}` : word;
+      if (joined.length <= lines[line].length) placed[line] = joined;
+      else if (line + 1 < lines.length && word.length <= lines[line + 1].length)
+        placed[++line] = word;
+      else return text;
+    }
+    return placed.map((each, at) => each.padEnd(lines[at].length)).join('\n');
+  }
+  return text.length > written.length ? text : text.padEnd(written.length);
+}
 
 const blank = (text: string, from: number, to: number) =>
   text.slice(0, from) + text.slice(from, to).replace(/[^\n]/gu, ' ') + text.slice(to);
