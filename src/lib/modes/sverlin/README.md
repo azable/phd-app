@@ -869,7 +869,11 @@ Every kind of node has these props, each with a fixed set of options:
   stroke colour or else its text's, a flat graphic look); `glow`: none or on, a
   halo in its stroke colour or else its fill's; `fillStyle`: solid or hatched
   (diagonal lines over the fill). These paint round or over the box a node
-  draws, so only where it draws a fill or stroke, and take no room.
+  draws, so only where it draws a fill or stroke, and take no room of their own:
+  each node keeps room round its box for the farthest its shadow and glow, and
+  any pointer's at it with its expansion, reach on each side in any state, so
+  none lies over a neighbour or past the drawing's edge, and nothing moves as a
+  pointer passes.
 - `decoration`: none, underline, or strike, a line under or through its own
   text, not its child nodes'; `case`: normal, uppercase, or small-caps (lower
   case as small capitals) for its own text, a value's unit keeping its own.

@@ -213,6 +213,53 @@ it.skipIf(!enabled)(
   }
 );
 
+// Paint round a box takes no room of its own, so each box keeps room for its largest reach on each
+// side in any state: a lifted shadow never lies over a neighbour or past the frame, and a pointer's
+// glow passing changes nothing.
+it.skipIf(!enabled)(
+  'keeps room round each box for its shadow and a pointer’s glow, so neither overlaps nor moves anything',
+  { timeout: 300_000 },
+  async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int, { max: 4 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values([7, 42, 3, 18]);
+</script>
+<script algorithm>
+  @start[let i = Index(0);]
+  while (@more[i < values.length]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+    const given = await drawsAsGiven(source, {
+      chosen: { 'Cell.shadow': 'lifted', 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
+    });
+    const cells = (step: SceneStep) =>
+      step.nodes
+        .filter((node) => node.kind === 'Cell' || node.kind === 'Here.Pointed')
+        .toSorted((a, b) => a.box.x - b.box.x)
+        .map(({ box }) => box);
+    const first = cells(given.steps[0]);
+    expect(first).toHaveLength(4);
+    for (const step of given.steps) {
+      const boxes = cells(step);
+      // Where they were at the first step, the pointer at one of them or past the end.
+      expect(boxes.map(({ x }) => Math.round(x))).toEqual(first.map(({ x }) => Math.round(x)));
+      // Lifted reaches 12 each side: between two boxes, room for both, and room at the edges.
+      for (const [left, right] of boxes.slice(0, -1).map((box, k) => [box, boxes[k + 1]]))
+        expect(right.x - (left.x + left.width)).toBeGreaterThanOrEqual(23.5);
+      expect(boxes[0].x).toBeGreaterThanOrEqual(11.5);
+      const last = boxes.at(-1)!;
+      expect(given.frame.width - (last.x + last.width)).toBeGreaterThanOrEqual(11.5);
+    }
+  }
+);
+
 // A box varying in width takes its own size in a slot keeping the largest, so its slot, and every
 // box beside it, stays put; its kind's anchor says which edge lines up.
 it.skipIf(!enabled)(

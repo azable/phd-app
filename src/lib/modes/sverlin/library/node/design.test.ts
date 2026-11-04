@@ -6,6 +6,7 @@ import {
   decorationCss,
   fillStyleCss,
   paintProps,
+  paintReach,
   propOptions,
   roleProps,
   starterLooks
@@ -78,5 +79,18 @@ describe('style props', () => {
     expect(caseCss('uppercase')).toEqual({ transform: 'uppercase', caps: 'normal' });
     expect(caseCss('small-caps')).toEqual({ transform: 'none', caps: 'small-caps' });
     expect(caseCss(undefined)).toBeUndefined();
+  });
+});
+
+describe('paint reach', () => {
+  it('reaches past a box by a shadow’s blur less its offset, a glow’s halo and a spread', () => {
+    expect(paintReach('none', 'none')).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    // lifted: no x offset, 4 down, blur 12.
+    expect(paintReach('lifted', 'none')).toEqual({ top: 8, right: 12, bottom: 16, left: 12 });
+    // hard: a block 3 right and 3 down, unblurred, reaches only those two sides.
+    expect(paintReach('hard', 'none')).toEqual({ top: 0, right: 3, bottom: 3, left: 0 });
+    // A glow's blur and spread on every side, the larger of each side kept.
+    expect(paintReach('hard', 'on', 4)).toEqual({ top: 10, right: 10, bottom: 10, left: 10 });
+    expect(paintReach('none', 'none', 8)).toEqual({ top: 8, right: 8, bottom: 8, left: 8 });
   });
 });

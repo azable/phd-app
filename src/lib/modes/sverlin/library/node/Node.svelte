@@ -70,8 +70,10 @@
     fillStyleCss,
     lookUp,
     paintProps,
+    paintReach,
     placedKind,
-    strokeStyleCss
+    strokeStyleCss,
+    widerReach
   } from './design';
   import { boundLength, boundLook, slotAnchor, type BoundDomain } from './bound';
   import { fontClass } from '../fonts';
@@ -209,15 +211,27 @@
   });
   // A pointer's kind may expand the element it is at by its expand on each side. In a row that
   // packs, the box grows, taking room the row keeps for it (see packRoom); elsewhere it is paint, its
-  // fill spread and its stroke drawn further out, in a room that keeps the pointer's reach wherever
-  // it is, so nothing moves.
+  // fill spread and its stroke drawn further out.
   const expandOf = (value: unknown) => (typeof value === 'number' ? value : 0);
   const expanded = $derived(expandOf(look('expand')));
-  const reach = untrack(() =>
-    __over && packedAlong === undefined
-      ? expandOf(lookUp(design, __over.kind, __over.placed, 'expand'))
-      : 0
-  );
+  // Paint round the box takes no room of its own, so the box sits in a room keeping its largest
+  // reach on each side in any state: its own kind's shadow and glow, and a pointer's at it, active
+  // or not, with the pointer's expansion where it is painted. So no paint lies over a neighbour or
+  // past the drawing's edge, and nothing moves as a pointer comes and goes.
+  const reach = untrack(() => {
+    const own = paintReach(
+      lookUp(design, __view, placed, 'shadow'),
+      lookUp(design, __view, placed, 'glow')
+    );
+    if (!__over) return own;
+    const of = (prop: string) => lookUp(design, __over.kind, __over.placed, prop);
+    const spreads = packedAlong === undefined ? expandOf(of('expand')) : 0;
+    return widerReach(own, paintReach(of('shadow'), of('glow'), spreads));
+  });
+  const reaches = reach.top > 0 || reach.right > 0 || reach.bottom > 0 || reach.left > 0;
+  const reachPadding = reaches
+    ? `${reach.top}px ${reach.right}px ${reach.bottom}px ${reach.left}px`
+    : undefined;
   const growth = $derived(packedAlong === undefined ? 0 : expanded);
   const spread = $derived(packedAlong === undefined ? expanded : 0);
   // The id a participant's selection refers to this node by (see provideNodeIds).
@@ -775,12 +789,12 @@
         {/each}
       </Overhang>
     {/if}
-  {:else if slotWidth || slotHeight || reach}
+  {:else if slotWidth || slotHeight || reaches}
     <!-- A box of its own size in the slot that keeps the largest it reaches (see varies), with room
-      round it for a pointer's expansion (see reach). -->
+      round it for the paint it reaches past it with (see reach). -->
     <div
       class="sv-room"
-      style:padding={reach ? `${reach}px` : undefined}
+      style:padding={reachPadding}
       style:display="flex"
       style:justify-content={xAnchor}
       style:align-items={yAnchor}

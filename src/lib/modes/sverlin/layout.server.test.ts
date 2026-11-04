@@ -160,6 +160,32 @@ describe('laying out on the server', () => {
     expect(new Map(given.components).get('Bar')?.height).toBe(144);
   }, 60_000);
 
+  it('keeps room round each box for the paint it reaches past it with, in every state', async () => {
+    const size = async (shadow: string) => {
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values([1, 2, 3]);</script><script algorithm>@start[let i = Index(0);]
+while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+        chosen: { 'Cell.shadow': shadow, 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
+      });
+      expect(layout.errors).toEqual([]);
+      const prefix = 'window.__sverlinGeometry=';
+      const [given] = JSON.parse(
+        javascript.slice(prefix.length, javascript.indexOf(';\n'))
+      ) as Geometry[];
+      return new Map(given.components).get('Row')!;
+    };
+    const plain = await size('none');
+    const lifted = await size('lifted');
+    // Every cell keeps the pointer glow's 10 pixels each side, at it or not, so nothing moves as
+    // it passes. Lifted reaches 12 each side, 8 above and 16 below: 2 more on each side of each of
+    // the three cells and 6 more below, and nothing more above.
+    expect(lifted.width - plain.width).toBeCloseTo(3 * 4, 0);
+    expect(lifted.height - plain.height).toBeCloseTo(6, 0);
+  }, 60_000);
+
   it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
     const box = async (cell: string) => {
       const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = collection(Int, { max: 2 });</script><script input>const values = Values([1, 2]);</script><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main"><Node>{values}</Node></Layout>`;

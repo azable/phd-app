@@ -131,6 +131,42 @@ export function boxEffects(
   };
 }
 
+export type Reach = { top: number; right: number; bottom: number; left: number };
+
+export const noReach: Reach = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * How far paint round a box reaches past it on each side, in pixels: a shadow its blur less its
+ * offset toward that side, a glow its blur and spread, an expansion its spread. A shadow's blur
+ * fades over its blur radius (CSS blurs by half of it as a standard deviation), so that much is
+ * kept.
+ */
+export function paintReach(shadow: unknown, glow: unknown, spread = 0): Reach {
+  const reach = { top: spread, right: spread, bottom: spread, left: spread };
+  const drawn = shadowOf(shadow);
+  if (drawn) {
+    const { x, y, blur } = shadows[drawn];
+    reach.top = Math.max(reach.top, blur - y);
+    reach.right = Math.max(reach.right, blur + x);
+    reach.bottom = Math.max(reach.bottom, blur + y);
+    reach.left = Math.max(reach.left, blur - x);
+  }
+  if (glow === 'on') {
+    const halo = glowHalo.blur + glowHalo.spread;
+    for (const side of ['top', 'right', 'bottom', 'left'] as const)
+      reach[side] = Math.max(reach[side], halo);
+  }
+  return reach;
+}
+
+/** The larger reach on each side. */
+export const widerReach = (a: Reach, b: Reach): Reach => ({
+  top: Math.max(a.top, b.top),
+  right: Math.max(a.right, b.right),
+  bottom: Math.max(a.bottom, b.bottom),
+  left: Math.max(a.left, b.left)
+});
+
 /** A drawn fill's style, as the image over its colour, or undefined for solid. */
 export function fillStyleCss(name: unknown): { style: 'hatched'; css: string } | undefined {
   if (name === 'hatched') {
