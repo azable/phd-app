@@ -387,11 +387,13 @@ The algorithm and domain may be shaped for what the visualization teaches, as a
 result type (a search returning a `union(Index, NotFound)`, rather than -1 or a
 done flag), a swap as one operation, a structure that walks a vertex’s
 neighbours, or a step split for clarity, and a participant’s request that
-implies changing them is followed. Avoid only a workaround where the language
-has a direct way: a flag, a sentinel, or a variable added solely to make
-something show or hide, or a cast to reach another view, where a label,
-`<When of="@label">`, a view chosen per place, or a pointer at a label does it
-(see Views of what a step computed).
+implies changing them is followed. Change them for the view too wherever that
+makes the source simpler, for example a variable that keeps the end of the
+sorted part for the picture to read. Avoid only a stand-in value that means
+nothing, as -1 for no position, and a workaround where the language has a direct
+way: a flag added solely to make something show or hide, or a cast to reach
+another view, where a label, `<When of="@label">`, a view chosen per place, or a
+pointer at a label does it (see Views of what a step computed).
 
 An interaction of kind runtime-failure was reported by the participant’s
 browser, not written by the participant: revise the view so that every step
