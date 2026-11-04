@@ -594,15 +594,26 @@
       text: textColour
     })
   );
-  // An expansion painted round the box: its fill spread out, and its stroke drawn as an outline at
-  // the spread's edge, the border showing the fill beneath it.
+  // An expansion painted round the box: its fill spread out, and its stroke drawn at the spread's
+  // edge, the border showing the fill beneath it. A solid stroke is a second shadow just outside the
+  // fill's, so both shrink together between steps; an outline's offset animates in whole pixels and
+  // would lag behind. A dashed or dotted stroke, which no shadow draws, stays an outline.
+  const spreadStroke = $derived(spread > 0 && strokeColour !== undefined && borderWidth > 0);
+  const strokeDashes = $derived(strokeStyleCss(look('strokeStyle')));
   const spreadShadow = $derived(
-    spread && fillColour ? `0 0 0 ${spread}px ${fillColour}` : undefined
+    spread > 0
+      ? [
+          fillColour ? `0 0 0 ${spread}px ${fillColour}` : undefined,
+          spreadStroke && !strokeDashes
+            ? `0 0 0 ${spread + borderWidth}px ${strokeColour}`
+            : undefined
+        ]
+          .filter(Boolean)
+          .join(', ') || undefined
+      : undefined
   );
   const spreadOutline = $derived(
-    spread && strokeColour && borderWidth > 0
-      ? `${borderWidth}px ${strokeStyleCss(look('strokeStyle')) ?? 'solid'} ${strokeColour}`
-      : undefined
+    spreadStroke && strokeDashes ? `${borderWidth}px ${strokeDashes} ${strokeColour}` : undefined
   );
   const fillStyle = $derived(fillColour ? fillStyleCss(look('fillStyle')) : undefined);
   // Its own text's line: the value's or the text it writes, never its child nodes', and its case,
@@ -726,7 +737,7 @@
     style:text-transform={textCase?.transform}
     style:font-variant-caps={textCase?.caps}
     style:text-decoration-line={__text ? decoration : undefined}
-    style:border-color={spreadOutline
+    style:border-color={spreadStroke
       ? 'transparent'
       : (strokeColour ?? (borderWidth > 0 ? 'transparent' : undefined))}
     style:border-style={strokeStyleCss(look('strokeStyle'))}
