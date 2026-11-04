@@ -541,3 +541,40 @@ it.skipIf(!enabled)(
     expect(forms).toEqual(['natural', 'natural', 'natural']);
   }
 );
+
+it.skipIf(!enabled)(
+  'links an {#each} index to a computed position, drawing none where it runs past the end',
+  { timeout: 120_000 },
+  async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int, { max: 4 });
+</script>
+<script input>const values = Values([3, 1, 2]);</script>
+<script algorithm>@run[let n = Int(1);]</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row">
+  <Node layout="row">{#each this as v, k}{v}<Link from={k} to={k + 1} />{/each}</Node>
+</View>
+<Layout name="Main"><Node>{values}</Node></Layout>`;
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    const ends = await page.evaluate(() =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '.sv-layer:not(.pending):not(.sv-leaving) .sv-link'
+        )
+      ].map((link) => `${link.dataset.from}->${link.dataset.to}`)
+    );
+    await page.close();
+    expect(errors).toEqual([]);
+    // 0→1 and 1→2; the last cell's 2→3 runs past the three values, so it draws nothing.
+    expect(ends).toEqual(['values[0]->values[1]', 'values[1]->values[2]']);
+  }
+);

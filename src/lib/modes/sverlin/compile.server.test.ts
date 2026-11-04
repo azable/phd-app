@@ -428,6 +428,32 @@ describe('single-component Svelte compilation', () => {
     ).resolves.toBeDefined();
   });
 
+  it('resolves a link end computed from an {#each} index, and refuses one naming no element', () => {
+    const source = (link: string) =>
+      `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int, { max: 4 });
+</script>
+<script input>const values = Values([3, 1, 2]);</script>
+<script algorithm>@run[let n = Int(1);]</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row">
+  <Node layout="row">{#each this as v, k}{v}${link}{/each}</Node>
+</View>
+<Layout name="Main"><Node>{values}</Node></Layout>`;
+    // Arithmetic of one index and numbers is a position in the collection the index walks.
+    const { component } = prepareSvelteComponent(source('<Link from={k} to={2 * k + 1} />'));
+    expect(component).toContain('__toIn');
+    expect(component).toContain('__fromIn');
+    // A number written in the view, or arithmetic of two indices, names no element.
+    expect(() => prepareSvelteComponent(source('<Link from={k} to={3} />'))).toThrow(
+      '<Link to={3}> names no element'
+    );
+    expect(() =>
+      prepareSvelteComponent(source('{#each this as w, j}<Link from={k} to={k + j} />{/each}'))
+    ).toThrow('<Link to={k + j}> names no element');
+  });
+
   it("names a view's value this, refusing another name and a this outside a view", () => {
     const source = (markup: string) =>
       `<script domain>const Int = type([1, 3]);</script><script input>const n = Int(1);</script><script algorithm>@run[let i = Int(1);]</script>

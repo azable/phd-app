@@ -1800,6 +1800,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         )
       );
     const slotted = new Map<number, string[]>();
+    const unresolvedEnds: { end: string; written: string; start: number }[] = [];
     const tagged = withInsertions(svelteSource, [
       ...branchInsertions(found.components),
       // A grid's rows and columns for any input, from its coordinates' types (see gridExtents).
@@ -1838,7 +1839,8 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         pointers.removals,
         placeSlots,
         referencesOf(master),
-        positions.targets
+        positions.targets,
+        unresolvedEnds
       ),
       // A brace render has no type name written to replace: its alias is its callee (see implicitInsertions).
       ...[...aliases.values()]
@@ -1849,6 +1851,16 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           remove: callee.end - callee.start
         }))
     ]);
+    if (unresolvedEnds.length)
+      throw InvalidSvelteSourceError.combine(
+        unresolvedEnds.map(
+          ({ end, written, start }) =>
+            new InvalidSvelteSourceError(
+              `<Link ${end}={${written}}> names no element: a link's end is a position, as ${end}={k} for an {#each} index or arithmetic of one index and numbers, as ${end}={2 * k + 1}, a position or reference the state holds, as ${end}={edge.${end}} or to={node.next}, or a label, as ${end}={@swap.${end}}.`,
+              { code: 'invalid_prop', start: sourcePosition(source, start) }
+            )
+        )
+      );
     const leftOut = leftOutModel(ast.html, source, nodeKinds, slotted, paths, openingReads);
     // A place drawing its own choice of view is decided by that choice.
     for (const [start, { alias }] of aliases) {

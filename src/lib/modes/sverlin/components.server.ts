@@ -902,7 +902,9 @@ export function slotInsertions(
    * The variable holding the collection each at(p) reads into, by where the call starts (see
    * positionReads): at(p) reads its element, as vertices[p], and draws nothing past either end.
    */
-  atTargets: ReadonlyMap<number, string> = new Map()
+  atTargets: ReadonlyMap<number, string> = new Map(),
+  /** Filled with each link end that names no element, with where it is written. */
+  unresolvedEnds: { end: string; written: string; start: number }[] = []
 ): Insertion[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -1174,8 +1176,23 @@ export function slotInsertions(
         reads.push(...stateReadsOf(expression, scoped, locals));
         const end = attribute.name;
         // An {#each} index, as from={k} in {#each vertices as v, k}: a position into what it walks.
+        // Or arithmetic of one index and numbers, as to={2 * k + 1}: a position into the same.
+        const indexIn = (node: Part | undefined): string[] | undefined => {
+          if (node?.type === 'Literal' && typeof node.value === 'number') return [];
+          if (node?.type === 'Identifier') {
+            const found = locals.get(String(node.name ?? ''));
+            return found?.kind === 'position' ? [String(node.name)] : undefined;
+          }
+          if (node?.type === 'BinaryExpression' || node?.type === 'UnaryExpression') {
+            const parts = [node.left, node.right, node.argument].filter(Boolean) as Part[];
+            const names = parts.map(indexIn);
+            return names.every(Boolean) ? (names as string[][]).flat() : undefined;
+          }
+          return undefined;
+        };
+        const names = indexIn(expression);
         const local =
-          expression?.type === 'Identifier' ? locals.get(String(expression.name ?? '')) : undefined;
+          names && names.length > 0 && new Set(names).size === 1 ? locals.get(names[0]) : undefined;
         if (local?.kind === 'position') {
           insertions.push({
             at: (part.start ?? 0) + '<Link'.length,
@@ -1183,7 +1200,16 @@ export function slotInsertions(
           });
           continue;
         }
-        if (!/ (path|at)=/u.test(slot)) continue;
+        if (!/ (path|at)=/u.test(slot)) {
+          // Neither an index nor a position the state holds: it would name no element.
+          if (expression && slot === '')
+            unresolvedEnds.push({
+              end,
+              written: source.slice(expression.start ?? 0, expression.end ?? 0),
+              start: expression.start ?? 0
+            });
+          continue;
+        }
         insertions.push({
           at: (part.start ?? 0) + '<Link'.length,
           text: slot

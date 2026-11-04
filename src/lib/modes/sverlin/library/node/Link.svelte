@@ -160,11 +160,26 @@
     () => !!joined.pair && (layoutMemoryContext()?.lines.has(joined.pair) ?? false)
   );
   const unseen = untrack(() => hidden || look('shown', false) === false);
+  // An end computed from an {#each} index, as to={2 * k + 1}, past its collection's ends at this
+  // step names no element there, so the link is not drawn at this step.
+  const beyond = untrack(() =>
+    [
+      [from, __fromIn],
+      [to, __toIn]
+    ].some(([end, walks]) => {
+      if (walks === undefined || typeof end !== 'number') return false;
+      const path = types?.pathOf(walks);
+      const length = path === undefined ? undefined : types?.lengthOf(path);
+      return length !== undefined && (end < 0 || end >= length);
+    })
+  );
   // The end it draws is no element of the state, so it draws none.
   provideSlot(undefined);
 </script>
 
-{#if end}
+{#if beyond}
+  <!-- An end past its collection at this step: no link here. -->
+{:else if end}
   {@render end(to)}
 {:else if !line || joined.forward}
   <span

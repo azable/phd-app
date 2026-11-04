@@ -1403,19 +1403,22 @@ prop, as `Arrow.Link` for a link in `Arrow`.
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the
   node holding its whole `{#each}` item), the index of an `{#each}` over a
-  collection among them, as `k` in `{#each vertices as v, k}`; labels giving
-  positions, as `@insert.swap.from`; never text written in the view. In a view
-  of an element, a link with no `from` starts at the node drawing that element,
-  as a node's `next`. An arrow meets what is seen of its end: a node with no
-  stroke or fill of its own is met at the bordered or filled boxes inside it, as
-  a vertex's name cell rather than the column holding it and its caption, unless
-  reaching them would cross that other content: an arrow down from a vertex with
-  captions under it leaves just below what is drawn under it at that step, its
-  captions or a pointer's label, in line with its name cell, not below room kept
-  for a label shown only at other steps. An arrow coming in aslant passes the
-  empty corner of a caption wider than the name cell to meet the cell, and
-  crosses a pointer's fill round the vertex, so it keeps its place from step to
-  step.
+  collection among them, as `k` in `{#each vertices as v, k}`, or arithmetic of
+  one such index and numbers, as `to={2 * k + 1}` for a heap's child, which
+  draws no link at a step where it runs past the collection's ends; labels
+  giving positions, as `@insert.swap.from`. An end naming no element, as a
+  number or text written in the view or arithmetic of two indices, fails the
+  build. In a view of an element, a link with no `from` starts at the node
+  drawing that element, as a node's `next`. An arrow meets what is seen of its
+  end: a node with no stroke or fill of its own is met at the bordered or filled
+  boxes inside it, as a vertex's name cell rather than the column holding it and
+  its caption, unless reaching them would cross that other content: an arrow
+  down from a vertex with captions under it leaves just below what is drawn
+  under it at that step, its captions or a pointer's label, in line with its
+  name cell, not below room kept for a label shown only at other steps. An arrow
+  coming in aslant passes the empty corner of a caption wider than the name cell
+  to meet the cell, and crosses a pointer's fill round the vertex, so it keeps
+  its place from step to step.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
