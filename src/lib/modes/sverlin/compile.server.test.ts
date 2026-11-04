@@ -1135,7 +1135,7 @@ describe('typed view components', () => {
       'views with more values than can be drawn',
       () =>
         prepareSvelteComponent(
-          `<script domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script algorithm></script><View of="Flags" name="F"><Node value={this.a} /></View>\n<Layout name="Main"><Node /></Layout>`
+          `<script domain>const Flag = type("boolean"); const Flags = record({ a: Flag, b: Flag, c: Flag, d: Flag, e: Flag, f: Flag, g: Flag, h: Flag, i: Flag });</script><script algorithm></script><View of="Flags" name="F"><Node>{#each [this.a, this.b, this.c, this.d, this.e, this.f, this.g, this.h, this.i] as flag}<Node value={flag} />{/each}</Node></View>\n<Layout name="Main"><Node /></Layout>`
         ),
       /F would be drawn with too many values of Flags/
     ]
@@ -1429,17 +1429,12 @@ ${body}
     }
   );
 
-  it('says why a label types no view: no such label, a statement, or the algorithm failing', () => {
+  it('says why a label types no view: no such label, or the algorithm failing', () => {
     expect(() =>
       prepareSvelteComponent(
         pairs(walk('    const sum = @sum[values[left] + values[right]];'), '@sum')
       )
     ).toThrow('no label is named: a label inside another is named by both');
-    expect(() =>
-      prepareSvelteComponent(
-        pairs(walk('    @add[const sum = values[left] + values[right];]'), '@pair.add')
-      )
-    ).toThrow('marks a statement, not an expression');
     // The algorithm's own problem, a statement in no label beside the others, comes first.
     expect(() =>
       prepareSvelteComponent(

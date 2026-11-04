@@ -151,6 +151,25 @@ export type MasterStep = {
 };
 
 /**
+ * A span of a label kept as a record (see design "Records"): when it started and ended, by how many
+ * events the algorithm had logged then, the call it is in and the call around that, how many calls
+ * are around its call, and the variables in scope at its two stops. A function's own span is its
+ * call.
+ */
+export type SpanRecord = {
+  label: string;
+  ordinal: number;
+  started: number;
+  ended: number;
+  /** The call it is in, as sort#3, and the call around that; none outside every call. */
+  call?: string;
+  parent?: string;
+  depth: number;
+  before?: StepSnapshot;
+  after?: StepSnapshot;
+};
+
+/**
  * An application of an operator, its operands named by the operator's parameters and its result as
  * `value`, each copied when it was made, with the types of their parts by path.
  */
@@ -351,6 +370,8 @@ export function traceAlgorithm(
     labels?: ReadonlySet<string>;
     /** The labels a view typed by the label draws, whose operands and result are kept as applications. */
     applications?: ReadonlySet<string>;
+    /** The labels whose spans are kept as records, for queries over them (see SpanRecord). */
+    records?: ReadonlySet<string>;
   } = {},
   /** Whether no code may run outside a label, as in an authored source (see readLabels). */
   complete = false
@@ -361,6 +382,8 @@ export function traceAlgorithm(
   root: BlockStatement;
   labels: Label[];
   code: string;
+  /** The spans of the labels kept as records, and of every call, in the order they ended. */
+  records: SpanRecord[];
 } {
   const parsed = parseBlock(body, 'algorithm', domain);
   const { root, offset, code } = parsed;
@@ -386,6 +409,11 @@ export function traceAlgorithm(
         : undefined;
     if (expression) applying.set(expression, [...(applying.get(expression) ?? []), full]);
   }
+  // A block or statement label a view is typed by draws its span's record, the variables in scope
+  // when the span ends; a label a query reads keeps every span's record.
+  const recording = new Set<string>(keep.records ?? []);
+  for (const { full, nodes, statement } of labelled.labels)
+    if (keep.applications?.has(full) && (statement || nodes.length !== 1)) recording.add(full);
   const named = new Map<Unit, string>();
   const holding = new Map<string, Unit>();
   for (const label of labelled.labels) {
@@ -399,6 +427,8 @@ export function traceAlgorithm(
     code,
     captured,
     applying,
+    recording,
+    drawnRecords: keep.applications ?? new Set(),
     units: labelled.units,
     named,
     holding,
@@ -406,7 +436,14 @@ export function traceAlgorithm(
     pauses: pacing.pauses ?? new Set(labelled.labels.map(({ full }) => full))
   });
   const steps = interpreter.run();
-  return { steps, opening: interpreter.opening!, root, labels: labelled.labels, code };
+  return {
+    steps,
+    opening: interpreter.opening!,
+    root,
+    labels: labelled.labels,
+    code,
+    records: interpreter.records
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -436,6 +473,8 @@ type Run = {
   scope: Scope;
   start: number;
   since?: Since;
+  /** The variables in scope as it started, where its label's spans are kept as records. */
+  before?: StepSnapshot;
 };
 /**
  * A value a labelled expression gave, by the label's full name, with the run of the label around it
@@ -538,6 +577,13 @@ class Interpreter {
   readonly #runs: Run[] = [];
   /** The applications the step being recorded made, by operator. */
   #applied: Record<string, Application[]> = {};
+  /** The labels whose spans are kept as records, and those a view draws a span's record of. */
+  readonly #recording: ReadonlySet<string>;
+  readonly #drawnRecords: ReadonlySet<string>;
+  /** The bodies of the functions called, whose spans are calls. */
+  readonly #functionBodies = new WeakSet<object>();
+  /** The records kept, in the order their spans ended (see SpanRecord). */
+  readonly records: SpanRecord[] = [];
   /**
    * The typed operands and result of each application, and the variable each operand was read
    * through, if any, so its copy starts there (see identities).
@@ -575,8 +621,12 @@ class Interpreter {
       code?: string;
       captured?: ReadonlyMap<AnyNode, readonly string[]>;
       applying?: ReadonlyMap<AnyNode, readonly string[]>;
+      recording?: ReadonlySet<string>;
+      drawnRecords?: ReadonlySet<string>;
     }
   ) {
+    this.#recording = options.recording ?? new Set();
+    this.#drawnRecords = options.drawnRecords ?? new Set();
     this.#root = root;
     this.#captured = options.captured ?? new Map();
     this.#applying = options.applying ?? new Map();
@@ -1622,6 +1672,9 @@ class Interpreter {
       ordinal,
       scope,
       start: this.#log.seen,
+      ...(label !== undefined && this.#recording.has(label)
+        ? { before: this.#snapshotOf(node, scope) }
+        : {}),
       ...(step
         ? {
             since: {
@@ -1635,6 +1688,8 @@ class Interpreter {
 
   /** End a run of labelled code, recording a step where its label is paused at. */
   #end(node: AnyNode, scope: Scope): void {
+    const ended = this.#runs.at(-1);
+    if (ended) this.#keepRecord(ended, node, scope);
     const run = this.#runs.pop();
     if (!run) return;
     const edge = this.#isEdge(this.#named.get(run.unit), run.ordinal)
@@ -1644,6 +1699,50 @@ class Interpreter {
     if (since) this.#record(run.node, node, scope, since, run, edge);
     // A value no longer inside a run of the label around it is never kept again.
     this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
+  }
+
+  /**
+   * Keep the record of a span ending, where its label's spans are kept or it is a call: the
+   * variables in scope now, at its :after, and the call it is in. A block or statement label a view
+   * is typed by also draws it, as an application made at this step.
+   */
+  #keepRecord(run: Run, node: AnyNode, scope: Scope): void {
+    const label = this.#named.get(run.unit);
+    const isCall = (each: Run) => 'type' in each.unit && this.#functionBodies.has(each.unit);
+    if (label === undefined || (!isCall(run) && !this.#recording.has(label))) return;
+    const calls = this.#runs.filter((each) => isCall(each) && this.#named.has(each.unit));
+    const id = (each: Run) => `${this.#named.get(each.unit)}#${each.ordinal}`;
+    const inner = calls.at(-1);
+    const parent = calls.at(-2);
+    const kept = this.#recording.has(label);
+    const after = kept ? this.#snapshotOf(node, scope) : undefined;
+    this.records.push({
+      label,
+      ordinal: run.ordinal,
+      started: run.start,
+      ended: this.#log.seen,
+      ...(inner ? { call: id(inner) } : {}),
+      ...(parent ? { parent: id(parent) } : {}),
+      depth: Math.max(calls.length - 1, 0),
+      ...(run.before ? { before: run.before } : {}),
+      ...(after ? { after } : {})
+    });
+    if (after && this.#drawnRecords.has(label) && !this.#applyingLabel(label))
+      this.#pendingApplied.push([
+        labelApplication(label),
+        {
+          state: after.state,
+          types: after.types,
+          ...(after.targets ? { targets: after.targets } : {}),
+          at: this.#offset(node).start
+        }
+      ]);
+  }
+
+  /** Whether a label marks an expression whose operands and result are kept as its application. */
+  #applyingLabel(label: string): boolean {
+    for (const names of this.#applying.values()) if (names.includes(label)) return true;
+    return false;
   }
 
   /** Whether a run of a label is one the scene is within, which opens and closes on a step. */
@@ -2488,6 +2587,7 @@ class Interpreter {
     this.#returned = undefined;
     try {
       const stepping = this.#units.nodes.has(declared.body);
+      this.#functionBodies.add(declared.body);
       if (stepping) this.#begin(declared.body, frame);
       const completion = this.#block(declared.body.body, frame);
       if (stepping) this.#end(declared.body, frame);

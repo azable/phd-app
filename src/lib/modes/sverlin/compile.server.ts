@@ -3752,8 +3752,9 @@ function withNodeRefs(
 }
 
 /**
- * Why a label types no view, completing "<View> takes …": no label has its name, it marks a
- * statement or block, or the case never evaluates it.
+ * Why a label types no view, completing "<View> takes …": no label has its name, or the case never
+ * runs its code. A view of an expression label draws its operands and result; one of a block or
+ * statement label, the variables in scope when its span ends.
  */
 function labelViewProblem(type: string, labels: readonly Label[] | undefined): string {
   const written = asWritten(type);
@@ -3768,7 +3769,7 @@ function labelViewProblem(type: string, labels: readonly Label[] | undefined): s
     label.nodes.length === 1 &&
     (!label.statement || label.nodes[0].type === 'ExpressionStatement');
   if (label && !marksExpression)
-    return `${written}, which marks a statement, not an expression, so it computes no value to draw: ${expression}.`;
+    return `${written}, whose code no step of the case runs, so it has no span to draw: label code the case reaches.`;
   return `${written}, whose expression no step of the case evaluates, so there is nothing to draw: ${expression} that the case reaches.`;
 }
 
@@ -4222,7 +4223,8 @@ function viewDomainOf(domain: DomainRegistry, viewed: ReadonlySet<string>): Doma
       name,
       fields: {
         ...Object.fromEntries(parameters.map((parameter, index) => [parameter, operands[index]])),
-        value: result
+        // A span's record of a block label has no value of its own.
+        ...(result ? { value: result } : {})
       }
     }
   ]);

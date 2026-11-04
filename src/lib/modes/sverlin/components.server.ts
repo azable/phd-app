@@ -1550,7 +1550,15 @@ export function componentProbes(
     const type = signatures[name];
     const { node } = found.find((component) => component.name === name)!;
     const parameter = node.parameters?.[0]?.name ?? '';
-    const single = onlyViewed(valueUses(node.children, new Set([parameter]), views));
+    // A part the component never reads is drawn with one value too: a record of a label's span
+    // holds every variable in scope, most of which its view never draws.
+    const uses = valueUses(node.children, new Set([parameter]), views);
+    const single = onlyViewedOrUnread(uses);
+    const spanProblem = spanFieldProblem(type, parameter, uses, domain);
+    if (spanProblem) {
+      problems.push({ message: spanProblem, start: node.start ?? 0 });
+      continue;
+    }
     const values = valuesOf(type, parameter, single);
     const branches = branchTests(node).length;
     const ways = 2 ** branches;
@@ -1669,9 +1677,14 @@ export function probeValues(
         return valuesOf(structure.element, path, single);
       case 'record': {
         const names = Object.keys(structure.fields);
-        const fields = names.map((name) =>
-          valuesOf(structure.fields[name], path ? `${path}.${name}` : name, single)
-        );
+        // A field the view never reads, of no type it can measure, is drawn as nothing.
+        const fields = names.map((name) => {
+          const at = path ? `${path}.${name}` : name;
+          return (
+            valuesOf(structure.fields[name], at, single) ??
+            (single(at) ? { every: [null], widest: [null] } : undefined)
+          );
+        });
         const records = (cases: unknown[][] | undefined) =>
           cases?.map((values) =>
             Object.fromEntries(names.map((name, index) => [name, values[index]]))
@@ -1788,6 +1801,43 @@ export function onlyViewed({
   return (path) =>
     [...viewed].some((view) => within(path, view)) &&
     ![...placed].some((read) => within(path, read) || within(read, path));
+}
+
+/**
+ * What is wrong with a view of a label's span reading its record: a field no variable in scope at
+ * its stops has, or one with no type to measure it by.
+ */
+function spanFieldProblem(
+  type: string,
+  parameter: string,
+  uses: { viewed: ReadonlySet<string>; placed: ReadonlySet<string> },
+  domain: DomainRegistry
+): string | undefined {
+  const record = domain.structures[type];
+  if (!type.startsWith('ℓ') || record?.kind !== 'record') return undefined;
+  const label = `@${type.slice(1).replaceAll('ˑ', '.')}`;
+  for (const path of [...uses.viewed, ...uses.placed]) {
+    if (!path.startsWith(`${parameter}.`)) continue;
+    const field = path.slice(parameter.length + 1).split(/[.[]/u)[0];
+    if (!(field in record.fields))
+      return `A view of ${label} reads this.${field}, but ${field} is not in scope where its code runs; it reads the variables in scope there: ${Object.keys(record.fields).join(', ')}.`;
+    if (!record.fields[field])
+      return `A view of ${label} reads this.${field}, which has no type to measure it by: give it a type where the algorithm computes it, as Int(…).`;
+  }
+  return undefined;
+}
+
+/** As onlyViewed, and also true of a part neither passed to views nor read for placement. */
+function onlyViewedOrUnread(uses: {
+  viewed: ReadonlySet<string>;
+  placed: ReadonlySet<string>;
+}): (path: string) => boolean {
+  const viewedOnly = onlyViewed(uses);
+  const within = (path: string, outer: string) =>
+    path === outer || path.startsWith(`${outer}.`) || path.startsWith(`${outer}[`);
+  const used = [...uses.viewed, ...uses.placed];
+  return (path) =>
+    viewedOnly(path) || !used.some((read) => within(path, read) || within(read, path));
 }
 
 /**

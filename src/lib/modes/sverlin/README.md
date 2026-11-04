@@ -787,6 +787,13 @@ keeping its room, where it computed nothing. A view typed by a label no step
 evaluates is refused. The view never computes itself: label the expression, as
 `@next[i + 1]`, and read the label.
 
+A label on a block or a statement is a type too. Its view draws one span of the
+label: the variables in scope where the span ends, each read as `this.name`. For
+example, `<View of="@sort" name="CallFrame">sort {this.lo} to {this.hi}</View>`
+draws one call of `sort`. A view of such a label reads only variables in scope
+there, and each one it reads needs a type. `{@sort}` in a layout draws the span
+that ended at the step, and nothing where none did.
+
 Bubble sort, the question at each comparison and a caption at each swap in one
 place:
 
