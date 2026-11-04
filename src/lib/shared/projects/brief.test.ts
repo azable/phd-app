@@ -10,16 +10,7 @@ import {
 } from './brief';
 import type { ProjectEvent } from './events';
 
-const families = [
-  'views',
-  'shown',
-  'arrangement',
-  'pacing',
-  'shape',
-  'lettering',
-  'colour',
-  'spacing'
-];
+const families = ['views', 'shown', 'arrangement', 'shape', 'lettering', 'colour', 'spacing'];
 
 function responded(id: number, payload: object): ProjectEvent {
   return {

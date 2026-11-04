@@ -154,5 +154,5 @@ BFS(start)
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
+  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
 </Storyboard>

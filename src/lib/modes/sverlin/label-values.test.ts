@@ -163,7 +163,7 @@ describe('a for … of variable', () => {
       'for (const v of digits) @read{ const seen = @seen[v]; }',
       input,
       counting,
-      { pauses: new Map([['read', 'on']]) }
+      { pauses: new Set(['read']) }
     ).steps;
     const { identities } = steps[1];
     expect(identities?.refs.v).toBe(identities?.ids['digits[1]']);

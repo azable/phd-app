@@ -14,12 +14,12 @@ project.design lists every variable of the design space (see Design below), by
 its key, with its options, by name from project.design.options or listed, and
 its value in the variant the presentations start from: the one the participant
 was viewing, with the starter’s values for anything new. project.source is the
-source, project.summary what the assistant’s change does, project.runs each
-label’s runs, and project.structures each free layout kind’s structure as its
-data makes it (path, cycle, tree, layers, or none), which its natural form draws
-as its own shape, so a pair contrasting forms can show the structure in shapes
-that really differ (its direction turns only a natural or line form); the
-conversation says what the participant asked for.
+source, project.summary what the assistant’s change does, and project.structures
+each free layout kind’s structure as its data makes it (path, cycle, tree,
+layers, or none), which its natural form draws as its own shape, so a pair
+contrasting forms can show the structure in shapes that really differ (its
+direction turns only a natural or line form); the conversation says what the
+participant asked for.
 
 project.seen lists the variants of this source the participant has already been
 shown, newest first, each as the values it differs in from the starting variant.
@@ -63,33 +63,20 @@ and offsetY enlarge, spread or move its whole drawing where it is, taking no
 room, as a lift (offsetY -8) or a growth from the bottom (scale with the
 element's yAnchor end).
 
-Choose where the steps pause too: the starter pauses at every label, "on", the
-finest the steps go, except labels whose runs all draw nothing new, which start
-"off". project.runs gives each label’s runs and how many change what the view
-draws (drawn): a label whose runs change nothing drawn only repeats the step
-before, so turn it off, and around labels kept on, one whose own runs add
-nothing beyond theirs is off too, or "accumulate" where its run builds up from
-the parts paused at inside it, as a comparison from its operands. Where a
-listing shows, a pause at a loop’s or an if’s body lights all the code its run
-ran, and one at its test only the test’s line, though it draws nothing new:
-pause at either or neither, by whether a step should show a pass’s work or where
-the code goes next. The assistant paced the source as it wrote it: vary its
-pauses as any other open choice, by these rules.
-
-What the participant asked for, a look or a pacing, choose; earlier preferences
-name the values each pair differed in, so keep a value that keeps winning.
-Everything else is open, and yours to explore across the conversation: views,
-each layout's frame (the source's scenes fix which layout shows when; a frame's
-ratio stays fit unless the participant asks for another shape), colours, shapes,
-spacing, shadows, glows, fill styles, text case, a free layout’s form, pacing,
+What the participant asked for, choose; earlier preferences name the values each
+pair differed in, so keep a value that keeps winning. Everything else is open,
+and yours to explore across the conversation: views, each layout's frame (the
+source's scenes fix which layout shows when, and which steps each shows; a
+frame's ratio stays fit unless the participant asks for another shape), colours,
+shapes, spacing, shadows, glows, fill styles, text case, a free layout’s form,
 and what is shown at all (a listing or none, as listing.language none; a type’s
 view or none; a kind’s shown false), so some designs show an element others
 leave out, keeping shown what the participant asked for, and the participant
 sees real alternatives rather than one design repeated. A pair is also a
 question, so choose it to learn the most from the participant’s answer: from the
 conversation and earlier preferences, judge which open choices are still
-uncertain and likely to matter to them, as a listing or none, or coarse or fine
-steps, and make the two variants differ in those few and stay alike elsewhere,
+uncertain and likely to matter to them, as a listing or none, or a view or
+another, and make the two variants differ in those few and stay alike elsewhere,
 so their preference says which they prefer. Do not contrast what earlier
 preferences have settled or what they have shown they do not mind; move on to
 other choices in later pairs.

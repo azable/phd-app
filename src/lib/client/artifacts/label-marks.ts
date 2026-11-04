@@ -1,7 +1,7 @@
 /**
  * The algorithm's label marks, `@name[`, `@name{`, and the `]` closing a span, dimmed in the
  * editor so the code around them reads as before (see the Sverlin guide's Steps), and each label's
- * full name, as a label inside another takes that one's as a prefix, for its pauses. Hovering a
+ * full name, as a label inside another takes that one's as a prefix. Hovering a
  * label, where it opens or where the view or a variant names it, highlights every place with its
  * full name and tints the code each of its openings marks.
  */
@@ -110,7 +110,7 @@ const labelReference = /@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/gu;
 
 /**
  * The full name of the label at a position: an opening's, or a name written after `@` elsewhere
- * (`<When of="@insert.key">`, `pause@insert.key`) that some opening has; none at any other text.
+ * (`<When of="@insert.key">`, `pause="@insert.key"`) that some opening has; none at any other text.
  */
 export function labelAt(
   source: string,

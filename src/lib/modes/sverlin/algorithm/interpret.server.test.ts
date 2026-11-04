@@ -138,12 +138,12 @@ describe('algorithm interpretation', () => {
     // Every label paused at: over 200 steps, which only name what variants can show.
     expect(interpretAlgorithm(body).length).toBeGreaterThan(algorithmLimits.maximumSteps);
     // Pausing at the passes alone shows three steps.
-    const passes = traceAlgorithm(body, undefined, atoms, { pauses: new Map([['pass', 'on']]) });
+    const passes = traceAlgorithm(body, undefined, atoms, { pauses: new Set(['pass']) });
     expect(passes.steps.map(({ name }) => name)).toEqual(['@pass#1', '@pass#2', '@pass#3']);
     // Pausing at each step shows more than one presentation can, and says where to pause less.
     expect(() =>
-      traceAlgorithm(body, undefined, atoms, { pauses: new Map([['pass.step', 'on']]) })
-    ).toThrow(/variant shows more than 200 steps, most at the end of @pass.step \(200\)/);
+      traceAlgorithm(body, undefined, atoms, { pauses: new Set(['pass.step']) })
+    ).toThrow(/scene shows more than 200 steps, most at the end of @pass.step \(200\)/);
   });
 
   it('gives an algorithm without labels one step, its end', () => {

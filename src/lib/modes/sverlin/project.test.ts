@@ -20,7 +20,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Shown"><Node>n</Node></Layout><Layout name="Main" of="n"><Node><Shown />{n}</Node></Layout>\n\n<Storyboard>\n  <Scene name="main"><Main n={n} /></Scene>\n</Storyboard>';
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Shown"><Node>n</Node></Layout><Layout name="Main" of="n"><Node><Shown />{n}</Node></Layout>\n\n<Storyboard>\n  <Scene name="main" pause="@start, @set"><Main n={n} /></Scene>\n</Storyboard>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -84,7 +84,7 @@ describe('Svelte-backed project lifecycle', () => {
     expect(left.stepSignature).toBe(right.stepSignature);
     expect(left.labels).toEqual(right.labels);
     expect(left.steps).toEqual(right.steps);
-    expect(left.steps).toHaveLength(19);
+    expect(left.steps).toEqual(left.labels);
     // The first is the starter; the second is randomised from it.
     expect(left.variant?.['views.Int']).toBe('IntCell');
     expect(left.origins?.['IntCell.fill']).toBe('starter');

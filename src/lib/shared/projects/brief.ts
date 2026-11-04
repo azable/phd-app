@@ -18,13 +18,12 @@ import { plainMessageText } from './events/message-content';
 /**
  * The families design choices are explored by, the ones that change the picture most first: the
  * views drawn (views, pointers, the listing shown), what is shown, the arrangement (layouts, forms,
- * directions), pacing, shape, lettering, and colour.
+ * directions), shape, lettering, and colour.
  */
 export type ChoiceFamily =
   | 'views'
   | 'shown'
   | 'arrangement'
-  | 'pacing'
   | 'shape'
   | 'lettering'
   | 'colour'
@@ -46,11 +45,12 @@ export type BriefAttribute = {
   question: string;
   why: string;
   /**
-   * The design choices it bears on, the inputs a source is run on (Stage 4), the subject, or the
+   * The design choices it bears on, the inputs a source is run on (Stage 4), the steps its
+   * storyboard pauses at, which the assistant writes in the source, the subject, or the
    * conversation: how the participant likes to work, which steers what the assistant asks and
    * offers rather than any choice.
    */
-  bearsOn: readonly ChoiceFamily[] | 'inputs' | 'subject' | 'conversation';
+  bearsOn: readonly ChoiceFamily[] | 'inputs' | 'storyboard' | 'subject' | 'conversation';
   /**
    * How it is best asked: in words; by showing, a comparison whose sides stand for its tags, the
    * pick setting it (see projectBrief); or both, what a picture shows by a comparison (a label's
@@ -101,12 +101,12 @@ export const briefAttributes = [
     key: 'audience',
     question: 'Who is it for, and what do they already know?',
     why: 'Newcomers need more shown and slower steps; those who know the basics, less.',
-    bearsOn: ['shown', 'pacing', 'views'],
+    bearsOn: ['shown', 'views'],
     asked: 'words',
     askFirst: true,
     tags: {
-      novice: { families: { shown: 1.3, pacing: 1.2 } },
-      experienced: { families: { pacing: 0.8 } }
+      novice: { families: { shown: 1.3 } },
+      experienced: {}
     }
   },
   {
@@ -116,7 +116,7 @@ export const briefAttributes = [
     question:
       'To help me focus it, what should students be able to do after seeing this — for example, an intended learning outcome from your subject?',
     why: 'What students should be able to do decides what is marked, where it pauses and what it says; what they get wrong, the step it must show.',
-    bearsOn: ['views', 'shown', 'arrangement', 'pacing', 'colour'],
+    bearsOn: ['views', 'shown', 'arrangement', 'colour'],
     asked: 'both',
     askFirst: true,
     // The outcome's verb, after the verbs intended learning outcomes use, ordered by the SOLO
@@ -124,9 +124,9 @@ export const briefAttributes = [
     // families its design bears on.
     tags: {
       // Recognise a pattern: mark it, and pause only at the key steps.
-      notice: { families: { arrangement: 1.3, views: 1.2, colour: 1.2, pacing: 1.2 } },
+      notice: { families: { arrangement: 1.3, views: 1.2, colour: 1.2 } },
       // Follow it step by step: pause at every step, its state always visible, a what-next moment.
-      trace: { families: { pacing: 1.5, shown: 1.4 } },
+      trace: { families: { shown: 1.4 } },
       // Say why each step happens: captions that say why.
       explain: { families: { shown: 1.4, views: 1.1 } },
       // Set it against another way: the same input both ways, a version each for now.
@@ -139,7 +139,7 @@ export const briefAttributes = [
         families: { lettering: 0.8 }
       },
       // The step where learners go wrong has to show, and pause.
-      misconception: { families: { shown: 1.2, pacing: 1.3 } }
+      misconception: { families: { shown: 1.2 } }
     }
   },
   {
@@ -159,12 +159,12 @@ export const briefAttributes = [
     question:
       'Will it be explained in a lecture, stepped through by students alone, or revised from?',
     why: 'A lecture needs it legible from afar; alone, it must explain itself; revising, it should be quick to scan.',
-    bearsOn: ['lettering', 'shown', 'pacing'],
+    bearsOn: ['lettering', 'shown'],
     asked: 'words',
     tags: {
       lecture: { families: { lettering: 1.4, shape: 1.1 } },
-      alone: { families: { shown: 1.3, pacing: 1.3 } },
-      revision: { families: { shown: 1.2, pacing: 0.7 } }
+      alone: { families: { shown: 1.3 } },
+      revision: { families: { shown: 1.2 } }
     }
   },
   {
@@ -185,12 +185,9 @@ export const briefAttributes = [
     key: 'detail',
     question: 'Should it show every step, or only the steps that matter?',
     why: 'It decides where the steps pause.',
-    bearsOn: ['pacing'],
+    bearsOn: 'storyboard',
     asked: 'words',
-    tags: {
-      'every-step': { families: { pacing: 1.2 } },
-      'key-steps': { families: { pacing: 1.6 } }
-    }
+    tags: { 'every-step': {}, 'key-steps': {} }
   },
   {
     key: 'constraints',

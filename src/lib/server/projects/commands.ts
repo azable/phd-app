@@ -209,7 +209,6 @@ function botChooser(
           design,
           ...(request.seen.length ? { seen: request.seen } : {}),
           ...(Object.keys(request.settled).length ? { settled: request.settled } : {}),
-          ...(request.design.runs ? { runs: request.design.runs } : {}),
           ...(request.design.structures && Object.keys(request.design.structures).length
             ? { structures: request.design.structures }
             : {})

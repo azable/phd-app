@@ -3,7 +3,6 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import {
-  pauseGhosts,
   drawnValues,
   ghostRowAt,
   ghostSummary,
@@ -203,25 +202,6 @@ describe('variant markers', () => {
     const [side, stacked] = tagGhosts(state, shown);
     expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
     expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
-  });
-
-  it('shows each label’s pauses after its mark, by its full name', () => {
-    const algorithm = '<script algorithm>\n  @insert{ @swap[x = 1;] }\n</script>';
-    const paused = presentations.map((presentation, index) => ({
-      ...presentation,
-      variant: { 'pause@insert': 'accumulate', 'pause@insert.swap': index ? 'off' : 'on' }
-    }));
-    const ghosts = pauseGhosts(EditorState.create({ doc: algorithm }), paused);
-    expect(
-      ghosts.map(({ at, props: [{ key, differs }] }) => [
-        algorithm.slice(0, at).slice(-7),
-        key,
-        differs
-      ])
-    ).toEqual([
-      ['@insert', 'pause@insert', false],
-      ['{ @swap', 'pause@insert.swap', true]
-    ]);
   });
 
   it('flashes the view marker after a render a revealed region covers', () => {

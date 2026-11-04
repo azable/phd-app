@@ -41,5 +41,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main heap={heap} /></Scene>
+  <Scene name="main" pause="@insert.sift.swap"><Main heap={heap} /></Scene>
 </Storyboard>

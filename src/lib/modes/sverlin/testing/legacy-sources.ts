@@ -2,9 +2,11 @@
  * Test support: a source written with snippets as parts, {@render Part()}, and page layouts that
  * declare nothing, as Sverlin was written before layouts took inputs, rewritten in the current form:
  * parts as layouts declaring the state they read, renders as their tags, snippets nested in a view or
- * part as kinds, every page layout declaring what it reads, and a storyboard showing the first. For tests that build sources from
+ * part as kinds, every page layout declaring what it reads, and a storyboard showing the first, pausing at every label where it reads state. For tests that build sources from
  * pieces, where inputs cannot be written beforehand.
  */
+
+import { readMarkers } from '../algorithm/labels.server';
 
 const ident = /[A-Za-z_$][\w$]*/gu;
 
@@ -220,6 +222,29 @@ function convert(text: string, extraState: string[] = []): string {
   return withStoryboard(text);
 }
 
+/** Every label of the algorithm, by full name, as @insert.swap, each inside the labels around it. */
+function labelNames(text: string): string[] {
+  const body = /<script\s+algorithm[^>]*>([\s\S]*?)<\/script>/u.exec(text)?.[1] ?? '';
+  const { markers } = readMarkers(body);
+  // A block's marker ends at its {; it marks the code to the } closing it.
+  const endOf = (marker: (typeof markers)[number]) => {
+    if (marker.kind === 'span') return marker.end;
+    let depth = 0;
+    for (let at = marker.start; at < body.length; at++)
+      if (body[at] === '{') depth++;
+      else if (body[at] === '}' && --depth === 0) return at;
+    return body.length;
+  };
+  const full = new Map<(typeof markers)[number], string>();
+  for (const marker of markers) {
+    const around = markers
+      .filter((other) => other !== marker && other.start <= marker.at && marker.at < endOf(other))
+      .at(-1);
+    full.set(marker, around ? `${full.get(around)}.${marker.name}` : marker.name);
+  }
+  return [...new Set(full.values())].map((name) => `@${name}`);
+}
+
 /** The source with a storyboard showing its first page layout, where it has none. */
 function withStoryboard(text: string): string {
   if (/<Storyboard\b/u.test(text)) return text;
@@ -233,7 +258,10 @@ function withStoryboard(text: string): string {
     .filter((input) => input && !input.startsWith('@'))
     .map((input) => ` ${input}={${input}}`)
     .join('');
-  return `${text}\n<Storyboard><Scene name="main"><${page[1]}${passed} /></Scene></Storyboard>`;
+  // A layout reading no state is one frame, which pauses nowhere.
+  const labels = page[2] ? labelNames(text) : [];
+  const pause = labels.length ? ` pause="${labels.join(', ')}"` : '';
+  return `${text}\n<Storyboard><Scene name="main"${pause}><${page[1]}${passed} /></Scene></Storyboard>`;
 }
 
 export { convert as currentForm, stateNamesOf };

@@ -87,7 +87,7 @@ describe('listings of the source’s own', () => {
     // comparison never run.
     const prepared = prepareSvelteComponent(insertion);
     const { text } = prepared.listings!.textbook;
-    const pauses = new Map(['shift', 'place', 'test'].map((label) => [label, 'on'] as const));
+    const pauses = new Set(['shift', 'place', 'test']);
     const tests = prepared
       .paced(pauses)
       .lit.textbook.map(({ current }) => current.map(([start, end]) => text.slice(start, end)))

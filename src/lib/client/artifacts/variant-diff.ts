@@ -43,14 +43,13 @@ const viewCategories: Record<string, string> = { views: 'view', pointers: 'point
 /**
  * A variable's key in words: its kind's and prop's names split into words, and its place, after
  * `@`, as “for …”: `Highlight.Pointed@pair.left.fill` is “Highlight pointed fill for pair.left”,
- * `views.Int@swap.held` “Int view for swap.held”, and `pause@insert.swap` “Pause at insert.swap”.
+ * and `views.Int@swap.held` “Int view for swap.held”.
  * Whether something is shown is said by its value (`choiceValue`), not its name.
  */
 export function choiceName(key: string): string {
   const at = key.indexOf('@');
   const head = at < 0 ? key : key.slice(0, at);
   const tail = at < 0 ? undefined : key.slice(at + 1);
-  if (head === 'pause') return tail ? `Pause at ${tail}` : 'Pause';
   const [category, type, ...rest] = head.split('.');
   if (category in viewCategories && type && !rest.length) {
     const name = `${words(type)} ${viewCategories[category]}`;

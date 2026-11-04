@@ -938,9 +938,8 @@ export function designVariables(
     const typeIn = (rest: string) => rest.split('@')[0].split('.').at(-1) ?? rest;
     const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
     const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
-    const prop = key.startsWith('pause@')
-      ? 'pause'
-      : key === 'listing.language' || key === 'listing.places'
+    const prop =
+      key === 'listing.language' || key === 'listing.places'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
     // A pointer's overflow and a collection's have options of their own, as does a listing's text
@@ -960,9 +959,7 @@ export function designVariables(
       'listing.places': listingPlacesOptions,
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
-      'overflow.collection': overflowOptions.collection,
-      // A label with no labels inside it reads accumulating as on.
-      pause: ['accumulate', 'on', 'off']
+      'overflow.collection': overflowOptions.collection
     };
     if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
     return {

@@ -66,6 +66,6 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="stacked"><Stacked values={values} /></Scene>
-  <Scene name="side"><Side values={values} /></Scene>
+  <Scene name="stacked" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Stacked values={values} /></Scene>
+  <Scene name="side" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Side values={values} /></Scene>
 </Storyboard>

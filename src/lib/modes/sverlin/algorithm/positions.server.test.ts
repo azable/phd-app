@@ -52,7 +52,7 @@ describe('positions', () => {
         @count[k = i + j - 1;]
       }
     `,
-      { pauses: new Map(['start', 'count'].map((label) => [label, 'on'])) }
+      { pauses: new Set(['start', 'count']) }
     );
     // Pausing at the start and each count; the loop's last test changes nothing,
     // so the last count is the last step.

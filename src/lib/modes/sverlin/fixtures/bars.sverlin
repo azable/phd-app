@@ -30,5 +30,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main j={j} values={values} /></Scene>
+  <Scene name="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main j={j} values={values} /></Scene>
 </Storyboard>

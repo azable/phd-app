@@ -156,26 +156,11 @@ export class DesignValueError extends Error {
 }
 
 /**
- * Where and how the steps pause: each label of the algorithm, by its full name, as
- * pause@insert.swap.to, accumulating, on, or off, the first how it pauses where it is switched on;
- * one with no labels inside it, which has no pauses inside it, only on or off (see PauseMode in
- * algorithm/interpret.server.ts).
- */
-/**
  * The variable choosing the view of a type, as views.Int; for a view typed by a label, the label as
  * written, as views.@insert.compare for the operator ℓinsertˑcompare (see withLabelOperators).
  */
 export const viewKey = (type: string): string =>
   type.startsWith('ℓ') ? `views.@${type.slice(1).replaceAll('ˑ', '.')}` : `views.${type}`;
-
-export function pauseSpace(labels: readonly string[], leaves: ReadonlySet<string>): DesignSpace {
-  return Object.fromEntries(
-    labels.map((label) => [
-      `pause@${label}`,
-      leaves.has(label) ? ['on', 'off'] : ['accumulate', 'on', 'off']
-    ])
-  );
-}
 
 /**
  * The variable a place falls back to until a variant sets it apart: one variable, or, where it
@@ -238,30 +223,6 @@ export function listingRegionFallbacks(
       })
     )
   );
-}
-
-/**
- * The pauses a source starts with: every label on, for the assistant and chooser to thin, except
- * those whose runs, paced at every label, all draw what the step before drew (runs from its
- * build). A label that never ran, or never names a step, adds no step and stays on, so it pauses
- * where another input runs it; where no label's runs draw anything, every label stays on, so the
- * steps still walk the code.
- */
-export function starterPauses(
-  labels: readonly string[],
-  runs: Readonly<Record<string, { runs: number; drawn: number }>> = {}
-): Record<string, DesignValue> {
-  const silent = (label: string) => (runs[label]?.runs ?? 0) > 0 && runs[label].drawn === 0;
-  const thinned = labels.some((label) => !silent(label));
-  return Object.fromEntries(
-    labels.map((label) => [`pause@${label}`, thinned && silent(label) ? 'off' : 'on'])
-  );
-}
-
-/** A pause@ value, accumulating at a label with no labels inside it as on; any other as it is. */
-function asPause(space: DesignSpace, key: string, value: unknown): unknown {
-  if (!key.startsWith('pause@') || !Object.hasOwn(space, key)) return value;
-  return value === 'accumulate' && !space[key].includes(value) ? 'on' : value;
 }
 
 /**
@@ -359,10 +320,8 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       const axis = key.endsWith('.width') ? 'width' : 'height';
       return `${kind}'s ${axis} is bound to its value in the view, ${axis}={…}, so it has no ${axis} variable; ${kind}.${axis === 'width' ? 'x' : 'y'}Anchor places it.`;
     }
-    if (key.startsWith('pause@')) {
-      const pauses = Object.keys(space).filter((other) => other.startsWith('pause@'));
-      return `The design has no variable ${key}; a pause names a label by its full name, and its pauses are ${pauses.join(', ') || 'none'}.`;
-    }
+    if (key.startsWith('pause@'))
+      return `The design has no variable ${key}: the steps a scene shows are its pause, in the source, as <Scene name="…" pause="@${key.slice('pause@'.length)}">.`;
     // A view choice, a type's or a place's, is one variable, not a kind and a prop.
     if (key.startsWith('views.') || key.startsWith('pointers.')) {
       const choices = Object.keys(space).filter(
@@ -387,7 +346,6 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
                 (other) =>
                   !other.startsWith('views.') &&
                   !other.startsWith('pointers.') &&
-                  !other.startsWith('pause@') &&
                   !other.startsWith('listing.')
               )
               .map((other) => other.slice(0, other.lastIndexOf('.')))
@@ -419,9 +377,7 @@ export function buildVariant(
   seed: number,
   fallbacks: Readonly<Record<string, Fallback>> = {}
 ): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
-  const chosen = Object.entries(request.chosen ?? {}).map(
-    ([key, value]) => [key, asPause(space, key, value)] as const
-  );
+  const chosen = Object.entries(request.chosen ?? {});
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
     .map(([key, value]) => unfit(space, key, value));
@@ -435,8 +391,7 @@ export function buildVariant(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
   const base = request.base ?? {};
-  for (const [key, saved] of Object.entries(base)) {
-    const value = asPause(space, key, saved);
+  for (const [key, value] of Object.entries(base)) {
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
       origins[key] = 'kept';
@@ -472,18 +427,16 @@ export function buildVariant(
 
 /**
  * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card.fill@true,
- * views for a choice of views (views.Int, pointers.Index), and the variable itself for
- * the pauses.
+ * views for a choice of views (views.Int, pointers.Index).
  */
 function propOf(key: string): string {
   if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
-  if (key.startsWith('pause@')) return key;
   return key.slice(key.lastIndexOf('.') + 1).replace(/@.*/u, '');
 }
 
 /**
- * Props a random variant leaves as they were: what is shown, how things line up, the frame, where
- * the steps pause, a listing's language, and a text's decoration, as a line through it can mean it
+ * Props a random variant leaves as they were: what is shown, how things line up, the frame, a
+ * listing's language, and a text's decoration, as a line through it can mean it
  * is gone.
  */
 const kept = new Set<string>([
@@ -546,8 +499,7 @@ function drawOne(
       ? candidates[Math.floor(keyedRandom(seed, stream) * candidates.length)]
       : value;
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
-  if (prop.startsWith('pause@') || kept.has(prop) || framedKinds(space).has(kindOf(key)))
-    return value;
+  if (kept.has(prop) || framedKinds(space).has(kindOf(key))) return value;
   // A bound prop's hue and the way its options run are drawn afresh; a length's unit stays near.
   if (['@hue', '@order'].some((end) => key.endsWith(end))) return pick(options);
   if (colourProps.has(prop)) {

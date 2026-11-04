@@ -114,5 +114,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
 </Storyboard>

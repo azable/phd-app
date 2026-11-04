@@ -57,5 +57,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main vertices={vertices} current={current} queue={queue} /></Scene>
+  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main vertices={vertices} current={current} queue={queue} /></Scene>
 </Storyboard>

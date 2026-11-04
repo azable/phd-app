@@ -321,15 +321,6 @@ describe('design variables in the AI context', () => {
     expect(projectAiContext(document())).not.toHaveProperty('runs');
   });
 
-  it('gives every pause its options, so a chosen pause is one of them', () => {
-    const design = designVariables({
-      variant: { 'pause@insert.swap': 'on', 'pause@insert.swap.to': 'on', 'Cell.fill': 'none' }
-    });
-    for (const key of ['pause@insert.swap', 'pause@insert.swap.to'])
-      expect(design.variables.find(({ variable }) => variable === key)?.options).toBe('pause');
-    expect(design.options.pause).toEqual(['accumulate', 'on', 'off']);
-  });
-
   it('offers how a listing’s places light its own options', () => {
     const design = designVariables({ variant: { 'listing.places': 'fill' } });
     expect(design.variables[0].options).toBe('listing.places');

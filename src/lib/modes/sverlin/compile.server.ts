@@ -23,7 +23,6 @@ import {
   type LabelRun,
   type MasterStep,
   type Pacing,
-  type PauseMode,
   type Pauses,
   type TraceState,
   type TypedState
@@ -98,8 +97,6 @@ import {
   designSpace,
   listingRegionFallbacks,
   listingRegionSpace,
-  pauseSpace,
-  starterPauses,
   starterVariant,
   viewKey,
   type DesignKind,
@@ -254,30 +251,27 @@ export type PreparedComponent = {
   component: string;
   /** The component compiled to render strings, so steps are laid out without mounting them. */
   serverComponent: string;
-  /** The steps pausing at every label, the starter's (see Pacing). */
+  /** The steps pausing at every label (see Pacing). */
   master: MasterStep[];
   /** The names of the source's own listings (see listing/mapped.server.ts). */
   ownListings: string[];
   /**
-   * Every label of the algorithm, by full name, and those with no labels inside them, which pause
-   * only 'on'; and for each label, how many runs it has and how many of them change what the view
-   * draws, for the chooser to pace by (see chooser.md).
+   * Every label of the algorithm, by full name; and for each label, how many runs it has and how
+   * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
+   * assistant.md).
    */
-  pauses: { labels: string[]; leaves: string[]; runs: Record<string, LabelRuns> };
+  pauses: { labels: string[]; runs: Record<string, LabelRuns> };
   /**
-   * The steps pausing at the labels given, each as given or, given as a set, as it pauses where its
-   * variable is on (see pausing), and what follows from them: the values the root reads for
-   * placement, measured with every value of their types, as each names a step of its own, and what
-   * each step lights in each listing. Made once per way of pausing.
+   * The steps pausing at the labels given, and what follows from them: the values the root reads
+   * for placement, measured with every value of their types, as each names a step of its own, and
+   * what each step lights in each listing. Made once per way of pausing.
    */
-  paced: (pauses: Pauses | ReadonlySet<string>) => PacedSteps;
+  paced: (pauses: Pauses) => PacedSteps;
   /** The scenes the presentation plays, in order (see storyboard.server.ts). */
   storyboard: Storyboard;
   /**
-   * Every step the source can show, in the order its storyboard plays them, by label (see
-   * storyboardOf): the master's in each scene, with the end, which a variant pausing at fewer labels
-   * may keep where the master does not. Every variant's steps are some of these, by label, which is
-   * how they line up.
+   * Every step the source shows, in the order its storyboard plays them, by label (see
+   * storyboardOf), the same in every variant.
    */
   steps: string[];
   /** The source's identity, from its steps, shared by its presentations however they are paced. */
@@ -418,7 +412,7 @@ function viewSteps(source: string): MasterStep[] | undefined {
 }
 
 /**
- * The steps a component's algorithm records, pausing at every label as the starter does, as the
+ * The steps a component's algorithm records, pausing at every label, as the
  * page steps where its view builds, and else run without its view, so they can be read whether or
  * not it builds, as by the assistant checking what its algorithm does.
  * Throws the domain, input, or algorithm's problem.
@@ -625,41 +619,8 @@ function paced(
   return { ...run, steps: [run.opening, ...run.steps] };
 }
 
-/** A variant's variable for pausing at a label, by the label's full name, as pause@insert.swap.to. */
-export const pauseKey = (label: string): string => `pause@${label}`;
-
-/**
- * Labels paused at, each as a label pauses where its variable is on: a label with labels inside it
- * accumulating, one without, which has no pauses inside it, on.
- */
-export function pausing(
-  labels: Iterable<string>,
-  leaves: ReadonlySet<string>
-): Map<string, PauseMode> {
-  return new Map([...labels].map((label) => [label, leaves.has(label) ? 'on' : 'accumulate']));
-}
-
-/** How a variant pauses at each label: as its pause@ variable says ('off' not at all), else 'on'. */
-export function pausesOf(
-  pauses: PreparedComponent['pauses'],
-  values: Readonly<Record<string, unknown>>
-): Map<string, PauseMode> {
-  const leaves = new Set(pauses.leaves);
-  return new Map(
-    pauses.labels.flatMap((label): [string, PauseMode][] => {
-      const value = values[pauseKey(label)];
-      if (value === 'off') return [];
-      return [[label, value === 'accumulate' && !leaves.has(label) ? 'accumulate' : 'on']];
-    })
-  );
-}
-
 /** How a source pauses, as a key, for the steps paced so (see PreparedComponent.paced). */
-const pausesKey = (pauses: Pauses) =>
-  [...pauses]
-    .map(([label, mode]) => `${label}=${mode}`)
-    .sort()
-    .join(',');
+const pausesKey = (pauses: Pauses) => [...pauses].sort().join(',');
 
 /**
  * Each step as two, the state just before its code and just after it: the events up to the code,
@@ -1516,7 +1477,7 @@ function prepareViews(
       const span = filter ? narrowed.get(filter) : undefined;
       if (span) appliedIn[`${name}_${filter}`] = { operator: name, ...span };
     }
-    // The page pauses where labels finish (see Pacing), at the labels a variant pauses at, else at
+    // The page pauses where labels finish (see Pacing), at the labels a scene pauses at, else at
     // every label; the applications made inside the labels the root renders an operator at, one at
     // a time or so far, are kept.
     const shown = new Map<string, { start: number; end: number }[]>();
@@ -1635,9 +1596,27 @@ function prepareViews(
         )
       );
     const labelNames = traced.labels.map(({ full }) => full);
-    const parents = new Set(traced.labels.flatMap(({ parent }) => (parent ? [parent.full] : [])));
-    const leaves = new Set(labelNames.filter((label) => !parents.has(label)));
-    const { storyboard, problems: sceneProblems } = storyboardOf(scenes, master, labelNames);
+    // The steps each way of pausing makes, traced once each. The master, pausing at every label, is
+    // bounded only as the source's (algorithmLimits); a scene pausing so is held to what one
+    // presentation shows, by tracing it as a scene.
+    const tracedBy = new Map<string, MasterStep[]>();
+    const tracedSteps = (pauses: Pauses): MasterStep[] => {
+      const key = pausesKey(pauses);
+      const made = tracedBy.get(key);
+      if (made) return made;
+      const steps =
+        key === pausesKey(new Set(labelNames)) && master.length <= algorithmLimits.maximumSteps + 1
+          ? master
+          : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
+      tracedBy.set(key, steps);
+      return steps;
+    };
+    const { storyboard, problems: sceneProblems } = storyboardOf(
+      scenes,
+      master,
+      labelNames,
+      (scene) => tracedSteps(scenePauses(scene))
+    );
     // Reported once the view's own problems are cleared, which may be why nothing is shown.
     if ((unshown.length || sceneProblems.length) && !viewProblems.length)
       throw InvalidSvelteSourceError.combine([
@@ -1652,23 +1631,10 @@ function prepareViews(
       ]);
     const steps = storyboard.steps;
     // Pausing at every label, the finest the steps go, whose states those of any other pauses are
-    // among, each accumulating, which holds the most; where that outruns the limit, the starter's.
-    let finest: MasterStep[] = [];
-    try {
-      finest = paced(
-        source,
-        algorithm,
-        input,
-        domain,
-        { ...pacing, pauses: pausing(labelNames, leaves) },
-        keep
-      ).steps;
-    } catch {
-      finest = [];
-    }
-    const seen = [...master, ...finest];
+    // among.
+    const seen = master;
     // Every state a presentation can show: each step's before and after.
-    const everyStep = [...phasesOf(master), ...phasesOf(finest)];
+    const everyStep = phasesOf(master);
     // An application of each operator the root renders, from any step, to stand in hidden; for one
     // no step applies, as a branch this input never takes, its widest value, drawn hidden throughout.
     const applied: Record<string, Application> = {};
@@ -1846,7 +1812,7 @@ function prepareViews(
     // A presentation opens on the input as given, before the algorithm declares anything: the view
     // reading a variable itself is hidden until it is declared (see leftOutModel), and refused only
     // where it is out of scope after that.
-    const phased = [master, finest].map(phasesOf);
+    const phased = [phasesOf(master)];
     const scopedLater = new Set(
       [...scoped].filter(
         (name) =>
@@ -1995,21 +1961,13 @@ function prepareViews(
       (node: { type?: string; expression?: { name?: string } }) =>
         !(node.type === 'SnippetBlock' && Object.hasOwn(components, node.expression?.name ?? ''))
     );
-    // The steps each way of pausing makes, with what follows from them, made once each; the
-    // starter's are the master's.
+    // The steps each way of pausing makes, with what follows from them, made once each.
     const pacedBy = new Map<string, PacedSteps>();
-    const pacedSteps = (given: Pauses | ReadonlySet<string>): PacedSteps => {
-      const pauses: Pauses = 'get' in given ? given : pausing(given, leaves);
+    const pacedSteps = (pauses: Pauses): PacedSteps => {
       const key = pausesKey(pauses);
       const made = pacedBy.get(key);
       if (made) return made;
-      // The master, pausing at every label, is bounded only as the source's (algorithmLimits); a
-      // variant pausing so is held to what one presentation shows, by tracing it as a variant.
-      const steps =
-        key === pausesKey(new Map(labelNames.map((label) => [label, 'on']))) &&
-        master.length <= algorithmLimits.maximumSteps + 1
-          ? master
-          : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
+      const steps = tracedSteps(pauses);
       const result: PacedSteps = {
         steps,
         // By the page's states, each step's before and after (see phasesOf).
@@ -2043,7 +2001,7 @@ function prepareViews(
       serverComponent,
       master,
       ownListings,
-      pauses: { labels: labelNames, leaves: [...leaves], runs },
+      pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
       steps,
@@ -2094,7 +2052,6 @@ function prepareViews(
             ),
             ...listingRegionSpace(regionLabels),
             ...placesSpace,
-            ...pauseSpace(labelNames, leaves),
             ...boundDesign(bindings).space
           },
           bindings
@@ -2115,7 +2072,6 @@ function prepareViews(
             ),
             ...regionStarter,
             ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
-            ...starterPauses(labelNames, runs),
             ...boundDesign(bindings).starter
           },
           bindings
@@ -2219,12 +2175,8 @@ export async function bundlePresentation(
   // Each scene's steps, paced as it pauses, in storyboard order; a frame is the input as given,
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
-  const pauses = pausesOf(prepared.pauses, values);
-  const leaves = new Set(prepared.pauses.leaves);
   const entries = scenes.flatMap((scene, sceneIndex) => {
-    const run = prepared.paced(
-      scene.frame ? pauses : scenePauses(scene, pauses, (labels) => pausing(labels, leaves))
-    );
+    const run = prepared.paced(scenePauses(scene));
     return (scene.frame ? [0] : sceneSteps(scene, run.steps)).map((index) => ({
       scene,
       sceneIndex,
@@ -2245,7 +2197,7 @@ export async function bundlePresentation(
   );
   if (master.length > algorithmLimits.maximumSteps + 1)
     throw new InvalidSvelteSourceError(
-      `The storyboard shows ${master.length} steps in this variant, more than the ${algorithmLimits.maximumSteps + 1} a presentation can: show fewer scenes, scenes within fewer runs, or pause at fewer labels.`,
+      `The storyboard shows ${master.length} steps, more than the ${algorithmLimits.maximumSteps + 1} a presentation can: show fewer scenes, scenes within fewer runs, or pause at fewer labels.`,
       { code: 'too_many_steps' }
     );
   const single = scenes.length === 1 && !scenes[0].frame;
@@ -2411,7 +2363,7 @@ export async function bundlePresentation(
   if (output.contents.byteLength > maximumBundleBytes) {
     const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     throw new InvalidSvelteSourceError(
-      `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; the variant pausing at fewer labels gives fewer steps.`
+      `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; scenes pausing at fewer labels give fewer steps.`
     );
   }
   // Every step laid out on the server, which the page draws with as given: one the server cannot

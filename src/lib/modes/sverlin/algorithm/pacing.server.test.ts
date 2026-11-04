@@ -20,9 +20,8 @@ const search = `
 `;
 const steps = (body: string, pacing?: Pacing, applications?: ReadonlySet<string>) =>
   traceAlgorithm(body, input, domain, pacing, applications ? { applications } : {}).steps;
-// Pausing at each label given, accumulating.
-const pausedAt = (...labels: string[]) =>
-  new Map(labels.map((label) => [label, 'accumulate' as const]));
+// Pausing at each label given.
+const pausedAt = (...labels: string[]) => new Set(labels);
 const checked = (trace: ReturnType<typeof steps>) => trace.map(({ state }) => state.checked);
 // A view typed by the comparison's label, which keeps its operands and result at each step.
 const shown = new Set(['pass.check.equal']);
@@ -47,12 +46,7 @@ describe('pauses at labels', () => {
   });
 
   it('pause at every label, on, where no pauses are given, whatever the view shows', () => {
-    const every = new Map(
-      ['start', 'pass', 'pass.count', 'pass.check', 'pass.check.equal'].map((label) => [
-        label,
-        'on' as const
-      ])
-    );
+    const every = new Set(['start', 'pass', 'pass.count', 'pass.check', 'pass.check.equal']);
     const trace = steps(search);
     expect(trace.map(({ state, unit }) => [state.checked, unit !== undefined])).toEqual(
       steps(search, { pauses: every }).map(({ state, unit }) => [state.checked, unit !== undefined])
@@ -111,7 +105,7 @@ describe('pauses at labels', () => {
       body,
       input,
       domain,
-      { pauses: new Map([['pass.look', 'on']]) },
+      { pauses: new Set(['pass.look']) },
       { labels: new Set(['pass.look']) }
     ).steps;
     expect(trace.map(({ labelled }) => labelled?.['pass.look']?.[0].state.value)).toEqual([
@@ -198,10 +192,7 @@ describe('pauses at labels', () => {
     expect(all.slice(1, 3).every(({ inside }) => inside?.includes('outer'))).toBe(true);
     // Paused at the outer label alone, its one step comes after the loop.
     expect(
-      steps(merged, { pauses: new Map([['outer', 'on']]) }).map(({ name, state }) => [
-        name,
-        state.n
-      ])
+      steps(merged, { pauses: new Set(['outer']) }).map(({ name, state }) => [name, state.n])
     ).toEqual([['@outer#1', 4]]);
     // Labelled statements in a row each count once, the outer label's end named after it.
     const rows = `
@@ -231,28 +222,6 @@ describe('pauses at labels', () => {
       ['@call#1', 0],
       ['@go#1', undefined]
     ]);
-  });
-
-  it('keep the code an accumulating row has run lit at the steps inside it', () => {
-    const merged = `
-  let n = Int(0);
-  @outer[
-    @first[n++;]
-    while ((n < 3)) @take{
-      n++;
-    }
-  ]
-`;
-    const run = steps(merged, {
-      pauses: new Map([
-        ['outer', 'accumulate'],
-        ['outer.take', 'on']
-      ])
-    });
-    expect(run.map(({ name }) => name)).toEqual(['@outer.take#1', '@outer.take#2', '@outer#1']);
-    // Each take keeps lit what the outer run did before it, from the first label's code on.
-    for (const step of run.slice(0, 2))
-      expect(step.trail?.some(([, , labels]) => labels.includes('outer'))).toBe(true);
   });
 
   it('number every step by its moment, the same however steps are paced', () => {

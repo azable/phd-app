@@ -93,7 +93,7 @@ describe('identities', () => {
          @place[values[j] = key;]
        }`,
       paths,
-      { pauses: new Map(['start', 'shift', 'place'].map((label) => [label, 'on'])) }
+      { pauses: new Set(['start', 'shift', 'place']) }
     );
     const gone = new Set<number>();
     let previous = new Set<number>();

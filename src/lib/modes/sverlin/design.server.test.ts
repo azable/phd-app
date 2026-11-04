@@ -10,8 +10,7 @@ import {
   buildVariant,
   DesignValueError,
   listingRegionFallbacks,
-  listingRegionSpace,
-  starterPauses
+  listingRegionSpace
 } from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
@@ -75,26 +74,6 @@ describe('design space', () => {
     expect(Object.keys(starter).sort()).toEqual(Object.keys(space).sort());
     expect(starter['views.Int']).toBe('IntCell');
     for (const [key, value] of Object.entries(starter)) expect(space[key]).toContain(value);
-  });
-
-  it('starts a label off where every run draws what the step before drew', () => {
-    const labels = ['pass', 'pass.check', 'pass.swap', 'pass.rare'];
-    const runs = {
-      pass: { runs: 3, drawn: 0 },
-      'pass.check': { runs: 9, drawn: 9 },
-      'pass.swap': { runs: 4, drawn: 4 }
-    };
-    expect(starterPauses(labels, runs)).toEqual({
-      'pause@pass': 'off',
-      'pause@pass.check': 'on',
-      'pause@pass.swap': 'on',
-      // Never ran here: adds no step, and pauses where another input runs it.
-      'pause@pass.rare': 'on'
-    });
-    // Where nothing draws anything new, every label stays on, so the steps still walk the code.
-    expect(
-      starterPauses(['a', 'b'], { a: { runs: 2, drawn: 0 }, b: { runs: 1, drawn: 0 } })
-    ).toEqual({ 'pause@a': 'on', 'pause@b': 'on' });
   });
 });
 
@@ -297,18 +276,6 @@ describe('listing regions', () => {
     const none = values({ ...shared, 'pointers.Position@pass.left': 'none' });
     expect(none['listing.lit@pass.left.fill']).toBe('amber-200');
     expect(none['listing.lit@pass.fill']).toBe('amber-200');
-  });
-});
-
-describe('pauses chosen', () => {
-  it('read accumulating as on at a label with no labels inside it', () => {
-    const space = { 'pause@sweep': ['accumulate', 'on', 'off'], 'pause@sweep.pair': ['on', 'off'] };
-    const starter = { 'pause@sweep': 'on', 'pause@sweep.pair': 'on' };
-    const chosen = { 'pause@sweep': 'accumulate', 'pause@sweep.pair': 'accumulate' };
-    expect(buildVariant(space, starter, { chosen }, 1).values).toEqual({
-      'pause@sweep': 'accumulate',
-      'pause@sweep.pair': 'on'
-    });
   });
 });
 

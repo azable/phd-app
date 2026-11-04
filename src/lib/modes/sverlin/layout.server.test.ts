@@ -15,12 +15,11 @@ import { differingSteps } from '$lib/shared/differing-steps';
 import { smallestReadableText } from '$lib/shared/readability';
 
 // Every label paused at, the finest steps a source has, as the starter was before it thinned them.
-const everyPause = (prepared: ReturnType<typeof prepareSvelteComponent>) =>
-  Object.fromEntries(
-    Object.keys(prepared.design.space)
-      .filter((key) => key.startsWith('pause@'))
-      .map((key) => [key, 'on'])
-  );
+/** A source prepared with its scene pausing at every label. */
+const everyPause = (source: string) => {
+  const labels = prepareSvelteComponent(source).pauses.labels.map((label) => `@${label}`);
+  return prepareSvelteComponent(source.replace(/pause="[^"]*"/u, `pause="${labels.join(', ')}"`));
+};
 
 /** A server bundle whose layout answers with what it is given, as geometry would come back. */
 const answering = (body: string) =>
@@ -110,10 +109,9 @@ describe('laying out on the server', () => {
 
   it('describes what each step draws, alike where a value changes nothing seen', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
-    const prepared = prepareSvelteComponent(source);
+    const prepared = everyPause(source);
     const drawnWith = async (seed: number, chosen: Record<string, string | number>) =>
-      (await bundlePresentation(prepared, seed, { chosen: { ...everyPause(prepared), ...chosen } }))
-        .layout.drawn;
+      (await bundlePresentation(prepared, seed, { chosen })).layout.drawn;
     const starter = await drawnWith(1, {});
     expect(starter).toHaveLength(18);
     // Another seed places nothing here; a cell's least size is under what the pointer keeps.
@@ -127,12 +125,11 @@ describe('laying out on the server', () => {
 
   it('counts no step where marks differ only in the room kept for labels not yet shown', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-labels.sverlin', 'utf8');
-    const prepared = prepareSvelteComponent(source);
+    const prepared = everyPause(source);
     const drawnWith = async (labels: boolean) =>
       (
         await bundlePresentation(prepared, 1, {
           chosen: {
-            ...everyPause(prepared),
             'pointers.Index@lo': 'LowerMark',
             'pointers.Index@hi': 'UpperMark',
             'LowerMark.LowerLabel.shown': labels,

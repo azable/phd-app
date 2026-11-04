@@ -131,12 +131,12 @@ scene at least.
   this is how a frame is told from a step.)
 - A stepping scene steps through the whole run, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
-  `within="@sort.merge#1"`, ending at the step that ends it. `pause` names, by
-  full name and separated by commas, the labels that end a step in it, as
-  `pause="@sort.merge.take"`, in place of the variant's `pause@` variables; the
-  label it is within always ends one. `at="start"` or `at="end"` shows only its
-  first or its last step. `title` is a caption beside its name in the controls.
-  Props are written as they are, never computed.
+  `within="@sort.merge#1"`. `pause` names, by full name and separated by commas,
+  the labels that end a step in it, as `pause="@sort.merge.take"`: the scene
+  pauses at those labels and no others, and `within` only chooses which runs it
+  shows. `at="start"` or `at="end"` shows only its first or its last step.
+  `title` is a caption beside its name in the controls. Props are written as
+  they are, never computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
@@ -324,31 +324,21 @@ label given a kind of its own.
   leading a labelled block, before its first labelled statement, need no label
   of their own, as `let min = i;` at the top of `@select{`. A label on part of a
   statement asks nothing of the code around it.
-- The page pauses where labels finish, and only there: a pause at a label is a
-  step at the end of each of its runs, so a check finding nothing is a step too.
-  Each label is a variable, `pause@` and its full name, as
-  `"pause@insert.swap": "on"`: `"accumulate"`, `"on"`, or `"off"`. Every label
-  is `"on"` to start with, except one whose runs all draw what the step before
-  drew, as a test whose result nothing shows, which starts `"off"`; the variant
-  chooses where the steps pause. So label what a step can be about, as a
+- The page pauses where labels finish, and only there: a scene's pause at a
+  label (see Storyboard) is a step at the end of each of its runs, so a check
+  finding nothing is a step too. So label what a step can be about, as a
   comparison, `@compare[values[j - 1] > key]`, and the operands it reads, and
   draw them.
 - A step shows the state just after its code, each value moving there from where
   the step on screen drew it, in one motion. Code not paused at, inside a label
-  that is off or outside every label, leads up to the next step, and what a
-  label there gives, a value or an application rendered at it, is drawn at that
-  step, as a comparison not paused at is at the swap it leads to. A step inside
-  a run of a label, as in a call it makes, ends that run's code so far: what it
-  changes after is compared with the step. Presentations paced differently step
-  together, one holding its step while the other shows the code between.
-- A label with labels inside it says what its pauses inside keep:
-  `"accumulate"`, what its run has done so far, its labels' values drawn and its
-  code lit, until the run finishes, so paused at the right operand the left one
-  is still marked and `j - 1` still lit; `"on"`, only its own part and the code
-  leading up to it outside the run. Either way its own end shows its whole run.
-  A label that is off passes through to the labels around it. A step keeps the
-  parts of each run around it that accumulates, back to where a run nearer it
-  that is on began. A label with no labels inside it is only on or off.
+  the scene does not pause at, leads up to the next step, and what a label there
+  gives, a value or an application rendered at it, is drawn at that step, as a
+  comparison not paused at is at the swap it leads to. A step inside a run of a
+  label, as in a call it makes, ends that run's code so far: what it changes
+  after is compared with the step.
+- A step inside a run shows only its own part and the code leading up to it; a
+  step ending a run shows its whole run, the values its labels gave inside it
+  drawn and its code lit.
 - Step 0 is the input as given, before any code runs; what the algorithm
   declares, its labels' values, and its applications appear from the first step
   on, and the view reads a variable itself only inside a `<Node>`, which hides
@@ -453,7 +443,7 @@ Binary search, stopping where it finds the target:
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
+  <Scene name="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -641,7 +631,7 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
+  <Scene name="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
 </Storyboard>
 ```
 
@@ -803,13 +793,13 @@ place:
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Stacked values={values} /></Scene>
+  <Scene name="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
 </Storyboard>
 ```
 
 Paused at both, a comparison reads "is 5 > 1? true", its operands lifting out of
 their cells, and the swap after it says why they trade places. With
-`pause@sweep.pair.test` off the page plays the swaps alone; with
+`pause="@sweep.pair.swap"` alone the page plays the swaps alone; with
 `views.@sweep.pair.test` none the question is left out and the steps stay as
 they were.
 
@@ -819,12 +809,11 @@ shorter ending is refused with the full names it could stand for, so adding a
 label never changes or breaks what a name reads, in the markup or a variant.
 Only a label on an expression gives a value, as `const key = @key[values[i]];`:
 `@name` is what that expression gave since the step before, drawn at the step's
-after, and missing where it gave none or several. It is held at later steps
-inside the run around it that keeps it (see Steps), drawn from the step's
-before, so a mark stays until that code finishes. So a view shows what a step's
-code held though no variable holds it, as the key a whole insertion inserts,
-`{@insert.key}`, out of scope once its block ends. A label giving a position is
-drawn by a pointer, pointing while that code runs.
+after, and missing where it gave none or several. It is held at the step ending
+the run around it (see Steps), which shows that run whole. So a view shows what
+a step's code held though no variable holds it, as the key a whole insertion
+inserts, `{@insert.key}`, out of scope once its block ends. A label giving a
+position is drawn by a pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -843,18 +832,19 @@ for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
 
 A label gives a value only where its code ran, `&&` skipping it included, so the
 marks come and go with the comparison, however the value is then used. A label
-added for a mark is a pause too: on, the page pauses as the cell is picked; off,
-the mark shows at the step its code leads up to.
+added for a mark is a place to pause too: paused at, the page pauses as the cell
+is picked; else the mark shows at the step its code leads up to.
 
 A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
 `Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
-the pairs found out of order red, and with `pause@insert.swap.to` on, as a step
-of their own before anything is written. Showing or hiding something at some
-steps needs no flag, sentinel, or cast in the algorithm: a label, a pointer at a
-label, a view chosen per place, or `<When of="@label">` below does it.
+the pairs found out of order red, and with `@insert.swap.to` in the scene's
+pause, as a step of their own before anything is written. Showing or hiding
+something at some steps needs no flag, sentinel, or cast in the algorithm: a
+label, a pointer at a label, a view chosen per place, or `<When of="@label">`
+below does it.
 
 `<When of="@insert.swap">…</When>` draws its contents at each step inside a run
 of a label, any label: the step that ends a run and those inside it where labels
@@ -886,10 +876,6 @@ The design space is every variable of a component's look, found in its markup:
   of types).
 - `pointers.Index`, for each position type rendered by name as a pointer: its
   pointer views and `none` (see Pointers).
-- `pause@insert.swap.to`, for each label, by its full name, never a shorter
-  ending, so a label added later changes no saved variant: `"accumulate"`,
-  `"on"`, or `"off"`, one with no labels inside it only `"on"` or `"off"` (see
-  Steps).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
   node a layout writes beside what it draws, as a row in its root, is of its
@@ -1147,8 +1133,8 @@ an error: rename the label.
 
 A variant gives every variable a value, and a presentation draws one. The
 starter is each type in its first view, each kind in a plain look for what it
-is: values framed, text and layouts unframed, and pointers marked in amber, and
-every label paused `"on"` but those whose runs draw nothing new. A presentation
+is: values framed, text and layouts unframed, and pointers marked in amber.
+Every variant shows the same steps, those the scenes pause at. A presentation
 built after a change keeps the values of the one it was made from where nothing
 else sets them, and takes the starter's for anything new; the assistant sets
 values with `vary`, or with `edit` or `revise` for the source it changes, and
@@ -1266,13 +1252,12 @@ there. A region holds the text of what its label marks and no more: a loop's or
 an `if`'s own line goes with its test's label or none, never inside its body's,
 as `for i = 2 to n` stays outside `@insert[…]`; a test with a line of its own
 has a label of its own, as `while (@more[Waiting(queue)])` with
-`while @more[the queue is not empty]`, and the design decides whether to pause
-there: the assistant for a new or edited source, a chooser for more variants.
+`while @more[the queue is not empty]`, and the scenes' pauses decide whether to
+pause there.
 
 - Only the code of labels the steps pause at lights, all in one look: a step's
-  label's region with the code inside it, and the parts done so far of a run
-  accumulating around it; other code stays dark, so label what should light, as
-  `@bound[j > 0]`, and pause at it.
+  label's region with the code inside it; other code stays dark, so label what
+  should light, as `@bound[j > 0]`, and pause at it.
 - A region lights without the regions inside it that did not run since the code
   around them started, so once `j > 0` fails, `A[j] > key` stays dark. Code kept
   as run lights only once it is done, once the step has left it or, for a loop
@@ -1370,7 +1355,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
 </Storyboard>
 ```
 
@@ -1596,7 +1581,7 @@ at marked and the queue drawn by number:
 </Layout>
 
 <Storyboard>
-  <Scene name="search"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="search" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
 </Storyboard>
 ```
 

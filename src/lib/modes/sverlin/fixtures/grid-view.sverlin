@@ -32,5 +32,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main a={a} b={b} /></Scene>
+  <Scene name="main" pause="@scale.grow, @scale.copy"><Main a={a} b={b} /></Scene>
 </Storyboard>

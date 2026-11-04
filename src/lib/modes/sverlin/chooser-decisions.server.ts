@@ -1,6 +1,6 @@
 /**
  * The Sverlin chooser on OpenAI's Decisions API, making more variants of a source as it is: each
- * visible choice (what is shown, the listing, views, forms, pacing) is asked as one choice question,
+ * visible choice (what is shown, the listing, views, forms) is asked as one choice question,
  * which other option is most worth showing next, or to keep it, each answered with the probability
  * of every option, and every variant changes the few the answers most want changed, never one
  * already seen. Asked instead for each variable's value, every answer keeps its starting value with
@@ -29,13 +29,12 @@ const changedPerResample = 2;
 /** The answer keeping a variable as it is, among a resample question's alternatives. */
 const keep = '(keep)';
 
-/** What is shown, views, forms and pacing are asked first where a design has more variables than a request can ask. */
+/** What is shown, views and forms are asked first where a design has more variables than a request can ask. */
 function priority(key: string): number {
   if (key.endsWith('.shown') || key === 'listing.language') return 0;
   if (key.startsWith('views.') || key.startsWith('pointers.')) return 1;
   if (key.endsWith('.form')) return 2;
-  if (key.startsWith('pause@')) return 3;
-  return 4;
+  return 3;
 }
 
 type Asked = { variable: string; value: DesignValue; options: readonly DesignValue[] };
@@ -53,8 +52,8 @@ function askedVariables(project: ChooserProject): Asked[] {
     .slice(0, maximumDecisionQuestions);
 }
 
-/** The choices a participant sees change at once: what is shown, the listing, views, layouts, forms, pacing. */
-const visible = (variable: string) => priority(variable) < 4;
+/** The choices a participant sees change at once: what is shown, the listing, views, layouts, forms. */
+const visible = (variable: string) => priority(variable) < 3;
 
 /** Resample questions: for each visible choice, which other option is most worth showing, or keep. */
 export function resampleQuestions(asked: readonly Asked[]): ChoiceQuestion[] {

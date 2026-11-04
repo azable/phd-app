@@ -44,5 +44,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main lo={lo} hi={hi} values={values} /></Scene>
+  <Scene name="main" pause="@range, @probe.right, @probe.left"><Main lo={lo} hi={hi} values={values} /></Scene>
 </Storyboard>

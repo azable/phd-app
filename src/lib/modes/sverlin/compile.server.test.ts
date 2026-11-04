@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { stepPlaces } from '$lib/shared/presentations';
-
-import type { MasterStep, PauseMode } from './algorithm/interpret.server';
+import type { MasterStep } from './algorithm/interpret.server';
 import {
   bundlePresentation,
   compileSvelteComponent as compileCurrent,
   InvalidSvelteSourceError,
-  pausesOf,
   prepareSvelteComponent as prepareCurrent
 } from './compile.server';
 import { currentForm } from './testing/legacy-sources';
@@ -102,7 +99,7 @@ describe('single-component Svelte compilation', () => {
     );
     for (const bundle of bundles) {
       expect(bundle.stepSignature).toBe(bundles[0].stepSignature);
-      // The starter pauses where i is set and moved, as the caption draws it, and at each
+      // The scene pauses where i is set and moved, as the caption draws it, and at each
       // comparison.
       expect(bundle.labels).toEqual([
         'start',
@@ -116,19 +113,8 @@ describe('single-component Svelte compilation', () => {
         '@check.equal#4',
         '@run#1'
       ]);
-      // Every step the source can show: each check's position set or moved, its test, its
-      // comparison, and its pass.
-      expect(bundle.steps).toEqual([
-        'start',
-        ...[1, 2, 3, 4].flatMap((n) => [
-          ...(n === 1 ? ['@first#1'] : [`@next#${n - 1}`]),
-          `@more#${n}`,
-          `@check.equal#${n}`,
-          `@check#${n}`
-        ]),
-        '@run#1',
-        'end'
-      ]);
+      // Every variant shows the source's steps.
+      expect(bundle.steps).toEqual(bundle.labels);
     }
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
       new Set(['IntCell', 'IntTally'])
@@ -277,7 +263,7 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values([4, 9]);</script>\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum" of="total, values"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main" of="total, values"><Node><Sum total={total} values={values} /></Node></Layout>',
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values([4, 9]);</script>\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum" of="total, values"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main" of="total, values"><Node><Sum total={total} values={values} /></Node></Layout><Storyboard><Scene name="main" pause="@start, @add"><Main total={total} values={values} /></Scene></Storyboard>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
@@ -576,7 +562,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     expect(prepared.listings?.code.text).toBe('for i = 1 to n step 1');
     // The input as given, lighting nothing, then i set, each test, each pass's move, and the loop's
     // end.
-    const { lit } = prepared.paced(pausesOf(prepared.pauses, {}));
+    const { lit } = prepared.paced(new Set(prepared.pauses.labels));
     expect(lit.code).toHaveLength(8);
     expect(lit.code[0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
@@ -976,7 +962,7 @@ describe('typed view components', () => {
       `<script domain>const Int = type([1, 3]); const Index = type("integer", { min: -1, max: 3 }); const Values = array(Int, { max: 8 });</script><script input>const values = Values([1, 3, 1]); const target = Int(3);</script><script algorithm>@start[let i = Index(-1);] @move[i = Index(0);]</script><View of="Int" name="IntView"><Node value={this} /></View>\n<Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{value}{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="target, values, i"><Node>{target}<Cells values={values} i={i} /></Node></Layout>`
     );
     // i places the pointer, measured where it is first declared; target and the cells go to views.
-    expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
+    expect(prepared.paced(new Set(prepared.pauses.labels)).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3] }
     ]);
   });
@@ -985,7 +971,7 @@ describe('typed view components', () => {
     const prepared = prepareSvelteComponent(
       `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 5 }); const Position = index(Values);</script><script input>const values = Values([1, 3, 1]);</script><script algorithm>@start[let i = Position(-1);] @move[i = Position(0);]</script><Layout name="Cells" of="values, i"><Node layout="row">{#each values as value, k}<Node>{#if k === i}<Node>i</Node>{/if}</Node>{/each}</Node></Layout><Layout name="Main" of="values, i"><Node><Cells values={values} i={i} /></Node></Layout>`
     );
-    expect(prepared.paced(pausesOf(prepared.pauses, {})).placements).toEqual([
+    expect(prepared.paced(new Set(prepared.pauses.labels)).placements).toEqual([
       { path: 'i', step: 3, values: [-1, 0, 1, 2, 3, 4, 5] }
     ]);
   });
@@ -1163,7 +1149,9 @@ describe('scope', () => {
 
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
-      source('<Layout name="Main" of="key"><Node>{key}</Node></Layout>')
+      source(
+        '<Layout name="Main" of="key"><Node>{key}</Node></Layout><Storyboard><Scene name="main" pause="@key, @done"><Main key={key} /></Scene></Storyboard>'
+      )
     );
     const { javascript } = await bundlePresentation(prepared, 1);
     // After the loop, i and key are out of scope: they stand in from the step that had them, and are
@@ -1314,7 +1302,7 @@ describe('views of what a step computed', () => {
     expect(javascript).toMatch(/__applied_(?:ℓ|\\u2113)sweep/u);
   });
 
-  it('pause at each comparison its label runs, and apart from it at each swap', async () => {
+  it('pause at each comparison its label runs, and apart from it at each swap', () => {
     const prepared = prepareSvelteComponent(bubble);
     const both = prepared.paced(new Set(['sweep.pair.test', 'sweep.pair.swap'])).steps;
     const steps = (master: typeof prepared.master) =>
@@ -1338,15 +1326,6 @@ describe('views of what a step computed', () => {
       ['1,5,4,2,3', ['5 > 1']],
       ['1,4,5,2,3', ['5 > 4']]
     ]);
-    const paced = await bundlePresentation(prepared, 1, {
-      chosen: {
-        'pause@sweep': 'off',
-        'pause@sweep.pair': 'off',
-        'pause@sweep.pair.test': 'off'
-      }
-    });
-    expect(paced.labels).toHaveLength(7);
-    expect(paced.stepSignature).toBe((await bundlePresentation(prepared, 1)).stepSignature);
   });
 
   it('refuse a label read inside a view, and a view typed by a label no step evaluates', () => {
@@ -1456,49 +1435,8 @@ describe('pauses at labels', () => {
       ].join(' | ');
     });
 
-  it('offers a pause at every label, by its full name, on to start where its runs draw something', () => {
+  it('pauses at the labels given, each comparison and swap a step', () => {
     const prepared = prepareSvelteComponent(insertion);
-    const starterPauses = (source: string) =>
-      Object.fromEntries(
-        Object.entries(prepareSvelteComponent(source).design.starter).filter(([key]) =>
-          key.startsWith('pause@')
-        )
-      );
-    // A pass's end draws what its last swap drew, so it starts off; the rest each draw a change.
-    // The loop's parts and the bound only move or test i and j, which nothing draws, so they start off.
-    expect(starterPauses(insertion)).toEqual({
-      'pause@guard': 'off',
-      'pause@insert.guard': 'off',
-      'pause@onward': 'off',
-      'pause@setup': 'off',
-      'pause@insert': 'off',
-      'pause@insert.compare': 'on',
-      'pause@insert.compare.left': 'on',
-      'pause@insert.compare.right': 'on',
-      'pause@insert.swap': 'on',
-      'pause@insert.swap.from': 'on',
-      'pause@insert.swap.to': 'on'
-    });
-    // What the view draws decides them: without its marks or its comparison, only the swap, which
-    // moves values, draws something new.
-    const bare = insertion.replace(/\{@insert\.[a-z.]*\}\n?/g, '').replace('{@insert.compare}', '');
-    expect(bare).not.toContain('{@insert.compare.left}');
-    expect(starterPauses(bare)).toEqual({
-      'pause@guard': 'off',
-      'pause@insert.guard': 'off',
-      'pause@onward': 'off',
-      'pause@setup': 'off',
-      'pause@insert': 'off',
-      'pause@insert.compare': 'off',
-      'pause@insert.compare.left': 'off',
-      'pause@insert.compare.right': 'off',
-      'pause@insert.swap': 'on',
-      'pause@insert.swap.from': 'off',
-      'pause@insert.swap.to': 'off'
-    });
-    // A label with labels inside it can accumulate; one without is only on or off.
-    expect(prepared.design.space['pause@insert.compare']).toEqual(['accumulate', 'on', 'off']);
-    expect(prepared.design.space['pause@insert.swap.to']).toEqual(['on', 'off']);
     const coarse = prepared.paced(new Set(['insert.compare', 'insert.swap'])).steps;
     expect(played(coarse).slice(0, 5)).toEqual([
       '5,2,4,1 | 5 > 2: true | left right | ',
@@ -1509,18 +1447,18 @@ describe('pauses at labels', () => {
     ]);
   });
 
-  it('pauses at each label switched on, holding a mark until the run around it finishes', () => {
+  it('pauses at each label given, the end of a run holding the marks made inside it', () => {
     const prepared = prepareSvelteComponent(insertion);
     // Left, right, the comparison, the swap's marks with nothing moved, then the swap; the pair in
     // order makes no marks step, as no swap runs.
     expect(played(prepared.paced(fine).steps).slice(0, 11)).toEqual([
       '5,2,4,1 |  | left | ',
-      '5,2,4,1 |  | right | left',
+      '5,2,4,1 |  | right | ',
       '5,2,4,1 | 5 > 2: true |  | left right',
       '5,2,4,1 |  | from to | ',
       '2,5,4,1 |  |  | from to',
       '2,5,4,1 |  | left | ',
-      '2,5,4,1 |  | right | left',
+      '2,5,4,1 |  | right | ',
       '2,5,4,1 | 5 > 4: true |  | left right',
       '2,5,4,1 |  | from to | ',
       '2,4,5,1 |  |  | from to',
@@ -1528,7 +1466,7 @@ describe('pauses at labels', () => {
     ]);
   });
 
-  it('lights each pause’s region and lines the presentations up by moment', async () => {
+  it('lights each pause’s region', () => {
     const prepared = prepareSvelteComponent(insertion);
     const { text } = prepared.listings!.code;
     const lit = prepared
@@ -1536,37 +1474,12 @@ describe('pauses at labels', () => {
       .lit.code.slice(1, 4)
       .map(({ current }) => current.map(([start, end]) => text.slice(start, end)));
     expect(lit).toEqual([['j - 1'], ['j'], ['A[j - 1] > A[j]']]);
-    const coarseChoice = {
-      'pause@insert': 'off',
-      'pause@insert.compare': 'accumulate',
-      'pause@insert.compare.left': 'off',
-      'pause@insert.compare.right': 'off',
-      'pause@insert.swap': 'accumulate',
-      'pause@insert.swap.from': 'off',
-      'pause@insert.swap.to': 'off'
-    };
-    const coarse = await bundlePresentation(prepared, 1, { chosen: coarseChoice });
-    const apart = await bundlePresentation(prepared, 1, {
-      chosen: {
-        ...coarseChoice,
-        'pause@insert.compare.left': 'on',
-        'pause@insert.compare.right': 'on',
-        'pause@insert.swap.to': 'on'
-      }
-    });
-    expect(apart.stepSignature).toBe(coarse.stepSignature);
-    expect(apart.labels.length).toBeGreaterThan(coarse.labels.length);
-    // Both are some of the source's steps, in order, by name.
-    expect(apart.steps).toEqual(coarse.steps);
-    expect(stepPlaces(coarse.steps, coarse.labels)).toBeDefined();
-    expect(stepPlaces(apart.steps, apart.labels)).toBeDefined();
   });
-
-  it('names a pause by the label’s full name, refusing its short ending', async () => {
+  it('refuses a pause chosen as a variable, as the scenes say where the steps pause', async () => {
     const prepared = prepareSvelteComponent(insertion);
     await expect(
-      bundlePresentation(prepared, 1, { chosen: { 'pause@left': 'on' } })
-    ).rejects.toThrow('a pause names a label by its full name');
+      bundlePresentation(prepared, 1, { chosen: { 'pause@insert.swap': 'on' } })
+    ).rejects.toThrow('the steps a scene shows are its pause');
   });
 
   describe('listing regions as places', () => {
@@ -1630,7 +1543,7 @@ describe('pauses at labels', () => {
   });
 });
 
-describe('pauses accumulate', () => {
+describe('pauses inside a run', () => {
   const insertion = prepareSvelteComponent(
     // The pauses-at-labels source, whose listing marks every label.
     `<script domain>
@@ -1687,10 +1600,10 @@ describe('pauses accumulate', () => {
 </Layout>`
   );
   const { text } = insertion.listings!.code;
-  const operands = { 'insert.compare.left': 'on', 'insert.compare.right': 'on' } as const;
+  const operands = ['insert.compare.left', 'insert.compare.right'];
   /** The first three steps' marks held, and the listing's text, current and earlier. */
-  const firstSteps = (modes: Record<string, PauseMode>) => {
-    const { steps, lit } = insertion.paced(new Map(Object.entries(modes)));
+  const firstSteps = (labels: string[]) => {
+    const { steps, lit } = insertion.paced(new Set(labels));
     const texts = (ranges: readonly (readonly [number, number])[]) =>
       ranges.map(([start, end]) => text.slice(start, end));
     return [1, 2, 3].map((index) => ({
@@ -1700,74 +1613,19 @@ describe('pauses accumulate', () => {
     }));
   };
 
-  it('keep the comparison’s earlier parts, marks and code alike, until it finishes', () => {
-    const [left, right, compare] = firstSteps({ ...operands, 'insert.compare': 'accumulate' });
-    expect(left).toMatchObject({ held: [], current: ['j - 1'] });
-    // At the right operand, the left one stays marked, and its code lit faintly.
-    expect(right.held).toEqual(['left']);
-    expect(right.current).toEqual(['j']);
-    expect(right.earlier.join(' ')).toContain('j - 1');
-    expect(compare).toMatchObject({ held: ['left', 'right'], current: ['A[j - 1] > A[j]'] });
-  });
-
-  it('show only each pause’s own part where the run around it is on', () => {
-    const [left, right, compare] = firstSteps({ ...operands, 'insert.compare': 'on' });
+  it('show only each pause’s own part inside a run', () => {
+    const [left, right, compare] = firstSteps([...operands, 'insert.compare']);
     // Only the operand lights: not what led up to the comparison, outside every pause, nor the rest
-    // of the comparison, which is on.
+    // of the comparison.
     expect(left).toEqual({ held: [], current: ['j - 1'], earlier: [] });
     expect(right).toEqual({ held: [], current: ['j'], earlier: [] });
     // Its own end shows the whole of its run.
     expect(compare).toMatchObject({ held: ['left', 'right'], current: ['A[j - 1] > A[j]'] });
   });
 
-  it('pass through a label that is off, to the runs around it', () => {
-    // Off, the comparison neither pauses nor keeps: the insertion around it, accumulating, keeps.
-    const kept = firstSteps({ ...operands, insert: 'accumulate', 'insert.swap': 'accumulate' });
-    expect(kept[1].held).toEqual(['left']);
-    expect(kept[1].earlier.join(' ')).toContain('j - 1');
-    // With nothing around it keeping, only the code since the step before could light faintly: the
-    // left operand's cell read, in the comparison still being run, which stays dark.
-    const none = firstSteps({ ...operands, 'insert.swap': 'accumulate' });
-    expect(none[1]).toEqual({ held: [], current: ['j'], earlier: [] });
-  });
-
-  it('light as run only code that has run, a statement once the code has left it', () => {
-    const fine = {
-      ...operands,
-      'insert.compare': 'accumulate',
-      'insert.swap': 'accumulate',
-      'insert.swap.to': 'on'
-    } as const;
-    const { lit } = insertion.paced(new Map(Object.entries(fine)));
-    const texts = (ranges: readonly (readonly [number, number])[]) =>
-      ranges.map(([start, end]) => text.slice(start, end));
-    // Paused at the left operand: the comparison it is in has not been evaluated, so it is dark, and
-    // the code before it is in no run the page pauses at.
-    expect(texts(lit.code[1].earlier)).toEqual([]);
-    // At the right operand, only the left one, done, is lit faintly.
-    expect(texts(lit.code[2].earlier)).toEqual(['j - 1']);
-    // Paused at the swap's read of A[j]: its first line ran; its second is half run and the rest
-    // has not run, so they stay dark, as does the loop's line, in no run the page pauses at.
-    expect(texts(lit.code[4].current)).toEqual(['j']);
-    expect(texts(lit.code[4].earlier)).toEqual(['moved = A[j - 1]']);
-  });
-
-  it('nest: an accumulating run keeps its parts from before an inner run that is on', () => {
-    const [, right] = firstSteps({ ...operands, insert: 'accumulate', 'insert.compare': 'on' });
-    // The insertion's start, before the comparison, stays; the comparison's left operand does not.
-    expect(right.held).toEqual([]);
-    expect(right.earlier.join(' ')).toContain('j = i');
-    expect(right.earlier.join(' ')).not.toContain('j - 1');
-  });
-
   it('name each step by its label’s run, the same however the steps pause', () => {
-    const coarse = insertion.paced(
-      new Map([
-        ['insert.compare', 'accumulate'],
-        ['insert.swap', 'accumulate']
-      ])
-    ).steps;
-    const fine = insertion.paced(pausesOf(insertion.pauses, {})).steps;
+    const coarse = insertion.paced(new Set(['insert.compare', 'insert.swap'])).steps;
+    const fine = insertion.paced(new Set(insertion.pauses.labels)).steps;
     expect(coarse.map(({ name }) => name).slice(0, 4)).toEqual([
       'start',
       '@insert.compare#1',
@@ -1789,37 +1647,13 @@ describe('pauses accumulate', () => {
     for (const { name, state } of coarse) expect(byName.get(name)).toEqual(state);
   });
 
-  it('count each label’s runs and those changing what the view draws, for the chooser', () => {
+  it('count each label’s runs and those changing what the view draws, for the assistant', () => {
     const { runs } = insertion.pauses;
     // Each comparison and swap changes what the board draws; an insertion's own end adds nothing
     // beyond them, so pausing there would repeat the step before.
     expect(runs['insert.compare']).toEqual({ runs: 6, drawn: 6 });
     expect(runs['insert.swap']).toEqual({ runs: 5, drawn: 5 });
     expect(runs['insert']).toEqual({ runs: 3, drawn: 0 });
-  });
-
-  it('take a leaf’s accumulating, which has no pauses inside it, as on', () => {
-    expect(
-      pausesOf(insertion.pauses, {
-        'pause@insert': 'off',
-        'pause@insert.compare.left': 'accumulate',
-        'pause@insert.compare': 'on',
-        'pause@insert.compare.right': 'off',
-        'pause@insert.swap': 'accumulate',
-        'pause@insert.swap.from': 'off',
-        'pause@insert.swap.to': 'off'
-      })
-    ).toEqual(
-      new Map([
-        ['guard', 'on'],
-        ['insert.compare', 'on'],
-        ['insert.compare.left', 'on'],
-        ['insert.guard', 'on'],
-        ['insert.swap', 'accumulate'],
-        ['onward', 'on'],
-        ['setup', 'on']
-      ])
-    );
   });
 
   it('keys a label’s place by its full name only', () => {
@@ -2253,17 +2087,16 @@ describe('<OneOf> branches', () => {
 describe('the bundle', () => {
   it('embeds each value once where steps share it, so pausing at many labels fits', async () => {
     // Dijkstra on five vertices as an assistant wrote it, paused at every label but its loops' parts
-    // and two of its tests, within a variant's 200 steps: each step's state repeating the variant
-    // made it more than 2 MB.
-    const prepared = prepareSvelteComponent(dijkstra);
+    // and two of its tests, within a presentation's 200 steps: each step's state repeating the
+    // variant made it more than 2 MB.
     const quiet =
       /(first|more|next)(Round|Rounds|Vertex|Vertices|Edge|Edges)$|\.(closer|outgoing)$/u;
-    const everyPause = Object.fromEntries(
-      Object.keys(prepared.design.space)
-        .filter((key) => key.startsWith('pause@') && !quiet.test(key))
-        .map((key) => [key, 'on'])
-    );
-    const { javascript, labels } = await bundlePresentation(prepared, 1, { chosen: everyPause });
+    const pause = prepareSvelteComponent(dijkstra)
+      .pauses.labels.filter((label) => !quiet.test(label))
+      .map((label) => `@${label}`)
+      .join(', ');
+    const prepared = prepareSvelteComponent(dijkstra.replace(/pause="[^"]*"/u, `pause="${pause}"`));
+    const { javascript, labels } = await bundlePresentation(prepared, 1);
     expect(labels.length).toBeGreaterThan(100);
     expect(javascript.length).toBeLessThan(1024 * 1024);
   });
@@ -2383,16 +2216,14 @@ describe('step limits', () => {
 </Layout>
 `;
 
-  it('builds a variant pausing at fewer labels, and says where to pause less over the limit', async () => {
-    const prepared = prepareSvelteComponent(long);
-    expect(prepared.steps.length).toBeGreaterThan(300);
-    const quiet = ['setup', 'guard', 'onward', 'pass.from', 'pass.more', 'pass.next', 'pass.step'];
-    const passes = await bundlePresentation(prepared, 1, {
-      chosen: Object.fromEntries(quiet.map((label) => [`pause@${label}`, 'off']))
-    });
-    expect(passes.labels.length).toBeLessThanOrEqual(5);
-    await expect(bundlePresentation(prepared, 1)).rejects.toThrow(
-      /variant shows more than 200 steps, most at the end of @pass\.step/
+  it('builds a scene pausing at fewer labels, and says where to pause less over the limit', async () => {
+    const pausing = (pause: string) =>
+      `${long}\n<Storyboard><Scene name="main" pause="${pause}"><Main n={n} /></Scene></Storyboard>`;
+    expect(prepareSvelteComponent(pausing('@run')).master.length).toBeGreaterThan(300);
+    const passes = await bundlePresentation(prepareSvelteComponent(pausing('@run, @pass')), 1);
+    expect(passes.labels.length).toBeLessThanOrEqual(6);
+    expect(() => prepareSvelteComponent(pausing('@pass.step'))).toThrow(
+      /scene shows more than 200 steps, most at the end of @pass\.step/
     );
   });
 });

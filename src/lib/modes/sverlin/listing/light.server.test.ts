@@ -29,7 +29,7 @@ const text = `for @loop[i = 0 to n - 1]
     @check[found = @matches[A[i] == x]]
     if @test[found then @stop[stop]]`;
 // Pausing at the check: each step leads up to it, then makes it.
-const atCheck = { pauses: new Map([['check', 'on' as const]]) };
+const atCheck = { pauses: new Set(['check']) };
 const traced = traceAlgorithm(body, input, domain, atCheck);
 const { listing, problems } = mappedListing({ body: text }, traced);
 /** The text each range of a step's lighting covers. */
@@ -118,7 +118,7 @@ describe('lighting', () => {
 `.replace('@swap{', 'if ((a < values.length)) @swap{'),
       input,
       domain,
-      { pauses: new Map([['swap', 'accumulate']]) }
+      { pauses: new Set(['swap']) }
     );
     const { listing: paired, problems } = mappedListing(
       { body: 'if a < n\n  @swap[kept = A[@from[a]]\n  a = a + 1]' },

@@ -97,5 +97,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main vertices={vertices} neighbours={neighbours} queue={queue} current={current} /></Scene>
+  <Scene name="main" pause="@init, @visit, @visit.take, @visit.remove, @visit.look.add"><Main vertices={vertices} neighbours={neighbours} queue={queue} current={current} /></Scene>
 </Storyboard>

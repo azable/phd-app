@@ -91,5 +91,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
 </Storyboard>

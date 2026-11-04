@@ -79,7 +79,6 @@ describe('choices in words', () => {
     expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');
     expect(choiceName('views.Int@swap.held')).toBe('Int view for swap.held');
     expect(choiceName('pointers.Index')).toBe('Index pointer');
-    expect(choiceName('pause@insert.swap')).toBe('Pause at insert.swap');
     expect(choiceName('listing.language')).toBe('Listing language');
   });
 

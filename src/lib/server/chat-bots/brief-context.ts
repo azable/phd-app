@@ -219,7 +219,8 @@ export function briefContext(
         ...(attribute.asked !== 'words' ? { asked: attribute.asked } : {}),
         ...(attribute.assumed ? { assumed: attribute.assumed } : {})
       };
-      if (attribute.bearsOn === 'inputs' || fewer) return unknown;
+      if (attribute.bearsOn === 'inputs' || attribute.bearsOn === 'storyboard' || fewer)
+        return unknown;
       if (attribute.bearsOn === 'conversation')
         return attribute.withAlternatives && !conversation.compared
           ? { ...unknown, prompt: 'ask', withAlternatives: true }

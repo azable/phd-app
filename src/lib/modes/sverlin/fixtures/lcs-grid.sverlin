@@ -48,5 +48,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main y={y} x={x} t={t} /></Scene>
+  <Scene name="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
 </Storyboard>

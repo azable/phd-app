@@ -5,7 +5,7 @@
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
  * type, as {@render Flag(seen)}, the view each shown variant draws it with, and where the render is
  * a place, as {@render Index(@left)}, a chip opening that place's own values. A layout's root's chip
- * holds its frame. After each label's mark in the algorithm, where its steps pause. Views of a type
+ * holds its frame. Views of a type
  * that no shown presentation's variant chose are greyed out, and so are nodes every
  * shown presentation left out (see left-out.ts).
  *
@@ -33,7 +33,6 @@ export type GhostProp = {
   key?: string;
 };
 
-import { labelOpenings } from './label-marks';
 import { tagEnd } from './selection-highlights';
 import {
   revealedField,
@@ -79,14 +78,13 @@ export type DrawnMarker = {
 
 /**
  * The ghost props of one tag, at the offset of its closing > (or />), and its kind; or of a place, at
- * the end of the render drawn there, named by it (`@left`); or a label's pauses, after its mark.
+ * the end of the render drawn there, named by it (`@left`).
  */
 export type TagGhosts = {
   at: number;
   props: GhostProp[];
   kinds: string[];
   place?: string;
-  pause?: true;
 };
 
 /** A view no shown presentation drew, from its <View to its </View>. */
@@ -475,29 +473,6 @@ export function placeGhosts(
 }
 
 /**
- * Where each label of the algorithm pauses in each shown presentation's variant, after its mark, as
- * pause@insert.swap.to by its full name.
- */
-export function pauseGhosts(
-  state: EditorState,
-  presentations: readonly DrawnPresentation[]
-): TagGhosts[] {
-  return labelOpenings(state.doc.toString()).flatMap(({ to, full }) => {
-    const key = `pause@${full}`;
-    return presentations.some(({ variant = {} }) => key in variant)
-      ? [
-          {
-            at: to,
-            props: [variable(presentations, key, 'pause')],
-            kinds: [],
-            pause: true as const
-          }
-        ]
-      : [];
-  });
-}
-
-/**
  * A listing's settings in each shown presentation's variant: its language, then its lit look, then
  * each region's paint, by its label's full name, as lit@insert.compare.left.fill.
  */
@@ -744,51 +719,6 @@ class GhostTableWidget extends WidgetType {
   }
 }
 
-/** A variable as a pill: its name and value, or each shown presentation's where they differ. */
-function pill({ name, values, differs, key }: GhostProp, revealed: readonly string[]): HTMLElement {
-  const element = document.createElement('span');
-  element.className = [
-    'cm-ghost-value',
-    differs && 'cm-drawn-differs',
-    key !== undefined && revealed.includes(key) && 'cm-revealed-row'
-  ]
-    .filter(Boolean)
-    .join(' ');
-  if (key) element.dataset.key = key;
-  element.title = values
-    .map(({ label, title }) => `${label ? `${label}: ` : ''}${title}`)
-    .join('\n');
-  const shown = differs ? values.map(({ text }) => text).join(' / ') : values[0]?.text;
-  element.textContent = `${name} ${shown ?? ''}`;
-  return element;
-}
-
-/** After a label's mark: where its steps pause in each shown variant. */
-class PauseWidget extends WidgetType {
-  constructor(
-    private readonly prop: GhostProp,
-    private readonly revealed: readonly string[] = []
-  ) {
-    super();
-  }
-
-  eq(other: PauseWidget): boolean {
-    return (
-      JSON.stringify([other.prop, other.revealed]) === JSON.stringify([this.prop, this.revealed])
-    );
-  }
-
-  toDOM(): HTMLElement {
-    const element = pill(this.prop, this.revealed);
-    element.classList.add('cm-pause-value');
-    return element;
-  }
-
-  ignoreEvent(): boolean {
-    return false;
-  }
-}
-
 /** Open or close the ghost props of the tag whose chip is at a position. */
 const toggleGhosts = StateEffect.define<number>();
 
@@ -822,12 +752,8 @@ function decorations(
       )
     );
   }
-  for (const { at, props, kinds, place, pause } of ghosts) {
+  for (const { at, props, kinds, place } of ghosts) {
     if (!props.length || at > state.doc.length) continue;
-    if (pause) {
-      marks.push(Decoration.widget({ widget: new PauseWidget(props[0], keys), side: 1 }).range(at));
-      continue;
-    }
     const shown = open.includes(at);
     // A place's chip follows the view marker after its render.
     marks.push(
@@ -880,8 +806,7 @@ const drawnField = StateField.define<DrawnState>({
       if (effect.is(setDrawnValues)) {
         const ghosts = [
           ...tagGhosts(transaction.state, effect.value.presentations),
-          ...placeGhosts(transaction.state, effect.value.presentations),
-          ...pauseGhosts(transaction.state, effect.value.presentations)
+          ...placeGhosts(transaction.state, effect.value.presentations)
         ].sort((a, b) => a.at - b.at);
         next = {
           markers: viewMarkers(transaction.state, effect.value.presentations),
@@ -920,8 +845,8 @@ const drawnField = StateField.define<DrawnState>({
 });
 
 /**
- * Where the first row of these design variables is: the line its ghost props open under, or a
- * label's pause sits on; undefined where none has a row.
+ * Where the first row of these design variables is: the line its ghost props open under;
+ * undefined where none has a row.
  */
 export function ghostRowAt(state: EditorState, keys: readonly string[]): number | undefined {
   const drawn = state.field(drawnField, false);
@@ -1002,7 +927,6 @@ const drawnTheme = EditorView.baseTheme({
     backgroundColor: 'color-mix(in oklab, var(--muted-foreground) 14%, transparent)',
     cursor: 'default'
   },
-  '.cm-pause-value': { marginLeft: '0.25rem', fontStyle: 'normal' },
   '.cm-ghost-value.cm-drawn-differs': {
     backgroundColor: 'color-mix(in oklab, #d97706 20%, transparent)'
   },

@@ -110,8 +110,7 @@ export function ghostKey(text: string, design?: ReferenceDesign): string | undef
 
 /**
  * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
- * `@insert.compare.left` as `@…compare.left`, `pause@insert.compare.left` as
- * `pause@…compare.left`, `Highlight.Pointed@insert.compare.left.fill` as
+ * `@insert.compare.left` as `@…compare.left`, `Highlight.Pointed@insert.compare.left.fill` as
  * `Highlight.Pointed@…compare.left.fill`, a kind's place keeping its prop; `head` before the
  * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
  * fewer, or text that names no label.

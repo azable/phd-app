@@ -70,5 +70,5 @@
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main nodes={nodes} /></Scene>
+  <Scene name="main" pause="@insert.attach, @sequence.pick"><Main nodes={nodes} /></Scene>
 </Storyboard>

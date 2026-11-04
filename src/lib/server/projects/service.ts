@@ -504,7 +504,7 @@ export function reportRuntimeFailure(
 /**
  * The variant a failed presentation was made from, when the failure may be its own: built from
  * another variant with values chosen or drawn at random, it is built again from that variant
- * alone, keeping its pauses so it still shows the steps of the presentations beside it. Built from
+ * alone. Built from
  * its variant as it was, or from the starter, there is nothing else to show: the failure is the
  * source's.
  */
@@ -524,14 +524,8 @@ function variantMadeFrom(
   const variant = built?.payload.variant;
   if (!built || !variant) return undefined;
   if (!variant.randomise && !Object.keys(variant.chosen ?? {}).length) return undefined;
-  const pauses = Object.fromEntries(
-    Object.entries(presentationVariant(presentation)).filter(([key]) => key.startsWith('pause@'))
-  );
   return {
-    request: {
-      ...(variant.base ? { base: variant.base } : {}),
-      ...(Object.keys(pauses).length ? { chosen: pauses } : {})
-    },
+    request: variant.base ? { base: variant.base } : {},
     sourceLabel: built.payload.sourceLabel
   };
 }

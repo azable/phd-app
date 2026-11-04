@@ -127,9 +127,11 @@ export type MasterStep = {
   labelled?: Record<string, LabelRun[]>;
   /** The labels whose runs the step is inside, by full name: the run it ends and those around it. */
   inside?: string[];
+  /** The same runs, each as its label and which run of it it is, as insert#2. */
+  runs?: string[];
   /**
-   * The values labelled expressions gave at earlier steps that the step keeps (see PauseMode),
-   * drawn from its before on, so a mark stays until the run keeping it finishes.
+   * The values labelled expressions gave at earlier steps inside the run the step ends, which it
+   * shows whole, drawn from its before on.
    */
   held?: Record<string, LabelRun[]>;
   /** How many events the algorithm had logged by the step's end; its events are the last of them. */
@@ -137,8 +139,7 @@ export type MasterStep = {
   /**
    * The stretches of the events logged whose code the step lights, each from the count logged
    * before its first to that before the one after its last, with the labels of its run, by full
-   * name, whose code alone it lights: its own run, and those earlier in each run that accumulates
-   * around it (see PauseMode).
+   * name, whose code alone it lights: its own run.
    */
   trail?: Stretch[];
 };
@@ -250,16 +251,10 @@ export type FrameUnits = {
 };
 
 /**
- * How the page pauses at a label: at the end of each of its runs, the pauses inside a run each
- * showing only their own part ('on'), or keeping what the run has done so far, its labels' values
- * and the code that ran, until it finishes ('accumulate'). A step keeps the parts of each run around
- * it that accumulates, back to where a run nearer it that is 'on' began; a label paused at by
- * neither is passed through. A step always shows its own run whole.
+ * The labels the page pauses at, by full name: a step at the end of each of their runs, showing
+ * its own run whole; a label not paused at is passed through.
  */
-export type PauseMode = 'on' | 'accumulate';
-
-/** The labels the page pauses at, by full name, each with how (see PauseMode). */
-export type Pauses = ReadonlyMap<string, PauseMode>;
+export type Pauses = ReadonlySet<string>;
 
 /**
  * Where the page pauses, which makes the steps: the end of each run of each label in `pauses`, by
@@ -378,8 +373,7 @@ export function traceAlgorithm(
     named,
     holding,
     pacing,
-    pauses:
-      pacing.pauses ?? new Map(labelled.labels.map(({ full }): [string, PauseMode] => [full, 'on']))
+    pauses: pacing.pauses ?? new Set(labelled.labels.map(({ full }) => full))
   });
   const steps = interpreter.run();
   return { steps, opening: interpreter.opening!, root, labels: labelled.labels, code };
@@ -558,7 +552,7 @@ class Interpreter {
     this.#named = options.named ?? new Map();
     this.#holding = options.holding ?? new Map();
     this.#pacing = options.pacing ?? {};
-    this.#pauses = options.pauses ?? new Map();
+    this.#pauses = options.pauses ?? new Set();
     this.#offset = offset;
     this.#kind = options.kind;
     this.#domain = options.domain ?? noDomain;
@@ -1614,60 +1608,25 @@ class Interpreter {
     return label === undefined ? [] : [label];
   }
 
-  /** Why a variant shows too many steps: the labels most of them end at, to pause at less. */
+  /** Why a scene shows too many steps: the labels most of them end at, to pause at less. */
   #tooManySteps(): string {
     const most = [...this.#stepsAt]
       .filter(([label]) => label !== 'end')
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3);
     const counts = most.map(([label, count]) => `@${label} (${count})`).join(', ');
-    const off = most.length ? ` as pause@${most[0][0]} off` : '';
-    return `This variant shows more than ${algorithmLimits.maximumSteps} steps, most at the end of ${counts || 'its labels'}; stop pausing at some of them${off}, pause at the labels around them instead, or give a smaller input.`;
-  }
-
-  /** How the page pauses at a run's label (see PauseMode). */
-  #modeOf(run: Run): PauseMode | 'off' {
-    const label = this.#named.get(run.unit);
-    return (label !== undefined && this.#pauses.get(label)) || 'off';
-  }
-
-  /**
-   * What a step ending `ending` (none at the algorithm's end) keeps of the runs around it: whether
-   * a value given inside the runs `inside` is kept, its own run's always and those of the runs
-   * accumulating around it, unless given inside a run nearer the step that is 'on'; and the
-   * stretches of events kept likewise, each lighting only its run's labels' code.
-   */
-  #kept(ending?: Run): { keeps: (inside: readonly Run[]) => boolean; trail: Stretch[] } {
-    const now = this.#log.seen;
-    const around = [...this.#runs].reverse();
-    const keeps = (inside: readonly Run[]) => {
-      if (ending && inside.includes(ending)) return true;
-      for (const run of around) {
-        if (!inside.includes(run)) continue;
-        const mode = this.#modeOf(run);
-        if (mode !== 'off') return mode === 'accumulate';
-      }
-      return false;
-    };
-    const trail: Stretch[] = ending ? [[ending.start, now, this.#labelsOf(ending)]] : [];
-    let limit = now;
-    for (const run of around) {
-      const mode = this.#modeOf(run);
-      if (mode === 'on') limit = Math.min(limit, run.start);
-      else if (mode === 'accumulate' && run.start < limit)
-        trail.push([run.start, limit, this.#labelsOf(run)]);
-    }
-    return { keeps, trail };
+    const off = most.length ? `, leaving @${most[0][0]} out of the scene's pause` : '';
+    return `A scene shows more than ${algorithmLimits.maximumSteps} steps, most at the end of ${counts || 'its labels'}; stop pausing at some of them${off}, pause at the labels around them instead, or give a smaller input.`;
   }
 
   /**
    * Record a step whose code has just run: the state after it, and the events since the last. Its
-   * applications and labelled values are all those made since the step before; those given at earlier steps inside a run of
-   * the label around them going on, or ending here, are held where the step keeps them (see
-   * PauseMode). The runs going on start their code again after it.
+   * applications and labelled values are all those made since the step before; those given at
+   * earlier steps inside the run it ends are held, as it shows its own run whole, and it lights
+   * that run's code. The runs going on start their code again after it.
    */
   #record(unit: AnyNode, node: AnyNode, scope: Scope, since: Since, ending?: Run): void {
-    // A variant's own pauses bound what it shows; pausing at every label only names the steps.
+    // A scene's own pauses bound what it shows; pausing at every label only names the steps.
     if (!this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSourceSteps)
       this.#fail(
         unit,
@@ -1675,11 +1634,12 @@ class Interpreter {
       );
     if (this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSteps)
       this.#fail(unit, this.#tooManySteps());
-    const { keeps, trail } = this.#kept(ending);
+    const trail: Stretch[] = ending ? [[ending.start, this.#log.seen, this.#labelsOf(ending)]] : [];
     const held: Record<string, LabelRun[]> = {};
     for (const given of this.#labelGiven) {
       const going = given.around === ending || this.#runs.includes(given.around);
-      if (given.recorded && going && keeps(given.inside)) (held[given.name] ??= []).push(given.run);
+      if (given.recorded && going && ending && given.inside.includes(ending))
+        (held[given.name] ??= []).push(given.run);
       given.recorded = true;
     }
     const byName = <T>(entries: readonly [string, T][]) => {
@@ -1689,9 +1649,11 @@ class Interpreter {
     };
     this.#applied = byName(this.#pendingApplied);
     this.#labelled = byName(this.#pendingLabelled);
-    const inside = [
-      ...new Set([...this.#runs, ...(ending ? [ending] : [])].flatMap((run) => this.#labelsOf(run)))
-    ];
+    const around = [...this.#runs, ...(ending ? [ending] : [])];
+    const inside = [...new Set(around.flatMap((run) => this.#labelsOf(run)))];
+    const runs = around.flatMap((run) =>
+      this.#labelsOf(run).map((label) => `${label}#${run.ordinal}`)
+    );
     const after = this.#state(node, scope, [], this.#operandPlaces(scope));
     this.#nameOperands(after.identities?.ids);
     const logged = this.#log.step(this.#offset, (value) => {
@@ -1709,7 +1671,7 @@ class Interpreter {
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name: ending ? this.#nameOf(ending) : 'end',
-      ...(inside.length ? { inside } : {}),
+      ...(inside.length ? { inside, runs } : {}),
       ...after,
       ...logged,
       ...(Object.keys(this.#applied).length ? { applied: this.#applied } : {}),
@@ -1778,7 +1740,7 @@ class Interpreter {
 
   /**
    * Keep the value a labelled expression gave, for the next step, its own or leading up to it, and
-   * for the steps after it inside the run of the label around it that keep it (see PauseMode).
+   * for the step ending the run of the label around it.
    */
   #capture(node: AnyNode, value: Value): void {
     for (const name of this.#applying.get(node) ?? []) this.#applyLabel(name, node, value);

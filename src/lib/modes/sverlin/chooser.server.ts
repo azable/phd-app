@@ -14,8 +14,7 @@ import guide from './README.md?raw';
 
 /**
  * What the chooser is given when more variants of a source as it is are wanted: the source, what it changes, how many variants, its design, the variants of it already seen (each
- * as the values it differs in), each label's runs, with how many change what the view draws, and
- * each free layout kind's structure.
+ * as the values it differs in), and each free layout kind's structure.
  */
 export type ChooserProject = {
   source: string;
@@ -24,7 +23,6 @@ export type ChooserProject = {
   design: AiDesign;
   seen?: Record<string, string | number | boolean>[];
   settled?: Record<string, string | number | boolean>;
-  runs?: Record<string, { runs: number; drawn: number }>;
   structures?: Record<string, string>;
 };
 

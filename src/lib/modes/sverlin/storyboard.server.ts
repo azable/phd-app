@@ -1,8 +1,8 @@
 /**
  * The storyboard, `<Storyboard>` holding `<Scene>`s in the order they play, each nesting the one
  * layout it shows as a tag that passes it state: only scenes read state. A scene steps through the
- * run, or the runs of one label it is `within`, pausing as its `pause` says or the variant's
- * `pause@` variables, or shows one moment of them (`at`); a scene passing no state and choosing no
+ * run, or the runs of one label it is `within`, pausing only where its `pause` says, or shows one
+ * moment of them (`at`); a scene passing no state and choosing no
  * moments is a single frame, as a title card or a note. The storyboard is read from the text before
  * Svelte sees the view, and then blanked; its steps are chosen once the run is traced (sceneSteps).
  */
@@ -14,7 +14,7 @@ export type Scene = {
   name: string;
   /** The page layout it shows. */
   layout: string;
-  /** The labels that end a step inside it, by full name; the variant's pause@ where none. */
+  /** The labels that end a step inside it, by full name. */
   pause?: string[];
   /** The runs of one label it steps through, all of them or the nth to begin. */
   within?: { label: string; run?: number };
@@ -291,42 +291,25 @@ function sceneOf(
 
 /**
  * The steps a scene shows, by their index among the run's: every step, or those inside the runs of
- * the label it is within (the nth only, from the step after the one ending the run before it to the
- * step ending it), then the first or the last where it is at one. The run must pause at that label,
- * so the step ending each of its runs is named for it (see scenePauses).
+ * the label it is within (the nth only), then the first or the last where it is at one.
  */
 export function sceneSteps(scene: Scene, steps: readonly MasterStep[]): number[] {
   let chosen = steps.map((_, index) => index);
   if (scene.within) {
     const { label: within, run } = scene.within;
-    chosen = chosen.filter((index) => steps[index].inside?.includes(within));
-    if (run !== undefined) {
-      const ends = steps.flatMap(({ name }, index) =>
-        name?.startsWith(`@${within}#`) ? [index] : []
-      );
-      const end = steps.findIndex(({ name }) => name === `@${within}#${run}`);
-      if (end < 0) return [];
-      const after = ends.filter((index) => index < end).at(-1) ?? -1;
-      chosen = chosen.filter((index) => index > after && index <= end);
-    }
+    chosen = chosen.filter((index) =>
+      run === undefined
+        ? steps[index].inside?.includes(within)
+        : steps[index].runs?.includes(`${within}#${run}`)
+    );
   }
   if (scene.at === 'start') return chosen.slice(0, 1);
   if (scene.at === 'end') return chosen.slice(-1);
   return chosen;
 }
 
-/** How a scene pauses: as its pause says, else as the variant does, and always at its within. */
-export function scenePauses<Mode extends string>(
-  scene: Scene,
-  variant: ReadonlyMap<string, Mode>,
-  pausing: (labels: readonly string[]) => Map<string, Mode>
-): Map<string, Mode> {
-  const pauses = scene.pause ? pausing(scene.pause) : new Map(variant);
-  const within = scene.within?.label;
-  if (within && !pauses.has(within))
-    for (const [key, mode] of pausing([within])) pauses.set(key, mode);
-  return pauses;
-}
+/** The labels a scene pauses at: those its pause names, and no others. */
+export const scenePauses = (scene: Scene): Set<string> => new Set(scene.pause ?? []);
 
 /**
  * How a step is labelled in a storyboard of several scenes: its scene's name, its title in
@@ -350,18 +333,20 @@ export type Storyboard = {
 
 /**
  * The storyboard checked against the run pausing at every label, `master`: each label a scene names
- * is one of the algorithm's, each run it is within is one of the label's, and each scene shows a
- * step. Scenes play in order, each showing the steps it selects, whatever the one before showed.
+ * is one of the algorithm's, and each run it is within is one of the label's; and the steps it
+ * shows, each scene's from its own steps (`paced`, pausing as it does). Scenes play in order, each
+ * showing the steps it selects, whatever the one before showed.
  */
 export function storyboardOf(
   scenes: readonly Scene[],
   master: readonly MasterStep[],
-  labels: readonly string[]
+  labels: readonly string[],
+  paced: (scene: Scene) => readonly MasterStep[]
 ): { storyboard: Storyboard; problems: { message: string; scene: Scene }[] } {
   const problems: { message: string; scene: Scene }[] = [];
   const known = (each: string) => labels.includes(each);
   const listed = labels.map((each) => `@${each}`).join(', ');
-  const chosen = scenes.map((scene) => {
+  const steps = scenes.flatMap((scene) => {
     for (const each of [...(scene.pause ?? []), ...(scene.within ? [scene.within.label] : [])])
       if (!known(each)) {
         problems.push({
@@ -370,9 +355,8 @@ export function storyboardOf(
         });
         return [];
       }
-    if (scene.frame) return [];
-    const steps = sceneSteps(scene, master);
-    if (!steps.length && scene.within) {
+    if (scene.frame) return [sceneLabel(scene, undefined)];
+    if (scene.within && !sceneSteps({ ...scene, at: undefined }, master).length) {
       const { label, run } = scene.within;
       const runs = master.filter(({ name }) => name?.startsWith(`@${label}#`)).length;
       problems.push({
@@ -382,17 +366,17 @@ export function storyboardOf(
             : `within="@${label}" matches no run: the algorithm never runs @${label} with this input.`,
         scene
       });
+      return [];
     }
-    return steps;
-  });
-  const own = (index: number) => master[index].name ?? `Step ${index + 1}`;
-  const single = scenes.length === 1 && !scenes[0].frame;
-  const steps = scenes.flatMap((scene, index) => {
-    if (scene.frame) return [sceneLabel(scene, undefined)];
-    const names = chosen[index].map(own);
-    // A variant pausing at fewer labels ends the run on a step of its own, the end.
-    if (chosen[index].at(-1) === master.length - 1 && names.at(-1) !== 'end') names.push('end');
-    return single ? names : names.map((name) => sceneLabel(scene, name));
+    const own = paced(scene);
+    const chosen = sceneSteps(scene, own);
+    if (!chosen.length)
+      problems.push({
+        message: `The scene ${scene.name} shows no step: pause at a label it runs, as pause="@${scene.within?.label ?? labels[0] ?? 'label'}".`,
+        scene
+      });
+    const names = chosen.map((index) => own[index].name ?? `Step ${index + 1}`);
+    return scenes.length === 1 ? names : names.map((name) => sceneLabel(scene, name));
   });
   return { storyboard: { scenes: [...scenes], steps }, problems };
 }

@@ -151,5 +151,5 @@ while @moreRounds[round ≤ number of vertices]
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main v={v} vertices={vertices} source={source} distances={distances} previous={previous} visited={visited} adjacency={adjacency} /></Scene>
+  <Scene name="main" pause="@unknown, @initial, @round.firstVertex, @round.nextVertex, @round.settle.mark, @round.settle.edge.relax"><Main v={v} vertices={vertices} source={source} distances={distances} previous={previous} visited={visited} adjacency={adjacency} /></Scene>
 </Storyboard>

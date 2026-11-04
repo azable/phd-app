@@ -67,7 +67,7 @@ const designValue = v.strictObject({
 
 /**
  * Values for a changed source's variables, which its first version is built with over the viewed
- * variant's: the assistant's own choices, as where a first version's steps pause. Optional (null in
+ * variant's: the assistant's own choices, as a first version's colours. Optional (null in
  * the strict response).
  */
 const sourceValues = v.optional(
@@ -75,7 +75,7 @@ const sourceValues = v.optional(
     v.pipe(
       v.array(designValue),
       v.description(
-        'Values for the changed source’s variables, by key, as pause@label, its version built with them; or null to keep the viewed variant’s values and the starter’s for new ones.'
+        'Values for the changed source’s variables, by key, as Cell.fill, its version built with them; or null to keep the viewed variant’s values and the starter’s for new ones.'
       )
     )
   )

@@ -13,7 +13,6 @@ const design: AiDesign = {
     { variable: 'Compared.fill', options: 'fill', value: 'white' },
     { variable: 'Cell.fill', options: 'fill', value: 'white' },
     { variable: 'Cell.font', options: 'font', value: 'sans' },
-    { variable: 'pause@insert.swap', options: ['on', 'off'], value: 'on' },
     { variable: 'listing.language', options: ['python', 'pseudo'], value: 'pseudo' }
   ]
 };
@@ -61,8 +60,8 @@ describe('the brief steering the preference summary', () => {
           }
         })
       );
-    expect(outcome('trace').weight('pause@insert.swap')).toBeGreaterThan(1);
-    expect(outcome('apply').weight('pause@insert.swap')).toBe(1);
+    expect(outcome('trace').weight('Cell.shown')).toBeGreaterThan(1);
+    expect(outcome('apply').weight('views.Int')).toBe(1);
     expect(outcome('notice').weight('Cell.fill')).toBeGreaterThan(1);
     expect(outcome('explain').weight('Cell.font')).toBe(
       briefSteering(brief({})).weight('Cell.font')
@@ -77,11 +76,11 @@ describe('the brief steering the preference summary', () => {
   it('multiplies every value’s weights', () => {
     const steering = briefSteering(
       brief({
-        detail: { status: 'confirmed', value: 'only key steps', tags: ['key-steps'] },
+        audience: { status: 'confirmed', value: 'newcomers', tags: ['novice'] },
         setting: { status: 'inferred', value: 'revising', tags: ['revision'] }
       })
     );
-    expect(steering.weight('pause@insert.swap')).toBeCloseTo(1.6 * 0.7);
+    expect(steering.weight('Cell.shown')).toBeCloseTo(1.3 * 1.2);
   });
 
   it('keeps colours out of what is worth asking and of comparisons when it prints in grey', () => {

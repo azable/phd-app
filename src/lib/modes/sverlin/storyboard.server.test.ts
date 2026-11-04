@@ -65,7 +65,7 @@ describe('storyboards', () => {
       storyboard(
         scene('name="search"'),
         scene('name="then"', '<Card />'),
-        scene('name="probe" within="@probe#2" title="the second probe"')
+        scene('name="probe" within="@probe#2" pause="@probe.pick" title="the second probe"')
       )
     );
     expect(prepared.storyboard.scenes.map(({ name, frame }) => [name, frame])).toEqual([
@@ -73,9 +73,7 @@ describe('storyboards', () => {
       ['then', true],
       ['probe', false]
     ]);
-    const { labels } = await bundlePresentation(prepared, 1, {
-      chosen: { 'pause@probe': 'off', 'pause@probe.pick': 'on' }
-    });
+    const { labels } = await bundlePresentation(prepared, 1);
     const scenes = labels.map((label) => label.split(':')[0]);
     // The whole run, the card as one frame, then the second probe again from its start.
     expect(labels[0]).toBe('search: start');
@@ -83,11 +81,9 @@ describe('storyboards', () => {
     expect(
       scenes.slice(scenes.indexOf('then') + 1).every((name) => name === 'probe (the second probe)')
     ).toBe(true);
-    expect(labels.at(-1)).toBe('probe (the second probe): @probe#2');
-    // Each presentation's steps are some of the source's, in order, however it pauses.
-    expect(labels.every((label) => prepared.steps.includes(label))).toBe(true);
-    const places = labels.map((label) => prepared.steps.indexOf(label));
-    expect(places).toEqual([...places].sort((a, b) => a - b));
+    expect(labels.at(-1)).toBe('probe (the second probe): @probe.pick#2');
+    // Every presentation shows the source's steps.
+    expect(labels).toEqual(prepared.steps);
   });
 
   it('shows one moment of a scene, at its start or end', async () => {
@@ -102,11 +98,9 @@ describe('storyboards', () => {
     expect(labels).toEqual(['first: start', `last: ${whole.labels.at(-1)}`]);
   });
 
-  it('paces a scene by its own pauses, whatever the variant’s', async () => {
+  it('paces a scene by its own pauses alone', async () => {
     const prepared = prepareSvelteComponent(storyboard(scene('name="probes" pause="@probe"')));
-    const { labels } = await bundlePresentation(prepared, 1, {
-      chosen: { 'pause@probe.pick': 'on', 'pause@probe.check': 'on' }
-    });
+    const { labels } = await bundlePresentation(prepared, 1);
     expect(
       labels.filter((label) => label.startsWith('@')).every((label) => /^@probe#\d+$/u.test(label))
     ).toBe(true);
@@ -120,7 +114,10 @@ describe('storyboards', () => {
     };
     const whole = await reserved(storyboard(scene('name="search"')));
     const both = await reserved(
-      storyboard(scene('name="search"'), scene('name="probe" within="@probe#2"'))
+      storyboard(
+        scene('name="search"'),
+        scene('name="probe" within="@probe#2" pause="@probe.pick"')
+      )
     );
     expect(both).toEqual(whole);
   });

@@ -2596,7 +2596,7 @@ describe('assistant edits', () => {
     expect(change?.operation === 'upsert' && change.artifact.content.text).toBe(captioned);
   });
 
-  it('builds an edited source with the values the edit gives, as where it pauses', async () => {
+  it('builds an edited source with the values the edit gives, as a colour', async () => {
     const { document } = await created('Paced edit');
     mocks.generatePrepared.mockReset().mockResolvedValue({
       ...generation(undefined, 'Edited.'),
@@ -2612,7 +2612,7 @@ describe('assistant edits', () => {
             replace: '<Result target={target} found={found} /><Note />'
           }
         ],
-        values: [{ variable: 'pause@missing', value: 'off' }],
+        values: [{ variable: 'Note.fill', value: 'sky-100' }],
         summary: 'Adds a caption'
       }
     });
@@ -2625,9 +2625,8 @@ describe('assistant edits', () => {
         ? [event.payload.presentation]
         : []
     );
-    expect(presentation?.variant?.['pause@missing']).toBe('off');
-    expect(presentation?.origins?.['pause@missing']).toBe('chosen');
-    expect(presentation?.variant?.['pause@check.equal']).toBe('on');
+    expect(presentation?.variant?.['Note.fill']).toBe('sky-100');
+    expect(presentation?.origins?.['Note.fill']).toBe('chosen');
   });
 
   it('asks again with what kept the edits from applying, and accepts the correction', async () => {

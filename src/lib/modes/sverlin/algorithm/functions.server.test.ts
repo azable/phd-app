@@ -73,7 +73,7 @@ describe('functions', () => {
       const values = Values([3, 8, 5]);
       const total = count(values, Index(0));
     `,
-      { ...showing('Same'), pauses: new Map([['test', 'on']]) }
+      { ...showing('Same'), pauses: new Set(['test']) }
     );
     // Pausing at each call's test, the innermost's too, where it returns; then the end.
     expect(trace.map(({ state }) => state.lo)).toEqual([0, 1, 2, 3, undefined]);
@@ -153,7 +153,7 @@ describe('loops', () => {
     // Pausing at the start, the passes down, and the takes: a labelled loop steps once per pass, and
     // the end, which only drops the loop's variables, is no step.
     const trace = run(loops, {
-      pauses: new Map(['start', 'down', 'take'].map((label) => [label, 'on']))
+      pauses: new Set(['start', 'down', 'take'])
     });
     expect(trace.slice(1, 4).map(({ state }) => state.last)).toEqual([5, 3, 1]);
     expect(trace.slice(4).map(({ state }) => state.j)).toEqual([0, 2, 4]);

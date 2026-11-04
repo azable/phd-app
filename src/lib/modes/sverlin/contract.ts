@@ -65,5 +65,7 @@ export const linearSearchSource = `<script domain>
 </Layout>
 
 <Storyboard>
-  <Scene name="search"><Main values={values} i={i} found={found} target={target} /></Scene>
+  <Scene name="search" pause="@first, @check.equal, @next, @run">
+    <Main values={values} i={i} found={found} target={target} />
+  </Scene>
 </Storyboard>`;

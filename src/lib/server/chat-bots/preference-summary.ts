@@ -30,7 +30,6 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
     return { family: 'views', impact: 1 };
   if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
-  if (variable.startsWith('pause@')) return { family: 'pacing', impact: 0.6 };
   const prop = variable.slice(variable.lastIndexOf('.') + 1);
   switch (prop) {
     case 'form':

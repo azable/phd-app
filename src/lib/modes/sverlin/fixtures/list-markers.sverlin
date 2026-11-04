@@ -139,5 +139,5 @@ while @more[cur ≠ ∅]
 </Layout>
 
 <Storyboard>
-  <Scene name="main"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
+  <Scene name="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
 </Storyboard>

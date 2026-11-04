@@ -79,7 +79,7 @@ describe('the event log', () => {
       @mark[const a = Int(1);]
       @mark[const b = Int(2);]`;
     const { steps: trace } = traceAlgorithm(body, undefined, domain, {
-      pauses: new Map([['mark', 'on']])
+      pauses: new Set(['mark'])
     });
     expect(trace).toHaveLength(2);
     expect(trace[0].events).toHaveLength(maximumStepEvents);
