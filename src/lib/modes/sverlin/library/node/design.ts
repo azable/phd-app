@@ -197,6 +197,7 @@ export const propOptions = {
   yAnchor: ['start', 'center', 'end'],
   gap: spacing,
   spacing: ['slots', 'packed'],
+  expand: [0, 2, 4, 8],
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
@@ -335,7 +336,11 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
   value: nodeProps,
   text: nodeProps,
-  pointed: [...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)), 'overflow'],
+  pointed: [
+    ...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)),
+    'overflow',
+    'expand'
+  ],
   link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'route', 'head', 'headSize']
 };
 
@@ -370,6 +375,7 @@ export function optionsOf(
 /** Paint shows only where a pointer is; its other props hold in every slot, so slots keep one size. */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
+  'expand',
   'stroke',
   'strokeStyle',
   'opacity',
@@ -504,7 +510,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     radius: 8,
     minSize: 2.5,
     ...plainStyle,
-    overflow: 'shown'
+    overflow: 'shown',
+    expand: 0
   },
   link: {
     shown: true,

@@ -101,6 +101,7 @@
     __places,
     __extent,
     __domains,
+    __packedAlong,
     ...bound
   }: {
     /** A primitive to display, when the node has no children. */
@@ -148,6 +149,8 @@
      * compiler, with the values each can take (see bound.ts).
      */
     __domains?: Readonly<Record<string, BoundDomain>>;
+    /** Internal: for a pointer's copy of an element, the axis the element's row packs along. */
+    __packedAlong?: 'width' | 'height';
     /**
      * Internal: every row and column a grid's cells can take for any input, from their coordinates'
      * types, null where they cannot be worked out (see gridExtents in bound-props.server.ts).
@@ -186,7 +189,7 @@
   // varies, or its value sizes, its own, in a slot that keeps the largest, so nothing around it
   // moves, placed by its kind's anchor. A parent packing its children along an axis keeps no slot
   // for them there: each takes its own size, and the parent the room of them all.
-  const packedAlong = packingContext();
+  const packedAlong = untrack(() => __packedAlong ?? packingContext());
   const varies = (axis: 'width' | 'height') =>
     Boolean(__domains?.[axis]) || look(axis) === 'varying';
   const varyingWidth = $derived(varies('width'));
@@ -197,6 +200,19 @@
     !(axis === 'width' ? varyingWidth : varyingHeight) && packedAlong !== axis;
   const xAnchor = $derived(slotAnchor(look('xAnchor'), 'x', __domains));
   const yAnchor = $derived(slotAnchor(look('yAnchor'), 'y', __domains));
+  // A pointer's kind may expand the element it is at by its expand on each side. In a row that
+  // packs, the box grows, taking room the row keeps for it (see packRoom); elsewhere it is paint, its
+  // fill spread and its stroke drawn further out, in a room that keeps the pointer's reach wherever
+  // it is, so nothing moves.
+  const expandOf = (value: unknown) => (typeof value === 'number' ? value : 0);
+  const expanded = $derived(expandOf(look('expand')));
+  const reach = untrack(() =>
+    __over && packedAlong === undefined
+      ? expandOf(lookUp(design, __over.kind, __over.placed, 'expand'))
+      : 0
+  );
+  const growth = $derived(packedAlong === undefined ? 0 : expanded);
+  const spread = $derived(packedAlong === undefined ? expanded : 0);
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -389,6 +405,30 @@
       !memory?.measuring
   );
   untrack(() => providePacking(packs ? (arrangement === 'row' ? 'width' : 'height') : undefined));
+  // The room a packed collection keeps for its pointers' expansions: one for each pointer that can
+  // point into it, along it, and one across, at the largest expand any pointer's kind takes. While
+  // the page measures it is padding at its end, so the room it keeps holds them; as a step shows,
+  // that room is its least size and the expanded box takes it.
+  const packRoom = untrack(() => {
+    if (!collection || look('spacing') !== 'packed' || !__items) return undefined;
+    if (arrangement !== 'row' && arrangement !== 'column') return undefined;
+    const largest = Math.max(
+      0,
+      ...Object.entries(design)
+        .filter(([key, value]) => key.endsWith('.expand') && typeof value === 'number')
+        .map(([, value]) => value as number)
+    );
+    const path = types?.pathOf(__items);
+    const count = path
+      ? pointersContext().filter((pointer) => reachesInto(types, pointer, path)).length
+      : 0;
+    if (!largest || !count) return undefined;
+    const along = 2 * largest * count;
+    const across = 2 * largest;
+    return arrangement === 'row'
+      ? { width: along, height: across }
+      : { width: across, height: along };
+  });
   // A grid's child is placed in the cell its row and col name, one to a coordinate at each step;
   // the nodes inside it are no grid's children. A grid keeps the tracks the page worked out over
   // every step (see LayoutMemory), so it never moves as it fills in.
@@ -436,6 +476,22 @@
     const along = valueWidth === undefined ? (padding ?? '0') : '0';
     return `${across} ${along}`;
   });
+  // Its padding's four sides, top, right, bottom, left, each with pixels added where it grows.
+  const paddingSides = (padding: string | undefined, add: readonly number[]) => {
+    const [top = '0', right = top, bottom = top, left = right] = (padding ?? '0').split(/\s+/u);
+    const sides = [top, right, bottom, left].map((side, index) =>
+      add[index] ? `calc(${side} + ${add[index]}px)` : side
+    );
+    return add.some(Boolean) ? sides.join(' ') : padding;
+  };
+  const boxPadding = $derived.by(() => {
+    if (growth) return paddingSides(valuePadding, [growth, growth, growth, growth]);
+    if (packRoom && memory?.measuring)
+      return paddingSides(valuePadding, [0, packRoom.width, packRoom.height, 0]);
+    return valuePadding;
+  });
+  const grown = (least: string | undefined) =>
+    growth ? (least ? `calc(${least} + ${2 * growth}px)` : `${2 * growth}px`) : least;
   const sized = (length: number | undefined) =>
     length !== undefined && bare ? `${length}px` : undefined;
   const least = (length: number | undefined, axis: 'width' | 'height') =>
@@ -443,18 +499,30 @@
       ? `${length}px`
       : leastOf(measured('minSize', 'em'), keepsSlot(axis) ? reserved?.[axis] : undefined);
   const strokeColour = $derived(colourCss(look('stroke')));
+  // Its stroke width holds in every state, as strokeWidth is not paint: a stroke of no colour keeps
+  // its width, transparent, so a pointer colouring it moves nothing inside.
   const borderWidth = $derived(
-    strokeColour && typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
+    typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
   );
   const fillColour = $derived(colourCss(look('fill')));
   const textColour = $derived(colourCss(look('color')));
   // Its shadow and glow, round the box it draws at this step, and its fill's style over its fill.
   const effects = $derived(
     boxEffects(look('shadow'), look('glow'), {
-      stroke: borderWidth > 0 ? strokeColour : undefined,
+      stroke: strokeColour && borderWidth > 0 ? strokeColour : undefined,
       fill: fillColour,
       text: textColour
     })
+  );
+  // An expansion painted round the box: its fill spread out, and its stroke drawn as an outline at
+  // the spread's edge, the border showing the fill beneath it.
+  const spreadShadow = $derived(
+    spread && fillColour ? `0 0 0 ${spread}px ${fillColour}` : undefined
+  );
+  const spreadOutline = $derived(
+    spread && strokeColour && borderWidth > 0
+      ? `${borderWidth}px ${strokeStyleCss(look('strokeStyle')) ?? 'solid'} ${strokeColour}`
+      : undefined
   );
   const fillStyle = $derived(fillColour ? fillStyleCss(look('fillStyle')) : undefined);
   // Its own text's line: the value's or the text it writes, never its child nodes', and its case,
@@ -521,6 +589,7 @@
     __id={id}
     __slot={slot}
     {...props}
+    __packedAlong={packedAlong}
     __places={[...ownPlaces, ...((props.__places as string[] | undefined) ?? [])]}
   />
 {/snippet}
@@ -558,21 +627,24 @@
     style:color={textColour}
     style:background-color={fillColour}
     style:background-image={fillStyle?.css}
-    style:box-shadow={[effects.css, light.shadow].filter(Boolean).join(', ') || undefined}
-    style:outline={light.outline}
-    style:outline-offset={light.outlineOffset}
+    style:box-shadow={[spreadShadow, effects.css, light.shadow].filter(Boolean).join(', ') ||
+      undefined}
+    style:outline={light.outline ?? spreadOutline}
+    style:outline-offset={light.outlineOffset ?? (spreadOutline ? `${spread}px` : undefined)}
     style:text-transform={textCase?.transform}
     style:font-variant-caps={textCase?.caps}
     style:text-decoration-line={__text ? decoration : undefined}
-    style:border-color={strokeColour}
+    style:border-color={spreadOutline
+      ? 'transparent'
+      : (strokeColour ?? (borderWidth > 0 ? 'transparent' : undefined))}
     style:border-style={strokeStyleCss(look('strokeStyle'))}
     style:border-width={`${borderWidth}px`}
     style:border-radius={measured('radius', 'px')}
-    style:padding={valuePadding}
+    style:padding={boxPadding}
     style:width={sized(valueWidth)}
     style:height={sized(valueHeight)}
-    style:min-width={least(valueWidth, 'width')}
-    style:min-height={least(valueHeight, 'height')}
+    style:min-width={grown(least(valueWidth, 'width'))}
+    style:min-height={grown(least(valueHeight, 'height'))}
     style:opacity={look('opacity') as number | undefined}
   >
     {#if free}
@@ -678,10 +750,12 @@
         {/each}
       </Overhang>
     {/if}
-  {:else if slotWidth || slotHeight}
-    <!-- A box of its own size in the slot that keeps the largest it reaches (see varies). -->
+  {:else if slotWidth || slotHeight || reach}
+    <!-- A box of its own size in the slot that keeps the largest it reaches (see varies), with room
+      round it for a pointer's expansion (see reach). -->
     <div
       class="sv-room"
+      style:padding={reach ? `${reach}px` : undefined}
       style:display="flex"
       style:justify-content={xAnchor}
       style:align-items={yAnchor}

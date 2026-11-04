@@ -255,3 +255,170 @@ it.skipIf(!enabled)(
     );
   }
 );
+
+it.skipIf(!enabled)(
+  'moves nothing inside an element when a pointer colours its stroke, its width held in every state',
+  { timeout: 120_000 },
+  async () => {
+    // A cell that lays out its value from its start: a stroke appearing inside it would push it.
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 999 });
+  const Values = collection(Int, { max: 5 });
+  const Position = index(Values);
+</script>
+<script input>
+  const values = Values([42, 3, 815, 26, 9]);
+</script>
+<script algorithm>
+  @start[let i = Position(0);]
+  while (@more[i < values.length]) @step{
+    @halve[values[i] = Int(Math.floor(values[i] / 2));]
+    @next[i++;]
+  }
+</script>
+<View of="Int" name="Cell">
+  <Node layout="row"><Node value={this} />{#if this === 7}<Node>lucky</Node>{/if}</Node>
+</View>
+<View of="Values" name="Row">
+  <Node layout="row">{#each this as v}{v}{/each}</Node>
+</View>
+<View of="Position" name="Here"><Pointed /></View>
+<Layout name="Main">
+  <Node>{values}{i}</Node>
+</Layout>`;
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    // Each cell's value, by its index in the row, at each step: its position never moves.
+    const positions: Record<number, Set<string>> = {};
+    for (let step = 0; step < 6; step++) {
+      await page.evaluate(
+        (to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'),
+        step
+      );
+      await page.waitForTimeout(1500);
+      const drawn = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) .value'
+          )
+        ]
+          .filter((value) => getComputedStyle(value).visibility !== 'hidden')
+          .map((value) => {
+            const { x, y } = value.getBoundingClientRect();
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+      );
+      drawn.forEach((at, index) => (positions[index] ??= new Set()).add(at));
+    }
+    expect(errors).toEqual([]);
+    expect(Object.keys(positions)).toHaveLength(5);
+    for (const at of Object.values(positions)) expect([...at]).toHaveLength(1);
+  }
+);
+
+type Drawn = { left: number; right: number; text: string; shadow: string; outline: string };
+
+/** Each step's cells, left to right, and the row around them, as drawn, with the chosen looks. */
+async function scanned(chosen: Record<string, string | number>) {
+  const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values([7, 42, 3, 18, 25]);
+  const target = Int(18);
+</script>
+<script algorithm>
+  @start[let i = Index(0);]
+  while (@scan[values[i] !== target]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+  const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+    chosen
+  });
+  const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setContent(sandboxDocument('', javascript, 0, 1));
+  await page.waitForFunction(() =>
+    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+  );
+  const steps: { cells: Drawn[]; row: number }[] = [];
+  for (let step = 0; step < labels.length; step++) {
+    await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
+    await page.waitForTimeout(1500);
+    steps.push(
+      await page.evaluate(() => {
+        const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+        const cells = [...document.querySelectorAll<HTMLElement>(`${layer} .value`)]
+          .filter((value) => getComputedStyle(value).visibility !== 'hidden')
+          .map((value) => {
+            const node = value.closest<HTMLElement>('.sv-node')!;
+            const box = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return {
+              left: box.left,
+              right: box.right,
+              text: value.innerText,
+              shadow: style.boxShadow,
+              outline: style.outlineOffset
+            };
+          });
+        const row = document.querySelector<HTMLElement>(`${layer} [data-sv-kind="Row"]`)!;
+        return { cells, row: row.getBoundingClientRect().width };
+      })
+    );
+  }
+  await page.close();
+  expect(errors).toEqual([]);
+  return steps;
+}
+
+it.skipIf(!enabled)(
+  'expands the pointed cell as paint in a row of slots, moving no cell',
+  { timeout: 120_000 },
+  async () => {
+    const steps = await scanned({ 'Here.Pointed.expand': 4 });
+    const lefts = (index: number) =>
+      new Set(steps.map(({ cells }) => cells[index].left.toFixed(1)));
+    for (let index = 0; index < 5; index++) expect(lefts(index).size).toBe(1);
+    expect(new Set(steps.map(({ row }) => row.toFixed(1))).size).toBe(1);
+    // Where the pointer is, its cell is painted 4px larger: a spread of its fill and its outline.
+    expect(steps.some(({ cells }) => cells.some((cell) => / 4px/u.test(cell.shadow)))).toBe(true);
+    expect(steps.some(({ cells }) => cells.some((cell) => cell.outline === '4px'))).toBe(true);
+  }
+);
+
+it.skipIf(!enabled)(
+  'expands the pointed cell in a packed row, pushing its neighbours, the row never growing',
+  { timeout: 120_000 },
+  async () => {
+    const steps = await scanned({ 'Here.Pointed.expand': 4, 'Row.spacing': 'packed' });
+    // The row keeps one size; a neighbour of the pointed cell moves as the pointer passes it.
+    expect(new Set(steps.map(({ row }) => row.toFixed(1))).size).toBe(1);
+    expect(new Set(steps.map(({ cells }) => cells[2].left.toFixed(1))).size).toBeGreaterThan(1);
+    // Each cell the pointer passes, 7, 42, 3 and 18, grows while it is there, every one by the same
+    // amount: 4px each side, at the page's fit, from the step that declares i.
+    const growths = [0, 1, 2, 3].map((index) => {
+      const widths = steps.slice(1).map(({ cells }) => cells[index].right - cells[index].left);
+      return Math.max(...widths) - Math.min(...widths);
+    });
+    expect(growths[0]).toBeGreaterThan(4);
+    for (const growth of growths) expect(growth).toBeCloseTo(growths[0], 1);
+    // Between neighbours the gap is the same, the expanded cell's included.
+    for (const { cells } of steps) {
+      const gaps = cells.slice(1).map((cell, index) => (cell.left - cells[index].right).toFixed(1));
+      expect(new Set(gaps).size).toBe(1);
+    }
+  }
+);

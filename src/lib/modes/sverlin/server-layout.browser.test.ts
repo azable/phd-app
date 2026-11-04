@@ -297,3 +297,35 @@ it.skipIf(!enabled)(
     expect(new Set(gaps.map(({ second }) => second)).size).toBeGreaterThan(1);
   }
 );
+
+it.skipIf(!enabled)(
+  'draws a pointer’s expansion as the server lays it out, painted in a row of slots and taking room in a packed one',
+  { timeout: 300_000 },
+  async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = collection(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values([7, 42, 3, 18, 25]);
+  const target = Int(18);
+</script>
+<script algorithm>
+  @start[let i = Index(0);]
+  while (@scan[values[i] !== target]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+    for (const chosen of [
+      { 'Here.Pointed.expand': 4 },
+      { 'Here.Pointed.expand': 4, 'Row.spacing': 'packed' }
+    ]) {
+      const { steps } = await drawsAsGiven(source, { chosen });
+      const rows = steps.flatMap((step) => step.nodes.filter(({ kind }) => kind === 'Row'));
+      expect(new Set(rows.map(({ box }) => Math.round(box.width))).size).toBe(1);
+    }
+  }
+);

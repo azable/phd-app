@@ -57,7 +57,8 @@ its xAnchor and yAnchor place a varying box, or a length, in its slot: keep
 boxes uniform where they are places in a structure, and varying where their size
 means something. A row's or column's spacing, slots or packed, keeps each child
 in its slot, or packs them a constant gap apart so a growing child moves the
-next.
+next. A pointer's expand enlarges the element it is at, painted in a row of
+slots, pushing the neighbours aside in a packed one.
 
 Choose where the steps pause too: the starter pauses at every label, "on", the
 finest the steps go, except labels whose runs all draw nothing new, which start

@@ -2599,7 +2599,8 @@ const designProps = new Set([
   'case',
   'xAnchor',
   'yAnchor',
-  'spacing'
+  'spacing',
+  'expand'
 ]);
 
 /**

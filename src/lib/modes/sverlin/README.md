@@ -190,9 +190,15 @@ written in the view so the label is a kind of its own.
 
 - `<Pointed>` takes no props and is written in the pointer view itself, not a
   snippet inside it. Where the pointer is, the element is drawn in the pointer's
-  kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke, opacity,
-  text colour, shadow, glow, fill style, decoration) shows only there, the rest
-  of its look in every slot, so every slot keeps one size.
+  kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke colour,
+  opacity, text colour, shadow, glow, fill style, decoration, expand) shows only
+  there, the rest of its look in every slot, so every slot keeps one size; a
+  stroke keeps its width in every slot, drawn in no colour where none shows.
+  `expand`, 0, 2, 4, or 8 pixels on each side, enlarges the element where the
+  pointer is: in a row of slots it is painted, its fill spread and its stroke
+  drawn further out, in room every element keeps for it, so nothing moves; in a
+  packed row it takes room, pushing the neighbours aside, the row keeping room
+  for one expansion for each pointer into it.
 - Render a pointer in a layout's root itself, outside other nodes, snippets, and
   blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
   an element, a field (`{edges[e].to}`), or a label (see Views of what a step
@@ -877,25 +883,26 @@ Every kind of node has these props, each with a fixed set of options:
 A kind arranging its children, with a `layout`, a collection, or links, also has
 `spacing`, slots (each child in its slot, a `gap` between slots) or packed (each
 at its own size along the row or column, a `gap` between them, so a growing
-child moves the next; the node itself keeps room for every child's largest, so
-nothing outside it moves), `gap` (as `padding`), `align` (start, center, or end,
-across) and `justify` (start, center, end, between, around, or evenly, along;
-for a grid, see Grid); where a collection's node has more room than its tracks
-need, `justify` start, center, or end puts the room after, around, or before
-them, and between, around, or evenly spreads the tracks over it. Positions past
-a collection's ends are drawn in end slots, kept only as far as drawn positions
-go: a collection's kind has `overflow`, included (end slots are tracks of its
-box) or excluded (they hang outside, so centring it centres its elements), and a
-`<Pointed>` kind too, shown (drawn past the ends) or hidden (nothing there,
-keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`,
-and `strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
-`straight`, `curved` (each arrow choosing its own side and how far to bow round
-what is in its way), or `wire` (straight runs turning only at right angles,
-round the boxes, side by side apart); `head`, the mark at each end a link points
-to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
-`diamond`, or `bar`, which starts at `none` where every link of the kind is a
-two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16
-pixels. A label's look is its own nodes' kind.
+child moves the next; the node itself keeps room for every child's largest, and
+for its pointers' `expand`, so nothing outside it moves), `gap` (as `padding`),
+`align` (start, center, or end, across) and `justify` (start, center, end,
+between, around, or evenly, along; for a grid, see Grid); where a collection's
+node has more room than its tracks need, `justify` start, center, or end puts
+the room after, around, or before them, and between, around, or evenly spreads
+the tracks over it. Positions past a collection's ends are drawn in end slots,
+kept only as far as drawn positions go: a collection's kind has `overflow`,
+included (end slots are tracks of its box) or excluded (they hang outside, so
+centring it centres its elements), and a `<Pointed>` kind too, shown (drawn past
+the ends) or hidden (nothing there, keeping no room). A link's kind has `shown`,
+`stroke`, `strokeWidth`, `opacity`, and `strokeStyle`; `route`, `layout` (as its
+layout's arrows run, the start), `straight`, `curved` (each arrow choosing its
+own side and how far to bow round what is in its way), or `wire` (straight runs
+turning only at right angles, round the boxes, side by side apart); `head`, the
+mark at each end a link points to, `none`, `arrow` (a filled triangle), `open`
+(an outlined one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none`
+where every link of the kind is a two-way line and `arrow` otherwise; and
+`headSize`, 6, 9 (the start), 12, or 16 pixels. A label's look is its own nodes'
+kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
