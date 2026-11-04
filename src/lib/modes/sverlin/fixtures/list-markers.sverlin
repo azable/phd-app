@@ -50,92 +50,86 @@ while @more[cur ≠ ∅]
 </View>
 
 <View of="ListNode" name="NodeBox">
-  {#snippet NextField()}
-    <Node><Link to={this.next} /></Node>
-  {/snippet}
   <Node layout="row">
     {this.name}
-    {@render NextField()}
+    <Node kind="NextField"><Link to={this.next} /></Node>
   </Node>
 </View>
 
 <View of="NodeRef" name="Marker">
-  {#snippet PointerLabel()}
-    <Node>{this === prev ? 'prev' : this === cur ? 'cur' : 'next'}</Node>
-  {/snippet}
   <Node layout="column">
     <Pointed />
-    {@render PointerLabel()}
+    <Node kind="PointerLabel">{this === prev ? 'prev' : this === cur ? 'cur' : 'next'}</Node>
   </Node>
 </View>
 
-{#snippet Title()}
+<Layout name="Title">
   <Node>Reverse a singly linked list</Node>
-{/snippet}
+</Layout>
 
-{#snippet Heap()}
+<Layout name="Heap">
   <Node layout="free">
     {#each all(ListNode) as node}
       {node}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet StartNote()}
+<Layout name="StartNote">
   <Node>Start with prev at ∅ and cur at the head.</Node>
-{/snippet}
+</Layout>
 
-{#snippet SaveNote()}
+<Layout name="SaveNote">
   <Node>Save the next node before changing the link.</Node>
-{/snippet}
+</Layout>
 
-{#snippet ReverseNote()}
+<Layout name="ReverseNote">
   <Node>Reverse cur’s link so it points to the finished prefix.</Node>
-{/snippet}
+</Layout>
 
-{#snippet AdvanceNote()}
+<Layout name="AdvanceNote">
   <Node>Move prev and cur one node forward.</Node>
-{/snippet}
+</Layout>
 
-{#snippet FinishNote()}
+<Layout name="FinishNote">
   <Node>prev is now the head of the reversed list.</Node>
-{/snippet}
+</Layout>
 
-{#snippet StepNote()}
+<Layout name="StepNote" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node>
     <OneOf><When of="@rewire.save">
-      {@render SaveNote()}
+      <SaveNote />
     </When><When of="@rewire.reverse">
-      {@render ReverseNote()}
+      <ReverseNote />
     </When><When of="@rewire.advance">
-      {@render AdvanceNote()}
+      <AdvanceNote />
     </When><When of="@finish">
-      {@render FinishNote()}
+      <FinishNote />
     </When></OneOf>
     <When of="start">
-      {@render StartNote()}
+      <StartNote />
     </When>
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet Diagram()}
+<Layout name="Diagram" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="column">
-    {@render Heap()}
-    {@render StepNote()}
+    <Heap />
+    <StepNote />
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet Board()}
+<Layout name="Board" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="row">
     <Listing />
-    {@render Diagram()}
+    <Diagram />
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title />
+    <Board />
     {prev}
     {cur}
     {after}

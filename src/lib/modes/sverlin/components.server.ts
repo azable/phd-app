@@ -172,21 +172,24 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   };
   for (const node of html?.children ?? []) nested(node.children ?? [], 1);
   // A snippet's name is its kind, so each names one snippet; one without a type takes nothing.
-  const named = new Set<string>();
+  // A snippet with a parameter is a view, one without a layout drawn by its tag.
+  const named = new Map<string, string>();
   const snippets = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(snippets);
     const part = node as SvelteNode;
     const name = part.type === 'SnippetBlock' ? part.expression?.name : undefined;
-    if (name && named.has(name))
+    const written = part.parameters?.length ? 'view' : 'layout';
+    const earlier = name === undefined ? undefined : named.get(name);
+    if (name && earlier)
       problems.push({
-        message: `Two snippets are named ${name}: a snippet's name is the kind of the nodes it draws, so give each its own.`,
+        message: `${earlier === written ? `Two ${written}s are` : 'A view and a layout are both'} named ${name}: a name is the kind of the nodes drawn by it, so give each its own.`,
         start: part.start ?? 0
       });
-    else if (name) named.add(name);
+    else if (name) named.set(name, written);
     if (name && part.parameters?.length && !typeOf(part))
       problems.push({
-        message: `${name} takes a parameter without a type: a view takes one value, written <View of="Int" name="${name}">…</View>, and a snippet without parameters is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`,
+        message: `${name} takes a parameter without a type: a view takes one value, written <View of="Int" name="${name}">…</View>, and a layout takes none, as <Layout name="Title">…</Layout>.`,
         start: part.start ?? 0
       });
     for (const [key, child] of Object.entries(part))
@@ -479,7 +482,7 @@ export function positionReads(
     if (recorded.length === 1) return recorded[0];
     return {
       problem: holding.length
-        ? `at() reads the ${collection} a ${position} points into, and ${holding.join(' and ')} each hold one: read the element in the root or a part, as ${holding[0]}[p].`
+        ? `at() reads the ${collection} a ${position} points into, and ${holding.join(' and ')} each hold one: read the element in a layout, as ${holding[0]}[p].`
         : `at() reads the ${collection} a ${position} points into, and no variable holds one.`
     };
   };
@@ -771,7 +774,7 @@ export function pointerCalls(
       const start = part.start ?? 0;
       if (where !== 'top' || inNode)
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if} and outside snippets, as {i} for a position i${
+          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if}, as {i} for a position i${
             inNode && pointers.get(name)?.view
               ? `; or, to show the position as a number here, add a view that draws it, as <View of="${name}" name="${name}Text"><Node value={this} /></View>`
               : ''

@@ -40,11 +40,11 @@ it.skipIf(!enabled)(
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="First"><Pointed /></View>
 <View of="Index" name="Second"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="i, j, values">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
     {i}
     {j}
   </Node>
@@ -101,13 +101,13 @@ it.skipIf(!enabled)(
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Index" name="Highlight"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet At()}<Node>at {i}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="At" of="i"><Node>at {i}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="i, values">
   <Node>
-    {@render Cells()}
-    {@render At()}
+    <Cells values={values} />
+    <At i={i} />
     {i}
   </Node>
 </Layout>`;
@@ -160,11 +160,11 @@ it.skipIf(!enabled)(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Highlight"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="i, j, values">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
     {i}
     {j}
   </Node>
@@ -215,13 +215,13 @@ it.skipIf(!enabled)(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Int" name="IntTally"><Node>{'•'.repeat(this)}</Node></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Key()}<Node>key {key}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, key">
   <Node>
-    {@render Cells()}
-    {@render Key()}
+    <Cells values={values} />
+    <Key key={key} />
   </Node>
 </Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
@@ -283,7 +283,7 @@ it.skipIf(!enabled)(
   <Node layout="row">{#each this as v}{v}{/each}</Node>
 </View>
 <View of="Position" name="Here"><Pointed /></View>
-<Layout name="Main">
+<Layout name="Main" of="values, i">
   <Node>{values}{i}</Node>
 </Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
@@ -342,7 +342,7 @@ async function scanned(chosen: Record<string, string | number>) {
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen
   });
@@ -460,7 +460,7 @@ it.skipIf(!enabled)(
   <Node layout="row">{#each this as v}{v}{/each}</Node>
 </View>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @insert.compare.left, @insert.compare.right">
   <Node>
     {values}
     {@insert.compare.left}
@@ -542,7 +542,7 @@ async function transformed(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here">${pointer}</View>
-<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
   const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
     chosen
   });

@@ -27,10 +27,10 @@ copied exactly from project.base, whitespace included, that occurs in it once
 (take in enough of the lines around it to make it so), with replace; the edits
 apply in order. Use revise, with the complete replacement source, only for a
 first visualization or a change to most of it. Change the source only for what
-is drawn, as a new node, snippet, or view, or the algorithm, writing each design
+is drawn, as a new node, layout, or view, or the algorithm, writing each design
 as the guide’s Declare what varies describes; A targeted request, as “make the
 pointer red” or “add the index”, changes only what it names: leave every view
-and snippet it does not address as it was. A request about scope or focus, as
+and layout it does not address as it was. A request about scope or focus, as
 “simpler”, “fewer steps”, “just the main idea”, “too busy” or “too big”, is
 about the whole picture: decide what the picture must show for it and for the
 brief’s focus, and remove or merge the rest rather than adding to it, with
@@ -224,13 +224,13 @@ Use the participant’s subject, audience, learning goals, and style preferences
 to design the explanation, without inferring an aesthetic from audience alone.
 Keep replies brief, and describe only what the participant sees: never mention
 repairs, failed attempts, build errors, or the source’s internal names (its
-snippets, views, variables and keys), only how the picture looks and behaves;
-the steps’ names, and the algorithm’s own names as the listing shows them, are
-what they see. Name every presentation you speak of with a presentation-ref
-segment, copying its id exactly from the context: the participant sees it as a
-pill they can open, so never call it “this” or “here’s”. Where your reply speaks
-of the version this decision makes, name it with a candidate-ref segment, slot 0
-(with comparisons, slots 0 and 1 are the first pair’s two sides), which the
+layouts, views, variables and keys), only how the picture looks and behaves; the
+steps’ names, and the algorithm’s own names as the listing shows them, are what
+they see. Name every presentation you speak of with a presentation-ref segment,
+copying its id exactly from the context: the participant sees it as a pill they
+can open, so never call it “this” or “here’s”. Where your reply speaks of the
+version this decision makes, name it with a candidate-ref segment, slot 0 (with
+comparisons, slots 0 and 1 are the first pair’s two sides), which the
 application resolves to that version, as it records your reply once the version
 is shown (“[pill] checks each cell in turn.”), not “This shows…”; a reply alone
 (respond) has no candidate-ref. When feedback is ambiguous, offer the readings
@@ -366,7 +366,7 @@ keeping the design, and say so (“[pill] runs the same search with a target tha
 isn’t there.”); the earlier case stays one version back. Change the algorithm or
 the view as well only where the new input reaches something they do not handle
 yet, as a search that never returns its not-found result. Never duplicate views,
-snippets, or variables to show two cases in one source. Where a case needs an
+layouts, or variables to show two cases in one source. Where a case needs an
 input the domain’s types cannot hold, as weights on a graph whose edges have
 none, say so and offer the nearest they can.
 

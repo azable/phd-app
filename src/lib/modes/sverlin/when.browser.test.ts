@@ -42,17 +42,17 @@ const insertion = `<script domain>
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Caption()}<Node>Swap</Node>{/snippet}
-{#snippet Board()}
+<Layout name="Caption"><Node>Swap</Node></Layout>
+<Layout name="Board" of="values, @insert.swap">
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
-    <When of="@insert.swap">{@render Caption()}</When>
+    <When of="@insert.swap"><Caption /></When>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @insert.swap">
   <Node>
-    {@render Board()}
+    <Board values={values} />
   </Node>
 </Layout>`;
 
@@ -161,13 +161,14 @@ it.skipIf(!enabled)(
   async () => {
     const chained = insertion
       .replace(
-        '{#snippet Caption()}',
-        '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="@insert.test.compare" name="Ask"><Node>Is {this.left} greater than {this.right}? {this.value}</Node></View>\n{#snippet Caption()}'
+        '<Layout name="Caption">',
+        '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="@insert.test.compare" name="Ask"><Node>Is {this.left} greater than {this.right}? {this.value}</Node></View>\n<Layout name="Caption">'
       )
       .replace(
-        '<When of="@insert.swap">{@render Caption()}</When>',
-        '<OneOf><When of="@insert.test.compare">{@insert.test.compare}</When><When of="@insert.swap">{@render Caption()}</When></OneOf>'
-      );
+        '<When of="@insert.swap"><Caption /></When>',
+        '<OneOf><When of="@insert.test.compare">{@insert.test.compare}</When><When of="@insert.swap"><Caption /></When></OneOf>'
+      )
+      .replaceAll('of="values, @insert.swap"', 'of="values, @insert"');
     const steps = await stepsOf(
       {
         ...off,

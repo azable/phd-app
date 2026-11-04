@@ -37,14 +37,13 @@ const list = (algorithm: string) => `<script domain>
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
 <View of="ListNode" name="NodeBox">
-  {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
-  <Node layout="row">{this.name}{@render NextField()}</Node>
+  <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-{#snippet Heap()}<Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>{/snippet}
+<Layout name="Heap"><Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node></Layout>
 
 <Layout name="Main">
   <Node>
-    {@render Heap()}
+    <Heap />
   </Node>
 </Layout>`;
 

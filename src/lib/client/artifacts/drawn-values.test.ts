@@ -95,24 +95,24 @@ describe('drawn value markers', () => {
 
     it('greys out a node every shown presentation left out, from its tag to its closing tag', () => {
       const markup =
-        '{#snippet T()}<Node>Sort</Node>{/snippet}\n{#snippet K()}<Node>key <Node>{x}</Node></Node>{/snippet}';
+        '<Layout name="T"><Node>Sort</Node></Layout>\n<Layout name="K"><Node>key <Node>{x}</Node></Node></Layout>';
       const doc = EditorState.create({ doc: markup });
       const left = (presentations: Parameters<typeof leftOutNodes>[1]) =>
         leftOutNodes(doc, presentations).map(({ from, to }) => markup.slice(from, to));
       expect(
         left([
-          { seed: 1, leftOut: ['2:15', '2:25'] },
-          { seed: 2, leftOut: ['2:15'] }
+          { seed: 1, leftOut: ['2:18', '2:28'] },
+          { seed: 2, leftOut: ['2:18'] }
         ])
       ).toEqual(['<Node>key <Node>{x}</Node></Node>']);
       // One presentation drawing it, or one that recorded nothing, greys nothing.
       expect(
         left([
-          { seed: 1, leftOut: ['2:15'] },
+          { seed: 1, leftOut: ['2:18'] },
           { seed: 2, leftOut: [] }
         ])
       ).toEqual([]);
-      expect(left([{ seed: 1, leftOut: ['2:15'] }, { seed: 2 }])).toEqual([]);
+      expect(left([{ seed: 1, leftOut: ['2:18'] }, { seed: 2 }])).toEqual([]);
     });
 
     it('leaves views be beside a presentation that recorded no variant', () => {
@@ -125,7 +125,7 @@ describe('drawn value markers', () => {
 
 describe('variant markers', () => {
   const source =
-    '<View of="Index" name="Here">\n  <Pointed />\n</View>\n{#snippet Title()}<Node>Search</Node>{/snippet}';
+    '<View of="Index" name="Here">\n  <Pointed />\n</View>\n<Layout name="Title"><Node>Search</Node></Layout>';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
@@ -139,14 +139,14 @@ describe('variant markers', () => {
       seed: 1,
       variant: variant('amber-100'),
       origins: { 'Here.Pointed.fill': 'starter' },
-      kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
+      kinds: { '2:3': ['Here.Pointed'], '4:22': ['Title'] }
     },
     {
       label: 'bottom',
       seed: 2,
       variant: variant('blue-100'),
       origins: { 'Here.Pointed.fill': 'random' },
-      kinds: { '2:3': ['Here.Pointed'], '4:19': ['Title'] }
+      kinds: { '2:3': ['Here.Pointed'], '4:22': ['Title'] }
     }
   ];
 
@@ -192,7 +192,7 @@ describe('variant markers', () => {
 
   it('puts a layout’s frame in its root’s chip, and greys the layouts no variant shows', () => {
     const laid =
-      '<Layout name="Side">\n  <Node layout="row">{@render Title()}</Node>\n</Layout>\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>';
+      '<Layout name="Side">\n  <Node layout="row"><Title /></Node>\n</Layout>\n<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>';
     const shown = [
       {
         seed: 1,
@@ -205,7 +205,7 @@ describe('variant markers', () => {
     expect(side.props.map(({ name }) => name)).toEqual(['ratio', 'gap']);
     expect(stacked.props.map(({ name }) => name)).toEqual(['ratio']);
     expect(unchosenLayouts(state, shown).map(({ from, to }) => laid.slice(from, to))).toEqual([
-      '<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>'
+      '<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>'
     ]);
   });
 
@@ -271,7 +271,7 @@ describe('variant markers', () => {
 
   it('marks a render with the variable the build says it reads, a mark or a number', () => {
     const doc =
-      '{#snippet At()}<Node>at {@render Index(lo)}</Node>{/snippet}\n{@render Index(@mid)}';
+      '<Layout name="At"><Node>at {@render Index(lo)}</Node></Layout>\n{@render Index(@mid)}';
     const variant = { 'views.Index': 'IndexText', 'pointers.Index': 'Highlight' };
     const renders = { '1:25': 'views.Index', '2:1': 'pointers.Index' };
     const markers = viewMarkers(EditorState.create({ doc }), [
@@ -291,7 +291,7 @@ describe('place values', () => {
     '<View of="Int" name="IntCell"><Node value={this} /></View>',
     '<View of="Index" name="IndexText"><Node value={this} /></View>',
     '<View of="Greater" name="Ask"><Node>{@render Int(this.a)}</Node></View>',
-    '{#snippet Top()}<Node>looking at {@render Index(i)}</Node>{/snippet}',
+    '<Layout name="Top"><Node>looking at {@render Index(i)}</Node></Layout>',
     '{@render Index(@left)}',
     '{@render Index(@right)}',
     '{@render Int(v)}'

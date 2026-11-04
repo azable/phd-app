@@ -58,8 +58,8 @@
 
 <View of="VertexRef" name="Outline"><Pointed /></View>
 
-{#snippet Title()}<Node>Breadth-first search from A</Node>{/snippet}
-{#snippet Graph()}
+<Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
+<Layout name="Graph" of="vertices, neighbours">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -68,24 +68,24 @@
       {/each}
     {/each}
   </Node>
-{/snippet}
-{#snippet QueueLine()}
+</Layout>
+<Layout name="QueueLine" of="queue">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
-{/snippet}
-{#snippet Board()}
+</Layout>
+<Layout name="Board" of="vertices, neighbours, queue">
   <Node layout="column">
-    {@render Graph()}
-    {@render QueueLine()}
+    <Graph vertices={vertices} neighbours={neighbours} />
+    <QueueLine queue={queue} />
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="current, vertices, neighbours, queue">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title />
+    <Board vertices={vertices} neighbours={neighbours} queue={queue} />
     {current}
   </Node>
 </Layout>

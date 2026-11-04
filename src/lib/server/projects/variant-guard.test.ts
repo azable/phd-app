@@ -26,18 +26,19 @@ const asked = recorded.answers.map(({ name }) => ({
 }));
 
 describe('pictureTree', () => {
-  it('reads what the root renders and what each snippet renders', () => {
-    // Board, and the position type the view marks as a pointer.
-    expect(tree.root).toEqual(['Board', 'Index']);
+  it('reads what the root draws and what each layout draws by its tag', () => {
+    expect(tree.root).toEqual(['Board']);
     expect(tree.snippets.get('Board')).toEqual(['<Listing>', 'SearchView']);
     expect(tree.snippets.get('SearchView')).toContain('Answer');
   });
 
   it('measures the picture by the layout a variant shows, never hiding a layout’s own nodes', () => {
-    const laid = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
-{#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
-<Layout name="Stacked"><Node>{@render Title()}{@render Board()}</Node></Layout>
-<Layout name="Bare"><Node layout="row"><Node>{@render Board()}</Node></Node></Layout>`);
+    const laid = pictureTree(`<Layout name="Title"><Node>t</Node></Layout>
+<Layout name="Cells"><Node>c</Node></Layout>
+<Layout name="Note"><Node>n</Node></Layout>
+<Layout name="Board"><Node><Cells /><Note /></Node></Layout>
+<Layout name="Stacked"><Node><Title /><Board /></Node></Layout>
+<Layout name="Bare"><Node layout="row"><Node><Board /></Node></Node></Layout>`);
     expect(laid.layouts.get('Stacked')).toEqual(['Title', 'Board']);
     expect(laid.layouts.get('Bare')).toEqual(['Board']);
     // Hiding the title hides a quarter of the stacked page, and nothing of the bare one.
@@ -48,12 +49,14 @@ describe('pictureTree', () => {
     expect(allowedChange(guard, 'layout', 'Stacked')).toBe(true);
   });
 
-  it('reads a view written as a tag as a snippet of its name', () => {
+  it('reads the kinds a view’s nodes name as what it draws', () => {
     const viewed =
-      pictureTree(`<View of="Values" name="Row">{#snippet Under()}<Node>i</Node>{/snippet}<Node>{@render Under()}</Node></View>
-<Layout name="Main"><Node>{@render Row()}</Node></Layout>`);
+      pictureTree(`<View of="Values" name="Row"><Node><Node kind="Under">i</Node></Node></View>
+<Layout name="Shown" of="values"><Node>{values}</Node></Layout>
+<Layout name="Main" of="values"><Node><Shown values={values} /></Node></Layout>`);
     expect(viewed.snippets.get('Row')).toEqual(['Under']);
-    expect(viewed.layouts.get('Main')).toEqual(['Row']);
+    expect(viewed.layouts.get('Main')).toEqual(['Shown']);
+    expect([...viewed.layouts.keys()]).toEqual(['Main']);
   });
 });
 
@@ -75,15 +78,16 @@ describe('allowedChange', () => {
 
   it('measures how much of the picture a change hides', () => {
     expect(hiddenShare(tree, recorded.variant, [['Board.shown', false]])).toBeGreaterThan(0.85);
-    expect(hiddenShare(tree, recorded.variant, [['FoundCaption.shown', false]])).toBeLessThan(0.1);
+    expect(hiddenShare(tree, recorded.variant, [['FoundCaption.shown', false]])).toBeLessThan(0.15);
   });
 });
 
 describe('allowedComparisonSide', () => {
-  const page = pictureTree(`{#snippet Title()}<Node>t</Node>{/snippet}
-{#snippet Note()}<Node>n</Node>{/snippet}
-{#snippet Board()}<Node>{@render Cells()}{@render Note()}</Node>{/snippet}
-<Layout name="Stacked"><Node>{@render Title()}{@render Board()}</Node></Layout>`);
+  const page = pictureTree(`<Layout name="Title"><Node>t</Node></Layout>
+<Layout name="Note"><Node>n</Node></Layout>
+<Layout name="Cells"><Node>c</Node></Layout>
+<Layout name="Board"><Node><Cells /><Note /></Node></Layout>
+<Layout name="Stacked"><Node><Title /><Board /></Node></Layout>`);
   const guard = { tree: page, base: { layout: 'Stacked' }, settled: {} };
 
   it('lets the assistant compare a top-level title with and without, which a chooser may not hide', () => {

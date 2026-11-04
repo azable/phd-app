@@ -133,15 +133,15 @@ it.skipIf(!enabled)(
   @next[i = Position(1);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}
+<Layout name="Cells" of="values, partner">
   <Node layout="row">
     {#each values as v, k}{v}<Link from={k} to={partner[k]} />{/each}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, partner">
   <Node>
-    {@render Cells()}
+    <Cells values={values} partner={partner} />
   </Node>
 </Layout>`;
     const { steps, errors } = await linksAtEachStep(pairs);

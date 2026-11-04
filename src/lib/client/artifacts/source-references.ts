@@ -1,6 +1,6 @@
 /**
- * What text in a message refers to in a source: the regions an inline code span names, as a snippet
- * (`Highlight`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
+ * What text in a message refers to in a source: the regions an inline code span names, as a view,
+ * layout or kind (`Highlight`, `Title`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
  * (`Highlight.Pointed@left.fill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
  * is there; and the regions build problems are about.
  *
@@ -275,7 +275,7 @@ function matches(source: string, pattern: RegExp, group = 0): SourceRange[] {
 
 /**
  * A kind or its variable, as `Row.Under`, `Highlight.Pointed.fill` or `IntCell@swap.held.fill`:
- * the snippet path, and the place after `@`, less a prop at the end.
+ * the path of views, layouts and kinds, and the place after `@`, less a prop at the end.
  */
 function kindKey(text: string): { segments: string[]; place?: string } | undefined {
   const [path, ...rest] = text.split('@');
@@ -353,7 +353,7 @@ function labelDeclarations(source: string): { full: string; from: number; to: nu
   return found;
 }
 
-/** A view's or snippet's declaration, or a declaration in a script; for `.Pointed`, its marks. */
+/** A view's or layout's declaration, or a declaration in a script; for `.Pointed`, its marks. */
 function kindRanges(source: string, segments: string[]): SourceRange[] {
   const part = segments.at(-1) === 'Pointed' || segments.at(-1) === 'Link' ? segments.at(-1) : '';
   const snippet = part ? segments.at(-2) : segments.at(-1);
@@ -361,7 +361,7 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
   const declared = matches(
     source,
     new RegExp(
-      String.raw`(?:\{#snippet\s+|<View\b[^>]*?\bname=")(${escape(snippet)})(?:\s*\(|")`,
+      String.raw`(?:\{#snippet\s+|<(?:View|Layout)\b[^>]*?\bname=")(${escape(snippet)})(?:\s*\(|")`,
       'gu'
     ),
     1
@@ -380,8 +380,13 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
   }
   if (!part) return declared;
   const body = source.slice(declared[0].to);
+  const opening = source.slice(source.lastIndexOf('<', declared[0].from), declared[0].from);
   const end = body.indexOf(
-    source.slice(0, declared[0].from).endsWith('name="') ? '</View>' : '{/snippet}'
+    opening.startsWith('<View')
+      ? '</View>'
+      : opening.startsWith('<Layout')
+        ? '</Layout>'
+        : '{/snippet}'
   );
   const inside = end < 0 ? body : body.slice(0, end);
   return [

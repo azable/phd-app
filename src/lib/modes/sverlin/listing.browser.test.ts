@@ -55,16 +55,16 @@ const insertion = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Highlight"><Pointed /></View>
-{#snippet Board()}
+<Layout name="Board" of="values">
   <Node layout="row">
     <Listing />
     <Node>{#each values as v}{v}{/each}</Node>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @insert.swap.to, @insert.swap.from, @insert.test.compare.left, @insert.test.compare.right">
   <Node>
-    {@render Board()}
+    <Board values={values} />
     {@insert.test.compare.left}
     {@insert.test.compare.right}
     {@insert.swap.from}
@@ -217,12 +217,12 @@ const search = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Arrow"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Goal()}<Node>target {target}</Node>{/snippet}
-<Layout name="Main">
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
+<Layout name="Main" of="lo, hi, mid, target, values">
   <Node layout="row">
     <Listing />
-    <Node>{@render Goal()}{@render Cells()}</Node>
+    <Node><Goal target={target} /><Cells values={values} /></Node>
     {lo}
     {hi}
     {mid}

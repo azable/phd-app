@@ -33,7 +33,7 @@
 <View of="Char" name="Letter"><Node value={this} /></View>
 <View of="Count" name="CountText"><Node value={this} /></View>
 
-{#snippet Lcs()}
+<Layout name="Lcs" of="y, x, t">
   <Node layout="grid">
     {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
     {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
@@ -41,8 +41,8 @@
       {#each cells as cell, j}<Node row={i + 1} col={j + 1}>{cell}</Node>{/each}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
-  <Node>{@render Lcs()}</Node>
+<Layout name="Main" of="y, x, t">
+  <Node><Lcs y={y} x={x} t={t} /></Node>
 </Layout>

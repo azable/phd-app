@@ -24,20 +24,18 @@
 <View of="Index" name="IndexNumber"><Node value={this} /></View>
 
 <View of="Index" name="LowerMark">
-  {#snippet LowerLabel()}<Node>lo</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render LowerLabel()}</Node>
+  <Node layout="column"><Pointed /><Node kind="LowerLabel">lo</Node></Node>
 </View>
 
 <View of="Index" name="UpperMark">
-  {#snippet UpperLabel()}<Node>hi</Node>{/snippet}
-  <Node layout="column"><Pointed />{@render UpperLabel()}</Node>
+  <Node layout="column"><Pointed /><Node kind="UpperLabel">hi</Node></Node>
 </View>
 
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="target, lo, hi, values">
   <Node>
-    <Node layout="row"><Node>Searching for {target}</Node>{@render Cells()}</Node>
+    <Node layout="row"><Node>Searching for {target}</Node><Cells values={values} /></Node>
     {lo}
     {hi}
   </Node>

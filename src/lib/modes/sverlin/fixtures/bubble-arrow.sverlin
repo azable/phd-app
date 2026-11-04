@@ -27,26 +27,26 @@
 <View of="@pass.pair.compare" name="Ask">
   <Node>compare {this.left} and {this.right}</Node>
 </View>
-{#snippet SwapNote()}<Node>Swap</Node>{/snippet}
-{#snippet Title()}<Node>Bubble sort</Node>{/snippet}
+<Layout name="SwapNote"><Node>Swap</Node></Layout>
+<Layout name="Title"><Node>Bubble sort</Node></Layout>
 <View of="Values" name="Cells">
   <Node>{#each this as v}{v}{/each}</Node>
 </View>
-{#snippet Board()}
+<Layout name="Board" of="values, @pass.pair.swap, @pass.pair.compare">
   <Node layout="column">
     {values}
     <When of="@pass.pair.swap">
       <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
     </When>
     {@pass.pair.compare}
-    <When of="@pass.pair.swap">{@render SwapNote()}</When>
+    <When of="@pass.pair.swap"><SwapNote /></When>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @pass.pair.swap, @pass.pair.compare">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title />
+    <Board values={values} />
     {@pass.pair.compare.left}
     {@pass.pair.compare.right}
     <When of="@pass.pair.swap">

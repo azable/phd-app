@@ -44,21 +44,20 @@
 <View of="VertexRef" name="RefCard"><Node value={this} /></View>
 <View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
 <View of="VertexRef" name="Marked"><Pointed /></View>
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, out">
   <Node layout="free">
     {#each vertices as v, k}
-      {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{v}{@render VertexNumber()}</Node>
+      <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
       {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
   </Node>
-{/snippet}
-{#snippet QueueLine()}<Node>queue {queue}</Node>{/snippet}
+</Layout>
+<Layout name="QueueLine" of="queue"><Node>queue {queue}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="current, vertices, out, queue, @visit.look.check.next">
   <Node>
-    {@render Graph()}
-    {@render QueueLine()}
+    <Graph vertices={vertices} out={out} />
+    <QueueLine queue={queue} />
     {current}
     {@visit.look.check.next}
   </Node>

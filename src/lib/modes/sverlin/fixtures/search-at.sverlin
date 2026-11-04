@@ -26,18 +26,18 @@
 <View of="Index" name="IndexValue">{at(this)}</View>
 <View of="Index" name="Arrow"><Pointed /></View>
 
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Bounds()}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Bounds" of="lo, hi">
   <Node layout="row">
     <Node>lo</Node>{lo}
     <Node>hi</Node>{hi}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="lo, hi, values">
   <Node>
-    {@render Cells()}
-    {@render Bounds()}
+    <Cells values={values} />
+    <Bounds lo={lo} hi={hi} />
     {lo}
     {hi}
   </Node>

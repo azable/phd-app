@@ -124,7 +124,7 @@ const significant = (part: Part) =>
 
 /** What the compiler says of a source without layouts. */
 export const noLayoutMessage =
-  'The view declares no layout: put what the page draws in <Layout name="Main"><Node>…</Node></Layout>, one root <Node> holding the parts, and a second layout for another arrangement.';
+  'The view declares no layout: put what the page draws in <Layout name="Main"><Node>…</Node></Layout>, one root <Node> holding what it shows, and a second layout for another arrangement.';
 
 /**
  * The page's layouts, and the view as Svelte parses it: each layout an {#if}, its root's tags
@@ -149,7 +149,7 @@ export function pageLayouts(
       if (part.type !== 'SnippetBlock' && significant(part))
         problems.push({
           message:
-            'With layouts, the top level holds only parts, views, and layouts: render this in a layout, inside its root <Node>, as <Layout name="Side"><Node layout="row">{@render Board()}{@render Table()}</Node></Layout>.',
+            'The top level holds only views and layouts: draw this in a layout, inside its root <Node>, as <Layout name="Side"><Node layout="row"><Board /><Table /></Node></Layout>.',
           start: part.start ?? 0
         });
       continue;
@@ -170,7 +170,7 @@ export function pageLayouts(
     const [root] = body;
     if (body.length !== 1 || root.type !== 'InlineComponent' || root.name !== 'Node') {
       problems.push({
-        message: `The layout ${name}'s body is one root <Node>, the frame, holding what the page shows, as <Layout name="${name}"><Node layout="row">{@render Board()}{@render Table()}</Node></Layout>; every other part goes inside it.`,
+        message: `The layout ${name}'s body is one root <Node>, the frame, holding what the page shows, as <Layout name="${name}"><Node layout="row"><Board /><Table /></Node></Layout>; everything else goes inside it.`,
         start: (root ?? part).start ?? start
       });
       continue;
@@ -211,7 +211,7 @@ export function pageLayouts(
     if (depth > 0 && layoutNameOf(part) !== undefined)
       problems.push({
         message:
-          'A layout arranges the whole page, so it is declared at the top level, beside the parts and views, never inside a block, a node, or a snippet.',
+          'A layout arranges the whole page, so it is declared at the top level, beside the views and other layouts, never inside a block or a node.',
         start: part.start ?? 0
       });
     for (const [key, child] of Object.entries(part))

@@ -10,6 +10,7 @@
  */
 
 import type { MasterStep } from './algorithm/interpret.server';
+import { writtenColumn } from './written-columns';
 
 type Part = Record<string, unknown> & {
   type?: string;
@@ -53,7 +54,8 @@ export type LeftOutModel = {
 export function siteOf(source: string, offset: number): string {
   const before = source.slice(0, offset);
   const lineStart = before.lastIndexOf('\n') + 1;
-  return `${before.split('\n').length}:${offset - lineStart + 1}`;
+  const line = before.split('\n').length;
+  return `${line}:${writtenColumn(line, offset - lineStart) + 1}`;
 }
 
 /**

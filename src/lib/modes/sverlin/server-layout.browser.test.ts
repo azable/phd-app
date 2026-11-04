@@ -169,8 +169,9 @@ it.skipIf(!enabled)(
   { timeout: 300_000 },
   async () => {
     const source = fixtures['./fixtures/bubble-layouts.sverlin'];
-    // The node the Side layout writes beside its parts, by its tag's line.
-    const line = source.split('\n').findIndex((text) => text.includes('<Node>{@render Title()}'));
+    // The node the Side layout writes beside what it draws, by its tag's line.
+    const line = source.split('\n').findIndex((text) => text.includes('<Node><Title /></Node>'));
+    expect(line).toBeGreaterThan(0);
     const holds = (steps: SceneStep[]) =>
       steps.some((step) => step.nodes.some((node) => node.id.startsWith(`${line + 1}:`)));
     const side = await drawsAsGiven(source, { chosen: { layout: 'Side', 'Side.ratio': '4:3' } });
@@ -237,7 +238,7 @@ it.skipIf(!enabled)(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
     const given = await drawsAsGiven(source, {
       chosen: { 'Cell.shadow': 'lifted', 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
     });
@@ -280,7 +281,7 @@ it.skipIf(!enabled)(
 </script>
 <View of="Name" name="Tag"><Node value={this} /></View>
 <View of="Names" name="Row"><Node layout="row">{#each this as n}{n}{/each}</Node></View>
-<Layout name="Main"><Node>{names}</Node></Layout>`;
+<Layout name="Main" of="names"><Node>{names}</Node></Layout>`;
     const tags = (step: SceneStep) =>
       step.nodes
         .filter((node) => node.kind === 'Tag')
@@ -324,7 +325,7 @@ it.skipIf(!enabled)(
   @grow[a = Int(100);]
 </script>
 <View of="Int" name="Num"><Node value={this} /></View>
-<Layout name="Main"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>`;
+<Layout name="Main" of="a, b"><Node><Node layout="row" kind="Pair">{a}{b}</Node></Node></Layout>`;
     const { steps } = await drawsAsGiven(source, {
       chosen: { 'Num.width': 'varying', 'Main.Pair.spacing': 'packed' }
     });
@@ -367,7 +368,7 @@ it.skipIf(!enabled)(
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
     for (const chosen of [
       { 'Here.Pointed.expand': 4 },
       { 'Here.Pointed.expand': 4, 'Row.spacing': 'packed' }

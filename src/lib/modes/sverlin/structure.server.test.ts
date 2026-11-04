@@ -28,16 +28,15 @@ const list = `<script domain>
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
 <View of="ListNode" name="NodeBox">
-  {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
-  <Node layout="row">{this.name}{@render NextField()}</Node>
+  <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-{#snippet Heap()}
+<Layout name="Heap">
   <Node layout="free">{#each all(ListNode) as node}{node}{/each}</Node>
-{/snippet}
+</Layout>
 
 <Layout name="Main">
   <Node>
-    {@render Heap()}
+    <Heap />
   </Node>
 </Layout>`;
 
@@ -57,15 +56,15 @@ const ring = `<script domain>
   @second[at = next[at];]
 </script>
 <View of="Name" name="NameCell"><Node value={this} /></View>
-{#snippet Ring()}
+<Layout name="Ring" of="names, next">
   <Node layout="free">
     {#each names as name, k}{name}<Link from={k} to={next[k]} />{/each}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="names, next">
   <Node>
-    {@render Ring()}
+    <Ring names={names} next={next} />
   </Node>
 </Layout>`;
 
@@ -82,11 +81,11 @@ const unlinked = `<script domain>
   @move[i = Position(1);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}<Node layout="free">{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node layout="free">{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
   </Node>
 </Layout>`;
 

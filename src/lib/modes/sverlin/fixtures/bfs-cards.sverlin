@@ -68,15 +68,14 @@ while @more[the queue is not empty]
 
 <View of="VertexRef" name="Outline"><Pointed /></View>
 <View of="VertexRef" name="Captioned">
-  {#snippet Caption()}<Node>start here</Node>{/snippet}
   <Node layout="column">
     <Pointed />
-    {@render Caption()}
+    <Node kind="Caption">start here</Node>
   </Node>
 </View>
 
-{#snippet Title()}<Node>Breadth-first search from A</Node>{/snippet}
-{#snippet Graph()}
+<Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
+<Layout name="Graph" of="vertices, neighbours">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -85,27 +84,27 @@ while @more[the queue is not empty]
       {/each}
     {/each}
   </Node>
-{/snippet}
-{#snippet QueueLine()}
+</Layout>
+<Layout name="QueueLine" of="queue">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
-{/snippet}
-{#snippet Board()}
+</Layout>
+<Layout name="Board" of="vertices, neighbours, queue">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      {@render Graph()}
-      {@render QueueLine()}
+      <Graph vertices={vertices} neighbours={neighbours} />
+      <QueueLine queue={queue} />
     </Node>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="start, current, vertices, neighbours, queue">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title />
+    <Board vertices={vertices} neighbours={neighbours} queue={queue} />
     {start}
     {current}
   </Node>

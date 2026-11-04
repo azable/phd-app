@@ -370,7 +370,7 @@ export function viewThisValues(source: string): {
       else
         problems.push({
           message:
-            'this is the value a view draws, and only a view has one: read it inside a view, as <View of="Vertex" name="Card"><Node>{this.name}</Node></View>, and in a part of the page or the root read the variable itself.',
+            'this is the value a view draws, and only a view has one: read it inside a view, as <View of="Vertex" name="Card"><Node>{this.name}</Node></View>, and in a layout read the variable itself.',
           start: at
         });
       at += 3;
@@ -413,8 +413,8 @@ export function viewTags(source: string): {
     const type = /:\s*([^,]+?)\s*$/u.exec(parameters)?.[1];
     problems.push({
       message: type
-        ? `${name} takes a value, as only a view does: write it as a view, <View of="${type}" name="${name}">…</View>, its value this; a snippet takes nothing and is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}.`
-        : `${name} takes a parameter: a snippet takes nothing and is a part of the page, as {#snippet Title()}<Node>…</Node>{/snippet}, and ${viewAdvice}.`,
+        ? `${name} takes a value, as only a view does: write it as a view, <View of="${type}" name="${name}">…</View>, its value this.`
+        : `${name} takes a parameter: a layout takes none, reading the state it declares, as <Layout name="Caption" of="target">…</Layout>, and ${viewAdvice}.`,
       start: match.index ?? 0
     });
   }
@@ -442,7 +442,7 @@ export function viewTags(source: string): {
     }
     if (open) {
       problems.push({
-        message: `A <View> is written at the top level, beside the parts and layouts, not inside another view: close the view before it with </View>.`,
+        message: `A <View> is written at the top level, beside the layouts, not inside another view: close the view before it with </View>.`,
         start
       });
       continue;

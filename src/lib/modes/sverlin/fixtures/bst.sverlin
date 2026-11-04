@@ -49,20 +49,20 @@
     </Node>
   </Node>
 </View>
-{#snippet Title()}<Node>Binary search tree insertion</Node>{/snippet}
-{#snippet Heap()}
+<Layout name="Title"><Node>Binary search tree insertion</Node></Layout>
+<Layout name="Heap">
   <Node layout="free" flow="y">
     {#each all(TreeNode) as node}{node}{/each}
   </Node>
-{/snippet}
-{#snippet Status()}
+</Layout>
+<Layout name="Status" of="@sequence.pick">
   <Node>Insert next value {@sequence.pick}</Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="@sequence.pick">
   <Node>
-    {@render Title()}
-    {@render Heap()}
-    {@render Status()}
+    <Title />
+    <Heap />
+    <Status />
   </Node>
 </Layout>

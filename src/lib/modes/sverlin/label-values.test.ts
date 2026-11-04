@@ -27,13 +27,15 @@ const insertion = `
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}`;
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>`;
 
 /** A source of the algorithm and its parts, its one layout holding `view`. */
-const prepare = (view: string, algorithm = insertion, parts = '') =>
+/** The view in a layout reading what it names, values and labels, or `of`. */
+const prepare = (view: string, algorithm = insertion, parts = '', of = readIn(view)) =>
   prepareSvelteComponent(
-    `${domain}${algorithm}\n${parts}\n<Layout name="Main"><Node>${view}</Node></Layout>`
+    `${domain}${algorithm}\n${parts}\n<Layout name="Main" of="${of}"><Node>${view}</Node></Layout>`
   );
+const readIn = (view: string) => [...new Set(view.match(/\bvalues\b|@[\w.]+/gu))].join(', ');
 
 describe('labels read in the view', () => {
   it('are rewritten as identifiers of the same length, outside tags and strings', () => {
@@ -51,23 +53,24 @@ describe('labels read in the view', () => {
     ]);
   });
 
-  it('are an attribute’s value only inside a tag, so text before {@render …} may end in =', async () => {
+  it('are an attribute’s value only inside a tag, so text before a label may end in =', async () => {
     const text = '<Node>current key = {v}</Node>';
     expect(markLabels(text)).toEqual({ source: text, references: [], heaps: [] });
     const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n{#snippet Inserting()}<Node>current key = {@insert.key}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Inserting()}</Node></Layout>`
+        `${domain}${insertion}\n<Layout name="Inserting" of="@insert.key"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main" of="@insert.key"><Node><Inserting /></Node></Layout>`
       )
     ).resolves.toBeDefined();
   });
 
-  it('give the value the labelled expression gave in a step’s own code, in a part of the page', () => {
+  it('give the value the labelled expression gave in a step’s own code, in a layout drawn by another', () => {
     const prepared = prepare(
-      '{@render Inserting()}',
+      '<Inserting />',
       insertion,
-      '{#snippet Inserting()}<Node>inserting {@insert.key}</Node>{/snippet}'
+      '<Layout name="Inserting" of="@insert.key"><Node>inserting {@insert.key}</Node></Layout>',
+      '@insert.key'
     );
     expect(prepared.labelled).toEqual({
       ℓinsertˑkey: {
@@ -103,7 +106,7 @@ describe('labels read in the view', () => {
     expect(() => prepare('{@a.v}{@b.v}', twice)).not.toThrow();
   });
 
-  it('take a label on an expression, and are read only in the root and its parts', () => {
+  it('take a label on an expression, and are read only in layouts', () => {
     const statement = `
 <script algorithm>
   for (@setup[let i = Index(1)]; @guard[i < values.length]; @onward[i++]) @insert{
@@ -117,7 +120,7 @@ describe('labels read in the view', () => {
     );
     expect(() =>
       prepare(
-        '{@render Cells()}',
+        '<Cells values={values} />',
         insertion,
         '<View of="Values" name="Shown"><Node>{@insert.key}</Node></View>'
       )
@@ -139,8 +142,10 @@ describe('labels read in the view', () => {
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);
     expect(() =>
       prepare(
-        '{@render Asked()}',
-        `${search}\n{#snippet Asked()}<Node>{#each applied(Equal, @check) as e}{e}{/each}</Node>{/snippet}`
+        '<Asked />',
+        `${search}\n<Layout name="Asked" of="@check"><Node>{#each applied(Equal, @check) as e}{e}{/each}</Node></Layout>`,
+        '',
+        '@check'
       )
     ).toThrow('applied(Equal, @check) is not written: label the expression whose results it lists');
   });

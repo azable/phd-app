@@ -45,11 +45,11 @@ const merge = `<script domain>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>↑</Node></Node></View>
 <View of="Position" name="Placed"><Pointed /></View>
-{#snippet Rows()}<Node layout="column">{left}{right}{merged}</Node>{/snippet}
+<Layout name="Rows" of="left, right, merged"><Node layout="column">{left}{right}{merged}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="i, j, k, left, right, merged">
   <Node>
-    {@render Rows()}
+    <Rows left={left} right={right} merged={merged} />
     {i}
     {j}
     {k}
@@ -239,16 +239,16 @@ const walk = `<script domain>
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Edge" name="Arrow"><Link from={this.from} to={this.to} /></View>
 <View of="EdgeIndex" name="Current"><Pointed /></View>
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, edges">
   <Node layout="free">
     {#each vertices as name}{name}{/each}
     {#each edges as edge}{edge}{/each}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="e, vertices, edges">
   <Node>
-    {@render Graph()}
+    <Graph vertices={vertices} edges={edges} />
     {e}
   </Node>
 </Layout>`;
@@ -330,7 +330,7 @@ const taken = `<script domain>
   <Node layout="column"><Pointed /><Node>taken</Node></Node>
 </View>
 
-<Layout name="Main">
+<Layout name="Main" of="left, right, take">
   <Node>
     {left}
     {right}
@@ -405,7 +405,7 @@ const apart = `<script domain>
 <View of="Index" name="Short"><Node layout="column"><Pointed /><Node>i</Node></Node></View>
 <View of="Index" name="Long"><Node layout="column"><Pointed /><Node>the other one</Node></Node></View>
 
-<Layout name="Main">
+<Layout name="Main" of="values, i, j">
   <Node>
     {values}
     {i}
@@ -485,7 +485,7 @@ const far = `<script domain>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
 
-<Layout name="Main">
+<Layout name="Main" of="values, i">
   <Node>
     {values}
     {i}
@@ -543,10 +543,10 @@ it.skipIf(!enabled)(
 
 const cursors = taken
   .replace(
-    '<Layout name="Main">',
-    `<View of="Index" name="ICursor">{#snippet IName()}<Node>i</Node>{/snippet}<Node layout="column">{@render IName()}<Pointed /></Node></View>
-<View of="Index" name="JCursor">{#snippet JName()}<Node>j</Node>{/snippet}<Node layout="column">{@render JName()}<Pointed /></Node></View>
-<Layout name="Main">`
+    '<Layout name="Main" of="left, right, take">',
+    `<View of="Index" name="ICursor"><Node layout="column"><Node kind="IName">i</Node><Pointed /></Node></View>
+<View of="Index" name="JCursor"><Node layout="column"><Node kind="JName">j</Node><Pointed /></Node></View>
+<Layout name="Main" of="left, right, take, i, j">`
   )
   .replace(
     '{take.from}',
@@ -674,7 +674,7 @@ it.skipIf(!enabled)(
   { timeout: 120_000 },
   async () => {
     const prepared = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n{#snippet Pair()}<Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node>{/snippet}<Layout name="Main"><Node>{@render Pair()}</Node></Layout>`
+      `<script domain>const Int = type([1, 2]); const Values = collection(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values([1, 2]); const i = Position(0); const j = Position(1);</script><script algorithm></script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="values, i, j"><Node><Pair values={values} i={i} j={j} /></Node></Layout>`
     );
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: {
@@ -737,13 +737,13 @@ const compared = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="@compare.greater" name="Ask"><Node>{this.left} vs {this.right}</Node></View>
-{#snippet Board()}
+<Layout name="Board" of="values, @compare.greater">
   <Node layout="column"><Node>{#each values as v}{v}{/each}</Node>{@compare.greater}</Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @compare.greater">
   <Node>
-    {@render Board()}
+    <Board values={values} />
   </Node>
 </Layout>`;
 
@@ -825,7 +825,7 @@ const scan = `<script domain>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main"><Node>{values}{i}</Node></Layout>`;
+<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>`;
 
 /** A value's box on screen, and its fill as red, green and blue. */
 type Cell = { left: number; right: number; fill: number[] };

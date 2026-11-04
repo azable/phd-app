@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { bundlePresentation, frameSettings, prepareSvelteComponent } from './compile.server';
 import layouts from './fixtures/bubble-layouts.sverlin?raw';
 
-/** The fixture's view with its layouts replaced. */
-const withView = (view: string) => `${layouts.slice(0, layouts.indexOf('<Layout'))}${view}`;
+/** The fixture's view with its page layouts replaced. */
+const withView = (view: string) =>
+  `${layouts.slice(0, layouts.indexOf('<Layout name="Stacked"'))}${view}`;
 
 const problemOf = (source: string) => {
   try {
@@ -69,7 +70,8 @@ describe('layouts of the page', () => {
   });
 
   it('refuses a source without layouts, naming the fix', () => {
-    expect(problemOf(withView('{@render Title()}\n{@render Board()}'))).toMatch(
+    const unlaid = `${layouts.slice(0, layouts.indexOf('<Layout'))}<Node>Bubble sort</Node>`;
+    expect(problemOf(unlaid)).toMatch(
       /declares no layout: put what the page draws in <Layout name="Main">/u
     );
   });
@@ -88,63 +90,67 @@ describe('layouts of the page', () => {
   it.each([
     [
       'something beside the layouts',
-      '{@render Title()}\n<Layout name="A"><Node>{@render Board()}</Node></Layout>',
-      'the top level holds only parts, views, and layouts'
+      '<Title />\n<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout>',
+      'The top level holds only views and layouts'
     ],
     [
       'two roots',
-      '<Layout name="A"><Node>{@render Title()}</Node><Node>{@render Board()}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node><Title /></Node><Node><Board values={values} /></Node></Layout>',
       'body is one root <Node>'
     ],
     [
       'a free root',
-      '<Layout name="A"><Node layout="free">{@render Board()}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node layout="free"><Board values={values} /></Node></Layout>',
       'its only prop is layout, "row" or "column"'
     ],
     [
       'a nested layout',
-      '<Layout name="A"><Node>{#if true}<Layout name="B"><Node>{@render Board()}</Node></Layout>{/if}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node>{#if true}<Layout name="B" of="values, @pass"><Node><Board values={values} /></Node></Layout>{/if}</Node></Layout>',
       'declared at the top level'
     ],
     [
       'two layouts of one name',
-      '<Layout name="A"><Node>{@render Board()}</Node></Layout>\n<Layout name="A"><Node>{@render Title()}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout>\n<Layout name="A" of="values, @pass"><Node><Title /></Node></Layout>',
       'Two layouts are named A'
     ],
     [
-      "a snippet's name",
-      '<Layout name="Title"><Node>{@render Board()}</Node></Layout>',
-      "has a snippet's name"
+      "a view's name",
+      '<Layout name="Cells" of="values, @pass"><Node><Board values={values} /></Node></Layout>',
+      "has a view's name"
     ],
-    ['a nameless layout', '<Layout><Node>{@render Board()}</Node></Layout>', 'is no layout'],
+    [
+      'a nameless layout',
+      '<Layout><Node><Board values={values} /></Node></Layout>',
+      'is no layout'
+    ],
     [
       'a layout closed on itself',
-      '<Layout name="A" /><Node>{@render Board()}</Node>',
+      '<Layout name="A" /><Node><Board values={values} /></Node>',
       '<Layout name="A" /> holds nothing'
     ],
     [
       'a closing without its >',
-      '<Layout name="A"><Node>{@render Board()}</Node></Layout\n',
+      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout\n',
       '</Layout does not close the layout: close the layout with </Layout>.'
     ],
     [
       'a layout never closed',
-      '<Layout name="A"><Node>{@render Board()}</Node>\n<Layout name="B"><Node>{@render Title()}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node>\n<Layout name="B" of="values, @pass"><Node><Title /></Node></Layout>',
       'The layout A is never closed: close the layout with </Layout>'
     ],
     [
       'a closing without an opening',
-      '<Layout name="A"><Node>{@render Board()}</Node></Layout></Layout>',
+      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout></Layout>',
       'This </Layout> closes no layout'
     ],
     [
       'only a closing',
-      '<Node>{@render Board()}</Node></Layout>',
+      '<Node><Board values={values} /></Node></Layout>',
       'This </Layout> closes no layout'
     ],
     [
       'text in the root',
-      '<Layout name="A"><Node>Bubble sort {@render Board()}</Node></Layout>',
+      '<Layout name="A" of="values, @pass"><Node>Bubble sort <Board values={values} /></Node></Layout>',
       'Text outside a <Node>'
     ]
   ])('refuses %s', (_, view, message) => {
@@ -152,7 +158,8 @@ describe('layouts of the page', () => {
   });
 
   it('keeps every offset, so problems point where they are written', () => {
-    const view = '<Layout name="A">\n  <Node>{@render Missing()}</Node>\n</Layout>';
+    const view =
+      '<Layout name="A" of="values, @pass">\n  <Node><Title /><Board values={values} /><Missing /></Node>\n</Layout>';
     const source = withView(view);
     try {
       prepareSvelteComponent(source);
@@ -160,12 +167,14 @@ describe('layouts of the page', () => {
     } catch (cause) {
       const { line, column } = cause as { line: number; column: number };
       const lines = source.split('\n');
-      expect(lines[line - 1].slice(column - 1)).toMatch(/^\{@render Missing/u);
+      expect(lines[line - 1].slice(column - 1)).toMatch(/^<Missing/u);
     }
   });
 
   it('points at a malformed closing', () => {
-    const source = withView('<Layout name="A">\n  <Node>{@render Board()}</Node>\n</Layout');
+    const source = withView(
+      '<Layout name="A" of="values, @pass">\n  <Node><Board values={values} /></Node>\n</Layout'
+    );
     try {
       prepareSvelteComponent(source);
       expect.unreachable();

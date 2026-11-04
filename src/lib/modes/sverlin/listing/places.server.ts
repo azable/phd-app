@@ -20,7 +20,7 @@ export function tokenProblems(
   const known = new Set(rendered);
   const listed = rendered.length
     ? `the places it renders are ${[...known].sort().join(', ')}`
-    : 'it renders nothing at a place, as {@render Position(mid)} at @mid';
+    : 'it draws nothing at a place, as {mid} at @mid';
   return tokens
     .filter(({ place }) => !known.has(place))
     .map(({ place, at }) => ({

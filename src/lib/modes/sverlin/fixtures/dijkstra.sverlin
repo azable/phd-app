@@ -84,7 +84,7 @@
   <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
 </View>
 
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, edges">
   <Node layout="free">
     {#each vertices as vertex}
       {vertex}
@@ -93,21 +93,21 @@
       {edge}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet Title()}<Node>Dijkstra's shortest paths</Node>{/snippet}
-{#snippet Status()}
+<Layout name="Title"><Node>Dijkstra's shortest paths</Node></Layout>
+<Layout name="Status" of="current, @round.visit.edge.relax.check">
   <Node layout="column">
     <Node>Nearest chosen: {current}</Node>
     {@round.visit.edge.relax.check}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="current, e, vertices, edges, @round.visit.edge.relax.check">
   <Node>
-    {@render Title()}
-    {@render Graph()}
-    {@render Status()}
+    <Title />
+    <Graph vertices={vertices} edges={edges} />
+    <Status current={current} />
     {current}
     {e}
   </Node>

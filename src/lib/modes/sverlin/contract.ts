@@ -5,7 +5,7 @@ export const sverlinStarter = {
   language: 'svelte',
   mediaType: 'text/x-svelte',
   source:
-    '<script algorithm>\n</script>\n{#snippet Title()}<Node>Start your visualization</Node>{/snippet}\n<Layout name="Stacked">\n  <Node>{@render Title()}</Node>\n</Layout>\n'
+    '<script algorithm>\n</script>\n<Layout name="Title"><Node>Start your visualization</Node></Layout>\n<Layout name="Stacked">\n  <Node><Title /></Node>\n</Layout>\n'
 } as const;
 
 /** A small self-contained algorithm example for administrator projects. */
@@ -29,39 +29,37 @@ export const linearSearchSource = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Int" name="IntTally">
-  {#snippet Tally()}<Node>{'•'.repeat(this)}</Node>{/snippet}
   <Node layout="column">
     <Node value={this} />
-    {@render Tally()}
+    <Node kind="Tally">{'•'.repeat(this)}</Node>
   </Node>
 </View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Values" name="Row">
   <Node layout="row">
     {#each this as value, k}
-      {#snippet Under()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
         {value}
-        {@render Under()}
+        <Node kind="Under">{k}</Node>
       </Node>
     {/each}
   </Node>
 </View>
 <View of="Index" name="Highlight"><Pointed /></View>
-{#snippet Title()}<Node>Linear search</Node>{/snippet}
-{#snippet Caption()}<Node>Find {target} by checking each cell in order.</Node>{/snippet}
+<Layout name="Title"><Node>Linear search</Node></Layout>
+<Layout name="Caption" of="target"><Node>Find {target} by checking each cell in order.</Node></Layout>
 <View of="@check.equal" name="Ask"><Node>is {this.left} equal to {this.right}?</Node></View>
-{#snippet Checking()}<Node>Checking index {i}: {@check.equal}</Node>{/snippet}
-{#snippet Result()}<Node>Found {target} at index {found}.</Node>{/snippet}
+<Layout name="Checking" of="i, @check.equal"><Node>Checking index {i}: {@check.equal}</Node></Layout>
+<Layout name="Result" of="target, found"><Node>Found {target} at index {found}.</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, i, found, target, @check.equal">
   <Node>
-    {@render Title()}
-    {@render Caption()}
+    <Title />
+    <Caption target={target} />
     {values}
     {i}
     {found}
-    {@render Checking()}
-    {@render Result()}
+    <Checking i={i} />
+    <Result target={target} found={found} />
   </Node>
 </Layout>`;

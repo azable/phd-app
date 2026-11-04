@@ -36,20 +36,19 @@
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Flag" name="SeenMark"><Node>{this ? '✓' : '·'}</Node></View>
 <View of="Vertex" name="VertexCard">
-  {#snippet OutField()}<Node>{#each this.out as w}<Link to={w} />{/each}</Node>{/snippet}
-  <Node layout="column">{this.name}{this.seen}{@render OutField()}</Node>
+  <Node layout="column">{this.name}{this.seen}<Node kind="OutField">{#each this.out as w}<Link to={w} />{/each}</Node></Node>
 </View>
 <View of="VertexRef" name="Marked"><Pointed /></View>
-{#snippet Graph()}
+<Layout name="Graph">
   <Node layout="free">{#each all(Vertex) as v}{v}{/each}</Node>
-{/snippet}
+</Layout>
 
-{#snippet Line()}<Node>queue: {#each queue as q}{q.name}{/each}</Node>{/snippet}
+<Layout name="Line" of="queue"><Node>queue: {#each queue as q}{q.name}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="current, queue, @visit.look.check.next">
   <Node>
-    {@render Graph()}
-    {@render Line()}
+    <Graph />
+    <Line queue={queue} />
     {current}
     {@visit.look.check.next}
   </Node>

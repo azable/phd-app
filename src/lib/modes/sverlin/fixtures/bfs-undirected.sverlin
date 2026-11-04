@@ -52,8 +52,8 @@
   <Node>{#each this as item}{item}{/each}</Node>
 </View>
 
-{#snippet Title()}<Node>Breadth-first search from A, on an undirected graph</Node>{/snippet}
-{#snippet Graph()}
+<Layout name="Title"><Node>Breadth-first search from A, on an undirected graph</Node></Layout>
+<Layout name="Graph" of="vertices, neighbours">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -62,18 +62,18 @@
       {/each}
     {/each}
   </Node>
-{/snippet}
-{#snippet QueueLine()}
+</Layout>
+<Layout name="QueueLine" of="queue">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="vertices, neighbours, queue">
   <Node>
-    {@render Title()}
-    {@render Graph()}
-    {@render QueueLine()}
+    <Title />
+    <Graph vertices={vertices} neighbours={neighbours} />
+    <QueueLine queue={queue} />
   </Node>
 </Layout>

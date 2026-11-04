@@ -83,13 +83,13 @@ it.skipIf(!enabled)(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Inserting()}<Node>inserting {@insert.key}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Inserting" of="@insert.key"><Node>inserting {@insert.key}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @insert.key">
   <Node>
-    {@render Cells()}
-    {@render Inserting()}
+    <Cells values={values} />
+    <Inserting />
   </Node>
 </Layout>`;
     const keys = (
@@ -131,15 +131,15 @@ it.skipIf(!enabled)(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Swapped()}<Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Swapped" of="@sweep.pair.swap.a, @sweep.pair.swap.b"><Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node></Layout>
 <View of="@sweep.pair.test" name="Ask"><Node>is {this.left} > {this.right}?</Node></View>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @sweep.pair.test, @sweep.pair.swap.a, @sweep.pair.swap.b">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
     {@sweep.pair.test}
-    {@render Swapped()}
+    <Swapped />
   </Node>
 </Layout>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
@@ -181,11 +181,11 @@ it.skipIf(!enabled)(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Checked"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @check.hit.at">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
     {#each runs(@check.hit.at) as p}{p}{/each}
   </Node>
 </Layout>`;
@@ -221,13 +221,13 @@ it.skipIf(!enabled)(
 <View of="Digit" name="DigitCell"><Node value={this} /></View>
 <View of="Count" name="CountCell"><Node value={this} /></View>
 <View of="At" name="Reading"><Pointed /></View>
-{#snippet DigitRow()}<Node>{#each digits as d}{d}{/each}</Node>{/snippet}
-{#snippet CountRow()}<Node>{#each counts as c}{c}{/each}</Node>{/snippet}
+<Layout name="DigitRow" of="digits"><Node>{#each digits as d}{d}{/each}</Node></Layout>
+<Layout name="CountRow" of="counts"><Node>{#each counts as c}{c}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="v, digits, counts">
   <Node>
-    {@render DigitRow()}
-    {@render CountRow()}
+    <DigitRow digits={digits} />
+    <CountRow counts={counts} />
     {v}
   </Node>
 </Layout>`;

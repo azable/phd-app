@@ -117,7 +117,8 @@ export function unchosenViews(
         );
   const renderedElsewhere = (name: string, view: { from: number }) =>
     [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
-      ({ index }) => !/^(?:\{#snippet\s*|<View\b[^>]*\bname=")$/u.test(doc.slice(view.from, index))
+      ({ index }) =>
+        !/^(?:\{#snippet\s*|<(?:View|Layout)\b[^>]*\bname=")$/u.test(doc.slice(view.from, index))
     );
   const unchosen = new Map<string, UnchosenView>();
   for (const [key, names] of options) {
@@ -230,7 +231,7 @@ function nodeEnd(doc: string, from: number): number {
   return opening;
 }
 
-/** Each named view or snippet of a source, from its opening to the end of its closing. */
+/** Each named view or layout of a source, from its opening to the end of its closing. */
 function snippetBlocks(doc: string): Map<string, { from: number; to: number }> {
   return new Map(snippetRanges(doc).map(({ name, from, to }) => [name, { from, to }]));
 }
@@ -326,18 +327,19 @@ export function tagGhosts(
 const placeArgument = /^@?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
 
 /**
- * Each view and snippet of a source, from its opening to the end of its closing, and whether it
- * takes a value, as only a view does.
+ * Each view and layout of a source (and snippet, in sources written before layouts), from its
+ * opening to the end of its closing, and whether it takes a value, as only a view does.
  */
 function snippetRanges(doc: string): { name: string; from: number; to: number; typed: boolean }[] {
   const ranges: { name: string; from: number; to: number; typed: boolean }[] = [];
   const open: { name: string; from: number; typed: boolean }[] = [];
   for (const match of doc.matchAll(
-    /\{#snippet\s+([A-Za-z_$][\w$]*)|<View\b[^>]*?\bname="([A-Za-z_$][\w$]*)"[^>]*>|\{\/snippet\}|<\/View\s*>/gu
+    /\{#snippet\s+([A-Za-z_$][\w$]*)|<View\b[^>]*?\bname="([A-Za-z_$][\w$]*)"[^>]*>|<Layout\b[^>]*?\bname="([A-Za-z_$][\w$]*)"[^>]*?(\/?)>|\{\/snippet\}|<\/View\s*>|<\/Layout\s*>/gu
   )) {
-    if (match[1] || match[2])
-      open.push({ name: match[1] ?? match[2], from: match.index, typed: Boolean(match[2]) });
-    else {
+    const name = match[1] ?? match[2] ?? match[3];
+    if (name) {
+      if (!match[4]) open.push({ name, from: match.index, typed: Boolean(match[2]) });
+    } else {
       const block = open.pop();
       if (block) ranges.push({ ...block, to: match.index + match[0].length });
     }
@@ -421,8 +423,7 @@ export function placeGhosts(
     const place = placeArgument.exec(render.argument)?.[1];
     const end = braceEnd(doc, match.index);
     if (!place || end === undefined) continue;
-    // In a typed view, a place's variables carry the view's path; at the top level or in a part,
-    // none.
+    // In a typed view, a place's variables carry the view's path; in a layout, none.
     const around = snippets
       .filter(({ from, to }) => from < match.index && match.index < to)
       .sort((a, b) => a.from - b.from);

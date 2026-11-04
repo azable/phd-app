@@ -27,6 +27,6 @@
   </Node>
 </View>
 
-<Layout name="Main">
+<Layout name="Main" of="a, b">
   <Node layout="row">{a}{b}</Node>
 </Layout>

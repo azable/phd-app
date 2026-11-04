@@ -48,16 +48,16 @@ const insertion = `<script domain>
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Cells()}
+<Layout name="Cells" of="values, @insert.swap.to, @insert.swap.from">
   <Node layout="row">
     {#each values as v}{v}{/each}
     <Link from={@insert.swap.from} to={@insert.swap.to} />
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @insert.swap.to, @insert.swap.from">
   <Node>
-    {@render Cells()}
+    <Cells values={values} />
   </Node>
 </Layout>`;
 
@@ -178,9 +178,10 @@ const traded = insertion
       j--;`
   )
   .replace('    <Link from={@insert.swap.from} to={@insert.swap.to} />', '    {@insert.swap.trade}')
+  .replaceAll('of="values, @insert.swap.to, @insert.swap.from"', 'of="values, @insert.swap"')
   .replace(
-    '{#snippet Cells()}',
-    '<View of="@insert.swap.trade" name="Trade"><Link from={this.left} to={this.right} /></View>\n{#snippet Cells()}'
+    '<Layout name="Cells"',
+    '<View of="@insert.swap.trade" name="Trade"><Link from={this.left} to={this.right} /></View>\n<Layout name="Cells"'
   );
 
 it.skipIf(!enabled)(
@@ -557,7 +558,7 @@ it.skipIf(!enabled)(
 <View of="Values" name="Row">
   <Node layout="row">{#each this as v, k}{v}<Link from={k} to={k + 1} />{/each}</Node>
 </View>
-<Layout name="Main"><Node>{values}</Node></Layout>`;
+<Layout name="Main" of="values"><Node>{values}</Node></Layout>`;
     const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];

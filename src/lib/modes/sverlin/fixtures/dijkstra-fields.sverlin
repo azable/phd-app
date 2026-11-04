@@ -106,19 +106,17 @@ while @moreRounds[round ≤ number of vertices]
 <View of="VisitedFlag" name="VisitedWord"><Node>{this ? 'settled' : 'unsettled'}</Node></View>
 <View of="VertexRef" name="ScanMark"><Pointed /></View>
 
-{#snippet Title()}
+<Layout name="Title" of="vertices, source">
   <Node>Dijkstra’s shortest paths from {vertices[source].name}</Node>
-{/snippet}
+</Layout>
 
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, distances, previous, visited, adjacency">
   <Node layout="free">
     {#each vertices as vertex, k}
-      {#snippet DistanceLine()}<Node>distance {distances[k]}</Node>{/snippet}
-      {#snippet PreviousLine()}<Node>via {previous[k]}</Node>{/snippet}
       <Node layout="column">
         {vertex.name}
-        {@render DistanceLine()}
-        {@render PreviousLine()}
+        <Node kind="DistanceLine">distance {distances[k]}</Node>
+        <Node kind="PreviousLine">via {previous[k]}</Node>
         {visited[k]}
       </Node>
     {/each}
@@ -128,26 +126,26 @@ while @moreRounds[round ≤ number of vertices]
       {/each}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet Key()}
+<Layout name="Key">
   <Node>Each edge label is its weight. “Via” records the predecessor on the best route found so far.</Node>
-{/snippet}
+</Layout>
 
-{#snippet Board()}
+<Layout name="Board" of="vertices, distances, previous, visited, adjacency">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      {@render Graph()}
-      {@render Key()}
+      <Graph vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} />
+      <Key />
     </Node>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="v, vertices, source, distances, previous, visited, adjacency">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title vertices={vertices} source={source} />
+    <Board vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} />
     {v}
   </Node>
 </Layout>

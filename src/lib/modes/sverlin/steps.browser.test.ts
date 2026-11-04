@@ -42,13 +42,13 @@ it.skipIf(!enabled)(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet At()}<Node>at {i}</Node>{/snippet}
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="At" of="i"><Node>at {i}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, i">
   <Node>
-    {@render Cells()}
-    {@render At()}
+    <Cells values={values} />
+    <At i={i} />
   </Node>
 </Layout>`;
     const prepared = prepareSvelteComponent(source);
@@ -138,15 +138,15 @@ it.skipIf(!enabled)(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Title()}<Node>Pass</Node>{/snippet}
-{#snippet Key()}<Node>key {key}</Node>{/snippet}
-{#snippet Cells()}<Node layout="row">{#each values as x}{x}{/each}</Node>{/snippet}
+<Layout name="Title"><Node>Pass</Node></Layout>
+<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
+<Layout name="Cells" of="values"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="key, values">
   <Node>
-    {@render Title()}
-    {@render Key()}
-    {@render Cells()}
+    <Title />
+    <Key key={key} />
+    <Cells values={values} />
   </Node>
 </Layout>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that

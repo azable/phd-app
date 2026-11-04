@@ -1,6 +1,6 @@
 /**
  * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
- * top-level part (what the view's root renders, in any layout) or a node holding most of the picture, never what
+ * layout a page draws (what a page layout's root draws) or a node holding most of the picture, never what
  * the preference model settled (settledValues), at most one hide per variant, and
  * most of the picture still showing afterwards. A comparison the assistant designed is held only
  * to the last, and never hides the layout itself (allowedComparisonSide).
@@ -23,8 +23,10 @@ export function hides(variable: string, value: unknown): boolean {
 const hiddenAtMost = 0.5;
 
 /**
- * The views and snippets a source defines, by name, what each renders, what its root renders (in every layout), and
- * what each layout's root renders, the picture being the layout's a variant shows.
+ * What a source draws, by name: what each view, each layout another draws by its tag, and each kind
+ * a node names draws (`snippets`, as the compiler makes each of them a snippet), what the page
+ * layouts' roots draw (`root`), and what each page layout's root draws, the picture being the
+ * layout's a variant shows.
  */
 export type PictureTree = {
   snippets: Map<string, string[]>;
@@ -34,32 +36,35 @@ export type PictureTree = {
 
 export function pictureTree(source: string): PictureTree {
   const markup = source.replace(/<script[\s\S]*?<\/script>/gu, '');
-  const snippets = new Map<string, string[]>();
-  const root: string[] = [];
+  const declared = new Set(
+    [...markup.matchAll(/<Layout\s+name="([A-Za-z_]\w*)"/gu)].map(([, name]) => name)
+  );
+  const bodies = new Map<string, string[]>();
+  const drawn = new Set<string>();
   const open: string[] = [];
-  const layouts = new Map<string, string[]>();
-  let layout: string[] | undefined;
   const tokens =
-    /\{#snippet\s+([A-Za-z_]\w*)|<View\b[^>]*?\bname="([A-Za-z_]\w*)"[^>]*>|\{\/snippet\}|<\/View\s*>|\{@render\s+([A-Za-z_]\w*)\s*\(|<Listing\b|<Layout\s+name="([A-Za-z_]\w*)"|<\/Layout\s*>/gu;
-  for (const match of markup.matchAll(tokens)) {
-    const [whole, snippet, view, render, named] = match;
-    if (named) layouts.set(named, (layout = []));
-    else if (whole.startsWith('</Layout')) layout = undefined;
-    else if (snippet || view) {
-      open.push(snippet ?? view);
-      if (!snippets.has(snippet ?? view)) snippets.set(snippet ?? view, []);
-    } else if (whole === '{/snippet}' || whole.startsWith('</View')) open.pop();
-    else if (render) {
-      const parent = open.at(-1);
-      if (parent) snippets.get(parent)!.push(render);
-      else {
-        root.push(render);
-        layout?.push(render);
-      }
-    } else if (open.length === 0) layout?.push('<Listing>');
-    else snippets.get(open.at(-1)!)!.push('<Listing>');
+    /<View\b[^>]*?\bname="([A-Za-z_]\w*)"[^>]*>|<Layout\s+name="([A-Za-z_]\w*)"[^>]*>|<\/View\s*>|<\/Layout\s*>|<Node\b[^>]*?\bkind="([A-Za-z_]\w*)"|<Listing\b|<([A-Z]\w*)\b/gu;
+  for (const [whole, view, layout, kind, tag] of markup.matchAll(tokens)) {
+    const body = open.length ? bodies.get(open.at(-1)!) : undefined;
+    const opened = view ?? layout;
+    if (opened) {
+      open.push(opened);
+      if (!bodies.has(opened)) bodies.set(opened, []);
+    } else if (whole.startsWith('</')) open.pop();
+    else if (kind) {
+      if (!bodies.has(kind)) bodies.set(kind, []);
+      body?.push(kind);
+    } else if (whole === '<Listing') body?.push('<Listing>');
+    else if (tag && declared.has(tag)) {
+      body?.push(tag);
+      drawn.add(tag);
+    }
   }
-  return { snippets, root, layouts };
+  const layouts = new Map(
+    [...declared].filter((name) => !drawn.has(name)).map((name) => [name, bodies.get(name) ?? []])
+  );
+  const snippets = new Map([...bodies].filter(([name]) => !layouts.has(name)));
+  return { snippets, root: [...new Set([...layouts.values()].flat())], layouts };
 }
 
 type Hidden = { snippets: Set<string>; types: Set<string>; listing: boolean };
@@ -137,7 +142,7 @@ export type GuardContext = {
 export function allowedChange(context: GuardContext, variable: string, value: unknown): boolean {
   if (variable in context.settled && context.settled[variable] !== value) return false;
   if (!hides(variable, value)) return true;
-  // Nor the nodes a layout writes beside its parts, which are its root's.
+  // Nor the nodes a page layout writes beside what it draws, which are its root's.
   const snippet = variable.endsWith('.shown') ? shownSnippet(variable) : undefined;
   if (snippet && (context.tree.root.includes(snippet) || context.tree.layouts.has(snippet)))
     return false;
@@ -146,7 +151,7 @@ export function allowedChange(context: GuardContext, variable: string, value: un
 
 /**
  * Whether a side the assistant designed for a comparison may be built as given: it may hide a
- * top-level part, such as a title or caption, and more than one thing, but never the layout itself
+ * layout a page draws, such as a title or caption, and more than one thing, but never the layout itself
  * nor most of the picture.
  */
 export function allowedComparisonSide(context: GuardContext, side: DesignValues): boolean {

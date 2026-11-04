@@ -22,7 +22,7 @@ const source = `<script domain>
 </script>
 <View of="Index" name="Highlight"><Pointed /></View>
 <View of="Values" name="Row">
-  {#snippet Under()}<Node>i</Node>{/snippet}<Node kind="Label">v</Node>
+  <Node kind="Under">i</Node><Node kind="Label">v</Node>
 </View>
 <Layout name="Main">
   <Node>
@@ -37,7 +37,7 @@ const named = (text: string) =>
   referenceRanges(source, text).map(({ from, to }) => source.slice(from, to));
 
 describe('references in messages', () => {
-  it('name a snippet by its declaration, nested ones by their path', () => {
+  it('name a view or layout by its declaration, a kind by its path', () => {
     expect(named('Highlight')).toEqual(['Highlight']);
     expect(named('Row.Under')).toEqual(['Under']);
     expect(named('Row.Label.fill')).toEqual(['Label']);
@@ -127,8 +127,8 @@ describe('view choices, by what a build records each render reads', () => {
   const both = `<View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Index" name="Highlight"><Pointed /></View>
 <View of="Index" name="Arrow"><Pointed /></View>
-{#snippet At()}<Node>at {@render Index(lo)}</Node>{/snippet}
-{@render At()}
+<Layout name="At"><Node>at {@render Index(lo)}</Node></Layout>
+<At />
 {@render Index(mid)}
 {@render Index(found)}`;
   /** A render's line:column (both from 1), as a build records it. */

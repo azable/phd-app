@@ -19,25 +19,27 @@ const source = `<script domain>
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-{#snippet Title()}<Node>Pass</Node>{/snippet}
-{#snippet Picked()}<Node>picked {v}</Node>{/snippet}
-{#snippet Both()}<Node>{v} and {values[0]}</Node>{/snippet}
-{#snippet Cells()}<Node layout="row">{#each values as x}{x}{/each}</Node>{/snippet}
+<Layout name="Title"><Node>Pass</Node></Layout>
+<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>
+<Layout name="Both" of="v, values"><Node>{v} and {values[0]}</Node></Layout>
+<Layout name="Cells" of="values"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="v, values">
   <Node>
-    {@render Title()}
-    {@render Picked()}
-    {@render Both()}
-    {@render Cells()}
+    <Title />
+    <Picked v={v} />
+    <Both v={v} values={values} />
+    <Cells values={values} />
   </Node>
 </Layout>`;
 
 const prepared = prepareSvelteComponent(source);
 const siteIn = (text: string) => (written: string) => siteOf(text, text.indexOf(written));
-/** The site of a part's first node, right after its opening. */
-const nodeIn = (text: string) => (part: string) =>
-  siteOf(text, text.indexOf(`{#snippet ${part}()}`) + `{#snippet ${part}()}`.length);
+/** The site of a layout's first node, right after its opening. */
+const nodeIn = (text: string) => (layout: string) => {
+  const opening = new RegExp(`<Layout name="${layout}"[^>]*>`, 'u').exec(text)!;
+  return siteOf(text, opening.index + opening[0].length);
+};
 const site = siteIn(source);
 const node = nodeIn(source);
 // The pass as one label, which reads v and writes the row, as the same lines: its steps are its
@@ -73,8 +75,8 @@ describe('left out', () => {
       nodes: [node('Picked'), node('Both')],
       // v is in scope at no step, so it has no type to draw it by: its reads are left out as text.
       renders: [
-        site('{@render Picked()}'),
-        site('{@render Both()}'),
+        site('<Picked v={v} />'),
+        site('<Both v={v} values={values} />'),
         `read ${site('v}</Node>')}`,
         `read ${site('v} and')}`
       ]
@@ -97,9 +99,9 @@ describe('left out', () => {
         site('{v} and'),
         site('{values[0]}'),
         site('{x}'),
-        site('{@render Picked()}'),
-        site('{@render Both()}'),
-        site('{@render Cells()}')
+        site('<Picked v={v} />'),
+        site('<Both v={v} values={values} />'),
+        site('<Cells values={values} />')
       ]
     };
     expect(left(prepared, { 'views.Int': 'none' })).toEqual(expected);
@@ -112,7 +114,7 @@ describe('left out', () => {
     expect(notShown.nodes).not.toContain(node('Title'));
   });
 
-  it('leaves out a part of the page whose kind is not shown, and keeps the others', () => {
+  it('leaves out a layout whose kind is not shown, and keeps the others', () => {
     const { nodes } = left(prepared, { 'Title.shown': false });
     expect(nodes).toEqual([node('Title')]);
   });
@@ -120,11 +122,11 @@ describe('left out', () => {
   it('hide at a step a node one of whose own renders is hidden, and a row only with all its parts', () => {
     const nested = source
       .replace(
-        '{#snippet Picked()}<Node>picked {v}</Node>{/snippet}',
-        '{#snippet Outer()}<Node><Node>picked {v}</Node></Node>{/snippet}' +
-          '{#snippet Parts()}<Node><Node>v {v}</Node><Node>first {values[0]}</Node></Node>{/snippet}'
+        '<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>',
+        '<Layout name="Outer" of="v"><Node><Node>picked {v}</Node></Node></Layout>' +
+          '<Layout name="Parts" of="v, values"><Node><Node>v {v}</Node><Node>first {values[0]}</Node></Node></Layout>'
       )
-      .replace('{@render Picked()}', '{@render Outer()}{@render Parts()}');
+      .replace('<Picked v={v} />', '<Outer v={v} /><Parts v={v} values={values} />');
     const at = siteIn(nested);
     const first = nodeIn(nested);
     const hidden = (absent: string[]) => hiddenIn(prepareSvelteComponent(nested), absent);
@@ -144,10 +146,11 @@ describe('left out', () => {
     const reading = source
       .replace('for (@setup[let i', '@start[let found = Flag(false);]\n  for (@setup[let i')
       .replace(
-        '{#snippet Title()}<Node>Pass</Node>{/snippet}',
-        '{#snippet Status()}<Node>{#if found}found{:else}looking{/if}</Node>{/snippet}'
+        '<Layout name="Title"><Node>Pass</Node></Layout>',
+        '<Layout name="Status" of="found"><Node>{#if found}found{:else}looking{/if}</Node></Layout>'
       )
-      .replace('{@render Title()}', '{@render Status()}');
+      .replace('<Layout name="Main" of="v, values">', '<Layout name="Main" of="v, values, found">')
+      .replace('<Title />', '<Status found={found} />');
     const built = prepareSvelteComponent(reading);
     const status = nodeIn(reading)('Status');
     expect(hiddenIn(built, ['found'])).toContain(status);
@@ -157,12 +160,15 @@ describe('left out', () => {
   it('take each render in a node holding nodes as a part, a column losing only its caption', () => {
     const shaped = source
       .replace(
-        '{#snippet Picked()}<Node>picked {v}</Node>{/snippet}',
-        '{#snippet Column()}<Node layout="column"><Node>{#each values as x}{x}{/each}</Node>{v}</Node>{/snippet}' +
+        '<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>',
+        '<Layout name="Column" of="values, v"><Node layout="column"><Node>{#each values as x}{x}{/each}</Node>{v}</Node></Layout>' +
           // Accepted: a sentence with a node in it is parts too, so only its loose render goes.
-          '{#snippet Mixed()}<Node>picked {v} <Node>first {values[0]}</Node></Node>{/snippet}'
+          '<Layout name="Mixed" of="v, values"><Node>picked {v} <Node>first {values[0]}</Node></Node></Layout>'
       )
-      .replace('{@render Picked()}', '{@render Column()}{@render Mixed()}');
+      .replace(
+        '<Picked v={v} />',
+        '<Column values={values} v={v} /><Mixed v={v} values={values} />'
+      );
     const built = prepareSvelteComponent(shaped);
     const first = nodeIn(shaped);
     const hidden = hiddenIn(built, ['v']);
@@ -177,14 +183,14 @@ describe('left out', () => {
     expect(left.renders).toContain(`read ${siteIn(shaped)('v}</Node>')}`);
   });
 
-  it('takes a part rendered in another part’s node as one of that node’s parts', () => {
+  it('takes a layout drawn in another layout’s node as one of that node’s parts', () => {
     const inside = source
       .replace(
-        '{#snippet Cells()}',
-        '{#snippet Board()}<Node layout="column">{@render Cells()}{@render Picked()}</Node>{/snippet}{#snippet Cells()}'
+        '<Layout name="Cells"',
+        '<Layout name="Board" of="values, v"><Node layout="column"><Cells values={values} /><Picked v={v} /></Node></Layout><Layout name="Cells"'
       )
-      .replace('{@render Picked()}\n', '')
-      .replace('{@render Cells()}', '{@render Board()}');
+      .replace('    <Picked v={v} />\n', '')
+      .replace('<Cells values={values} />\n', '<Board values={values} v={v} />\n');
     const built = prepareSvelteComponent(inside);
     // Picked goes with v, but the board keeps the cells.
     expect(hiddenIn(built, ['v'])).not.toContain(nodeIn(inside)('Board'));

@@ -151,6 +151,8 @@ import { bindableProps, lengthProps } from './library/node/bound';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
+import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
+import { withColumnShifts, writtenColumn } from './written-columns';
 import {
   implicitInsertions,
   implicitRenders,
@@ -746,9 +748,22 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
   if (Buffer.byteLength(written, 'utf8') > maximumSourceBytes) {
     throw new InvalidSvelteSourceError('The Svelte component is too large.', { code: 'too_large' });
   }
+  // Layouts rendered by tags become the snippets they stand for, their tags renders, and snippets
+  // written by the author are refused (see layout-tags.server.ts).
+  const laid = layoutTags(written);
+  if (laid.problems.length)
+    throw InvalidSvelteSourceError.combine(
+      laid.problems.map(
+        ({ message, start }) =>
+          new InvalidSvelteSourceError(message, {
+            code: 'view_layout',
+            start: sourcePosition(written, start)
+          })
+      )
+    );
   // Views become the snippets they stand for (see viewTags), every line kept, and every line and
   // column but a closing's own, so positions and sites name the source as written.
-  const tags = viewTags(written);
+  const tags = viewTags(laid.source);
   if (tags.problems.length)
     throw InvalidSvelteSourceError.combine(
       tags.problems.map(
@@ -759,11 +774,18 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
           })
       )
     );
-  return { ...prepareViews(tags.source, tags.views), source: written };
+  return {
+    ...withColumnShifts(laid.shifts, () => prepareViews(tags.source, tags.views, laid.layouts)),
+    source: written
+  };
 }
 
 /** prepareSvelteComponent for a source whose views are snippets, each starting at an offset of `viewStarts`. */
-function prepareViews(source: string, viewStarts: readonly number[]): PreparedComponent {
+function prepareViews(
+  source: string,
+  viewStarts: readonly number[],
+  declaredLayouts: readonly DeclaredLayout[] = []
+): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   try {
     const extracted = extractBlocks(source);
@@ -829,7 +851,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         nested.map(
           (start) =>
             new InvalidSvelteSourceError(
-              'A <View> is written at the top level, beside the parts and layouts, never inside a part, a layout, or a node: move it out, and draw it where it belongs by rendering its value there.',
+              'A <View> is written at the top level, beside the layouts, never inside a layout or a node: move it out, and draw it where it belongs by writing its value there in braces.',
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -941,7 +963,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
     // The view is checked before any block runs, so its problems are reported with theirs.
     if (blocks.design)
       throw new InvalidSvelteSourceError(
-        'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, the snippet it is in, and every type a choice of its views. Remove the block, and name nodes by the snippets they are in, as {#snippet Caption()}<Node>…</Node>{/snippet}.',
+        'Sources have no design block: the design space is made from the view, every look a variable of a kind of node, and every type a choice of its views. Remove the block, and give a node a kind of its own where it needs one, as <Node kind="Caption">…</Node>.',
         { code: 'sverlin_block', start: sourcePosition(source, blocks.design.offset) }
       );
     const paths = snippetPaths(ast.html);
@@ -995,7 +1017,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       return kindNames.has(name)
         ? [
             new InvalidSvelteSourceError(
-              `The layout ${name} has a snippet's name, but a layout's name is its kind, as is a snippet's: rename one.`,
+              `The layout ${name} has a view's name, but a layout's name is its kind, as is a view's: rename one.`,
               { code: 'view_layout', start: sourcePosition(source, root) }
             )
           ]
@@ -1061,7 +1083,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       if (structure?.kind === 'ref' && structure.heap)
         viewProblems.push(
           new InvalidSvelteSourceError(
-            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in the root or a part, as {q.name} with q a ${type}, or mark its node with a pointer view, as <View of="${type}" name="Here"><Pointed /></View>.`,
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in a layout, as {q.name} with q a ${type}, or mark its node with a pointer view, as <View of="${type}" name="Here"><Pointed /></View>.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           )
         );
@@ -1118,6 +1140,27 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
           : `all(${unknownHeap.record}) draws every live node of a record a reference refers to, as all(Node) for const NodeRef = ref(Node);, and the domain has none.`,
         { code: 'view_component', start: sourcePosition(source, unknownHeap.start) }
       );
+    // Each layout reads only the state it declares (see layout-tags.server.ts).
+    const undeclared = layoutReadProblems(
+      (ast.html as { children?: unknown[] }).children ?? [],
+      declaredLayouts,
+      stateNames,
+      references.flatMap((reference) =>
+        reference.path === undefined ? [] : [{ path: reference.path, start: reference.start }]
+      ),
+      (node) => readsOf(node as Parameters<typeof readsOf>[0]),
+      layoutNameOf
+    );
+    if (undeclared.length)
+      throw InvalidSvelteSourceError.combine(
+        undeclared.map(
+          ({ message, start }) =>
+            new InvalidSvelteSourceError(message, {
+              code: 'view_layout',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
     stateNames.push(...[...nodeRecords.keys()].map(heapKey));
     const components = checkComponents(
       found.components,
@@ -1133,7 +1176,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
     const ownName = found.components.find(({ name, type }) => name === type);
     if (ownName)
       throw new InvalidSvelteSourceError(
-        `${ownName.name} is a view named after its type: name it after how it draws, as ${ownName.name}Cell, and {@render ${ownName.name}(…)} draws whichever view of ${ownName.name} the design chooses.`,
+        `${ownName.name} is a view named after its type: name it after how it draws, as ${ownName.name}Cell, and a value of ${ownName.name} in braces draws whichever of its views the design chooses.`,
         { code: 'view_component', start: sourcePosition(source, ownName.start) }
       );
     const typeKind = localKinds.find(({ name }) => definesType(viewing, name));
@@ -1148,7 +1191,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
     );
     if (typeNamed)
       throw new InvalidSvelteSourceError(
-        `The snippet ${typeNamed} has the name of a type, so {@render ${typeNamed}()} would draw a value of it: name the snippet after what it shows, as ${typeNamed}Part.`,
+        `The layout ${typeNamed} has the name of a type, whose values are drawn by its views: name the layout after what it shows, as ${typeNamed}Board.`,
         {
           code: 'view_component',
           start: sourcePosition(
@@ -1171,7 +1214,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       throw new InvalidSvelteSourceError(
         wrongRender.argued
           ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each runs(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
-          : `{@${labelOfOperator(wrongRender.name)}} draws what a step's code labelled @${labelOfOperator(wrongRender.name)} gave, which only the root and its parts know: write it there, outside any view.`,
+          : `{@${labelOfOperator(wrongRender.name)}} draws what a step's code labelled @${labelOfOperator(wrongRender.name)} gave, which only layouts know: write it in a layout, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
     // Each render of an applied operator by its key: the operator's name and the label it is
@@ -1193,7 +1236,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
     );
     if (unknown)
       throw new InvalidSvelteSourceError(
-        `{@render ${unknown.name}(…)} draws ${unknown.name}, which no snippet, type, or label is named: define it, as <View of="Index" name="${unknown.name}"><Pointed /></View> for a pointer or {#snippet ${unknown.name}()}<Node>…</Node>{/snippet} for a part of the page, or render one that exists.`,
+        `${unknown.name} is drawn, but no view, type, layout, or label is named so: define it, as <View of="Index" name="${unknown.name}"><Pointed /></View> for a pointer or <Layout name="${unknown.name}">…</Layout>, or draw one that exists.`,
         { code: 'view_component', start: sourcePosition(source, unknown.start) }
       );
     // Each type rendered by name chooses among its views: its plain views, where it also has
@@ -1351,9 +1394,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         if (reference.kind === 'during') {
           const call = `<When of="${reference.moment ?? `@${reference.path ?? ''}`}">`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
-            problem(
-              `${call} is in a view, which draws only its value: write it in the root or a part of the page.`
-            );
+            problem(`${call} is in a view, which draws only its value: write it in a layout.`);
           else if (reference.path === undefined && !reference.moment)
             problem(
               '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a run of that label; of="start" and of="end" draw them at the first step, the input as given, and the last.'
@@ -1384,7 +1425,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         }
         if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end)) {
           problem(
-            `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in the root and its parts, which pass what a view draws, as {@swap.a}.`
+            `${asWritten(reference.key)} is read in a view, which sees only its value; labels are read in layouts, which pass what a view draws, as {@swap.a}.`
           );
           continue;
         }
@@ -1425,7 +1466,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         const names = [...new Set(on.map(({ full }) => `@${full}`))];
         labelProblems.push(
           new InvalidSvelteSourceError(
-            `${name}(…) is called in the view, which only draws what the algorithm computed: ${names.length ? `read ${names.join(' or ')}, a label on an application of ${name}, in the root or a part of the page` : `label an application of ${name} in the algorithm, as @next[${name}(i)], and read that label, by its full name, in the root or a part of the page`}.`,
+            `${name}(…) is called in the view, which only draws what the algorithm computed: ${names.length ? `read ${names.join(' or ')}, a label on an application of ${name}, in a layout` : `label an application of ${name} in the algorithm, as @next[${name}(i)], and read that label, by its full name, in a layout`}.`,
             { code: 'view_label', start: sourcePosition(source, start) }
           )
         );
@@ -1543,7 +1584,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), runs(@label) and all(Node); a part of the page or the root also reads input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), runs(@label) and all(Node); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -1783,7 +1824,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
         scopedReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as in {@render Int(${asWritten(name)})}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
+              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as {${asWritten(name)}}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -2483,7 +2524,8 @@ function interpretBlock<T>(source: string, block: Block, run: (body: string) => 
 function sourcePosition(source: string, offset: number): { line: number; column: number } {
   const before = source.slice(0, offset);
   const lineStart = before.lastIndexOf('\n') + 1;
-  return { line: before.split('\n').length, column: offset - lineStart };
+  const line = before.split('\n').length;
+  return { line, column: writtenColumn(line, offset - lineStart) };
 }
 
 /**
@@ -2667,7 +2709,7 @@ function checkProps(
       problems.push(
         new InvalidSvelteSourceError(
           attribute.name === 'tags'
-            ? `<${component}> takes no tags: its kind is the snippet it is in, so name the node by a snippet, as {#snippet Caption()}<Node>…</Node>{/snippet}, and its look is a variable of that kind.`
+            ? `<${component}> takes no tags: its kind is the view or layout it is in, or one it names, as <Node kind="Caption">…</Node>, and its look is a variable of that kind.`
             : component === 'Node' && freeLayoutProps.includes(attribute.name as DesignProp)
               ? `<Node> ${attribute.name} is a free layout's look, which the variant gives the kind of node arranging it, not the markup: here the variable ${kind}.${attribute.name}.`
               : component === 'Link' && attribute.name === 'directed'
@@ -2681,7 +2723,7 @@ function checkProps(
                       : component === 'Link' && linkLooks.has(attribute.name)
                         ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
                         : designProps.has(attribute.name)
-                          ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the snippet it is in, and its look is a variable of that kind.`
+                          ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the view or layout it is in, or the one it names, and its look is a variable of that kind.`
                           : named.length
                             ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
                             : `<${component}> takes no props.`,
@@ -2964,7 +3006,7 @@ function withNodeRefs(
     }
     if (paths.has(name.data ?? '')) {
       reject(
-        `kind="${name.data}" has a snippet's name, which is its kind too: rename one.`,
+        `kind="${name.data}" has the name of a view or a layout, which is its kind too: rename one.`,
         'view_kinds',
         start
       );
@@ -2972,7 +3014,7 @@ function withNodeRefs(
     }
     if (view === 'root') {
       reject(
-        `A <Node> outside any view, part, or layout has no kind to name ${name.data} within.`,
+        `A <Node> outside any view or layout has no kind to name ${name.data} within.`,
         'view_kinds',
         start
       );
@@ -3075,7 +3117,7 @@ function withNodeRefs(
         );
       else if (!page)
         reject(
-          'A view draws only its value, so place <Listing /> outside views, at the top level or in a part of the page.',
+          'A view draws only its value, so place <Listing /> outside views, in a layout.',
           'view_markup',
           tag.start
         );
@@ -3088,7 +3130,7 @@ function withNodeRefs(
       (tag.expression?.type !== 'CallExpression' || tag.expression.callee?.type !== 'Identifier')
     ) {
       reject(
-        '{@render …} names the snippet it draws, as {@render Title()}, so the kinds of the nodes it draws are known before the view runs.',
+        'A layout is drawn by its tag, as <Title />, so the kinds of the nodes it draws are known before the view runs.',
         'view_markup',
         tag.start
       );
@@ -3106,7 +3148,7 @@ function withNodeRefs(
     if (element || special) {
       reject(
         element
-          ? `<${tag.name}> is not allowed: draw everything with <Node> and <Link>, each in a snippet whose name is its kind, such as {#snippet Caption()}<Node>…</Node>{/snippet}, and the design gives each kind its look.`
+          ? `<${tag.name}> is not allowed: draw everything with <Node> and <Link>, in views and layouts, giving a node a kind of its own where it needs one, as <Node kind="Caption">…</Node>, and the design gives each kind its look${/^[A-Z]/u.test(tag.name ?? '') ? `; to draw a layout here, declare it, <Layout name="${tag.name}">…</Layout>` : ''}.`
           : `${unsupportedMarkup[tag.type as string]} is not allowed: draw everything with <Node> and <Link>.`,
         'view_markup',
         tag.start
@@ -3160,7 +3202,7 @@ function withNodeRefs(
         );
       if (fromless && page)
         reject(
-          'A <Link> with no from starts at the element its view draws, so it belongs in a view of an element, as <Link to={n.next} /> in {#snippet NodeBox(n: ListNode)}; elsewhere, give it from={…}.',
+          'A <Link> with no from starts at the element its view draws, so it belongs in a view of an element, as <Link to={this.next} /> in <View of="ListNode" name="NodeBox">; elsewhere, give it from={…}.',
           'link_placement',
           tag.start
         );
@@ -3234,7 +3276,7 @@ function withNodeRefs(
   };
   if (ast.css)
     reject(
-      'Views cannot have a <style>: the design gives each kind of node, the snippet it is in, its look.',
+      'Views cannot have a <style>: the design gives each kind of node its look.',
       'view_style',
       ast.css.start
     );
@@ -3317,7 +3359,7 @@ function withNodeRefs(
     const known = kinds.get(key);
     if (known && apart(known) !== apart(role))
       reject(
-        `${key} is the kind of a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the snippet called ${key.slice(key.lastIndexOf('.') + 1)}.`,
+        `${key} is the kind of a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
         'view_kinds',
         entry.start
       );

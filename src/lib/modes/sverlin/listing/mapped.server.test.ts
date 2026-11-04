@@ -17,11 +17,11 @@ ${algorithm}
 <script listing="textbook">
 ${listing}
 </script>
-{#snippet Cells()}<Node>{#each values as v}<Node value={v} />{/each}</Node>{/snippet}
-<Layout name="Main">
+<Layout name="Cells" of="values"><Node>{#each values as v}<Node value={v} />{/each}</Node></Layout>
+<Layout name="Main" of="values">
   <Node>
     <Listing />
-    {@render Cells()}
+    <Cells values={values} />
   </Node>
 </Layout>`;
 

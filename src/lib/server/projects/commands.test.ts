@@ -1302,10 +1302,10 @@ describe('submitProjectFeedback', () => {
     const lines = (close: string, snippet = '', node = '') =>
       [
         '<script algorithm></script>',
-        '{#snippet Shown()}<Node>one</Node>{/snippet}',
+        '<Layout name="Shown"><Node>one</Node></Layout>',
         snippet,
         '<Layout name="Main"><Node>',
-        '<Node>{@render Shown()}</Node>',
+        '<Node><Shown /></Node>',
         '<Node>two</Node>',
         '<Node>three</Node>',
         node,
@@ -1313,10 +1313,10 @@ describe('submitProjectFeedback', () => {
       ].join('\n');
     const sources = {
       unclosed: lines('</Layout'),
-      twice: lines('</Layout>', '{#snippet Shown()}<Node>again</Node>{/snippet}'),
-      unknown: lines('</Layout>', '', '<Node>{@render Missing()}</Node>'),
+      twice: lines('</Layout>', '<Layout name="Shown"><Node>again</Node></Layout>'),
+      unknown: lines('</Layout>', '', '<Node><Missing /></Node>'),
       rewritten:
-        '<script algorithm></script>\n<Layout name="Main">\n<Node>{@render Gone()}</Node>\n</Layout>',
+        '<script algorithm></script>\n<Layout name="Main">\n<Node><Gone /></Node>\n</Layout>',
       working: lines('</Layout>')
     };
     // Each explains a difficulty, as the simpler fallback must; the others' are dropped.
@@ -2141,8 +2141,8 @@ describe('submitProjectFeedback', () => {
     const presentation = presentedEvent(created).payload.presentation;
     if (presentation.format !== 'browser-bundle-v1') throw new Error('Expected a Sverlin bundle.');
     const lines = presentation.source.text.split('\n');
-    const line = lines.findIndex((text) => text.startsWith('{#snippet Title()}')) + 1;
-    const column = '{#snippet Title()}'.length + 1;
+    const line = lines.findIndex((text) => text.startsWith('<Layout name="Title">')) + 1;
+    const column = '<Layout name="Title">'.length + 1;
     const reference: ElementReference = {
       type: 'element-ref',
       presentationId: presentation.presentationId,
@@ -2226,7 +2226,7 @@ function generation(
             action: 'revise' as const,
             source: source.startsWith('broken')
               ? '<script>import unavailable from "elsewhere";</script><h1>Broken</h1>'
-              : `<script algorithm></script>{#snippet Shown()}<Node>${source}</Node>{/snippet}\n<Layout name="Main"><Node>{@render Shown()}</Node></Layout>`,
+              : `<script algorithm></script><Layout name="Shown"><Node>${source}</Node></Layout>\n<Layout name="Main"><Node><Shown /></Node></Layout>`,
             summary: reply
           },
     ...(recovery ? { recovery } : {}),
@@ -2409,7 +2409,7 @@ describe('building on the candidate shown', () => {
         projectId: created.projectId,
         expectedHead: projectHead(created).id,
         artifactId: 'main',
-        source: `${earlier.source.text}\n{#snippet Edited()}<Node>Edited</Node>{/snippet}{@render Edited()}`,
+        source: `${earlier.source.text}\n<Layout name="Edited"><Node>Edited</Node></Layout>`,
         presentationCount: 1,
         operationId: '22345678-1234-4123-8123-123456789abc'
       },
@@ -2492,7 +2492,7 @@ describe('version parents', () => {
           projectId: created.projectId,
           expectedHead: projectHead(document).id,
           artifactId: 'main',
-          source: `${source}\n{#snippet Saved()}<Node>${operationId.slice(0, 2)}</Node>{/snippet}{@render Saved()}`,
+          source: `${source}\n<Layout name="Saved"><Node>${operationId.slice(0, 2)}</Node></Layout>`,
           presentationCount: 1,
           operationId,
           ...extra
@@ -2554,21 +2554,27 @@ describe('assistant edits', () => {
 
   it('applies the edits to the source it revises, and records what they change', async () => {
     const { document, source } = await created('Edited');
-    // The caption is a part, rendered in the layout, as the top level holds only parts and layouts.
+    // The caption is a layout of its own, drawn by its tag in Main.
     const captioned = source
       .replace(
-        '<Layout name="Main">',
-        '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
+        '<Layout name="Main" of=',
+        '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
       )
-      .replace('{@render Result()}', '{@render Result()}{@render Note()}');
+      .replace(
+        '<Result target={target} found={found} />',
+        '<Result target={target} found={found} /><Note />'
+      );
     mocks.generatePrepared.mockReset().mockResolvedValue(
       edit(
         [
           {
-            find: '<Layout name="Main">',
-            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
+            find: '<Layout name="Main" of=',
+            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
           },
-          { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
+          {
+            find: '<Result target={target} found={found} />',
+            replace: '<Result target={target} found={found} /><Note />'
+          }
         ],
         'Adds a caption'
       )
@@ -2593,10 +2599,13 @@ describe('assistant edits', () => {
         action: 'edit' as const,
         edits: [
           {
-            find: '<Layout name="Main">',
-            replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
+            find: '<Layout name="Main" of=',
+            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
           },
-          { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
+          {
+            find: '<Result target={target} found={found} />',
+            replace: '<Result target={target} found={found} /><Note />'
+          }
         ],
         values: [{ variable: 'pause@missing', value: 'off' }],
         summary: 'Adds a caption'
@@ -3262,10 +3271,13 @@ describe('several variants from chat', () => {
 
   const caption = [
     {
-      find: '<Layout name="Main">',
-      replace: '{#snippet Note()}<Node>Caption</Node>{/snippet}\n<Layout name="Main">'
+      find: '<Layout name="Main" of=',
+      replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
     },
-    { find: '{@render Result()}', replace: '{@render Result()}{@render Note()}' }
+    {
+      find: '<Result target={target} found={found} />',
+      replace: '<Result target={target} found={found} /><Note />'
+    }
   ];
 
   it('records the reply after the version it presents, naming it and asking about it', async () => {

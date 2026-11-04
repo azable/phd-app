@@ -85,70 +85,69 @@ BFS(start)
 
 <View of="VertexRef" name="PositionMark"><Pointed /></View>
 
-{#snippet Title()}
+<Layout name="Title">
   <Node>Breadth-first search from A</Node>
-{/snippet}
+</Layout>
 
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, adjacency">
   <Node layout="free">
     {#each vertices as vertex, k}
-      {#snippet IndexLabel()}<Node>{k}</Node>{/snippet}
       <Node layout="column">
         {vertex}
-        {@render IndexLabel()}
+        <Node kind="IndexLabel">{k}</Node>
       </Node>
       {#each adjacency[k] as neighbour}
         <Link from={k} to={neighbour} />
       {/each}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet QueueLine()}
+<Layout name="QueueLine" of="queue">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet OrderLine()}
+<Layout name="OrderLine" of="order">
   <Node layout="row">
     <Node>visit order</Node>
     {order}
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet CurrentInfo()}
+<Layout name="CurrentInfo" of="current">
   <Node>removing vertex {current} and exploring its neighbours</Node>
-{/snippet}
+</Layout>
 
-{#snippet NeighbourInfo()}
+<Layout name="NeighbourInfo" of="@visit.look.check.next">
   <Node>checking neighbour {@visit.look.check.next}</Node>
-{/snippet}
+</Layout>
 
-{#snippet StatePanel()}
+<Layout name="StatePanel" of="queue, order, current, @visit.look.check.next">
   <Node layout="column">
-    {@render QueueLine()}
-    {@render OrderLine()}
-    {@render CurrentInfo()}
-    {@render NeighbourInfo()}
+    <QueueLine queue={queue} />
+    <OrderLine order={order} />
+    <CurrentInfo current={current} />
+    <NeighbourInfo />
   </Node>
-{/snippet}
+</Layout>
 
-{#snippet Lesson()}
+<Layout name="Lesson" of="vertices, adjacency, queue, order, current, @visit.look.check.next">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      {@render Graph()}
-      {@render StatePanel()}
+      <Graph vertices={vertices} adjacency={adjacency} />
+      <StatePanel queue={queue} order={order} current={current} />
     </Node>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="current, vertices, adjacency, queue, order, @visit.look.check.next">
   <Node>
-    {@render Title()}
-    {@render Lesson()}
+    <Title />
+    <Lesson vertices={vertices} adjacency={adjacency} queue={queue} order={order} current={current} />
     {current}
     {@visit.look.check.next}
   </Node>

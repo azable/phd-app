@@ -23,8 +23,8 @@
 <View of="Int" name="Bar"><Node height={this} /></View>
 <View of="Position" name="Here"><Pointed /></View>
 
-{#snippet Bars()}<Node layout="row">{#each values as v}{v}{/each}</Node>{/snippet}
+<Layout name="Bars" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main">
-  <Node>{@render Bars()}{j}</Node>
+<Layout name="Main" of="j, values">
+  <Node><Bars values={values} />{j}</Node>
 </Layout>

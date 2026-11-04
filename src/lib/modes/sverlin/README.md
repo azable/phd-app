@@ -42,47 +42,59 @@ Design). A plain `<script>`, or one with any other attribute, is refused.
 
 The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components,
 a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
-`{#each}`, `{#snippet}`, `{@render}`, and `{@const}`, with no `<script>`,
-`<style>`, HTML, or SVG: every visible thing is a node or a link, so
-participants can select it and presentations can vary it. Nodes take no props
-that set a look: a node's kind is the view or snippet it is in, or one it names
-with `kind`, and the design gives each kind its look. Every input and algorithm
-variable in scope at the selected step and the library components are already in
-scope; never write `import`, and never declare names `Node`, `Link`, `Pointed`,
-`Listing`, `View`, `Layout`, `When`, or `OneOf`. Blocks in `{#…}` are Svelte's
-own (`{#if}`, `{#each}`, `{#snippet}`); Sverlin's own constructs are capitalised
-tags, as `<Node>`, `<View>`, `<Layout>`, and `<When>`; and code is in `<script>`
-blocks named by an attribute.
+`{#each}`, and `{@const}`, with no `<script>`, `<style>`, HTML, or SVG: every
+visible thing is a node or a link, so participants can select it and
+presentations can vary it. Nodes take no props that set a look: a node's kind is
+the view or layout it is in, or one it names with `kind`, and the design gives
+each kind its look. Every input and algorithm variable in scope at the selected
+step and the library components are already in scope; never write `import`, and
+never declare names `Node`, `Link`, `Pointed`, `Listing`, `View`, `Layout`,
+`When`, or `OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`);
+Sverlin's own constructs are capitalised tags, as `<Node>`, `<View>`,
+`<Layout>`, and `<When>`; and code is in `<script>` blocks named by an
+attribute. `{#snippet}` and `{@render}` are refused: what one would draw is a
+layout, a view, or a node with a `kind`.
 
-- The top level holds parts, views, and at least one layout: every source
-  declares its layouts, and one without is refused. A snippet, which takes no
-  parameters, is a part of the page, as
-  `{#snippet Title()}<Node>Linear search</Node>{/snippet}`, drawn where a layout
-  renders it, `{@render Title()}`; a part reads what a layout reads and renders
-  parts and views. A layout, `<Layout name="Side">…</Layout>`, arranges the
-  whole page, its one prop its name: its body is one root `<Node>`, the frame
-  (see Page frame), which holds renders, with `{#if}` and `{#each}` around them,
-  a `<Listing />`, and nodes arranging them, and is selectable as the whole
-  page. Its only prop is `layout`, `row` or `column` (the start), how it
-  arranges what it holds. Render the parts in the root rather than one part
-  holding the whole page.
+- The top level holds views and at least one layout: every source declares its
+  layouts, and one without is refused. A layout,
+  `<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>`,
+  names its inputs in `of`, the input and algorithm variables and labels it
+  reads, as `values` and `@insert.compare`, and reads nothing else: a variable
+  or label it reads without declaring is refused, naming what to add, and a
+  label declared covers the labels inside it, as `@insert` covers
+  `@insert.compare`. Its two props are written as they are, never computed.
+- A layout is drawn in another by its tag, `<Range lo={lo} hi={hi} />`, which
+  passes every variable it declares by name, each as the state of its own name;
+  one missing, extra, or passed another value is refused. The layout drawing it
+  declares what it passes, and the labels it reads too, which reach it by name.
+  A tag is closed at once, `/>`, and a layout drawn inside itself is refused. A
+  tag in a node of text and values is drawn inline, as a value is, as
+  `<Node>Searching for <Target target={target} /> in the list</Node>`.
+- A layout no other layout draws arranges the whole page: its body is one root
+  `<Node>`, the frame (see Page frame), which holds values, layout tags, with
+  `{#if}` and `{#each}` around them, a `<Listing />`, and nodes arranging them,
+  and is selectable as the whole page. Its only prop is `layout`, `row` or
+  `column` (the start), how it arranges what it holds. A layout's name is its
+  nodes' kind, so a layout drawn on several pages looks alike on each, and it is
+  measured over every value its inputs' types allow. Draw the layouts in the
+  root rather than one layout holding the whole page.
 
 ```svelte
-<Layout name="Side">
-  <Node layout="row">{@render Board()}<Node>{@render Table()}<Listing /></Node></Node>
+<Layout name="Side" of="values, lo, hi">
+  <Node layout="row"><Board values={values} /><Node><Range lo={lo} hi={hi} /><Listing /></Node></Node>
 </Layout>
-<Layout name="Stacked">
-  <Node>{@render Title()}{@render Board()}{@render Table()}</Node>
+<Layout name="Stacked" of="values, lo, hi">
+  <Node><Title /><Board values={values} /><Range lo={lo} hi={hi} /></Node>
 </Layout>
 ```
 
-- The variant shows one layout, its `layout` variable (see Design), the first
-  where nothing chooses another. Declare another layout where the request leaves
-  open how the page is arranged or what it holds, as the parts side by side or
-  stacked, or the page with a listing against one without; layouts, as views,
-  differ in how they arrange the parts or which they hold, never only in look,
-  which is the variant's. A part looks alike in every layout. A layout arranges
-  the page, a node's `layout` prop its children.
+- The variant shows one page layout, its `layout` variable (see Design), the
+  first where nothing chooses another. Declare another where the request leaves
+  open how the page is arranged or what it holds, as the board and the range
+  side by side or stacked, or the page with a listing against one without; page
+  layouts, as views, differ in how they arrange what they draw or which they
+  draw, never only in look, which is the variant's. A node's `layout` prop
+  arranges its children.
 - Draw every value of a domain type through a view of its type, as `{target}`,
   and every position through a pointer; the markup around them arranges, labels,
   and explains. A node of text and renders with no `layout` reads as a line of
@@ -102,18 +114,17 @@ A view draws one value of one domain type, written
 `<View of="Type" name="Name">` holding what it draws, its value always `this`,
 as `<View of="Int" name="IntCell"><Node value={this} /></View>` or
 `<View of="Vertex" name="VertexCard"><Node>{this.name}</Node></View>`. Its two
-props are written as they are, never computed, and it takes no others. A snippet
-takes no value: one with a parameter is an error, and so is `this` in a part of
-the page or the root, which has no value of its own. The node showing the value
-shows the type's unit too. Define views at the top level, never inside a part, a
-layout, or a node, and end each `</View>` its line, putting what follows on the
-next. A view reads only `this`, types, other views, labels (`@…`), the library's
-components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`, and the names its
-`{#each}` blocks and `{@const}` tags declare: never the input or algorithm
-variables, a pointer apart, and never browser globals such as `window` or
-`self`. How two values relate is drawn where both are in scope, in the view
-holding them or by a pointer; a part of the page or the root also reads the
-input and algorithm variables.
+props are written as they are, never computed, and it takes no others. A layout
+takes no value: `this` in a layout is an error, as it has no value of its own.
+The node showing the value shows the type's unit too. Define views at the top
+level, never inside a layout or a node, and end each `</View>` its line, putting
+what follows on the next. A view reads only `this`, types, other views, labels
+(`@…`), the library's components, `Math`, `at(p)`, `runs(@label)`, `all(Node)`,
+and the names its `{#each}` blocks and `{@const}` tags declare: never the input
+or algorithm variables, a pointer apart, and never browser globals such as
+`window` or `self`. How two values relate is drawn where both are in scope, in
+the view holding them or by a pointer; a layout reads the input and algorithm
+variables it declares.
 
 A value in braces is drawn by its type's view: in the markup's text, `{key}`,
 with `key` an `Int`, draws the view `views.Int` chooses, among every view of
@@ -127,11 +138,9 @@ holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
 of its own; one member drawn as a pointer, as a position beside `'none'`, marks
 where the value points. Name views after how they draw, as `IntCell` or
 `IntTally`. Which view draws a value is the variant's, so a view named as its
-type (`<View of="Int" name="Int">`), rendering a view by its own name
-(`{@render IntCell(it)}`; one render is drawn apart through its place, see
-Places), writing a value's view as a render of its type (`{@render Int(key)}`,
-which is `{key}`), and a value whose type no view draws are errors.
-`{@render Title()}` draws a part, and `{@check.equal}` what a labelled
+type (`<View of="Int" name="Int">`) and a value whose type no view draws are
+errors; to draw one value with a view of its own, choose it for its place (see
+Places). `<Title />` draws a layout, and `{@check.equal}` what a labelled
 expression computed, through a view typed by its label (see Views of what a step
 computed). Views differ in what they draw: two differing only in look, as a cell
 and a round cell, are one view. Offer more than one where the request leaves
@@ -185,25 +194,25 @@ pointer: it holds one `<Pointed>`, standing for the element pointed at, drawn
 with its own view, and nodes around it, placed by layout, annotate it: a mark
 alone, `<Pointed />`; a bracket,
 `<Node layout="row"><Node>[</Node><Pointed /></Node>`; or a label below,
-`<Node layout="column"><Pointed />{@render Caption()}</Node>`, its snippet
-written in the view so the label is a kind of its own.
+`<Node layout="column"><Pointed /><Node kind="Caption">i</Node></Node>`, the
+label given a kind of its own.
 
-- `<Pointed>` takes no props and is written in the pointer view itself, not a
-  snippet inside it. Where the pointer is, the element is drawn in the pointer's
-  kind, as `Here.Pointed` for the view `Here`: its paint (fill, stroke colour,
-  opacity, text colour, shadow, glow, fill style, decoration, expand and the
-  transforms below) shows only there, the rest of its look in every slot, so
-  every slot keeps one size; a stroke keeps its width in every slot, drawn in no
-  colour where none shows. `expand`, 0, 2, 4, or 8 pixels on each side, enlarges
-  the element where the pointer is: in a row of slots it is painted, its fill
-  spread and its stroke drawn further out, in room every element keeps for it,
-  so nothing moves; in a packed row it takes room, growing from where the
-  element's kind places it along the row (`xAnchor`): about its centre by
-  default, the elements before it moving back as far as those after move on; the
-  row keeps room for one expansion for each pointer into it, at its ends as that
-  anchor says (a packed column keeps it at its end). Between steps an element
-  changes size and paint as it moves, so an expansion grows and a highlight
-  fades from one element to the next.
+- `<Pointed>` takes no props and is written in the pointer view itself. Where
+  the pointer is, the element is drawn in the pointer's kind, as `Here.Pointed`
+  for the view `Here`: its paint (fill, stroke colour, opacity, text colour,
+  shadow, glow, fill style, decoration, expand and the transforms below) shows
+  only there, the rest of its look in every slot, so every slot keeps one size;
+  a stroke keeps its width in every slot, drawn in no colour where none shows.
+  `expand`, 0, 2, 4, or 8 pixels on each side, enlarges the element where the
+  pointer is: in a row of slots it is painted, its fill spread and its stroke
+  drawn further out, in room every element keeps for it, so nothing moves; in a
+  packed row it takes room, growing from where the element's kind places it
+  along the row (`xAnchor`): about its centre by default, the elements before it
+  moving back as far as those after move on; the row keeps room for one
+  expansion for each pointer into it, at its ends as that anchor says (a packed
+  column keeps it at its end). Between steps an element changes size and paint
+  as it moves, so an expansion grows and a highlight fades from one element to
+  the next.
 - A pointer's kind transforms what it is at, where it is, taking no room:
   `scale` (1, 1.1, 1.2, or 1.3) draws it larger from the element's anchors
   (`xAnchor`, `yAnchor`), so with `yAnchor` end it grows upward, its bottom
@@ -215,14 +224,14 @@ written in the view so the label is a kind of its own.
   element. Every element keeps room for their reach in every state, so nothing
   is painted over or cut off and nothing moves; between steps an element grows,
   shrinks and rises as the pointer comes and goes.
-- Render a pointer in a layout's root itself, outside other nodes, snippets, and
+- Render a pointer in a page layout's root itself, outside other nodes and
   blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
   an element, a field (`{edges[e].to}`), or a label (see Views of what a step
   computed). There a position type draws as a mark, through its pointer views
   (`pointers.Index`), so every mark of it looks the same; inside another node,
   as `<Node>at {i}</Node>`, as its number, through its other views
-  (`views.Index`). A pointer only another layout renders draws nothing and keeps
-  no room.
+  (`views.Index`). A pointer in a layout another layout draws by its tag draws
+  nothing and keeps no room.
 - The page draws the pointer around the element wherever that is drawn. Every
   element keeps room for the pointers that can point into its collection, and a
   position shown past an end gets a slot there, so nothing moves as pointers
@@ -240,9 +249,9 @@ written in the view so the label is a kind of its own.
   pointer view that names nothing; where views of one type must say different
   things, each place's view is chosen by what it says, as `pointers.Position@j`
   (see Places).
-- A reference follows its element as it moves: `{@render Tracked(tracked)}`,
-  with `const tracked = Tracked(values[3]);`, marks that value wherever a sort
-  takes it.
+- A reference follows its element as it moves: `{tracked}`, with
+  `const tracked = Tracked(values[3]);`, marks that value wherever a sort takes
+  it.
 
 ## Steps
 
@@ -389,15 +398,15 @@ Binary search, stopping where it finds the target:
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Index" name="Mark"><Pointed /></View>
-{#snippet Title()}<Node>Binary search for {target}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Range()}<Node>between {lo} and {hi}</Node>{/snippet}
+<Layout name="Title" of="target"><Node>Binary search for {target}</Node></Layout>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>
 
-<Layout name="Stacked">
+<Layout name="Stacked" of="lo, mid, hi, target, values">
   <Node>
-    {@render Title()}
-    {@render Cells()}
-    {@render Range()}
+    <Title target={target} />
+    <Cells values={values} />
+    <Range lo={lo} hi={hi} />
     {lo}
     {mid}
     {hi}
@@ -558,17 +567,16 @@ nodes `prev` and `cur` refer to both marked:
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
 <View of="ListNode" name="NodeBox">
-  {#snippet NextField()}<Node><Link to={this.next} /></Node>{/snippet}
-  <Node layout="row">{this.name}{@render NextField()}</Node>
+  <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
 <View of="NodeRef" name="Here"><Pointed /></View>
-{#snippet Heap()}
+<Layout name="Heap">
   <Node layout="free" flow="x">{#each all(ListNode) as n}{n}{/each}</Node>
-{/snippet}
+</Layout>
 
-<Layout name="Stacked">
+<Layout name="Stacked" of="prev, cur">
   <Node>
-    {@render Heap()}
+    <Heap />
     {prev}
     {cur}
   </Node>
@@ -582,10 +590,10 @@ nodes `prev` and `cur` refer to both marked:
 - A field is read and written through a reference, `cur.next = prev`; a value of
   another type is refused, and reading or writing one through the end is a
   mistake at that step ("cur is an End ("end"), so it has no next"). A variable
-  holding a node or the end is made with the union, `let cur = Next(head);`. The
-  root and its parts read a field through a reference too, from the node it
-  refers to, as `{#each queue as q}{q.name}{/each}`; a view drawing a reference
-  itself as a value is refused, as it would show the node's place.
+  holding a node or the end is made with the union, `let cur = Next(head);`. A
+  layout reads a field through a reference too, from the node it refers to, as
+  `{#each queue as q}{q.name}{/each}`; a view drawing a reference itself as a
+  value is refused, as it would show the node's place.
 - A node lives while something refers to it: a variable in scope, a collection,
   or a live node. `all(ListNode)` is every live node, in the order made, drawn
   as a collection, each through the record's view; one no longer referred to
@@ -600,7 +608,7 @@ nodes `prev` and `cur` refer to both marked:
   `<View of="NodeRef" name="NextLink"><Link to={this} /></View>`, ends at the
   value drawn, not at a node. Draw a node as fields, as a textbook does,
   `[ A | next ]` or a tree's `[ left | key | right ]`: a node holding only such
-  links is a field, its own snippet so it has its own look
+  links is a field, a kind of its own so it has its own look
   (`NodeBox.NextField`); the arrow leaves the field, arcing over its node where
   it points back. A tree's children are placed in the order their links leave
   it, so the left field's child is on the left. Where the field is the end, the
@@ -613,10 +621,10 @@ nodes `prev` and `cur` refer to both marked:
   `index(Nodes)`.
 - A view reads through a position with `at(p)`, the element it points at in the
   collection it points into, as
-  `<View of="VertexRef" name="VertexName">{at(this).name}</View>`; the root and
-  its parts may too. With `VertexRef = index(Vertices)`, `at(p)` is a `Vertex`
-  and `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and a record
-  of positions reads through twice, `at(edge.from).name`. What draws it is the
+  `<View of="VertexRef" name="VertexName">{at(this).name}</View>`; a layout may
+  too. With `VertexRef = index(Vertices)`, `at(p)` is a `Vertex` and
+  `at(p).name` a `Name`; into integers, `at(mid)` is an `Int`; and a record of
+  positions reads through twice, `at(edge.from).name`. What draws it is the
   element itself, so a pointer's view drawn round the whole element marks it
   there too; but it moves as the position, so a name in a queue slides with its
   entry and fades out as it leaves while the element stays where it is held;
@@ -672,11 +680,11 @@ a step, its operands named by its syntax, `this.left` and `this.right` for a
 comparison or arithmetic, `this.argument` for `!` or `-x`, a function's
 parameters by name for a labelled call, and its result `this.value`, each drawn
 through its type's view (a plain `true` or `false` as text).
-`{@sweep.pair.test}` in the root or a part draws what that expression computed
-since the step before, through the view `views.@sweep.pair.test` chooses, and
-nothing, keeping its room, where it computed nothing. A view typed by a label no
-step evaluates is refused. The view never computes itself: label the expression,
-as `@next[i + 1]`, and read the label.
+`{@sweep.pair.test}` in a layout draws what that expression computed since the
+step before, through the view `views.@sweep.pair.test` chooses, and nothing,
+keeping its room, where it computed nothing. A view typed by a label no step
+evaluates is refused. The view never computes itself: label the expression, as
+`@next[i + 1]`, and read the label.
 
 Bubble sort, the question at each comparison and a caption at each swap in one
 place:
@@ -708,22 +716,22 @@ place:
 <View of="@sweep.pair.test" name="Ask">
   <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
-{#snippet Swapping()}<Node>out of order, so they swap</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Board()}
+<Layout name="Swapping"><Node>out of order, so they swap</Node></Layout>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Board" of="values, @sweep.pair.test, @sweep.pair.swap">
   <Node layout="column">
-    {@render Cells()}
+    <Cells values={values} />
     <OneOf><When of="@sweep.pair.test">
       {@sweep.pair.test}
     </When><When of="@sweep.pair.swap">
-      {@render Swapping()}
+      <Swapping />
     </When></OneOf>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Stacked">
+<Layout name="Stacked" of="values, @sweep.pair.test, @sweep.pair.swap">
   <Node>
-    {@render Board()}
+    <Board values={values} />
   </Node>
 </Layout>
 ```
@@ -734,7 +742,7 @@ their cells, and the swap after it says why they trade places. With
 `views.@sweep.pair.test` none the question is left out and the steps stay as
 they were.
 
-A label is read in the root and its parts, never in a view, by its full name,
+A label is read in a layout that declares it, never in a view, by its full name,
 the labels around it first, as `@insert.key` for `@key` inside `@insert`; a
 shorter ending is refused with the full names it could stand for, so adding a
 label never changes or breaks what a name reads, in the markup or a variant.
@@ -815,37 +823,34 @@ The design space is every variable of a component's look, found in its markup:
   (see View).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
-  node a layout writes beside its parts, as a row in its root, is of its kind
-  too.
+  node a layout writes beside what it draws, as a row in its root, is of its
+  kind too.
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
   `listing.lit@insert.compare.left.fill`, which follows its label's mark until
   set, and where it has tokens, `listing.places` (see Listing).
-- Each kind of node's props. A kind is the view or snippet a node is in: a
-  view's or a part's name, as `Items` or `Title`, and for a snippet inside
-  another, both, as `IntTally.Tally`; every node of a view or snippet is of its
-  kind. A node naming its kind, as `<Node kind="Header">` in `Table`, is of the
-  kind `Table.Header`, with the nodes inside it, as a snippet `Header` inside
-  `Table` would make them; in a layout, as `Main.Note`. A pointer view's
-  `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is a snippet's
-  `<Link>`, as `Graph.Link`. A variable is its kind and prop, as
-  `Here.Pointed.fill` or `Items.Under.shown`.
+- Each kind of node's props. A kind is the view or layout a node is in, its
+  name, as `Items` or `Title`; every node of a view or layout is of its kind. A
+  node naming its kind, as `<Node kind="Header">` in `Table`, is of the kind
+  `Table.Header`, with the nodes inside it; in a view, as `IntTally.Tally`. A
+  pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is
+  a layout's or view's `<Link>`, as `Graph.Link`. A variable is its kind and
+  prop, as `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard.fill@true` or
   `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
   bound to a view's value).
 
-A view's or snippet's name is its kind, and so is a node's `kind`, so each names
+A view's or layout's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
 `Amber` or `Big`. Each has a name of its own in the whole view, nested ones
 included, as `CurrentCaption` and `NeighbourCaption` inside two pointer views,
-never `Caption` in both; a part is not named as a type, and a render names a
-part, a type, or a label, so every kind is known before the view runs. A `kind`
-is written as it is, one capitalised word, never computed; nodes of one snippet
-naming the same kind are one kind, and it is named apart from every snippet,
-layout, and type. Name a kind with `kind` where its nodes take no value and are
-drawn once, as a table's header cells; a nested snippet is for a part used more
-than once.
+never `Caption` in both; a layout is not named as a type, and a tag names a
+layout, so every kind is known before the view runs. A `kind` is written as it
+is, one capitalised word, never computed; nodes of one view or layout naming the
+same kind are one kind, and it is named apart from every view, layout, and type.
+A kind written on several nodes, as each header cell, is one kind, so they look
+alike.
 
 Every kind of node has these props, each with a fixed set of options:
 
@@ -853,14 +858,14 @@ Every kind of node has these props, each with a fixed set of options:
   keeps no room. A render is missing where its view is `none` or not shown or it
   draws an absent value: for a whole presentation left out, keeping no room, and
   at one step hidden, keeping its room. A node of only text and renders is one
-  statement that one missing render takes whole, so
-  `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step that swaps
-  nothing; a node holding other nodes has parts, each node and render in it, and
-  goes only with all of them, so in
+  statement that one missing render takes whole, a layout's tag in it counting
+  as a render, so `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step
+  that swaps nothing; a node holding other nodes has parts, each node and render
+  in it, and goes only with all of them, so in
   `<Node layout="row"><Node>lo {lo}</Node><Node>mid {mid}</Node></Node>` only
-  the `mid` part hides while `mid` is out of scope (a part of the page rendered
-  in it counts as its nodes do). Split a sentence into parts to keep what is
-  there. A node holding no render, as a title, stays. A `<Pointed>` kind has no
+  the `mid` part hides while `mid` is out of scope (a layout drawn by its tag in
+  it counts as its nodes do). Split a sentence into parts to keep what is there.
+  A node holding no render, as a title, stays. A `<Pointed>` kind has no
   `shown`: to drop a pointer, leave out a node around its `<Pointed>`, give its
   type's view `none`, or render it in `{#if}`, its elements then drawn as
   without it.
@@ -1043,7 +1048,7 @@ variant sets them, so one value is drawn apart with nothing declared:
 - its own choice of view, where its type has more than one view of the kind it
   draws, as `pointers.Index@found` or `views.Int@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
-  can draw, nested snippets included, as
+  can draw, the kinds its nodes name included, as
   `Highlight.Pointed@pair.compare.left.fill` or
   `IntTally.Tally@swap.held.shown`, though not for another view that view
   renders.
@@ -1086,11 +1091,11 @@ which may change what is shown where the conversation leaves it open.
 The markup decides what can vary, so write it so the choices worth comparing are
 variables:
 
-- Draw everything that means something of its own in a snippet of its own, so
-  its look is a variable of its own and a variant can leave it out: a title, a
-  caption, an index, a pointer's label. A snippet without parameters draws it:
-  rendered in a layout, a part of the page; inside a view, a part of it that
-  sees the view's value, as `Under` and `Tally` below.
+- Give everything that means something of its own a kind of its own, so its look
+  is a variable of its own and a variant can leave it out: a title, a caption,
+  an index, a pointer's label. In a page, a layout of its own draws it, as
+  `<Title />`; inside a view, a node naming its kind, which sees the view's
+  value, as `Under` and `Tally` below.
 - Draw what the state means with views of its own: an answer, as the position a
   search finds, by a pointer of its own, and a mark meaning something else at
   some steps by another pointer, rendered in `{#if}` or at a label, so a found
@@ -1108,14 +1113,12 @@ variables:
 
 ```svelte
 <View of="Int" name="IntTally">
-  {#snippet Tally()}<Node>{'•'.repeat(this)}</Node>{/snippet}
-  <Node layout="column"><Node value={this} />{@render Tally()}</Node>
+  <Node layout="column"><Node value={this} /><Node kind="Tally">{'•'.repeat(this)}</Node></Node>
 </View>
 <View of="Values" name="Items">
   <Node>
     {#each this as v, k}
-      {#snippet Under()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{v}{@render Under()}</Node>
+      <Node layout="column">{v}<Node kind="Under">{k}</Node></Node>
     {/each}
   </Node>
 </View>
@@ -1175,7 +1178,7 @@ exactly as written, lighting the code each step ran. The algorithm block is what
 runs and the listing what is read, and they meet through labels, so the
 algorithm is written as the language needs (typed values, labels) while the
 listing reads as the lesson; when the algorithm changes, its listing follows.
-Place it outside views, in a layout or a part, as
+Place it outside views, in a layout, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
 The text is a `<script listing="textbook">` block; with several,
@@ -1208,25 +1211,25 @@ there: the assistant for a new or edited source, a chooser for more variants.
   statement its label marks, each line lights for its own statement; otherwise
   it lights as one. A line lights from its first character to its last, never
   its indentation.
-- A token, `$name[text]`, marks text as a reference to the place the root or a
-  part renders at `@name` (see Places), as `$mid[A[mid]]` for `{mid}` or
-  `$key[key]` for `{key}` in a part. Tokens are written by hand, never matched
-  by name, so `$j[A[j + 1]]` names `@j` where the pseudocode's `j` is the
-  algorithm's `j - 1`. Tokens and regions nest either way, as
-  `$x[A[@left[j - 1]]]`, a region inside a token keeping its prefix; a token
-  inside another, an unclosed one, or one naming a place nothing renders is an
-  error. When a step's own code, not code kept lit from earlier, overlaps a
-  token, the step touches its place: every token naming it and its references in
-  the picture light together, in the colour of the place's mark, its pointer
-  view's `<Pointed>` fill (`Mark.Pointed@i.fill`) or its value's view's
-  (`IntCell@key.fill`), or its stroke where the fill is none or white. In the
-  picture, a place is the element a pointer at it points at, or the outermost
-  node of a value rendered there or of a pointer view with nodes around its
-  `<Pointed>`, a caption's number included. Hovering any reference outlines the
-  others, dashed in its colour. `listing.places`, there only where a listing has
-  tokens, says how places light: `fill` (the start: the token filled, a 3px band
-  round the node), `underline`, `outline` (a ring), or `none`, which lights
-  nothing and links nothing on hover; none takes room.
+- A token, `$name[text]`, marks text as a reference to the place a layout draws
+  at `@name` (see Places), as `$mid[A[mid]]` for `{mid}` or `$key[key]` for
+  `{key}` in a layout. Tokens are written by hand, never matched by name, so
+  `$j[A[j + 1]]` names `@j` where the pseudocode's `j` is the algorithm's
+  `j - 1`. Tokens and regions nest either way, as `$x[A[@left[j - 1]]]`, a
+  region inside a token keeping its prefix; a token inside another, an unclosed
+  one, or one naming a place nothing renders is an error. When a step's own
+  code, not code kept lit from earlier, overlaps a token, the step touches its
+  place: every token naming it and its references in the picture light together,
+  in the colour of the place's mark, its pointer view's `<Pointed>` fill
+  (`Mark.Pointed@i.fill`) or its value's view's (`IntCell@key.fill`), or its
+  stroke where the fill is none or white. In the picture, a place is the element
+  a pointer at it points at, or the outermost node of a value rendered there or
+  of a pointer view with nodes around its `<Pointed>`, a caption's number
+  included. Hovering any reference outlines the others, dashed in its colour.
+  `listing.places`, there only where a listing has tokens, says how places
+  light: `fill` (the start: the token filled, a 3px band round the node),
+  `underline`, `outline` (a ring), or `none`, which lights nothing and links
+  nothing on hover; none takes room.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes
@@ -1278,18 +1281,18 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Pointed /></View>
-{#snippet Key()}<Node>key {key}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Board()}
+<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Board" of="key, values">
   <Node layout="row">
     <Listing />
-    <Node layout="column">{@render Key()}{@render Cells()}</Node>
+    <Node layout="column"><Key key={key} /><Cells values={values} /></Node>
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Stacked">
+<Layout name="Stacked" of="i, j, key, values">
   <Node>
-    {@render Board()}
+    <Board key={key} values={values} />
     {i}
     {j}
   </Node>
@@ -1321,7 +1324,7 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `row` and `col`: in a grid, the cell a child is placed in, whole numbers from
   0, as `row={i} col={j}`; only a grid's children take them, and each takes
   both.
-- `kind`: a kind of its own within its snippet or layout, written as it is, as
+- `kind`: a kind of its own within its view or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
   root node is its frame and takes none.
 - A look, inside a view, as an expression of its value, as `fill={this.seen}`
@@ -1336,7 +1339,7 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 cell by `row` and `col`, usually loop indices or positions:
 
 ```svelte
-{#snippet Table()}
+<Layout name="Table" of="x, y, t">
   <Node layout="grid">
     {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
     {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
@@ -1344,7 +1347,7 @@ cell by `row` and `col`, usually loop indices or positions:
       {#each cells as cell, j}<Node row={i + 1} col={j + 1}>{cell}</Node>{/each}
     {/each}
   </Node>
-{/snippet}
+</Layout>
 ```
 
 - A grid holds only nodes placed by `row` and `col`, from any number of
@@ -1498,30 +1501,29 @@ at marked and the queue drawn by number:
 <View of="VertexRef" name="RefCard"><Node value={this} /></View>
 <View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
 <View of="VertexRef" name="Marked"><Pointed /></View>
-{#snippet Graph()}
+<Layout name="Graph" of="vertices, out">
   <Node layout="free">
     {#each vertices as v, k}
-      {#snippet VertexNumber()}<Node>{k}</Node>{/snippet}
-      <Node layout="column">{v}{@render VertexNumber()}</Node>
+      <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
       {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
   </Node>
-{/snippet}
-{#snippet QueueLine()}<Node>queue {queue}</Node>{/snippet}
+</Layout>
+<Layout name="QueueLine" of="queue"><Node>queue {queue}</Node></Layout>
 
-<Layout name="Stacked">
+<Layout name="Stacked" of="current, vertices, out, queue, @visit.look.check.next">
   <Node>
-    {@render Graph()}
-    {@render QueueLine()}
+    <Graph vertices={vertices} out={out} />
+    <QueueLine queue={queue} />
     {current}
     {@visit.look.check.next}
   </Node>
 </Layout>
 
-<Layout name="Side">
+<Layout name="Side" of="current, vertices, out, queue, @visit.look.check.next">
   <Node layout="row">
-    {@render Graph()}
-    {@render QueueLine()}
+    <Graph vertices={vertices} out={out} />
+    <QueueLine queue={queue} />
     {current}
     {@visit.look.check.next}
   </Node>

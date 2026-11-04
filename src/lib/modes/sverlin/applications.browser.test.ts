@@ -53,18 +53,18 @@ const source = `<script domain>
 <View of="@sweep.pair.test" name="Ask">
   <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
-{#snippet Title()}<Node>Bubble sort</Node>{/snippet}
-{#snippet Board()}
+<Layout name="Title"><Node>Bubble sort</Node></Layout>
+<Layout name="Board" of="values, @sweep.pair.test">
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
     {@sweep.pair.test}
   </Node>
-{/snippet}
+</Layout>
 
-<Layout name="Main">
+<Layout name="Main" of="values, @sweep.pair.test">
   <Node>
-    {@render Title()}
-    {@render Board()}
+    <Title />
+    <Board values={values} />
   </Node>
 </Layout>`;
 

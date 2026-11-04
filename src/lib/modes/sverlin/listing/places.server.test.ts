@@ -28,12 +28,12 @@ ${listing}
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Arrow"><Pointed /></View>
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-{#snippet Goal()}<Node>target {target}</Node>{/snippet}
-<Layout name="Main">
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
+<Layout name="Main" of="lo, hi, mid, target, values">
   <Node layout="row">
     <Listing />
-    <Node>{@render Goal()}{@render Cells()}</Node>
+    <Node><Goal target={target} /><Cells values={values} /></Node>
     {lo}
     {hi}
     {mid}
@@ -69,12 +69,12 @@ const linearSearch = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Pointed /></View>
-{#snippet Goal()}<Node>target {target}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-<Layout name="Main">
+<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Main" of="i, target, values">
   <Node layout="row">
     <Listing />
-    <Node>{@render Goal()}{@render Cells()}</Node>
+    <Node><Goal target={target} /><Cells values={values} /></Node>
     {i}
   </Node>
 </Layout>`;
@@ -221,12 +221,12 @@ describe('tokens naming places in a listing', () => {
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Pointed /></View>
-{#snippet Key()}<Node>key {key}</Node>{/snippet}
-{#snippet Cells()}<Node>{#each values as v}{v}{/each}</Node>{/snippet}
-<Layout name="Stacked">
+<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Stacked" of="i, j, key, values">
   <Node layout="row">
     <Listing />
-    <Node layout="column">{@render Key()}{@render Cells()}</Node>
+    <Node layout="column"><Key key={key} /><Cells values={values} /></Node>
     {i}
     {j}
   </Node>
