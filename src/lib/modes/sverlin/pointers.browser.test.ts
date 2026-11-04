@@ -322,7 +322,7 @@ it.skipIf(!enabled)(
   }
 );
 
-type Drawn = { left: number; right: number; text: string; shadow: string; outline: string };
+type Drawn = { left: number; right: number; text: string; shadow: string };
 
 /** Each step's cells, left to right, and the row around them, as drawn, with the chosen looks. */
 async function scanned(chosen: Record<string, string | number>) {
@@ -370,8 +370,7 @@ async function scanned(chosen: Record<string, string | number>) {
               left: box.left,
               right: box.right,
               text: value.innerText,
-              shadow: style.boxShadow,
-              outline: style.outlineOffset
+              shadow: style.boxShadow
             };
           });
         const row = document.querySelector<HTMLElement>(`${layer} [data-sv-kind="Row"]`)!;
@@ -393,9 +392,11 @@ it.skipIf(!enabled)(
       new Set(steps.map(({ cells }) => cells[index].left.toFixed(1)));
     for (let index = 0; index < 5; index++) expect(lefts(index).size).toBe(1);
     expect(new Set(steps.map(({ row }) => row.toFixed(1))).size).toBe(1);
-    // Where the pointer is, its cell is painted 4px larger: a spread of its fill and its outline.
-    expect(steps.some(({ cells }) => cells.some((cell) => / 4px/u.test(cell.shadow)))).toBe(true);
-    expect(steps.some(({ cells }) => cells.some((cell) => cell.outline === '4px'))).toBe(true);
+    // Where the pointer is, its cell is painted 4px larger: a spread of its fill, and its 1.5px stroke
+    // as a second shadow just outside it.
+    expect(
+      steps.some(({ cells }) => cells.some((cell) => / 4px.* 5\.5px/u.test(cell.shadow)))
+    ).toBe(true);
   }
 );
 
@@ -667,7 +668,8 @@ it.skipIf(!enabled)(
     const steps = await scanned({ 'Here.Pointed.spread': 6 });
     for (let index = 0; index < 5; index++)
       expect(new Set(steps.map(({ cells }) => cells[index].left.toFixed(1))).size).toBe(1);
-    expect(steps.some(({ cells }) => cells.some((cell) => / 6px/u.test(cell.shadow)))).toBe(true);
-    expect(steps.some(({ cells }) => cells.some((cell) => cell.outline === '6px'))).toBe(true);
+    expect(
+      steps.some(({ cells }) => cells.some((cell) => / 6px.* 7\.5px/u.test(cell.shadow)))
+    ).toBe(true);
   }
 );
