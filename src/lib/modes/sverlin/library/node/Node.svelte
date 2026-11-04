@@ -491,12 +491,11 @@
     const setting = look(prop);
     return typeof setting === 'number' ? `${setting}${unit}` : undefined;
   };
-  // A node sized by its value and holding nothing is its length along it, with no padding there, so
-  // 0 draws no length; one holding a label is as long as the larger of the two.
-  const bare = $derived(!children && value === undefined && !__items);
+  // A node sized by its value holds nothing (the build refuses anything inside it), so it is its
+  // length along it exactly, with no padding there, and 0 draws no length.
   const valuePadding = $derived.by(() => {
     const padding = measured('padding', 'em');
-    if (!bare || (valueWidth === undefined && valueHeight === undefined)) return padding;
+    if (valueWidth === undefined && valueHeight === undefined) return padding;
     const across = valueHeight === undefined ? (padding ?? '0') : '0';
     const along = valueWidth === undefined ? (padding ?? '0') : '0';
     return `${across} ${along}`;
@@ -517,8 +516,7 @@
   });
   const grown = (least: string | undefined) =>
     growth ? (least ? `calc(${least} + ${2 * growth}px)` : `${2 * growth}px`) : least;
-  const sized = (length: number | undefined) =>
-    length !== undefined && bare ? `${length}px` : undefined;
+  const sized = (length: number | undefined) => (length !== undefined ? `${length}px` : undefined);
   const least = (length: number | undefined, axis: 'width' | 'height') =>
     length !== undefined
       ? `${length}px`

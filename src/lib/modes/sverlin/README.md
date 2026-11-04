@@ -993,17 +993,18 @@ has no values to bind: give it a type where the algorithm computes it, as
   its value. Any number of values fits, but none below zero. The unit, in pixels
   per unit, is a variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or
   24), starting at the largest that keeps the type's largest value within 200
-  pixels, and every node of the kind shares it. Such a node holding nothing is
-  exactly its length, so 0 draws only its border; one holding a label is the
-  longer of the two. It sits in a room as long as its type's largest value,
-  which keeps that room wherever it is drawn, a pointer on it or not, so nothing
-  around it moves; the node itself is only its length. A bound axis has no
-  `width` or `height` variable, its size being the value; the kind's anchor
-  along it places the node in its room, starting at `end` for `height`
-  (`Bar.yAnchor`), so the nodes of a kind stand on one baseline, and `start` for
-  `width` (`Bar.xAnchor`). A kind sizes an axis by its value in all its nodes or
-  none: a kind passes to the nodes inside it, so give the node sized by its
-  value a kind of its own, as
+  pixels, and every node of the kind shares it. Such a node holds nothing, no
+  text, nodes or values, so it is exactly its length: 0 draws only its border
+  and 1 one unit. Put a label beside it, as
+  `<Node layout="column"><Node kind="Length" height={this} /><Node value={this} /></Node>`.
+  It sits in a room as long as its type's largest value, which keeps that room
+  wherever it is drawn, a pointer on it or not, so nothing around it moves; the
+  node itself is only its length. A bound axis has no `width` or `height`
+  variable, its size being the value; the kind's anchor along it places the node
+  in its room, starting at `end` for `height` (`Bar.yAnchor`), so the nodes of a
+  kind stand on one baseline, and `start` for `width` (`Bar.xAnchor`). A kind
+  sizes an axis by its value in all its nodes or none: a kind passes to the
+  nodes inside it, so give the node sized by its value a kind of its own, as
   `<Node layout="column"><Node kind="Length" height={this} />{this.name}</Node>`.
   Anywhere else a box sizes to its contents, at least its kind's `minSize`.
 
@@ -1013,6 +1014,9 @@ has no values to bind: give it a type where the algorithm computes it, as
 </View>
 <View of="Level" name="LevelCell"><Node value={this} textSize={this} /></View>
 <View of="Int" name="Bar"><Node height={this} /></View>
+<View of="Int" name="Labelled">
+  <Node layout="column"><Node kind="Length" height={this} /><Node value={this} /></Node>
+</View>
 ```
 
 ### Places

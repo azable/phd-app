@@ -2661,6 +2661,27 @@ describe('slots and boxes', () => {
     expect(design.space['Bar.height']).toEqual(['uniform', 'varying']);
   });
 
+  it('refuses a node sized by its value holding anything, and builds the label beside it', () => {
+    expect(() =>
+      prepareSvelteComponent(
+        source(
+          '<View of="Wide" name="Bar"><Node height={this}><Node value={this} /></Node></View>',
+          '{wide}'
+        )
+      )
+    ).toThrow(
+      '<Node height={this}> holds what it is sized by: a node sized by its value holds nothing, so 0 draws as nothing and 1 as one unit. Put the label beside it, as <Node layout="column"><Node kind="Length" height={this} /><Node value={this} /></Node>.'
+    );
+    // The form the message shows builds as written.
+    const { design } = prepareSvelteComponent(
+      source(
+        '<View of="Wide" name="Bar"><Node layout="column"><Node kind="Length" height={this} /><Node value={this} /></Node></View>',
+        '{wide}'
+      )
+    );
+    expect(design.space['Bar.Length.height@unit']).toBeDefined();
+  });
+
   it('refuses where a box sits, or how a row spaces, written in the markup', () => {
     expect(() =>
       prepareSvelteComponent(

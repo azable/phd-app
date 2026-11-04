@@ -3000,6 +3000,16 @@ function withNodeRefs(
         reject(found.problem, 'bound_prop', start);
         return false;
       }
+      // A node sized by its value is that length exactly, so nothing inside may make it larger.
+      const holds = (tag.children ?? []).some(
+        (child) => child.type !== 'Comment' && !(child.type === 'Text' && !child.data?.trim())
+      );
+      if (length && holds)
+        reject(
+          `<Node ${prop}={${written}}> holds what it is sized by: a node sized by its value holds nothing, so 0 draws as nothing and 1 as one unit. Put the label beside it, as <Node layout="column"><Node kind="Length" ${prop}={${written}} /><Node value={${written}} /></Node>.`,
+          'bound_prop',
+          start
+        );
       const other = bindings.find((binding) => binding.kind === kind && binding.prop === prop);
       // Lengths of one kind share a unit, whatever their ranges: the unit starts from the widest.
       if (other && length) {

@@ -204,9 +204,11 @@ it.skipIf(!enabled)(
       expect(drawnBars[0].kind).toBe('Here.Pointed');
       const scale = drawnBars[2].box.height / (9 * 16);
       const pixels = drawnBars.map(({ box }) => Math.round(box.height / scale));
-      // The values 6, 2, 9, 4, 0, 7 at 16 pixels per unit; a Bar of 0 draws only its border.
+      // The values 6, 2, 9, 4, 0, 7 at 16 pixels per unit. A Bar of 0 has no length: it draws
+      // only its two borders, the starter's 1.5 pixels each snapped to 1 at this page's device
+      // pixel ratio of 1 (see snappedBorder), as a box is its border at the least.
       expect(pixels.slice(0, 4)).toEqual([96, 32, 144, 64]);
-      expect(pixels[4]).toBeLessThan(4);
+      expect(pixels[4]).toBe(2);
       expect(pixels[5]).toBe(112);
       expect(new Set(drawnBars.map(({ box }) => Math.round(edge(box))))).toHaveLength(1);
     }
