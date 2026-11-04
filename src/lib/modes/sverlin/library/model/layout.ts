@@ -147,7 +147,9 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     if (known) return known;
     const look = lookAt(element);
     const { left, top, horizontal, vertical } = edges(look);
-    const toBorder = (size: number, edge: number) => (look.borderBox ? size : size + edge);
+    // A border box is never smaller than its padding and border, as at height 0.
+    const toBorder = (size: number, edge: number) =>
+      look.borderBox ? Math.max(size, edge) : size + edge;
     const kept = least?.(element);
     const leastWidth = toBorder(
       laid(Math.max(lengthPx(look.minWidth), kept?.width ?? 0)),

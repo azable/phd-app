@@ -123,13 +123,23 @@ async function animated(source: string, label: string, chosen: Record<string, st
     Element.prototype.animate = function (keyframes, options) {
       const frames = keyframes as Keyframe[];
       const node = this as HTMLElement;
-      started.push({
-        place:
-          node.closest<HTMLElement>('[data-sv-kind="QueueItems"], [data-sv-kind="Taken"]')?.dataset
-            .svKind ?? 'Graph',
-        text: node.innerText.trim(),
-        change: frames[0].translate ? 'moves' : frames[0].opacity === 0 ? 'appears' : 'goes'
-      });
+      // A move translates; a new node fades in from nothing and a gone one out to nothing. A node
+      // whose size or paint changes between steps also animates (see motion.ts): no change of place.
+      const change = frames[0].translate
+        ? 'moves'
+        : Number(frames[0].opacity) === 0
+          ? 'appears'
+          : Number(frames.at(-1)?.opacity) === 0
+            ? 'goes'
+            : undefined;
+      if (change)
+        started.push({
+          place:
+            node.closest<HTMLElement>('[data-sv-kind="QueueItems"], [data-sv-kind="Taken"]')
+              ?.dataset.svKind ?? 'Graph',
+          text: node.innerText.trim(),
+          change
+        });
       return animate.call(this, keyframes, options);
     };
   });
