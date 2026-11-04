@@ -114,7 +114,7 @@ export function implicitRenders(
       reference.kind === 'value' ? [[reference.key, reference.path] as const] : []
     )
   );
-  // runs(@check.at), written ϟcheckˑat by then: every value the label has given, of its type.
+  // spans(@check.at), written ϟcheckˑat by then: every value the label has given, of its type.
   const runsPaths = new Map(
     references.flatMap((reference) =>
       reference.kind === 'runs' ? [[reference.key, reference.path] as const] : []

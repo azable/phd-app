@@ -349,7 +349,7 @@ export type PointerCall = {
   /** The place it is rendered at, whose own variables its view's kinds take. */
   place?: Place;
   /**
-   * A pointer at each position of a list, as {#each runs(@check.at) as p}{@render Checked(p)}{/each}:
+   * A pointer at each position of a list, as {#each spans(@check.at) as p}{@render Checked(p)}{/each}:
    * the list, named by `path`, each item's path its own.
    */
   list?: () => unknown;

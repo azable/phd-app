@@ -810,7 +810,17 @@ function prepareViews(
             })
         )
       );
-    const { source: marked, references, allReads } = markLabels(viewed.source);
+    const { source: marked, references, allReads, runsReads } = markLabels(viewed.source);
+    if (runsReads.length)
+      throw InvalidSvelteSourceError.combine(
+        runsReads.map(
+          ({ label, start }) =>
+            new InvalidSvelteSourceError(
+              `runs(@${label}) is written spans(@${label}): every value the label has given so far, one for each span of its code.`,
+              { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
     if (allReads.length)
       throw InvalidSvelteSourceError.combine(
         allReads.map(
@@ -1409,7 +1419,7 @@ function prepareViews(
             problem(`${call} is in a view, which draws only its value: write it in a layout.`);
           else if (reference.path === undefined && !reference.moment)
             problem(
-              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a run of that label; of=":before" and of=":after" draw them at the case\'s first step, the input as given, and its last.'
+              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a span of that label; of=":before" and of=":after" draw them at the case\'s first step, the input as given, and its last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
@@ -1431,7 +1441,7 @@ function prepareViews(
           continue;
         if (reference.kind === 'value' && tested.has(reference.start)) {
           problem(
-            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <When of="${asWritten(reference.key)}">…</When> draws its contents at each step inside a run of the label.`
+            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <When of="${asWritten(reference.key)}">…</When> draws its contents at each step inside a span of the label.`
           );
           continue;
         }
@@ -1588,7 +1598,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p) and runs(@label); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p) and spans(@label); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -1667,7 +1677,7 @@ function prepareViews(
             const steps = [...new Set(both.map(({ step }) => step))];
             return [
               new InvalidSvelteSourceError(
-                `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; a <OneOf>'s branches take turns in one place, so give each a label whose runs never meet the others', give each outcome a label of its own, or write them as <When>s of their own.`,
+                `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; a <OneOf>'s branches take turns in one place, so give each a label whose spans never meet the others', give each outcome a label of its own, or write them as <When>s of their own.`,
                 { code: 'view_label', start: sourcePosition(source, start) }
               )
             ];
@@ -1864,7 +1874,7 @@ function prepareViews(
         labelReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but a label's value is drawn only through a view, as {${asWritten(name)}}, never tested or computed with. A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).`,
+              `The view reads ${asWritten(name)} itself, but a label's value is drawn only through a view, as {${asWritten(name)}}, never tested or computed with. A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a span of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -2248,7 +2258,7 @@ export async function bundlePresentation(
   );
   if (master.length > algorithmLimits.maximumSteps + 1)
     throw new InvalidSvelteSourceError(
-      `The storyboard shows ${master.length} steps, more than the ${algorithmLimits.maximumSteps + 1} a presentation can: show fewer scenes, scenes within fewer runs, or pause at fewer labels.`,
+      `The storyboard shows ${master.length} steps, more than the ${algorithmLimits.maximumSteps + 1} a presentation can: show fewer scenes, scenes within fewer spans, or pause at fewer labels.`,
       { code: 'too_many_steps' }
     );
   const single = scenes.length === 1 && !scenes[0].frame;

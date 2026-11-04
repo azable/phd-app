@@ -2083,7 +2083,7 @@ describe('<When of="@label">', () => {
     expect(() =>
       prepareSvelteComponent(caption('{#if @pass.look.read}{@render Caption()}{/if}'))
     ).toThrow(
-      '{#if @pass.look.read} would choose what to draw by the label\'s value, which a view never does: <When of="@pass.look.read">…</When> draws its contents at each step inside a run of the label.'
+      '{#if @pass.look.read} would choose what to draw by the label\'s value, which a view never does: <When of="@pass.look.read">…</When> draws its contents at each step inside a span of the label.'
     );
     expect(() =>
       prepareSvelteComponent(

@@ -47,7 +47,7 @@ export function writtenCases(scanned: string): {
     if (match[1] === 'Run') {
       tags.push({ start, end: closing < 0 ? start + 4 : closing + 2 });
       problems.push({
-        message: `An execution the source shows is a <Case>, not a <Run>: write <Case name="present" …/>, and name it in a scene with case="present". A run is one pass through a label's code, as @insert#2.`,
+        message: `An execution the source shows is a <Case>, not a <Run>: write <Case name="present" …/>, and name it in a scene with case="present". A span is one execution of a label's code, as @insert#2.`,
         start
       });
       continue;

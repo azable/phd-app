@@ -155,22 +155,22 @@ scene at least.
 - A stepping scene names the case it shows, as `case="present"` (see Cases); one
   naming none, or a case no `<Case>` names, is refused. Its stops, `within`,
   `pause` and `at` are those of that case, and two scenes may show two cases.
-- Each run of a label has two stops: `:before`, just before its code begins, and
-  `:after`, just after it ends. The whole case has them too: its `:before` is
-  the input as the case gives it, and its `:after` the state the algorithm ends
-  on.
-- A stepping scene steps through the whole case, or the runs of one label
-  `within` names: every run, `within="@sort.merge"`, or the nth to begin,
-  `within="@sort.merge#1"`. It opens on their `:before` (the first run's, for
-  every run) and closes on their `:after` (the last run's), as
+- Each span of a label has two stops: `:before`, just before its code begins,
+  and `:after`, just after it ends. The whole case has them too: its `:before`
+  is the input as the case gives it, and its `:after` the state the algorithm
+  ends on.
+- A stepping scene steps through the whole case, or the spans of one label
+  `within` names: every span, `within="@sort.merge"`, or the nth to begin,
+  `within="@sort.merge#1"`. It opens on their `:before` (the first span's, for
+  every span) and closes on their `:after` (the last span's), as
   `@sort.merge#1:before` and `@sort.merge#1` in the controls, or the whole
   case's, `:before` and `:after`. `pause` names, separated by commas, the stops
   where the scene takes a step between them: a label by its full name for the
-  end of each of its runs, as `pause="@sort.merge.take"`, which
+  end of each of its spans, as `pause="@sort.merge.take"`, which
   `@sort.merge.take:after` also writes, and `@sort.merge.take:before` for just
   before each begins; `pause="@sort.merge.take:before, @sort.merge.take"` takes
   both. The scene pauses at those stops and no others, and `within` only chooses
-  which runs it shows, so a scene with no `pause` shows its `:before` and its
+  which spans it shows, so a scene with no `pause` shows its `:before` and its
   `:after`. A step the view draws from exactly what it drew the step before from
   (the variables it reads, the marks held, the code lit, and each `<When>`)
   draws the same picture, so it is left out, and the build warns, naming both
@@ -184,7 +184,7 @@ scene at least.
   every node keeps the largest room it reaches at any step of any scene, and a
   free layout is laid out once over them all, so nothing moves between scenes.
 - A scene naming no layout the source declares, a label that is none of the
-  algorithm's, or a run its label never has, a scene that shows no step, and a
+  algorithm's, or a span its label never has, a scene that shows no step, and a
   storyboard showing more steps than a presentation can are refused.
 
 ## Views of types
@@ -198,10 +198,10 @@ takes no value: `this` in a layout is an error, as it has no value of its own.
 The node showing the value shows the type's unit too. Define views at the top
 level, never inside a layout or a node, and end each `</View>` its line, putting
 what follows on the next. A view reads only `this`, types, other views, labels
-(`@…`), the library's components, `Math`, `at(p)`, `runs(@label)`, and the names
-its `{#each}` blocks and `{@const}` tags declare: never the input or algorithm
-variables, a pointer apart, and never browser globals such as `window` or
-`self`. How two values relate is drawn where both are in scope, in the view
+(`@…`), the library's components, `Math`, `at(p)`, `spans(@label)`, and the
+names its `{#each}` blocks and `{@const}` tags declare: never the input or
+algorithm variables, a pointer apart, and never browser globals such as `window`
+or `self`. How two values relate is drawn where both are in scope, in the view
 holding them or by a pointer; a layout reads the input and algorithm variables
 it declares.
 
@@ -340,16 +340,16 @@ label given a kind of its own.
   already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`.
   A name is one word, without dots, and the algorithm runs as if the marks were
   spaces.
-- A run of a label is one execution of the code it marks, from where it begins
+- A span of a label is one execution of the code it marks, from where it begins
   to where it ends: one evaluation of an expression, one pass of a loop's body,
-  one call of a function, recursive calls included. Runs nest, a run ends early
-  at a `break` or `return`, and code that does not execute has no run. `@x#n` is
-  the nth run of `x` to begin.
+  one call of a function, recursive calls included. Spans nest, a span ends
+  early at a `break` or `return`, and code that does not execute has no span.
+  `@x#n` is the nth span of `x` to begin.
 - No code runs outside a label. Every statement of the algorithm, at its top
   level and in each function's body, is inside a label, as
-  `@run[const found = search(values, target);]`. Every test of an `if`, `while`,
-  or `do … while` is a label's own code, or conditions joined by `&&` and `||`
-  that each are, as `if (@base[Short(lo, hi)])` or
+  `@search[const found = search(values, target);]`. Every test of an `if`,
+  `while`, or `do … while` is a label's own code, or conditions joined by `&&`
+  and `||` that each are, as `if (@base[Short(lo, hi)])` or
   `while (@bound[j > 0] && @compare[values[j - 1] > key])`, so each decision is
   a step, its value the condition's, even where it fails. Each part of a `for`
   header is a label's own code too, as
@@ -376,11 +376,11 @@ label given a kind of its own.
   the step on screen drew it, in one motion. Code not paused at, inside a label
   the scene does not pause at, leads up to the next step, and what a label there
   gives, a value or an application rendered at it, is drawn at that step, as a
-  comparison not paused at is at the swap it leads to. A step inside a run of a
-  label, as in a call it makes, ends that run's code so far: what it changes
+  comparison not paused at is at the swap it leads to. A step inside a span of a
+  label, as in a call it makes, ends that span's code so far: what it changes
   after is compared with the step.
-- A step inside a run shows only its own part and the code leading up to it; a
-  step ending a run shows its whole run, the values its labels gave inside it
+- A step inside a span shows only its own part and the code leading up to it; a
+  step ending a span shows its whole span, the values its labels gave inside it
   drawn and its code lit.
 - At a case's `:before` no code has run: what the algorithm declares, its
   labels' values, and its applications appear from the first step on (see
@@ -392,9 +392,9 @@ label given a kind of its own.
   never at the top level with a stand-in such as -1. A name is declared once
   among the blocks in scope: a loop inside another cannot declare `j` again,
   while loops one after another can.
-- A step is named by the stop it is at: the label whose run it ends and which
-  run that is, as `@insert.swap#1`, or `@insert.swap#1:before` just before that
-  run begins, and `:before` and `:after` for the whole case's: in a recursive
+- A step is named by the stop it is at: the label whose span it ends and which
+  span that is, as `@insert.swap#1`, or `@insert.swap#1:before` just before that
+  span begins, and `:before` and `:after` for the whole case's: in a recursive
   function, `@sort#1` ends the first call made, the outermost, at the last of
   its steps. The name is the same in every variant, which numbers only the steps
   it shows. A step has no text: the view says what it shows, from the recorded
@@ -853,10 +853,10 @@ label never changes or breaks what a name reads, in the markup or a variant.
 Only a label on an expression gives a value, as `const key = @key[values[i]];`:
 `@name` is what that expression gave since the step before, drawn at the step's
 after, and missing where it gave none or several. It is held at the step ending
-the run around it (see Steps), which shows that run whole. So a view shows what
-a step's code held though no variable holds it, as the key a whole insertion
-inserts, `{@insert.key}`, out of scope once its block ends. A label giving a
-position is drawn by a pointer, pointing while that code runs.
+the span around it (see Steps), which shows that span whole. So a view shows
+what a step's code held though no variable holds it, as the key a whole
+insertion inserts, `{@insert.key}`, out of scope once its block ends. A label
+giving a position is drawn by a pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -889,13 +889,13 @@ something at some steps needs no flag, sentinel, or cast in the algorithm: a
 label, a pointer at a label, a view chosen per place, or `<When of="@label">`
 below does it.
 
-`<When of="@insert.swap">…</When>` draws its contents at each step inside a run
-of a label, any label: the step that ends a run and those inside it where labels
-within pause, whatever the pauses, never steps leading up to it or after it;
-elsewhere they are hidden, keeping their room. `of=":before"` and `of=":after"`,
-the whole case's stops, draw them at the first step, the input as given, and at
-the last, as a note the same in every case, as "the array is now sorted". A
-`<When>` names one label or moment and never reads the label's value
+`<When of="@insert.swap">…</When>` draws its contents at each step inside a span
+of a label, any label: the step that ends a span and those inside it where
+labels within pause, whatever the pauses, never steps leading up to it or after
+it; elsewhere they are hidden, keeping their room. `of=":before"` and
+`of=":after"`, the whole case's stops, draw them at the first step, the input as
+given, and at the last, as a note the same in every case, as "the array is now
+sorted". A `<When>` names one label or moment and never reads the label's value
 (`{#if @label}` is refused); it has no `{:else}`. Branches that take turns share
 one place, as large as the largest,
 `<OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>`, as in bubble sort
@@ -931,11 +931,11 @@ the other:
 </OneOf>
 ```
 
-What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
-the label has given up to this step:
+What has happened so far is a list for `{#each}`: `spans(@check.at)`, every
+value the label has given up to this step:
 
 ```svelte
-{#each runs(@check.at) as p}{p}{/each}
+{#each spans(@check.at) as p}{p}{/each}
 ```
 
 ## Design
@@ -1046,8 +1046,8 @@ between, around, or evenly, along; for a grid, see Grid); where an array's node
 has more room than its tracks need, `justify` start, center, or end puts the
 room after, around, or before them, and between, around, or evenly spreads the
 tracks over it; an array's kind starts at center where every value of its type
-keeps one length through the run, as an array being sorted, and at start where
-one grows or shrinks, as a queue, so no element moves as another comes or goes.
+keeps one length throughout, as an array being sorted, and at start where one
+grows or shrinks, as a queue, so no element moves as another comes or goes.
 Positions past an array's ends are drawn in end slots, kept only as far as drawn
 positions go: an array's kind has `overflow`, included (end slots are tracks of
 its box) or excluded (they hang outside, so centring it centres its elements),
@@ -1113,10 +1113,9 @@ bound prop reads `this`, or a name read from it: an `{#each}` item, of its
 array's element type, as `fill={v.seen}` in `{#each this.vertices as v}`, its
 index, of the array's position type (one before it to its `max`), and a
 `{@const}` name of a field. In a view of a label, `this.left`, `this.right`,
-`this.value`, or a labelled call's parameters have the type the algorithm's runs
-gave them; an operand of no type, a plain number as the `2` in `@small[n < 2]`,
-has no values to bind: give it a type where the algorithm computes it, as
-`Int(2)`.
+`this.value`, or a labelled call's parameters have the type the algorithm gave
+them; an operand of no type, a plain number as the `2` in `@small[n < 2]`, has
+no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
 
 - `true` and `false` are unordered: each has a variable of its own over the
   prop's options, as `VertexCard.fill@true` and `VertexCard.fill@false`,

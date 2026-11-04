@@ -856,7 +856,7 @@ export function pointerCalls(
       }
       return;
     }
-    // A pointer at each position a label has given so far, as {#each runs(@check.at) as p}
+    // A pointer at each position a label has given so far, as {#each spans(@check.at) as p}
     // {@render Checked(p)}{/each}, written {#each ϟcheckˑat as p} by then (see label-values.ts).
     const listed = part.type === 'EachBlock' && where === 'top' ? listPointer(part) : undefined;
     if (listed) {

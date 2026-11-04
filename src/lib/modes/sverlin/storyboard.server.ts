@@ -195,7 +195,7 @@ function sceneOf(
       );
     if (found[1] === 'run')
       return fail(
-        `A <Scene> names the execution it shows with case, as case="present", the name of a <Case>: a run is one pass through a label's code, as @insert#2.`
+        `A <Scene> names the execution it shows with case, as case="present", the name of a <Case>: a span is one execution of a label's code, as @insert#2.`
       );
     if (!sceneProps.has(found[1]))
       return fail(
@@ -221,7 +221,7 @@ function sceneOf(
       .map((each) => stop.exec(each.trim()));
     if (stops.some((each) => !each) || !stops.length)
       return fail(
-        `pause="${given.get('pause')}" names the stops of runs where ${name} takes a step, separated by commas: a label by its full name for the end of each of its runs, as pause="@sort.merge.take", which @sort.merge.take:after also writes, and @sort.merge.take:before for just before each begins.`
+        `pause="${given.get('pause')}" names the stops of spans where ${name} takes a step, separated by commas: a label by its full name for the end of each of its spans, as pause="@sort.merge.take", which @sort.merge.take:after also writes, and @sort.merge.take:before for just before each begins.`
       );
     pause = stops.map((each) => (each![2] === 'before' ? beforeStop(each![1]) : each![1]));
   }
@@ -232,7 +232,7 @@ function sceneOf(
     );
     if (!run)
       return fail(
-        `within="${given.get('within')}" names the runs of a label ${name} steps through, every run, within="@sort.merge", or the nth to begin, within="@sort.merge#1"; it opens on their :before and closes on their :after.`
+        `within="${given.get('within')}" names the spans of a label ${name} steps through, every span, within="@sort.merge", or the nth to begin, within="@sort.merge#1"; it opens on their :before and closes on their :after.`
       );
     within = { label: run[1], ...(run[2] ? { run: Number(run[2]) } : {}) };
   }
@@ -476,8 +476,8 @@ export function storyboardOf(
       problems.push({
         message:
           run !== undefined && run > runs
-            ? `within="@${label}#${run}" matches no run: in the case ${scene.case}, @${label} runs ${runs} time${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
-            : `within="@${label}" matches no run: the algorithm never runs @${label} in the case ${scene.case}.`,
+            ? `within="@${label}#${run}" matches no span: in the case ${scene.case}, @${label} has ${runs} span${runs === 1 ? '' : 's'}, as @${label}#1${runs > 1 ? ` to @${label}#${runs}` : ''}.`
+            : `within="@${label}" matches no span: the algorithm never runs @${label} in the case ${scene.case}.`,
         scene
       });
       return [];

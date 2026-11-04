@@ -51,17 +51,17 @@ pause (see the guide's Storyboard) so a first visualization, and each label you
 add, steps through sensibly. As no code runs outside a label (see the guide's
 Steps), a source has labels it rarely pauses at: a loop's start, test, and move,
 and tests whose outcome the view does not show, unless a step should show where
-the code goes next. project.runs gives each label of the base by name, how many
-times it runs and how many of those runs change what the view draws (drawn); for
-a label the base does not have, judge the same from what the algorithm does. A
-label whose runs change nothing drawn only repeats the step before, so leave it
-out of every pause, and around labels paused at, one whose own runs add nothing
+the code goes next. project.spans gives each label of the base by name, how many
+spans it has and how many of those change what the view draws (drawn); for a
+label the base does not have, judge the same from what the algorithm does. A
+label whose spans change nothing drawn only repeats the step before, so leave it
+out of every pause, and around labels paused at, one whose own spans add nothing
 beyond theirs; a fast inner loop, running many times for each step around it, is
-paused at in one scene within one of its runs rather than at every run. Where a
-listing shows (see the guide's Listing), pause at a loop’s or an if’s body, its
-test, either or neither, by whether a step should show a pass’s work or where
-the code goes next. Give each outcome, as found and not found, a label of its
-own and its message a `<When>` of it (see `<When>` in the guide). Keep each
+paused at in one scene within one of its spans rather than at every span. Where
+a listing shows (see the guide's Listing), pause at a loop’s or an if’s body,
+its test, either or neither, by whether a step should show a pass’s work or
+where the code goes next. Give each outcome, as found and not found, a label of
+its own and its message a `<When>` of it (see `<When>` in the guide). Keep each
 scene's pauses unless the participant asks for other steps; a request for more
 or fewer steps changes the source's pauses.
 
@@ -374,8 +374,8 @@ replying, and relabel a region mapped to the wrong code or never run.
 The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),
 or the problem that stops it, with omittedSteps when not all fit. They pause at
-the end of every label's runs, so they hold every step a scene can show by the
-same name, except a run's start, @insert.swap#1:before, the state of the step
+the end of every label's spans, so they hold every step a scene can show by the
+same name, except a span's start, @insert.swap#1:before, the state of the step
 before it. Check it against what the algorithm should do before revising the
 view, and use it to say what a step shows; name a step by its name, as
 @insert.swap#1, as a number is only where it falls in one presentation.

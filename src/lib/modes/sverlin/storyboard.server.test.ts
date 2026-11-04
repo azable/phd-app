@@ -194,12 +194,12 @@ describe('storyboards', () => {
     [
       'a within matching no run',
       storyboard(scene('name="probe" within="@probe#9"')),
-      'within="@probe#9" matches no run: in the case main, @probe runs'
+      'within="@probe#9" matches no span: in the case main, @probe has'
     ],
     [
       'a within written as another selector',
       storyboard(scene('name="probe" within="Run[label=probe]"')),
-      'within="Run[label=probe]" names the runs of a label'
+      'within="Run[label=probe]" names the spans of a label'
     ],
     [
       'a label that is none of the algorithm’s',

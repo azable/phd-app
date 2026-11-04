@@ -97,6 +97,9 @@ export type AiVariable = {
 /** A label's runs, and how many of them change what the view draws (compile.server.ts LabelRuns). */
 export type AiLabelRuns = { runs: number; drawn: number };
 
+/** A label's spans as the assistant reads them: how many, and how many change what the view draws. */
+export type AiLabelSpans = { spans: number; drawn: number };
+
 /** What a source's build found that every variant shares: each label's runs, each free layout kind's structure. */
 export type SourceBuildFacts = {
   runs?: Record<string, AiLabelRuns>;
@@ -249,10 +252,10 @@ export type AiProjectContext = {
    */
   design: AiDesign;
   /**
-   * Each label of the base, by name: how many times it runs, and how many of those runs change what
-   * the view draws (drawn), from its newest successful build.
+   * Each label of the base, by name: how many spans it has, and how many of those change what the
+   * view draws (drawn), from its newest successful build. Builds store them as runs.
    */
-  runs?: Record<string, AiLabelRuns>;
+  spans?: Record<string, AiLabelSpans>;
   activePresentations: AiPresentationSummary[];
   interfaceCapabilities: string[];
   /**
@@ -586,7 +589,13 @@ export function projectAiContext(
     base,
     versions: sourceVersions(document),
     design,
-    ...(runs ? { runs } : {}),
+    ...(runs
+      ? {
+          spans: Object.fromEntries(
+            Object.entries(runs).map(([label, { runs: spans, drawn }]) => [label, { spans, drawn }])
+          )
+        }
+      : {}),
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),

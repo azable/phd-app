@@ -173,7 +173,7 @@ it.skipIf(!enabled)(
 <Layout name="Main" of="values, @check.hit.at">
   <Node>
     <Cells values={values} />
-    {#each runs(@check.hit.at) as p}{p}{/each}
+    {#each spans(@check.hit.at) as p}{p}{/each}
   </Node>
 </Layout>
 

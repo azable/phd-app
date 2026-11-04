@@ -1,6 +1,6 @@
 /**
  * Labels read in the view's markup (labels as values): `@swap.a` is the value the expression
- * labelled `swap.a` gave in a step's own code; `runs(@check.at)` every value it has given so far;
+ * labelled `swap.a` gave in a step's own code; `spans(@check.at)` every value it has given so far;
  * `applied(Equal, @inner)` every application of `Equal` made inside `@inner` so far; and
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
@@ -12,7 +12,7 @@
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
  * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
  * when(@b)}` in place of the tags between them (see whenTags); then `@swap.a` as `ℓswapˑa`,
- * `runs(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal, @inner)` as `ǂEqualˑˑinner` and
+ * `spans(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal, @inner)` as `ǂEqualˑˑinner` and
  * spaces, and `when(@swap)` as `ʬswap` and spaces. The page is
  * given each as a prop of that name.
  */
@@ -53,7 +53,7 @@ export const untypedBoolean = 'boolean';
 export function written(name: string): string {
   if (isDuringKey(name) && name[1] === dot) return name.slice(2);
   if (isLabelKey(name) || isDuringKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;
-  if (isRunsKey(name)) return `runs(@${name.slice(1).replaceAll(dot, '.')})`;
+  if (isRunsKey(name)) return `spans(@${name.slice(1).replaceAll(dot, '.')})`;
   if (isHistoryKey(name)) {
     const [operator, path] = name.slice(1).split(dot + dot);
     return `applied(${operator}${path ? `, @${path.replaceAll(dot, '.')}` : ''})`;
@@ -62,7 +62,8 @@ export function written(name: string): string {
 }
 
 const path = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/u;
-const runsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
+const runsCall = /^spans\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
+const oldRunsCall = /^runs\(\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)/u;
 const allCall = /^all\(\s*([A-Za-z_$][\w$]*)\s*\)/u;
 const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
@@ -72,7 +73,7 @@ const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(befor
 const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
 const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
 const tagsAdvice =
-  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a run of the label, or of=":before" or of=":after", the case\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
+  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a span of the label, or of=":before" or of=":after", the case\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
 
 /**
  * The markup with each <When> as `{#if when(…)}…{/if}` and each <OneOf> as a chain of them, no
@@ -191,9 +192,12 @@ export function markLabels(source: string): {
   source: string;
   references: LabelReference[];
   allReads: { record: string; start: number }[];
+  /** Each `runs(@label)` written, the old name of `spans(@label)`. */
+  runsReads: { label: string; start: number }[];
 } {
   const references: LabelReference[] = [];
   const allReads: { record: string; start: number }[] = [];
+  const runsReads: { label: string; start: number }[] = [];
   let out = '';
   let depth = 0;
   let quote: string | undefined;
@@ -248,6 +252,8 @@ export function markLabels(source: string): {
       }
       if (!word && rest.startsWith('when('))
         references.push({ kind: 'during', key: '', start: index });
+      const old = !word ? oldRunsCall.exec(rest) : null;
+      if (old) runsReads.push({ label: old[1], start: index });
       const every = !word ? allCall.exec(rest) : null;
       if (every) {
         allReads.push({ record: every[1], start: index });
@@ -281,7 +287,7 @@ export function markLabels(source: string): {
     }
     out += char;
   }
-  return { source: out, references, allReads };
+  return { source: out, references, allReads, runsReads };
 }
 
 /** Where a label's code is in the algorithm block's body, for applications made inside it. */

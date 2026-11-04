@@ -317,7 +317,10 @@ describe('design variables in the AI context', () => {
         payload: { durationMs: 1, buildId, bundle: recorded(JSON.stringify({ runs })) }
       }
     );
-    expect(projectAiContext(value).runs).toEqual(runs);
+    expect(projectAiContext(value).spans).toEqual({
+      check: { spans: 6, drawn: 6 },
+      missing: { spans: 1, drawn: 0 }
+    });
     expect(projectAiContext(document())).not.toHaveProperty('runs');
   });
 

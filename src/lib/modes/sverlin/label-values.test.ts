@@ -41,7 +41,7 @@ const readIn = (view: string) => [...new Set(view.match(/\bvalues\b|@[\w.]+/gu))
 describe('labels read in the view', () => {
   it('are rewritten as identifiers of the same length, outside tags and strings', () => {
     const markup =
-      '<Node>a@b {@swap.a} {"@x"} {#each runs(@check.at) as p}{/each} {#each applied(Equal, @in) as e}{/each}</Node>';
+      '<Node>a@b {@swap.a} {"@x"} {#each spans(@check.at) as p}{/each} {#each applied(Equal, @in) as e}{/each}</Node>';
     const { source, references } = markLabels(markup);
     expect(source).toHaveLength(markup.length);
     expect(source).toContain('{ℓswapˑa}');
@@ -56,7 +56,7 @@ describe('labels read in the view', () => {
 
   it('are an attribute’s value only inside a tag, so text before a label may end in =', async () => {
     const text = '<Node>current key = {v}</Node>';
-    expect(markLabels(text)).toEqual({ source: text, references: [], allReads: [] });
+    expect(markLabels(text)).toEqual({ source: text, references: [], allReads: [], runsReads: [] });
     const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
@@ -139,8 +139,11 @@ describe('labels read in the view', () => {
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Checked"><Pointed /></View>
 `;
-    const prepared = prepare(`{#each runs(@check.at) as p}{p}{/each}`, search);
+    const prepared = prepare(`{#each spans(@check.at) as p}{p}{/each}`, search);
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);
+    expect(() => prepare('{#each runs(@check.at) as p}{p}{/each}', search)).toThrow(
+      'runs(@check.at) is written spans(@check.at)'
+    );
     expect(() =>
       prepare(
         '<Asked />',
