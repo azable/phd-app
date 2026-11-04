@@ -1,8 +1,9 @@
 /**
  * Props bound to a view's value, as `<Node stroke={this.visited} />`: the prop's options are the
  * range, the values the expression can take the domain, and the design says which option each
- * value takes. An unordered domain (booleans, words) has a variable per value, as
- * `Card.stroke@true`; an ordered one (numbers) keeps its order, taking consecutive options from
+ * value takes. An unordered domain (booleans, words not of an enumeration) has a variable per
+ * value, as `Card.stroke@true`; an ordered one (numbers, an enumeration in its declared order)
+ * keeps its order, taking consecutive options from
  * `@from`, or for a colour the shades of `@hue`, lightest first, running `@order` up or down.
  */
 

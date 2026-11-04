@@ -916,15 +916,19 @@ not: group it in the expression, as `opacity={this > 50}` or
 `textSize={Math.floor(this / 25)}`. A constant look stays the design's, so a
 bound prop reads `this`.
 
-- `true` and `false`, and words of an enumeration, are unordered: each value has
-  a variable of its own over the prop's options, as `VertexCard.fill@true` and
-  `VertexCard.fill@false`, starting with false neutral and the rest in distinct
-  hues.
-- Numbers run in order, and go only onto props whose options run in order
-  (`textSize`, `strokeWidth`, `opacity`, `padding`, `radius`, `minSize`,
-  `weight`, `gap`), taking consecutive options from `@from`, as
-  `LevelCell.textSize@from`, or onto a colour, taking the shades of `@hue`,
-  lightest first; `@order` runs them `up` or `down`.
+- `true` and `false` are unordered: each has a variable of its own over the
+  prop's options, as `VertexCard.fill@true` and `VertexCard.fill@false`,
+  starting with false neutral and true in a hue, and so are words written in the
+  expression, as `this.seen ? 'new' : 'old'`, each one word.
+- Numbers, and an enumeration's values in its declared order, run in order: a
+  `State` of `type(['Unseen', 'Queued', 'Done'])` runs from `Unseen` to `Done`,
+  and a union of enumerations through its members in turn. They go only onto
+  props whose options run in order (`textSize`, `strokeWidth`, `opacity`,
+  `padding`, `radius`, `minSize`, `weight`, `gap`), taking consecutive options
+  from `@from`, as `LevelCell.textSize@from`, or onto a colour, taking the
+  shades of `@hue`, lightest first, as `VertexCard.fill@hue`; `@order` runs them
+  `up` or `down`. Declare an enumeration in the order its values should read, as
+  a vertex's progress.
 - One kind binds a prop to one expression's values: two nodes of a kind binding
   it differently need kinds of their own (`kind="Visited"`). A bound prop that
   sizes a box keeps the box at its largest over every step, as every box does.

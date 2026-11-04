@@ -2434,6 +2434,27 @@ describe('props bound to a view’s value', () => {
     });
   });
 
+  it('runs an enumeration in its declared order, onto one hue’s shades or an ordered prop', () => {
+    const states = (views: string) =>
+      prepareSvelteComponent(
+        `<script domain>const State = type(['Unseen', 'Queued', 'Done']);</script><script algorithm>@run[let s = State('Queued');]</script><View of="State" name="StateText"><Node value={this} /></View>\n${views}\n<Layout name="Main"><Node>{s}</Node></Layout>`
+      );
+    const coloured = states('<View of="State" name="Dot"><Node fill={this}>{this}</Node></View>');
+    expect(coloured.design.space['Dot.fill@hue']).toContain('teal');
+    expect(coloured.design.starter).toMatchObject({
+      'Dot.fill@hue': 'blue',
+      'Dot.fill@order': 'up'
+    });
+    expect(coloured.design.space).not.toHaveProperty(['Dot.fill@Unseen']);
+    const sized = states(
+      '<View of="State" name="Dot"><Node strokeWidth={this}>{this}</Node></View>'
+    );
+    expect(sized.design.space['Dot.strokeWidth@from']).toEqual([0, 0.5, 1, 1.5, 2]);
+    expect(() =>
+      states('<View of="State" name="Dot"><Node font={this}>{this}</Node></View>')
+    ).toThrow(/an enumeration, whose values run in its declared order, and font's options do not/);
+  });
+
   it('binds a position, its values one before its collection to its max', () => {
     const { design } = prepareSvelteComponent(
       `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 2 }); const Position = index(Values);</script><script input>const values = Values([4, 7]);</script><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Position" name="Faded"><Node opacity={this}>{this}</Node></View>\n<View of="Position" name="PositionText"><Node value={this} /></View>\n<Layout name="Main"><Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node></Layout>`

@@ -172,14 +172,32 @@ function readsThis(node: unknown): boolean {
   );
 }
 
-/** A value names its own variable, as Card.stroke@visited, so it is one word. */
+/**
+ * The values of an enumeration of words a path reads, as this.state, in their declared order; a
+ * union of such enumerations runs through its members in order. Undefined for anything else.
+ */
+function declaredOrder(node: Node, thisType: string, domain: DomainRegistry): string[] | undefined {
+  const type = typeOf(node, thisType, domain);
+  if (type === undefined) return undefined;
+  const structure = domain.structures[type];
+  const members = structure?.kind === 'union' ? structure.members : [type];
+  const lists = members.map((member) => domain.atoms[member]?.values);
+  if (
+    !lists.every((values) => values?.length && values.every((value) => typeof value === 'string'))
+  )
+    return undefined;
+  return unique(lists.flat() as string[]) as string[];
+}
+
+/** A value of an unordered domain names its own variable, as Card.stroke@visited, so it is one word. */
 const nameable = (value: BoundValue) =>
   typeof value === 'boolean' || /^[A-Za-z0-9_-]+$/u.test(String(value));
 
 /**
  * The values a prop bound to `expression` in a view of `thisType` can take, in order, or why it
- * cannot be bound: numbers keep their order and map onto an ordered prop in order; true and false
- * and words are unordered and map onto any prop, each its own option.
+ * cannot be bound: numbers, and an enumeration's words in their declared order, keep their order
+ * and map onto an ordered prop in order; true and false, and words from anywhere else, are unordered
+ * and map onto any prop, each its own option.
  */
 export function boundDomain(
   prop: string,
@@ -198,16 +216,16 @@ export function boundDomain(
       problem: `${prop}={${written}} takes values that cannot be known before the algorithm runs: a bound prop reads this, its fields, and comparisons and arithmetic of them, as ${prop}={this.visited} or ${prop}={this.level}, each of a type with few values, as type('integer', { min: 0, max: 3 }) or an enumeration.`
     };
   const numbers = found.every((value) => typeof value === 'number');
+  const declared = numbers ? undefined : declaredOrder(expression as Node, thisType, domain);
   const values = numbers
     ? unique(found).toSorted((a, b) => (a as number) - (b as number))
-    : found.every((value) => typeof value === 'boolean')
-      ? [false, true]
-      : unique(found);
-  const ordered = numbers;
+    : (declared ??
+      (found.every((value) => typeof value === 'boolean') ? [false, true] : unique(found)));
+  const ordered = numbers || declared !== undefined;
   const capacity = boundCapacity(prop, ordered);
   if (ordered && !orderedProps.has(prop) && !colourProps.has(prop))
     return {
-      problem: `${prop}={${written}} is a number, whose values run in order, and ${prop}'s options do not: bind a number to a prop that runs in order, as ${[...orderedProps].join(', ')}, or a colour, which takes one hue's shades.`
+      problem: `${prop}={${written}} is ${numbers ? 'a number, whose values run in order' : 'an enumeration, whose values run in its declared order'}, and ${prop}'s options do not: bind it to a prop that runs in order, as ${[...orderedProps].join(', ')}, or a colour, which takes one hue's shades.`
     };
   if (values.length > capacity)
     return {
