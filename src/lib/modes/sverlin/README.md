@@ -137,10 +137,9 @@ scene at least.
   label it is within always ends one. `at="start"` or `at="end"` shows only its
   first or its last step. `title` is a caption beside its name in the controls.
   Props are written as they are, never computed.
-- Scenes play in order, each from its first step's state. A scene going back in
-  the run, to before where the stepping scene before it ended, is a rewind,
-  marked ↺ beside its name in the controls, as a merge shown again in detail
-  after the whole sort.
+- Scenes play in the storyboard's order, each showing what it selects, from its
+  first step's state, whatever the scene before it showed: a merge may be shown
+  again in detail after the whole sort.
 - A layout a scene shows keeps its place and size in every scene that shows it:
   every node keeps the largest room it reaches at any step of any scene, and a
   free layout is laid out once over them all, so nothing moves between scenes.

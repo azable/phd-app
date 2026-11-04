@@ -60,7 +60,7 @@ describe('storyboards', () => {
     expect(one.design.space).not.toHaveProperty('layout');
   });
 
-  it('plays scenes in order, marking a scene going back in the run as a rewind', async () => {
+  it('plays scenes in order, each showing what it selects, whatever the one before showed', async () => {
     const prepared = prepareSvelteComponent(
       storyboard(
         scene('name="search"'),
@@ -68,12 +68,10 @@ describe('storyboards', () => {
         scene('name="probe" within="@probe#2" title="the second probe"')
       )
     );
-    expect(
-      prepared.storyboard.scenes.map(({ name, rewind, frame }) => [name, rewind, frame])
-    ).toEqual([
-      ['search', false, false],
-      ['then', false, true],
-      ['probe', true, false]
+    expect(prepared.storyboard.scenes.map(({ name, frame }) => [name, frame])).toEqual([
+      ['search', false],
+      ['then', true],
+      ['probe', false]
     ]);
     const { labels } = await bundlePresentation(prepared, 1, {
       chosen: { 'pause@probe': 'off', 'pause@probe.pick': 'on' }
@@ -83,11 +81,9 @@ describe('storyboards', () => {
     expect(labels[0]).toBe('search: start');
     expect(scenes.indexOf('then')).toBe(scenes.lastIndexOf('then'));
     expect(
-      scenes
-        .slice(scenes.indexOf('then') + 1)
-        .every((name) => name === 'probe ↺ (the second probe)')
+      scenes.slice(scenes.indexOf('then') + 1).every((name) => name === 'probe (the second probe)')
     ).toBe(true);
-    expect(labels.at(-1)).toBe('probe ↺ (the second probe): @probe#2');
+    expect(labels.at(-1)).toBe('probe (the second probe): @probe#2');
     // Each presentation's steps are some of the source's, in order, however it pauses.
     expect(labels.every((label) => prepared.steps.includes(label))).toBe(true);
     const places = labels.map((label) => prepared.steps.indexOf(label));

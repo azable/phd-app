@@ -178,8 +178,8 @@ it.skipIf(!enabled)(
     const { labels } = await bundlePresentation(prepareSvelteComponent(source), 1, request);
     const drawn = await drawsAsGiven(source, request);
     expect(drawn.frame.width / drawn.frame.height).toBeCloseTo(4 / 3, 2);
-    // The stacked scene, then the side one going back to the start, which alone holds that node.
-    const side = labels.map((label) => label.startsWith('side ↺: '));
+    // The stacked scene, then the side one from the start again, which alone holds that node.
+    const side = labels.map((label) => label.startsWith('side: '));
     expect(side).toContain(true);
     expect(drawn.steps.map(holds)).toEqual(side);
   }

@@ -2236,7 +2236,7 @@ export async function bundlePresentation(
   const single = scenes.length === 1 && !scenes[0].frame;
   const labels = entries.map(({ scene, run, index }) => {
     const own = run.steps[index].name ?? `Step ${index + 1}`;
-    return single ? own : sceneLabel(scene, scene.rewind, own);
+    return single ? own : sceneLabel(scene, own);
   });
   // Each step's placements and lit code, from its run's, by the page's states (see phasesOf).
   const placements = entries.flatMap(({ scene, run, index }, at) =>

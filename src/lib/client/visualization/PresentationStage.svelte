@@ -221,16 +221,13 @@
   const stepCount = $derived(playbackContext.stepCount);
   // The step's name, its label elided at the start as chat pills are (@…compare.left#3); in
   // developer view only, as participants follow the step's number.
-  // The scene the step is in, where a Sverlin storyboard has several: its name, ↺ where it goes back
-  // in the run, and its title.
+  // The scene the step is in, where a Sverlin storyboard has several: its name and its title.
   const scene = $derived.by(() =>
     visible.length && visible.every(({ presentation }) => isSverlinPresentation(presentation))
       ? sceneOfLabel(playbackContext.frames[step]?.label)
       : undefined
   );
-  const sceneText = $derived(
-    scene && `${scene.scene}${scene.rewind ? ' ↺' : ''}${scene.title ? ` — ${scene.title}` : ''}`
-  );
+  const sceneText = $derived(scene && `${scene.scene}${scene.title ? ` — ${scene.title}` : ''}`);
   const stepName = $derived.by(() => {
     if (!session.developerView) return undefined;
     const label = scene ? scene.step : playbackContext.frames[step]?.label;

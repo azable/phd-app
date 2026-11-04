@@ -329,22 +329,21 @@ export function scenePauses<Mode extends string>(
 }
 
 /**
- * How a step is labelled in a storyboard of several scenes: its scene's name, ↺ where the scene goes
- * back in the run, its title in brackets, then the step's own name; a frame by its scene alone. A
- * storyboard of one stepping scene keeps the steps' own names.
+ * How a step is labelled in a storyboard of several scenes: its scene's name, its title in
+ * brackets, then the step's own name; a frame by its scene alone. A storyboard of one stepping scene
+ * keeps the steps' own names.
  */
 export function sceneLabel(
   scene: Pick<Scene, 'name' | 'title' | 'frame'>,
-  rewind: boolean,
   step: string | undefined
 ): string {
-  const head = `${scene.name}${rewind ? ' ↺' : ''}${scene.title ? ` (${scene.title})` : ''}`;
+  const head = `${scene.name}${scene.title ? ` (${scene.title})` : ''}`;
   return scene.frame || step === undefined ? head : `${head}: ${step}`;
 }
 
-/** The storyboard as built: its scenes, each marked where it goes back in the run, and its steps. */
+/** The storyboard as built: its scenes, in the order they play, and its steps. */
 export type Storyboard = {
-  scenes: (Scene & { rewind: boolean })[];
+  scenes: Scene[];
   /** Every step the storyboard can show, by label (see sceneLabel), in the order they play. */
   steps: string[];
 };
@@ -352,8 +351,7 @@ export type Storyboard = {
 /**
  * The storyboard checked against the run pausing at every label, `master`: each label a scene names
  * is one of the algorithm's, each run it is within is one of the label's, and each scene shows a
- * step. A stepping scene going back in the run, to before where the stepping scene before it ended,
- * is a rewind.
+ * step. Scenes play in order, each showing the steps it selects, whatever the one before showed.
  */
 export function storyboardOf(
   scenes: readonly Scene[],
@@ -387,22 +385,14 @@ export function storyboardOf(
     }
     return steps;
   });
-  let end = -1;
-  const marked = scenes.map((scene, index) => {
-    const steps = chosen[index];
-    if (scene.frame || !steps.length) return { ...scene, rewind: false };
-    const rewind = end >= 0 && steps[0] < end;
-    end = steps.at(-1)!;
-    return { ...scene, rewind };
-  });
   const own = (index: number) => master[index].name ?? `Step ${index + 1}`;
-  const single = marked.length === 1 && !marked[0].frame;
-  const steps = marked.flatMap((scene, index) => {
-    if (scene.frame) return [sceneLabel(scene, false, undefined)];
+  const single = scenes.length === 1 && !scenes[0].frame;
+  const steps = scenes.flatMap((scene, index) => {
+    if (scene.frame) return [sceneLabel(scene, undefined)];
     const names = chosen[index].map(own);
     // A variant pausing at fewer labels ends the run on a step of its own, the end.
     if (chosen[index].at(-1) === master.length - 1 && names.at(-1) !== 'end') names.push('end');
-    return single ? names : names.map((name) => sceneLabel(scene, scene.rewind, name));
+    return single ? names : names.map((name) => sceneLabel(scene, name));
   });
-  return { storyboard: { scenes: marked, steps }, problems };
+  return { storyboard: { scenes: [...scenes], steps }, problems };
 }
