@@ -377,17 +377,15 @@ label given a kind of its own.
   step ending a run shows its whole run, the values its labels gave inside it
   drawn and its code lit.
 - At a case's `:before` no code has run: what the algorithm declares, its
-  labels' values, and its applications appear from the first step on, and the
-  view reads a variable itself only inside a `<Node>`, which hides until it is
-  declared. `return;` stops the algorithm early.
+  labels' values, and its applications appear from the first step on (see
+  `shown` in Design). `return;` stops the algorithm early.
 - Each step records every variable in scope, before and after its code: the
   input's, the top level's, and those of the blocks around it. A variable out of
   scope at a step is not part of it, so whatever the view draws from it is
   missing there (see `shown` in Design): declare a variable where it belongs,
-  never at the top level with a stand-in such as -1, and draw one a step's code
-  declares through a view or a pointer. A name is declared once among the blocks
-  in scope: a loop inside another cannot declare `j` again, while loops one
-  after another can.
+  never at the top level with a stand-in such as -1. A name is declared once
+  among the blocks in scope: a loop inside another cannot declare `j` again,
+  while loops one after another can.
 - A step is named by the stop it is at: the label whose run it ends and which
   run that is, the nth run of that label to begin, as `@insert.swap#1`, or
   `@insert.swap#1:before` just before that run begins, and `:before` and
@@ -953,11 +951,15 @@ Every kind of node has these props, each with a fixed set of options:
 - `shown`: whether its nodes are drawn; one left out takes its children and
   keeps no room. A render is missing where its view is `none` or not shown or it
   draws an absent value: for a whole presentation left out, keeping no room, and
-  at one step hidden, keeping its room. A node of only text and renders is one
-  statement that one missing render takes whole, a layout's tag in it counting
-  as a render, so `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step
-  that swaps nothing; a node holding other nodes has parts, each node and render
-  in it, and goes only with all of them, so in
+  at one step hidden, keeping its room. A part that reads a variable which does
+  not exist at a step, not declared yet, as at a `:before`, or out of scope, is
+  not drawn there and keeps its room: a node by what it reads, an `{#if}`,
+  `{#key}` or `{#each}` with all it holds by its test. No check for existence is
+  needed. A node of only text and renders is one statement that one missing
+  render takes whole, a layout's tag in it counting as a render, so
+  `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step that swaps
+  nothing; a node holding other nodes has parts, each node and render in it, and
+  goes only with all of them, so in
   `<Node layout="row"><Node>lo {lo}</Node><Node>mid {mid}</Node></Node>` only
   the `mid` part hides while `mid` is out of scope (a layout drawn by its tag in
   it counts as its nodes do). Split a sentence into parts to keep what is there.

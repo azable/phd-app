@@ -315,6 +315,60 @@ export function scopedReadsOf(
 }
 
 /**
+ * Each {#if}, {#key} or {#each} whose test reads a variable of `absent`, which some step lacks,
+ * wrapped in a slot reading it: at such a step everything inside is drawn hidden, keeping its room,
+ * as the test reads that variable's stand-in from another step (see standInsFor). An {#if}'s
+ * {:else if} tests count as its own.
+ */
+export function guardInsertions(markup: unknown, absent: ReadonlySet<string>): Insertion[] {
+  type Part = Record<string, unknown> & { type?: string; start?: number; end?: number };
+  const free = new Set(
+    freeReads(markup)
+      .filter(({ name }) => absent.has(name))
+      .map(({ start }) => start)
+  );
+  const readsIn = (value: unknown, into: Set<string>): Set<string> => {
+    if (!value || typeof value !== 'object') return into;
+    if (Array.isArray(value)) value.forEach((item) => readsIn(item, into));
+    else {
+      const node = value as Part & { name?: string };
+      if (node.type === 'Identifier' && free.has(node.start ?? -1)) into.add(node.name ?? '');
+      for (const [key, child] of Object.entries(node))
+        if (key !== 'parent' && key !== 'loc') readsIn(child, into);
+    }
+    return into;
+  };
+  // The tests of an {#if} and of each {:else if} after it.
+  const chainTests = (block: Part): unknown[] => {
+    const children = ((block.else as Part | undefined)?.children as Part[] | undefined) ?? [];
+    const next = children.find((child) => child.type === 'IfBlock' && child.elseif);
+    return [block.expression, ...(next ? chainTests(next) : [])];
+  };
+  const insertions: Insertion[] = [];
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    const node = value as Part;
+    const tests =
+      node.type === 'IfBlock' && !node.elseif
+        ? chainTests(node)
+        : node.type === 'KeyBlock' || node.type === 'EachBlock'
+          ? [node.expression]
+          : [];
+    const reads = [...readsIn(tests, new Set())];
+    if (reads.length && node.start !== undefined && node.end !== undefined)
+      insertions.push(
+        { at: node.start, text: `<SverlinSlot inherit reads={${JSON.stringify(reads)}}>` },
+        { at: node.end, text: '</SverlinSlot>' }
+      );
+    for (const [key, child] of Object.entries(node))
+      if (key !== 'parent' && key !== 'loc') walk(child);
+  };
+  walk(markup);
+  return insertions;
+}
+
+/**
  * The variables a component reads that it does not declare: identifiers in its expressions, less
  * member and key names, and less its parameters and the names its blocks and {@const} tags declare.
  */

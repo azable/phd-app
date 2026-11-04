@@ -1161,14 +1161,14 @@ describe('scope', () => {
     expect(javascript).toContain('["i","key"]');
   });
 
-  it('rejects the view reading a variable out of scope at some step itself', () => {
+  it('takes the view reading a variable out of scope at some step itself, hidden there', () => {
     expect(() =>
       prepareSvelteComponent(
         source(
           '<Layout name="K" of="key"><Node><Node value={key} /></Node></Layout><Layout name="Main" of="key"><Node><K key={key} /></Node></Layout>'
         )
       )
-    ).toThrow('The view reads key itself, but key is out of scope at some steps');
+    ).not.toThrow();
   });
 
   it('rejects choosing by a label value, pointing at <When> and at labelling the guarded code', () => {
@@ -1184,21 +1184,36 @@ describe('scope', () => {
     );
   });
 
-  it('takes a variable declared later read itself only inside a node, which hides at step 0', () => {
+  it.each([
+    ['in a node', '<Node>{#if done}Done{/if}</Node>'],
+    ['in a block at the top', '{#if done}<Node>Done</Node>{/if}']
+  ])('takes a variable declared later read itself %s, hidden until it is declared', (_, part) => {
     expect(() =>
       prepareSvelteComponent(
         source(
-          '<Layout name="D" of="done"><Node>{#if done}Done{/if}</Node></Layout><Layout name="Main" of="done"><Node><D done={done} /></Node></Layout>'
+          `<Layout name="D" of="done">${part}</Layout><Layout name="Main" of="done"><Node><D done={done} /></Node></Layout>`
         )
       )
     ).not.toThrow();
+  });
+
+  it('hides a block testing an absent variable with all it holds, through a slot reading it', () => {
+    const { component } = prepareSvelteComponent(
+      source(
+        '<Layout name="Main" of="key, done"><Node>{key}{#if done}<Node>Done</Node>{/if}</Node></Layout>'
+      )
+    );
+    expect(component).toMatch(/inherit: true,\s*reads: \["done"\]/u);
+  });
+
+  it('refuses a name the algorithm never declares', () => {
     expect(() =>
       prepareSvelteComponent(
         source(
-          '<Layout name="D" of="done">{#if done}<Node>Done</Node>{/if}</Layout><Layout name="Main" of="done"><Node><D done={done} /></Node></Layout>'
+          '<Layout name="Main" of="key"><Node>{key}{#if never}<Node>Never</Node>{/if}</Node></Layout>'
         )
       )
-    ).toThrow('The view reads done itself outside any <Node>');
+    ).toThrow('The view reads never, which nothing gives it');
   });
 });
 

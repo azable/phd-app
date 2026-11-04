@@ -81,6 +81,7 @@ import {
   unknownReadOf,
   rootPlacements,
   scopedReadsOf,
+  guardInsertions,
   snippetPaths,
   steadyLengths,
   viewCallsOf,
@@ -1831,42 +1832,36 @@ function prepareViews(
             )
         )
       );
-    // A presentation opens on the input as given, before the algorithm declares anything: the view
-    // reading a variable itself is hidden until it is declared (see leftOutModel), and refused only
-    // where it is out of scope after that.
-    const phased = [phasesOf(master)];
-    const scopedLater = new Set(
-      [...scoped].filter(
-        (name) =>
-          isLabelKey(name) ||
-          phased.some((phases) => {
-            const first = phases.findIndex(({ state }) => name in state);
-            return first >= 0 && phases.slice(first).some(({ state }) => !(name in state));
-          })
-      )
-    );
-    const scopedReads = scopedReadsOf(ast.html, scopedLater);
-    const openingReads = scopedReadsOf(
-      ast.html,
-      new Set([...scoped].filter((name) => !scopedLater.has(name)))
-    );
-    if (scopedReads.length)
+    // A variable the view reads itself is absent at a step where it is not declared yet, as at a
+    // scene's :before, or out of scope: what reads it is drawn hidden there, keeping its room, a
+    // node by its own reads (see leftOutModel) and a block by its test (see guardInsertions). A
+    // label's value is no variable to test.
+    const labelReads = scopedReadsOf(ast.html, new Set([...scoped].filter(isLabelKey)));
+    if (labelReads.length)
       throw InvalidSvelteSourceError.combine(
-        scopedReads.map(
+        labelReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but ${asWritten(name)} is out of scope at some steps, where there is no value to show. Draw it through a view or a pointer, as {${asWritten(name)}}, which draw nothing where it is out of scope.${isLabelKey(name) ? ` A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).` : ''}`,
+              `The view reads ${asWritten(name)} itself, but a label's value is drawn only through a view, as {${asWritten(name)}}, never tested or computed with. A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a run of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
       );
-    const unhidden = outsideNodes(ast.html, openingReads);
+    const absentVariables = new Set([...scoped].filter((name) => !isLabelKey(name)));
+    const openingReads = scopedReadsOf(ast.html, absentVariables);
+    const guards = guardInsertions(ast.html, absentVariables);
+    const guarded = guards.flatMap(({ at }, index) =>
+      index % 2 ? [] : [{ start: at, end: guards[index + 1].at }]
+    );
+    const unhidden = outsideNodes(ast.html, openingReads).filter(
+      ({ start }) => !guarded.some((span) => span.start <= start && start < span.end)
+    );
     if (unhidden.length)
       throw InvalidSvelteSourceError.combine(
         unhidden.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself outside any <Node>, but ${asWritten(name)} is not declared yet at step 0, the input as given, so there is nothing to show there. Put the read inside a <Node>, which hides until ${asWritten(name)} is declared.`,
+              `The view reads ${asWritten(name)} itself outside any <Node> or block test, where nothing can hide it at a step ${asWritten(name)} does not exist. Put the read inside a <Node>.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1874,6 +1869,7 @@ function prepareViews(
     const slotted = new Map<number, string[]>();
     const unresolvedEnds: { end: string; written: string; start: number }[] = [];
     const tagged = withInsertions(svelteSource, [
+      ...guards,
       ...branchInsertions(found.components),
       // A grid's rows and columns for any input, from its coordinates' types (see gridExtents).
       ...[
