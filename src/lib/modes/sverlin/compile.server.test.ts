@@ -2533,6 +2533,36 @@ describe('props bound to a view’s value', () => {
     );
   });
 
+  it('types an {#each} item by its collection’s element and its index by the position type', () => {
+    const { design } = prepareSvelteComponent(
+      `<script domain>const Flag = type('boolean'); const Vertex = record({ seen: Flag }); const Vertices = collection(Vertex, { max: 2 }); const Position = index(Vertices); const Graph = record({ vertices: Vertices });</script><script input>const graph = Graph({ vertices: [{ seen: false }, { seen: true }] });</script><script algorithm>@run[let done = Flag(false);]</script><View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Graph" name="Drawing"><Node layout="row">{#each this.vertices as v, j}<Node kind="Dot" fill={v.seen} opacity={j}>x</Node>{/each}</Node></View>\n<Layout name="Main"><Node>{graph}{done}</Node></Layout>`
+    );
+    expect(design.starter).toMatchObject({
+      'Drawing.Dot.fill@false': 'neutral-200',
+      'Drawing.Dot.fill@true': 'blue-200'
+    });
+    // j is a Position, -1 to 2: four values, one to each of opacity's four options.
+    expect(design.space['Drawing.Dot.opacity@from']).toEqual([0.25]);
+  });
+
+  describe('a label’s operands', () => {
+    const labelled = (bound: string, than = 'Level(2)') =>
+      prepareSvelteComponent(
+        `<script domain>const Level = type('integer', { min: 0, max: 3 }); const Levels = collection(Level, { max: 3 }); const Position = index(Levels);</script><script input>const levels = Levels([3, 1, 2]);</script><script algorithm>@start[let i = Position(0);]\nwhile (@more[i < levels.length]) @step{ if (@test[levels[i] > ${than}]) @big[i++;] else @small[i++;] }</script><View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<View of="@step.test" name="Ask"><Node ${bound}>is {this.left} more than {this.right}?</Node></View>\n<Layout name="Main"><Node><Node>{#each levels as v}{v}{/each}</Node>{@step.test}{i}</Node></Layout>`
+      );
+
+    it('binds an operand by the type its runs gave it', () => {
+      const { design } = labelled('opacity={this.left}');
+      expect(design.space['Ask.opacity@from']).toEqual([0.25]);
+    });
+
+    it('refuses an operand its runs gave no type, saying how to give it one', () => {
+      expect(() => labelled('opacity={this.right}', '2')).toThrow(
+        /reads this.right, which @step.test gives no type: .* with a constructor, as Int\(…\)/
+      );
+    });
+  });
+
   it('refuses an anchor written in the markup', () => {
     expect(() =>
       component('<View of="Wide" name="Bar"><Node height={this} anchor="start" /></View>')

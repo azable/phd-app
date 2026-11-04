@@ -914,7 +914,14 @@ algorithm runs, must fit the prop's options: a colour tells apart its colours,
 `type('integer', { min: 0, max: 3 })` fits `opacity`, an `Int` from 0 to 99 does
 not: group it in the expression, as `opacity={this > 50}` or
 `textSize={Math.floor(this / 25)}`. A constant look stays the design's, so a
-bound prop reads `this`.
+bound prop reads `this`, or a name read from it: an `{#each}` item, of its
+collection's element type, as `fill={v.seen}` in `{#each this.vertices as v}`,
+its index, of the collection's position type (one before it to its `max`), and a
+`{@const}` name of a field. In a view of a label, `this.left`, `this.right`,
+`this.value`, or a labelled call's parameters have the type the algorithm's runs
+gave them; an operand of no type, a plain number as the `2` in `@small[n < 2]`,
+has no values to bind: give it a type where the algorithm computes it, as
+`Int(2)`.
 
 - `true` and `false` are unordered: each has a variable of its own over the
   prop's options, as `VertexCard.fill@true` and `VertexCard.fill@false`,

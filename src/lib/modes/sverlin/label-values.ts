@@ -48,6 +48,9 @@ export const isRunsKey = (name: string): boolean => name.startsWith(runs);
 export const isHistoryKey = (name: string): boolean => name.startsWith(history);
 export const isDuringKey = (name: string): boolean => name.startsWith(during);
 /** A key as its author wrote it, for messages: a <When>'s as its `of`. */
+/** What a label operator's operand or result is that no domain type holds: a comparison's true or false, drawn as text. */
+export const untypedBoolean = 'boolean';
+
 export function written(name: string): string {
   if (isDuringKey(name) && name[1] === dot) return name.slice(2);
   if (isLabelKey(name) || isDuringKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;

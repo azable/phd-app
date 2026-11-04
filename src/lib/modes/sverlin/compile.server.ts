@@ -40,6 +40,7 @@ import {
   markLabels,
   momentTarget,
   resolveLabel,
+  untypedBoolean,
   viewThis,
   viewTags,
   viewThisValues,
@@ -72,6 +73,7 @@ import {
   componentProbes,
   findComponents,
   isPart,
+  eachScope,
   probeMarkup,
   pointerCalls,
   probeValues,
@@ -133,7 +135,14 @@ import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
 import { layOutOnServer, layoutFailureMessage } from './layout.server';
-import { boundDesign, boundDomain, boundLengthDomain, type Binding } from './bound-props.server';
+import {
+  boundDesign,
+  boundDomain,
+  boundLengthDomain,
+  typeOfPath,
+  type Binding,
+  type Scope
+} from './bound-props.server';
 import { bindableProps, lengthProps } from './library/node/bound';
 import { readabilityOf } from './readability.server';
 import type { Readability } from '$lib/shared/readability';
@@ -548,9 +557,6 @@ function withLabelOperators(domain: DomainRegistry, steps: readonly MasterStep[]
     }
   return { ...domain, operators };
 }
-
-/** What a label operator's operand or result is that no domain type holds: a comparison's true or false, drawn as text. */
-export const untypedBoolean = 'boolean';
 
 /** The full name of the label an operator's name is, as insert.compare for ℓinsertˑcompare. */
 const labelOfOperator = (name: string): string => name.slice(1).replaceAll('ˑ', '.');
@@ -2902,10 +2908,15 @@ function withNodeRefs(
   const bindings: Binding[] = [];
   const boundProps: Insertion[] = [];
   const domains = new Map<number, Record<string, unknown>>();
-  const bind = (tag: Tag, kind: string): Attribute[] => {
+  // The names a bound expression reads in a view: this, and what {#each} and {@const} declare.
+  const scopeIn = (view: string, names: Scope): Scope | undefined => {
+    const thisType = viewTypes.get(view.split('.')[0]);
+    return thisType === undefined ? undefined : new Map([[viewThis, thisType], ...names]);
+  };
+  const bind = (tag: Tag, kind: string, names: Scope): Attribute[] => {
     const attributes = tag.attributes ?? [];
-    const thisType = viewTypes.get(kind.split('.')[0]);
-    if (tag.name !== 'Node' || thisType === undefined) return attributes;
+    const scope = scopeIn(kind, names);
+    if (tag.name !== 'Node' || scope === undefined) return attributes;
     return attributes.filter((attribute) => {
       const [part] = Array.isArray(attribute.value) ? attribute.value : [];
       const expression = part?.type === 'MustacheTag' ? part.expression : undefined;
@@ -2921,7 +2932,7 @@ function withNodeRefs(
         prop,
         expression,
         written,
-        thisType,
+        scope,
         domain
       );
       if ('problem' in found) {
@@ -2948,16 +2959,18 @@ function withNodeRefs(
   // Each <Link> belongs to the nearest <Node> around it, which then lays out with links. Text
   // belongs inside a node, where it can be selected; a view may also write it beside its nodes.
   // `page`: in the root or a part of the page, rather than in a view.
+  // `names`: what {#each} blocks and {@const} tags around declare, with their types (see Scope).
   const walk = (
     value: unknown,
     around: { links: boolean } | undefined,
     inNode: boolean,
     view: string,
-    page: boolean
+    page: boolean,
+    names: Map<string, string>
   ): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      for (const part of value) walk(part, around, inNode, view, page);
+      for (const part of value) walk(part, around, inNode, view, page, names);
       return;
     }
     const tag = value as Tag & Record<string, unknown> & { data?: string };
@@ -3041,7 +3054,7 @@ function withNodeRefs(
       else
         checkProps(
           tag.name as 'Node' | 'Link' | 'Pointed',
-          bind(tag, kind),
+          bind(tag, kind, names),
           tag.start,
           source,
           problems,
@@ -3072,14 +3085,33 @@ function withNodeRefs(
             tag.start
           );
       }
-      walk(tag.children, tag.name === 'Node' ? entry : around, true, kind, page);
+      walk(tag.children, tag.name === 'Node' ? entry : around, true, kind, page, names);
       return;
     }
     // What a layout holds is the page's top level, and a node written there is of the layout's kind.
     const layout = view === 'root' ? layoutNameOf(tag) : undefined;
     if (layout !== undefined) {
-      walk(tag.children, around, inNode, layout, page);
+      walk(tag.children, around, inNode, layout, page, names);
       return;
+    }
+    const scope = domain && scopeIn(view, names);
+    const typed = (node: unknown) => scope && domain && typeOfPath(node as never, scope, domain);
+    // An {#each} item in a view has its collection's element type, its index the position type.
+    if (tag.type === 'EachBlock' && scope && domain) {
+      const inner = eachScope(tag, scope, typed, domain, { index: true });
+      inner.delete(viewThis);
+      for (const [key, child] of Object.entries(tag))
+        if (key !== 'children' && key !== 'parent' && key !== 'metadata')
+          walk(child, around, inNode, view, page, names);
+      walk(tag.children, around, inNode, view, page, inner);
+      return;
+    }
+    // A {@const} name of a path's value has that path's type, for the nodes after it.
+    if (tag.type === 'ConstTag' && scope) {
+      const assigned = (tag as { expression?: { left?: Tag; right?: unknown } }).expression;
+      const type = typed(assigned?.right);
+      if (assigned?.left?.type === 'Identifier' && assigned.left.name && type)
+        names.set(assigned.left.name, type);
     }
     const snippet = tag.type === 'SnippetBlock' ? tag.expression?.name : undefined;
     // A part of the page writes its text in nodes, as the root does; a view may write it beside.
@@ -3091,7 +3123,8 @@ function withNodeRefs(
           around,
           nested,
           snippet ? (paths.get(snippet) ?? snippet) : view,
-          snippet ? page && isPart(tag) : page
+          snippet ? page && isPart(tag) : page,
+          snippet ? new Map() : names
         );
   };
   if (ast.css)
@@ -3100,7 +3133,7 @@ function withNodeRefs(
       'view_style',
       ast.css.start
     );
-  walk(ast.html, undefined, false, 'root', true);
+  walk(ast.html, undefined, false, 'root', true, new Map());
   problems.push(...gridProblems(ast.html, source));
   // What a node is says which props its kind has: one that arranges its children has a layout's.
   // A field holds only links that start at it, as a node's next: a box, its content centred.

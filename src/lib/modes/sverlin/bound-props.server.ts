@@ -7,7 +7,7 @@
 import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 import type { DesignSpace, DesignValue } from './design.server';
-import { viewThis } from './label-values';
+import { isLabelKey, untypedBoolean, written as writtenName } from './label-values';
 import {
   anchorKey,
   anchors,
@@ -30,6 +30,12 @@ import {
 /** A prop a view binds: the kind of the node, the prop, and the values its expression takes. */
 export type Binding = { kind: string; prop: string; domain: BoundDomain };
 
+/**
+ * The names a bound expression reads, with their types: the view's value, `this`, and the names
+ * {#each} blocks and {@const} tags inside the view declare, as v for each vertex.
+ */
+export type Scope = ReadonlyMap<string, string>;
+
 /** More values than this make no domain a prop could tell apart, so working them out stops. */
 const largest = 1000;
 
@@ -37,6 +43,7 @@ type Node = Record<string, unknown> & { type?: string };
 
 /** The values of a type, in order, or undefined where they are not few and known. */
 function valuesOfType(domain: DomainRegistry, type: string): BoundValue[] | undefined {
+  if (type === untypedBoolean) return [false, true];
   const atom: AtomType | undefined = domain.atoms[type];
   if (atom) {
     if (atom.values) return [...atom.values];
@@ -56,16 +63,26 @@ function valuesOfType(domain: DomainRegistry, type: string): BoundValue[] | unde
 
 const unique = (values: readonly BoundValue[]) => [...new Set(values)];
 
-/** The type a path from the view's value reads, as this.dist, through records and references. */
-function typeOf(node: Node, thisType: string, domain: DomainRegistry): string | undefined {
-  if (node.type === 'Identifier') return node.name === viewThis ? thisType : undefined;
-  if (node.type !== 'MemberExpression' || node.computed) return undefined;
-  const owner = typeOf(node.object as Node, thisType, domain);
-  let structure = owner === undefined ? undefined : domain.structures[owner];
+/**
+ * The type a path from a name in scope reads, as this.dist or v.seen: a record's field, through
+ * references; a collection's element, as this.cells[0]; and a label's operand or result, as
+ * this.left in a view typed by the label, typed as the run gave it, '' where it gave no type.
+ */
+export function typeOfPath(node: Node, scope: Scope, domain: DomainRegistry): string | undefined {
+  if (node.type === 'Identifier') return scope.get(node.name as string);
+  if (node.type !== 'MemberExpression') return undefined;
+  const owner = typeOfPath(node.object as Node, scope, domain);
+  if (owner === undefined) return undefined;
+  let structure = domain.structures[owner];
+  if (node.computed) return structure?.kind === 'collection' ? structure.element : undefined;
+  const field = (node.property as { name?: string }).name ?? '';
+  const operator = domain.operators?.[owner];
+  if (operator)
+    return field === 'value'
+      ? operator.result
+      : operator.operands[operator.parameters.indexOf(field)];
   if (structure?.kind === 'ref') structure = domain.structures[structure.element];
-  return structure?.kind === 'record'
-    ? structure.fields[(node.property as { name?: string }).name ?? '']
-    : undefined;
+  return structure?.kind === 'record' ? structure.fields[field] : undefined;
 }
 
 const comparisons = new Set(['===', '!==', '==', '!=', '<', '<=', '>', '>=']);
@@ -97,7 +114,7 @@ function combinations(lists: readonly (readonly BoundValue[])[]): BoundValue[][]
 }
 
 /** The values an expression can take, or undefined where they cannot be worked out. */
-function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundValue[] | undefined {
+function valuesOf(node: Node, scope: Scope, domain: DomainRegistry): BoundValue[] | undefined {
   switch (node.type) {
     case 'Literal':
       return ['string', 'number', 'boolean'].includes(typeof node.value)
@@ -105,12 +122,12 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
         : undefined;
     case 'Identifier':
     case 'MemberExpression': {
-      const type = typeOf(node, thisType, domain);
+      const type = typeOfPath(node, scope, domain);
       return type === undefined ? undefined : valuesOfType(domain, type);
     }
     case 'UnaryExpression': {
       if (node.operator === '!') return [false, true];
-      const values = valuesOf(node.argument as Node, thisType, domain);
+      const values = valuesOf(node.argument as Node, scope, domain);
       return node.operator === '-' && values?.every((value) => typeof value === 'number')
         ? values.map((value) => -value)
         : undefined;
@@ -118,9 +135,7 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
     case 'BinaryExpression': {
       if (comparisons.has(node.operator as string)) return [false, true];
       const apply = arithmetic[node.operator as string];
-      const operands = [node.left, node.right].map((side) =>
-        valuesOf(side as Node, thisType, domain)
-      );
+      const operands = [node.left, node.right].map((side) => valuesOf(side as Node, scope, domain));
       if (!apply || operands.some((values) => !values)) return undefined;
       const all = combinations(operands as BoundValue[][]);
       if (!all?.every((pair) => pair.every((value) => typeof value === 'number'))) return undefined;
@@ -128,9 +143,7 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
       return results.every(Number.isFinite) ? results : undefined;
     }
     case 'LogicalExpression': {
-      const operands = [node.left, node.right].map((side) =>
-        valuesOf(side as Node, thisType, domain)
-      );
+      const operands = [node.left, node.right].map((side) => valuesOf(side as Node, scope, domain));
       if (operands.some((values) => !values)) return undefined;
       const all = combinations(operands as BoundValue[][]);
       return all?.map(([a, b]) =>
@@ -139,7 +152,7 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
     }
     case 'ConditionalExpression': {
       const branches = [node.consequent, node.alternate].map((side) =>
-        valuesOf(side as Node, thisType, domain)
+        valuesOf(side as Node, scope, domain)
       );
       return branches.some((values) => !values) ? undefined : (branches.flat() as BoundValue[]);
     }
@@ -149,7 +162,7 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
       const name = (callee.property as { name?: string } | undefined)?.name ?? '';
       if (callee.type !== 'MemberExpression' || object?.name !== 'Math' || !maths[name])
         return undefined;
-      const args = (node.arguments as Node[]).map((arg) => valuesOf(arg, thisType, domain));
+      const args = (node.arguments as Node[]).map((arg) => valuesOf(arg, scope, domain));
       if (args.some((values) => !values?.every((value) => typeof value === 'number')))
         return undefined;
       return combinations(args as BoundValue[][])?.map((list) =>
@@ -161,23 +174,43 @@ function valuesOf(node: Node, thisType: string, domain: DomainRegistry): BoundVa
   }
 }
 
-/** Whether an expression reads the view's value, so it is no constant look. */
-function readsThis(node: unknown): boolean {
+/** Whether an expression reads the view's value, or a name read from it, so it is no constant look. */
+function readsValue(node: unknown, scope: Scope): boolean {
   if (!node || typeof node !== 'object') return false;
-  if (Array.isArray(node)) return node.some(readsThis);
+  if (Array.isArray(node)) return node.some((item) => readsValue(item, scope));
   const part = node as Node;
-  if (part.type === 'Identifier' && part.name === viewThis) return true;
+  if (part.type === 'Identifier' && scope.has(part.name as string)) return true;
   return Object.entries(part).some(
-    ([key, child]) => key !== 'parent' && key !== 'loc' && readsThis(child)
+    ([key, child]) => key !== 'parent' && key !== 'loc' && readsValue(child, scope)
   );
+}
+
+/** The first path the expression reads that its run gave no type, as this.left for hi - lo. */
+function untypedPath(node: unknown, scope: Scope, domain: DomainRegistry): Node | undefined {
+  if (!node || typeof node !== 'object') return undefined;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = untypedPath(item, scope, domain);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  const part = node as Node;
+  if (part.type === 'MemberExpression' && typeOfPath(part, scope, domain) === '') return part;
+  for (const [key, child] of Object.entries(part))
+    if (key !== 'parent' && key !== 'loc') {
+      const found = untypedPath(child, scope, domain);
+      if (found) return found;
+    }
+  return undefined;
 }
 
 /**
  * The values of an enumeration of words a path reads, as this.state, in their declared order; a
  * union of such enumerations runs through its members in order. Undefined for anything else.
  */
-function declaredOrder(node: Node, thisType: string, domain: DomainRegistry): string[] | undefined {
-  const type = typeOf(node, thisType, domain);
+function declaredOrder(node: Node, scope: Scope, domain: DomainRegistry): string[] | undefined {
+  const type = typeOfPath(node, scope, domain);
   if (type === undefined) return undefined;
   const structure = domain.structures[type];
   const members = structure?.kind === 'union' ? structure.members : [type];
@@ -189,12 +222,20 @@ function declaredOrder(node: Node, thisType: string, domain: DomainRegistry): st
   return unique(lists.flat() as string[]) as string[];
 }
 
+/** Why a prop cannot be bound to a label's operand the run gave no type, as hi - lo in @base[hi - lo < 2]. */
+function untypedProblem(prop: string, written: string, path: Node, scope: Scope): string {
+  const name = (path.property as { name?: string }).name ?? '';
+  const label = [...scope.values()].find(isLabelKey);
+  const shown = label ? writtenName(label) : 'the label';
+  return `${prop}={${written}} reads this.${name}, which ${shown} gives no type: a plain number has no known values, so give it one where the algorithm computes it, with a constructor, as Int(…).`;
+}
+
 /** A value of an unordered domain names its own variable, as Card.stroke@visited, so it is one word. */
 const nameable = (value: BoundValue) =>
   typeof value === 'boolean' || /^[A-Za-z0-9_-]+$/u.test(String(value));
 
 /**
- * The values a prop bound to `expression` in a view of `thisType` can take, in order, or why it
+ * The values a prop bound to `expression`, reading names in `scope`, can take, in order, or why it
  * cannot be bound: numbers, and an enumeration's words in their declared order, keep their order
  * and map onto an ordered prop in order; true and false, and words from anywhere else, are unordered
  * and map onto any prop, each its own option.
@@ -203,20 +244,22 @@ export function boundDomain(
   prop: string,
   expression: unknown,
   written: string,
-  thisType: string,
+  scope: Scope,
   domain: DomainRegistry | undefined
 ): BoundDomain | { problem: string } {
-  if (!readsThis(expression))
+  if (!readsValue(expression, scope))
     return {
       problem: `${prop}={${written}} reads nothing of the view's value: a constant look is the design's, a variable of the node's kind, so a bound prop reads this, as ${prop}={this.visited}.`
     };
-  const found = domain && valuesOf(expression as Node, thisType, domain);
+  const found = domain && valuesOf(expression as Node, scope, domain);
+  const untyped = !found && domain ? untypedPath(expression, scope, domain) : undefined;
+  if (untyped) return { problem: untypedProblem(prop, written, untyped, scope) };
   if (!found)
     return {
       problem: `${prop}={${written}} takes values that cannot be known before the algorithm runs: a bound prop reads this, its fields, and comparisons and arithmetic of them, as ${prop}={this.visited} or ${prop}={this.level}, each of a type with few values, as type('integer', { min: 0, max: 3 }) or an enumeration.`
     };
   const numbers = found.every((value) => typeof value === 'number');
-  const declared = numbers ? undefined : declaredOrder(expression as Node, thisType, domain);
+  const declared = numbers ? undefined : declaredOrder(expression as Node, scope, domain);
   const values = numbers
     ? unique(found).toSorted((a, b) => (a as number) - (b as number))
     : (declared ??
@@ -239,7 +282,7 @@ export function boundDomain(
 }
 
 /**
- * The least and largest values a length bound to `expression` in a view of `thisType` can take, or
+ * The least and largest values a length bound to `expression`, reading names in `scope`, can take, or
  * why it cannot be bound: numbers, none below zero, as many as the type has. A type with too many
  * values to list is read by its range.
  */
@@ -247,24 +290,26 @@ export function boundLengthDomain(
   prop: string,
   expression: unknown,
   written: string,
-  thisType: string,
+  scope: Scope,
   domain: DomainRegistry | undefined
 ): BoundDomain | { problem: string } {
-  if (!readsThis(expression))
+  if (!readsValue(expression, scope))
     return {
       problem: `${prop}={${written}} reads nothing of the view's value: a length is the value times a unit, so it reads this, as ${prop}={this} or ${prop}={this.dist}; a box not bound sizes to its contents.`
     };
   const node = expression as Node;
   const type =
     domain && (node.type === 'Identifier' || node.type === 'MemberExpression')
-      ? typeOf(node, thisType, domain)
+      ? typeOfPath(node, scope, domain)
       : undefined;
   const atom = type === undefined ? undefined : domain?.atoms[type];
   const found =
-    (domain && valuesOf(node, thisType, domain)) ??
+    (domain && valuesOf(node, scope, domain)) ??
     (atom && atom.base !== 'boolean' && atom.min !== undefined && atom.max !== undefined
       ? [atom.min, atom.max]
       : undefined);
+  const untyped = !found && domain ? untypedPath(node, scope, domain) : undefined;
+  if (untyped) return { problem: untypedProblem(prop, written, untyped, scope) };
   if (!found)
     return {
       problem: `${prop}={${written}} takes values that cannot be known before the algorithm runs: a length reads this, its fields, and arithmetic of them, each of a number type with a least and largest value, as type('integer', { min: 0, max: 99 }).`

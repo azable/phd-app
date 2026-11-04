@@ -411,6 +411,31 @@ function freeReads(
 }
 
 /**
+ * The scope inside an {#each} block: its item named with its collection's element type, as v for
+ * each Vertex of this.vertices, and with `index`, its index named with the collection's position
+ * type, where the domain declares one.
+ */
+export function eachScope(
+  each: Readonly<Record<string, unknown>>,
+  scope: ReadonlyMap<string, string>,
+  typeOf: (node: unknown) => string | undefined,
+  domain: DomainRegistry,
+  { index = false } = {}
+): Map<string, string> {
+  const inner = new Map(scope);
+  const collection = typeOf(each.expression);
+  const structure = collection === undefined ? undefined : domain.structures[collection];
+  if (structure?.kind !== 'collection') return inner;
+  const context = each.context as { type?: string; name?: unknown } | undefined;
+  if (context?.type === 'Identifier' && typeof context.name === 'string')
+    inner.set(context.name, structure.element);
+  const positions = Object.values(domain.atoms).filter((atom) => atom.index === collection);
+  if (index && typeof each.index === 'string' && positions.length === 1)
+    inner.set(each.index, positions[0].name);
+  return inner;
+}
+
+/**
  * Every `at(p)` in the markup, by where it starts, with the variable holding the collection the
  * position `p` points into, as vertices for a VertexRef; and each read through a position written
  * another way, or that the domain does not allow, with why. Types come from the domain: a view's
@@ -537,11 +562,7 @@ export function positionReads(
     }
     if (part.type === 'EachBlock') {
       visit(part.expression, scope);
-      const inner = new Map(scope);
-      const context = part.context as Part | undefined;
-      const element = collectionOf(typeOf(part.expression as Part, scope))?.element;
-      if (context?.type === 'Identifier' && typeof context.name === 'string' && element)
-        inner.set(context.name, element);
+      const inner = eachScope(part, scope, (node) => typeOf(node as Part, scope), domain);
       visit(part.children, inner);
       return visit(part.else, scope);
     }
