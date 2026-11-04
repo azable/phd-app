@@ -171,10 +171,12 @@ scene at least.
   before each begins; `pause="@sort.merge.take:before, @sort.merge.take"` takes
   both. The scene pauses at those stops and no others, and `within` only chooses
   which runs it shows, so a scene with no `pause` shows its `:before` and its
-  `:after`. A step drawing what the step before it drew is left out, as a run
-  that changes nothing drawn. `at=":before"` or `at=":after"` shows only one of
-  them. `title` is a caption beside its name in the controls. Props are written
-  as they are, never computed.
+  `:after`. A step the view draws from exactly what it drew the step before from
+  (the variables it reads, the marks held, the code lit, and each `<When>`)
+  draws the same picture, so it is left out, and the build warns, naming both
+  steps. `at=":before"` or `at=":after"` shows only one of them. `title` is a
+  caption beside its name in the controls. Props are written as they are, never
+  computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
@@ -889,16 +891,42 @@ of a label, any label: the step that ends a run and those inside it where labels
 within pause, whatever the pauses, never steps leading up to it or after it;
 elsewhere they are hidden, keeping their room. `of=":before"` and `of=":after"`,
 the whole case's stops, draw them at the first step, the input as given, and at
-the last, as a note on what the algorithm starts from or ends with. A `<When>`
-names one label or moment and never reads the label's value (`{#if @label}` is
-refused); it has no `{:else}`. Branches that take turns share one place, as
-large as the largest,
+the last, as a note the same in every case, as "the array is now sorted". A
+`<When>` names one label or moment and never reads the label's value
+(`{#if @label}` is refused); it has no `{:else}`. Branches that take turns share
+one place, as large as the largest,
 `<OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>`, as in bubble sort
 above; a `<OneOf>` whose branches would show at one step, as a label and one
 inside it, is refused. Text that changes from step to step in one place, as a
 status line saying what each step does, is one `<OneOf>`: separate `<When>`s
 each keep their own room, so their texts stack down the page instead of
 replacing one another.
+
+Each outcome of the algorithm, as found and not found, is a label of its own,
+and its message is a `<When>` of that label. An outcome is decided in the
+algorithm, never in a layout by testing the state at `:before` or `:after`.
+`return;` ends the algorithm at an outcome, so code after a loop runs only for
+the other:
+
+```
+<script algorithm>
+  for (
+    @start[let i = Index(values, 0)];
+    @more[i < values.length];
+    @next[i++]
+  ) @scan{
+    if (@check[values[i] === target]) @found{
+      return;
+    }
+  }
+  @missing[return;]
+</script>
+…
+<OneOf>
+  <When of="@scan.found"><Node>Found {target} at index {i}.</Node></When>
+  <When of="@missing"><Node>{target} is not in the array.</Node></When>
+</OneOf>
+```
 
 What has happened so far is a list for `{#each}`: `runs(@check.at)`, every value
 the label has given up to this step:

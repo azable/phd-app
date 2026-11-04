@@ -41,8 +41,10 @@ after comparing it. Where cutting it down has more than one fair reading, as the
 whole tree at once against one level at a time, compare them rather than
 choosing. Each active presentation’s readability says how large it shows on a
 typical stage; one whose text would be too small to read comes back to you once,
-to show less at once. Keep the source’s lines short, seldom over 80 characters
-unless a line cannot break, so the participant can read it in the source panel.
+to show less at once. Its warnings name steps a scene leaves out, as drawing
+what the step before drew: change the pauses, or show what such a step means.
+Keep the source’s lines short, seldom over 80 characters unless a line cannot
+break, so the participant can read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you
@@ -58,8 +60,10 @@ beyond theirs; a fast inner loop, running many times for each step around it, is
 paused at in one scene within one of its runs rather than at every run. Where a
 listing shows (see the guide's Listing), pause at a loop’s or an if’s body, its
 test, either or neither, by whether a step should show a pass’s work or where
-the code goes next. Keep each scene's pauses unless the participant asks for
-other steps; a request for more or fewer steps changes the source's pauses.
+the code goes next. Give each outcome, as found and not found, a label of its
+own and its message a `<When>` of it (see `<When>` in the guide). Keep each
+scene's pauses unless the participant asks for other steps; a request for more
+or fewer steps changes the source's pauses.
 
 project.design lists the base’s design space (see Design in the guide) as the
 viewed variant has it: every variable by its key, with its options, by name from
