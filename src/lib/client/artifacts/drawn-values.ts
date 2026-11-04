@@ -19,6 +19,7 @@ import {
   colourCss,
   frameOptions,
   listingOptions,
+  placeProps,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
 import type { DesignValues } from '$lib/shared/presentations';
@@ -471,7 +472,7 @@ export function placeGhosts(
       const at = key.indexOf('@');
       const rest = key.slice(at + 1);
       const dot = rest.lastIndexOf('.');
-      if (dot < 0 || rest.slice(0, dot) !== place || !paintProps.has(rest.slice(dot + 1)))
+      if (dot < 0 || rest.slice(0, dot) !== place || !placeProps.has(rest.slice(dot + 1)))
         return undefined;
       const head = key.slice(0, at);
       for (const prefix of prefixes) {
@@ -499,9 +500,6 @@ export function placeGhosts(
   }
   return ghosts;
 }
-
-/** The props a place sets of its own: what tells one render apart. */
-const paintProps = new Set(['shown', 'fill', 'stroke', 'color']);
 
 /**
  * Where each label of the algorithm pauses in each shown presentation's variant, after its mark, as

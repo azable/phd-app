@@ -422,3 +422,92 @@ it.skipIf(!enabled)(
     }
   }
 );
+
+it.skipIf(!enabled)(
+  'lights the places a label marks with paint only, so no cell moves or resizes at any step',
+  { timeout: 120_000 },
+  async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = collection(Int, { max: 5 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values([5, 2, 8, 1, 4]);
+</script>
+
+<script algorithm>
+  for (@first[let i = Index(1)]; @more[i < values.length]; @next[i++]) @insert{
+    @start[let j = i;]
+    while (@compare[j > 0 && values[@left[j - 1]] > values[@right[j]]]) @swap{
+      const held = values[j - 1];
+      values[j - 1] = values[j];
+      values[j] = held;
+      j--;
+    }
+  }
+</script>
+
+<View of="Int" name="Cell">
+  <Node value={this} />
+</View>
+<View of="Index" name="Highlight">
+  <Pointed />
+</View>
+<View of="Values" name="Row">
+  <Node layout="row">{#each this as v}{v}{/each}</Node>
+</View>
+
+<Layout name="Main">
+  <Node>
+    {values}
+    {@insert.compare.left}
+    {@insert.compare.right}
+  </Node>
+</Layout>`;
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+      chosen: {
+        'Highlight.Pointed@insert.compare.left.fill': 'sky-200',
+        'Highlight.Pointed@insert.compare.right.fill': 'violet-200'
+      }
+    });
+    const page = await browser!.newPage({ viewport: { width: 1000, height: 500 } });
+    await page.setContent(sandboxDocument('', javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    const boxes: string[] = [];
+    const lit = new Set<string>();
+    for (let step = 0; step < 8; step++) {
+      await page.evaluate(
+        (to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'),
+        step
+      );
+      await page.waitForTimeout(900);
+      const drawn = await page.evaluate(() => {
+        const cells = [
+          ...document.querySelectorAll<HTMLElement>(
+            '.sv-layer:not(.pending):not(.sv-leaving) .value'
+          )
+        ].map((value) => value.closest<HTMLElement>('.sv-node')!);
+        return {
+          boxes: cells
+            .map((cell) => {
+              const box = cell.getBoundingClientRect();
+              return [box.x, box.y, box.width, box.height].map((n) => n.toFixed(1)).join(',');
+            })
+            .sort(),
+          lit: cells
+            .map((cell) => getComputedStyle(cell).backgroundColor)
+            .filter((colour) => colour !== 'rgb(255, 255, 255)')
+        };
+      });
+      boxes.push(drawn.boxes.join(' '));
+      for (const colour of drawn.lit) lit.add(colour);
+    }
+    // Every step draws the same five boxes, whichever cells the two places light.
+    expect(new Set(boxes).size).toBe(1);
+    expect(lit.size).toBe(2);
+  }
+);

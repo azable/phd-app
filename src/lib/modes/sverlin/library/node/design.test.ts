@@ -5,8 +5,10 @@ import {
   caseCss,
   decorationCss,
   fillStyleCss,
+  listingRegionProps,
   paintProps,
   paintReach,
+  placeProps,
   propOptions,
   roleProps,
   starterLooks
@@ -38,6 +40,14 @@ describe('style props', () => {
     for (const prop of ['shadow', 'glow', 'fillStyle', 'decoration'])
       expect(paintProps.has(prop)).toBe(true);
     expect(paintProps.has('case')).toBe(false);
+  });
+
+  it('leave every prop that takes room to the kind, a place setting only paint and being shown', () => {
+    const room = ['padding', 'textSize', 'font', 'weight', 'strokeWidth', 'minSize', 'radius'];
+    for (const prop of [...room, 'gap', 'width', 'height', 'xAnchor', 'yAnchor', 'spacing'])
+      expect(paintProps.has(prop)).toBe(false);
+    expect([...placeProps].filter((prop) => !paintProps.has(prop))).toEqual(['shown']);
+    expect(listingRegionProps.every((prop) => paintProps.has(prop))).toBe(true);
   });
 
   it('draw shadows and a glow round a box only, hard in its stroke or else its text colour', () => {

@@ -283,8 +283,14 @@ const listingLitOptions = {
   padding: propOptions.padding
 } satisfies Record<string, readonly (string | number)[]>;
 
+/**
+ * The paint that tells one place apart, a render's or a listing region's: all of it paint (see
+ * paintProps), so a place never changes how much room anything takes.
+ */
+export const placePaint = ['fill', 'stroke', 'color'] as const;
+
 /** The props a region of a listing sets for itself, as `listing.lit@insert.compare.left.fill`. */
-export const listingRegionProps = ['fill', 'stroke', 'color'] as const;
+export const listingRegionProps = placePaint;
 
 /** The lit text's options for a prop, for its own variable or a region's. */
 export function listingPropOptions(prop: string): readonly (string | number)[] | undefined {
@@ -408,7 +414,13 @@ export function optionsOf(
   return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
 }
 
-/** Paint shows only where a pointer is; its other props hold in every slot, so slots keep one size. */
+/**
+ * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
+ * step to step or render to render, a pointer at a node, a place, a listing's lit region, sets
+ * only paint; every other prop is its kind's in every slot and at every step, so slots keep one
+ * size. A pointer's paint shows only where it is, its other props in every slot it can point at.
+ * `expand` is paint, taking room only in a packed row, which keeps room for it.
+ */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
   'expand',
@@ -422,8 +434,12 @@ export const paintProps: ReadonlySet<string> = new Set([
   'decoration'
 ]);
 
-/** The props a place sets for the kinds of the view it draws, those that tell one render apart. */
-export const placeProps: ReadonlySet<string> = new Set(['shown', 'fill', 'stroke', 'color']);
+/**
+ * The props a place sets for the kinds of the view it draws, those that tell one render apart: its
+ * paint, and whether it is shown at all, which holds at every step, a render left out keeping no
+ * room throughout.
+ */
+export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint]);
 
 /**
  * A render at a place: what is written there after `@` (`@left`, `@g.a`), the path of the view it

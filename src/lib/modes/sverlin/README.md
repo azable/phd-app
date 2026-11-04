@@ -1037,6 +1037,14 @@ variant sets them, so one value is drawn apart with nothing declared:
   `IntTally.Tally@swap.held.shown`, though not for another view that view
   renders.
 
+A place sets only paint and whether it is shown, never how much room anything
+takes: its padding, text size, font, weight, stroke width, corners, sizes, and
+anchors are its kinds', at every step and in every place, so a place lit at one
+step and not the next moves nothing. The same holds for whatever changes a look
+from step to step: a pointer's paint shows only where it is, the rest of its
+look in every slot, and a listing's lit regions set their own fill, stroke, and
+colour only.
+
 ```json
 {
   "pointers.Index": "Highlight",

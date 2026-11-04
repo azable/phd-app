@@ -134,6 +134,24 @@ describe('variants', () => {
     ).toThrow('The design has no variable pointers.Index@found; its view choices are views.Int');
   });
 
+  it('refuses a place setting what takes room, which holds for its kind at every step', () => {
+    expect(space).not.toHaveProperty('Highlight.Pointed@found.padding');
+    expect(space).toHaveProperty('Highlight.Pointed.padding');
+    expect(() =>
+      buildVariant(space, starter, { chosen: { 'Highlight.Pointed@found.padding': 0.5 } }, 1)
+    ).toThrow(
+      'A place sets only its paint (fill, stroke, color) and whether it is shown, never how much room anything takes: padding holds for every Highlight.Pointed at every step, as Highlight.Pointed.padding.'
+    );
+    expect(
+      Object.keys(space)
+        // A view chosen per place holds at every step, as a type's does; the rest are a place's looks.
+        .filter((key) => /@[^.]/u.test(key) && !/^(pause@|views\.|pointers\.)/u.test(key))
+        .map((key) => key.slice(key.lastIndexOf('.') + 1))
+        .filter((prop) => !['unit', 'true', 'false', 'from', 'order', 'hue'].includes(prop))
+        .every((prop) => ['shown', 'fill', 'stroke', 'color'].includes(prop))
+    ).toBe(true);
+  });
+
   it('keeps a place as its kinds are until a variant sets it apart', () => {
     const { fallbacks } = prepared.design;
     const [first, second] = space['Highlight.Pointed.fill'].filter(

@@ -15,6 +15,7 @@ import {
   listingPropOptions,
   listingRegionProps,
   optionsOf,
+  placePaint,
   placeProps,
   roleProps,
   starterFrame,
@@ -375,6 +376,12 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.`;
     }
     const kind = key.slice(0, key.lastIndexOf('.'));
+    // A place sets only its paint and whether it is shown: every other prop holds for its kind.
+    const at = kind.indexOf('@');
+    const prop = key.slice(kind.length + 1);
+    const ofKind = at < 0 ? undefined : `${kind.slice(0, at)}.${prop}`;
+    if (ofKind && !placeProps.has(prop) && Object.hasOwn(space, ofKind))
+      return `A place sets only its paint (${placePaint.join(', ')}) and whether it is shown, never how much room anything takes: ${prop} holds for every ${kind.slice(0, at)} at every step, as ${ofKind}.`;
     const near = Object.keys(space).filter((other) => other.startsWith(`${kind}.`));
     return near.length
       ? `${kind} has no prop ${key.slice(kind.length + 1)}; its variables are ${near.join(', ')}.`
