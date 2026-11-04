@@ -1272,7 +1272,9 @@ cell by `row` and `col`, usually loop indices or positions:
 - Two cells at one coordinate at one step is an error at that step.
 - Every column is as wide as its widest cell and every row as tall as its
   tallest at any step, as many as the largest coordinate any step uses, so a
-  table filling in never moves.
+  table filling in never moves. A grid in a view sizes them over every value of
+  its type too, one set every copy shares, so two tables drawn by one view line
+  up column for column.
 - The grid's kind has `gap`, between columns and rows; `align`, where each cell
   sits in its column and row; and `justify`, how the columns spread where the
   grid has more room than they need.

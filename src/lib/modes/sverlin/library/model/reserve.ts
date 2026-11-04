@@ -7,7 +7,8 @@
  * - any other node keeps the largest size it reaches at any step, laid out with the sizes the nodes
  *   inside it keep, so it holds them at every step;
  * - the items of a collection all keep the largest any of them reaches;
- * - a grid's columns and rows each keep the largest any of their cells reaches at any step, and
+ * - a grid's columns and rows each keep the largest any of their cells reaches at any step and, for
+ *   a grid in a typed view, for any value the view is probed with, in one set every copy shares;
  *   the node holding it is sized with those tracks;
  * - a free layout is solved once over every step from its children's sizes (see node/span.ts), and
  *   the node holding it is sized with it at that size.
@@ -134,7 +135,7 @@ function sizer(options: ReserveOptions) {
         inside ||= box !== undefined;
       } else if (classes.includes('sv-chain') && !insideBox && id)
         kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
-      else if (classes.includes('sv-grid') && !insideBox && element.attributes['data-sv-grid']) {
+      else if (classes.includes('sv-grid') && element.attributes['data-sv-grid']) {
         const grid = element.attributes['data-sv-grid'];
         kinds.set(element, { kind: 'grid', key: `g:${grid}`, id: grid });
       } else if (classes.includes('sv-arranged')) {
@@ -368,6 +369,28 @@ function sizer(options: ReserveOptions) {
     const { width, height } = extentAlone(at, element);
     return { width: Math.round(width), height: Math.round(height) };
   }
+  /**
+   * Widen a grid's kept tracks to hold every cell of these drawings of it: each column as wide as
+   * the widest cell it holds and each row as tall as the tallest, as many as the largest coordinate.
+   */
+  function widenTracks(grid: string, drawn: readonly { at: Read; element: ModelElement }[]) {
+    const kept = memory.tracks.get(grid);
+    const columns = [...(kept?.columns ?? [])];
+    const rows = [...(kept?.rows ?? [])];
+    for (const { at, element } of drawn)
+      for (const cell of elementsOf(element)) {
+        const row = Number(cell.attributes['data-sv-row']);
+        const column = Number(cell.attributes['data-sv-col']);
+        if (!Number.isInteger(row) || !Number.isInteger(column)) continue;
+        const { width, height } = sizeAlone(at, cell);
+        columns[column] = Math.max(columns[column] ?? 0, width);
+        rows[row] = Math.max(rows[row] ?? 0, height);
+      }
+    memory.tracks.set(grid, {
+      columns: Array.from(columns, (width) => width ?? 0),
+      rows: Array.from(rows, (height) => height ?? 0)
+    });
+  }
 
   return {
     read,
@@ -379,6 +402,7 @@ function sizer(options: ReserveOptions) {
     hostReader,
     extentAlone,
     sizeAlone,
+    widenTracks,
     layouts: () => layouts
   };
 }
@@ -398,6 +422,19 @@ export function probeComponent(
   const model = sizer(options);
   const at = model.read({ markup });
   if (!at) return {};
+  // Its grids first, the innermost before those around them, each keeping tracks for every value it
+  // is drawn with here, which the box is then laid out with and the steps widen further.
+  const grids = new Map<string, { at: Read; element: ModelElement }[]>();
+  const depthOf = (element: ModelElement): number => {
+    const parent = at.parents.get(element);
+    return parent ? depthOf(parent) + 1 : 0;
+  };
+  const inGrids = [...at.kinds].filter(
+    (entry): entry is [ModelElement, Extract<Kind, { kind: 'grid' }>] => entry[1].kind === 'grid'
+  );
+  for (const [element, kind] of inGrids.sort(([a], [b]) => depthOf(b) - depthOf(a)))
+    grids.set(kind.id, [...(grids.get(kind.id) ?? []), { at, element }]);
+  for (const [grid, drawn] of grids) model.widenTracks(grid, drawn);
   let box = options.memory.components.get(name);
   let font: string | undefined;
   const holdsArrangement = (element: ModelElement): boolean =>
@@ -497,23 +534,9 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
     }
     // Then the grids, each column as wide as the widest cell it holds at any step and each row as
     // tall as the tallest, as many as the largest coordinate any step uses.
-    for (const key of keys.filter((each) => each.startsWith('g:'))) {
-      const columns: number[] = [];
-      const rows: number[] = [];
-      for (const { at, element } of instances.get(key) ?? [])
-        for (const cell of elementsOf(element)) {
-          const row = Number(cell.attributes['data-sv-row']);
-          const column = Number(cell.attributes['data-sv-col']);
-          if (!Number.isInteger(row) || !Number.isInteger(column)) continue;
-          const { width, height } = model.sizeAlone(at, cell);
-          columns[column] = Math.max(columns[column] ?? 0, width);
-          rows[row] = Math.max(rows[row] ?? 0, height);
-        }
-      memory.tracks.set(key.slice(2), {
-        columns: Array.from(columns, (width) => width ?? 0),
-        rows: Array.from(rows, (height) => height ?? 0)
-      });
-    }
+    // A grid in a typed view starts from the tracks its probed values reached (see probeComponent).
+    for (const key of keys.filter((each) => each.startsWith('g:')))
+      model.widenTracks(key.slice(2), instances.get(key) ?? []);
     // Then the nodes, each keeping the largest size it reaches.
     for (const key of keys.filter((each) => each.startsWith('n:'))) {
       const id = key.slice(2);

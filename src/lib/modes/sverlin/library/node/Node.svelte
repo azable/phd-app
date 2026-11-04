@@ -25,6 +25,8 @@
     hiddenSitesContext,
     provideHidden,
     insideComponentBox,
+    insideView,
+    provideInView,
     leftOutContext,
     listingContext,
     provideRenderPlace,
@@ -378,10 +380,17 @@
     grid?.add(at);
   });
   untrack(() => provideGrid(arrangement === 'grid' ? new Set() : undefined));
+  // A grid in a typed view is drawn by every copy of the view and for every value it is probed
+  // with, so it keeps its tracks by its site, one set they all share and line up by.
+  const inView = untrack(() => Boolean(__component) || insideView());
+  untrack(() => {
+    if (__component) provideInView();
+  });
+  const gridKey = untrack(() =>
+    arrangement !== 'grid' ? undefined : inView ? (__ref ? `view:${__ref}` : undefined) : id
+  );
   const tracks = untrack(() =>
-    arrangement === 'grid' && memory && !memory.measuring && !insideBox && id
-      ? memory.tracks.get(id)
-      : undefined
+    gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
   );
   const trackCss = (sizes: readonly number[] | undefined) =>
     sizes?.length ? sizes.map((size) => `${size}px`).join(' ') : undefined;
@@ -556,7 +565,7 @@
              places each cell in its column and row, and justify spreads the columns. -->
       <div
         class="sv-grid"
-        data-sv-grid={id}
+        data-sv-grid={gridKey}
         style:gap={`${gap}em`}
         style:align-items={alignment}
         style:justify-items={alignment}

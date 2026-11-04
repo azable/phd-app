@@ -1,0 +1,32 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 999 });
+  const Row = collection(Int, { max: 2 });
+  const Table = collection(Row, { max: 2 });
+  const Index = index(Table);
+</script>
+
+<script input>
+  const a = Table([[1, 2], [3, 4]]);
+  const b = Table([[5, 6], [7, 8]]);
+</script>
+
+<script algorithm>
+  for (@start[let i = Index(a, 0)]; @more[i < a.length]; @next[i++]) @scale{
+    @grow[a[i][0] = Int(a[i][0] * 300);]
+    @copy[b[i][1] = Int(b[i][1] * 100);]
+  }
+</script>
+
+<View of="Int" name="Numeral"><Node value={this} /></View>
+<View of="Index" name="IndexText"><Node value={this} /></View>
+<View of="Table" name="Grid">
+  <Node layout="grid">
+    {#each this as cells, i}
+      {#each cells as cell, j}<Node row={i} col={j}>{cell}</Node>{/each}
+    {/each}
+  </Node>
+</View>
+
+<Layout name="Main">
+  <Node layout="row">{a}{b}</Node>
+</Layout>

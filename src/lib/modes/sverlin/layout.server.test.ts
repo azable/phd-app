@@ -193,6 +193,42 @@ describe('laying out on the server', () => {
     const clashing = await bundlePresentation(prepareSvelteComponent(twice), 1);
     expect(clashing.layout.errors.join(' ')).toMatch(/Two cells of a grid are at row 0, col 2/);
   }, 60_000);
+  it('gives a grid in a view one set of tracks, its widest over every value, that every copy shares', async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 999 });
+  const Row = collection(Int, { max: 2 });
+  const Table = collection(Row, { max: 2 });
+</script>
+<script input>
+  const a = Table([[1, 2], [3, 4]]);
+  const b = Table([[5, 6], [7, 8]]);
+</script>
+<script algorithm>
+  @grow[a[0][0] = Int(999);]
+</script>
+<View of="Int" name="Numeral"><Node value={this} /></View>
+<View of="Table" name="Grid">
+  <Node layout="grid">{#each this as cells, i}{#each cells as cell, j}<Node row={i} col={j}>{cell}</Node>{/each}{/each}</Node>
+</View>
+<Layout name="Main"><Node layout="row">{a}{b}</Node></Layout>`;
+    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    expect(layout.errors).toEqual([]);
+    const prefix = 'window.__sverlinGeometry=';
+    const [given] = JSON.parse(
+      javascript.slice(prefix.length, javascript.indexOf(';\n'))
+    ) as Geometry[];
+    // One set for the view's grid, drawn for a and b: every column as wide as 999 needs from the
+    // first step, as the view is probed with the widest values, so nothing moves when 999 appears.
+    const inView = given.tracks.filter(([key]) => key.startsWith('view:'));
+    expect(inView).toHaveLength(1);
+    const [[, tracks]] = inView;
+    expect(tracks.columns).toHaveLength(2);
+    expect(tracks.rows).toHaveLength(2);
+    expect(tracks.columns[0]).toBe(tracks.columns[1]);
+    const box = new Map(given.components).get('Grid');
+    expect(box?.width).toBeGreaterThanOrEqual(tracks.columns[0] + tracks.columns[1]);
+  }, 60_000);
+
   it('lays a node out in its case, wider uppercase, alike at the starter', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);

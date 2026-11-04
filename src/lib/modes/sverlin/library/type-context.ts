@@ -203,7 +203,8 @@ export type LayoutMemory = {
    */
   reserved: Map<string, { width: number; height: number }>;
   /**
-   * Each grid's tracks, by its node's id: every column as wide as the widest cell it holds at any
+   * Each grid's tracks, by its node's id, or for a grid in a typed view by its site, shared by every
+   * copy of the view and its probed values: every column as wide as the widest cell it holds at any
    * step and every row as tall as the tallest, as many as the largest coordinate any step uses, so a
    * grid filling in never moves.
    */
@@ -251,6 +252,15 @@ export function provideComponentBox(): void {
 
 export function insideComponentBox(): boolean {
   return getContext<boolean | undefined>('sverlin:in-component-box') === true;
+}
+
+/** Inside a typed view, whose every copy shares one set of tracks for each grid it draws. */
+export function provideInView(): void {
+  setContext('sverlin:in-view', true);
+}
+
+export function insideView(): boolean {
+  return getContext<boolean | undefined>('sverlin:in-view') === true;
 }
 
 /**
