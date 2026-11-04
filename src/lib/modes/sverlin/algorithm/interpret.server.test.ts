@@ -28,7 +28,8 @@ const plain = <T extends { types: unknown }>(step: T) => ({
   gap: undefined,
   seen: undefined,
   trail: undefined,
-  name: undefined
+  name: undefined,
+  edge: undefined
 });
 
 describe('algorithm interpretation', () => {

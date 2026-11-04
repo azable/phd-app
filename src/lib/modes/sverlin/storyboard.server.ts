@@ -7,7 +7,7 @@
  * Svelte sees the view, and then blanked; its steps are chosen once the run is traced (sceneSteps).
  */
 
-import type { MasterStep } from './algorithm/interpret.server';
+import type { Edges, MasterStep } from './algorithm/interpret.server';
 
 /** One scene as written. */
 export type Scene = {
@@ -289,27 +289,68 @@ function sceneOf(
   };
 }
 
+/** The label a step's name is for, as insert.swap for @insert.swap#2. */
+const labelOf = (name = '') => name.replace(/^@|#\d+$/gu, '');
+
 /**
- * The steps a scene shows, by their index among the run's: every step, or those inside the runs of
- * the label it is within (the nth only), then the first or the last where it is at one.
+ * The steps a scene shows, by their index among the run's, paced as it pauses with its edges (see
+ * Edges in algorithm/interpret.server.ts): from its start to its end, the whole run's or that of
+ * the runs of the label it is within (the nth only), with the steps it pauses at between; then the
+ * first or the last where it is at one. A step drawing what the step before it drew is left out, the
+ * code it lights included where the view places a listing (`listed`).
  */
-export function sceneSteps(scene: Scene, steps: readonly MasterStep[]): number[] {
+export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = false): number[] {
   let chosen = steps.map((_, index) => index);
   if (scene.within) {
-    const { label: within, run } = scene.within;
-    chosen = chosen.filter((index) =>
-      run === undefined
-        ? steps[index].inside?.includes(within)
-        : steps[index].runs?.includes(`${within}#${run}`)
+    const { label, run } = scene.within;
+    const ofRun = (step: MasterStep) =>
+      run === undefined ? labelOf(step.name) === label : step.name === `@${label}#${run}`;
+    const first = steps.findIndex((step) => step.edge === 'start' && ofRun(step));
+    const last = steps.findLastIndex((step) => step.edge === 'end' && ofRun(step));
+    if (first < 0 || last < 0) return [];
+    const paused = scenePauses(scene).has(label);
+    // Between the runs of every run, only what is inside one of them, and no run's own edges.
+    const between = (step: MasterStep) =>
+      run !== undefined ||
+      (step.inside?.includes(label) &&
+        step.edge !== 'start' &&
+        !(step.edge === 'end' && labelOf(step.name) === label && !paused));
+    chosen = chosen.filter(
+      (index) =>
+        index === first ||
+        index === last ||
+        (first < index && index < last && between(steps[index]))
     );
   }
   if (scene.at === 'start') return chosen.slice(0, 1);
   if (scene.at === 'end') return chosen.slice(-1);
-  return chosen;
+  return chosen.filter(
+    (index, at) => at === 0 || !drawnAlike(steps[chosen[at - 1]], steps[index], listed)
+  );
 }
+
+/**
+ * Whether a step draws what the step before it drew: the same state, with nothing its own code
+ * gave, as a comparison, the same marks held, and where a listing shows, the same code lit.
+ */
+const drawnAlike = (before: MasterStep, step: MasterStep, listed: boolean) =>
+  !step.labelled &&
+  !step.applied &&
+  JSON.stringify([before.state, before.held, listed && before.trail]) ===
+    JSON.stringify([step.state, step.held, listed && step.trail]);
 
 /** The labels a scene pauses at: those its pause names, and no others. */
 export const scenePauses = (scene: Scene): Set<string> => new Set(scene.pause ?? []);
+
+/** The runs a scene is within, which open and close on a step of their own. */
+export const sceneEdges = (scene: Scene): Edges | undefined => scene.within;
+
+/**
+ * A step's own name in a scene: its label's run, as @insert.swap#2, or the scene's start or end
+ * where the step is only that, at a label the scene does not pause at.
+ */
+export const ownName = (scene: Scene, step: MasterStep): string =>
+  step.edge && !scenePauses(scene).has(labelOf(step.name)) ? step.edge : (step.name ?? '');
 
 /**
  * How a step is labelled in a storyboard of several scenes: its scene's name, its title in
@@ -341,23 +382,29 @@ export function storyboardOf(
   scenes: readonly Scene[],
   master: readonly MasterStep[],
   labels: readonly string[],
-  paced: (scene: Scene) => readonly MasterStep[]
+  paced: (scene: Scene) => readonly MasterStep[],
+  listed = false
 ): { storyboard: Storyboard; problems: { message: string; scene: Scene }[] } {
   const problems: { message: string; scene: Scene }[] = [];
   const known = (each: string) => labels.includes(each);
-  const listed = labels.map((each) => `@${each}`).join(', ');
+  const named = labels.map((each) => `@${each}`).join(', ');
   const steps = scenes.flatMap((scene) => {
     for (const each of [...(scene.pause ?? []), ...(scene.within ? [scene.within.label] : [])])
       if (!known(each)) {
         problems.push({
-          message: `The scene ${scene.name} names @${each}, no label of the algorithm${labels.length ? `; its labels are ${listed}` : ''}.`,
+          message: `The scene ${scene.name} names @${each}, no label of the algorithm${labels.length ? `; its labels are ${named}` : ''}.`,
           scene
         });
         return [];
       }
     if (scene.frame) return [sceneLabel(scene, undefined)];
-    if (scene.within && !sceneSteps({ ...scene, at: undefined }, master).length) {
-      const { label, run } = scene.within;
+    const within = scene.within;
+    const runsWithin = (step: MasterStep) =>
+      within?.run === undefined
+        ? step.inside?.includes(within?.label ?? '')
+        : step.runs?.includes(`${within.label}#${within.run}`);
+    if (within && !master.some(runsWithin)) {
+      const { label, run } = within;
       const runs = master.filter(({ name }) => name?.startsWith(`@${label}#`)).length;
       problems.push({
         message:
@@ -369,13 +416,8 @@ export function storyboardOf(
       return [];
     }
     const own = paced(scene);
-    const chosen = sceneSteps(scene, own);
-    if (!chosen.length)
-      problems.push({
-        message: `The scene ${scene.name} shows no step: pause at a label it runs, as pause="@${scene.within?.label ?? labels[0] ?? 'label'}".`,
-        scene
-      });
-    const names = chosen.map((index) => own[index].name ?? `Step ${index + 1}`);
+    const chosen = sceneSteps(scene, own, listed);
+    const names = chosen.map((index) => ownName(scene, own[index]));
     return scenes.length === 1 ? names : names.map((name) => sceneLabel(scene, name));
   });
   return { storyboard: { scenes: [...scenes], steps }, problems };

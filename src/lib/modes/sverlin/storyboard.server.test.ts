@@ -81,7 +81,12 @@ describe('storyboards', () => {
     expect(
       scenes.slice(scenes.indexOf('then') + 1).every((name) => name === 'probe (the second probe)')
     ).toBe(true);
-    expect(labels.at(-1)).toBe('probe (the second probe): @probe.pick#2');
+    // The second probe opens on its start and closes on its end, its pick between.
+    expect(labels.slice(-3)).toEqual([
+      'probe (the second probe): start',
+      'probe (the second probe): @probe.pick#2',
+      'probe (the second probe): end'
+    ]);
     // Every presentation shows the source's steps.
     expect(labels).toEqual(prepared.steps);
   });
@@ -96,6 +101,31 @@ describe('storyboards', () => {
       1
     );
     expect(labels).toEqual(['first: start', `last: ${whole.labels.at(-1)}`]);
+  });
+
+  it('opens and closes each stepping scene on its start and end, its pauses between', async () => {
+    const prepared = prepareSvelteComponent(
+      storyboard(
+        scene('name="whole"'),
+        scene('name="first" within="@probe#1"'),
+        scene('name="picks" within="@probe#1" pause="@probe.pick"'),
+        scene('name="hit" within="@probe#2"')
+      )
+    );
+    const { labels } = await bundlePresentation(prepared, 1);
+    // No pause: the input as given and the end; within a run, just before it and just after it,
+    // the run's own label adding no pause. The probe finding the target moves nothing drawn, so
+    // its end, drawing what its start drew, is left out.
+    expect(labels).toEqual([
+      'whole: start',
+      'whole: end',
+      'first: start',
+      'first: end',
+      'picks: start',
+      'picks: @probe.pick#1',
+      'picks: end',
+      'hit: start'
+    ]);
   });
 
   it('paces a scene by its own pauses alone', async () => {

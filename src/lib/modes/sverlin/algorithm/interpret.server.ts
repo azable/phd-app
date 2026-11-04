@@ -130,6 +130,11 @@ export type MasterStep = {
   /** The same runs, each as its label and which run of it it is, as insert#2. */
   runs?: string[];
   /**
+   * Where the step is a scene's start or end: the input as given, or the state just before a run it
+   * is within begins; the state the algorithm ends on, or just after such a run ends.
+   */
+  edge?: 'start' | 'end';
+  /**
    * The values labelled expressions gave at earlier steps inside the run the step ends, which it
    * shows whole, drawn from its before on.
    */
@@ -264,7 +269,12 @@ export type Pauses = ReadonlySet<string>;
 export type Pacing = {
   shown?: ReadonlyMap<string, readonly Span[]>;
   pauses?: Pauses;
+  /** The runs a scene is within, every run of the label or its nth, each opening and closing on a step (see Edge). */
+  edges?: Edges;
 };
+
+/** The runs of one label, all of them or the nth to begin, as a scene is within. */
+export type Edges = { label: string; run?: number };
 
 /**
  * The source's labels (see labels.server.ts), the code they mark, each label's unit, and the
@@ -498,6 +508,8 @@ class Interpreter {
   #labelGiven: Given[] = [];
   /** How many runs have started, numbering each. */
   #runCount = 0;
+  /** The state after the last step recorded, which the code run since then leads up from. */
+  #since: Since | undefined;
   /** How many runs of each label have begun, by full name, which numbers each run as it begins. */
   readonly #begun = new Map<string, number>();
   /** How many steps end at each label paused at, by full name, for advice on pausing at fewer. */
@@ -635,14 +647,23 @@ class Interpreter {
   run(): MasterStep[] {
     // Every presentation opens on the input as given, before any of the algorithm runs.
     const opening = this.#state(this.#root, this.#topLevel);
+    this.#since = this.#sinceNow(this.#root, this.#topLevel);
     this.#execute();
     // What runs after the last step is a step of its own where it changes a value still in scope,
-    // or declares one; variables only leaving scope are no step. Without steps, it is the only one.
+    // or declares one; variables only leaving scope are no step, and the last step is the end.
+    // Without steps, it is the only one.
     const last = this.#trace.at(-1);
-    this.#record(this.#root, this.#root, this.#topLevel, {
-      before: this.#snapshotOf(this.#root, this.#topLevel),
-      gap: this.#log.pending
-    });
+    this.#record(
+      this.#root,
+      this.#root,
+      this.#topLevel,
+      {
+        before: this.#snapshotOf(this.#root, this.#topLevel),
+        gap: this.#log.pending
+      },
+      undefined,
+      { name: 'end', at: 'end' }
+    );
     const end = this.#trace.at(-1)!;
     if (
       last &&
@@ -650,11 +671,21 @@ class Interpreter {
         ([name, value]) =>
           name in last.state && JSON.stringify(last.state[name]) === JSON.stringify(value)
       )
-    )
+    ) {
       this.#trace.pop();
+      last.edge = 'end';
+    }
     if ((this.#trace[0]?.moment ?? 0) <= 0)
       for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
-    this.opening = { moment: 0, name: 'start', ...opening, before: opening, gap: 0, events: [] };
+    this.opening = {
+      moment: 0,
+      name: 'start',
+      edge: 'start',
+      ...opening,
+      before: opening,
+      gap: 0,
+      events: []
+    };
     return this.#trace;
   }
 
@@ -1570,6 +1601,11 @@ class Interpreter {
     const step = label !== undefined && this.#pauses.has(label);
     const ordinal = (this.#begun.get(label ?? '') ?? 0) + 1;
     if (label !== undefined) this.#begun.set(label, ordinal);
+    if (this.#isEdge(label, ordinal))
+      this.#record(node, node, scope, this.#since ?? this.#sinceNow(node, scope), undefined, {
+        name: `@${label}#${ordinal}`,
+        at: 'start'
+      });
     this.#runs.push({
       unit,
       node,
@@ -1592,9 +1628,28 @@ class Interpreter {
   #end(node: AnyNode, scope: Scope): void {
     const run = this.#runs.pop();
     if (!run) return;
-    if (run.since) this.#record(run.node, node, scope, run.since, run);
+    const edge = this.#isEdge(this.#named.get(run.unit), run.ordinal)
+      ? { name: this.#nameOf(run), at: 'end' as const }
+      : undefined;
+    const since = run.since ?? (edge && (this.#since ?? this.#sinceNow(node, scope)));
+    if (since) this.#record(run.node, node, scope, since, run, edge);
     // A value no longer inside a run of the label around it is never kept again.
     this.#labelGiven = this.#labelGiven.filter(({ around }) => this.#runs.includes(around));
+  }
+
+  /** Whether a run of a label is one the scene is within, which opens and closes on a step. */
+  #isEdge(label: string | undefined, ordinal: number): boolean {
+    const edges = this.#pacing.edges;
+    return (
+      edges !== undefined &&
+      label === edges.label &&
+      (edges.run === undefined || edges.run === ordinal)
+    );
+  }
+
+  /** The state now, as the code before a step leads up from it. */
+  #sinceNow(node: AnyNode, scope: Scope): Since {
+    return { before: this.#snapshotOf(node, scope), gap: this.#log.pending };
   }
 
   /** A step's name, ending a run: its label and which run of it this is, counted as runs begin. */
@@ -1625,7 +1680,14 @@ class Interpreter {
    * earlier steps inside the run it ends are held, as it shows its own run whole, and it lights
    * that run's code. The runs going on start their code again after it.
    */
-  #record(unit: AnyNode, node: AnyNode, scope: Scope, since: Since, ending?: Run): void {
+  #record(
+    unit: AnyNode,
+    node: AnyNode,
+    scope: Scope,
+    since: Since,
+    ending?: Run,
+    edge?: { name: string; at: 'start' | 'end' }
+  ): void {
     // A scene's own pauses bound what it shows; pausing at every label only names the steps.
     if (!this.#pacing.pauses && this.#trace.length >= algorithmLimits.maximumSourceSteps)
       this.#fail(
@@ -1662,7 +1724,8 @@ class Interpreter {
         ? single
         : undefined;
     });
-    const label = ending ? this.#nameOf(ending).replace(/^@|#\d+$/gu, '') : 'end';
+    const name = edge?.name ?? (ending ? this.#nameOf(ending) : 'end');
+    const label = name.replace(/^@|#\d+$/gu, '');
     this.#stepsAt.set(label, (this.#stepsAt.get(label) ?? 0) + 1);
     this.#trace.push({
       // Strictly later than the step before, though no event came between them.
@@ -1670,7 +1733,8 @@ class Interpreter {
       before: since.before,
       gap: Math.max(since.gap - (logged.dropped ?? 0), 0),
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
-      name: ending ? this.#nameOf(ending) : 'end',
+      name,
+      ...(edge ? { edge: edge.at } : {}),
       ...(inside.length ? { inside, runs } : {}),
       ...after,
       ...logged,
@@ -1695,6 +1759,7 @@ class Interpreter {
       gap: this.#log.pending
     };
     for (const run of this.#runs) if (run.since) run.since = again;
+    this.#since = again;
   }
 
   /**

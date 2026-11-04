@@ -131,12 +131,17 @@ scene at least.
   this is how a frame is told from a step.)
 - A stepping scene steps through the whole run, or the runs of one label
   `within` names: every run, `within="@sort.merge"`, or the nth to begin,
-  `within="@sort.merge#1"`. `pause` names, by full name and separated by commas,
-  the labels that end a step in it, as `pause="@sort.merge.take"`: the scene
-  pauses at those labels and no others, and `within` only chooses which runs it
-  shows. `at="start"` or `at="end"` shows only its first or its last step.
-  `title` is a caption beside its name in the controls. Props are written as
-  they are, never computed.
+  `within="@sort.merge#1"`. It opens on its start, `start` in the controls: the
+  input as given, or the state just before the first run it is within begins. It
+  closes on its end, `end`: the state the algorithm ends on, or just after the
+  last run it is within ends. `pause` names, by full name and separated by
+  commas, the labels that end a step between them, as
+  `pause="@sort.merge.take"`: the scene pauses at those labels and no others,
+  and `within` only chooses which runs it shows, so a scene with no `pause`
+  shows its start and its end. A step drawing what the step before it drew is
+  left out, as a run that changes nothing drawn. `at="start"` or `at="end"`
+  shows only its start or its end. `title` is a caption beside its name in the
+  controls. Props are written as they are, never computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
@@ -354,13 +359,13 @@ label given a kind of its own.
   in scope: a loop inside another cannot declare `j` again, while loops one
   after another can.
 - A step is named by the label whose run it ends and which run that is, the nth
-  run of that label to begin, as `@insert.swap#1` (`start` for the input as
-  given, `end` for the end): in a recursive function, `@sort#1` ends the first
-  call made, the outermost, at the last of its steps. The name is the same in
-  every variant, which numbers only the steps it shows. A step has no text: the
-  view says what it shows, from the recorded variables, so what it should say is
-  in the algorithm's variables, as an answer is the value a search returns or
-  where its loop stops.
+  run of that label to begin, as `@insert.swap#1` (`start` and `end` for a
+  scene's start and end, at a label it does not pause at): in a recursive
+  function, `@sort#1` ends the first call made, the outermost, at the last of
+  its steps. The name is the same in every variant, which numbers only the steps
+  it shows. A step has no text: the view says what it shows, from the recorded
+  variables, so what it should say is in the algorithm's variables, as an answer
+  is the value a search returns or where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value an array also holds shows a copy,

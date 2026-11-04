@@ -48,23 +48,24 @@ does. Keep the source’s lines short, seldom over 80 characters unless a line
 cannot break, so the participant can read it in the source panel.
 
 Pace a new or changed source yourself, as no one else does: each scene of the
-storyboard pauses only at the labels its pause names (see the guide's
-Storyboard), so give a first visualization, and each label you add, scenes that
-step through it sensibly. As no code runs outside a label (see the guide's
-Steps), a source has labels it rarely pauses at: a loop's start, test, and move,
-and tests whose outcome the view does not show, unless a step should show where
-the code goes next. project.runs gives each label of the base by name, how many
-times it runs and how many of those runs change what the view draws (drawn); for
-a label the base does not have, judge the same from what the algorithm does. A
-label whose runs change nothing drawn only repeats the step before, so leave it
-out of every pause, and around labels paused at, one whose own runs add nothing
-beyond theirs; a fast inner loop, running many times for each step around it, is
-paused at in one scene within one of its runs rather than at every run. Where a
-listing shows, a pause at a loop’s or an if’s body lights all the code its run
-ran, and one at its test only the test’s line, though it draws nothing new:
-pause at either or neither, by whether a step should show a pass’s work or where
-the code goes next. Keep each scene's pauses unless the participant asks for
-other steps; a request for more or fewer steps changes the source's pauses.
+storyboard pauses only at the labels its pause names, between its start and its
+end (see the guide's Storyboard), so give a first visualization, and each label
+you add, scenes that step through it sensibly. As no code runs outside a label
+(see the guide's Steps), a source has labels it rarely pauses at: a loop's
+start, test, and move, and tests whose outcome the view does not show, unless a
+step should show where the code goes next. project.runs gives each label of the
+base by name, how many times it runs and how many of those runs change what the
+view draws (drawn); for a label the base does not have, judge the same from what
+the algorithm does. A label whose runs change nothing drawn only repeats the
+step before, so leave it out of every pause, and around labels paused at, one
+whose own runs add nothing beyond theirs; a fast inner loop, running many times
+for each step around it, is paused at in one scene within one of its runs rather
+than at every run. Where a listing shows, a pause at a loop’s or an if’s body
+lights all the code its run ran, and one at its test only the test’s line,
+though it draws nothing new: pause at either or neither, by whether a step
+should show a pass’s work or where the code goes next. Keep each scene's pauses
+unless the participant asks for other steps; a request for more or fewer steps
+changes the source's pauses.
 
 project.design lists the base’s design space (see Design in the guide) as the
 viewed variant has it: every variable by its key, with its options, by name from

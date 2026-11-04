@@ -20,6 +20,7 @@ import {
   traceAlgorithm,
   type Application,
   type BlockKind,
+  type Edges,
   type LabelRun,
   type MasterStep,
   type Pacing,
@@ -148,6 +149,8 @@ import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
 import {
+  ownName,
+  sceneEdges,
   sceneLabel,
   scenePauses,
   sceneSteps,
@@ -262,11 +265,12 @@ export type PreparedComponent = {
    */
   pauses: { labels: string[]; runs: Record<string, LabelRuns> };
   /**
-   * The steps pausing at the labels given, and what follows from them: the values the root reads
-   * for placement, measured with every value of their types, as each names a step of its own, and
-   * what each step lights in each listing. Made once per way of pausing.
+   * The steps pausing at the labels given, opening and closing each run of `edges` on a step, and
+   * what follows from them: the values the root reads for placement, measured with every value of
+   * their types, as each names a step of its own, and what each step lights in each listing. Made
+   * once per way of pausing.
    */
-  paced: (pauses: Pauses) => PacedSteps;
+  paced: (pauses: Pauses, edges?: Edges) => PacedSteps;
   /** The scenes the presentation plays, in order (see storyboard.server.ts). */
   storyboard: Storyboard;
   /**
@@ -620,7 +624,8 @@ function paced(
 }
 
 /** How a source pauses, as a key, for the steps paced so (see PreparedComponent.paced). */
-const pausesKey = (pauses: Pauses) => [...pauses].sort().join(',');
+const pausesKey = (pauses: Pauses, edges?: Edges) =>
+  `${[...pauses].sort().join(',')}|${edges ? `${edges.label}#${edges.run ?? ''}` : ''}`;
 
 /**
  * Each step as two, the state just before its code and just after it: the events up to the code,
@@ -1600,14 +1605,14 @@ function prepareViews(
     // bounded only as the source's (algorithmLimits); a scene pausing so is held to what one
     // presentation shows, by tracing it as a scene.
     const tracedBy = new Map<string, MasterStep[]>();
-    const tracedSteps = (pauses: Pauses): MasterStep[] => {
-      const key = pausesKey(pauses);
+    const tracedSteps = (pauses: Pauses, edges?: Edges): MasterStep[] => {
+      const key = pausesKey(pauses, edges);
       const made = tracedBy.get(key);
       if (made) return made;
       const steps =
         key === pausesKey(new Set(labelNames)) && master.length <= algorithmLimits.maximumSteps + 1
           ? master
-          : paced(source, algorithm, input, domain, { ...pacing, pauses }, keep).steps;
+          : paced(source, algorithm, input, domain, { ...pacing, pauses, edges }, keep).steps;
       tracedBy.set(key, steps);
       return steps;
     };
@@ -1615,7 +1620,8 @@ function prepareViews(
       scenes,
       master,
       labelNames,
-      (scene) => tracedSteps(scenePauses(scene))
+      (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene)),
+      Boolean(listing)
     );
     // Reported once the view's own problems are cleared, which may be why nothing is shown.
     if ((unshown.length || sceneProblems.length) && !viewProblems.length)
@@ -1963,11 +1969,11 @@ function prepareViews(
     );
     // The steps each way of pausing makes, with what follows from them, made once each.
     const pacedBy = new Map<string, PacedSteps>();
-    const pacedSteps = (pauses: Pauses): PacedSteps => {
-      const key = pausesKey(pauses);
+    const pacedSteps = (pauses: Pauses, edges?: Edges): PacedSteps => {
+      const key = pausesKey(pauses, edges);
       const made = pacedBy.get(key);
       if (made) return made;
-      const steps = tracedSteps(pauses);
+      const steps = tracedSteps(pauses, edges);
       const result: PacedSteps = {
         steps,
         // By the page's states, each step's before and after (see phasesOf).
@@ -2176,13 +2182,15 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   const entries = scenes.flatMap((scene, sceneIndex) => {
-    const run = prepared.paced(scenePauses(scene));
-    return (scene.frame ? [0] : sceneSteps(scene, run.steps)).map((index) => ({
-      scene,
-      sceneIndex,
-      run,
-      index
-    }));
+    const run = prepared.paced(scenePauses(scene), sceneEdges(scene));
+    return (scene.frame ? [0] : sceneSteps(scene, run.steps, Boolean(prepared.listings))).map(
+      (index) => ({
+        scene,
+        sceneIndex,
+        run,
+        index
+      })
+    );
   });
   const master = entries.map(({ scene, run, index }) =>
     scene.frame
@@ -2202,7 +2210,7 @@ export async function bundlePresentation(
     );
   const single = scenes.length === 1 && !scenes[0].frame;
   const labels = entries.map(({ scene, run, index }) => {
-    const own = run.steps[index].name ?? `Step ${index + 1}`;
+    const own = ownName(scene, run.steps[index]);
     return single ? own : sceneLabel(scene, own);
   });
   // Each step's placements and lit code, from its run's, by the page's states (see phasesOf).
