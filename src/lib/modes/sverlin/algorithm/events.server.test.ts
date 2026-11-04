@@ -81,7 +81,7 @@ describe('the event log', () => {
     const { steps: trace } = traceAlgorithm(body, undefined, domain, {
       pauses: new Set(['mark'])
     });
-    expect(trace).toHaveLength(2);
+    expect(trace).toHaveLength(3);
     expect(trace[0].events).toHaveLength(maximumStepEvents);
     expect(trace[0].events?.at(-1)?.kind).toBe('write');
     expect(trace[0].dropped).toBeGreaterThan(4000);

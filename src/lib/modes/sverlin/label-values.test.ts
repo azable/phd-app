@@ -84,7 +84,7 @@ describe('labels read in the view', () => {
       prepared
         .paced(new Set(['insert']))
         .steps.map((step) => step.labelled?.['insert.key']?.map((run) => run.state.value))
-    ).toEqual([undefined, [2], [8], [1]]);
+    ).toEqual([undefined, [2], [8], [1], undefined]);
   });
 
   it('name a label by its full name only, refusing a shorter ending even where unique', () => {

@@ -14,6 +14,7 @@ import {
   type MasterStep,
   type Stop
 } from './algorithm/interpret.server';
+import { momentTarget } from './label-values';
 
 /** One scene as written. */
 export type Scene = {
@@ -311,14 +312,32 @@ function sceneOf(
   };
 }
 
+/** What a scene's steps are drawn from, besides the steps themselves. */
+export type SceneView = {
+  /** Whether the view places a listing, whose lit code is then part of each step's picture. */
+  listed?: boolean;
+  /** What each <When> names: a label's full name, or a stop as momentTarget gives it. */
+  whens?: readonly string[];
+  /** The variables the view reads, the only ones a step's picture is drawn from; else every one. */
+  reads?: readonly string[];
+};
+
+/** A step a scene leaves out, drawing what the step before it, `like`, drew. */
+export type LeftOutStep = { scene: Scene; step: number; like: number };
+
 /**
  * The steps a scene shows, by their index among the run's, paced as it pauses with its edges (see
  * Edges in algorithm/interpret.server.ts): from its :before to its :after, the whole case's or those
  * of the runs of the label it is within (the nth only), with the steps it pauses at between; then
- * the first or the last where it is at one. A step drawing what the step before it drew is left out, the
- * code it lights included where the view places a listing (`listed`).
+ * the first or the last where it is at one. A step the view draws from exactly what it drew the step
+ * before from is left out, as it draws the same picture, and added to `leftOut`.
  */
-export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = false): number[] {
+export function sceneSteps(
+  scene: Scene,
+  steps: readonly MasterStep[],
+  view: SceneView = {},
+  leftOut?: LeftOutStep[]
+): number[] {
   let chosen = steps.map((_, index) => index);
   if (scene.within) {
     const { label, run } = scene.within;
@@ -346,20 +365,51 @@ export function sceneSteps(scene: Scene, steps: readonly MasterStep[], listed = 
   }
   if (scene.at === 'before') return chosen.slice(0, 1);
   if (scene.at === 'after') return chosen.slice(-1);
-  return chosen.filter(
-    (index, at) => at === 0 || !drawnAlike(steps[chosen[at - 1]], steps[index], listed)
-  );
+  const absent = '\u0000absent';
+  const drawnFrom = (index: number) =>
+    JSON.stringify([
+      view.reads
+        ? view.reads.map((name) => (name in steps[index].state ? steps[index].state[name] : absent))
+        : steps[index].state,
+      steps[index].held,
+      view.listed && steps[index].trail,
+      (view.whens ?? []).map((target) => atWhen(target, steps, index))
+    ]);
+  const shown: number[] = [];
+  for (const index of chosen) {
+    const like = shown.at(-1);
+    const step = steps[index];
+    if (
+      like !== undefined &&
+      !step.labelled &&
+      !step.applied &&
+      drawnFrom(like) === drawnFrom(index)
+    )
+      leftOut?.push({ scene, step: index, like });
+    else shown.push(index);
+  }
+  return shown;
 }
 
 /**
- * Whether a step draws what the step before it drew: the same state, with nothing its own code
- * gave, as a comparison, the same marks held, and where a listing shows, the same code lit.
+ * Whether a <When> naming `target` draws at step `at` of a case's steps: inside a run of its label,
+ * or at the case's :before or :after.
  */
-const drawnAlike = (before: MasterStep, step: MasterStep, listed: boolean) =>
-  !step.labelled &&
-  !step.applied &&
-  JSON.stringify([before.state, before.held, listed && before.trail]) ===
-    JSON.stringify([step.state, step.held, listed && step.trail]);
+export function atWhen(target: string, steps: readonly MasterStep[], at: number): boolean {
+  if (target === momentTarget('before')) return at === 0;
+  if (target === momentTarget('after')) return at === steps.length - 1;
+  return steps[at].inside?.includes(target) ?? false;
+}
+
+/** The warning for a step a scene leaves out, naming it and the step whose picture it repeats. */
+export function leftOutWarning(
+  { scene, step, like }: LeftOutStep,
+  steps: readonly MasterStep[],
+  scenes: number
+): string {
+  const name = (index: number) => steps[index].name ?? `step ${index + 1}`;
+  return `${scenes > 1 ? `In the scene ${scene.name}, ` : ''}${name(like)} and ${name(step)} draw the same picture, so ${name(step)} is left out: pause at what changes the picture, or show what this step means with <When of="@label">.`;
+}
 
 /** The stops a scene pauses at: those its pause names, and no others. */
 export const scenePauses = (scene: Scene): Set<string> => new Set(scene.pause ?? []);
@@ -398,7 +448,7 @@ export function storyboardOf(
   masterOf: (scene: Scene) => readonly MasterStep[],
   labels: readonly string[],
   paced: (scene: Scene) => readonly MasterStep[],
-  listed = false
+  view: SceneView = {}
 ): { storyboard: Storyboard; problems: { message: string; scene: Scene }[] } {
   const problems: { message: string; scene: Scene }[] = [];
   const known = (each: string) => labels.includes(each);
@@ -433,7 +483,7 @@ export function storyboardOf(
       return [];
     }
     const own = paced(scene);
-    const chosen = sceneSteps(scene, own, listed);
+    const chosen = sceneSteps(scene, own, view);
     const names = chosen.map((index) => own[index].name ?? '');
     return scenes.length === 1 ? names : names.map((name) => sceneLabel(scene, name));
   });

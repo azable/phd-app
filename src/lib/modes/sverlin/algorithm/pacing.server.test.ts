@@ -29,11 +29,12 @@ const equal = 'ℓpassˑcheckˑequal';
 
 describe('pauses at labels', () => {
   it('step at the end of each run of a label paused at, from the state before it to the state after', () => {
-    // [3, 8, 5, 2], looking for 5: the start and three counts; the loop's exit only drops i, so it
-    // is no step.
+    // [3, 8, 5, 2], looking for 5: the start, three counts, and the end, :after, without i.
     const trace = steps(search, { pauses: pausedAt('start', 'pass.count') });
-    expect(checked(trace)).toEqual([0, 1, 2, 3]);
-    expect(trace.at(-1)?.state.i).toBe(2);
+    expect(checked(trace)).toEqual([0, 1, 2, 3, 3]);
+    expect(trace.at(-2)?.state.i).toBe(2);
+    expect(trace.at(-1)?.name).toBe(':after');
+    expect(trace.at(-1)?.state).not.toHaveProperty('i');
     expect(
       trace.slice(1, 4).map(({ before, state }) => [before?.state.checked, state.checked])
     ).toEqual([
@@ -56,7 +57,7 @@ describe('pauses at labels', () => {
 
   it('keep what a labelled expression a view is typed by computed, at the step that computes it', () => {
     const trace = steps(search, { pauses: pausedAt('start', 'pass.count', 'pass.check') }, shown);
-    // The start, then each count and each check; the check finding 5 ends the search.
+    // The start, then each count and each check, the check finding 5 ending the search, then the end.
     expect(
       trace.map(({ state, applied }) => [
         state.checked,
@@ -69,7 +70,8 @@ describe('pauses at labels', () => {
       [2, []],
       [2, ['8 = 5']],
       [3, []],
-      [3, ['5 = 5']]
+      [3, ['5 = 5']],
+      [3, []]
     ]);
     const [, , check] = trace;
     expect(check.unit).toBeDefined();
@@ -81,11 +83,12 @@ describe('pauses at labels', () => {
     expect(checks.map(({ before, state }) => [before?.state.checked, state.checked])).toEqual([
       [1, 1],
       [2, 2],
+      [3, 3],
       [3, 3]
     ]);
-    expect(checks.every(({ applied }) => applied?.[equal]?.length === 1)).toBe(true);
+    expect(checks.slice(0, -1).every(({ applied }) => applied?.[equal]?.length === 1)).toBe(true);
     // Pausing at the pass as well, which ends after each check, adds a step that changes nothing.
-    expect(steps(search, { pauses: pausedAt('pass', 'pass.check') }, shown)).toHaveLength(6);
+    expect(steps(search, { pauses: pausedAt('pass', 'pass.check') }, shown)).toHaveLength(7);
     // Pausing nowhere leaves the end alone.
     expect(steps(search, { pauses: pausedAt() }, shown)).toHaveLength(1);
   });
@@ -109,7 +112,11 @@ describe('pauses at labels', () => {
       { labels: new Set(['pass.look']) }
     ).steps;
     expect(trace.map(({ labelled }) => labelled?.['pass.look']?.[0].state.value)).toEqual([
-      3, 8, 5, 2
+      3,
+      8,
+      5,
+      2,
+      undefined
     ]);
   });
 
@@ -132,8 +139,9 @@ describe('pauses at labels', () => {
       [undefined, 0],
       [0, 1],
       [1, 2],
-      // The pass that breaks out; the loop's exit after it only drops i, so it is no step.
-      [2, 3]
+      // The pass that breaks out, then the end, :after, from after the loop, without i.
+      [2, 3],
+      [undefined, 3]
     ]);
   });
 
@@ -144,7 +152,7 @@ describe('pauses at labels', () => {
     expect(trace[1].state).toMatchObject({ a: 2, b: 2 });
   });
 
-  it('end with a step for what runs after the last step, only where it changes a value in scope', () => {
+  it('end with a step of its own, :after, for what runs after the last step', () => {
     // A write after the loop to what the view does not draw is no step of its own, but makes the
     // end one, the loop's exit in it.
     const after = steps(`${search}\n@more[checked++;]`, { pauses: pausedAt('pass.check') }, shown);
@@ -154,9 +162,9 @@ describe('pauses at labels', () => {
     expect(after.at(-1)?.events?.map(({ kind }) => kind)).toEqual(
       expect.arrayContaining(['exit', 'write'])
     );
-    // A loop's last test changes nothing.
+    // A loop's last test changes nothing, and the end is still a step of its own.
     const counting = '@start[let n = Int(0);]\nwhile ((n < 2)) @up{\n  n++;\n}';
-    expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2]);
+    expect(steps(counting).map(({ state }) => state.n)).toEqual([0, 1, 2, 2]);
   });
 
   it('refuse two labels on the same code, which could never pause or draw apart', () => {
@@ -186,14 +194,18 @@ describe('pauses at labels', () => {
       ['@outer.first#1', 2],
       ['@outer.take#1', 3],
       ['@outer.take#2', 4],
-      ['@outer#1', 4]
+      ['@outer#1', 4],
+      [':after', 4]
     ]);
     // Every take is inside the outer label's run.
     expect(all.slice(1, 3).every(({ inside }) => inside?.includes('outer'))).toBe(true);
     // Paused at the outer label alone, its one step comes after the loop.
     expect(
       steps(merged, { pauses: new Set(['outer']) }).map(({ name, state }) => [name, state.n])
-    ).toEqual([['@outer#1', 4]]);
+    ).toEqual([
+      ['@outer#1', 4],
+      [':after', 4]
+    ]);
     // Labelled statements in a row each count once, the outer label's end named after it.
     const rows = `
   let n = Int(0);
@@ -202,7 +214,8 @@ describe('pauses at labels', () => {
     expect(steps(rows).map(({ name, state }) => [name, state.n])).toEqual([
       ['@outer.first#1', 1],
       ['@outer.second#1', 2],
-      ['@outer#1', 2]
+      ['@outer#1', 2],
+      [':after', 2]
     ]);
   });
 
@@ -220,7 +233,8 @@ describe('pauses at labels', () => {
       ['@call#2', 1],
       ['@call.deeper#1', 0],
       ['@call#1', 0],
-      ['@go#1', undefined]
+      ['@go#1', undefined],
+      [':after', undefined]
     ]);
   });
 
@@ -286,7 +300,8 @@ describe('no code outside a label, in an authored source', () => {
 `;
 
   it('runs a for header’s parts in order: the start, the test before each pass, the move after it', () => {
-    // [3, 8, 5, 2], looking for 5: the third pass breaks, so no move or test follows it.
+    // [3, 8, 5, 2], looking for 5: the third pass breaks, so no move or test follows it, only the
+    // end.
     expect(names(labelled)).toEqual([
       '@start#1',
       '@first#1',
@@ -306,7 +321,8 @@ describe('no code outside a label, in an authored source', () => {
       '@pass.count#3',
       '@pass.check.found#3',
       '@pass.check#3',
-      '@pass#3'
+      '@pass#3',
+      ':after'
     ]);
   });
 
@@ -326,7 +342,8 @@ describe('no code outside a label, in an authored source', () => {
       true,
       false
     ]);
-    expect(trace.steps.at(-1)?.name).toBe('@more#5');
+    expect(trace.steps.at(-2)?.name).toBe('@more#5');
+    expect(trace.steps.at(-1)?.name).toBe(':after');
   });
 
   it('refuses a statement outside every label, at the top level and in a function', () => {

@@ -49,7 +49,7 @@ describe('algorithm interpretation', () => {
         @next[i++;]
       }
     `);
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 0, 1, 1]);
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 0, 1, 1, 1]);
     expect(trace[0].state).toEqual({ values: [3, 8, 5], i: -1, found: false });
     expect(trace[4].state).toEqual({ values: [3, 8, 5], i: 1, found: true });
   });
@@ -140,7 +140,12 @@ describe('algorithm interpretation', () => {
     expect(interpretAlgorithm(body).length).toBeGreaterThan(algorithmLimits.maximumSteps);
     // Pausing at the passes alone shows three steps.
     const passes = traceAlgorithm(body, undefined, atoms, { pauses: new Set(['pass']) });
-    expect(passes.steps.map(({ name }) => name)).toEqual(['@pass#1', '@pass#2', '@pass#3']);
+    expect(passes.steps.map(({ name }) => name)).toEqual([
+      '@pass#1',
+      '@pass#2',
+      '@pass#3',
+      ':after'
+    ]);
     // Pausing at each step shows more than one presentation can, and says where to pause less.
     expect(() =>
       traceAlgorithm(body, undefined, atoms, { pauses: new Set(['pass.step']) })
@@ -173,6 +178,7 @@ describe('input and step selection', () => {
     expect(trace[0].before?.state).toEqual({ values: [2, 1], label: 'pair' });
     expect(trace.map(({ state }) => state)).toEqual([
       { values: [1, 2], label: 'pair', t: 2 },
+      { values: [1, 2], label: 'pair', t: 2, swapped: true },
       { values: [1, 2], label: 'pair', t: 2, swapped: true }
     ]);
     expect(input.state.values).toEqual([2, 1]);

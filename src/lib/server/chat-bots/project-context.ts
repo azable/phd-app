@@ -127,6 +127,8 @@ export type AiPresentationSummary = {
   contentSha256: string;
   /** How large it draws on a typical stage, where the server laid it out. */
   readability?: string;
+  /** Each step a scene leaves out, drawing what the step before it drew (see sceneSteps). */
+  warnings?: string[];
 };
 
 /** Full details resolved for an event explicitly selected by the user. */
@@ -878,7 +880,8 @@ function presentationSummary(
     contentSha256: (scripted ? presentation.javascript : presentation.rendered).sha256,
     ...(scripted && presentation.readability
       ? { readability: readabilityText(presentation.readability) }
-      : {})
+      : {}),
+    ...(scripted && presentation.warnings?.length ? { warnings: presentation.warnings } : {})
   };
 }
 

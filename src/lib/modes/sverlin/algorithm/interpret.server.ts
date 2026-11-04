@@ -669,10 +669,8 @@ class Interpreter {
     const opening = this.#state(this.#root, this.#topLevel);
     this.#since = this.#sinceNow(this.#root, this.#topLevel);
     this.#execute();
-    // What runs after the last step is a step of its own where it changes a value still in scope,
-    // or declares one; variables only leaving scope are no step, and the last step is the end.
-    // Without steps, it is the only one.
-    const last = this.#trace.at(-1);
+    // The end is a step of its own, :after; a scene leaves it out where it draws what the step
+    // before drew (see sceneSteps in storyboard.server.ts).
     this.#record(
       this.#root,
       this.#root,
@@ -684,17 +682,6 @@ class Interpreter {
       undefined,
       { name: ':after', at: 'after' }
     );
-    const end = this.#trace.at(-1)!;
-    if (
-      last &&
-      Object.entries(end.state).every(
-        ([name, value]) =>
-          name in last.state && JSON.stringify(last.state[name]) === JSON.stringify(value)
-      )
-    ) {
-      this.#trace.pop();
-      last.edge = 'after';
-    }
     if ((this.#trace[0]?.moment ?? 0) <= 0)
       for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
     this.opening = {

@@ -151,12 +151,12 @@ describe('loops', () => {
       }
     `;
     // Pausing at the start, the passes down, and the takes: a labelled loop steps once per pass, and
-    // the end, which only drops the loop's variables, is no step.
+    // the end, :after, is a step of its own, without the loop's variables.
     const trace = run(loops, {
       pauses: new Set(['start', 'down', 'take'])
     });
     expect(trace.slice(1, 4).map(({ state }) => state.last)).toEqual([5, 3, 1]);
-    expect(trace.slice(4).map(({ state }) => state.j)).toEqual([0, 2, 4]);
+    expect(trace.slice(4).map(({ state }) => state.j)).toEqual([0, 2, 4, undefined]);
   });
 
   it('take any header: a counter declared outside, changed in the body, or a bound that grows', () => {
@@ -170,10 +170,10 @@ describe('loops', () => {
         @bump[k++;]
       }
     `);
-    // @grow pauses at each run, the one finding values long enough too. The last test only drops
-    // k, so the end is no step: the last is the bump to 7.
-    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3]);
-    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7]);
+    // @grow pauses at each run, the one finding values long enough too, then the bump to 7, then
+    // the end, :after, without k.
+    expect(trace.map(({ state }) => state.i)).toEqual([0, 0, 1, 2, 3, 3, 3]);
+    expect(trace.slice(4).map(({ state }) => state.k)).toEqual([2, 7, undefined]);
   });
 
   it('run a do...while body once before its test', () => {
@@ -183,7 +183,7 @@ describe('loops', () => {
         @up[n++;]
       } while ((n < 0));
     `);
-    // The start, then the body's step; the test that fails after it changes nothing, so no end.
-    expect(trace.map(({ state }) => state.n)).toEqual([0, 1]);
+    // The start, the body's step, and the end, :after, which the failing test changes nothing for.
+    expect(trace.map(({ state }) => state.n)).toEqual([0, 1, 1]);
   });
 });

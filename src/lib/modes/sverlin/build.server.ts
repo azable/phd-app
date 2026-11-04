@@ -50,6 +50,7 @@ export async function buildBatch(
           kinds: prepared.design.tags,
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
+          ...(bundle.warnings ? { warnings: bundle.warnings } : {}),
           runs: prepared.pauses.runs,
           structures: prepared.design.structures,
           ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),

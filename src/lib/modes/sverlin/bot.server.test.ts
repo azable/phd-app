@@ -251,7 +251,7 @@ describe('recorded steps in the assistant context', () => {
   it('gives the steps the current source records, with the variables in scope', () => {
     // Named by their labels' runs: the input as given (here none), last set, n set and tested, a
     // step per pass with n moved and tested again, then the step after the loop, where n is out of
-    // scope.
+    // scope, and the end.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
         { name: ':before', state: {} },
@@ -264,7 +264,8 @@ describe('recorded steps in the assistant context', () => {
         { name: '@step#2', state: { last: 1, n: 1 } },
         { name: '@onward#2', state: { last: 1, n: 2 } },
         { name: '@guard#3', state: { last: 1, n: 2 } },
-        { name: '@done#1', state: { last: 1, done: true } }
+        { name: '@done#1', state: { last: 1, done: true } },
+        { name: ':after', state: { last: 1, done: true } }
       ]
     });
   });
@@ -279,7 +280,8 @@ describe('recorded steps in the assistant context', () => {
         { name: '@step#1', state: { last: 0, n: 0 } },
         { name: '@onward#1', state: { last: 0, n: 1 } },
         { name: '@guard#2', state: { last: 0, n: 1 } },
-        { name: '@done#1', state: { last: 0, done: true } }
+        { name: '@done#1', state: { last: 0, done: true } },
+        { name: ':after', state: { last: 0, done: true } }
       ]
     });
     expect(

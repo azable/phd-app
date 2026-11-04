@@ -163,6 +163,9 @@ import {
   scenePauses,
   sceneSteps,
   storyboardOf,
+  atWhen,
+  leftOutWarning,
+  type LeftOutStep,
   type Scene,
   type Storyboard
 } from './storyboard.server';
@@ -240,6 +243,8 @@ export type SvelteBundle = {
   origins: Record<string, DesignOrigin>;
   /** The <Node> tags it leaves out, by their line:column. */
   leftOut: string[];
+  /** Each step a scene leaves out, drawing what the step before it drew (see sceneSteps). */
+  warnings?: string[];
   /**
    * Every step laid out on the server, which the page is given: how long working it out took, the
    * steps the view failed to draw, and what each step draws (see layout.server.ts).
@@ -348,6 +353,8 @@ export type PreparedComponent = {
   histories?: Record<string, { operator: string; start: number; end: number }>;
   /** The labels <When>s draw their contents in the runs of, by full name, by key. */
   during?: Record<string, string>;
+  /** The variables the view reads, which a step draws from (see sceneSteps). */
+  viewReads: string[];
   /** The view's nodes and renders, and its views, for what each presentation leaves out. */
   leftOut?: { model: LeftOutModel; components: string[] };
 };
@@ -1520,12 +1527,12 @@ function prepareViews(
       traced.steps;
     const inputOf = (shown?: string) =>
       caseInputsOf.find(({ name }) => name === shown)?.input ?? input;
+    // The variables the view reads: a step draws from these, and from no other.
+    const viewReads = [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
+      stateNames.includes(name)
+    );
     const runs = labelRuns(master, {
-      state: new Set(
-        [...readsOf(ast.html as Parameters<typeof readsOf>[0])].filter((name) =>
-          stateNames.includes(name)
-        )
-      ),
+      state: new Set(viewReads),
       labels: new Set(Object.values(labelled).map(({ label }) => label)),
       operators: new Set(shown.keys()),
       during: new Set(Object.values(during))
@@ -1563,25 +1570,6 @@ function prepareViews(
               }
             : kind;
     });
-    // A chain's branches take turns in one place: none may show at a step another shows at. The
-    // master pauses at every label, so every step any pacing has is among its steps.
-    const overlaps = whens.chains.flatMap(({ start, keys }) => {
-      const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
-      const both = master.flatMap((step, at) => {
-        const shown = labels.filter((label) => atWhen(label, master, at));
-        return shown.length > 1 ? [{ step: step.name ?? '', shown }] : [];
-      });
-      if (!both.length) return [];
-      const [{ shown }] = both;
-      const steps = [...new Set(both.map(({ step }) => step))];
-      return [
-        new InvalidSvelteSourceError(
-          `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}, inside runs of both; a <OneOf>'s branches take turns in one place, so give each a label whose runs never meet the others', or write them as <When>s of their own.`,
-          { code: 'view_label', start: sourcePosition(source, start) }
-        )
-      ];
-    });
-    if (overlaps.length) throw InvalidSvelteSourceError.combine(overlaps);
     // A name nothing gives the page would fail only in the browser.
     const unread = unknownReadOf(
       ast.html,
@@ -1639,12 +1627,13 @@ function prepareViews(
       tracedBy.set(key, steps);
       return steps;
     };
+    const sceneView = { listed: Boolean(listing), whens: Object.values(during), reads: viewReads };
     const { storyboard, problems: sceneProblems } = storyboardOf(
       scenes,
       (scene) => masterOf(scene.case),
       labelNames,
       (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene), scene.case),
-      Boolean(listing)
+      sceneView
     );
     // Reported once the view's own problems are cleared, which may be why nothing is shown.
     if ((unshown.length || uncased.length || sceneProblems.length) && !viewProblems.length)
@@ -1659,6 +1648,32 @@ function prepareViews(
             })
         )
       ]);
+    // A chain's branches take turns in one place: none may show at a step another shows at, among
+    // the steps each scene plays.
+    const overlaps =
+      storyboard.scenes.length && !viewProblems.length
+        ? whens.chains.flatMap(({ start, keys }) => {
+            const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
+            const both = storyboard.scenes.flatMap((scene) => {
+              if (scene.frame) return [];
+              const own = tracedSteps(scenePauses(scene), sceneEdges(scene), scene.case);
+              return sceneSteps(scene, own, sceneView).flatMap((at) => {
+                const shown = labels.filter((label) => atWhen(label, own, at));
+                return shown.length > 1 ? [{ step: own[at].name ?? '', shown }] : [];
+              });
+            });
+            if (!both.length) return [];
+            const [{ shown }] = both;
+            const steps = [...new Set(both.map(({ step }) => step))];
+            return [
+              new InvalidSvelteSourceError(
+                `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; a <OneOf>'s branches take turns in one place, so give each a label whose runs never meet the others', give each outcome a label of its own, or write them as <When>s of their own.`,
+                { code: 'view_label', start: sourcePosition(source, start) }
+              )
+            ];
+          })
+        : [];
+    if (overlaps.length) throw InvalidSvelteSourceError.combine(overlaps);
     const steps = storyboard.steps;
     // Pausing at every label, the finest the steps go, whose states those of any other pauses are
     // among.
@@ -2109,6 +2124,7 @@ function prepareViews(
       ...(Object.keys(labelled).length ? { labelled } : {}),
       ...(Object.keys(histories).length ? { histories } : {}),
       ...(Object.keys(during).length ? { during } : {}),
+      viewReads,
       leftOut: {
         model: leftOut,
         components: [...Object.keys(components), ...paths.values()]
@@ -2200,16 +2216,24 @@ export async function bundlePresentation(
   // Each scene's steps, paced as it pauses, in storyboard order; a frame is the input as given,
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
+  // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
+  const warnings: string[] = [];
   const entries = scenes.flatMap((scene, sceneIndex) => {
     const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case);
-    return (scene.frame ? [0] : sceneSteps(scene, run.steps, Boolean(prepared.listings))).map(
-      (index) => ({
-        scene,
-        sceneIndex,
-        run,
-        index
-      })
-    );
+    const view = {
+      listed: Boolean(prepared.listings),
+      whens: Object.values(prepared.during ?? {}),
+      reads: prepared.viewReads
+    };
+    const left: LeftOutStep[] = [];
+    const chosen = scene.frame ? [0] : sceneSteps(scene, run.steps, view, left);
+    warnings.push(...left.map((each) => leftOutWarning(each, run.steps, scenes.length)));
+    return chosen.map((index) => ({
+      scene,
+      sceneIndex,
+      run,
+      index
+    }));
   });
   const master = entries.map(({ scene, run, index }) =>
     scene.frame
@@ -2426,7 +2450,8 @@ export async function bundlePresentation(
     stepSignature: prepared.signature,
     variant: values,
     origins: variant.origins,
-    leftOut: leftOut.nodes
+    leftOut: leftOut.nodes,
+    ...(warnings.length ? { warnings } : {})
   };
 }
 
@@ -4435,13 +4460,6 @@ function labelRuns(
     if (changes) count.drawn++;
   }
   return runs;
-}
-
-/** Whether a <When> draws at master step `at`: inside a run of its label, or the first or last step. */
-function atWhen(target: string, steps: readonly MasterStep[], at: number): boolean {
-  if (target === momentTarget('before')) return at === 0;
-  if (target === momentTarget('after')) return at === steps.length - 1;
-  return steps[at].inside?.includes(target) ?? false;
 }
 
 /** What a <When> names, as its `of` is written. */

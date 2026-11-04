@@ -47,9 +47,10 @@ describe('lighting', () => {
   });
 
   it('lights nothing at the last step, after the last step’s code: it is no run of a label', () => {
-    // The loop's exit only drops found and i, so it is no step: the page rests on the check that
-    // found 8.
-    expect(lightSteps(listing, traced.steps)).toHaveLength(2);
+    // The check that found 8, then the end, :after, a step of its own lighting nothing.
+    const atEnd = lightSteps(listing, traced.steps);
+    expect(atEnd).toHaveLength(3);
+    expect(shown(listing, atEnd[2])).toEqual({ current: [], earlier: [] });
     // A declaration after the loop makes the end a step, holding the test that held, the stop,
     // and the exit.
     const ending = traceAlgorithm(

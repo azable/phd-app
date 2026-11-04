@@ -25,6 +25,7 @@ describe('scope', () => {
       ['values'],
       ['values', 'i', 'seen'],
       ['values', 'i', 'seen'],
+      ['values', 'done'],
       ['values', 'done']
     ]);
     expect(trace[1].types).toMatchObject({ i: 'Position', seen: 'Int' });

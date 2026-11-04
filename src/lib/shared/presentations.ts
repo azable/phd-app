@@ -134,6 +134,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
   /** How large it draws on a typical stage, where the server laid it out. */
   readability: v.optional(readabilitySchema),
+  /** Each step a scene leaves out, drawing what the step before it drew, for the assistant. */
+  warnings: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(200))),
   generationEventId: v.optional(positiveSchema)
 });
 

@@ -246,7 +246,9 @@ describe('tokens naming places in a listing', () => {
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
     expect(steps[1]).toEqual(['@key', '@i']);
     expect(steps[2]).toEqual(['@j']);
-    expect(steps.at(-1)).toEqual(['@j', '@key']);
+    expect(steps.at(-2)).toEqual(['@j', '@key']);
+    // The end, :after, lights no code, so it touches nothing.
+    expect(steps.at(-1)).toEqual([]);
   });
 
   it('touch nothing without lit code', () => {

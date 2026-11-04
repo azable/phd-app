@@ -27,14 +27,14 @@ describe('references', () => {
       const front = Front(queue[1]);]
       @leave[queue.shift();]
     `);
-    expect(trace.map(({ state }) => state.front)).toEqual([7, 7]);
+    expect(trace.map(({ state }) => state.front)).toEqual([7, 7, 7]);
     expect(trace[0].types.front).toBe('Front');
     expect(
       whereIs(
         `@start[let queue = Values([4, 7, 9]); const front = Front(queue[1]);] @leave[queue.shift();]`,
         'front'
       )
-    ).toEqual(['queue[1]', 'queue[0]']);
+    ).toEqual(['queue[1]', 'queue[0]', 'queue[0]']);
   });
 
   it('refer to nothing once their element is gone', () => {
@@ -43,7 +43,7 @@ describe('references', () => {
         `@start[let queue = Values([4, 7]); const front = Front(queue[0]);] @leave[queue.shift();]`,
         'front'
       )
-    ).toEqual(['queue[0]', undefined]);
+    ).toEqual(['queue[0]', undefined, undefined]);
   });
 
   it('follow the original of a copied value, not the copy', () => {
@@ -52,7 +52,7 @@ describe('references', () => {
         `@start[const values = Values([5, 2]); const r = Front(values[0]);] @copy[values[1] = values[0];]`,
         'r'
       )
-    ).toEqual(['values[0]', 'values[0]']);
+    ).toEqual(['values[0]', 'values[0]', 'values[0]']);
   });
 
   it('are made from an element of a collection of their type', () => {

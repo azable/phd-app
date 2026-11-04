@@ -33,8 +33,8 @@ describe('positions', () => {
         @up[i++;]
       }
     `);
-    // The loop's last test, after the last i++, changes nothing, so it is no step.
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3]);
+    // The loop's last test, after the last i++, changes nothing; the end is a step of its own.
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 1, 2, 3, 3]);
     expect(trace[0].types.i).toBe('Position');
   });
 
@@ -54,10 +54,9 @@ describe('positions', () => {
     `,
       { pauses: new Set(['start', 'count']) }
     );
-    // Pausing at the start and each count; the loop's last test changes nothing,
-    // so the last count is the last step.
-    expect(trace.map(({ state }) => state.merged)).toEqual([[], [1], [1, 2], [1, 2, 3]]);
-    expect(trace.at(-1)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
+    // Pausing at the start and each count, then the end, :after.
+    expect(trace.map(({ state }) => state.merged)).toEqual([[], [1], [1, 2], [1, 2, 3], [1, 2, 3]]);
+    expect(trace.at(-2)?.state).toMatchObject({ i: 1, j: 2, k: 2 });
   });
 
   it('hold a whole number from one before the start to their collection type’s max', () => {
@@ -71,7 +70,7 @@ describe('positions', () => {
       @far[i = 8;
       i = 0;]
     `);
-    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 2, 4, 0]);
+    expect(trace.map(({ state }) => state.i)).toEqual([-1, 0, 2, 4, 0, 0]);
     expect(() => run('const values = Values([3, 8, 5]); let i = Position(-2);')).toThrow(
       /at least -1/
     );

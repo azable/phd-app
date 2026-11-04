@@ -90,6 +90,7 @@ describe('single-component Svelte compilation', () => {
       3,
       3,
       3,
+      undefined,
       undefined
     ]);
     expect(prepared.master.at(-1)?.state.found).toBe(3);
@@ -561,10 +562,10 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
     expect(prepared.design.starter['listing.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n step 1');
-    // The input as given, lighting nothing, then i set, each test, each pass's move, and the loop's
-    // end.
+    // The input as given, lighting nothing, then i set, each test, each pass's move, the loop's
+    // end, and the end of all, :after.
     const { lit } = prepared.paced(new Set(prepared.pauses.labels));
-    expect(lit.code).toHaveLength(8);
+    expect(lit.code).toHaveLength(9);
     expect(lit.code[0]).toEqual({ current: [], earlier: [] });
     const { javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n step 1');
@@ -1333,8 +1334,8 @@ describe('views of what a step computed', () => {
       ['1,5,4,2,3', ['5 > 4']],
       ['1,4,5,2,3', []]
     ]);
-    // Ten comparisons and six swaps, after the input as given.
-    expect(both).toHaveLength(17);
+    // Ten comparisons and six swaps, after the input as given, then the end.
+    expect(both).toHaveLength(18);
     // Not pausing at the comparisons, the sort plays through its swaps, each comparison leading up
     // to its swap and drawn there.
     const swaps = prepared.paced(new Set(['sweep.pair.swap'])).steps;
@@ -2025,14 +2026,14 @@ describe('<When of="@label">', () => {
       )
     );
     expect(Object.values(prepared.during ?? {})).toEqual(['#before', 'pass', '#after']);
-    // The last step ends the finishing statement, so the two would show at one step.
+    // The finishing statement and the end, :after, are steps of their own, so the two take turns.
     expect(() =>
       prepareSvelteComponent(
         caption(
           '<OneOf><When of="@finish">{@render Caption()}</When><When of=":after">{@render Caption()}</When></OneOf>'
         )
       )
-    ).toThrow('branches @finish and :after would both show');
+    ).not.toThrow();
   });
 
   it('takes a run of statements in a row to its last, the labels inside it included', () => {
@@ -2162,7 +2163,7 @@ describe('<OneOf> branches', () => {
         )
       )
     ).toThrow(
-      "The <OneOf>'s branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3, inside runs of both"
+      "The <OneOf>'s branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3;"
     );
     expect(() =>
       prepareSvelteComponent(
@@ -2198,7 +2199,8 @@ describe('the bundle', () => {
       .join(', ');
     const prepared = prepareSvelteComponent(dijkstra.replace(/pause="[^"]*"/u, `pause="${pause}"`));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
-    expect(labels.length).toBeGreaterThan(100);
+    // The steps drawing something new, those drawing what the step before drew left out.
+    expect(labels.length).toBeGreaterThan(60);
     expect(javascript.length).toBeLessThan(1024 * 1024);
   });
 });
