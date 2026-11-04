@@ -1,7 +1,7 @@
 /**
  * Props a view binds to its value, as `<Node stroke={this.visited} />` (see library/node/bound.ts):
  * the values each expression can take, worked out from the view's type before the algorithm runs,
- * and the variables saying which option each value takes, or for a length, its unit.
+ * and the variables saying which option each value takes, or for a length, its unit and anchor.
  */
 
 import type { AtomType } from './algorithm/atoms.server';
@@ -9,6 +9,8 @@ import type { DomainRegistry } from './algorithm/structures.server';
 import type { DesignSpace, DesignValue } from './design.server';
 import { viewThis } from './label-values';
 import {
+  anchorKey,
+  anchors,
   boundCapacity,
   boundHues,
   boundOptions,
@@ -18,6 +20,7 @@ import {
   orderKeys,
   orderedProps,
   orders,
+  starterAnchor,
   unitKey,
   valueKey,
   type BoundDomain,
@@ -297,6 +300,8 @@ export function boundDesign(bindings: readonly Binding[]): {
       const key = unitKey(kind, prop);
       space[key] = lengthUnits;
       starter[key] = starterUnit(Math.max(...(domain.values as number[])));
+      space[anchorKey(kind, prop)] = anchors;
+      starter[anchorKey(kind, prop)] = starterAnchor(prop);
       continue;
     }
     const options = boundOptions(prop);

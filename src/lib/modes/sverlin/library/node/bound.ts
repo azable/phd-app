@@ -146,3 +146,26 @@ export function boundLength(
     ? Math.max(0, value) * unit
     : undefined;
 }
+
+/** Where a bar sits along its length in its room: its start (top or left), centre, or end. */
+export const anchors = ['start', 'center', 'end'] as const;
+
+/** The variable placing a length's bar in its room, as Bar.height@anchor. */
+export const anchorKey = (kind: string, prop: string): string => `${kind}.${prop}@anchor`;
+
+/** A bar's anchor before the design gives one: standing on the bottom, or from the left. */
+export const starterAnchor = (prop: string): (typeof anchors)[number] =>
+  prop === 'height' ? 'end' : 'start';
+
+/** A bound length's anchor, by the design's variable of its kind, as flexbox places it. */
+export function boundAnchor(
+  design: Readonly<Record<string, unknown>>,
+  kind: string,
+  prop: string
+): 'flex-start' | 'center' | 'flex-end' {
+  const anchor = design[anchorKey(kind, prop)];
+  const placed = anchors.includes(anchor as (typeof anchors)[number])
+    ? (anchor as (typeof anchors)[number])
+    : starterAnchor(prop);
+  return placed === 'center' ? 'center' : placed === 'end' ? 'flex-end' : 'flex-start';
+}

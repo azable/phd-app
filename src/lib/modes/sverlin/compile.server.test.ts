@@ -2479,6 +2479,9 @@ describe('props bound to a view’s value', () => {
     expect(design.space['Bar.width@unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
     // The largest unit keeping 99, the largest Wide, within 200 pixels.
     expect(design.starter['Bar.width@unit']).toBe(2);
+    // A bar from the left, as width runs, until the design places it otherwise.
+    expect(design.space['Bar.width@anchor']).toEqual(['start', 'center', 'end']);
+    expect(design.starter['Bar.width@anchor']).toBe('start');
   });
 
   it.each([
@@ -2505,6 +2508,12 @@ describe('props bound to a view’s value', () => {
     expect(() => component('', '<Node><Node width={wide}>x</Node>{card}</Node>')).toThrow(
       /width is a length bound to a view's value/
     );
+  });
+
+  it('refuses an anchor written in the markup', () => {
+    expect(() =>
+      component('<View of="Wide" name="Bar"><Node height={this} anchor="start" /></View>')
+    ).toThrow(/takes no anchor: where a bar sits in its room is a look the design gives/);
   });
 });
 

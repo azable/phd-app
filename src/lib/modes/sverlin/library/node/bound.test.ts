@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { boundLength, boundLook, shadesFor } from './bound';
+import { boundAnchor, boundLength, boundLook, shadesFor } from './bound';
 
 describe('bound props', () => {
   it('give each value of an unordered domain its own variable’s option', () => {
@@ -41,5 +41,12 @@ describe('bound props', () => {
       0, 16, 144
     ]);
     expect(boundLength({}, 'Bar', 'height', 3)).toBeUndefined();
+  });
+
+  it('place a bar in its room by its kind’s anchor, standing or from the left by default', () => {
+    expect(boundAnchor({}, 'Bar', 'height')).toBe('flex-end');
+    expect(boundAnchor({}, 'Bar', 'width')).toBe('flex-start');
+    expect(boundAnchor({ 'Bar.height@anchor': 'start' }, 'Bar', 'height')).toBe('flex-start');
+    expect(boundAnchor({ 'Bar.height@anchor': 'center' }, 'Bar', 'height')).toBe('center');
   });
 });

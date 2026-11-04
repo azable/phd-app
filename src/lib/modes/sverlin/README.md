@@ -793,8 +793,8 @@ The design space is every variable of a component's look, found in its markup:
   `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard.fill@true` or
-  `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
-  bound to a view's value).
+  `LevelCell.textSize@from`, or a length's unit and anchor, as `Bar.height@unit`
+  and `Bar.height@anchor` (see Props bound to a view's value).
 
 A view's or snippet's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
@@ -933,11 +933,14 @@ bound prop reads `this`.
   variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or 24), starting at
   the largest that keeps the type's largest value within 200 pixels, and every
   node of the kind shares it. A bar holding nothing is exactly its length, so 0
-  draws only its border; one holding a label is the longer of the two. It stands
-  in a room as long as its type's largest value, from the room's left, or for
-  `height` its bottom, so bars of different values line up and nothing around
-  them moves. Anywhere else a box sizes to its contents, at least its kind's
-  `minSize`.
+  draws only its border; one holding a label is the longer of the two. It sits
+  in a room as long as its type's largest value, which keeps that room wherever
+  it is drawn, a pointer on it or not, so nothing around it moves; the bar
+  itself is only its length. Where in the room is a variable of the kind along
+  each bound length, as `Bar.height@anchor`: `start` (the top, or the left),
+  `center`, or `end`, starting at `end` for `height`, so bars stand on one
+  baseline, and `start` for `width`. Anywhere else a box sizes to its contents,
+  at least its kind's `minSize`.
 
 ```svelte
 <View of="Vertex" name="VertexCard">

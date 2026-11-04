@@ -68,7 +68,7 @@
     placedKind,
     strokeStyleCss
   } from './design';
-  import { boundLength, boundLook, type BoundDomain } from './bound';
+  import { boundAnchor, boundLength, boundLook, type BoundDomain } from './bound';
   import { fontClass } from '../fonts';
   import { lightOf, namedPlaces, nodeLight } from '../listing/places';
   import { alignments, justifications } from './scales';
@@ -163,14 +163,19 @@
     return mapped ?? lookUp(design, __view, placed, prop);
   };
   // A length the view binds, as width={this}: its value times its kind's unit, in pixels. A bar
-  // draws its length from the start of a room that keeps the largest it reaches, so nothing around
-  // it moves; a vertical bar stands on the room's bottom.
+  // draws its length in a room that keeps the largest it reaches, so nothing around it moves, at
+  // its kind's anchor along each bound length: a vertical bar stands on the room's bottom unless the
+  // design hangs it from the top or centres it.
   const lengthOf = (prop: 'width' | 'height') =>
     __domains?.[prop] ? boundLength(design, __view, prop, bound[`__bound_${prop}`]) : undefined;
   const barWidth = $derived(lengthOf('width'));
   const barHeight = $derived(lengthOf('height'));
   const bar = untrack(() => Boolean(__domains?.width || __domains?.height));
   const standing = untrack(() => Boolean(__domains?.height));
+  const alongAnchor = $derived(boundAnchor(design, __view, standing ? 'height' : 'width'));
+  const acrossAnchor = $derived(
+    standing && __domains?.width ? boundAnchor(design, __view, 'width') : 'flex-start'
+  );
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
   const endSlot = endSlotContext();
@@ -337,7 +342,9 @@
     __type,
     __links,
     __component,
-    __items
+    __items,
+    __domains,
+    ...bound
   });
 
   const collection = $derived(__items !== undefined);
@@ -639,8 +646,8 @@
       class="sv-room"
       style:display="flex"
       style:flex-direction={standing ? 'column' : 'row'}
-      style:justify-content={standing ? 'flex-end' : 'flex-start'}
-      style:align-items="flex-start"
+      style:justify-content={alongAnchor}
+      style:align-items={acrossAnchor}
       style:min-width={leastOf(undefined, reserved?.width)}
       style:min-height={leastOf(undefined, reserved?.height)}
     >

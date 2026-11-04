@@ -181,3 +181,34 @@ it.skipIf(!enabled)(
     expect(holds(stacked.steps)).toBe(false);
   }
 );
+
+// A bar draws its own length, the value times its kind's unit, in a room keeping the largest it
+// reaches, also where a pointer draws it again; the room is never the bar.
+it.skipIf(!enabled)(
+  'draws each bar its value long, standing or hanging by its anchor, a pointer on it or not',
+  { timeout: 300_000 },
+  async () => {
+    const source = fixtures['./fixtures/bars.sverlin'];
+    const bars = (step: SceneStep) =>
+      step.nodes
+        .filter((node) => node.kind === 'Bar' || node.kind === 'Here.Pointed')
+        .toSorted((a, b) => a.box.x - b.box.x)
+        .map(({ kind, box }) => ({ kind, box }));
+    for (const [anchor, edge] of [
+      ['end', (box: { y: number; height: number }) => box.y + box.height],
+      ['start', (box: { y: number }) => box.y]
+    ] as const) {
+      const given = await drawsAsGiven(source, { chosen: { 'Bar.height@anchor': anchor } });
+      // At step 1 the pointer j is on the first bar, which it draws again.
+      const drawnBars = bars(given.steps[1]);
+      expect(drawnBars[0].kind).toBe('Here.Pointed');
+      const scale = drawnBars[2].box.height / (9 * 16);
+      const pixels = drawnBars.map(({ box }) => Math.round(box.height / scale));
+      // The values 6, 2, 9, 4, 0, 7 at 16 pixels per unit; a bar of 0 draws only its border.
+      expect(pixels.slice(0, 4)).toEqual([96, 32, 144, 64]);
+      expect(pixels[4]).toBeLessThan(4);
+      expect(pixels[5]).toBe(112);
+      expect(new Set(drawnBars.map(({ box }) => Math.round(edge(box))))).toHaveLength(1);
+    }
+  }
+);
