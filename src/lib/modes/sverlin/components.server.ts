@@ -1664,6 +1664,32 @@ function traceExtents(steps: Steps) {
 }
 
 /**
+ * The collection types whose length is the same at every step of the run: every value of the type,
+ * by its path, keeps one length wherever it is recorded.
+ */
+export function steadyLengths(steps: Steps): Set<string> {
+  const lengths = new Map<string, number>();
+  const types = new Map<string, string>();
+  const varying = new Set<string>();
+  const walk = (value: unknown, path: string, typed: TypeMap): void => {
+    if (value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      const type = typed[path];
+      if (type) {
+        const known = lengths.get(path);
+        if (known !== undefined && known !== value.length) varying.add(type);
+        lengths.set(path, value.length);
+        types.set(path, type);
+      }
+      value.forEach((item, index) => walk(item, `${path}[${index}]`, typed));
+    } else for (const [key, item] of Object.entries(value)) walk(item, `${path}.${key}`, typed);
+  };
+  for (const { state, types: typed } of steps)
+    for (const [name, value] of Object.entries(state)) walk(value, name, typed);
+  return new Set([...types.values()].filter((type) => !varying.has(type)));
+}
+
+/**
  * Whether a path's value is passed only to views: it, or a value holding it, is passed to one, and
  * neither it nor anything holding or held by it is read for anything else.
  */

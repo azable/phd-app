@@ -2600,6 +2600,32 @@ describe('slots and boxes', () => {
     expect(design.space['WideText.spacing']).toBeUndefined();
   });
 
+  it('starts a collection where its first item is, and its items centred only where its length never changes', () => {
+    const collections = (algorithm: string) =>
+      prepareSvelteComponent(
+        `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = collection(Int, { max: 6 }); const Queue = collection(Int, { max: 6 });</script><script input>const values = Values([1, 2, 3]); const queue = Queue([1]);</script><script algorithm>${algorithm}</script><View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Line"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<Layout name="Main"><Node layout="column"><Node layout="row" kind="Fixed">{#each values as v}{v}{/each}</Node><Node layout="column" kind="Growing">{#each queue as v}{v}{/each}</Node>{values}</Node></Layout>`
+      ).design.starter;
+    // values never changes length; queue grows.
+    const starter = collections('@grow[queue.push(Int(2));]');
+    expect(starter).toMatchObject({
+      // A box that varies starts at its first item, along its axis.
+      'Main.Fixed.xAnchor': 'start',
+      'Main.Growing.yAnchor': 'start',
+      'Line.xAnchor': 'start',
+      // Items centred where the length is steady, at the start where it changes.
+      'Main.Fixed.justify': 'center',
+      'Line.justify': 'center',
+      'Main.Growing.justify': 'start'
+    });
+    // Across its axis, and anything not a collection, start as before.
+    expect(starter['Main.Fixed.yAnchor']).toBe('center');
+    expect(starter['Cell.xAnchor']).toBe('center');
+    // A collection type that grows anywhere starts at its start everywhere.
+    expect(collections('@grow[values.push(Int(2));]')['Main.Fixed.justify']).toBe('start');
+  });
+
   it('has no variable for an axis the view sizes by its value, and says why when one is chosen', async () => {
     const prepared = prepareSvelteComponent(
       source('<View of="Wide" name="Bar"><Node height={this} /></View>', '{wide}')

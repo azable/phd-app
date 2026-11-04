@@ -39,6 +39,8 @@ export type DesignKind = {
   role: KindRole;
   free?: { structure: LayoutStructure; flow?: 'x' | 'y' };
   lines?: true;
+  /** For a collection's node, the axis its items run along and whether its length never changes. */
+  collection?: { axis: 'x' | 'y'; steady: boolean };
 };
 
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
@@ -61,16 +63,25 @@ const propsOf = ({ role, free }: DesignKind) =>
 /**
  * A kind's starting value for a prop: a free layout runs right, across the wide stage, unless its
  * structure is a tree, which branches down as trees are drawn; and a link's head is none where
- * every link of its kind is a two-way line, as an undirected graph's edges.
+ * every link of its kind is a two-way line, as an undirected graph's edges. A collection's box,
+ * where it varies, starts where its first item is, so the items already there stay as it grows; and
+ * its items sit in the middle of its room where its length never changes, at its start where it
+ * does, so none moves as one comes or goes.
  */
-const starterLook = ({ role, free, lines }: DesignKind, prop: string) =>
+const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string) =>
   prop === 'direction' && free
     ? free.structure === 'tree'
       ? 'down'
       : 'right'
     : prop === 'head' && lines
       ? 'none'
-      : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
+      : collection && prop === (collection.axis === 'x' ? 'xAnchor' : 'yAnchor')
+        ? 'start'
+        : collection && prop === 'justify'
+          ? collection.steady
+            ? 'center'
+            : 'start'
+          : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a

@@ -84,6 +84,7 @@ import {
   rootPlacements,
   scopedReadsOf,
   snippetPaths,
+  steadyLengths,
   viewCallsOf,
   slotInsertions,
   viewsOf,
@@ -970,6 +971,7 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       flows,
       tagKinds,
       nodeKinds,
+      collections,
       localKinds,
       listing,
       listingAt,
@@ -1481,14 +1483,28 @@ function prepareViews(source: string, viewStarts: readonly number[]): PreparedCo
       domain,
       steps: master
     });
+    // A collection's kind starts its box and items by its axis and whether its length ever changes.
+    const steady = steadyLengths(master);
+    const variables = variableTypes(master);
     const kinds = unlaid.map((kind): DesignKind => {
       const structure = structures[kind.key];
       const flow = flows.get(kind.key);
+      const items = collections.get(kind.key);
+      const itemsType =
+        items && (items.type ?? (items.over ? variables.get(items.over) : undefined));
       return structure
         ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } }
         : kind.role === 'link' && lines.has(kind.key)
           ? { ...kind, lines: true }
-          : kind;
+          : items
+            ? {
+                ...kind,
+                collection: {
+                  axis: items.axis,
+                  steady: itemsType !== undefined && steady.has(itemsType)
+                }
+              }
+            : kind;
     });
     // A chain's branches take turns in one place: none may show at a step another shows at. The
     // master pauses at every label, so every step any pacing has is among its steps.
@@ -2871,6 +2887,11 @@ function withNodeRefs(
   tagKinds: Record<string, string[]>;
   /** Each <Node> tag's kind, by where it starts, for what a presentation leaves out. */
   nodeKinds: Map<number, string>;
+  /**
+   * The kinds of collections' nodes, by key: the axis their items run along, and the type their
+   * {#each} goes over where a view gives it, else the variable it goes over.
+   */
+  collections: Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>;
   /** The kinds nodes name, as kind="Header", with where each kind prop starts. */
   localKinds: { name: string; start: number }[];
   /** Whether the view places a <Listing />, and where the first starts. */
@@ -3240,6 +3261,7 @@ function withNodeRefs(
     });
   const tagKinds: Record<string, string[]> = {};
   const nodeKinds = new Map<number, string>();
+  const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
@@ -3280,6 +3302,24 @@ function withNodeRefs(
         flows.set(key, part.data);
     }
     if (entry.name === 'Node') nodeKinds.set(entry.start, key);
+    // A node holding one {#each} is a collection: its kind's starters depend on its axis and on
+    // whether what it goes over keeps one length (see starterLook).
+    const items = (entry.tag.children ?? []).filter(
+      (child) =>
+        !(child.type === 'Text' && !child.data?.trim()) &&
+        !(child.type === 'InlineComponent' && child.name === 'Link')
+    );
+    if (entry.name === 'Node' && items.length === 1 && items[0].type === 'EachBlock') {
+      const over = items[0].expression;
+      const scope = domain && scopeIn(entry.view, new Map());
+      const layout = (entry.tag.attributes ?? []).find(({ name }) => name === 'layout')?.value;
+      const [part] = Array.isArray(layout) ? layout : [];
+      collections.set(key, {
+        axis: part?.type === 'Text' && part.data === 'column' ? 'y' : 'x',
+        ...(scope && domain && over ? { type: typeOfPath(over as never, scope, domain) } : {}),
+        ...(over?.type === 'Identifier' && over.name ? { over: over.name } : {})
+      });
+    }
     const { line, column } = sourcePosition(source, entry.start);
     tagKinds[`${line}:${column + 1}`] = [key];
   }
@@ -3336,7 +3376,8 @@ function withNodeRefs(
     ),
     flows,
     tagKinds,
-    nodeKinds
+    nodeKinds,
+    collections
   };
 }
 
