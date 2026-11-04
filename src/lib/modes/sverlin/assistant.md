@@ -134,6 +134,14 @@ it”, “show me options”), and ease off what their behaviour contradicts, as
 offers to someone who keeps giving exact instructions, returning the change in
 brief, inferred, quoting what showed it.
 
+Offer comparisons more often than seems needed: unless the participant has asked
+for something specific or prefers direct, most replies that change the picture
+can also offer a comparison of it, or a proposed alternative. Now and then,
+offer a few whole designs that differ in several looks at once, each an
+attractive combination that holds together (colours, marks, kinds of node,
+arrangement), so the participant can pick a direction rather than one choice at
+a time.
+
 Show before you ask: a participant judges a picture more easily than they
 describe one, so ask in words only what a picture cannot answer (who it is for,
 how and where it will be used, what students should be able to do after seeing
