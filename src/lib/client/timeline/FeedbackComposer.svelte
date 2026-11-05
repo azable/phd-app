@@ -67,6 +67,11 @@
   // The pair the participant chose to write about something else instead, until another shows.
   let writingInstead = $state<string>();
   const pair = $derived(offered && offered.key !== writingInstead ? offered : undefined);
+  // Once that pair leaves the stage, it brings its answers back when it shows again; else a pair
+  // written beside once could never be answered.
+  $effect(() => {
+    if (writingInstead !== undefined && offered?.key !== writingInstead) writingInstead = undefined;
+  });
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
   let hasContent = $state(false);
@@ -100,6 +105,8 @@
     editorRevision += 1;
     hasContent = false;
     enterWithPair = false;
+    // The message written instead is sent, so the pair still open takes its answers again.
+    writingInstead = undefined;
     hasExplicitReferences = false;
     savedRange = undefined;
     session.focusedEvents = [];
