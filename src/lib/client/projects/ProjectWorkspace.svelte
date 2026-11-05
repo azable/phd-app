@@ -229,7 +229,49 @@
   const showAdminControls = $derived(isAdmin && !adminPreview && !session.readOnly);
   const developerView = $derived(isAdmin && !adminPreview && !session.readOnly && devMode);
   const helpersSwitch = $derived(viewHelpersSwitch(session.events));
-  const viewHelpersOn = $derived(helpersSwitch ?? conditionViewHelpers);
+  // The view helpers' dev switch is remembered in this browser and applied to each project once it
+  // is idle, as a project busy with a turn (its helpers included) takes no command.
+  const helpersPreferenceKey = 'phd-app:view-helpers';
+  let helpersPreference = $state<boolean | undefined>(readHelpersPreference());
+  const viewHelpersOn = $derived(helpersPreference ?? helpersSwitch ?? conditionViewHelpers);
+  function readHelpersPreference(): boolean | undefined {
+    try {
+      const stored = localStorage.getItem(helpersPreferenceKey);
+      return stored === null ? undefined : stored === 'on';
+    } catch {
+      return undefined;
+    }
+  }
+  function setHelpers(enabled: boolean) {
+    helpersPreference = enabled;
+    try {
+      localStorage.setItem(helpersPreferenceKey, enabled ? 'on' : 'off');
+    } catch {
+      // A browser that keeps nothing still applies the switch to this project.
+    }
+  }
+  // Each project is sent the switch once for each value, so a command that fails is not resent.
+  // Not reactive: only the effect reads it.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const helpersSent = new Set<string>();
+  $effect(() => {
+    const wanted = helpersPreference;
+    if (
+      wanted === undefined ||
+      !developerView ||
+      !session.loaded ||
+      session.snapshot.mode !== 'sverlin' ||
+      busy ||
+      session.readOnly ||
+      !session.atHead ||
+      (helpersSwitch ?? conditionViewHelpers) === wanted
+    )
+      return;
+    const sent = `${projectId}:${wanted}`;
+    if (helpersSent.has(sent)) return;
+    helpersSent.add(sent);
+    void session.runCommand({ type: 'view-helpers', enabled: wanted });
+  });
   // The tab's title: the task, in a study, or the project's title; never the system's name.
   const pageTitle = $derived(
     study?.title || (session.resource ? session.snapshot.title : '') || 'Visualization'
@@ -773,13 +815,10 @@
                       id="view-helpers"
                       size="sm"
                       checked={viewHelpersOn}
-                      disabled={mutationsDisabled}
-                      onCheckedChange={(enabled) =>
-                        session.runCommand({ type: 'view-helpers', enabled })}
+                      onCheckedChange={setHelpers}
                     />
                     <Label for="view-helpers" class="text-sm"
-                      >View helpers: {viewHelpersOn ? 'on' : 'off'}
-                      ({helpersSwitch === undefined ? 'study condition' : 'dev switch'})</Label
+                      >View helpers: {viewHelpersOn ? 'on' : 'off'}</Label
                     >
                   </div>
                 {/if}
