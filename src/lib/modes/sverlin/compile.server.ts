@@ -3744,6 +3744,17 @@ function withNodeRefs(
       (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
     const element = tag.type === 'Element' || (tag.type === 'InlineComponent' && !library);
     const special = typeof tag.type === 'string' && Object.hasOwn(unsupportedMarkup, tag.type);
+    // A view written as a tag, as <Cells values={values} />, the commonest unknown tag in the
+    // 5 November benchmark's first tries: say how a view is drawn.
+    const viewType = element && tag.name ? viewTypes.get(tag.name) : undefined;
+    if (viewType) {
+      reject(
+        `<${tag.name}> is a view of ${viewType}, which is drawn by writing a value of ${viewType} in braces, not by its tag: write the value, as {${tag.attributes?.[0]?.name ?? 'value'}}, and the design chooses ${tag.name} among the views of ${viewType}.`,
+        'view_markup',
+        tag.start
+      );
+      return;
+    }
     if (element || special) {
       reject(
         element

@@ -155,6 +155,11 @@ describe('layouts of the page', () => {
       'This </Layout> closes no layout'
     ],
     [
+      'a view written as a tag',
+      '<Layout name="A" of="values, @pass"><Node><Cells values={values} /></Node></Layout>',
+      '<Cells> is a view of Values, which is drawn by writing a value of Values in braces, not by its tag: write the value, as {values}'
+    ],
+    [
       'text in the root',
       '<Layout name="A" of="values, @pass"><Node>Bubble sort <Board values={values} /></Node></Layout>',
       'Text outside a <Node>'
