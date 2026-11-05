@@ -283,6 +283,11 @@ export type SvelteBundle = {
     /** Every step's scene, drawn on the server (see layout.server.ts). */
     scenes?: ServerScenes;
   };
+  /**
+   * The code laying every step out, for drawing scenes again, of a part or with other design
+   * values, without building again (see scenesOnServer).
+   */
+  layoutCode: string;
 };
 
 type Block = { body: string; offset: number };
@@ -2792,6 +2797,7 @@ export async function bundlePresentation(
   return {
     javascript,
     layout,
+    layoutCode: layoutBundle.text,
     labels,
     steps: prepared.steps,
     stepSignature: prepared.signature,

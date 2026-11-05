@@ -62,7 +62,7 @@ export {
   type StepState
 } from './steps';
 export { recordLayouts, type Sizing } from './record';
-export { scenesOf } from './model/scene-of';
+export { scenesOf, type SceneRequest } from './model/scene-of';
 export { applyGeometry, geometryFor, geometryOf, geometryVersion, type Geometry } from './geometry';
 export { shownFrame, type ShownFrame } from './fit';
 export { fitShapes } from './node/scales';

@@ -15,6 +15,7 @@ import { fontsVersion, serverMeasure } from './fonts/measure.server';
 import type { DrawnSummary } from './library/drawing';
 import type { Geometry } from './library/geometry';
 import { snappedBorder } from './library/model/look';
+import type { SceneRequest } from './library/model/scene-of';
 import type { SceneFrame, SceneStep } from './library/scene';
 
 /** Every step's scene, and the frame they are drawn in. */
@@ -149,12 +150,20 @@ async function loadIsolated(code: string, within: Limits, errors: string[]) {
     const at = async (
       devicePixelRatio: number,
       design?: Record<string, DesignValue>,
-      representative = false
+      representative = false,
+      scenes?: SceneRequest
     ) =>
       JSON.parse(
         (await layOut.apply(
           undefined,
-          design ? [devicePixelRatio, JSON.stringify(design), representative] : [devicePixelRatio],
+          design || scenes
+            ? [
+                devicePixelRatio,
+                design && JSON.stringify(design),
+                representative,
+                scenes && JSON.stringify(scenes)
+              ]
+            : [devicePixelRatio],
           { timeout: within.layOutMs, result: { promise: true, copy: true } }
         )) as string
       ) as Geometry;
@@ -204,6 +213,33 @@ async function layOutIsolated(
     return { errors, failure: cause instanceof Error ? cause.message : String(cause) };
   } finally {
     loaded?.dispose();
+  }
+}
+
+/**
+ * Scenes of a presentation's layout code (the server bundle a build lays out with), each request in
+ * one isolate loaded once: with design values in place of the variant's, where given, and of some
+ * steps or one part of each (see SceneRequest), at a device pixel ratio of 1. Each is none where
+ * the model could not lay it out, or the view failed to draw.
+ */
+export async function scenesOnServer(
+  code: string,
+  requests: readonly (SceneRequest & { design?: Record<string, DesignValue> })[],
+  within = limits
+): Promise<(ServerScenes | undefined)[]> {
+  const errors: string[] = [];
+  const loaded = await loadIsolated(code, within, errors);
+  try {
+    const scenes: (ServerScenes | undefined)[] = [];
+    for (const { design, ...request } of requests) {
+      const failed = errors.length;
+      const laid = await loaded.at(1, design, false, request).catch(() => undefined);
+      const described = await loaded.read<ServerScenes>('__sverlinScenes');
+      scenes.push(laid && errors.length === failed ? described : undefined);
+    }
+    return scenes;
+  } finally {
+    loaded.dispose();
   }
 }
 

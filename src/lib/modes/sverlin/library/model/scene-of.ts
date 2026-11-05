@@ -56,25 +56,36 @@ type Context = Place & {
   hidden: boolean;
   /** In a link's label, drawn over the links. */
   label: boolean;
+  /** Inside the part asked for, whose nodes and links are described. */
+  inPart: boolean;
 };
+
+/**
+ * What of the steps to describe: some steps only, by number, and one part of each, the nodes with
+ * an id (data-sv-node) or of a kind (data-sv-kind, as 'Graph' or 'VertexCard'), with everything
+ * inside them and the links they draw; unset, all of it. Boxes stay where the whole step puts them.
+ */
+export type SceneRequest = { steps?: readonly number[]; part?: { node?: string; kind?: string } };
 
 /**
  * Every step's scene, from the state each shows (its second, as the page shows a step), each state
  * described once for every step showing it, and the frame's; none where the model cannot lay a
  * state out, for the page to describe instead. A state the view failed to draw is a step drawn
- * as an error, as the page draws it.
+ * as an error, as the page draws it. Asked for some steps, the others are left out.
  */
 export function scenesOf(
   shown: ReadonlyMap<number, ModelElement | undefined>,
   drawnLike: readonly number[],
   stepCount: number,
   options: ReserveOptions,
-  frame: SceneFrameSize
+  frame: SceneFrameSize,
+  request: SceneRequest = {}
 ): { frame: SceneFrame; steps: SceneStep[] } | undefined {
   const described = new Map<number, SceneStep>();
   const steps: SceneStep[] = [];
   let background: string | undefined;
   for (let step = 0; step < stepCount; step++) {
+    if (request.steps && !request.steps.includes(step)) continue;
     const state = drawnLike[2 * step + 1];
     let scene = described.get(state);
     if (!scene) {
@@ -83,7 +94,7 @@ export function scenesOf(
       else
         try {
           const memory = { ...options.memory, step: state };
-          const laid = sceneOf(markup, { ...options, memory }, frame);
+          const laid = sceneOf(markup, { ...options, memory }, frame, request.part);
           scene = laid.scene;
           background ??= laid.background;
         } catch {
@@ -99,12 +110,17 @@ export function scenesOf(
   };
 }
 
-/** One step's scene from the markup of the state it shows. */
+/** One step's scene from the markup of the state it shows, or one part of it. */
 export function sceneOf(
   markup: ModelElement,
   options: ReserveOptions,
-  frame: SceneFrameSize
+  frame: SceneFrameSize,
+  part?: SceneRequest['part']
 ): { scene: SceneStep; background?: string } {
+  const isPart = ({ attributes }: ModelElement) =>
+    attributes['data-sv-node'] !== undefined &&
+    ((part?.node !== undefined && attributes['data-sv-node'] === part.node) ||
+      (part?.kind !== undefined && attributes['data-sv-kind'] === part.kind));
   // Each free layout is routed here, from the markup as drawn (see routesOf).
   const reserve = { ...options, memory: { ...options.memory, routes: undefined } };
   const model = sizerFor(reserve);
@@ -218,6 +234,7 @@ export function sceneOf(
       return;
     }
     let open = context.open;
+    const inPart = context.inPart || isPart(element);
     const isNode = element.tag === 'div' && attributes['data-sv-node'] !== undefined;
     if (isNode) {
       const node =
@@ -225,7 +242,7 @@ export function sceneOf(
           ? undefined
           : describeNode(element, styled, sceneBox(left, top, box.width, box.height), open);
       if (node) {
-        nodes.push(node);
+        if (inPart) nodes.push(node);
         const text = readingText(ownPieces(element, element, context.hidden));
         if (text) node.text = text;
       }
@@ -236,7 +253,8 @@ export function sceneOf(
       const mark = markOf(element, styled, sceneBox(left, top, box.width, box.height), placedLabel);
       if (mark) (nearest.node.marks ??= []).push(mark);
     }
-    const next: Context = { ...context, open, hidden };
+    const next: Context = { ...context, open, hidden, inPart };
+    const drawsLinks = inPart && !hidden;
     // Its children and its text in order, the text drawn in lines by the nearest node.
     const texts = new Map(
       (context.layout.texts.get(element) ?? []).map((text) => [text.index, text])
@@ -266,7 +284,7 @@ export function sceneOf(
           ? 'row'
           : 'column';
       const route = routeOverlay(model.layoutReader(at, context.layout), element, axis);
-      if (!hidden) for (const line of route.lines) linkOf(line, line.style, element, left, top);
+      if (drawsLinks) for (const line of route.lines) linkOf(line, line.style, element, left, top);
       walkChildren();
       for (const { label, middle } of route.labels)
         walkLabel(label, context.layout, { x: left + middle.x, y: top + middle.y }, next);
@@ -289,7 +307,7 @@ export function sceneOf(
       walk(child, { ...next, layout, x: left + x - own.x, y: top + y - own.y });
     });
     for (const edge of arranged.edges) {
-      if (!hidden)
+      if (drawsLinks)
         linkOf(
           edge,
           edge.id === undefined ? undefined : arranged.styles[edge.id],
@@ -453,6 +471,7 @@ export function sceneOf(
     y: 0,
     open: [],
     hidden: false,
+    inPart: !part,
     label: false
   });
   const background = at.styled.get(at.frame)?.paint.background;

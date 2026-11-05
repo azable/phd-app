@@ -6,7 +6,8 @@
 // __sverlinDrawn (see recordLayouts); how large it draws as __sverlinSize; and every step's scene,
 // as the page would describe it, as __sverlinScenes (see model/scene-of.ts). Given design values,
 // it lays every step out with them in place of the variant's, to measure another arrangement (see
-// arrangementsOnServer), recording nothing else; asked for representative steps only, it lays out
+// arrangementsOnServer), recording nothing else but the scenes asked for, of some steps or of one
+// part (see scenesOnServer); asked for representative steps only, it lays out
 // the final state and the state holding the most, which show an arrangement nearly as well as every
 // step does, for a fraction of the time.
 
@@ -24,6 +25,7 @@ import {
   stepsOf,
   unpackStates,
   type FrameExtent,
+  type SceneRequest,
   type ShownFrame
 } from 'sverlin';
 // The layered form's engine, dagre, which only the server's layout loads (library/node/engines.ts).
@@ -44,7 +46,8 @@ const scope = globalThis as unknown as {
   __sverlinLayOut?: (
     devicePixelRatio: number,
     design?: string,
-    representative?: boolean
+    representative?: boolean,
+    scenes?: string
   ) => Promise<string>;
   __sverlinDrawn?: string;
   __sverlinDrawing?: string;
@@ -76,8 +79,10 @@ const representativeSteps = steps.distinct.length
     }
   : steps;
 
-scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
+scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes) => {
   const values = design ? (JSON.parse(design) as Record<string, unknown>) : undefined;
+  const request = scenes ? (JSON.parse(scenes) as SceneRequest) : undefined;
+  scope.__sverlinScenes = undefined;
   states.forEach((state, phase) => {
     state.__design = values ? { ...variant[phase], ...values } : variant[phase];
   });
@@ -90,10 +95,11 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
   const characters = new Map<number, number>();
   // What is drawn is the same at any device pixel ratio but for borders snapping, so it is read once.
   const drawn: string[] | undefined = devicePixelRatio === 1 && !values ? [] : undefined;
-  // Each step's scene is drawn with the version shown, once the frame is known.
+  // Each step's scene is drawn, once the frame is known, with the version shown or where asked.
   let shown: Parameters<NonNullable<Parameters<typeof recordLayouts>[0]['shown']>> | undefined;
+  const describing = request ?? (drawn && !representative ? {} : undefined);
   const reservation = await recordLayouts({
-    steps: representative ? representativeSteps : steps,
+    steps: representative && !request ? representativeSteps : steps,
     layouts,
     sizing: { components, placements },
     render: ({ props, settings, context }) =>
@@ -124,7 +130,7 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
     // only measured.
     routes: !values && !representative,
     drawn,
-    ...(drawn && !representative ? { shown: (...given) => (shown = given) } : {}),
+    ...(describing ? { shown: (...given) => (shown = given) } : {}),
     drawing: (drawing) => {
       if (drawn) scope.__sverlinDrawing = JSON.stringify(drawing);
     },
@@ -136,8 +142,16 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
   if (drawn) scope.__sverlinDrawn = JSON.stringify(drawn);
   if (shown && frame && extents.length) {
     const size = { width: extents[0].frame.width, height: frame.height, fit: frame.fit };
-    const scenes = scenesOf(shown[0], steps.drawnLike, steps.stepCount, shown[1], size);
-    scope.__sverlinScenes = scenes ? JSON.stringify(scenes) : undefined;
+    const [markups, reserve] = shown;
+    const described = scenesOf(
+      markups,
+      steps.drawnLike,
+      steps.stepCount,
+      reserve,
+      size,
+      describing
+    );
+    scope.__sverlinScenes = described ? JSON.stringify(described) : undefined;
   }
   if (devicePixelRatio === 1) {
     const size = frame && drawnSize(extents, frame, characters);
