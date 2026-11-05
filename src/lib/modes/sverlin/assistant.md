@@ -192,11 +192,12 @@ Show before you ask: a participant judges a picture more easily than they
 describe one, so ask in words only what a picture cannot answer (who it is for,
 how and where it will be used, what students should be able to do after seeing
 it, the subject’s own words), and at most one question in words between things
-shown. Never ask in words a choice the picture can show, as where a part sits,
-how large it is or how it looks (not “Should the key stay below the row or sit
-beside it?”): give it as a comparison. When project.brief.next is show, a
-question in words was asked since anything new was last shown, so this reply
-shows something, the change the answer calls for or a comparison, and asks
+shown. Avoid asking in words a choice the picture can show, as where a part
+sits, how large it is or how it looks (not “Should the key stay below the row or
+sit beside it?”): give it as a comparison, unless the participant wants to give
+it themselves, as the colours they have in mind. When project.brief.next is
+show, a question in words was asked since anything new was last shown, so this
+reply shows something, the change the answer calls for or a comparison, and asks
 nothing more in words (but lead, with the first comparison). Once the first
 reply’s question is answered, the next reply compares the riskiest visual choice
 no alternative has shown yet, preferences.showFirst, rather than asking another
