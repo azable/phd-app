@@ -5,7 +5,9 @@
 // fit every step shows at, which the page draws with as given; what each step draws as
 // __sverlinDrawn (see recordLayouts); and how large it draws as __sverlinSize. Given design values,
 // it lays every step out with them in place of the variant's, to measure another arrangement (see
-// arrangementsOnServer), recording nothing else.
+// arrangementsOnServer), recording nothing else; asked for representative steps only, it lays out
+// the final state and the state holding the most, which show an arrangement nearly as well as every
+// step does, for a fraction of the time.
 
 import { render } from 'svelte/server';
 import {
@@ -35,7 +37,11 @@ type Host = {
 
 const scope = globalThis as unknown as {
   __sverlinHost: Host;
-  __sverlinLayOut?: (devicePixelRatio: number, design?: string) => Promise<string>;
+  __sverlinLayOut?: (
+    devicePixelRatio: number,
+    design?: string,
+    representative?: boolean
+  ) => Promise<string>;
   __sverlinDrawn?: string;
   __sverlinDrawing?: string;
   __sverlinSize?: string;
@@ -50,8 +56,22 @@ const steps = stepsOf(unpackStates(packed), atoms, listing, lengths);
 const ratio = (steps.states[0] as { __frame?: { ratio?: string } } | undefined)?.__frame?.ratio;
 const states = steps.states as { __design: Record<string, unknown> }[];
 const variant = states.map(({ __design }) => __design);
+// The final state, where a graph has every node and link it reaches, and the state holding the most,
+// as its longest queue: drawn alike to the others where they are.
+const holding = (state: number) => JSON.stringify(states[state]).length;
+const representativeSteps = steps.distinct.length
+  ? {
+      ...steps,
+      distinct: [
+        ...new Set([
+          steps.drawnLike[states.length - 1],
+          steps.distinct.reduce((most, state) => (holding(state) > holding(most) ? state : most))
+        ])
+      ]
+    }
+  : steps;
 
-scope.__sverlinLayOut = async (devicePixelRatio, design) => {
+scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
   const values = design ? (JSON.parse(design) as Record<string, unknown>) : undefined;
   states.forEach((state, phase) => {
     state.__design = values ? { ...variant[phase], ...values } : variant[phase];
@@ -66,7 +86,7 @@ scope.__sverlinLayOut = async (devicePixelRatio, design) => {
   // What is drawn is the same at any device pixel ratio but for borders snapping, so it is read once.
   const drawn: string[] | undefined = devicePixelRatio === 1 && !values ? [] : undefined;
   const reservation = await recordLayouts({
-    steps,
+    steps: representative ? representativeSteps : steps,
     layouts,
     sizing: { components, placements },
     render: ({ props, settings, context }) =>

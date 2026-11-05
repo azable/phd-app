@@ -49,6 +49,28 @@ describe('arrangements laid out by the server', () => {
   );
 
   it(
+    'ranks arrangements laid out at representative steps as it ranks them laid out at every step',
+    { timeout: 120_000 },
+    async () => {
+      const prepared = prepareSvelteComponent(bfsReferences);
+      const top = async (arrangeSteps: 'every' | 'representative') => {
+        const { layout } = await bundlePresentation(
+          prepared,
+          1,
+          {},
+          { arrange: true, arrangeSteps }
+        );
+        return rankedArrangements(layout.arrangements ?? [])
+          .slice(0, 3)
+          .map(({ values }) => JSON.stringify(values));
+      };
+      const representative = await top('representative');
+      expect(representative.length).toBeGreaterThan(1);
+      expect(representative).toEqual(await top('every'));
+    }
+  );
+
+  it(
     'arranges a tree drawn by a view of its reference type in each form, links ending at its nodes',
     { timeout: 120_000 },
     async () => {

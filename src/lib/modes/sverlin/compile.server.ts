@@ -158,7 +158,7 @@ import {
 } from './bound-props.server';
 import { bindableProps, lengthProps, valueOnlyProps } from './library/node/bound';
 import { iconNames } from './library/fonts';
-import { measuredArrangements } from './arrangements.server';
+import { measuredArrangements, type ArrangedSteps } from './arrangements.server';
 import { readabilityOf } from './readability.server';
 import { drawingText } from './library/drawing';
 import type { Arrangement, Readability } from '$lib/shared/readability';
@@ -2474,7 +2474,7 @@ export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
   request: VariantRequest = {},
-  options: { arrange?: boolean } = {}
+  options: { arrange?: boolean; arrangeSteps?: ArrangedSteps } = {}
 ): Promise<SvelteBundle> {
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
@@ -2747,7 +2747,8 @@ export async function bundlePresentation(
           design.space,
           values,
           { size, geometry: geometries[0] },
-          frame.ratio
+          frame.ratio,
+          options.arrangeSteps
         )
       : undefined;
   const layout: SvelteBundle['layout'] = {

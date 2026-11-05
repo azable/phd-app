@@ -29,6 +29,13 @@ const seedsTried = 3;
 
 const arrangementVariable = /^(.+)\.(form|direction|layoutSeed)$/u;
 
+/**
+ * Which steps each arrangement is laid out at: every step, as the version is, or only the final state
+ * and the one holding the most, which rank arrangements as every step does (checked on the graph
+ * fixtures and three projects of 2026-11-05) in a fraction of the time.
+ */
+export type ArrangedSteps = 'every' | 'representative';
+
 /** The values of each other arrangement to try: every form and direction, then a few seeds. */
 export function arrangementDesigns(
   space: Readonly<Record<string, readonly DesignValue[]>>,
@@ -67,7 +74,8 @@ export async function measuredArrangements(
   space: Readonly<Record<string, readonly DesignValue[]>>,
   values: Readonly<Record<string, DesignValue>>,
   shown: { size: DrawnSize; geometry: Geometry },
-  ratio: FrameRatio
+  ratio: FrameRatio,
+  steps: ArrangedSteps = 'representative'
 ): Promise<Arrangement[] | undefined> {
   const designs = arrangementDesigns(space, values);
   if (!designs.length) return undefined;
@@ -80,6 +88,25 @@ export async function measuredArrangements(
     const keys = Object.keys(design);
     return keys.length === 1 && keys[0].endsWith('.layoutSeed') ? keys[0] : undefined;
   };
+  if (steps === 'representative') {
+    // The shown arrangement is laid out at the same steps, so all are measured alike.
+    const [first, ...others] = await arrangementsOnServer(
+      code,
+      [{}, ...designs],
+      budgetMs,
+      new Set(),
+      seedOnly,
+      undefined,
+      true
+    );
+    if (!first || Object.keys(first.values).length || !others.length) return undefined;
+    return [first, ...others].map(({ values: set, size, crossings }, index) => ({
+      values: { ...own, ...set },
+      readability: readabilityOf(size, ratio),
+      crossings,
+      ...(index === 0 ? { shown: true } : {})
+    }));
+  }
   const measured = await arrangementsOnServer(code, designs, budgetMs, seen, seedOnly);
   if (!measured.length) return undefined;
   return [

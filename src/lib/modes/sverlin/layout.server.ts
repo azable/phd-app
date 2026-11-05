@@ -137,11 +137,15 @@ async function loadIsolated(code: string, within: Limits, errors: string[]) {
     const script = await isolate.compileScript(code);
     await script.run(context, { timeout: within.loadMs });
     const layOut = await global.get('__sverlinLayOut', { reference: true });
-    const at = async (devicePixelRatio: number, design?: Record<string, DesignValue>) =>
+    const at = async (
+      devicePixelRatio: number,
+      design?: Record<string, DesignValue>,
+      representative = false
+    ) =>
       JSON.parse(
         (await layOut.apply(
           undefined,
-          design ? [devicePixelRatio, JSON.stringify(design)] : [devicePixelRatio],
+          design ? [devicePixelRatio, JSON.stringify(design), representative] : [devicePixelRatio],
           { timeout: within.layOutMs, result: { promise: true, copy: true } }
         )) as string
       ) as Geometry;
@@ -215,7 +219,8 @@ export async function arrangementsOnServer(
   budgetMs: number,
   seen = new Set<string>(),
   group: (values: Record<string, DesignValue>) => string | undefined = () => undefined,
-  within = limits
+  within = limits,
+  representative = false
 ): Promise<MeasuredArrangement[]> {
   const started = performance.now();
   const errors: string[] = [];
@@ -232,7 +237,7 @@ export async function arrangementsOnServer(
       if (among !== undefined && settled.has(among)) continue;
       const failed = errors.length;
       const begun = performance.now();
-      const geometry = await loaded.at(1, values).catch(() => undefined);
+      const geometry = await loaded.at(1, values, representative).catch(() => undefined);
       longest = Math.max(longest, performance.now() - begun);
       const size = await loaded.read<DrawnSize>('__sverlinSize');
       if (!geometry || !size || errors.length > failed) continue;
