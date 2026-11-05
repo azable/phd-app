@@ -98,3 +98,116 @@ it.skipIf(!enabled)(
     expect(opacities.at(-1)).toBeCloseTo(0.25, 2);
   }
 );
+
+const sides = `<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = array(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+</script>
+
+<script algorithm>
+  @begin[let sorted = Index(values, 1);]
+  for (@first[let i = Index(values, 1)]; @more[i < values.length]; @next[i++]) @pass{
+    @key[const key = values[i];]
+    @init[let j = i;]
+    while (@test[j > 0 && values[j - 1] > key]) @shift{
+      values[j] = values[j - 1];
+      j--;
+    }
+    @put[values[j] = key; sorted++;]
+  }
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+
+<Layout name="Board" of="values, sorted, key">
+  <Node layout="column">
+    <Node layout="row">
+      <Node kind="SortedPart" layout="row">{#each values as v, k}{#if k < sorted}<Node kind="Left">{v}</Node>{/if}{/each}</Node>
+      <Node kind="Gap">|</Node>
+      <Node kind="UnsortedPart" layout="row">{#each values as v, k}{#if k >= sorted}<Node kind="Right">{v}</Node>{/if}{/each}</Node>
+    </Node>
+    <Node kind="KeyRow" layout="row"><Node>key</Node>{key}</Node>
+  </Node>
+</Layout>
+
+<Case name="main" values={[31, 12, 25, 8, 17, 4]} />
+
+<Storyboard>
+  <Scene name="sort" case="main" pause="@pass.key, @pass.put"><Board values={values} sorted={sorted} key={key} /></Scene>
+</Storyboard>`;
+
+it.skipIf(!enabled)(
+  'carries a cell’s frame with its value as it crosses into the sorted part, never waiting empty',
+  { timeout: 120_000 },
+  async () => {
+    const built = await bundlePresentation(prepareSvelteComponent(sides), 1, {
+      chosen: {
+        'Cell.fill': 'none',
+        'Board.SortedPart.Left.fill': 'sky-200',
+        'Board.UnsortedPart.Right.opacity': 0.5,
+        'Board.SortedPart.justify': 'end',
+        'Board.UnsortedPart.justify': 'start',
+        'Board.SortedPart.spacing': 'packed',
+        'Board.UnsortedPart.spacing': 'packed'
+      }
+    });
+    const put = built.labels.indexOf('@pass.put#1');
+    expect(put).toBeGreaterThan(0);
+    const page = await browser!.newPage({ viewport: { width: 760, height: 320 } });
+    await page.setContent(sandboxDocument('', built.javascript, 0, 1));
+    await page.waitForFunction(() =>
+      document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
+    );
+    await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), put - 1);
+    await page.waitForTimeout(2000);
+    // Where the right part drew 12 before the put, then, each frame of the put, the sorted frame
+    // around 12: its left edge, its fill, and whether 12 sits inside it.
+    const { from, frames } = await page.evaluate(async (step) => {
+      const shown = () => document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)');
+      const holding = (kind: string) =>
+        [...(shown()?.querySelectorAll<HTMLElement>(`[data-sv-kind$="${kind}"]`) ?? [])].find(
+          (node) => node.textContent?.trim() === '12'
+        );
+      const from = holding('Right')!.getBoundingClientRect().left;
+      const frames: { left: number; fill: string; inside: boolean }[] = [];
+      const start = performance.now();
+      window.postMessage({ type: 'sverlin:step', step }, '*');
+      while (performance.now() - start < 700) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const frame = holding('Left');
+        const value = frame?.querySelector<HTMLElement>('[data-sv-identity]');
+        if (!frame || !value) continue;
+        const box = frame.getBoundingClientRect();
+        const at = value.getBoundingClientRect();
+        const middle = at.left + at.width / 2;
+        frames.push({
+          left: box.left,
+          fill: getComputedStyle(frame).backgroundColor,
+          inside: middle >= box.left - 1 && middle <= box.right + 1
+        });
+      }
+      return { from, frames };
+    }, put);
+    await page.close();
+
+    expect(frames.length).toBeGreaterThan(8);
+    // It starts away from where it lands, where the right part drew 12, and moves across.
+    const to = frames.at(-1)!.left;
+    expect(Math.abs(from - to)).toBeGreaterThan(20);
+    expect(Math.abs(frames[0].left - to)).toBeGreaterThan(Math.abs(from - to) / 2);
+    const start = frames[0].left;
+    const between = frames.filter(
+      ({ left }) => Math.min(start, to) + 2 < left && left < Math.max(start, to) - 2
+    );
+    expect(between.length).toBeGreaterThan(4);
+    // The value is inside its frame at every frame: no empty blue box where it lands.
+    expect(frames.every(({ inside }) => inside)).toBe(true);
+    // Its fill blends into the sorted blue rather than switching at once.
+    expect(new Set(frames.map(({ fill }) => fill)).size).toBeGreaterThan(3);
+  }
+);

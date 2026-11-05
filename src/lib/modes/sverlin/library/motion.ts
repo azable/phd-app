@@ -46,9 +46,9 @@ function placedByIdentity(layer: HTMLElement): Map<string, Placed[]> {
 
 /**
  * The nodes of a layer that draw no value of their own but frame exactly one, as a cell of a kind an
- * {#if} chose around the value it holds, each with its box.
+ * {#if} chose around the value it holds, each with its box and the identity of the value it holds.
  */
-function framesOf(layer: HTMLElement): Placed[] {
+function framesOf(layer: HTMLElement): (Placed & { holds: string; value: HTMLElement })[] {
   return [...layer.querySelectorAll<HTMLElement>('.sv-node:not([data-sv-identity])')].flatMap(
     (element) => {
       if (element.closest<HTMLElement>('[data-sv-hidden]')?.dataset.svHidden === 'true') return [];
@@ -56,7 +56,16 @@ function framesOf(layer: HTMLElement): Placed[] {
       const values = [...element.querySelectorAll<HTMLElement>('[data-sv-identity]')].filter(
         (inner) => !element.contains(inner.parentElement?.closest('[data-sv-identity]') ?? null)
       );
-      return values.length === 1 ? [{ element, box: element.getBoundingClientRect() }] : [];
+      return values.length === 1
+        ? [
+            {
+              element,
+              box: element.getBoundingClientRect(),
+              holds: values[0].dataset.svIdentity ?? '',
+              value: values[0]
+            }
+          ]
+        : [];
     }
   );
 }
@@ -281,6 +290,26 @@ export function animateStep(
     });
   }
 
+  // A frame around one value that moved, as a cell crossing from the unsorted part to the sorted,
+  // is a new node no identity pairs: it moves with its value, so the value never leaves it and it
+  // never waits empty where the value lands, its paint blending from the frame that held the same
+  // value before, where one did. A frame in the same place as one before is paired by place below.
+  const oldFrames = framesOf(before);
+  const newFrames = framesOf(after);
+  for (const { element, box, holds, value } of newFrames) {
+    const carried = moves.get(value);
+    if (!carried || oldFrames.some((frame) => samePlace(frame.box, box))) continue;
+    const held = [holds, copiedFrom(holds, copies)];
+    const sources = oldFrames.filter((frame) => held.includes(frame.holds));
+    moves.set(element, {
+      x: carried.x,
+      y: carried.y,
+      scale: scaleOf(element, box) / ownScale(element),
+      grown: 1,
+      source: sources.length === 1 ? sources[0].element : element
+    });
+  }
+
   // Each node's old and new size and paint, read before anything here animates, as a parent's
   // colour animating would change what its children inherit.
   const styles = new Map(
@@ -292,8 +321,8 @@ export function animateStep(
   // A frame around one value, in the same place, drawn as another kind than before, as a cell an
   // {#if} draws as sorted or unsorted, fades from its old paint to its new: it is a new node, which
   // no identity pairs, so it would otherwise switch at once.
-  const oldFrames = framesOf(before);
-  const reframed = framesOf(after).flatMap(({ element, box }) => {
+  const reframed = newFrames.flatMap(({ element, box }) => {
+    if (moves.has(element)) return [];
     const was = oldFrames.find(
       (frame) =>
         samePlace(frame.box, box) && frame.element.dataset.svKind !== element.dataset.svKind
