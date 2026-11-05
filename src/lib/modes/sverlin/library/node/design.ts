@@ -264,7 +264,7 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
   return match ? { hue: match[1], shade: Number(match[2]) } : undefined;
 }
 
-const spacing = [0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
+const spacing = [0, 0.0625, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in

@@ -1135,9 +1135,9 @@ Every kind of node has these props, each with a fixed set of options:
   casual (rounded, handwritten), or slab (a serif with square, heavy serifs);
   `textSize`: 12, 14, 16, 18, 20, 24, 30, 36, or 48 pixels; `weight`: normal or
   bold.
-- `padding`: 0, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em; `radius`: 0, 2,
-  4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`, the least width
-  and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.
+- `padding`: 0, 0.0625, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em;
+  `radius`: 0, 2, 4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`,
+  the least width and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.
 - `shadow`: none, soft (a faint blur below), lifted (deeper and further down,
   raised off the page), or hard (a crisp block down and to the right, in its
   stroke colour or else its text's, a flat graphic look); `glow`: none or on, a

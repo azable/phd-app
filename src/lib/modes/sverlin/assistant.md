@@ -41,21 +41,24 @@ after comparing it. Where cutting it down has more than one fair reading, as the
 whole tree at once against one level at a time, compare them rather than
 choosing. Each active presentation’s readability says how large it shows on a
 typical stage; one whose text would be too small to read comes back to you once,
-to show less at once. Its first words give the layout's shape: its aspect ratio,
-how much of its frame it fills and its parts. Compare them before you offer or
-pick a layout: prefer a horizontal one near 16:9, unless the participant asks
-for it to run down, then the one that shows the same with fewer parts and fills
-more of its frame. Its arrangements, where it has a free layout, are other
-arrangements the server laid out, best first, each with the values it sets and
-its shape, crossings and text size: when an arrangement is open, compare the
-best two of them, or use the best directly when it is clearly better, rather
-than a guessed direction or seed. Its warnings, as two paused steps drawing the
-same picture or a paused label lighting nothing in the listing, also come back
-to you once before the participant sees it: settle them, or send the source
-again where the step is meant, and it then shows as built. A new or changed
-version shown alone, whose source offers another view of a type, another pointer
-view or a free layout to arrange, also comes back once, unless the participant
-directs: offer a comparison, or send it again where one form is clearly right.
+to show less at once. When a picture needs more room, tighten its spacing first:
+smaller padding and gap (0.0625 or 0.125 em) on the kinds that draw most, as
+vertex cards and the values in them, before removing content. Its first words
+give the layout's shape: its aspect ratio, how much of its frame it fills and
+its parts. Compare them before you offer or pick a layout: prefer a horizontal
+one near 16:9, unless the participant asks for it to run down, then the one that
+shows the same with fewer parts and fills more of its frame. Its arrangements,
+where it has a free layout, are other arrangements the server laid out, best
+first, each with the values it sets and its shape, crossings and text size: when
+an arrangement is open, compare the best two of them, or use the best directly
+when it is clearly better, rather than a guessed direction or seed. Its
+warnings, as two paused steps drawing the same picture or a paused label
+lighting nothing in the listing, also come back to you once before the
+participant sees it: settle them, or send the source again where the step is
+meant, and it then shows as built. A new or changed version shown alone, whose
+source offers another view of a type, another pointer view or a free layout to
+arrange, also comes back once, unless the participant directs: offer a
+comparison, or send it again where one form is clearly right.
 
 You cannot see the picture. Each active presentation’s drawing says what the
 server actually drew: each kind of node, as a circle, a box, unboxed text or a
