@@ -78,3 +78,22 @@ export function placePaint(
   const lit = values['listing.lit.fill'] as string | undefined;
   return unseen.has(lit) ? 'amber-300' : (lit as string);
 }
+
+const lightLooks = {
+  fill: 'a 3px band round it',
+  underline: 'a line under it',
+  outline: 'a ring off it'
+} as const;
+
+/**
+ * What the place lights draw, for the assistant's drawing: at a step whose code touches a place,
+ * the node drawing it lights in the place's colour, which no prop of the node's kind removes, so
+ * the variable that does is named; a participant sees the light as part of the node.
+ */
+export function placeLightsText(
+  places: { look: keyof typeof lightLooks; paints: Readonly<Record<string, string>> } | undefined
+): string | undefined {
+  const lit = Object.entries(places?.paints ?? {}).map(([place, paint]) => `${place} in ${paint}`);
+  if (!places || !lit.length) return undefined;
+  return `Place lights (listing.places ${places.look}): at a step whose code touches a place, the node drawing it shows ${lightLooks[places.look]}, as its tokens light: ${lit.join(', ')}; listing.places none removes them.`;
+}

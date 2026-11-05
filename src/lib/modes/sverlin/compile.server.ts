@@ -52,6 +52,7 @@ import type { Listing, PlaceToken } from './listing/listing';
 import { mappedListing, type RegionMap } from './listing/mapped.server';
 import { syntaxSpans } from './listing/syntax';
 import {
+  placeLightsText,
   placePaint,
   tokenProblems,
   touchedPlaces,
@@ -2734,7 +2735,13 @@ export async function bundlePresentation(
   const layout: SvelteBundle['layout'] = {
     ...laid,
     ...(size ? { readability: readabilityOf(size, frame.ratio) } : {}),
-    ...(drawing ? { drawing: drawingText(drawing) } : {}),
+    ...(drawing
+      ? {
+          drawing: [drawingText(drawing), placeLightsText(listing?.places)]
+            .filter(Boolean)
+            .join(' ')
+        }
+      : {}),
     ...(arrangements ? { arrangements } : {})
   };
   return {

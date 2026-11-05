@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent, shownListing } from '../compile.server';
 import { readRegions } from './mapped.server';
-import { placePaint, touchedPlaces } from './places.server';
+import { placeLightsText, placePaint, touchedPlaces } from './places.server';
 
 const binarySearch = (listing: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -195,6 +195,23 @@ describe('tokens naming places in a listing', () => {
       prepared.paced(new Set()).lit
     );
     expect(none?.places).toBeUndefined();
+  });
+
+  it('are told to the assistant with the variable that removes them, as no node prop does', () => {
+    const prepared = prepareSvelteComponent(binarySearch(tokened));
+    const values = { ...prepared.design.starter, 'Arrow.Pointed@mid.fill': 'sky-200' };
+    const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
+    const text = placeLightsText(listing?.places);
+    expect(text).toContain('listing.places fill');
+    expect(text).toContain('a 3px band round it');
+    expect(text).toContain('@mid in sky-200');
+    expect(text).toContain('listing.places none removes them');
+    const none = shownListing(
+      prepared,
+      { ...values, 'listing.places': 'none' },
+      prepared.paced(new Set()).lit
+    );
+    expect(placeLightsText(none?.places)).toBeUndefined();
   });
 
   it('touch the loop variables and the key of insertion sort', () => {
