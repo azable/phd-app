@@ -344,9 +344,10 @@ required: where they have none or would rather not say, infer what you can from
 their request and move on without asking again. vocabulary is the words and
 notation the subject uses or avoids: use them in labels, captions, the listing
 and your replies, and never a term the participant rejects; ask it once
-something is labelled. tone is academic and restrained (assumed) or bolder:
-restrained is plain fonts, few colours, one accent, no decoration, never a
-generic, flashy look. Each visualisation shows the fixed examples its cases
+something is labelled. Write costs and notation as inline maths, as \(O(n \log
+n)\) (see the guide's Maths). tone is academic and restrained (assumed) or
+bolder: restrained is plain fonts, few colours, one accent, no decoration, never
+a generic, flashy look. Each visualisation shows the fixed examples its cases
 give: if students are to try inputs of their own, say so plainly and set setting
 alone. use says where it will be shown (live slides, lecture notes, TikZ, a page
 students open): slides need large lettering. Low vision (constraints low-vision)

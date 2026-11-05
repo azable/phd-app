@@ -15,6 +15,7 @@ import { spanKey } from '../algorithm/interpret.server';
 import type { Label } from '../algorithm/labels.server';
 import { spanOf } from '../algorithm/parse.server';
 import type { Listing, Mark } from './listing';
+import { mathsText, tokenInMaths, unclosedMaths } from '../maths.server';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
 export type Region = { label: string; start: number; end: number; at: number };
@@ -85,6 +86,22 @@ export function readRegions(body: string): {
       .flatMap((region) => (region !== 'plain' && 'label' in region ? [region.label] : []))
       .at(-1);
   for (let index = 0; index < source.length; index++) {
+    // Inline maths, \(…\), is its Unicode text, holding no region or token.
+    if (source.startsWith('\\(', index)) {
+      const close = source.indexOf('\\)', index + 2);
+      if (close < 0) {
+        problems.push({ message: unclosedMaths, block: 'listing', at: characters[index].at });
+        break;
+      }
+      const inside = source.slice(index + 2, close);
+      const marked = /[$@][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u.exec(inside);
+      const converted = marked ? { problem: tokenInMaths(marked[0]) } : mathsText(inside);
+      if ('problem' in converted)
+        problems.push({ message: converted.problem, block: 'listing', at: characters[index].at });
+      else text += converted.text;
+      index = close + 1;
+      continue;
+    }
     const token = source[index] === '$' ? tokenOpen.exec(source.slice(index)) : null;
     if (token) {
       const outer = open.find(

@@ -1526,6 +1526,25 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </Storyboard>
 ```
 
+### Maths
+
+Write inline maths as LaTeX between `\(` and `\)`, in a node's text or in a
+listing, for example `\(O(n \log n)\)` or `\(a_i \le a_{i+1}\)`. The build
+writes it as Unicode text, `O(n log n)` and `aᵢ ≤ aᵢ₊₁`. In a node it is a node
+of kind `Math`, which has its own looks in the design.
+
+- Greek letters, named operators such as `\log` and `\max`, relations such as
+  `\le` and `\in`, operators such as `\cdot` and `\sum`, arrows, `\infty`, and
+  brackets such as `\lceil` and `\langle` all convert.
+- `^` and `_` convert where Unicode has a superscript or subscript for every
+  character, as `n^2` and `a_{i+1}`.
+- `\mathbb{N}` gives ℕ, `\text{…}` keeps words upright, and `\sqrt{n}` gives √n.
+- The build refuses what has no form on one line, and says what to write: a
+  fraction (write `(n+1)/2`), stacked limits, accents, a subscript Unicode has
+  no letters for (write `A[mid]`, not `A_{mid}`), or a long `\sqrt`.
+- A token, `$i[…]`, or a region, `@x[…]`, cannot be inside maths: write it
+  beside the maths.
+
 ## Node
 
 A node is one of three things:

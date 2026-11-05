@@ -22,11 +22,15 @@ RANGES = [
     (0x0020, 0x007E),  # Basic Latin
     (0x00A0, 0x017F),  # Latin-1, Latin Extended-A
     (0x0300, 0x036F),  # combining marks
+    (0x02B0, 0x02FF),  # modifier letters, superscripts inline maths writes (ʰ ʲ ʳ ˡ ˢ ˣ)
     (0x0370, 0x03FF),  # Greek, for the letters algorithms name things by
+    (0x1D2C, 0x1DBF),  # phonetic extensions, the other super- and subscript letters (ᵃ ᵢ ᵦ ᶜ)
+    (0x2C7C, 0x2C7D),  # subscript j and superscript V
     (0x2000, 0x20BF),  # punctuation, super- and subscripts, currency
     (0x2100, 0x23FF),  # letterlike, number forms, arrows, mathematical operators, technical
     (0x2500, 0x257F),  # box drawing
     (0x25A0, 0x27BF),  # shapes, symbols, dingbats (check marks)
+    (0x27E6, 0x27EB),  # mathematical brackets (⟨ ⟩)
     (0x27F0, 0x27FF),  # long arrows
     (0x2900, 0x297F),  # supplemental arrows
 ]

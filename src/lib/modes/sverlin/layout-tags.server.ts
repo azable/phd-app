@@ -10,6 +10,7 @@
  */
 
 import { fitted } from './layouts.server';
+import { mathsSpans, mathsText, tokenInMaths, unclosedMaths } from './maths.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -50,6 +51,10 @@ const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
 /** How a layout is written, for messages. */
 const layoutAdvice =
   'a layout is written <Layout name="Window" of="values, lo, hi">…</Layout>, named, with the state it reads, and rendered by another as <Window values={values} lo={lo} hi={hi} />';
+
+/** Text as Svelte markup reads it literally: no expression, tag, or entity in it. */
+const escapeText = (text: string) =>
+  text.replace(/[&<>{}]/gu, (character) => `&#${character.codePointAt(0)};`);
 
 /** Blank text, keeping its lines. */
 const blank = (text: string) => text.replace(/[^\n]/gu, ' ');
@@ -116,8 +121,28 @@ export function layoutTags(source: string): {
   captions: { place: string; start: number }[];
 } {
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
-  const scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, blank);
-  const problems = writtenSnippets(scanned);
+  let scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, blank);
+  // Inline maths, \(…\), becomes its Unicode text in a node of kind Math, and is read as spaces
+  // by every scan after, so its braces and $ are no Svelte expression or token.
+  const mathsProblems: Problem[] = [];
+  const mathsEdits: { start: number; length: number; text: string }[] = [];
+  for (const { start, end, inside } of mathsSpans(scanned)) {
+    if (end < 0) {
+      mathsProblems.push({ message: unclosedMaths, start });
+      break;
+    }
+    const token = /\$[A-Za-z_]\w*\[/u.exec(inside);
+    const converted = token ? { problem: tokenInMaths(token[0]) } : mathsText(inside);
+    if ('problem' in converted) mathsProblems.push({ message: converted.problem, start });
+    else
+      mathsEdits.push({
+        start,
+        length: end - start,
+        text: `<Node kind="Math">${escapeText(converted.text)}</Node>`
+      });
+    scanned = scanned.slice(0, start) + blank(scanned.slice(start, end)) + scanned.slice(end);
+  }
+  const problems = [...mathsProblems, ...writtenSnippets(scanned)];
   const declared: (DeclaredLayout & { opening: { start: number; end: number } })[] = [];
   for (const match of scanned.matchAll(layoutOpening)) {
     const start = match.index ?? 0;
@@ -194,7 +219,7 @@ export function layoutTags(source: string): {
   problems.push(...storyboard.problems);
   const unshown: Problem[] = storyboard.missing ? [storyboard.missing] : [];
   const containing = (at: number) => declared.find(({ body }) => at >= body.start && at < body.end);
-  const edits: { start: number; length: number; text: string }[] = [];
+  const edits: { start: number; length: number; text: string }[] = [...mathsEdits];
   const renders = new Map<string, Set<string>>();
   const tags = new RegExp(
     `<(${[...byName.keys()].map((each) => each.replace('$', '\\$')).join('|') || '(?!)'})\\b((?:[^>{"']|"[^"]*"|'[^']*'|\\{[^}]*\\})*)>`,
