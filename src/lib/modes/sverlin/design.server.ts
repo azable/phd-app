@@ -22,14 +22,16 @@ import {
   groupOf,
   groupOptions,
   groupProps,
+  inheritKey,
+  levelFor,
   propOptions,
-  roleLooks,
   roleProps,
   starterFrame,
   starterFreeLayout,
   starterListing,
   starterLooks,
   starterTokens,
+  styleOf,
   tagOf,
   tokenProps,
   type DesignProp,
@@ -163,25 +165,79 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   };
 }
 
-/** The level a kind's variable follows: its role and prop, as value and padding for IntCell.padding. */
-function levelOf(
-  roles: Readonly<Record<string, KindRole>>,
-  key: string
-): { role: KindRole; prop: DesignProp } | undefined {
+/** Whether a kind's variable follows a level: a prop of a kind with a role its group can set. */
+function follows(roles: Readonly<Record<string, KindRole>>, key: string): boolean {
   const kind = kindOf(key);
   const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-  const prop = key.slice(kind.length + 1) as DesignProp;
-  return role && groupProps(role).includes(prop) ? { role, prop } : undefined;
+  return !!role && groupProps(role).includes(key.slice(kind.length + 1) as DesignProp);
 }
 
-/** The variable a kind's level value comes from: its group where set, else its role look's token. */
-function levelSource(
+/**
+ * How many kinds each kind inherits through (see levelFor), so a kind's source settles before it:
+ * 0 for one inheriting none or a style. A kind inheriting a kind that inherits it back is an error
+ * naming the round.
+ */
+function inheritance(
   values: Readonly<Record<string, DesignValue>>,
-  { role, prop }: { role: KindRole; prop: DesignProp }
-): string | undefined {
-  const group = groupKey(tagOf(role), prop);
-  const value = Object.hasOwn(values, group) ? values[group] : roleLooks[role][prop];
-  return isToken(value) ? value : Object.hasOwn(values, group) ? group : undefined;
+  roles: Readonly<Record<string, KindRole>>
+): Map<string, number> {
+  const depth = new Map<string, number>();
+  const sourceOf = (kind: string) => {
+    const source = values[inheritKey(kind)];
+    return typeof source === 'string' && Object.hasOwn(roles, source) ? source : undefined;
+  };
+  for (const kind of Object.keys(roles)) {
+    const round = [kind];
+    for (let source = sourceOf(kind); source; source = sourceOf(source)) {
+      if (round.includes(source))
+        throw new DesignValueError(
+          `${[...round, source].join(' inherits ')}: a kind cannot inherit what inherits it; set one of them to inherit none or a $ style.`
+        );
+      round.push(source);
+    }
+    depth.set(kind, round.length - 1);
+  }
+  return depth;
+}
+
+/**
+ * The space with the styles the variant names (see isStyle): each style's props, taking the options
+ * every kind inheriting it has for the prop, or, where none inherits it yet, any kind's; and each
+ * kind's inherit taking the styles as options beside its role's kinds.
+ */
+function withStyles(
+  space: DesignSpace,
+  roles: Readonly<Record<string, KindRole>>,
+  values: Readonly<Record<string, unknown>>
+): DesignSpace {
+  const named = Object.keys(values).flatMap((key) => styleOf(key) ?? []);
+  const styles = [...new Set(named.map(({ style }) => style))];
+  if (!styles.length) return space;
+  const extended: Record<string, readonly DesignValue[]> = { ...space };
+  for (const { style, prop } of named) {
+    const heirs = Object.keys(roles).filter(
+      (kind) => values[inheritKey(kind)] === style && Object.hasOwn(space, `${kind}.${prop}`)
+    );
+    const holders = heirs.length
+      ? heirs
+      : Object.keys(roles).filter((kind) => Object.hasOwn(space, `${kind}.${prop}`));
+    const [first = [], ...rest] = holders.map((kind) => space[`${kind}.${prop}`]);
+    const options = heirs.length
+      ? first.filter((option) => rest.every((options) => options.includes(option)))
+      : [...new Set([first, ...rest].flat())];
+    // A style's prop may name a token of that prop whose every value it can take, as a group's.
+    const fitting = tokens.filter(
+      (token) =>
+        tokenProps[token] === prop &&
+        propOptions[tokenProps[token]].every((option) => options.includes(option as never))
+    );
+    extended[`${style}.${prop}`] = [...options.filter((option) => !isToken(option)), ...fitting];
+  }
+  for (const kind of Object.keys(roles)) {
+    const key = inheritKey(kind);
+    if (Object.hasOwn(space, key)) extended[key] = [...space[key], ...styles];
+  }
+  return extended;
 }
 
 /**
@@ -206,16 +262,6 @@ function groupUnfit(
   return cannot.length && cannot.length < reached.length
     ? `${key} cannot be ${JSON.stringify(value)}: it sets every kind of ${group.tag} with ${group.prop}, and ${cannot.join(', ')} cannot take it; set the others one by one, as ${reached.find((kind) => !cannot.includes(kind))}.${group.prop}.`
     : undefined;
-}
-
-/** The value a kind's level gives: its group's where set, else its role's look, through tokens. */
-function levelValue(
-  values: Readonly<Record<string, DesignValue>>,
-  { role, prop }: { role: KindRole; prop: DesignProp }
-): DesignValue | undefined {
-  const group = groupKey(tagOf(role), prop);
-  const value = Object.hasOwn(values, group) ? values[group] : roleLooks[role][prop];
-  return isToken(value) ? values[value] : value;
 }
 
 /** The layouts of a space: the kinds with a frame. */
@@ -354,6 +400,19 @@ export function designSpace(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, kindOptions(kind, prop)])
       )
+    ),
+    // What each kind inherits: none, or a kind of its role; the styles a variant names join these
+    // (see withStyles). The starter sets none, so a variant stores one only where it inherits.
+    ...Object.fromEntries(
+      kinds.map((kind) => [
+        inheritKey(kind.key),
+        [
+          'none',
+          ...kinds
+            .filter((other) => other.role === kind.role && other.key !== kind.key)
+            .map(({ key }) => key)
+        ]
+      ])
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
     ...Object.fromEntries(
@@ -502,7 +561,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
  * cannot take is an error naming that kind.
  */
 export function buildVariant(
-  space: DesignSpace,
+  offered: DesignSpace,
   starter: Readonly<Record<string, DesignValue>>,
   request: VariantRequest,
   seed: number,
@@ -515,21 +574,46 @@ export function buildVariant(
 } {
   // Keys come written or as kept (see design-keys.ts): `{Int}`, `IntCell:target.stroke` and
   // <Listing>.syntax are views.Int, IntCell@target.stroke and listing.syntax here.
+  const aliased = (entries: Record<string, unknown> | undefined) =>
+    keptValues(entries ?? {}, (key) => Object.hasOwn(offered, key));
+  const base = aliased(request.base);
+  const chosenValues = aliased(request.chosen);
+  // The styles the base and the chosen values name join the space (see withStyles).
+  const space = withStyles(offered, roles, { ...base, ...chosenValues });
   const has = (key: string) => Object.hasOwn(space, key);
-  const aliased = (entries: Record<string, unknown> | undefined) => keptValues(entries ?? {}, has);
-  const given = Object.entries(aliased(request.chosen));
-  const chosen = given.filter(([key]) => Object.hasOwn(space, key));
+  const asGiven = Object.entries(chosenValues);
+  const chosen = asGiven.filter(([key]) => has(key));
+  // A style's prop outside what its heirs share names them, as a group's names the kinds it reaches.
+  const heirsOf = (style: string) =>
+    Object.keys(roles).filter((kind) => ({ ...base, ...chosenValues })[inheritKey(kind)] === style);
+  const styleUnfit = (key: string, value: unknown) => {
+    const style = styleOf(key);
+    const heirs = style ? heirsOf(style.style) : [];
+    return heirs.length
+      ? unfit(space, key, value).replace(
+          /;/u,
+          `: ${heirs.join(', ')} ${heirs.length === 1 ? 'inherits' : 'inherit'} ${style!.style}, and`
+        )
+      : undefined;
+  };
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
-    .map(([key, value]) => groupUnfit(space, roles, key, value) ?? unfit(space, key, value));
+    .map(
+      ([key, value]) =>
+        groupUnfit(space, roles, key, value) ?? styleUnfit(key, value) ?? unfit(space, key, value)
+    );
   if (problems.length) throw new DesignValueError(writtenText(problems.join(' '), has));
-  const isLevel = (key: string) => isToken(key) || groupOf(key) !== undefined;
-  const following = Object.keys(starter).filter((key) => levelOf(roles, key));
+  const isLevel = (key: string) =>
+    isToken(key) ||
+    groupOf(key) !== undefined ||
+    styleOf(key) !== undefined ||
+    key.endsWith('.inherit');
+  const following = Object.keys(starter).filter((key) => follows(roles, key));
   const asked =
     request.randomise === true ? [] : (request.randomise ?? []).map((key) => keptKey(key, has));
   const named = asked.filter((key) => Object.hasOwn(space, key));
   const dropped = [
-    ...given
+    ...asGiven
       .filter(([key]) => !Object.hasOwn(space, key))
       .map(([key, value]) => unfit(space, key, value)),
     ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
@@ -538,7 +622,6 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  const base = aliased(request.base);
   for (const [key, value] of Object.entries(base)) {
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
@@ -547,18 +630,21 @@ export function buildVariant(
   }
   // A kind's prop set apart from its level stays its own; every other follows its level.
   const own = new Set(
-    following.filter((key) => values[key] !== levelValue(values, levelOf(roles, key)!))
+    following.filter((key) => values[key] !== levelFor(values, roles, key)!.value)
   );
   // Each kind following a level takes the level's value; one that cannot is the level's error
   // where the level was chosen, and otherwise keeps its own value, as a base kept where it fits.
+  // A kind inheriting a kind follows after it, so it takes the value its source has come to.
   const follow = (checked: ReadonlySet<string>) => {
     const unfits: string[] = [];
-    for (const key of following) {
+    const depth = inheritance(values, roles);
+    const inOrder = following.toSorted(
+      (a, b) => (depth.get(kindOf(a)) ?? 0) - (depth.get(kindOf(b)) ?? 0)
+    );
+    for (const key of inOrder) {
       if (own.has(key)) continue;
-      const level = levelOf(roles, key)!;
-      const value = levelValue(values, level);
+      const { value, from } = levelFor(values, roles, key)!;
       if (value === undefined || value === values[key]) continue;
-      const from = levelSource(values, level);
       if (!fits(space, key, value)) {
         if (from && checked.has(from))
           unfits.push(`${from} is ${JSON.stringify(value)}, but ${unfit(space, key, value)}`);
@@ -577,20 +663,24 @@ export function buildVariant(
     if (value === values[key]) continue;
     values[key] = value;
     origins[key] = 'random';
-    if (request.randomise !== true && levelOf(roles, key)) own.add(key);
+    if (request.randomise !== true && follows(roles, key)) own.add(key);
   }
   follow(new Set());
-  // Levels first, so the kinds following them change; then each kind chosen, its own.
-  for (const [key, value] of chosen.filter(([key]) => isLevel(key))) {
+  // Every chosen value, then the kinds following the levels chosen; a kind chosen is its own, and
+  // one inheriting it follows the value chosen.
+  for (const [key, value] of chosen) {
     values[key] = value as DesignValue;
     origins[key] = 'chosen';
+    if (follows(roles, key)) own.add(key);
   }
-  for (const [key] of chosen) if (levelOf(roles, key)) own.add(key);
+  // A kind chosen to inherit something follows it where only its starter look set it apart, as a
+  // link's label starting unboxed: that look was no one's choice. Values chosen, kept or drawn stay.
+  for (const [key] of chosen.filter(([key]) => key.endsWith('.inherit'))) {
+    const kind = key.slice(0, -'.inherit'.length);
+    for (const prop of following.filter((name) => kindOf(name) === kind))
+      if (origins[prop] === 'starter') own.delete(prop);
+  }
   follow(new Set(chosen.map(([key]) => key).filter(isLevel)));
-  for (const [key, value] of chosen.filter(([key]) => !isLevel(key))) {
-    values[key] = value as DesignValue;
-    origins[key] = 'chosen';
-  }
   // In order, so a place falling back to another place, as a listing's region to its label's mark,
   // takes the value that one has come to.
   for (const [key, given] of Object.entries(fallbacks)) {
@@ -618,11 +708,12 @@ function propOf(key: string): string {
 }
 
 /**
- * Props a random variant leaves as they were: what is shown, how things line up, the frame, a
- * listing's language, and a text's decoration, as a line through it can mean it
+ * Props a random variant leaves as they were: what a kind inherits, what is shown, how things line
+ * up, the frame, a listing's language, and a text's decoration, as a line through it can mean it
  * is gone.
  */
 const kept = new Set<string>([
+  'inherit',
   'language',
   'shown',
   'opacity',

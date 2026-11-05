@@ -37,13 +37,21 @@ const bottom = {
 };
 
 describe('variant diff', () => {
-  it('writes every variant in one key order, one row per value', () => {
+  it('writes every variant nested, in one key order, one row per value', () => {
     expect(variantDocument(top).split('\n')).toEqual([
       '{',
-      '  "Arrow.style": "curved",',
-      '  "Box.gap": 8,',
-      '  "Here.shown": true,',
-      '  "Label.size": "small"',
+      '  "Arrow": {',
+      '    "style": "curved"',
+      '  },',
+      '  "Box": {',
+      '    "gap": 8',
+      '  },',
+      '  "Here": {',
+      '    "shown": true',
+      '  },',
+      '  "Label": {',
+      '    "size": "small"',
+      '  }',
       '}'
     ]);
   });
@@ -56,15 +64,16 @@ describe('variant diff', () => {
     };
     expect(JSON.parse(variantDocument(kept))).toEqual({
       '{Int}': 'IntCell',
-      'IntCell:k.fill': 'red-500',
-      'Card=true.fill': 'blue-100'
+      IntCell: { ':k': { fill: 'red-500' } },
+      Card: { '=true': { fill: 'blue-100' } }
     });
   });
 
   it('lines up rows of values set in different orders, marking only those that differ', () => {
+    // Each row names its prop, inside its kind's object.
     expect(changedKeys(variantDocument(top), variantDocument(bottom))).toEqual({
-      a: ['Here.shown', 'Label.size'],
-      b: ['Here.shown', 'Label.size']
+      a: ['shown', 'size'],
+      b: ['shown', 'size']
     });
     expect(differingKeys(top, bottom)).toEqual(['Here.shown', 'Label.size']);
   });
@@ -81,9 +90,10 @@ describe('variant diff', () => {
     const withoutGap = Object.fromEntries(
       Object.entries(bottom).filter(([key]) => key !== 'Box.gap')
     );
+    // The kind's object goes with its one value: its opening row, the value, its closing row.
     expect(changedKeys(variantDocument(top), variantDocument(withoutGap))).toEqual({
-      a: ['Box.gap', 'Here.shown', 'Label.size'],
-      b: ['Here.shown', 'Label.size']
+      a: ['Box', 'gap', undefined, 'shown', 'size'],
+      b: ['shown', 'size']
     });
     expect(differingKeys(top, withoutGap)).toEqual(['Box.gap', 'Here.shown', 'Label.size']);
   });
@@ -153,8 +163,29 @@ describe("a developer's edit of the choices", () => {
     expect(choiceEdits(shown, '[1]')).toEqual({
       error: 'The choices must be one JSON object, each variable to its value.'
     });
-    expect(choiceEdits(shown, '{ "IntCell.fill": null }')).toEqual({
-      error: 'IntCell.fill must be a string, a number or a boolean, not null.'
+    expect(choiceEdits(shown, '{ "IntCell": { "fill": [1] } }')).toEqual({
+      error: 'IntCell.fill must be a string, a number or a boolean, not [1].'
     });
+  });
+
+  it('reads the nested document, a null removing a value as a JSON Merge Patch does', () => {
+    const edited = JSON.stringify({
+      $spacing: 0.375,
+      $cell: { radius: 4 },
+      IntCell: { '...': '$cell', fill: null, padding: 0.375 }
+    });
+    expect(choiceEdits(shown, edited)).toEqual({
+      chosen: { '$cell.radius': 4, 'IntCell.inherit': '$cell' },
+      unset: ['IntCell.fill']
+    });
+  });
+
+  it('still reads an older flat document', () => {
+    const flat = JSON.stringify({
+      'IntCell.fill': 'blue-100',
+      'IntCell.padding': 0.375,
+      $spacing: 0.375
+    });
+    expect(choiceEdits(shown, flat)).toEqual({ chosen: { 'IntCell.fill': 'blue-100' }, unset: [] });
   });
 });

@@ -4,23 +4,29 @@
  * @packageDocumentation
  */
 
-import { keptValues, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+import {
+  flatDesign,
+  keptValues,
+  nestedDesign,
+  writtenValues
+} from '$lib/modes/sverlin/library/node/design-keys';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /**
- * A variant as JSON, one row per value, its keys as written (see design-keys.ts) and in one order,
+ * A variant as JSON in its nested form (see nestedDesign), its keys as written and in one order,
  * so two variants' rows line up and differ only where their values do.
  */
 export function variantDocument(variant: DesignValues): string {
-  const sorted = Object.entries(writtenValues(variant)).sort(([a], [b]) => a.localeCompare(b));
-  return JSON.stringify(Object.fromEntries(sorted), null, 2);
+  return JSON.stringify(nestedDesign(writtenValues(variant)), null, 2);
 }
 
 /**
- * A developer's edit of a version's choices as their document (see variantDocument): the values
- * it changes or adds, to build with as chosen, and the variables it removes, to stop keeping, so
- * every value left as it was keeps following its token or group; or why the text is not such a
- * document. A value is a string, a number or a boolean, as a variant's are.
+ * An edit of a version's choices as their document (see variantDocument): the values it changes or
+ * adds, to build with as chosen, and the variables it removes, to stop keeping, so every value left
+ * as it was keeps following what it inherits, its group or its token; or why the text is not such
+ * a document. The document is the whole design, nested or, as older documents were, flat: a key
+ * removed, or set to null as a JSON Merge Patch removes one, returns to what it follows. A value is
+ * a string, a number or a boolean, as a variant's are.
  */
 export function choiceEdits(
   shown: DesignValues,
@@ -34,17 +40,18 @@ export function choiceEdits(
   }
   if (!edited || typeof edited !== 'object' || Array.isArray(edited))
     return { error: 'The choices must be one JSON object, each variable to its value.' };
-  const entries = Object.entries(edited);
+  const entries = Object.entries(flatDesign(edited as Record<string, unknown>));
   const wrong = entries.find(
-    ([, value]) => !['string', 'number', 'boolean'].includes(typeof value)
+    ([, value]) => value !== null && !['string', 'number', 'boolean'].includes(typeof value)
   );
   if (wrong)
     return {
       error: `${wrong[0]} must be a string, a number or a boolean, not ${JSON.stringify(wrong[1])}.`
     };
   // Compared as the app keeps them: the document writes its keys in the written form.
-  const kept = keptValues(Object.fromEntries(entries) as DesignValues, (key) =>
-    Object.hasOwn(shown, key)
+  const kept = keptValues(
+    Object.fromEntries(entries.filter(([, value]) => value !== null)) as DesignValues,
+    (key) => Object.hasOwn(shown, key)
   );
   return {
     chosen: Object.fromEntries(

@@ -112,11 +112,12 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   starting with `<!-- summary: … -->` (what it shows, or what it changes, at
   most 300 characters, a version summary's limit) and, to make it a child of an
   earlier example, `<!-- parent: name -->`, and to build it with chosen values,
-  `<!-- variant: {"Here.shown": false} -->`, and to post a note to the chat
-  after it, `<!-- note: … -->` (markdown on one line; code in backticks links to
-  the source): while the page is open, each is saved, in name order, as a
-  version in its chat, and removed from the inbox; one the app refuses is posted
-  to the chat with the reason instead. A version the developer names, as
+  `<!-- variant: {"Here": {"shown": false}} -->` (nested, or flat as
+  `{"Here.shown": false}`), and to post a note to the chat after it,
+  `<!-- note: … -->` (markdown on one line; code in backticks links to the
+  source): while the page is open, each is saved, in name order, as a version in
+  its chat, and removed from the inbox; one the app refuses is posted to the
+  chat with the reason instead. A version the developer names, as
   `3fa2c1/Misty-Falcon-09` (its copy button, or Alt+Shift+C for the one shown,
   copies it), maps to its example in `.demo/names.json`. When done,
   `touch .demo/flush` to replace the project with a fresh one

@@ -151,15 +151,20 @@ variable by its kind and prop, as values.Cell.fill for Cell.fill, with its
 value; a key naming several kinds, as "Note, Status", gives each of them those
 values; its options are project.design.options of the prop, a set written as a
 rule, as colours, naming every hue in every shade. Its levels give each token's
-value, as `$spacing`, and each group a variant sets, as `<Node>`, with the kinds
-following it; a value written as a token, as `"padding": "$spacing"`, follows
-that token, and a kind's prop following a group is told only in the group. For a
-look asked of many kinds at once, as “less padding everywhere” or “every pointer
-teal”, set a token or a group (see Shared values in the guide) rather than each
-kind. Every key is written with its mark, as the design gives it: `{Int}` a
-type's view, `:found` a place, as `IntCell:found.fill`, and `=true` a value, as
-`VertexCard=true.fill`. A selected presentation’s differs gives the values where
-its variant differs from the viewed one. How anything looks is a variable: when
+value, as `$spacing`, each group a variant sets, as `<Node>`, and each style, as
+`$cell`, with the kinds following it; a value written as a token, as
+`"padding": "$spacing"`, follows that token, a kind's prop following a group or
+a style is told only there, and `"..."` in a kind's values is what it inherits.
+For a look asked of many kinds at once, as “less padding everywhere” or “every
+pointer teal”, set a token or a group (see Shared values in the guide) rather
+than each kind; for a look several kinds share, as “value cells rounder with a
+darker frame”, set a style's props and have those kinds inherit it
+(`$cell.radius`, `$cell.stroke`, `IntCell.inherit`). Every key is written with
+its mark, as the design gives it: `{Int}` a type's view, `:found` a place, as
+`IntCell:found.fill`, and `=true` a value, as `VertexCard=true.fill`; in values,
+each variable is one written key, as `$cell.radius` or `IntCell.inherit`. A
+selected presentation’s differs gives the values where its variant differs from
+the viewed one, nested as the design is. How anything looks is a variable: when
 the participant asks for a look, as a colour, a size, rounder cells, another
 view, or leaving something out, use vary instead of changing the source. values
 sets variables, by their key, to one of their options, and randomise names

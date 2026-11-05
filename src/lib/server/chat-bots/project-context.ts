@@ -26,7 +26,12 @@ import {
   preferredPresentation
 } from '$lib/shared/projects/events/visualization-presented';
 import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-ref';
-import { writtenKey, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+import {
+  nestedDesign,
+  type NestedDesign,
+  writtenKey,
+  writtenValues
+} from '$lib/modes/sverlin/library/node/design-keys';
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
 import type {
   BrowserBundlePresentation,
@@ -39,14 +44,13 @@ import {
   listingOptions,
   listingPlacesOptions,
   listingPropOptions,
-  groupKey,
   groupOf,
   groupOptions,
-  groupProps,
   isToken,
+  levelFor,
   overflowOptions,
   propOptions,
-  roleLooks,
+  styleOf,
   tagOf,
   tokenProps,
   type DesignProp,
@@ -178,8 +182,15 @@ export function designContext(design: AiDesign): AiDesignContext {
   const followers = new Map<string, Set<string>>();
   const own = variables.filter(({ variable, value, follows }) => {
     const group = groupOf(variable);
+    const style = styleOf(variable);
     if (isToken(variable)) levels[variable] = value;
     else if (group) ((levels[group.tag] ??= {}) as Record<string, DesignValue>)[group.prop] = value;
+    // A style is a level of its own, as a group is; what a kind inherits is told as "..." with
+    // the kind's own values.
+    else if (style)
+      ((levels[style.style] ??= {}) as Record<string, DesignValue>)[style.prop] = value;
+    else if (variable.endsWith('.inherit'))
+      (values[variable.slice(0, -'.inherit'.length)] ??= {})['...'] = value;
     else if (follows && !isToken(follows)) {
       const group = follows.slice(0, follows.lastIndexOf('.'));
       followers.set(
@@ -354,10 +365,11 @@ export type AiSelectedPresentation = AiPresentationSummary & {
   format: RenderablePresentation['format'];
   steps: Array<{ label: string }>;
   /**
-   * Where its variant differs from the viewed one in project.design: those variables, by key, with
-   * its values. The whole variant repeated the design (23,000 characters in project 7464186f).
+   * Where its variant differs from the viewed one in project.design: those variables, nested (see
+   * nestedDesign), with its values. The whole variant repeated the design (23,000 characters in
+   * project 7464186f).
    */
-  differs?: Record<string, DesignValue>;
+  differs?: NestedDesign<DesignValue>;
 };
 
 /**
@@ -535,7 +547,7 @@ const timelineCases = {
   },
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
   'visualization.variant-reverted': (event) =>
-    `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(writtenValues(event.payload.values))}, though its source draws without them; shown instead with ${JSON.stringify(writtenValues(event.payload.shown))} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
+    `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(nestedDesign(writtenValues(event.payload.values)))}, though its source draws without them; shown instead with ${JSON.stringify(nestedDesign(writtenValues(event.payload.shown)))} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
   // Left out of the index (projectAiContext).
   'visualization.loaded': (event) => `Presentation ${event.payload.presentationId} loaded.`,
   'assistant.responded': () => 'Assistant responded to the user.',
@@ -944,7 +956,9 @@ function selectedPresentation(
         displaySetId: event.payload.displaySetId,
         format: presentation.format,
         steps: presentationStepLabels(presentation).map((label) => ({ label })),
-        ...(differs && Object.keys(differs).length ? { differs: writtenValues(differs) } : {})
+        ...(differs && Object.keys(differs).length
+          ? { differs: nestedDesign(writtenValues(differs)) }
+          : {})
       };
     }
   }
@@ -1211,23 +1225,37 @@ export function designVariables(
   const options: Record<string, readonly DesignValue[]> = {};
   const variant = presentation?.variant ?? {};
   const roles = (presentation?.roles ?? {}) as Readonly<Record<string, KindRole>>;
-  // What a kind's prop follows where it holds that value (see buildVariant): its group where
-  // set, as <Node>.padding, or the token its role's look names, as $spacing.
+  // What a kind's prop follows where it holds that value (see buildVariant): what it inherits,
+  // as $cell.padding or VertexCard.padding, its group where set, as <Node>.padding, or the token
+  // its role's look names, as $spacing.
   const followed = (key: string): string | undefined => {
-    const kind = key.slice(0, Math.max(0, key.lastIndexOf('.')));
-    const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-    const prop = key.slice(kind.length + 1) as DesignProp;
-    if (!role || !groupProps(role).includes(prop)) return undefined;
-    const group = groupKey(tagOf(role), prop);
-    const level = Object.hasOwn(variant, group) ? variant[group] : roleLooks[role][prop];
-    const value = isToken(level) ? variant[level] : level;
-    if (value === undefined || value !== variant[key]) return undefined;
-    return Object.hasOwn(variant, group) ? group : isToken(level) ? level : undefined;
+    const level = levelFor(variant, roles, key);
+    return level?.value !== undefined && level.value === variant[key] ? level.from : undefined;
   };
   const rolesOfTag = (tag: string) =>
     [...new Set(Object.values(roles))].filter((role) => tagOf(role) === tag);
+  const styles = [...new Set(Object.keys(variant).flatMap((key) => styleOf(key)?.style ?? []))];
   const variables = Object.entries(variant).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
+    // What a kind inherits takes none, the kinds of its role, or a style the variant sets; a
+    // style's prop, its prop's options.
+    if (key.endsWith('.inherit')) {
+      const kind = key.slice(0, -'.inherit'.length);
+      const peers = Object.keys(roles).filter(
+        (other) => other !== kind && roles[other] === roles[kind]
+      );
+      return {
+        variable: key,
+        options: ['none', ...peers, ...styles],
+        value,
+        ...(origin ? { origin } : {})
+      };
+    }
+    const style = styleOf(key);
+    if (style && Object.hasOwn(propOptions, style.prop)) {
+      options[style.prop] = propOptions[style.prop as DesignProp];
+      return { variable: key, options: style.prop, value, ...(origin ? { origin } : {}) };
+    }
     // A token's options are its prop's; a role level's, its prop's and the tokens that fit it.
     if (isToken(key)) {
       const set = tokenProps[key];

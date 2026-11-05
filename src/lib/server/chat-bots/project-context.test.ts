@@ -361,6 +361,44 @@ describe('design variables in the AI context', () => {
     expect(design.variables.some(({ variable }) => variable === `${valueKind}.fill`)).toBe(false);
   });
 
+  it('tells a style as a level with the kinds inheriting it, and a kind’s source as "..."', () => {
+    const { design: built } = prepareSvelteComponent(bfs);
+    const valueKind = Object.keys(built.roles).find((kind) => built.roles[kind] === 'value')!;
+    const chosen = {
+      '$cell.radius': 2,
+      '$cell.stroke': 'neutral-500',
+      [`${valueKind}.inherit`]: '$cell'
+    };
+    const { values, origins } = buildVariant(
+      built.space,
+      built.starter,
+      { chosen },
+      1,
+      built.fallbacks,
+      built.roles
+    );
+    const variables = designVariables({ variant: values, origins, roles: built.roles });
+    expect(
+      variables.variables.find(({ variable }) => variable === `${valueKind}.radius`)
+    ).toMatchObject({
+      follows: '$cell.radius'
+    });
+    expect(
+      variables.variables.find(({ variable }) => variable === `${valueKind}.inherit`)?.options
+    ).toContain('$cell');
+    const design = designContext(variables);
+    expect(design.levels?.['$cell']).toEqual({
+      radius: 2,
+      stroke: 'neutral-500',
+      kinds: valueKind
+    });
+    const told = Object.entries(design.values).find(([kinds]) =>
+      kinds.split(', ').includes(valueKind)
+    )?.[1];
+    expect(told?.['...']).toBe('$cell');
+    expect(told?.radius).toBeUndefined();
+  });
+
   it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {
     const value = document();
     const buildId = '22345678-1234-4123-8123-123456789abc';

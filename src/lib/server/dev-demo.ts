@@ -3,8 +3,8 @@
  * agent drops into .demo/inbox, each saved as a version of its own, until a .demo/flush marker
  * replaces it with a fresh project. An example may begin with `<!-- summary: … -->`, saying what it
  * shows or changes, `<!-- parent: name -->`, naming the earlier example it changes (without a
- * parent it starts a tree of its own), `<!-- variant: {"Here.shown": false} -->`, values to build
- * it with, and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
+ * parent it starts a tree of its own), `<!-- variant: {"Here": {"shown": false}} -->`, values to
+ * build it with, nested or flat (see flatDesign), and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
  * Each presentation it shows is named, by the name the page shows it by, in .demo/names.json.
  * Only the dev server serves it.
  */
@@ -23,6 +23,7 @@ import { projectRepository } from '$lib/server/projects/repository';
 import { createProjectSkeleton, draftEvent } from '$lib/server/projects/service';
 import { withoutHeader } from '$lib/server/dev-demo-header';
 import { withExampleNames } from '$lib/server/dev-demo-names';
+import { flatDesign } from '$lib/modes/sverlin/library/node/design-keys';
 import type { DesignValues } from '$lib/shared/presentations';
 import { projectCommandSchema, type ProjectDocument } from '$lib/shared/projects/model';
 
@@ -99,7 +100,7 @@ async function saveWaiting(projectId: string): Promise<void> {
       source,
       presentationCount: 1,
       ...(summary ? { summary } : {}),
-      ...(variant ? { variant: JSON.parse(variant) as DesignValues } : {}),
+      ...(variant ? { variant: flatDesign(JSON.parse(variant)) as DesignValues } : {}),
       ...(from ? { from } : { root: true })
     });
     if (!command.success) {
