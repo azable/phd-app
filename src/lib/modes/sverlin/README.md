@@ -230,8 +230,8 @@ holding them or by a pointer; a layout reads the input and algorithm variables
 it declares.
 
 A value in braces is drawn by its type's view: in the markup's text, `{key}`,
-with `key` an `Int`, draws the view `views.Int` chooses, among every view of
-`Int` and `none`. The braces are Svelte's, holding a value; what they draw is
+with `key` an `Int`, draws the view `{Int}` chooses, among every view of `Int`
+and `none`. The braces are Svelte's, holding a value; what they draw is
 Sverlin's, the type of the value deciding: a view's parameter by its annotation,
 an `{#each}` item by its array, a field by its record, a variable or a label by
 what the steps record it holding. A value without a domain type, as a loop's own
@@ -334,10 +334,10 @@ pointer that marks nothing at any step.
   blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
   an element, a field (`{edges[e].to}`), or a label (see Views of what a step
   computed). There a position type draws as a mark, through its pointer views
-  (`pointers.Index`), so every mark of it looks the same; inside another node,
-  as `<Node>at {i}</Node>`, as its number, through its other views
-  (`views.Index`). A pointer in a layout another layout draws by its tag draws
-  nothing and keeps no room.
+  (`{Index}.pointer`), so every mark of it looks the same; inside another node,
+  as `<Node>at {i}</Node>`, as its number, through its other views (`{Index}`).
+  A pointer in a layout another layout draws by its tag draws nothing and keeps
+  no room.
 - The page draws the pointer around the element wherever that is drawn. Every
   element keeps room for the pointers that can point into its array, and a
   position shown past an end gets a slot there, so nothing moves as pointers
@@ -353,8 +353,8 @@ pointer that marks nothing at any step.
   view, as `i` under the mark, is right only where the variant chooses that view
   for that place, and a randomised variant can choose it elsewhere. Prefer one
   pointer view that names nothing; where views of one type must say different
-  things, each place's view is chosen by what it says, as `pointers.Position@j`
-  (see Places).
+  things, each place's view is chosen by what it says, as `{Position}:j` (see
+  Places).
 - A reference follows its element as it moves: `{tracked}`, with
   `const tracked = Tracked(values[3]);`, marks that value wherever a sort takes
   it.
@@ -741,9 +741,9 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   look (`NodeBox.NextField`); the arrow leaves the field, arcing over its node
   where it points back. A tree's children are placed in the order their links
   leave it, so the left field's child is on the left. Where the field is the
-  end, the link draws the end with its type's view (`views.End`, as `EndMark`'s
-  ∅). A pointer view of the reference, as `Here`, marks the node a variable
-  refers to, and draws nothing at the end.
+  end, the link draws the end with its type's view (`{End}`, as `EndMark`'s ∅).
+  A pointer view of the reference, as `Here`, marks the node a variable refers
+  to, and draws nothing at the end.
 - References suit nodes added and linked as the algorithm runs; where it does
   arithmetic on places, or the structure is an array (an array-based tree, a
   graph over a fixed list of vertices), keep a position instead, `index(Nodes)`.
@@ -809,9 +809,9 @@ comparison or arithmetic, `this.argument` for `!` or `-x`, a function's
 parameters by name for a labelled call, and its result `this.value`, each drawn
 through its type's view (a plain `true` or `false` as text).
 `{@sweep.pair.test}` in a layout draws what that expression computed since the
-step before, through the view `views.@sweep.pair.test` chooses, and nothing,
-keeping its room, where it computed nothing. A view typed by a label no step
-evaluates is refused. The view never computes itself: label the expression, as
+step before, through the view `{@sweep.pair.test}` chooses, and nothing, keeping
+its room, where it computed nothing. A view typed by a label no step evaluates
+is refused. The view never computes itself: label the expression, as
 `@next[i + 1]`, and read the label.
 
 A label on a block or a statement is a type too. Its view draws one span of the
@@ -879,8 +879,8 @@ place:
 Paused at both, a comparison reads "is 5 > 1? true", its operands lifting out of
 their cells, and the swap after it says why they trade places. With
 `pause="@sweep.pair.swap"` alone the page plays the swaps alone; with
-`views.@sweep.pair.test` none the question is left out and the steps stay as
-they were.
+`{@sweep.pair.test}` none the question is left out and the steps stay as they
+were.
 
 A label is read in a layout, never in a view, by its full name, the labels
 around it first, as `@insert.key` for `@key` inside `@insert`; a shorter ending
@@ -922,7 +922,7 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
-`Highlight.Pointed@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
+`Highlight.Pointed:insert.swap.from.fill` and `…to.fill` `red-300`, turns only
 the pairs found out of order red, and with `@insert.swap.to` in the scene's
 pause, as a step of their own before anything is written. Showing or hiding
 something at some steps needs no flag, sentinel, or cast in the algorithm: a
@@ -1084,9 +1084,9 @@ const SortCall = call('sort', { max: 15 });
 
 The design space is every variable of a component's look, found in its markup:
 
-- `views.Int`, for each type rendered by name: its views and `none` (see Views
-  of types).
-- `pointers.Index`, for each position type rendered by name as a pointer: its
+- `{Int}`, for each type rendered by name: its views and `none` (see Views of
+  types).
+- `{Index}.pointer`, for each position type rendered by name as a pointer: its
   pointer views and `none` (see Pointers).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
@@ -1104,8 +1104,8 @@ The design space is every variable of a component's look, found in its markup:
   a layout's or view's `<Link>`, as `Graph.Link`. A variable is its kind and
   prop, as `Here.Pointed.fill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
-- Each prop a view binds to its value, as `VertexCard.fill@true` or
-  `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
+- Each prop a view binds to its value, as `VertexCard=true.fill` or
+  `LevelCell.textSize.from`, or a length's unit, as `Bar.height.unit` (see Props
   bound to a view's value).
 - The design's tokens and groups, which set many kinds at once (see Shared
   values).
@@ -1268,7 +1268,7 @@ them; an operand of no type, a plain number as the `2` in `@small[n < 2]`, has
 no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
 
 - `true` and `false` are unordered: each has a variable of its own over the
-  prop's options, as `VertexCard.fill@true` and `VertexCard.fill@false`,
+  prop's options, as `VertexCard=true.fill` and `VertexCard=false.fill`,
   starting with false neutral and true in a hue, and so are words written in the
   expression, as `this.seen ? 'new' : 'old'`, each one word.
 - Numbers, and an enumeration's values in its declared order, run in order: a
@@ -1276,8 +1276,8 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
   and a union of enumerations through its members in turn. They go only onto
   props whose options run in order (`textSize`, `strokeWidth`, `opacity`,
   `padding`, `radius`, `minSize`, `weight`, `gap`), taking consecutive options
-  from `@from`, as `LevelCell.textSize@from`, or onto a colour, taking the
-  shades of `@hue`, lightest first, as `VertexCard.fill@hue`; `@order` runs them
+  from `.from`, as `LevelCell.textSize.from`, or onto a colour, taking the
+  shades of `.hue`, lightest first, as `VertexCard.fill.hue`; `.order` runs them
   `up` or `down`. Declare an enumeration in the order its values should read, as
   a vertex's progress.
 - One kind binds a prop to one expression's values: two nodes of a kind binding
@@ -1286,7 +1286,7 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
 - `width` and `height` are lengths, bound only in a view: the value times a unit
   of the node's kind, from zero, as `<Node height={this} />`, a node sized by
   its value. Any number of values fits, but none below zero. The unit, in pixels
-  per unit, is a variable, as `Bar.height@unit` (1, 2, 3, 4, 6, 8, 12, 16, or
+  per unit, is a variable, as `Bar.height.unit` (1, 2, 3, 4, 6, 8, 12, 16, or
   24), starting at the largest that keeps the type's largest value within 200
   pixels, and every node of the kind shares it. Such a node holds nothing, no
   text, nodes or values, so it is exactly its length: 0 draws only its border
@@ -1304,7 +1304,7 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
   Anywhere else a box sizes to its contents, at least its kind's `minSize`.
 - `icon` draws an icon for each value, bound only in a view, as
   `<View of="State" name="StateMark"><Node icon={this} /></View>`: each value
-  has a variable of its own whatever its type's order, as `StateMark.icon@done`,
+  has a variable of its own whatever its type's order, as `StateMark=done.icon`,
   starting on distinct icons. The icon is drawn before the node's value or text,
   in its colour and size, or alone in a node with neither; a node arranging
   children has none. Its options: `circle`, `circle-dot`, `circle-check`,
@@ -1333,20 +1333,20 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
 
 ### Places
 
-A value in braces is a place, named by what is written there after `@`: a label,
+A value in braces is a place, named after `:` by what is written there: a label,
 by its full name, a variable, or a field, as `{@pair.compare.left}` at
-`@pair.compare.left`, `{found}` at `@found`, and `{this.left}` in `Ask` at
-`Ask.` and `@this.left`. A value written another way, as `{values[0]}`, is none.
+`:pair.compare.left`, `{found}` at `:found`, and `{this.left}` in `Ask` at
+`Ask.` and `:this.left`. A value written another way, as `{values[0]}`, is none.
 Every value in braces is drawn by the view its type's variable chooses, in its
 kinds' looks; a place has variables of its own that fall back to those until a
 variant sets them, so one value is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it
-  draws, as `pointers.Index@found` or `views.Int@swap.held`;
+  draws, as `{Index}:found` or `{Int}:swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
   can draw, the kinds its nodes name included, as
-  `Highlight.Pointed@pair.compare.left.fill` or
-  `IntTally.Tally@swap.held.shown`, though not for another view that view
+  `Highlight.Pointed:pair.compare.left.fill` or
+  `IntTally.Tally:swap.held.shown`, though not for another view that view
   renders.
 
 A place sets only paint and whether it is shown, never how much room anything
@@ -1359,21 +1359,23 @@ colour only.
 
 ```json
 {
-  "pointers.Index": "Highlight",
-  "pointers.Index@found": "Arrow",
-  "Highlight.Pointed@pair.compare.left.fill": "sky-100",
-  "IntCell@swap.held.fill": "neutral-100"
+  "{Index}.pointer": "Highlight",
+  "{Index}:found": "Arrow",
+  "Highlight.Pointed:pair.compare.left.fill": "sky-100",
+  "IntCell:swap.held.fill": "neutral-100"
 }
 ```
 
-In a key the last part is the prop, and the dots after `@` the place's. A label
-and a variable rendered by one type with one name would share a place, which is
-an error: rename the label.
+In a key the last part is the prop, and the dots after `:` the place's. A place
+drawn both as a mark and as a number writes its mark's view
+`{Index}.pointer:found`. A label and a variable rendered by one type with one
+name would share a place, which is an error: rename the label.
 
 ### Shared values
 
-A key's mark says what it sets: `$` a token, `<…>` every kind its tag makes, `@`
-a place, and no mark one kind.
+A key's mark says what it sets: `$` a token, `<…>` every kind its tag makes,
+`{…}` the view a type is drawn with, `:` a place, `=` a value of the data, and
+no mark one kind. `@` names only a part of the run, a label, as in the source.
 
 - A token is one value the starter's kinds share: `$text` (text colour),
   `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight` (a
@@ -1391,7 +1393,7 @@ a place, and no mark one kind.
   `{"$spacing": 0.25, "<Node>.padding": 0.5, "IntCell.padding": 0}`, pointers
   take 0.25, every node's kind 0.5, and IntCell none. A kind set apart once
   stays apart when its token or group changes later, and a place, as
-  `IntCell@v.fill`, overrides its kind as before.
+  `IntCell:v.fill`, overrides its kind as before.
 
 ### Variants
 
@@ -1547,29 +1549,30 @@ the scenes' pauses decide whether to pause there.
   statement its label marks, each line lights for its own statement; otherwise
   it lights as one. A line lights from its first character to its last, never
   its indentation.
-- A token, `$name[text]`, marks text as a reference to the place a layout draws
-  at `@name` (see Places), as `$mid[A[mid]]` for `{mid}` or `$key[key]` for
-  `{key}` in a layout. Tokens are written by hand, never matched by name, so
-  `$j[A[j + 1]]` names `@j` where the pseudocode's `j` is the algorithm's
-  `j - 1`. Tokens and regions nest either way, as `$x[A[@left[j - 1]]]`, a
-  region inside a token keeping its prefix; a token inside another, an unclosed
-  one, or one naming a place nothing renders is an error. When a step's own
-  code, not code kept lit from earlier, overlaps a token, the step touches its
-  place: every token naming it and its references in the picture light together,
-  in the colour of the place's mark, its pointer view's `<Pointed>` fill
-  (`Mark.Pointed@i.fill`) or its value's view's (`IntCell@key.fill`), or its
-  stroke where the fill is none or white. In the picture, a place is the element
-  a pointer at it points at, or the outermost node of a value rendered there or
-  of a pointer view with nodes around its `<Pointed>`, a caption's number
-  included. Hovering any reference outlines the others, dashed in the place's
-  stroke (its fill where it has none), drawn in a darker shade of its hue where
-  it would show at less than 3:1 on the page, so a pale fill still outlines.
-  `listing.places`, there only where a listing has tokens, says how places
-  light: `fill` (the start: the token filled, a 3px band round the node),
-  `underline`, `outline` (a ring), or `none`, which lights nothing and links
-  nothing on hover; none takes room.
+- A token, `:name[text]`, marks text as a reference to the place a layout draws
+  at `:name` (see Places), as `:mid[A[mid]]` for `{mid}` or `:key[key]` for
+  `{key}` in a layout. Its `:` follows a space, a bracket, or the start of a
+  line, never a name, so `x := y` and `a : b` hold none. Tokens are written by
+  hand, never matched by name, so `:j[A[j + 1]]` names `:j` where the
+  pseudocode's `j` is the algorithm's `j - 1`. Tokens and regions nest either
+  way, as `:x[A[@left[j - 1]]]`, a region inside a token keeping its prefix; a
+  token inside another, an unclosed one, or one naming a place nothing renders
+  is an error. When a step's own code, not code kept lit from earlier, overlaps
+  a token, the step touches its place: every token naming it and its references
+  in the picture light together, in the colour of the place's mark, its pointer
+  view's `<Pointed>` fill (`Mark.Pointed:i.fill`) or its value's view's
+  (`IntCell:key.fill`), or its stroke where the fill is none or white. In the
+  picture, a place is the element a pointer at it points at, or the outermost
+  node of a value rendered there or of a pointer view with nodes around its
+  `<Pointed>`, a caption's number included. Hovering any reference outlines the
+  others, dashed in the place's stroke (its fill where it has none), drawn in a
+  darker shade of its hue where it would show at less than 3:1 on the page, so a
+  pale fill still outlines. `listing.places`, there only where a listing has
+  tokens, says how places light: `fill` (the start: the token filled, a 3px band
+  round the node), `underline`, `outline` (a ring), or `none`, which lights
+  nothing and links nothing on hover; none takes room.
 - A token can also go in the text of a layout or a view, for example
-  `<Node kind="Note">Lift $i[A[i]] into $key[key].</Node>`. It means the same as
+  `<Node kind="Note">Lift :i[A[i]] into :key[key].</Node>`. It means the same as
   in the listing. It is drawn as inline code, a kind of its own named `Code`
   (here `Board.Note.Code`) that starts in monospace. It lights at the same steps
   as the listing's tokens for its place, and hovering it outlines the place's
@@ -1622,13 +1625,13 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 <script listing="textbook">
   INSERTION-SORT(A, n)
   1  for @start[i = 2] @more[to n] @next[step 1]
-  2      @insert[@key[$key[key] = $i[A[i]]]
+  2      @insert[@key[:key[key] = :i[A[i]]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
   4      @init[j = i - 1]
-  5      while @test[@bound[j > 0] and @cmp[A[j] > $key[key]]]
-  6          @shift[@copy[$j[A[j + 1]] = A[j]]
+  5      while @test[@bound[j > 0] and @cmp[A[j] > :key[key]]]
+  6          @shift[@copy[:j[A[j + 1]] = A[j]]
   7          @down[j = j - 1]]
-  8      @place[$j[A[j + 1]] = $key[key]]]
+  8      @place[:j[A[j + 1]] = :key[key]]]
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
@@ -1673,7 +1676,7 @@ too.
   line, and says what to write: a fraction (write `(n+1)/2`), stacked limits,
   accents, or a subscript Unicode has no letters for (write `A[mid]`, not
   `A_{mid}`).
-- A token, `$i[…]`, or a region, `@x[…]`, cannot be inside maths: write it
+- A token, `:i[…]`, or a region, `@x[…]`, cannot be inside maths: write it
   beside the maths. A single `$`, as in `$5`, is text.
 
 ### Drawings

@@ -13,6 +13,7 @@ import { drawingTags } from './drawings.server';
 import { fitted } from './layouts.server';
 import { mathsSvg } from './maths-svg.server';
 import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
+import { placeTokenAt, placeTokenIn } from './listing/mapped.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -172,7 +173,7 @@ export function layoutTags(source: string): {
       mathsProblems.push({ message: unclosedMaths, start });
       break;
     }
-    const token = /\$[A-Za-z_]\w*\[/u.exec(inside);
+    const token = placeTokenIn.exec(inside);
     const converted = token ? { problem: tokenInMaths(token[0]) } : mathsSvg(inside);
     if ('problem' in converted) mathsProblems.push({ message: converted.problem, start });
     else
@@ -607,8 +608,7 @@ function captionTokens(
       tag = true;
       continue;
     }
-    if (character !== '$') continue;
-    const opening = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(scanned.slice(at));
+    const opening = placeTokenAt(scanned, at);
     if (!opening) continue;
     let depth = 0;
     let end = -1;

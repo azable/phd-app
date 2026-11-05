@@ -8,6 +8,7 @@
  */
 
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
+import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
 
 /** A region of a source, by offsets into its text. */
 export type SourceRange = { from: number; to: number };
@@ -61,7 +62,7 @@ export function referenceRanges(
   text: string,
   design?: ReferenceDesign
 ): SourceRange[] {
-  const written = text.trim();
+  const written = keptReference(text, design);
   if (!written) return [];
   const line = /^(?:lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?|(\d+):(\d+))$/u.exec(written);
   if (line) {
@@ -103,7 +104,7 @@ export function referenceRanges(
  * the view markers after its renders show it.
  */
 export function ghostKey(text: string, design?: ReferenceDesign): string | undefined {
-  const written = text.trim();
+  const written = keptReference(text, design);
   if (!design?.variant || !Object.hasOwn(design.variant, written)) return undefined;
   return /^(?:views|pointers)\.[^@]+$/u.test(written) ? undefined : written;
 }
@@ -174,8 +175,14 @@ export function codeMarkdown(spans: readonly { text: string; code: boolean }[]):
 
 /** The code-shaped pieces of text starting at an offset, longest first; see `codeIn`. */
 function codeAt(text: string, at: number): string[] {
-  if (at > 0 && /[\w$@.{]/u.test(text[at - 1])) return [];
-  if (text[at] === '{') return [balanced(text, at, '{', '}') ?? ''].filter(Boolean);
+  if (at > 0 && /[\w$@.{:=]/u.test(text[at - 1])) return [];
+  if (text[at] === '{') {
+    const braces = balanced(text, at, '{', '}');
+    if (!braces) return [];
+    // A type's view as written, as `{Int}:target` or `{Index}.pointer` (see design-keys.ts).
+    const after = /^(?:\.pointer)?(?::[\w$.]+)?/u.exec(text.slice(at + braces.length))?.[0] ?? '';
+    return after ? [braces + after, braces] : [braces];
+  }
   const rest = text.slice(at);
   const label = new RegExp(String.raw`^@${name}(?:\.${name})*`, 'u').exec(rest)?.[0];
   if (label) {
@@ -184,13 +191,24 @@ function codeAt(text: string, at: number): string[] {
       ? [label + (balanced(rest, label.length, '[', ']') ?? '[')]
       : [label];
   }
-  const path = new RegExp(String.raw`^${name}(?:\.${name})*(?:@${name}(?:\.${name})*)?`, 'u').exec(
-    rest
-  )?.[0];
+  const path = new RegExp(
+    String.raw`^${name}(?:\.${name})*(?:[@:]${name}(?:\.${name})*)?(?:=[\w$-]+(?:\.${name})+)?`,
+    'u'
+  ).exec(rest)?.[0];
   if (!path) return [];
   const call = rest[path.length] === '(' ? balanced(rest, path.length, '(', ')') : undefined;
   // A word alone is no code: only a call, or a path with a dot or a place.
-  return [...(call ? [path + call] : []), ...(/[.@]/u.test(path) ? [path] : [])];
+  return [...(call ? [path + call] : []), ...(/[.@:=]/u.test(path) ? [path] : [])];
+}
+
+/**
+ * A reference as the app keeps its keys: `{Int}` as views.Int, `IntCell:target.stroke` as
+ * IntCell@target.stroke (see design-keys.ts), where the assistant writes them so.
+ */
+function keptReference(text: string, design?: ReferenceDesign): string {
+  const written = text.trim();
+  const variant = design?.variant;
+  return keptKey(written, variant ? (key) => Object.hasOwn(variant, key) : undefined);
 }
 
 /** From an opener to the closer that matches it, or nothing where it is never closed. */

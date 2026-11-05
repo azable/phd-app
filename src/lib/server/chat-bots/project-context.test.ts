@@ -206,7 +206,7 @@ describe('mode-neutral AI project context', () => {
     });
     const differences = [
       { variable: 'root.fill', preferred: 'blue-100', other: 'amber-100' },
-      { variable: 'views.Int', preferred: 'IntCell', other: 'IntTally' }
+      { variable: '{Int}', preferred: 'IntCell', other: 'IntTally' }
     ];
     expect(
       projectAiContext(value, { eventIds: [], interactionEventIds: [6] }).interaction
@@ -215,7 +215,7 @@ describe('mode-neutral AI project context', () => {
       {
         role: 'user',
         content: expect.stringContaining(
-          'They differed in root.fill blue-100 (the other: amber-100); views.Int IntCell (the other: IntTally).'
+          'They differed in root.fill blue-100 (the other: amber-100); {Int} IntCell (the other: IntTally).'
         )
       }
     ]);
@@ -303,7 +303,7 @@ describe('design variables in the AI context', () => {
       ]
     });
     expect(design.variables.map(({ variable }) => variable)).toEqual([
-      'views.Int',
+      '{Int}',
       'Cell.fill',
       'Cell.overflow'
     ]);
@@ -630,7 +630,7 @@ describe('comparisons in the conversation', () => {
       answered: 1,
       later: 0,
       // Its view has four options (none among them), two compared.
-      choices: [{ variable: 'views.Int', state: 'either', compared: 2, unexplored: 2 }],
+      choices: [{ variable: '{Int}', state: 'either', compared: 2, unexplored: 2 }],
       unexplored: [{ family: 'colour', count: 1, examples: ['Cell.fill'] }]
     });
   });
@@ -713,7 +713,7 @@ describe('comparisons in the conversation', () => {
       ({ content }) => content
     );
     expect(message).toContain(
-      '; your comparison “Cells or tallies for the numbers?”; they differ in views.Int IntCell or IntTally)'
+      '; your comparison “Cells or tallies for the numbers?”; they differ in {Int} IntCell or IntTally)'
     );
     expect(answer).toMatch(/\nWith this choice I wrote: but make the tallies thinner$/u);
     expect(

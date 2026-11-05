@@ -2949,7 +2949,7 @@ describe('tokens in captions', () => {
 
   it('refuses a token naming a place nothing renders, and a node written with __code', () => {
     expect(() => prepareSvelteComponent(captioned('Look at $j[A[j]].'))).toThrow(
-      'The token $j[…] names @j, which the view renders nowhere'
+      'The token :j[…] names :j, which the view renders nowhere'
     );
     expect(() => prepareSvelteComponent(captioned('<Node __code="@i">A[i]</Node>'))).toThrow(
       '__code is reserved for the library'

@@ -56,7 +56,7 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
-import { listingAlias } from '$lib/modes/sverlin/library/node/design';
+import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
 import {
   bestCandidates,
   checkCandidate,
@@ -2194,9 +2194,10 @@ function comparisonBriefProblem({ brief }: Comparisons[number]): string | undefi
 }
 
 function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
-  // <Listing>.syntax is listing.syntax, the key the variant keeps.
+  // Keys as written or kept, kept (see design-keys.ts): {Int} is views.Int, <Listing>.syntax
+  // listing.syntax; the build sends a place's view to its pointer where only that is in the design.
   return Object.fromEntries(
-    values.map(({ variable, value }) => [listingAlias(variable), value])
+    values.map(({ variable, value }) => [keptKey(variable), value])
   ) as DesignValues;
 }
 
@@ -3816,6 +3817,6 @@ function variedValues(
   return {
     ...(viewed ? { base: viewed } : {}),
     chosen: designValues(decision.values),
-    randomise: decision.randomise.map(listingAlias)
+    randomise: decision.randomise.map((key) => keptKey(key))
   };
 }

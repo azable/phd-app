@@ -165,6 +165,23 @@ describe('view choices, by what a build records each render reads', () => {
     expect(covered('pointers.Index', design)).toEqual(['Highlight', '{@render Index(mid)}']);
   });
 
+  it('name the same with keys as written: {Index}, {Index}.pointer, {Index}:found', () => {
+    expect(covered('{Index}', design)).toEqual(covered('views.Index', design));
+    expect(covered('{Index}.pointer', design)).toEqual(covered('pointers.Index', design));
+    expect(covered('{Index}:found', design)).toEqual(covered('pointers.Index@found', design));
+    expect(named('Highlight.Pointed:compare.left.fill')).toEqual(
+      named('Highlight.Pointed@compare.left.fill')
+    );
+    expect(
+      codeIn(both, 'set {Index}:found and Highlight.Pointed:compare.left.fill', design)
+    ).toEqual([
+      { text: 'set ', code: false },
+      { text: '{Index}:found', code: true },
+      { text: ' and ', code: false },
+      { text: 'Highlight.Pointed:compare.left.fill', code: true }
+    ]);
+  });
+
   it("name a place's own render, and leave it out of the type's once set apart", () => {
     expect(covered('pointers.Index@found', design)).toEqual(['Arrow', '{@render Index(found)}']);
     const alike = {

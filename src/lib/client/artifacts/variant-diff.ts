@@ -4,14 +4,15 @@
  * @packageDocumentation
  */
 
+import { writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /**
- * A variant as JSON, one row per value, its keys in one order, so two variants' rows line up and
- * differ only where their values do.
+ * A variant as JSON, one row per value, its keys as written (see design-keys.ts) and in one order,
+ * so two variants' rows line up and differ only where their values do.
  */
 export function variantDocument(variant: DesignValues): string {
-  const sorted = Object.entries(variant).sort(([a], [b]) => a.localeCompare(b));
+  const sorted = Object.entries(writtenValues(variant)).sort(([a], [b]) => a.localeCompare(b));
   return JSON.stringify(Object.fromEntries(sorted), null, 2);
 }
 

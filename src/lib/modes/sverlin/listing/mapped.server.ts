@@ -33,7 +33,20 @@ export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; 
 export type RegionMap = { label: string; text: string; sources: { text: string; line: number }[] };
 
 const regionOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\[/u;
-const tokenOpen = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u;
+/**
+ * A place token opening at `index`, `:mid[` or, as older sources write it, `$mid[`. A `:` opens
+ * one only where no name, closing bracket or `:` comes just before it, so `x := y`, `a : b` and
+ * `{key:values[0]}` hold none.
+ */
+export function placeTokenAt(text: string, index: number): RegExpExecArray | null {
+  const mark = text[index];
+  if (mark !== '$' && mark !== ':') return null;
+  if (mark === ':' && index > 0 && /[\w$)\]}:]/u.test(text[index - 1])) return null;
+  return /^[$:]([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
+}
+
+/** A place token anywhere in a text, as maths must hold none. */
+export const placeTokenIn = /(?:\$|(?<![\w$)\]}:]):)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u;
 /**
  * The text a listing shows, without its region and token marks and the indentation its lines
  * share; its regions, each named with the names of those around it; and its tokens, which nest with
@@ -59,7 +72,7 @@ export function readRegions(body: string): {
   let at = lines.slice(0, first).reduce((total, line) => total + line.length + 1, 0);
   // A line of marks alone would show blank: openings join the next line, which takes their
   // indentation, and closings join the line before.
-  const opensOnly = /^\s*(?:[@$][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
+  const opensOnly = /^\s*(?:[@$:][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
   const closesOnly = /^\s*\]+\s*$/u;
   kept.forEach((line, index) => {
     const joined = (index > 0 && opensOnly.test(kept[index - 1])) || closesOnly.test(line);
@@ -105,7 +118,8 @@ export function readRegions(body: string): {
         break;
       }
       const inside = source.slice(index + open.length, close);
-      const marked = /[$@][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u.exec(inside);
+      const marked =
+        /@[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u.exec(inside) ?? placeTokenIn.exec(inside);
       const converted = marked ? { problem: tokenInMaths(marked[0]) } : mathsText(inside);
       if ('problem' in converted)
         problems.push({ message: converted.problem, block: 'listing', at: characters[index].at });
@@ -113,7 +127,7 @@ export function readRegions(body: string): {
       index = close + closing.length - 1;
       continue;
     }
-    const token = source[index] === '$' ? tokenOpen.exec(source.slice(index)) : null;
+    const token = placeTokenAt(source, index);
     if (token) {
       const outer = open.find(
         (entry): entry is Extract<Opened, { place: string }> =>
@@ -121,7 +135,7 @@ export function readRegions(body: string): {
       );
       if (outer)
         problems.push({
-          message: `The token $${token[1]}[ is inside the token $${outer.place.slice(1)}[…]: a token names one place, so write tokens side by side, as $i[i] and $j[j], never one inside another.`,
+          message: `The token :${token[1]}[ is inside the token :${outer.place.slice(1)}[…]: a token names one place, so write tokens side by side, as :i[i] and :j[j], never one inside another.`,
           block: 'listing',
           at: characters[index].at
         });
@@ -173,7 +187,7 @@ export function readRegions(body: string): {
   for (const unclosed of open)
     if (unclosed !== 'plain' && 'place' in unclosed)
       problems.push({
-        message: `The token $${unclosed.place.slice(1)}[ is never closed with ].`,
+        message: `The token :${unclosed.place.slice(1)}[ is never closed with ].`,
         block: 'listing',
         at: unclosed.at
       });
