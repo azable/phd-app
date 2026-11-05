@@ -130,25 +130,21 @@ it.skipIf(!enabled)(
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    // Step 1, comparing 5 and 2: no label gave the link's ends, so it is laid out hidden.
-    await go(1);
+    // The first step, the input as given: no label gave the link's ends, so it is laid out hidden.
+    // A comparison draws what the step before it drew, so the scene leaves it out (sceneSteps).
+    await go(0);
     const placed = await cells();
     expect(await row()).toBe('5 2 4 1');
     expect((await arrows()).filter(({ shown }) => shown)).toEqual([]);
-    // Step 2, swapping them: an arrow from the first cell to the second, arcing over them, and
-    // the values in their new order.
-    await go(2);
+    // Step 1, swapping them: an arrow from the first cell to the second, arcing over them, the
+    // values in their new order and the cells in the places they were.
+    await go(1);
     expect((await arrows()).filter(({ shown }) => shown)).toEqual([
       { joins: 'values[0] -> values[1]', shown: true }
     ]);
     expect(await arcs()).toBe(true);
     expect(await row()).toBe('2 5 4 1');
-    // Step 3, the next comparison: hidden again, the cells in the places they were, the values in
-    // the order the state has.
-    await go(3);
-    expect((await arrows()).filter(({ shown }) => shown)).toEqual([]);
     expect(await cells()).toEqual(placed);
-    expect(await row()).toBe('2 5 4 1');
     expect(errors).toEqual([]);
     await page.close();
   }
@@ -202,12 +198,12 @@ it.skipIf(!enabled)(
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
+    // The input as given draws no link; the first swap draws it (a comparison, drawing alike, is
+    // left out of the steps).
+    await go(0);
+    expect(await shown()).toEqual([]);
     await go(1);
-    expect(await shown()).toEqual([]);
-    await go(2);
     expect(await shown()).toEqual(['values[0] -> values[1]']);
-    await go(3);
-    expect(await shown()).toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   }

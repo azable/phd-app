@@ -49,9 +49,11 @@ it.skipIf(!enabled)(
         ).replace(/\s+/g, ' ')
       );
     };
-    // A is taken, then its neighbours B and C are queued in turn.
-    expect(await line(1)).toBe('queue:');
-    expect(await line(3)).toBe('queue: B');
+    // A is taken, then its neighbours B and C are queued in turn; step 0 is the scene's start,
+    // :before, and step 1 the queue holding A.
+    expect(await line(1)).toBe('queue: A');
+    expect(await line(2)).toBe('queue:');
+    expect(await line(4)).toBe('queue: B');
     expect(errors).toEqual([]);
     await page.close();
   }
