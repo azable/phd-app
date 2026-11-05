@@ -102,6 +102,9 @@ Some features suit common needs. Offer them as alternatives where they fit:
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against
   `keywords`) as an alternative (see the guide's Listing).
+- When a node of a graph shows several states or fields, show its state as
+  paint, as `<Node fill={this.state}>`, a border or opacity, rather than words
+  that widen every node, with a short legend; compare it with words.
 - To reveal a node of a graph over time, keep it drawn and bind its look to the
   state, as `<Node opacity={this.seen}>`: it keeps its place and its links. An
   `{#if}` that leaves the node empty also removes every link into it.
