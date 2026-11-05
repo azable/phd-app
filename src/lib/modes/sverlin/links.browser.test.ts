@@ -331,7 +331,17 @@ it.skipIf(!enabled)(
           .map((path) => {
             const matrix = path.getScreenCTM()!;
             const start = path.getPointAtLength(0).matrixTransform(matrix);
-            const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+            // The head the line stops short for reaches on to the end it meets: a link running
+            // plumb stops short by the whole head.
+            const total = path.getTotalLength();
+            const last = path.getPointAtLength(total);
+            const before = path.getPointAtLength(Math.max(0, total - 1));
+            const reach = Number(path.dataset.headSize) || 0;
+            const span = Math.hypot(last.x - before.x, last.y - before.y) || 1;
+            const end = new DOMPoint(
+              last.x + ((last.x - before.x) / span) * reach,
+              last.y + ((last.y - before.y) / span) * reach
+            ).matrixTransform(matrix);
             return Math.round(Math.max(distance(start.x, start.y), distance(end.x, end.y)));
           });
       }, layer);
