@@ -817,7 +817,14 @@ async function runSverlinAssistantTurn(
         dependencies
       );
       current = generation.document;
-      if (!generation.ok) return { document: current, done: true };
+      if (!generation.ok) {
+        if (!generation.retried) return { document: current, done: true };
+        // The next attempt repairs what the last usable one left, if anything, told of this one.
+        failureSummaries.push(`Attempt ${attempt}: ${generation.message}`);
+        if (buildFeedback)
+          buildFeedback = { ...buildFeedback, priorFailureSummaries: [...failureSummaries] };
+        return { document: current, done: false };
+      }
       // What the participant said holds whether or not the decision with it could be built: the
       // brief entries of every attempt this turn, the latest for each attribute, steer this
       // decision's comparisons and are recorded with the accepted reply.
@@ -1323,7 +1330,11 @@ async function submitCandidateFeedback(
         dependencies
       );
       current = generation.document;
-      if (!generation.ok) return { document: current, done: true };
+      if (!generation.ok) {
+        if (!generation.retried) return { document: current, done: true };
+        failureSummaries.push(`Attempt ${attempt}: ${generation.message}`);
+        return { document: current, done: false };
+      }
       if (generation.result.candidates.length === 0) {
         if (attempt === 1) {
           return {
@@ -1498,6 +1509,7 @@ async function runSverlinGeneration(
       attempt: options.attempt,
       operationId: options.operationId,
       prompt,
+      attemptsLeft: options.attempt < options.chatbot.config.attemptProfiles.length,
       generate: () =>
         options.chatbot.generatePrepared(prompt, { signal: currentProjectOperationSignal() }),
       validateResult: (result) => {
@@ -1568,6 +1580,7 @@ async function runCandidateGeneration(
       attempt: options.attempt,
       operationId: options.operationId,
       prompt,
+      attemptsLeft: options.attempt < options.chatbot.config.attemptProfiles.length,
       generate: () =>
         options.chatbot.generatePrepared(prompt, { signal: currentProjectOperationSignal() }),
       validateResult: (result) => {
@@ -1617,7 +1630,9 @@ async function generationPreparationFailure(
       failed.payload.message,
       options.operationId,
       dependencies
-    )
+    ),
+    retried: false,
+    message: failed.payload.message
   };
 }
 
@@ -1631,6 +1646,8 @@ async function runPreparedGeneration<Output extends object>(
     validateResult: (result: ChatbotResult<Output>) => void;
     fallbackResponse: (result: ChatbotResult<Output>) => unknown;
     notifyFailure?: boolean;
+    /** Whether the ladder has another attempt, which a response that cannot be used goes on to. */
+    attemptsLeft?: boolean;
   },
   dependencies: ProjectCommandDependencies
 ) {
@@ -1691,7 +1708,12 @@ async function runPreparedGeneration<Output extends object>(
       }
     });
     document = await appendProjectEvents(document, [failed], dependencies.projectService);
-    if (options.notifyFailure !== false) {
+    // A response that cannot be used, incomplete, unparseable, or refused by validation, fails only
+    // its attempt: the ladder goes on. Project 0c34d124's xhigh repair spent its whole output budget
+    // reasoning, and its turn ended without the fallback.
+    const retried =
+      Boolean(options.attemptsLeft) && failed.payload.failureKind === 'invalid-response';
+    if (options.notifyFailure !== false && !retried) {
       document = await appendSystemFailure(
         document,
         failed.payload.message,
@@ -1699,7 +1721,7 @@ async function runPreparedGeneration<Output extends object>(
         dependencies
       );
     }
-    return { ok: false as const, document };
+    return { ok: false as const, document, retried, message: failed.payload.message };
   }
 }
 

@@ -1700,9 +1700,15 @@ describe('submitProjectFeedback', () => {
       },
       commandDependencies
     );
-    const failed = result.appendedEvents.find((event) => event.type === 'ai.generation-failed');
+    const failures = result.appendedEvents.filter((event) => event.type === 'ai.generation-failed');
+    const failed = failures[0];
 
-    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+    // Each attempt fails alone, so the ladder runs to its end and fails the turn once.
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(5);
+    expect(failures).toHaveLength(5);
+    expect(result.appendedEvents.filter((event) => event.type === 'system.notified')).toHaveLength(
+      1
+    );
     expect(failed).toMatchObject({
       type: 'ai.generation-failed',
       payload: {
@@ -1716,6 +1722,44 @@ describe('submitProjectFeedback', () => {
     }
     const details = JSON.parse(failed.payload.details.text);
     expect(details.providerResponse).toEqual(providerResponse);
+  });
+
+  it('goes on to the next attempt after an incomplete response, which then shows', async () => {
+    mocks.generatePrepared
+      .mockReset()
+      .mockRejectedValueOnce(
+        Object.assign(new Error('The chatbot response was incomplete (max_output_tokens).'), {
+          name: 'InvalidChatbotResponseError'
+        })
+      )
+      .mockResolvedValueOnce(generation('valid second source', 'Here it is.'));
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject({ title: 'Incomplete first' }, serviceDependencies);
+
+    const result = await submitProjectFeedback(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        content: markdownMessage('Create a visualization'),
+        focus: [],
+        presentationCount: 1,
+        operationId: '12345678-1234-4123-8123-123456789abc'
+      },
+      commandDependencies
+    );
+    const types = result.appendedEvents.map(({ type }) => type);
+
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
+    expect(mocks.generatePrepared.mock.calls[1][0].attempt).toMatchObject({
+      number: 2,
+      purpose: 'repair'
+    });
+    expect(result.appendedEvents.find(({ type }) => type === 'ai.generation-failed')).toMatchObject(
+      { payload: { attempt: 1, failureKind: 'invalid-response' } }
+    );
+    expect(types).not.toContain('system.notified');
+    expect(types).toContain('visualization.presented');
   });
 
   it('records invalid candidate references as generation failures before success', async () => {
