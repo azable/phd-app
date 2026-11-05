@@ -49,7 +49,9 @@ export function arrangementDesigns(
     const options = (prop: string) => space[`${kind}.${prop}`];
     const forms = options('form') ?? [undefined];
     const directions = options('direction') ?? [undefined];
-    for (const form of forms)
+    // The layered form first where offered, so the limit on arrangements never leaves it out.
+    const ordered = [...forms].sort((a, b) => Number(b === 'layered') - Number(a === 'layered'));
+    for (const form of ordered)
       for (const direction of directions) {
         const design: Record<string, DesignValue> = {};
         if (form !== undefined) design[`${kind}.form`] = form;
@@ -57,9 +59,10 @@ export function arrangementDesigns(
         const shown = Object.entries(design).every(([key, value]) => values[key] === value);
         if (!shown && Object.keys(design).length) designs.push(design);
       }
-    const seeds = (options('layoutSeed') ?? []).filter(
-      (seed) => seed !== values[`${kind}.layoutSeed`]
-    );
+    // A layered layout's seed changes nothing, so its seeds are not tried.
+    const seeds = (
+      values[`${kind}.form`] === 'layered' ? [] : (options('layoutSeed') ?? [])
+    ).filter((seed) => seed !== values[`${kind}.layoutSeed`]);
     for (const seed of seeds.slice(0, seedsTried)) designs.push({ [`${kind}.layoutSeed`]: seed });
   }
   return designs.slice(0, mostArrangements);

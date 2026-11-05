@@ -150,9 +150,9 @@ describe('free layout structures', () => {
     expect(designOf(reversal).structures).toEqual({ Nodes: 'none' });
   });
 
-  it('start each layout natural, running the way its structure does, with every form offered', () => {
+  it('start each layout natural, running the way its structure does, with every form it takes', () => {
     const starts = [list, bst, ring, bfs].map((source) => {
-      const { space, starter } = designOf(source);
+      const { space, starter, structures } = designOf(source);
       const [kind] = Object.keys(space)
         .filter((key) => key.endsWith('.form'))
         .map((key) => key.slice(0, -'.form'.length));
@@ -161,13 +161,18 @@ describe('free layout structures', () => {
         direction: starter[`${kind}.direction`],
         curve: starter[`${kind}.curve`],
         forms: space[`${kind}.form`],
+        structure: structures[kind],
         directions: space[`${kind}.direction`]
       };
     });
     expect(starts.every(({ form, curve }) => form === 'natural' && curve === 'straight')).toBe(
       true
     );
-    expect(starts.every(({ forms }) => forms.join() === propOptions.form.join())).toBe(true);
+    // Every form, but layered only where the links make layers.
+    for (const { forms, structure } of starts)
+      expect(forms).toEqual(
+        propOptions.form.filter((form) => form !== 'layered' || structure === 'layers')
+      );
     // A path, a ring and a graph run right; the tree's flow="y" sets its way, so it has none.
     expect(starts.map(({ direction }) => direction)).toEqual([
       'right',

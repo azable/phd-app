@@ -729,12 +729,15 @@ export function projectAiContext(
     const differs = differencesText(asked.get(first ?? ''));
     return differs ? `${question} (${differs})` : question;
   });
-  const design = designVariables(viewedPresentation(document, selection.interactionEventIds ?? []));
-  const brief = projectBrief(document.events);
-  const preferences = preferenceSummary(document.events, design, briefSteering(brief));
   const base = projectWorkspace(snapshot);
   const entry = base.artifacts.find(({ artifactId }) => artifactId === base.entryArtifactId);
-  const { runs } = entry ? sourceBuildFacts(document, entry.sha256) : {};
+  const { runs, structures } = entry ? sourceBuildFacts(document, entry.sha256) : {};
+  const design = designVariables(
+    viewedPresentation(document, selection.interactionEventIds ?? []),
+    structures
+  );
+  const brief = projectBrief(document.events);
+  const preferences = preferenceSummary(document.events, design, briefSteering(brief));
 
   return {
     projectId: document.projectId,
@@ -1131,7 +1134,9 @@ export function viewedPresentation(
 export function designVariables(
   presentation:
     | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'pointers' | 'listings'>
-    | undefined
+    | undefined,
+  /** Each free layout's structure, by its kind (see SourceBuildFacts): only layers take layered. */
+  structures?: Readonly<Record<string, string>>
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
   const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
@@ -1153,7 +1158,9 @@ export function designVariables(
           : 'overflow.collection'
         : prop === 'color' && key.startsWith('listing.')
           ? 'listing.color'
-          : prop;
+          : prop === 'form' && structures?.[key.slice(0, -'.form'.length)] !== 'layers'
+            ? 'form.unlayered'
+            : prop;
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
@@ -1161,7 +1168,9 @@ export function designVariables(
       'listing.places': listingPlacesOptions,
       'listing.color': listingPropOptions('color') ?? [],
       'overflow.pointer': overflowOptions.pointer,
-      'overflow.collection': overflowOptions.collection
+      'overflow.collection': overflowOptions.collection,
+      // The forms of a layout whose links make no layers, which do not take layered.
+      'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };
     if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
     return {

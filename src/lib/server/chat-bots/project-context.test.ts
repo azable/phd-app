@@ -403,8 +403,8 @@ describe('design variables in the AI context', () => {
 
   it('offers each free layout exactly the forms and directions its design takes', () => {
     for (const source of [bfs, bst]) {
-      const { space, starter } = prepareSvelteComponent(source).design;
-      const design = designVariables({ variant: starter });
+      const { space, starter, structures } = prepareSvelteComponent(source).design;
+      const design = designVariables({ variant: starter }, structures);
       const layout = design.variables.filter(({ variable }) =>
         /\.(form|direction)$/u.test(variable)
       );

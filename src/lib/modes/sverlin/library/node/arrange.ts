@@ -7,7 +7,7 @@
 
 import { Layout } from 'webcola/dist/src/layout';
 
-import { engineCentres, type Engine } from './engines';
+import { engineCentres } from './engines';
 import { findStructure, type Direction, type Form } from './forms';
 import { headDrawing, headTrim, type HeadEnds } from './heads';
 import {
@@ -82,8 +82,6 @@ export type ArrangeOptions = {
   random?: (key: string) => number;
   /** The form the linked structure takes; unset, its natural one. */
   form?: Form;
-  /** What places the linked structure (see engines.ts); unset, forms. */
-  engine?: Engine;
   /** The way the linked structure runs where no flow sets it (see formCentres). */
   direction?: Direction;
   /** Keys (see linkKey) of the links present at every step; only these decide the structure. Unset, all do. */
@@ -276,7 +274,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const form: Form | undefined = structure ? (options.form ?? 'natural') : undefined;
   const formed =
     structure && form
-      ? engineCentres(options.engine, {
+      ? engineCentres({
           structure,
           sizeOf: (node) => boxes[node],
           links: laidLinks.map(({ source, target }) => ({

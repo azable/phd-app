@@ -24,6 +24,8 @@ import {
   type FrameExtent,
   type ShownFrame
 } from 'sverlin';
+// The layered form's engine, dagre, which only the server's layout loads (library/node/engines.ts).
+import 'sverlin/layered';
 import MainServer from 'virtual:component-server';
 import atoms from 'virtual:atoms';
 import { components, lengths, listing, placements } from 'virtual:components';

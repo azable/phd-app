@@ -22,6 +22,7 @@ import {
   starterFreeLayout,
   starterListing,
   starterLooks,
+  type DesignProp,
   type DesignValues,
   type KindRole
 } from './library/node/design';
@@ -254,7 +255,7 @@ export function designSpace(
       : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, kindOptions(kind, prop)])
       )
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
@@ -265,6 +266,17 @@ export function designSpace(
     ),
     ...layoutSpace(layouts)
   };
+}
+
+/**
+ * A kind's options for a prop: its role's, the layered form only where its links make layers, the
+ * one structure dagre's layered engine lays out (library/node/layered-engine.ts).
+ */
+function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[] {
+  const options = optionsOf(kind.role, prop);
+  return prop === 'form' && kind.free?.structure !== 'layers'
+    ? options.filter((option) => option !== 'layered')
+    : options;
 }
 
 /** The first variant of a source: each type in its first view, and each kind in its role's look. */

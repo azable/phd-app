@@ -297,7 +297,9 @@ describe('free layouts', () => {
   const graph = prepareSvelteComponent(bfs).design;
 
   it('give the kind arranging one its form, direction, curve, and layout seed', () => {
-    expect(tree.space['Tree.form']).toEqual(forms);
+    // A tree takes every form but layered, which only layers take (layered-engine.ts).
+    expect(tree.space['Tree.form']).toEqual(forms.filter((form) => form !== 'layered'));
+    expect(graph.space['Graph.form']).toEqual(forms);
     expect(tree.space['Tree.curve']).toEqual(['straight', 'curved']);
     expect(tree.space['Tree.layoutSeed']).toContain(1);
     expect(tree.starter).toMatchObject({

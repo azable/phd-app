@@ -4225,21 +4225,20 @@ const allowedImports: Record<string, (path: string) => boolean> = {
       'virtual:trace',
       'virtual:atoms',
       'virtual:components',
-      'sverlin'
+      'sverlin',
+      'sverlin/layered'
     ].includes(path),
   component: (path) => runtime(path) || path === 'sverlin',
   // The constraint layout engine and the grid router wires take (see library/node/wires.ts), by
-  // their own modules, which need none of WebCola's d3 adaptor; and dagre, the layered layout
-  // engine (see library/node/engines.ts), plain JavaScript with no host access.
-  library: (path) =>
-    runtime(path) ||
-    /^\.\.?\//u.test(path) ||
-    webcolaModules.includes(path) ||
-    path === '@dagrejs/dagre'
+  // their own modules, which need none of WebCola's d3 adaptor.
+  library: (path) => runtime(path) || /^\.\.?\//u.test(path) || webcolaModules.includes(path)
 };
 // The same, compiled to render strings.
 allowedImports['component-server'] = allowedImports.component;
-allowedImports['library-server'] = allowedImports.library;
+// The server's library also takes dagre, the layered form's engine (library/node/layered-engine.ts),
+// plain JavaScript with no host access; it never reaches the page's bundle.
+allowedImports['library-server'] = (path) =>
+  allowedImports.library(path) || path === '@dagrejs/dagre';
 
 // Svelte's own entry for rendering strings, which a browser bundle would otherwise not resolve to.
 const svelteServerIndex = posix.join(
@@ -4276,6 +4275,8 @@ function sandboxModules(
         if (server && args.path === 'svelte') return { path: svelteServerIndex };
         if (server && args.path === 'sverlin')
           return { path: 'index.ts', namespace: 'library-server' };
+        if (args.namespace === 'layout' && args.path === 'sverlin/layered')
+          return { path: 'node/layered-engine.ts', namespace: 'library-server' };
         if (args.path === 'virtual:trace') return { path: 'states.json', namespace: 'trace' };
         if (args.path === 'virtual:atoms') return { path: 'atoms.json', namespace: 'atoms' };
         if (args.path === 'virtual:components')

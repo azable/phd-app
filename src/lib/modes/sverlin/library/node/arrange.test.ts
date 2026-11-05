@@ -173,7 +173,8 @@ describe('links along a flow', () => {
     const list = Array.from({ length: 8 }, (_, i) => ({ key: `n${i}`, width: 40, height: 40 }));
     const links = list.slice(1).map(({ key }, i) => `n${i} -> ${key}`);
     const looks = new Set<string>();
-    const sequenceForms = forms.filter((form) => form !== 'natural');
+    // Layered is no sequence: dagre draws it on the server, the page as natural (engines.ts).
+    const sequenceForms = forms.filter((form) => form !== 'natural' && form !== 'layered');
     for (const form of sequenceForms) {
       const result = arrange(list, {
         links,
@@ -339,7 +340,7 @@ describe('forms running a direction', () => {
         const flowing = arrange(tree, { links, gap: 8, form, flow, random });
         const unset = arrange(tree, { links, gap: 8, form, random });
         // The other sequence forms keep their own way.
-        const like = form === 'natural' || form === 'line' ? flowing : unset;
+        const like = form === 'natural' || form === 'layered' || form === 'line' ? flowing : unset;
         expect(directed.placements, `${form} ${direction}`).toEqual(like.placements);
       }
   });

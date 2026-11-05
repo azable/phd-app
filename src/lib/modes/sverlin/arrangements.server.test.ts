@@ -113,4 +113,24 @@ describe('arrangements laid out by the server', () => {
     expect(crossingsOf({ spans: [span([edge(0, 0, 10, 10), edge(0, 10, 10, 0)])] })).toBe(1);
     expect(crossingsOf({ spans: [span([edge(0, 0, 10, 10), edge(10, 10, 20, 0)])] })).toBe(0);
   });
+
+  it(
+    'draws the layered form with dagre on the server only, offered where links make layers',
+    { timeout: 120_000 },
+    async () => {
+      const prepared = prepareSvelteComponent(dijkstra);
+      expect(prepared.design.space['Graph.form']).toContain('layered');
+      // A tree is not offered it: dagre orders a layer its own way, a tree's children by theirs.
+      expect(prepareSvelteComponent(bst).design.space['Tree.form']).not.toContain('layered');
+      const natural = await bundlePresentation(prepared, 1, {});
+      const layered = await bundlePresentation(prepared, 1, {
+        chosen: { 'Graph.form': 'layered' }
+      });
+      // dagre packs each layer by its own nodes, so the graph draws larger than in its natural form.
+      expect(layered.layout.readability!.scale).toBeGreaterThan(natural.layout.readability!.scale);
+      // dagre runs in the server's layout alone: its ranker names never reach the page.
+      for (const { javascript } of [natural, layered])
+        expect(javascript).not.toMatch(/network-simplex|longest-path|tight-tree/u);
+    }
+  );
 });

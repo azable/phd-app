@@ -12,7 +12,7 @@
  * layered graph stacking its layers), then forms that lay any structure out in sequence along its
  * reading order, with links that skip ahead curving round.
  */
-export const forms = ['natural', 'line', 'snake', 'wave', 'arc', 'scatter'] as const;
+export const forms = ['natural', 'layered', 'line', 'snake', 'wave', 'arc', 'scatter'] as const;
 export type Form = (typeof forms)[number];
 
 /**
