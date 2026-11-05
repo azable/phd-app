@@ -216,7 +216,7 @@ matters most for the main structure, which can be drawn as genuinely different
 representations: a graph as vertices and arrows, as an adjacency matrix, or both
 side by side; an array as cells or as bars; a tree as nodes and links or as
 nested boxes. Compare representations like these early, before smaller looks.
-Give 2 to 4 independent comparisons in one decision, the most useful first (at
+Give 4 to 6 independent comparisons in one decision, the most useful first (at
 most 8); a pair is answered by a pick, not in words, so they are not the one
 question in words between things shown, which may come with them: the first pair
 shows with your reply, and each answer shows the next, so say in your reply how
