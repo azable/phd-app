@@ -37,4 +37,39 @@ describe('a listing’s syntax', () => {
     ]);
     expect(keywordsOf('JavaScript')).toBe(keywordsOf('js'));
   });
+
+  it('reads C by a name that starts with it, and pseudocode by any other', () => {
+    for (const name of ['c', 'C', 'C code', 'C-style', 'c99', 'c++'])
+      expect(keywordsOf(name)).toBe(keywordsOf('c'));
+    for (const name of ['textbook', 'clrs', 'pseudocode'])
+      expect(keywordsOf(name)).toBe(keywordsOf('textbook'));
+  });
+
+  it('takes C’s types, directives, block comments, characters and numbers', () => {
+    const code = [
+      '#include <stdio.h>',
+      '/* search',
+      '   a sorted array */',
+      'unsigned int f(const char c, bool on) {',
+      "  if (c == 'a') return 0x1F + 10u; // done",
+      '}'
+    ].join('\n');
+    expect(words(code, 'c', 'all')).toEqual([
+      'keyword:#include',
+      'comment:/* search\n   a sorted array */',
+      'keyword:unsigned',
+      'keyword:int',
+      'keyword:const',
+      'keyword:char',
+      'keyword:bool',
+      'keyword:if',
+      "string:'a'",
+      'keyword:return',
+      'number:0x1F',
+      'number:10u',
+      'comment:// done'
+    ]);
+    // A # inside a line is no directive.
+    expect(words('x = a # b;', 'c', 'all')).toEqual([]);
+  });
 });

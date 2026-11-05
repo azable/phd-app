@@ -1526,9 +1526,12 @@ the scenes' pauses decide whether to pause there.
 - `listing.syntax` sets how the listing's words look: `keywords` (the starter)
   draws its keywords in bold, as textbooks print them; `colour` also colours
   keywords, strings, comments and numbers; `none` draws plain text. The
-  listing's name chooses its keywords: `python`, `javascript`, `java` or `c`,
-  and any other name, such as `textbook`, reads as pseudocode (for, while, if,
-  then, return, to, …). Lit code keeps its own colour over the syntax colour.
+  listing's name chooses its keywords: `python`, `javascript`, `java` or `c`
+  (with C's types, `#include` lines and `/* */` comments), or a name starting
+  with one, as `c99`; any other name, such as `textbook`, reads as pseudocode
+  (for, while, if, then, return, to, …). So name a listing in a real language by
+  that language, as `<script listing="c">` for C code, or its types and strings
+  read as plain text. Lit code keeps its own colour over the syntax colour.
 
 Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 `key`:

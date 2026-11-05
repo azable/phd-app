@@ -85,6 +85,10 @@ Some features suit common needs. Offer them as alternatives where they fit:
   helpers are on, give them the type and a short task saying what to draw.
   Asking them without changing the source, say in one sentence that the
   alternatives follow; never promise what you cannot show.
+- When the participant gives code in a real language, such as C, name its
+  listing by that language (`<script listing="c">`), so its keywords and types
+  read right, and offer colour coding (`listing.syntax`, `colour` against
+  `keywords`) as an alternative (see the guide's Listing).
 
 Choose a case whose input shows how the algorithm works, small enough to step
 through. For example: a power of two for divide and conquer, as 8 values for
