@@ -948,6 +948,39 @@ value the label has given up to this step:
 {#each spans(@check.at) as p}{p}{/each}
 ```
 
+## Queries
+
+A query is a list of the spans of one label, given at every step. Write it
+beside the layouts:
+
+```svelte
+<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />
+```
+
+- Each row is one span of the label. It holds the variables in scope at the
+  span's latest stop so far: its `:before` while it goes on, its `:after` once
+  it has ended. A view of the label draws each row, as
+  `{#each stack as call} {call}{/each}`.
+- `where` keeps only the rows for which it is true. It is written in SQL's
+  words: `=`, `<>`, `<`, `<=`, `>`, `>=`, `and`, `or`, `not`, numbers, and text
+  in single quotes. `now` is the current step. `started` and `ended` are when
+  the span began and ended. `depth` counts the calls around the span's call, the
+  first call having depth 0. `call.started`, `call.ended` and `call.depth` are
+  its call's. A variable in the span's record is read by its name, for example
+  `lo`. JavaScript's `===`, `&&` and `!` are refused.
+- For example, `started <= now and now < ended` gives the calls going on, the
+  call stack; `ended <= now` gives the spans that have ended so far.
+- `order` sorts the rows by one or more fields, separated by commas, each
+  ascending, or descending with `desc`. Rows with equal fields stay in the order
+  their spans began.
+- `group` puts rows with the same value of a field together. The result is then
+  a list of groups, each with `key` and `rows`.
+- `max` is the most rows any input can give, required, so the layout keeps room
+  for all of them and nothing moves as rows come and go.
+- The result is state: a layout declares it, as
+  `<Layout name="Stack" of="stack">`, and a scene passes it, as
+  `<Stack stack={stack} />`.
+
 ## Design
 
 The design space is every variable of a component's look, found in its markup:

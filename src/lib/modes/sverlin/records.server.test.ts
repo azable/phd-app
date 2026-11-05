@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import stackFixture from './fixtures/merge-sort-stack.sverlin?raw';
 
 /** Merge sort, its calls drawn by a view of the function's label, and a layout. */
 export const mergeSort = (
@@ -85,5 +86,49 @@ describe('records of spans', () => {
         )
       )
     ).toMatch(/missing/u);
+  });
+});
+
+describe('queries', () => {
+  const frame =
+    '<View of="@sort" name="CallFrame"><Node layout="row">sort {this.lo} to {this.hi}</Node></View>';
+
+  it('gives the open calls, the call stack, as a list at every step', async () => {
+    const source = mergeSort(
+      frame,
+      '<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />\n<Layout name="Stack" of="stack"><Node layout="column">{#each stack as call}{call}{/each}</Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort.split"><Stack stack={stack} /></Scene>'
+    );
+    const prepared = prepareSvelteComponent(source);
+    const { labels } = await bundlePresentation(prepared, 1);
+    expect(labels.slice(0, 4)).toEqual([
+      ':before',
+      '@sort.split#1',
+      '@sort.split#2',
+      '@sort.split#3'
+    ]);
+    // At the third split, the calls on 0–8, 0–4 and 0–2 are open, outermost first.
+    const third = prepared.master.find(({ name }) => name === '@sort.split#3')!;
+    const stack = third.state.stack as { lo: number; hi: number }[];
+    expect(stack.map(({ lo, hi }) => `${lo}-${hi}`)).toEqual(['0-8', '0-4', '0-2']);
+  });
+
+  it('builds the merge sort call stack fixture, the stack growing and shrinking', async () => {
+    const prepared = prepareSvelteComponent(stackFixture);
+    const { labels } = await bundlePresentation(prepared, 1);
+    expect(labels.length).toBeGreaterThan(10);
+    const depths = prepared.master
+      .filter(({ name }) => name?.startsWith('@sort.merge#'))
+      .map(({ state }) => (state.stack as unknown[]).length);
+    expect(Math.max(...depths)).toBe(3);
+  });
+
+  it.each([
+    ['JavaScript operators', 'where="started <= now && now < ended"', "SQL's words"],
+    ['a missing bound', '', 'needs a bound on its rows'],
+    ['an unknown attribute', 'limit="3"', 'takes name, from, where, order, group and max']
+  ])('refuses %s', (_, attributes, message) => {
+    const tag = `<Select name="stack" from="@sort" ${attributes} ${attributes.startsWith('where') ? 'max="4"' : ''} />`;
+    expect(problemOf(stackFixture.replace(/<Select[\s\S]*?\/>/u, tag))).toContain(message);
   });
 });

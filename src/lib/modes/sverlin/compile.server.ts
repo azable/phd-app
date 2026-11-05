@@ -93,6 +93,7 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
+import { selectsOf, withSelectRows, withSelectTypes } from './selects.server';
 import {
   buildVariant,
   DesignValueError,
@@ -448,7 +449,9 @@ export function recordedTrace(source: string): MasterStep[] {
       code: 'missing_algorithm'
     });
   const domain = blocks.domain
-    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+    ? interpretBlock(source, blocks.domain, (body) =>
+        withSelectTypes(interpretDomain(body), selectsOf(source).selects)
+      )
     : noDomain;
   // Each case's steps in turn; with no case yet, the algorithm's from no input.
   const inputs = caseInputs(source, blocks, cases, domain);
@@ -519,7 +522,9 @@ function listingProblemsAlone(
   if (!own.length || !algorithm) return [];
   try {
     const domain = blocks.domain
-      ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+      ? interpretBlock(source, blocks.domain, (body) =>
+          withSelectTypes(interpretDomain(body), selectsOf(source).selects)
+        )
       : noDomain;
     const parsed = interpretBlock(source, algorithm, (body) =>
       parseBlock(body, 'algorithm', domain)
@@ -553,7 +558,9 @@ function earlyTyping(
   if (!blocks.algorithm) return undefined;
   try {
     const domain = blocks.domain
-      ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+      ? interpretBlock(source, blocks.domain, (body) =>
+          withSelectTypes(interpretDomain(body), selectsOf(source).selects)
+        )
       : noDomain;
     const input = firstInput(source, blocks, cases, domain);
     // Every label's values are kept, so a label read in the markup has its type.
@@ -673,10 +680,13 @@ function paced(
   pacing: Pacing = {},
   keep: Parameters<typeof traceAlgorithm>[4] = {}
 ): ReturnType<typeof traceAlgorithm> {
+  // Each query's rows are a variable at every step, from the records of its label's spans.
+  const { selects } = selectsOf(source);
+  const records = new Set([...(keep.records ?? []), ...selects.map(({ from }) => from)]);
   const run = interpretBlock(source, algorithm, (body) =>
-    traceAlgorithm(body, input, domain, pacing, keep, true)
+    traceAlgorithm(body, input, domain, pacing, { ...keep, records }, true)
   );
-  return { ...run, steps: [run.opening, ...run.steps] };
+  return { ...run, steps: withSelectRows([run.opening, ...run.steps], run.records, selects) };
 }
 
 /** How a source pauses, as a key, for the steps paced so (see PreparedComponent.paced). */
@@ -721,7 +731,9 @@ export function listingMapsOf(
   const { blocks, listings: listingBlocks, cases } = extractBlocks(source);
   if (!listingBlocks.length || !blocks.algorithm) return undefined;
   const domain = blocks.domain
-    ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+    ? interpretBlock(source, blocks.domain, (body) =>
+        withSelectTypes(interpretDomain(body), selectsOf(source).selects)
+      )
     : noDomain;
   const input = firstInput(source, blocks, cases, domain);
   const run = paced(source, blocks.algorithm, input, domain);
@@ -1124,7 +1136,9 @@ function prepareViews(
         { code: 'missing_algorithm' }
       );
     const declaredDomain = blocks.domain
-      ? interpretBlock(source, blocks.domain, (body) => interpretDomain(body))
+      ? interpretBlock(source, blocks.domain, (body) =>
+          withSelectTypes(interpretDomain(body), selectsOf(source).selects)
+        )
       : noDomain;
     // A view typed by a label sees the labelled expression as an operator named by it (see
     // withLabelOperators), its operands and result the fields the first trace recorded.
@@ -1187,9 +1201,18 @@ function prepareViews(
     // Names are checked before any block runs, so a clash is reported before what it causes.
     const declared = (block: Block | undefined, kind: 'input' | 'algorithm') =>
       block ? interpretBlock(source, block, (body) => declaredNames(body, kind, domain)) : [];
-    const stateNames = [
+    const variableNames = [
       ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
     ];
+    // A query's result is state too, a variable at every step (see selects.server.ts).
+    const queryNames = selectsOf(source).selects.map(({ name }) => name);
+    const clash = queryNames.find((name) => variableNames.includes(name));
+    if (clash)
+      throw new InvalidSvelteSourceError(
+        `The query ${clash} has the name of a variable of the input or algorithm: give it another name.`,
+        { code: 'view_select', start: sourcePosition(source, source.indexOf('<Select')) }
+      );
+    const stateNames = [...variableNames, ...queryNames];
     const typeName = stateNames.find((name) => definesType(domain, name));
     if (typeName)
       throw new InvalidSvelteSourceError(
@@ -1270,7 +1293,11 @@ function prepareViews(
     const linked = fromlessLinks(ast.html);
     if (linked.length)
       for (const name of endTypes) rendered.push({ name, start: linked[0], inNode: true });
-    const appliedRenders = operatorRendersOf(ast.html, operators);
+    const writtenSelects = selectsOf(source).selects;
+    const appliedRenders = operatorRendersOf(ast.html, operators, {
+      lists: new Set(writtenSelects.map(({ name }) => name)),
+      grouped: new Set(writtenSelects.flatMap(({ name, group }) => (group ? [name] : [])))
+    });
     const wrongRender = appliedRenders.find(({ argued, inView }) => argued || inView);
     if (wrongRender)
       throw new InvalidSvelteSourceError(
@@ -2696,7 +2723,14 @@ function extractBlocks(source: string): {
     );
   }
   const cases = casesOf(svelteSource);
-  for (const { start, end } of cases.tags)
+  const selects = selectsOf(svelteSource);
+  const [selectProblem] = selects.problems;
+  if (selectProblem)
+    throw new InvalidSvelteSourceError(selectProblem.message, {
+      code: 'view_select',
+      start: sourcePosition(source, selectProblem.start)
+    });
+  for (const { start, end } of [...cases.tags, ...selects.tags])
     svelteSource =
       svelteSource.slice(0, start) +
       svelteSource.slice(start, end).replace(/[^\n]/gu, ' ') +
@@ -4435,7 +4469,12 @@ function labelledForm(
  */
 function operatorRendersOf(
   markup: unknown,
-  operators: ReadonlySet<string>
+  operators: ReadonlySet<string>,
+  /** The queries, whose rows a label's view draws, and those of them in groups of rows. */
+  queries: { lists: ReadonlySet<string>; grouped: ReadonlySet<string> } = {
+    lists: new Set(),
+    grouped: new Set()
+  }
 ): {
   name: string;
   start: number;
@@ -4445,9 +4484,14 @@ function operatorRendersOf(
   inView: boolean;
 }[] {
   const found: ReturnType<typeof operatorRendersOf> = [];
-  const walk = (node: unknown, inView: boolean, items: ReadonlySet<string>): void => {
+  const walk = (
+    node: unknown,
+    inView: boolean,
+    items: ReadonlySet<string>,
+    groups: ReadonlySet<string> = new Set()
+  ): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView, items));
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView, items, groups));
     const part = node as {
       type?: string;
       start?: number;
@@ -4456,6 +4500,8 @@ function operatorRendersOf(
         name?: string;
         callee?: { name?: string };
         arguments?: unknown[];
+        object?: { type?: string; name?: string };
+        property?: { name?: string };
       };
       context?: { type?: string; name?: string };
     };
@@ -4482,10 +4528,33 @@ function operatorRendersOf(
       part.context?.type === 'Identifier'
         ? part.context.name
         : undefined;
-    const inner = item ? new Set([...items, item]) : items;
+    // A query's rows are records, each drawn by its label's view, as are a group's rows.
+    const each = part.type === 'EachBlock' ? part.expression : undefined;
+    const listed =
+      part.context?.type === 'Identifier' &&
+      ((each?.type === 'Identifier' &&
+        queries.lists.has(each.name ?? '') &&
+        !queries.grouped.has(each.name ?? '')) ||
+        (each?.type === 'MemberExpression' &&
+          each.object?.type === 'Identifier' &&
+          groups.has(each.object.name ?? '') &&
+          each.property?.name === 'rows'))
+        ? part.context.name
+        : undefined;
+    const group =
+      part.context?.type === 'Identifier' &&
+      each?.type === 'Identifier' &&
+      queries.grouped.has(each.name ?? '')
+        ? part.context.name
+        : undefined;
+    const inner =
+      item || listed
+        ? new Set([...items, ...[item, listed].filter((x) => x !== undefined)])
+        : items;
+    const innerGroups = group ? new Set([...groups, group]) : groups;
     const within = inView || (part.type === 'SnippetBlock' && !isPart(part));
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent') walk(child, within, inner);
+      if (key !== 'parent') walk(child, within, inner, innerGroups);
   };
   walk(markup, false, new Set());
   return found;

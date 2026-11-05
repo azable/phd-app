@@ -125,6 +125,12 @@ export type MasterStep = {
   applied?: Record<string, Application[]>;
   /** The values each labelled expression gave since the step before, by the label's full name. */
   labelled?: Record<string, LabelRun[]>;
+  /**
+   * The stop the step is at, numbered in the order the algorithm reaches the starts and ends of
+   * every span, the same however the steps pause: a span's record started at the stop its
+   * :before is, and ended at its :after's.
+   */
+  stop?: number;
   /** The labels whose runs the step is inside, by full name: the run it ends and those around it. */
   inside?: string[];
   /** The same runs, each as its label and which run of it it is, as insert#2. */
@@ -151,8 +157,8 @@ export type MasterStep = {
 };
 
 /**
- * A span of a label kept as a record (see design "Records"): when it started and ended, by how many
- * events the algorithm had logged then, the call it is in and the call around that, how many calls
+ * A span of a label kept as a record (see design "Records"): when it started and ended, as stops
+ * numbered in the order the algorithm reaches them (see MasterStep.stop), the call it is in and the call around that, how many calls
  * are around its call, and the variables in scope at its two stops. A function's own span is its
  * call.
  */
@@ -472,6 +478,8 @@ type Run = {
   ordinal: number;
   scope: Scope;
   start: number;
+  /** The stop it started at (see MasterStep.stop). */
+  started: number;
   since?: Since;
   /** The variables in scope as it started, where its label's spans are kept as records. */
   before?: StepSnapshot;
@@ -584,6 +592,8 @@ class Interpreter {
   readonly #functionBodies = new WeakSet<object>();
   /** The records kept, in the order their spans ended (see SpanRecord). */
   readonly records: SpanRecord[] = [];
+  /** How many starts and ends of spans the algorithm has reached (see MasterStep.stop). */
+  #stops = 0;
   /**
    * The typed operands and result of each application, and the variable each operand was read
    * through, if any, so its copy starts there (see identities).
@@ -1658,6 +1668,7 @@ class Interpreter {
     const step = label !== undefined && this.#pauses.has(label);
     const ordinal = (this.#begun.get(label ?? '') ?? 0) + 1;
     if (label !== undefined) this.#begun.set(label, ordinal);
+    const started = ++this.#stops;
     // Its :before, where the scene is within its runs or pauses there.
     const edge = this.#isEdge(label, ordinal);
     if (label !== undefined && (edge || this.#pauses.has(beforeStop(label))))
@@ -1672,6 +1683,7 @@ class Interpreter {
       ordinal,
       scope,
       start: this.#log.seen,
+      started,
       ...(label !== undefined && this.#recording.has(label)
         ? { before: this.#snapshotOf(node, scope) }
         : {}),
@@ -1688,8 +1700,9 @@ class Interpreter {
 
   /** End a run of labelled code, recording a step where its label is paused at. */
   #end(node: AnyNode, scope: Scope): void {
-    const ended = this.#runs.at(-1);
-    if (ended) this.#keepRecord(ended, node, scope);
+    const ending = this.#runs.at(-1);
+    this.#stops += 1;
+    if (ending) this.#keepRecord(ending, node, scope);
     const run = this.#runs.pop();
     if (!run) return;
     const edge = this.#isEdge(this.#named.get(run.unit), run.ordinal)
@@ -1719,8 +1732,8 @@ class Interpreter {
     this.records.push({
       label,
       ordinal: run.ordinal,
-      started: run.start,
-      ended: this.#log.seen,
+      started: run.started,
+      ended: this.#stops,
       ...(inner ? { call: id(inner) } : {}),
       ...(parent ? { parent: id(parent) } : {}),
       depth: Math.max(calls.length - 1, 0),
@@ -1843,6 +1856,7 @@ class Interpreter {
       ...(unit === this.#root ? {} : { unit: this.#offset(unit) }),
       name,
       ...(stop?.at ? { edge: stop.at } : {}),
+      stop: this.#stops,
       ...(inside.length ? { inside, runs } : {}),
       ...after,
       ...logged,
