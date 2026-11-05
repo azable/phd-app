@@ -8,12 +8,17 @@
 
 const layoutUnit = 64;
 
-/** How much an element is scaled on screen: its and its ancestors' scale transforms together. */
+/**
+ * How much an element is scaled on screen: its and its ancestors' scale transforms together, and
+ * the individual `scale` property, which motion animates and `transform` does not report.
+ */
 export function screenScale(element: Element): number {
   let scale = 1;
   for (let at: Element | null = element; at; at = at.parentElement) {
-    const transform = getComputedStyle(at).transform;
-    if (transform !== 'none') scale *= new DOMMatrixReadOnly(transform).a;
+    const style = getComputedStyle(at);
+    if (style.transform !== 'none') scale *= new DOMMatrixReadOnly(style.transform).a;
+    const own = Number.parseFloat(style.scale);
+    if (style.scale !== 'none' && Number.isFinite(own)) scale *= own;
   }
   return scale;
 }

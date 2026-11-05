@@ -65,6 +65,17 @@
     const index = look ? looks.findIndex((each) => headKey(each) === headKey(look)) : -1;
     return index < 0 ? undefined : `url(#${prefix}-${index})`;
   };
+  // Each line keyed by its link, so a line keeps its path element, and a move easing it, whatever
+  // order the links come in; a second line of one link by its place among them.
+  const keyed = $derived.by(() => {
+    const seen = new Map<string, number>();
+    return lines.map((line) => {
+      const link = line.id ?? line.link;
+      const nth = seen.get(link) ?? 0;
+      seen.set(link, nth + 1);
+      return { line, key: `${link}#${nth}` };
+    });
+  });
 </script>
 
 <defs>
@@ -95,7 +106,7 @@
     {/if}
   {/each}
 </defs>
-{#each lines as line, index (index)}
+{#each keyed as { line, key } (key)}
   {@const style = line.style}
   {@const marker = markerOf(line)}
   <path
