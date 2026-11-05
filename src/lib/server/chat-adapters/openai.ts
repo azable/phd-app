@@ -5,6 +5,7 @@
  */
 
 import OpenAI from 'openai';
+import type { ResponseInput } from 'openai/resources/responses/responses';
 
 import {
   InvalidChatbotResponseError,
@@ -129,6 +130,70 @@ function containsRefusal(value: unknown): boolean {
   return record.type === 'refusal' || Object.values(record).some(containsRefusal);
 }
 
+/**
+ * The request's input, cached by its prompt: the configured prompt, the same for every call of a
+ * bot, ends at an explicit cache breakpoint; the context and the conversation, which change every
+ * call, follow it and are never written to the cache. On GPT-5.6, implicit caching writes the whole
+ * prompt at 1.25× the input price at its latest message and reads only a prefix that matches to a
+ * breakpoint, so a prompt whose context changes every call was written each time and never read
+ * (measured 2026-11-05: 38,000 tokens written per call, none cached); with the breakpoint after the
+ * prompt, later calls read it at 0.1× (https://developers.openai.com/api/docs/guides/prompt-caching).
+ */
+export function requestInput(request: ChatAdapterRequest, context: string): ResponseInput {
+  return [
+    {
+      role: 'developer' as const,
+      content: [
+        {
+          type: 'input_text' as const,
+          text: request.initialPrompt,
+          prompt_cache_breakpoint: { mode: 'explicit' as const }
+        }
+      ]
+    },
+    {
+      role: 'developer' as const,
+      content: `Context provided by this chat configuration:\n\n${context}`
+    },
+    ...request.messages
+  ];
+}
+
+/**
+ * Explicit caching for models that accept it (GPT-5.6 and later). The default 30-minute lifetime
+ * writes at 1.25× input; a study session's calls come minutes apart, and the 12-hour lifetime would
+ * write at 2.5× (same source).
+ */
+export function cacheOptions(model: string): {
+  prompt_cache_options?: { mode: 'explicit'; ttl: '30m' };
+} {
+  return /^gpt-(5\.([6-9])|[6-9])/u.test(model)
+    ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } }
+    : {};
+}
+
+/** A response's token use, with the cached, cache-written and reasoning tokens where reported. */
+export function usageOf(usage: {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } | null;
+  output_tokens_details?: { reasoning_tokens?: number } | null;
+}): Record<string, number> {
+  const details = usage.input_tokens_details;
+  const reasoning = usage.output_tokens_details?.reasoning_tokens;
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    totalTokens: usage.total_tokens,
+    ...(details?.cached_tokens !== undefined ? { cachedInputTokens: details.cached_tokens } : {}),
+    ...(details?.cache_write_tokens !== undefined
+      ? { cacheWriteTokens: details.cache_write_tokens }
+      : {}),
+    ...(reasoning !== undefined ? { reasoningTokens: reasoning } : {})
+  };
+}
+
 /** Generate one response through the OpenAI Responses API. */
 export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<ChatAdapterResult> {
   const client = new OpenAI({
@@ -142,13 +207,8 @@ export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<
       model: request.parameters.model,
       // Keep the server's immutable project Timeline as the source of truth.
       store: false,
-      input: [
-        {
-          role: 'developer',
-          content: `${request.initialPrompt}\n\nContext provided by this chat configuration:\n\n${context}`
-        },
-        ...request.messages
-      ],
+      input: requestInput(request, context),
+      ...cacheOptions(request.parameters.model),
       max_output_tokens: request.parameters.maxOutputTokens,
       // A summary of the reasoning, unless turned off, comes back with the response for audit.
       reasoning: request.parameters.reasoningEffort
@@ -176,15 +236,7 @@ export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<
     generation: {
       model: response.model,
       responseId: response.id,
-      ...(response.usage
-        ? {
-            usage: {
-              inputTokens: response.usage.input_tokens,
-              outputTokens: response.usage.output_tokens,
-              totalTokens: response.usage.total_tokens
-            }
-          }
-        : {})
+      ...(response.usage ? { usage: usageOf(response.usage) } : {})
     }
   };
 }
