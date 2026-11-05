@@ -3252,7 +3252,7 @@ function replyWithRecovery(
   return [
     {
       type: 'markdown',
-      text: `I ran into a difficulty: ${plainFailureSummary(recovery.struggledWith)} To produce a working visualization, I simplified ${plainFailureSummary(recovery.simplified)}`
+      text: `I ran into a difficulty: ${plainFailureSummary(recovery.struggledWith)} To produce a working visualization, I simplified it: ${plainFailureSummary(recovery.simplified)}`
     },
     ...reply
   ];

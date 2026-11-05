@@ -216,6 +216,16 @@ export const algorithmLimits = {
   maximumTraceValues: 200_000
 } as const;
 
+/**
+ * Why the trace grew past its bound, with numbers: each step records every variable in scope, so
+ * its size is the state times the steps (project c0dc2b85's 10-vertex search hit it, and the
+ * repair had only "too large" to go on).
+ */
+function tooLargeMessage(steps: number): string {
+  const each = Math.round(algorithmLimits.maximumTraceValues / Math.max(steps, 1));
+  return `The recorded steps are too large: ${steps} steps so far, about ${each} values each, past ${algorithmLimits.maximumTraceValues.toLocaleString('en')} in all. Each step records every variable in scope, so keep less state (adjacency lists rather than a matrix, no copies of arrays, fewer fields in a record), label fewer statements, or give a smaller input.`;
+}
+
 /** The name a label's applications are kept under, as the view reads the label: `@insert.compare` as `ℓinsertˑcompare`. */
 export const labelApplication = (full: string): string => `ℓ${full.replaceAll('.', 'ˑ')}`;
 
@@ -2028,7 +2038,7 @@ class Interpreter {
     const { types, targets, placed } = into;
     this.#traceValues += 1;
     if (this.#traceValues > algorithmLimits.maximumTraceValues)
-      this.#fail(node, 'The recorded steps are too large; use smaller state or fewer steps.');
+      this.#fail(node, tooLargeMessage(this.#trace.length));
     if (value === undefined) return null;
     if (value instanceof Atom) {
       types[path] = value.type.name;
