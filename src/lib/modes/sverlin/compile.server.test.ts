@@ -552,6 +552,62 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     ).resolves.toBeDefined();
   });
 
+  it('refuses words in a node with a layout, which holds only nodes, renders and blocks', async () => {
+    const page = (markup: string) =>
+      compileSvelteComponent(
+        `<script algorithm></script>\n<Layout name="Main"><Node layout="column">${markup}</Node></Layout>\n<Storyboard><Scene name="main"><Main /></Scene></Storyboard>`
+      );
+    await expect(
+      page('<Node kind="Problem" layout="column">Find the target <Node>7</Node></Node>')
+    ).rejects.toMatchObject({
+      code: 'view_text',
+      line: 2,
+      message: expect.stringMatching(
+        /^"Find the target" is written in a node with a layout, of kind (Main\.)?Problem, .* Put them in a node of their own, as <Node kind="Caption">Find the target<\/Node>\.$/u
+      )
+    });
+    // So inside a block in it.
+    await expect(
+      page('<Node layout="row">{#if 1 > 0}and{/if}<Node>7</Node></Node>')
+    ).rejects.toMatchObject({ code: 'view_text', message: expect.stringContaining('"and"') });
+    // Words in a node of their own inside it, and in a link's label, are the node's or the link's.
+    await expect(
+      page(
+        '<Node layout="free">{#each [0, 1] as v, k}<Node>V</Node>{#if k > 0}<Link from={k - 1} to={k}>weight</Link>{/if}{/each}</Node><Node layout="row"><Node kind="Caption">Find the target</Node><Node>7</Node></Node>'
+      )
+    ).resolves.toBeDefined();
+  });
+
+  it('warns of a node with no layout holding two blocks and no words, which flow as text', async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 4 });
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>@run[let n = Int(0);]</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node>{#each this as v}{v}{/each}</Node></View>
+<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Goal"><Node>target 7</Node></Layout>
+<Layout name="Main" of="values">
+  <Node layout="column">
+    <Node kind="Problem"><Goal /><Cells values={values} /></Node>
+    <Node>{values}<Node layout="row"><Node>a</Node></Node></Node>
+    <Node>values {values} <Goal /></Node>
+  </Node>
+</Layout>
+<Case name="main" values={[1, 2]} />
+<Storyboard><Scene name="main" case="main"><Main values={values} /></Scene></Storyboard>`;
+    const { warnings } = await bundlePresentation(prepareCurrent(source), 1);
+    // The third node holds words of its own, so its children are read as a sentence.
+    expect(warnings?.filter((warning) => warning.includes('with no layout'))).toEqual([
+      '<Node kind="Problem">, a node with no layout, holds <Goal />, <Cells /> and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.',
+      'A node with no layout in Main holds {values}, a node with a layout and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.'
+    ]);
+  });
+
   it('shows the source’s own listing where the view places a <Listing />, lit per step', async () => {
     const source = [
       '<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script>',

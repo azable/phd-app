@@ -114,7 +114,11 @@ layout, a view, or a node with a `kind`.
   and explains. A node of text and renders with no `layout` reads as a line of
   text, its renders inline at their own sizes, wrapping between words, as
   `<Node>Found {target} at index {i}.</Node>`, which keeps each value sized and
-  looking as it does elsewhere, unlike `{target}`.
+  looking as it does elsewhere, unlike `{target}`. A node with a `layout` holds
+  only nodes, renders and blocks, never words: put its words in a node of their
+  own, as `<Node kind="Caption">Find the target</Node>`. Blocks in a node with
+  no `layout` and no words, as `<Node><Goal /><Cells /></Node>`, wrap against
+  each other with no gap, and the build warns: give it a layout.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
 - Write text in the participant's words about what the algorithm does, never a
@@ -191,10 +195,12 @@ scene at least.
   `:after`. A step the view draws from exactly what it drew the step before from
   (the variables it reads, the marks held, the code lit, and each `<When>`)
   draws the same picture, so it is left out, and the build warns, naming both
-  steps, unless the step left out is the scene's own `:before` or `:after`.
-  `at=":before"` or `at=":after"` shows only one of them. `title` is a caption
-  beside its name in the controls. Props are written as they are, never
-  computed.
+  steps, unless the step left out is the scene's own `:before` or `:after`. A
+  paused step whose values differ but whose drawn picture is the step before's,
+  as one moving a pointer that marks nothing, is shown, and the build warns,
+  naming the first run of such steps at each label. `at=":before"` or
+  `at=":after"` shows only one of them. `title` is a caption beside its name in
+  the controls. Props are written as they are, never computed.
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
@@ -292,7 +298,10 @@ with its own view, and nodes around it, placed by layout, annotate it: a mark
 alone, `<Pointed />`; a bracket,
 `<Node layout="row"><Node>[</Node><Pointed /></Node>`; or a label below,
 `<Node layout="column"><Pointed /><Node kind="Caption">i</Node></Node>`, the
-label given a kind of its own.
+label given a kind of its own. It marks the element only where the view draws it
+whole, with a view of its type, as `{vertex}`: a record drawn only by its
+fields, as `{vertex.name}`, has nothing to mark, and the build warns of a
+pointer that marks nothing at any step.
 
 - `<Pointed>` takes no props and is written in the pointer view itself. Where
   the pointer is, the element is drawn in the pointer's kind, as `Here.Pointed`
@@ -882,8 +891,12 @@ that expression gave since the step before, drawn at the step's after, and
 missing where it gave none or several. It is held at the step ending the span
 around it (see Steps), which shows that span whole. So a view shows what a
 step's code held though no variable holds it, as the key a whole insertion
-inserts, `{@insert.key}`, out of scope once its block ends. A label giving a
-position is drawn by a pointer, pointing while that code runs.
+inserts, `{@insert.key}`, out of scope once its block ends. Its step ends before
+the declaration's name holds the value, so `key` does not exist there: to pause
+where a view draws `key`, label the whole statement,
+`@key[const key = values[i];]`, and the build warns of a pause on the value
+alone where the view draws the name. A label giving a position is drawn by a
+pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -1686,8 +1699,8 @@ A node is one of three things:
   own node does with its value;
 - content: `<Node>any text or markup</Node>` shows its children, for titles,
   explanations, captions, indices, and pointer names, and with `layout` arranges
-  them, as a view of an array arranges its elements' views; without `layout`,
-  children flow as ordinary text;
+  them, as a view of an array arranges its elements' views, its words each in a
+  node of their own; without `layout`, children flow as ordinary text;
 - a shape: `<Node />` has no value or children, and draws only its box, for
   marks such as dots, sized by its kind's padding and least size.
 

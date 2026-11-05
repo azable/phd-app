@@ -41,6 +41,11 @@ export type Label = {
   start: number;
   end: number;
   statement: boolean;
+  /**
+   * Where it marks only the value a declaration gives, as `const mid = @mid[…];`, the declaration's
+   * keyword and name: it ends before the name holds the value.
+   */
+  initialises?: { keyword: string; name: string };
   parent?: Label;
   children: Label[];
 };
@@ -243,7 +248,18 @@ export function readLabels(
     }
     const { start } = spanOf(marked[0]);
     const { end } = spanOf(marked[marked.length - 1]);
+    const declarator = parents.get(marked[0]);
+    const declaration = declarator && parents.get(declarator);
+    const initialises =
+      marked.length === 1 &&
+      declarator?.type === 'VariableDeclarator' &&
+      declarator.init === marked[0] &&
+      declarator.id.type === 'Identifier' &&
+      declaration?.type === 'VariableDeclaration'
+        ? { keyword: declaration.kind, name: declarator.id.name }
+        : undefined;
     labels.push({
+      ...(initialises ? { initialises } : {}),
       name: marker.name,
       full: marker.name,
       nodes: marked,

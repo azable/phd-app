@@ -439,6 +439,48 @@ export function leftOutWarning(
   return `${scenes > 1 ? `In the scene ${scene.name}, ` : ''}${name(like)} and ${name(step)} draw the same picture, so ${name(step)} is left out: pause at what changes the picture, or show what this step means with <When of="@label">.`;
 }
 
+/** At most this many labels' repeats are told, so a long run of them never buries other warnings. */
+const repeatedLabelsTold = 5;
+
+/**
+ * The warnings for steps a scene pauses at whose drawn scene is the one before it, all of it,
+ * listing included, each step given in order with its scene, its name and its scene as drawn:
+ * one for each label so paused, naming its first run of repeats. Its state differed, so it was
+ * shown (see sceneSteps), but nothing the view draws shows that difference. A scene's :before and
+ * :after are no one's choice, so they go unwarned.
+ */
+export function repeatedStepWarnings(
+  steps: readonly { scene: Scene; name?: string; drawn: string }[],
+  scenes: number
+): string[] {
+  const runs = new Map<string, { scene: Scene; count: number; first: [number, number] }>();
+  steps.forEach(({ scene, name, drawn }, index) => {
+    const before = steps[index - 1];
+    if (!name?.startsWith('@') || before?.scene !== scene || before.drawn !== drawn) return;
+    const key = `${scene.name}\u0000${name.replace(/#\d+$/u, '')}`;
+    const run = runs.get(key);
+    if (!run) runs.set(key, { scene, count: 1, first: [index - 1, index] });
+    else {
+      run.count++;
+      if (run.first[1] === index - 1) run.first[1] = index;
+    }
+  });
+  const name = (index: number) => steps[index].name ?? `step ${index + 1}`;
+  const told = [...runs].slice(0, repeatedLabelsTold).map(([key, { scene, count, first }]) => {
+    const label = key.split('\u0000')[1];
+    const [from, to] = first.map(name);
+    const repeat =
+      count === 1
+        ? `${to} draws the same picture as ${from}`
+        : `${count} steps at ${label} draw the same picture as the step before them, as ${from} to ${to}`;
+    return `${scenes > 1 ? `In the scene ${scene.name}, ` : ''}${repeat}: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.`;
+  });
+  const untold = runs.size - told.length;
+  return untold > 0
+    ? [...told, `Steps at ${untold} more labels draw the same picture as the step before them.`]
+    : told;
+}
+
 /** The stops a scene pauses at: those its pause names, and no others. */
 export const scenePauses = (scene: Scene): Set<string> => new Set(scene.pause ?? []);
 

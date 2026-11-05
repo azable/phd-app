@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { repeatedStepWarnings } from './storyboard.server';
 
 const blocks = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -391,5 +392,122 @@ describe('steps drawing the same picture', () => {
     const { labels, warnings } = await bundlePresentation(prepared, 1);
     expect(labels.slice(-2)).toEqual(['@compare#4', ':after']);
     expect(warnings).toBeUndefined();
+  });
+
+  /** A linear search over records drawn by `item`, its pointer at the element searched. */
+  const records = (item: string, views = '') => `<script domain>
+  const Int = type('integer', { min: 0, max: 20 });
+  const Item = record({ value: Int });
+  const Items = array(Item, { max: 5 });
+  const Index = index(Items);
+</script>
+<script input>
+  const items = Items;
+  const target = Int;
+</script>
+<script algorithm>
+  @start[let i = Index(items, 0);]
+  while (@compare[items[i].value !== target]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+${views}
+<Layout name="Scan" of="items, i">
+  <Node>
+    <Node>{#each items as item}${item}{/each}</Node>
+    {i}
+  </Node>
+</Layout>
+<Case name="main" items={[{ value: 4 }, { value: 9 }, { value: 2 }, { value: 7 }]} target={7} />
+<Storyboard>
+  <Scene name="scan" case="main" pause="@next"><Scan items={items} i={i} /></Scene>
+</Storyboard>`;
+
+  it('warns of a pointer marking nothing, its elements drawn only by their fields, and of the paused steps it leaves alike', async () => {
+    const built = await bundlePresentation(prepareSvelteComponent(records('{item.value}')), 1);
+    // Each step moves i, which the view reads, so none is left out; but none shows it.
+    expect(built.labels).toEqual([':before', '@next#1', '@next#2', '@next#3']);
+    expect(built.warnings).toEqual([
+      '{i} draws Mark, a pointer into Items, but it marks nothing at any step: a pointer marks the element where the view draws it, drawn whole by a view of Item (as {item} with <View of="Item">), not only by its fields, and no element of Items is drawn so. Draw the elements of Items with their own view where the layout shows them, or point at a collection the view draws.',
+      '3 steps at @next draw the same picture as the step before them, as :before to @next#3: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
+    ]);
+    const marked = await bundlePresentation(
+      prepareSvelteComponent(
+        records('{item}', '<View of="Item" name="ItemCell"><Node value={this.value} /></View>')
+      ),
+      1
+    );
+    expect(marked.warnings).toBeUndefined();
+  });
+
+  it('warns of a pause on a label marking only the value a declaration gives, the view drawing the name', async () => {
+    const search = (algorithm: string, pause: string) => `<script domain>
+  const Int = type('integer', { min: 0, max: 20 });
+  const Values = array(Int, { max: 5 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  ${algorithm}
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<Layout name="Scan" of="values, mid">
+  <Node>
+    <Node>{#each values as v}{v}{/each}</Node>
+    {mid}
+  </Node>
+</Layout>
+<Case name="main" values={[4, 9, 2, 7]} />
+<Storyboard>
+  <Scene name="scan" case="main" pause="${pause}"><Scan values={values} mid={mid} /></Scene>
+</Storyboard>`;
+    const value = '@probe[const mid = @mid[Index(Math.floor(values.length / 2))];]';
+    const before = await bundlePresentation(prepareSvelteComponent(search(value, '@probe.mid')), 1);
+    expect(before.warnings).toContain(
+      '@probe.mid wraps only the value given to mid, so a scene pausing there pauses after the value is worked out but before mid holds it: mid does not exist at that step, and nothing drawing it shows. Label the whole statement, as @mid[const mid = …;].'
+    );
+    const whole = await bundlePresentation(
+      prepareSvelteComponent(
+        search('@mid[const mid = Index(Math.floor(values.length / 2));]', '@mid')
+      ),
+      1
+    );
+    expect(whole.warnings ?? []).not.toContainEqual(
+      expect.stringContaining('wraps only the value')
+    );
+  });
+
+  it('tells one repeat by both steps, each label once, within a scene, and at most five labels', () => {
+    const scene = (name: string) => ({ name, layout: 'Main', frame: false, start: 0 });
+    const [first, second] = [scene('first'), scene('second')];
+    const step = (on: typeof first, name: string, drawn: string) => ({ scene: on, name, drawn });
+    const hint =
+      ': what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.';
+    expect(
+      repeatedStepWarnings(
+        [
+          step(first, ':before', 'a'),
+          step(first, '@pick#1', 'b'),
+          step(first, '@pick#2', 'b'),
+          // A scene opens on its own first step, whatever the one before drew.
+          step(second, '@pick#3', 'b'),
+          step(second, ':after', 'b')
+        ],
+        2
+      )
+    ).toEqual([`In the scene first, @pick#2 draws the same picture as @pick#1${hint}`]);
+    const labels = ['@a', '@b', '@c', '@d', '@e', '@f', '@g'];
+    expect(
+      repeatedStepWarnings(
+        labels.flatMap((label) => [
+          step(first, `${label}#1`, label),
+          step(first, `${label}#2`, label)
+        ]),
+        1
+      ).at(-1)
+    ).toBe('Steps at 2 more labels draw the same picture as the step before them.');
   });
 });

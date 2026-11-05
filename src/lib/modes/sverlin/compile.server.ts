@@ -78,6 +78,7 @@ import {
   probeMarkup,
   branchInsertions,
   pointerCalls,
+  unmarkedPointerWarnings,
   probeValues,
   positionReads,
   readsOf,
@@ -94,6 +95,7 @@ import {
   type ComponentProbe,
   type Insertion,
   type Placement,
+  type PointerMark,
   type ComponentSignatures
 } from './components.server';
 import { callTypes } from './calls.server';
@@ -186,6 +188,7 @@ import {
   storyboardOf,
   atWhen,
   leftOutWarning,
+  repeatedStepWarnings,
   type LeftOutStep,
   type Scene,
   type Storyboard
@@ -309,8 +312,15 @@ export type PreparedComponent = {
   listingWarnings?: string[];
   /** Each input the view draws but neither the algorithm nor another input reads, told to the assistant. */
   inputWarnings?: string[];
-  /** Each bare position drawn as its number where a mark was likely meant, told to the assistant. */
+  /** Each label on only a declaration's value that a scene pauses at, told to the assistant. */
+  initialiserWarnings?: string[];
+  /**
+   * Each bare position drawn as its number where a mark was likely meant, and each node with no
+   * layout whose blocks flow as text, told to the assistant.
+   */
   positionWarnings?: string[];
+  /** The pointers the root renders, whose scenes are checked for an element each marks. */
+  pointerMarks?: PointerMark[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -1854,6 +1864,19 @@ function prepareViews(
       tracedBy.set(key, steps);
       return steps;
     };
+    // A label on only a declaration's value, paused at, ends before the name holds the value: one
+    // the view draws by the name, not by the label's own value (`{@probe.mid}`), shows nothing there.
+    const labelsRead = new Set(Object.values(labelled).map(({ label }) => label));
+    const initialiserWarnings = traced.labels.flatMap(({ full, name, initialises }) =>
+      initialises &&
+      viewReads.includes(initialises.name) &&
+      !labelsRead.has(full) &&
+      scenes.some(({ pause = [] }) => pause.includes(full))
+        ? [
+            `@${full} wraps only the value given to ${initialises.name}, so a scene pausing there pauses after the value is worked out but before ${initialises.name} holds it: ${initialises.name} does not exist at that step, and nothing drawing it shows. Label the whole statement, as @${name}[${initialises.keyword} ${initialises.name} = …;].`
+          ]
+        : []
+    );
     const sceneView = { listed: Boolean(listing), whens: Object.values(during), reads: viewReads };
     const { storyboard, problems: sceneProblems } = storyboardOf(
       scenes,
@@ -2101,6 +2124,11 @@ function prepareViews(
             .map((view) => view.name);
           return [[type, { into, numberView: options[0], markViews }] as const];
         })
+      ),
+      new Set(
+        [...Object.keys(domain.structures), ...Object.keys(components)].filter(
+          (name) => domain.structures[components[name] ?? name]?.kind === 'collection'
+        )
       )
     );
     if (pointers.problems.length)
@@ -2113,6 +2141,25 @@ function prepareViews(
             })
         )
       );
+    const pointerMarks = pointers.rendered.map(({ name, written, layout }): PointerMark => {
+      const own = found.pointers.has(name);
+      const views = own ? [name] : choiceOf(name).options;
+      const type = components[name] ?? components[views[0] ?? ''];
+      const structure = domain.structures[type] as { kind?: string; collection?: string };
+      const into =
+        structure?.kind === 'ref'
+          ? (structure.collection ?? '')
+          : (viewing.atoms[type]?.index ?? '');
+      const element = (domain.structures[into] as { element?: string } | undefined)?.element;
+      return {
+        written,
+        layout,
+        views,
+        ...(own ? {} : { choice: `pointers.${name}` }),
+        into,
+        ...(element ? { element } : {})
+      };
+    });
     // A type with a view is drawn, never called, rendered or not: {Index(k)} is refused too.
     const viewCalls = viewCallsOf(
       ast.html,
@@ -2344,7 +2391,9 @@ function prepareViews(
       ownListings,
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
+      ...(initialiserWarnings.length ? { initialiserWarnings } : {}),
       ...(pointers.warnings.length ? { positionWarnings: pointers.warnings } : {}),
+      ...(pointerMarks.length ? { pointerMarks } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2547,6 +2596,7 @@ export async function bundlePresentation(
   const warnings: string[] = [
     ...(prepared.listingWarnings ?? []),
     ...(prepared.inputWarnings ?? []),
+    ...(prepared.initialiserWarnings ?? []),
     ...(prepared.positionWarnings ?? []),
     ...variant.dropped
   ];
@@ -2770,6 +2820,25 @@ export async function bundlePresentation(
     throw new InvalidSvelteSourceError(layoutFailureMessage('its steps could not be drawn', []), {
       code: 'layout_failed'
     });
+  // What the view draws that shows nothing, told to the assistant: a pointer marking no element,
+  // and a paused step drawing the step before it again (its motion from it aside).
+  const drawnSteps = laid.scenes.steps;
+  warnings.push(
+    ...unmarkedPointerWarnings(
+      prepared.pointerMarks ?? [],
+      new Set(drawnSteps.flatMap(({ nodes }) => nodes.flatMap(({ kind }) => kind ?? []))),
+      new Set(scenes.map(({ layout }) => layout)),
+      values
+    ),
+    ...repeatedStepWarnings(
+      entries.map(({ scene, run, index }, at) => ({
+        scene,
+        name: scene.frame ? undefined : run.steps[index].name,
+        drawn: JSON.stringify({ ...drawnSteps[at], copies: undefined })
+      })),
+      scenes.length
+    )
+  );
   const arrangements =
     options.arrange && size && geometry
       ? await measuredArrangements(
@@ -3685,6 +3754,9 @@ function withNodeRefs(
   // belongs inside a node, where it can be selected; a view may also write it beside its nodes.
   // `page`: in the root or a part of the page, rather than in a view.
   // `names`: what {#each} blocks and {@const} tags around declare, with their types (see Scope).
+  // The kind of the nearest node around, where that node has a layout: it holds only nodes,
+  // renders and blocks, so words written in it would be its own text in the container's look.
+  let laidOut: string | undefined;
   const walk = (
     value: unknown,
     around: { links: boolean } | undefined,
@@ -3785,6 +3857,19 @@ function withNodeRefs(
       );
       return;
     }
+    // Pointing at the text itself, not the whitespace before it.
+    const textStart =
+      (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0);
+    if (laidOut !== undefined && tag.type === 'Text' && tag.data?.trim()) {
+      const words = tag.data.trim().replace(/\s+/gu, ' ');
+      const shown = words.length > 40 ? `${words.slice(0, 40)}…` : words;
+      reject(
+        `"${shown}" is written in a node with a layout, of kind ${laidOut}, which lays out only the nodes it holds: its words would draw as the node's own text, in its look, and could not be selected apart. Put them in a node of their own, as <Node kind="Caption">${shown}</Node>.`,
+        'view_text',
+        textStart
+      );
+      return;
+    }
     if (!inNode && ((tag.type === 'Text' && tag.data?.trim()) || tag.type === 'MustacheTag')) {
       const written = tag.type === 'MustacheTag' ? source.slice(tag.start, tag.end as number) : '';
       reject(
@@ -3792,8 +3877,7 @@ function withNodeRefs(
           ? `${written} is outside a <Node>, so it draws as nothing here. A position draws as a mark only in the root of the layout that draws the array it points into, so draw a position there, declaring it in that layout's of; any other value goes in a node, as <Node>${written}</Node>.`
           : 'Text outside a <Node> cannot be selected or given a look; put it in a node, such as <Node>Linear search</Node>.',
         'view_text',
-        // Point at the text itself, not the whitespace before it.
-        (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0)
+        textStart
       );
       return;
     }
@@ -3852,7 +3936,13 @@ function withNodeRefs(
             tag.start
           );
       }
+      // A grid has its own rule for what it holds (see gridProblems).
+      const layoutProp = tag.attributes?.find(({ name }) => name === 'layout');
+      const grid = JSON.stringify(layoutProp?.value ?? '').includes('"grid"');
+      const outer = laidOut;
+      laidOut = tag.name === 'Node' && layoutProp && !grid ? kind : undefined;
       walk(tag.children, tag.name === 'Node' ? entry : around, true, kind, page, names);
+      laidOut = outer;
       return;
     }
     // What a layout holds is the page's top level, and a node written there is of the layout's kind.
@@ -3899,6 +3989,8 @@ function withNodeRefs(
     const snippet = tag.type === 'SnippetBlock' ? tag.expression?.name : undefined;
     // A part of the page writes its text in nodes, as the root does; a view may write it beside.
     const nested = inNode || (snippet !== undefined && !isPart(tag));
+    const outer = laidOut;
+    if (snippet !== undefined) laidOut = undefined;
     for (const [key, child] of Object.entries(tag))
       if (key !== 'attributes' && key !== 'parent' && key !== 'metadata')
         walk(
@@ -3909,6 +4001,7 @@ function withNodeRefs(
           snippet ? page && isPart(tag) : page,
           snippet ? new Map() : names
         );
+    laidOut = outer;
   };
   if (ast.css)
     reject(

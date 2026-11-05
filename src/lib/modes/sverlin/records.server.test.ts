@@ -67,7 +67,7 @@ describe('records of spans', () => {
     const { labels } = await bundlePresentation(
       prepareSvelteComponent(
         mergeSort(
-          '<View of="@sort" name="CallFrame"><Node layout="row">sort {this.lo} to {this.hi}</Node></View>',
+          '<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}</Node></View>',
           '<Layout name="Arrays" of="values, @sort"><Node layout="column">{values}{@sort}</Node></Layout>',
           '<Scene name="sort" case="eight" pause="@sort"><Arrays values={values} /></Scene>'
         )
@@ -91,8 +91,7 @@ describe('records of spans', () => {
 });
 
 describe('queries', () => {
-  const frame =
-    '<View of="@sort" name="CallFrame"><Node layout="row">sort {this.lo} to {this.hi}</Node></View>';
+  const frame = '<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}</Node></View>';
 
   it('gives the open calls, the call stack, as a list at every step', async () => {
     const source = mergeSort(
