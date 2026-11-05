@@ -744,6 +744,7 @@
     data-sv-place={places.length ? places.join(' ') : undefined}
     class:cell={(!arrangement && !children && !__text) || __field}
     class:text={__text}
+    class:math={__math !== undefined}
     style:font-size={measured('textSize', 'px')}
     style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
     style:color={textColour}
@@ -958,6 +959,14 @@
     display: inline-grid;
     place-items: center;
     vertical-align: middle;
+  }
+  /*
+    Inline maths sits on the text's baseline, as a word does, its SVG raised or lowered by its own
+    vertical-align, the baseline MathJax gave it.
+  */
+  .text > :global(.sv-node.math) {
+    display: inline;
+    vertical-align: baseline;
   }
   /* A view with room round it for its paint sits in the line as the view alone would. */
   .text > :global(.sv-room) {

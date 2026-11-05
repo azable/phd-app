@@ -53,6 +53,8 @@ it.skipIf(!enabled)(
           const node = svg.closest<HTMLElement>('.sv-node')!;
           const own = svg.getBoundingClientRect();
           const box = node.getBoundingClientRect();
+          // Inline maths sits in its line, which the server made tall enough for it.
+          const line = node.parentElement!.getBoundingClientRect();
           const style = getComputedStyle(node);
           const sides = ['Left', 'Right'].reduce(
             (total, side) =>
@@ -66,7 +68,8 @@ it.skipIf(!enabled)(
             // The node's content width, which the server sized to the SVG, against the SVG's own.
             widths: [Math.round((box.width - sides) * 2) / 2, Math.round(own.width * 2) / 2],
             svg: { left: own.left, top: own.top, right: own.right, bottom: own.bottom },
-            node: { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
+            node: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+            line: { top: line.top, bottom: line.bottom }
           };
         }
       )
@@ -74,7 +77,7 @@ it.skipIf(!enabled)(
     await page.screenshot({ path: 'test-results/maths.png' });
     await page.close();
     expect(drawn).toHaveLength(4);
-    for (const { latex, svg, node, widths } of drawn) {
+    for (const { latex, svg, node, line, widths } of drawn) {
       expect([latex, Math.abs(widths[0] - widths[1]) <= 0.5]).toEqual([latex, true]);
       // Within half a pixel: the server measured the SVG as the page draws it.
       expect([latex, svg.left >= node.left - 0.5, svg.right <= node.right + 0.5]).toEqual([
@@ -82,11 +85,75 @@ it.skipIf(!enabled)(
         true,
         true
       ]);
-      expect([latex, svg.top >= node.top - 0.5, svg.bottom <= node.bottom + 0.5]).toEqual([
+      expect([latex, svg.top >= line.top - 0.5, svg.bottom <= line.bottom + 0.5]).toEqual([
         latex,
         true,
         true
       ]);
     }
+  }
+);
+
+it.skipIf(!enabled)(
+  "sets inline maths on the text's baseline, as a word sits",
+  { timeout: 300_000 },
+  async () => {
+    // The same letters as text and as maths: their lowest inked rows are the baseline.
+    const line = `<script algorithm>
+</script>
+<Layout name="Main">
+  <Node layout="column"><Node>xxx $$xxx$$ xxx</Node></Node>
+</Layout>
+<Storyboard><Scene name="main"><Main /></Scene></Storyboard>`;
+    const built = await bundlePresentation(prepareSvelteComponent(line), 1, {});
+    expect(built.layout.errors).toEqual([]);
+    const page = await browser!.newPage({
+      viewport: { width: 900, height: 300 },
+      deviceScaleFactor: 4
+    });
+    await page.setContent(
+      sandboxDocument('', built.javascript, 0, 1, undefined, undefined, embeddedFontsHead)
+    );
+    await page.waitForFunction(() => document.querySelector('.sv-layer:not(.pending) svg'));
+    await page.waitForTimeout(500);
+    const clip = await page.evaluate(() => {
+      const box = document
+        .querySelector('.sv-layer:not(.pending) svg')!
+        .closest('.sv-node')!
+        .parentElement!.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    });
+    const shot = (await page.screenshot({ clip })).toString('base64');
+    // Each run of inked columns, a letter, with its lowest inked row, read from the screenshot.
+    const letters = await page.evaluate(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = new OffscreenCanvas(image.width, image.height);
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      const { data: pixels, width, height } = context.getImageData(0, 0, image.width, image.height);
+      const inked = (x: number, y: number) => pixels[(y * width + x) * 4] < 200;
+      const runs: number[] = [];
+      let start = -1;
+      for (let x = 0; x <= width; x++) {
+        const any =
+          x < width && Array.from({ length: height }, (_, y) => inked(x, y)).some(Boolean);
+        if (any && start < 0) start = x;
+        if (!any && start >= 0) {
+          let bottom = 0;
+          for (let column = start; column < x; column++)
+            for (let y = 0; y < height; y++) if (inked(column, y)) bottom = Math.max(bottom, y);
+          runs.push(bottom);
+          start = -1;
+        }
+      }
+      return runs;
+    }, shot);
+    await page.close();
+    expect(letters).toHaveLength(9);
+    const [text, maths] = [[...letters.slice(0, 3), ...letters.slice(6)], letters.slice(3, 6)];
+    // Within two device pixels at four to a CSS pixel: half a pixel on the page.
+    for (const bottom of maths) expect(Math.abs(bottom - Math.max(...text))).toBeLessThanOrEqual(2);
   }
 );
