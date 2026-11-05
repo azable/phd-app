@@ -6,7 +6,10 @@
  * over the same time, so a box growing about its anchor grows while its neighbours make way, and a
  * highlight passing from one value to the next fades across. A copy of a value starts where its
  * source was; a new value fades in, unless it is part of one that moves; a value gone fades out
- * with the layer it was in, kept over the new one until then.
+ * with the layer it was in, kept over the new one until then. A value, or a copy, drawn in more
+ * places than its source was pairs each old place with the new one drawn in the most similar place,
+ * by the kinds around it; the others fade in where they are, as a start vertex's name appearing in
+ * a caption, which would otherwise fly in from the title with its sentence.
  */
 
 /**
@@ -68,6 +71,45 @@ function framesOf(layer: HTMLElement): (Placed & { holds: string; value: HTMLEle
         : [];
     }
   );
+}
+
+/** The kinds of the nodes around an element, nearest first: where it is drawn, as a role. */
+function roleOf(element: HTMLElement, layer: HTMLElement): string[] {
+  const kinds: string[] = [];
+  for (let node = element.parentElement; node && node !== layer; node = node.parentElement)
+    if (node.dataset.svKind) kinds.push(node.dataset.svKind);
+  return kinds;
+}
+
+/** How many of two roles' kinds agree, nearest first, up to the first that differs. */
+function sharedRole(a: readonly string[], b: readonly string[]): number {
+  let shared = 0;
+  while (shared < a.length && shared < b.length && a[shared] === b[shared]) shared += 1;
+  return shared;
+}
+
+/**
+ * Each place a value is drawn now paired with a place it was drawn before, the pairs sharing the
+ * most of their roles first, each place used once, in document order where roles tie; where the
+ * value is drawn in more places now, the new places left over pair with none.
+ */
+export function pairByRole(
+  now: readonly (readonly string[])[],
+  before: readonly (readonly string[])[]
+): (number | undefined)[] {
+  const candidates = now
+    .flatMap((role, fresh) =>
+      before.map((other, old) => ({ fresh, old, shared: sharedRole(role, other) }))
+    )
+    .toSorted((a, b) => b.shared - a.shared || a.fresh - b.fresh || a.old - b.old);
+  const pairs: (number | undefined)[] = now.map(() => undefined);
+  const used = new Set<number>();
+  for (const { fresh, old } of candidates) {
+    if (pairs[fresh] !== undefined || used.has(old)) continue;
+    pairs[fresh] = old;
+    used.add(old);
+  }
+  return pairs;
 }
 
 /** Whether two boxes are in the same place, at the same size, but for rounding. */
@@ -260,11 +302,23 @@ export function animateStep(
     { x: number; y: number; scale: number; grown: number; source: HTMLElement }
   >();
   const appearing: HTMLElement[] = [];
+  const paired = new Set<HTMLElement>();
   for (const [identity, placed] of now) {
-    const from = old.get(identity) ?? old.get(copiedFrom(identity, copies) ?? '');
+    const same = old.get(identity);
+    const from = same ?? old.get(copiedFrom(identity, copies) ?? '');
+    // Each place pairs with the old place of the value, or of the value it copies, drawn most alike;
+    // a place left over fades in where it is.
+    const pairs = from
+      ? pairByRole(
+          placed.map(({ element }) => roleOf(element, after)),
+          from.map(({ element }) => roleOf(element, before))
+        )
+      : [];
     placed.forEach(({ element, box }, index) => {
-      const source = from?.[Math.min(index, from.length - 1)];
+      const pair = pairs[index];
+      const source = pair === undefined ? undefined : from?.[pair];
       if (!source) return appearing.push(element);
+      if (same) paired.add(source.element);
       const grown = scaleOf(source.element, source.box) / scaleOf(element, box);
       const resized = Math.abs(grown - 1) >= unscaled;
       // Scaled about its transform origin, which keeps its place in the box, then moved so the box
@@ -367,15 +421,25 @@ export function animateStep(
       return false;
     return moves.has(outer) || ridesWith(outer);
   };
-  for (const element of appearing.filter((element) => !ridesWith(element)))
+  // A frame new here around a value that appears, as a caption's sentence around a name, fades in
+  // with it, as one.
+  const fading = new Set(appearing.filter((element) => !ridesWith(element)));
+  for (const { element, box, value } of newFrames)
+    if (fading.has(value) && !oldFrames.some((frame) => samePlace(frame.box, box))) {
+      fading.delete(value);
+      fading.add(element);
+    }
+  for (const element of fading)
     element.animate([{ opacity: 0 }, { opacity: getComputedStyle(element).opacity }], {
       duration: motionDuration,
       easing
     });
 
-  // Gone too: a value drawn more times before than now, its last ones, which no node pairs with.
+  // Gone too: a value drawn in a place before that no place now pairs with.
   const gone = [...old].flatMap(([identity, placed]) =>
-    placed.slice(now.get(identity)?.length ?? 0).map(({ element }) => element)
+    now.has(identity)
+      ? placed.filter(({ element }) => !paired.has(element)).map(({ element }) => element)
+      : placed.map(({ element }) => element)
   );
   for (const element of gone) element.dataset.svGone = '';
   return { gone };
