@@ -251,6 +251,33 @@ export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegi
   return [...names];
 }
 
+/**
+ * The names a block's code refers to, its declarations' own names left out: an identifier read,
+ * written or called, never a member's property name or an object's key.
+ */
+export function referencedNames(body: string, kind: BlockKind, domain?: DomainRegistry): Set<string> {
+  const { root } = parseBlock(body, kind, domain);
+  const names = new Set<string>();
+  const visit = (node: unknown, parent?: { type?: string; computed?: boolean }, key?: string) => {
+    if (Array.isArray(node)) return node.forEach((child) => visit(child, parent, key));
+    if (node === null || typeof node !== 'object') return;
+    const part = node as { type?: string; name?: string; computed?: boolean };
+    if (part.type === 'Identifier') {
+      const named =
+        (parent?.type === 'MemberExpression' && key === 'property' && !parent.computed) ||
+        (parent?.type === 'Property' && key === 'key' && !parent.computed) ||
+        (parent?.type === 'VariableDeclarator' && key === 'id') ||
+        (parent?.type === 'FunctionDeclaration' && (key === 'id' || key === 'params'));
+      if (!named && part.name) names.add(part.name);
+      return;
+    }
+    for (const [childKey, child] of Object.entries(node))
+      if (childKey !== 'loc') visit(child, part, childKey);
+  };
+  root.body.forEach((node) => visit(node));
+  return names;
+}
+
 /** Interpret the algorithm from the input state; the variables in scope are recorded at each step. */
 export function interpretAlgorithm(
   body: string,

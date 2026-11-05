@@ -13,6 +13,7 @@ import preludeSource from './assembly/prelude.ts?raw';
 import {
   AlgorithmError,
   declaredNames,
+  referencedNames,
   interpretDomain,
   interpretInput,
   algorithmLimits,
@@ -287,6 +288,8 @@ export type PreparedComponent = {
   ownListings: string[];
   /** Each label a scene pauses at that a listing marks no region for, told to the assistant. */
   listingWarnings?: string[];
+  /** Each input the view draws but neither the algorithm nor another input reads, told to the assistant. */
+  inputWarnings?: string[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -558,6 +561,10 @@ function listingProblemsAlone(
 /** What a step paused at a label with no region in the listing lights: nothing. */
 const unlitWarning = (full: string, name: string): string =>
   `The step @${full} lights nothing in the listing: mark the text its code shows as @${name}[…]${full.includes('.') ? ` inside @${full.split('.').slice(0, -1).join('.')}` : ''}, as A[@left[j - 1]] marks the j - 1 of A[j - 1].`;
+
+/** What an input the view draws but nothing reads shows: what was typed into the case, not the run. */
+const unreadInputWarning = (name: string): string =>
+  `The view draws the input ${name}, but the algorithm never reads it, so what it shows was typed into the case and does not come from the run: draw what the algorithm computes instead, its variables or a query of a label or a call type (as a tree of calls), and remove ${name}.`;
 
 /** The algorithm's steps paced as given (see Pacing), opening on step 0, the input as given. */
 
@@ -1903,6 +1910,29 @@ function prepareViews(
     const listingWarnings = written.unmarked
       .filter(({ full }) => paused.has(full))
       .map(({ full, name }) => unlitWarning(full, name));
+    // An input the view draws but neither the algorithm nor another input reads was typed in, so
+    // what it shows does not come from the run.
+    const inputWarnings = blocks.algorithm
+      ? (() => {
+          const read = new Set([
+            ...interpretBlock(source, blocks.algorithm, (body) =>
+              referencedNames(body, 'algorithm', domain)
+            ),
+            ...(blocks.input
+              ? interpretBlock(source, blocks.input, (body) =>
+                  referencedNames(body, 'input', domain)
+                )
+              : [])
+          ]);
+          // A pool is read through the references the case gives other inputs, never by its name.
+          return inputDeclarations(blocks.input?.body ?? '')
+            .inputs.filter(
+              ({ name, type }) =>
+                !isPool(domain, type) && viewReads.includes(name) && !read.has(name)
+            )
+            .map(({ name }) => unreadInputWarning(name));
+        })()
+      : [];
     const listings = listing
       ? Object.fromEntries(
           Object.entries(written.listings).map(([name, { text, regions = [], tokens }]) => [
@@ -2265,6 +2295,7 @@ function prepareViews(
       master,
       ownListings,
       ...(listingWarnings.length ? { listingWarnings } : {}),
+      ...(inputWarnings.length ? { inputWarnings } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2457,7 +2488,11 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
-  const warnings: string[] = [...(prepared.listingWarnings ?? []), ...variant.dropped];
+  const warnings: string[] = [
+    ...(prepared.listingWarnings ?? []),
+    ...(prepared.inputWarnings ?? []),
+    ...variant.dropped
+  ];
   const entries = scenes.flatMap((scene, sceneIndex) => {
     const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case, scene.over);
     const view = {
