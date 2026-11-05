@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { buildBatch } from './build.server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { serverMeasure } from './fonts/measure.server';
-import { geometryFor, geometryVersion, type Geometry } from './library/geometry';
+import { type Geometry } from './library/geometry';
 import { parseSheet } from './library/model/css';
 import { layOut } from './library/model/layout';
 import type { ModelElement } from './library/model/tree';
@@ -27,13 +27,13 @@ const answering = (body: string) =>
 
 describe('laying out on the server', () => {
   it('runs the presentation with nothing of Node in reach', async () => {
-    const { geometries, failure } = await layOutOnServer(
+    const { geometry, failure } = await layOutOnServer(
       answering(
         `return { borders: [], seen: [typeof process, typeof require, typeof fetch, typeof setTimeout] };`
       )
     );
     expect(failure).toBeUndefined();
-    expect((geometries?.[0] as unknown as { seen: string[] }).seen).toEqual([
+    expect((geometry as unknown as { seen: string[] }).seen).toEqual([
       'undefined',
       'undefined',
       'undefined',
@@ -44,36 +44,32 @@ describe('laying out on the server', () => {
   it('stops a presentation that never ends, and one that takes too much memory', async () => {
     const brief = { memoryMb: 64, loadMs: 1000, layOutMs: 1000 };
     const endless = await layOutOnServer(answering('for (;;) {}'), brief);
-    expect(endless.geometries).toBeUndefined();
+    expect(endless.geometry).toBeUndefined();
     expect(endless.failure).toMatch(/time/iu);
     const hungry = await layOutOnServer(
       answering('const kept = []; for (;;) kept.push(new Array(1e6).fill(1));'),
       brief
     );
-    expect(hungry.geometries).toBeUndefined();
+    expect(hungry.geometry).toBeUndefined();
     expect(hungry.failure).toMatch(/memory|disposed/iu);
   }, 120_000);
 
   it('reports a text no embedded font draws', async () => {
-    const { geometries, failure } = await layOutOnServer(
+    const { geometry, failure } = await layOutOnServer(
       answering(
         `__sverlinHost.width('a 漢字', "normal 400 16px 'Vis Sans', 'Vis Symbols', system-ui"); return { borders: [] };`
       )
     );
-    expect(geometries).toBeUndefined();
+    expect(geometry).toBeUndefined();
     expect(failure).toBe('no embedded font has 漢 字');
   });
 
   it('routes each free layout’s links at every state, the page drawing them as given', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/bfs-captions.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
-    const { javascript, labels } = await bundlePresentation(prepared, 1, {});
-    const given = JSON.parse(
-      /window\.__sverlinGeometry=(\[.*?\]);\n/su.exec(javascript)?.[1] ?? '[]'
-    ) as Geometry[];
-    // At every device pixel ratio laid out, every state of every step has its routes.
-    expect(given.length).toBeGreaterThan(0);
-    for (const geometry of given) {
+    const { geometry, labels } = await bundlePresentation(prepared, 1, {});
+    // Every state of every step has its routes.
+    {
       const [[, sets]] = geometry.routes ?? [];
       const states = new Set(sets.flatMap(([drawing]) => drawing));
       for (let step = 0; step < labels.length; step++) expect(states).toContain(2 * step + 1);
@@ -86,7 +82,7 @@ describe('laying out on the server', () => {
     const prepared = prepareSvelteComponent(source);
     const first = await bundlePresentation(prepared, 1, {});
     expect(first.layout).toMatchObject({ cached: false, errors: [] });
-    expect(first.javascript.startsWith('window.__sverlinGeometry=[')).toBe(true);
+    expect(first.layout.scenes?.steps.length).toBe(first.labels.length);
     const again = await bundlePresentation(prepared, 1, {});
     expect(again.layout?.cached).toBe(true);
     expect(again.javascript).toBe(first.javascript);
@@ -107,13 +103,10 @@ describe('laying out on the server', () => {
   it('measures how large it draws on a typical stage', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
-    const { javascript, layout } = await bundlePresentation(prepared, 1);
+    const { geometry, layout } = await bundlePresentation(prepared, 1);
     const { readability } = layout;
     // The frame and fit it is measured at are those the page is given and draws at.
-    const prefix = 'window.__sverlinGeometry=';
-    const [given] = JSON.parse(
-      javascript.slice(prefix.length, javascript.indexOf(';\n'))
-    ) as Geometry[];
+    const given = geometry;
     expect(readability?.frame.height).toBe(given.frame?.height);
     expect(readability?.scale).toBeCloseTo(
       (given.frame?.fit ?? 0) * Math.min(928 / 1200, 608 / (given.frame?.height ?? 1))
@@ -205,12 +198,9 @@ describe('laying out on the server', () => {
 
   it('keeps the room of a node sized by its value at its type’s largest value times its unit', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/bars.sverlin', 'utf8');
-    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
-    const prefix = 'window.__sverlinGeometry=';
-    const [given] = JSON.parse(
-      javascript.slice(prefix.length, javascript.indexOf(';\n'))
-    ) as Geometry[];
+    const given = geometry;
     // Values up to 9 at the starter's 16 pixels per unit: 144 pixels, whatever the input reaches.
     expect(new Map(given.components).get('Bar')?.height).toBe(144);
   }, 60_000);
@@ -226,14 +216,11 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
         chosen: { 'Cell.shadow': shadow, 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
       });
       expect(layout.errors).toEqual([]);
-      const prefix = 'window.__sverlinGeometry=';
-      const [given] = JSON.parse(
-        javascript.slice(prefix.length, javascript.indexOf(';\n'))
-      ) as Geometry[];
+      const given = geometry;
       return new Map(given.components).get('Row')!;
     };
     const plain = await size('none');
@@ -256,14 +243,11 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
-      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
         chosen: { 'Row.gap': 0, ...chosen }
       });
       expect(layout.errors).toEqual([]);
-      const prefix = 'window.__sverlinGeometry=';
-      const [given] = JSON.parse(
-        javascript.slice(prefix.length, javascript.indexOf(';\n'))
-      ) as Geometry[];
+      const given = geometry;
       const components = new Map(given.components);
       return { row: components.get('Row')!, cell: components.get('Cell')! };
     };
@@ -287,12 +271,9 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
-      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
-      const prefix = 'window.__sverlinGeometry=';
-      const [given] = JSON.parse(
-        javascript.slice(prefix.length, javascript.indexOf(';\n'))
-      ) as Geometry[];
+      const given = geometry;
       return new Map(given.components).get('Cell')!;
     };
     const plain = await box('<Node layout="row"><Node value={this} /></Node>');
@@ -311,12 +292,9 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
-      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
-      const prefix = 'window.__sverlinGeometry=';
-      const [given] = JSON.parse(
-        javascript.slice(prefix.length, javascript.indexOf(';\n'))
-      ) as Geometry[];
+      const given = geometry;
       return given.tracks[0][1];
     };
     // Two values drawn, but i runs to the max's 4: five columns, each room for a cell.
@@ -336,12 +314,9 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
-      const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
-      const prefix = 'window.__sverlinGeometry=';
-      const [given] = JSON.parse(
-        javascript.slice(prefix.length, javascript.indexOf(';\n'))
-      ) as Geometry[];
+      const given = geometry;
       return Math.max(...given.reserved.map(([, size]) => size.width));
     };
     const four = await widest(8, '[1, 2, 3, 4]');
@@ -351,12 +326,9 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps each grid column and row at its largest, and refuses two cells at one coordinate', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/lcs-grid.sverlin', 'utf8');
-    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
-    const prefix = 'window.__sverlinGeometry=';
-    const [given] = JSON.parse(
-      javascript.slice(prefix.length, javascript.indexOf(';\n'))
-    ) as Geometry[];
+    const given = geometry;
     // The headers at row 0 and col 0 and the table from 1: six of each, the corner left empty.
     const [[, tracks]] = given.tracks;
     expect(tracks.columns).toHaveLength(6);
@@ -390,12 +362,9 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main a={a} b={b} /></Scene>
 </Storyboard>`;
-    const { javascript, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+    const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
-    const prefix = 'window.__sverlinGeometry=';
-    const [given] = JSON.parse(
-      javascript.slice(prefix.length, javascript.indexOf(';\n'))
-    ) as Geometry[];
+    const given = geometry;
     // One set for the view's grid, drawn for a and b: every column as wide as 999 needs from the
     // first step, as the view is probed with the widest values, so nothing moves when 999 appears.
     const inView = given.tracks.filter(([key]) => key.startsWith('view:'));
@@ -412,10 +381,8 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);
     const geometryOf = async (chosen: Record<string, string>) => {
-      const { javascript } = await bundlePresentation(prepared, 1, { chosen });
-      const prefix = 'window.__sverlinGeometry=';
-      expect(javascript.startsWith(prefix)).toBe(true);
-      return JSON.parse(javascript.slice(prefix.length, javascript.indexOf(';\n'))) as Geometry[];
+      const { geometry } = await bundlePresentation(prepared, 1, { chosen });
+      return [geometry];
     };
     const reservedWidth = (geometries: Geometry[]) =>
       geometries[0].reserved.reduce((sum, [, { width }]) => sum + width, 0);
@@ -485,31 +452,6 @@ describe('text measured on the server', () => {
     expect(at(600, 16)).toBe(at(700, 16));
     expect(at(500, 16)).toBe(at(400, 16));
     expect(at(400, 13.6)).toBe(at(400, 13.59375));
-  });
-});
-
-describe('the geometry a page draws with', () => {
-  const geometry = (devicePixelRatio: number, borders: number[]): Geometry => ({
-    version: geometryVersion,
-    devicePixelRatio,
-    borders,
-    reserved: [],
-    tracks: [],
-    components: [],
-    spans: [],
-    lines: []
-  });
-
-  it('is the one whose borders snap alike at the page’s ratio, or else the nearest', () => {
-    const given = [geometry(1, [1, 1.5]), geometry(2, [1, 1.5])];
-    expect(geometryFor(given, 1)?.devicePixelRatio).toBe(1);
-    expect(geometryFor(given, 2)?.devicePixelRatio).toBe(2);
-    // At 1.25 a border of one pixel draws 0.8 wide, as none was laid out for: 1 is nearest.
-    expect(geometryFor(given, 1.25)?.devicePixelRatio).toBe(1);
-    expect(geometryFor(given, 1.75)?.devicePixelRatio).toBe(2);
-    expect(geometryFor([geometry(1, [1, 2])], 3)?.devicePixelRatio).toBe(1);
-    expect(geometryFor([{ ...geometry(1, []), version: geometryVersion - 1 }], 1)).toBeUndefined();
-    expect(geometryFor(undefined, 1)).toBeUndefined();
   });
 });
 

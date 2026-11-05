@@ -1,9 +1,7 @@
 /** The authored Main.svelte after prelude injection, as the bundler supplies it to entry.ts. */
-declare module 'virtual:component' {
-  import type { Component } from 'svelte';
-
-  const Main: Component<Record<string, unknown>>;
-  export default Main;
+/** How many steps the presentation shows, all the page knows of it (see entry.ts). */
+declare module 'virtual:steps' {
+  export const stepCount: number;
 }
 
 /** Each step's recorded values and the view each type draws, packed (see library/trace-pack.ts). */

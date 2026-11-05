@@ -13,15 +13,14 @@ library in `src/lib/modes/sverlin/library/`, and `html` authors script-free
 frames. Each mode folder owns its assistant, starter artifact, validation/build
 implementation, and playback component. The sole main study in
 `src/lib/studies/main.ts` compares the two, `sverlin` and `html`. JavaScript
-from authored artifacts executes in an opaque-origin sandboxed browser frame,
-and on the server only in the `isolated-vm` isolate that lays out each step
+from authored artifacts executes only on the server, in the `isolated-vm`
+isolate that lays out each step and draws its scene
 ([`layout.server.ts`](src/lib/modes/sverlin/layout.server.ts)), with bounded
 memory and time and no Node APIs; never in the server's own context or the
-application origin. The aim, not yet built, is for it to run only in that
-isolate, the page showing what it produces (see the workspace's
-`projects/phd-app/plan.md`). Sanitize authored HTML with a library and reject
-external imports; an iframe alone cannot prove that arbitrary JS will never
-attempt navigation.
+application origin. The page, an opaque-origin sandboxed browser frame, draws
+those scenes with the app's own code and runs none of the authored code.
+Sanitize authored HTML with a library and reject external imports; an iframe
+alone cannot prove that arbitrary JS will never attempt navigation.
 
 ## Communication and documentation
 

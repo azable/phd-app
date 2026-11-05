@@ -10,6 +10,7 @@ import { chromium, type Browser, type Frame, type Page } from 'playwright-core';
 import { inject, onTestFinished } from 'vitest';
 
 import { sandboxDocument } from '../../sandbox';
+import { embeddedFontsHead } from '../fonts';
 import type { SceneFrame, SceneStep } from '../library';
 
 /** Whether the browser tests run: `pnpm run test:browser` sets SVERLIN_RUN_BROWSER_TESTS=1. */
@@ -63,29 +64,30 @@ export async function openPage({
   return context.newPage();
 }
 
-/** Opens a built presentation at a step and waits until it has settled there. */
+/** A built presentation: its page's code and the scenes the server drew of every step. */
+export type Built = { javascript: string; layout: { scenes?: Served } };
+
+/**
+ * Opens a built presentation at a step, in the embedded fonts, the page sent its scenes as it asks
+ * as the app sends them, and waits until it has settled there.
+ */
 export async function openPresentation(
-  javascript: string,
-  options: PageOptions & {
-    step?: number;
-    head?: string;
-    errors?: string[];
-    /** Draw the steps from their scene data (library/SceneView.svelte), as `?scenes=1` does. */
-    scenes?: boolean;
-    /** Scene data the page is sent as it asks, as the app sends what the server drew. */
-    served?: { frame: SceneFrame; steps: SceneStep[] };
-  } = {}
+  built: Built,
+  options: PageOptions & { step?: number; errors?: string[] } = {}
 ): Promise<Page> {
   const page = await openPage(options);
   if (options.errors) page.on('pageerror', (error) => options.errors!.push(error.message));
-  const head = (options.head ?? '') + (options.served ? servingScript(options.served) : '');
+  const head = embeddedFontsHead + servingScript(scenesOf(built));
   await page.setContent(
-    sandboxDocument('', javascript, options.step ?? 0, 1, undefined, undefined, head, {
-      scenes: options.served ? 'served' : options.scenes
-    })
+    sandboxDocument('', built.javascript, options.step ?? 0, 1, undefined, undefined, head)
   );
   await settled(page, options.step ?? 0);
   return page;
+}
+
+function scenesOf(built: Built): Served {
+  if (!built.layout.scenes) throw new Error('The server drew no scenes of this presentation.');
+  return built.layout.scenes;
 }
 
 type Served = { frame: SceneFrame; steps: SceneStep[] };
@@ -95,8 +97,8 @@ type Served = { frame: SceneFrame; steps: SceneStep[] };
  * given: the page's own, which is its own parent, or, hosted, its frame's, whose every message it
  * keeps in `__messages`.
  */
-function servingScript(served: Served | undefined, hosted = false): string {
-  const scenes = JSON.stringify(served ?? null).replace(/</gu, '\\u003c');
+function servingScript(served: Served, hosted = false): string {
+  const scenes = JSON.stringify(served).replace(/</gu, '\\u003c');
   const presentation = hosted ? "document.querySelector('iframe')?.contentWindow" : 'window';
   return `<script>(() => {
     const served = ${scenes};
@@ -105,7 +107,7 @@ function servingScript(served: Served | undefined, hosted = false): string {
       const presentation = ${presentation};
       if (!presentation || source !== presentation) return;
       if (${hosted}) window.__messages.push(data);
-      if (!served || data?.type !== 'sverlin:scenes-wanted') return;
+      if (data?.type !== 'sverlin:scenes-wanted') return;
       const steps = data.steps.map((step) => [step, served.steps[step]]);
       presentation.postMessage({ type: 'sverlin:scenes', frame: served.frame, steps }, '*');
     });
@@ -118,8 +120,8 @@ function servingScript(served: Served | undefined, hosted = false): string {
  * scenes from those given, as Viewport.svelte does, and passes messages on to it (`send`).
  */
 export async function openHosted(
-  javascript: string,
-  options: PageOptions & { served?: Served } = {}
+  built: Built,
+  options: PageOptions = {}
 ): Promise<{
   page: Page;
   frame: Frame;
@@ -128,13 +130,19 @@ export async function openHosted(
 }> {
   const page = await openPage(options);
   const { width, height } = options.viewport ?? { width: 1200, height: 700 };
-  const presentation = sandboxDocument('', javascript, 0, 1, undefined, undefined, '', {
-    scenes: options.served ? 'served' : false
-  });
+  const presentation = sandboxDocument(
+    '',
+    built.javascript,
+    0,
+    1,
+    undefined,
+    undefined,
+    embeddedFontsHead
+  );
   const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
   // The host listens before the frame loads, so it hears the frame's first requests.
   await page.setContent(
-    `<body style="margin:0">${servingScript(options.served, true)}<iframe sandbox="allow-scripts" style="display:block;width:${width}px;height:${height}px;border:0" srcdoc="${escape(presentation)}"></iframe></body>`
+    `<body style="margin:0">${servingScript(scenesOf(built), true)}<iframe sandbox="allow-scripts" style="display:block;width:${width}px;height:${height}px;border:0" srcdoc="${escape(presentation)}"></iframe></body>`
   );
   const frame = page.frames()[1];
   await settled(frame, 0);
@@ -174,72 +182,5 @@ export async function settled(page: Page | Frame, step?: number): Promise<void> 
 /** Asks the page for a step, as the app does, and waits until it has settled there. */
 export async function showStep(page: Page, step: number): Promise<void> {
   await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
-  await settled(page, step);
-}
-
-/**
- * Asks for a step and holds its motion at a fraction of its length, for tests about motion: every
- * animation of the step is paused and set to that point of its own timing, so what it samples does
- * not depend on how busy the machine is. `finishMotion` lets the step end.
- */
-export async function holdMotion(page: Page, step: number, fraction: number): Promise<void> {
-  await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
-  await page.waitForFunction(() => document.getAnimations().length > 0, null, {
-    timeout: settleTimeout
-  });
-  await page.evaluate((fraction) => {
-    for (const animation of document.getAnimations()) {
-      const { delay = 0, duration } = animation.effect?.getTiming() ?? {};
-      animation.pause();
-      if (typeof duration === 'number') animation.currentTime = delay + duration * fraction;
-    }
-  }, fraction);
-}
-
-/**
- * Every step of a built presentation as its page describes it (see describeSteps in
- * assembly/entry.ts), asked for as the app asks, from a frame the size of the app's.
- */
-export async function describedScene(
-  javascript: string,
-  { head = '', deviceScaleFactor = 1 }: { head?: string; deviceScaleFactor?: number } = {}
-): Promise<{ frame: SceneFrame; steps: SceneStep[] }> {
-  const page = await openPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor });
-  await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
-<script>
-  addEventListener('message', ({ data }) => {
-    if (data?.type === 'sverlin:ready') window.ready = true;
-    if (data?.type === 'sverlin:scene') window.scene = data;
-  });
-</script>`);
-  await page.evaluate(
-    (document) => {
-      window.document.querySelector('iframe')!.srcdoc = document;
-    },
-    sandboxDocument('', javascript, 0, 1, undefined, undefined, head)
-  );
-  await page.waitForFunction(() => (window as { ready?: boolean }).ready, null, {
-    timeout: 60_000
-  });
-  await page.evaluate(() =>
-    document
-      .querySelector('iframe')
-      ?.contentWindow?.postMessage({ type: 'sverlin:describe', request: 'test' }, '*')
-  );
-  await page.waitForFunction(() => (window as { scene?: unknown }).scene, null, {
-    timeout: 120_000
-  });
-  const scene = await page.evaluate(
-    () => (window as unknown as { scene: { frame: SceneFrame; steps: SceneStep[] } }).scene
-  );
-  await page.close();
-  return scene;
-}
-
-/** Lets held motion finish, and waits until the page has settled at the step. */
-export async function finishMotion(page: Page, step: number): Promise<void> {
-  await page.evaluate(() => {
-    for (const animation of document.getAnimations()) animation.finish();
-  });
   await settled(page, step);
 }

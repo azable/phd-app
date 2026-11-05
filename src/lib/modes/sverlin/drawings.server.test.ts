@@ -64,7 +64,7 @@ describe('drawings written <Svg>', () => {
     expect(built.layout.errors).toEqual([]);
     // A heart's path and a spade's circle, both 2em at the 16px the server lays text out at.
     expect(built.layout.drawing).toContain('SuitMark: 2 drawing, about 32×32 px');
-    expect(built.javascript).toContain('data-sv-drawing');
+    expect(built.layoutCode).toContain('data-sv-drawing');
   });
 
   it.each([

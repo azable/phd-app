@@ -160,8 +160,7 @@ describe('storyboards', () => {
 
   it('keeps a layout’s placement in every scene showing it', async () => {
     const reserved = async (source: string) => {
-      const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1);
-      const [geometry] = JSON.parse(/window\.__sverlinGeometry=(.*);\n/u.exec(javascript)![1]);
+      const { geometry } = await bundlePresentation(prepareSvelteComponent(source), 1);
       return Object.fromEntries(geometry.reserved);
     };
     const whole = await reserved(storyboard(scene('name="search"')));

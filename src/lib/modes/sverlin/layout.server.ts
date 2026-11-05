@@ -14,7 +14,6 @@ import type { DesignValue } from './design.server';
 import { fontsVersion, serverMeasure } from './fonts/measure.server';
 import type { DrawnSummary } from './library/drawing';
 import type { Geometry } from './library/geometry';
-import { snappedBorder } from './library/model/look';
 import type { SceneRequest } from './library/model/scene-of';
 import type { SceneFrame, SceneStep } from './library/scene';
 
@@ -23,10 +22,10 @@ export type ServerScenes = { frame: SceneFrame; steps: SceneStep[] };
 
 export type ServerLayout = {
   /**
-   * Every step's layout at each device pixel ratio borders snap differently at, of 1 and 2, as on
-   * most screens; none where the server could not lay the presentation out, which fails its build.
+   * Every step's layout, at a device pixel ratio of 1 as its scenes are drawn; none where the
+   * server could not lay the presentation out, which fails its build.
    */
-  geometries?: Geometry[];
+  geometry?: Geometry;
   /**
    * What each step draws, as a key alike for steps drawing the same picture (see recordLayouts);
    * none where the server could not lay the presentation out.
@@ -100,7 +99,7 @@ export async function layOutOnServer(code: string, within = limits): Promise<Ser
   const laid = await layOutIsolated(code, within);
   const result = { ...laid, cached: false, ms: Math.round(performance.now() - started) };
   // A failure such as a time-out may pass on a less busy server, so only results are kept.
-  if (result.geometries) {
+  if (result.geometry) {
     kept.set(key, result);
     if (kept.size > keptMost) kept.delete(kept.keys().next().value as string);
   }
@@ -187,22 +186,18 @@ async function layOutIsolated(
   try {
     loaded = await loadIsolated(code, within, errors);
     const { at, read, measure } = loaded;
-    const geometries = [await at(1)];
+    const geometry = await at(1);
     const drawn = await read<string[]>('__sverlinDrawn');
     const drawing = await read<DrawnSummary>('__sverlinDrawing');
     const size = await read<DrawnSize>('__sverlinSize');
     const scenes = await read<ServerScenes>('__sverlinScenes');
-    // Most screens draw at 1 or 2 device pixels a CSS pixel; at 2 a border of half a pixel, or one
-    // and a half, keeps its width, where at 1 it snaps to a whole one.
-    if (geometries[0].borders.some((width) => snappedBorder(width, 2) !== snappedBorder(width, 1)))
-      geometries.push(await at(2));
     if (measure.missing.size)
       return {
         errors,
         failure: `no embedded font has ${[...measure.missing].slice(0, 10).join(' ')}`
       };
     return {
-      geometries,
+      geometry,
       ...(drawn ? { drawn } : {}),
       ...(drawing ? { drawing } : {}),
       ...(size ? { size } : {}),

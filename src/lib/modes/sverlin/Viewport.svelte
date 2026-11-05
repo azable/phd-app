@@ -16,7 +16,7 @@
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
   import type { SceneFrame, SceneStep } from './library';
-  import { sceneMessageSchema, type SverlinScene } from './scene';
+  import type { SverlinScene } from './scene';
   import { fetchScenes } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
@@ -48,12 +48,6 @@
     onLoadTiming?: (timing: PresentationLoadTiming) => void;
   } = $props();
 
-  // Drawing each step as SVG from its scene data (see library/SceneView.svelte) is a prototype,
-  // off unless the page's address asks for it with ?scenes=1.
-  const scenesWanted =
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('scenes') === '1';
-
   let iframe = $state<HTMLIFrameElement>();
   // The iframe fills its pane exactly, however short: the canvas inside fits itself to the iframe, so
   // an iframe taller than its pane would be clipped, cutting off the canvas.
@@ -68,8 +62,7 @@
       presentation.seed,
       undefined,
       untrack(() => selection),
-      embeddedFontsHead,
-      { scenes: scenesWanted && (untrack(() => projectId) ? 'served' : true) }
+      embeddedFontsHead
     );
   });
   // Whether the page has loaded and listens for steps; a new document starts unloaded.
@@ -82,37 +75,17 @@
     ready = false;
   });
 
-  // Requests for the page's scene, answered by the page with the request's id.
-  const sceneRequests: Record<
-    string,
-    (answer: v.InferOutput<typeof sceneMessageSchema> | Error) => void
-  > = {};
-  // Describing lays every step out once more, about as long as the first load, which takes about a
-  // third of a second for six steps; two minutes leaves room for the longest traces (200 steps).
-  const describeTimeoutMs = 120_000;
-
   /** The files this presentation can be exported as. */
   export function renderTargets(): RenderTarget[] {
     return sverlinTargets.map(({ id, title, animated }) => ({ id, title, animated }));
   }
 
-  /**
-   * Export this presentation as a target's file, from its every step as scene data: drawn on the
-   * server, or, where it has none, described by the page.
-   */
+  /** Export this presentation as a target's file, from every step's scene the server drew. */
   export async function render(target: string): Promise<RenderedFile> {
     const chosen = sverlinTargets.find(({ id }) => id === target);
     if (!chosen) throw new Error(`There is no ${target} export.`);
-    const served = projectId
-      ? await fetchScenes(projectId, presentation.presentationId).catch((cause: unknown) => {
-          console.warn(
-            `${logName()} has no scenes from the server; the page describes them`,
-            cause
-          );
-          return undefined;
-        })
-      : undefined;
-    return chosen.render(served ? sceneOf(served) : await describeScene());
+    if (!projectId) throw new Error('This visualization is in no project to draw it from.');
+    return chosen.render(sceneOf(await fetchScenes(projectId, presentation.presentationId)));
   }
 
   /** The scene render targets read, from every step's scene data. */
@@ -127,39 +100,6 @@
       steps: steps.map((step, index) => ({ ...step, label: labels[index] }))
     };
   }
-
-  /** Every step of this presentation as scene data, laid out as it is shown. */
-  function describeScene(): Promise<SverlinScene> {
-    const page = iframe?.contentWindow;
-    if (!page || !loaded) return Promise.reject(new Error('The visualization has not loaded yet.'));
-    const request = crypto.randomUUID();
-    const { labels } = presentation;
-    return new Promise<SverlinScene>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => answer(new Error('The visualization took too long to describe its steps.')),
-        describeTimeoutMs
-      );
-      function answer(reply: v.InferOutput<typeof sceneMessageSchema> | Error) {
-        clearTimeout(timeout);
-        delete sceneRequests[request];
-        if (reply instanceof Error) reject(reply);
-        else if ('failure' in reply) reject(new Error(reply.failure));
-        else if (reply.steps.length !== labels.length)
-          reject(new Error('The visualization described a different number of steps.'));
-        else resolve(sceneOf(reply));
-      }
-      sceneRequests[request] = answer;
-      page.postMessage({ type: 'sverlin:describe', request }, '*');
-    });
-  }
-  // A new document cannot answer the old one's requests.
-  $effect(() => {
-    void document;
-    return () => {
-      for (const answer of Object.values(sceneRequests))
-        answer(new Error('The visualization reloaded before it described its steps.'));
-    };
-  });
 
   $effect(() => {
     const shown = step;
@@ -181,22 +121,43 @@
     )
   });
 
+  // Why the server has no scenes for this presentation, such as one an older app built, shown
+  // in place of it; not the view's own failure, so nothing asks the assistant to repair it.
+  let unavailable = $state<string>();
+  $effect(() => {
+    void document;
+    unavailable = undefined;
+  });
+
   /** Send the page some steps' scenes drawn on the server, or why there are none. */
   function serveScenes(steps: number[]) {
     const page = iframe?.contentWindow;
-    if (!page || !projectId) return;
+    if (!page) return;
     const shown = presentation.presentationId;
-    const send = (message: object) => {
-      // A page loaded for another presentation since cannot use them.
-      if (presentation.presentationId === shown)
-        page.postMessage({ type: 'sverlin:scenes', ...message }, '*');
-    };
-    fetchScenes(projectId, shown, steps).then(
-      ({ frame, steps: drawn }) =>
-        send({ frame, steps: steps.map((step, index) => [step, drawn[index]]) }),
+    // A page loaded for another presentation since cannot use them.
+    const current = () => presentation.presentationId === shown;
+    const scenes = projectId
+      ? fetchScenes(projectId, shown, steps)
+      : Promise.reject(new Error('This visualization is in no project to draw it from.'));
+    scenes.then(
+      ({ frame, steps: drawn }) => {
+        if (current())
+          page.postMessage(
+            {
+              type: 'sverlin:scenes',
+              frame,
+              steps: steps.map((step, index) => [step, drawn[index]])
+            },
+            '*'
+          );
+      },
       (cause: unknown) => {
-        console.warn(`${logName()} has no scenes from the server; the page describes them`, cause);
-        send({ failure: cause instanceof Error ? cause.message : String(cause) });
+        if (!current()) return;
+        const message = cause instanceof Error ? cause.message : String(cause);
+        console.warn(`${logName()} has no scenes from the server`, cause);
+        unavailable = message;
+        ready = true;
+        page.postMessage({ type: 'sverlin:scenes', failure: message }, '*');
       }
     );
   }
@@ -302,24 +263,7 @@
   $effect(() => {
     const receive = (event: MessageEvent) => {
       if (!iframe || event.source !== iframe.contentWindow) return;
-      const data = event.data as {
-        type?: unknown;
-        request?: unknown;
-      } & Partial<Record<keyof CanvasView, unknown>>;
-      if (data?.type === 'sverlin:scene') {
-        const answer =
-          typeof data.request === 'string' && Object.hasOwn(sceneRequests, data.request)
-            ? sceneRequests[data.request]
-            : undefined;
-        if (!answer) return;
-        const parsed = v.safeParse(sceneMessageSchema, data);
-        answer(
-          parsed.success
-            ? parsed.output
-            : new Error('The visualization described its steps in an unexpected form.')
-        );
-        return;
-      }
+      const data = event.data as { type?: unknown } & Partial<Record<keyof CanvasView, unknown>>;
       if (data?.type === 'sverlin:scenes-wanted') {
         const parsed = v.safeParse(scenesWantedMessage, data);
         if (parsed.success) serveScenes(parsed.output.steps);
@@ -410,6 +354,14 @@
       <Spinner />
       <span>Loading…</span>
     </div>
+  {/if}
+  {#if unavailable}
+    <p
+      role="alert"
+      class="absolute inset-0 flex items-center justify-center bg-white px-6 text-center text-sm text-muted-foreground"
+    >
+      {unavailable}
+    </p>
   {/if}
   {#if failure}
     <p

@@ -235,7 +235,7 @@ describe('variants', () => {
     });
     expect(bundle.variant['views.Int']).toBe('IntTally');
     expect(bundle.origins['Row.Under.shown']).toBe('chosen');
-    expect(bundle.javascript).toContain('"views.Int":"IntTally"');
+    expect(bundle.layoutCode).toContain('"views.Int":"IntTally"');
   });
 });
 

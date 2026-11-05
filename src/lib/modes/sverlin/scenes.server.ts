@@ -18,8 +18,8 @@ const keptMost = 16;
 
 /**
  * Some steps of a version (all, where none are named), with its frame. Rebuilding must give the
- * version's own page code, or the scenes could differ from what it shows: a version built by an
- * earlier app has none.
+ * version's own page code, or the scenes could differ from what it was built as: a version an older
+ * app built has none, and must be built again.
  */
 export async function versionScenes(
   presentation: BrowserBundlePresentation,
@@ -45,7 +45,9 @@ async function rebuilt(presentation: BrowserBundlePresentation): Promise<ServerS
     bundlePresentation(prepareSvelteComponent(source.text), seed, variant ? { base: variant } : {})
   );
   if (bundle.javascript !== javascript.text)
-    throw new UnavailableScenesError('This version was built by an earlier version of the app.');
+    throw new UnavailableScenesError(
+      'This version was built by an older version of the app, which draws it differently; rebuild it to show it.'
+    );
   const scenes = bundle.layout.scenes;
   if (!scenes || scenes.steps.length !== labels.length)
     throw new UnavailableScenesError('The server could not draw this version’s steps.');

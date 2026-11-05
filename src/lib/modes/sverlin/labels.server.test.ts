@@ -1,15 +1,9 @@
-/**
- * Labels as values, and what has happened, in a real browser. Run with `pnpm run test:browser`,
- * which the devenv gives a browser (SVERLIN_TEST_BROWSER).
- */
+/** Labels as values, and what has happened, in the scenes the server draws. */
 
 import { expect, it } from 'vitest';
 
-import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
-
-import { sandboxDocument } from '../sandbox';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingEveryLabel } from './testing/every-pause';
+import { drawnSteps, textOf } from './testing/scenes';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -19,38 +13,17 @@ const domain = `<script domain>
 
 /** Each step's visible nodes, as kind:text, from the first step on. */
 async function stepsOf(source: string, count: number): Promise<string[][]> {
-  const prepared = prepareSvelteComponent(pausingEveryLabel(source));
-  const { javascript } = await bundlePresentation(prepared, 1, {});
-  const page = await openPage({ viewport: { width: 1200, height: 700 } });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setContent(sandboxDocument('', javascript, 0, 1));
-  await page.waitForFunction(() =>
-    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
-  );
-  const steps: string[][] = [];
-  for (let step = 0; step < count; step++) {
-    await showStep(page, step);
-    steps.push(
-      await page.evaluate(() =>
-        [
-          ...document.querySelectorAll<HTMLElement>(
-            '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind]'
-          )
-        ]
-          .filter((node) => getComputedStyle(node).visibility !== 'hidden')
-          .map((node) => `${node.dataset.svKind}:${node.innerText.replace(/\s+/gu, ' ').trim()}`)
-      )
+  const { steps } = await drawnSteps(pausingEveryLabel(source));
+  return steps
+    .slice(0, count)
+    .map((step) =>
+      step.nodes.filter(({ kind }) => kind).map((node) => `${node.kind}:${textOf(step, node)}`)
     );
-  }
-  await page.close();
-  expect(errors).toEqual([]);
-  return steps;
 }
 
-it.skipIf(!enabled)(
+it(
   'show the key each step of a whole insertion inserted, though out of scope at its after',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     const source = `${domain}
 <script input>
@@ -94,9 +67,9 @@ it.skipIf(!enabled)(
   }
 );
 
-it.skipIf(!enabled)(
+it(
   'say what a swap swapped, from the values its code read before the exchange',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     const source = `${domain}
 <script input>
@@ -140,9 +113,9 @@ it.skipIf(!enabled)(
   }
 );
 
-it.skipIf(!enabled)(
+it(
   'mark every cell a search has checked so far, and point from a loop variable',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     const search = `${domain}
 <script input>

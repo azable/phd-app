@@ -410,7 +410,8 @@ function sizer(options: ReserveOptions) {
       }
     }
     const filled = (tracks: (number | undefined)[], allowed: ReadonlySet<number>) => {
-      const largest = Math.max(0, ...tracks.map((size) => size ?? 0));
+      // Array.from visits a sparse array's holes, which map skips and spreading reads as undefined.
+      const largest = Math.max(0, ...Array.from(tracks, (size) => size ?? 0));
       return Array.from(
         { length: Math.max(tracks.length, ...[...allowed].map((index) => index + 1)) },
         (_, index) => tracks[index] ?? (allowed.has(index) ? largest : 0)

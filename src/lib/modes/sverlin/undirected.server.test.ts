@@ -1,57 +1,30 @@
 /**
- * Links whose direction follows from the data, in a real browser: one <Link> joining two elements
- * both ways at the same steps is one line, whose head starts as none. Run with
- * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
+ * Links whose direction follows from the data, in the scenes the server draws: one <Link> joining
+ * two elements both ways at the same steps is one line, whose head starts as none.
  */
 
 import { expect, it } from 'vitest';
 
-import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
-
-import { sandboxDocument } from '../sandbox';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
-import { pausingEveryLabel } from './testing/every-pause';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
+import { pausingEveryLabel } from './testing/every-pause';
+import { drawnSteps, edgeOf } from './testing/scenes';
 
-/** The links each step of a source draws, shown or kept hidden: each as written, with a head or not. */
+/** The links each step of a source draws, each as written, with a head or not; hidden ones are not drawn. */
 async function linksAtEachStep(source: string) {
-  const { javascript, labels } = await bundlePresentation(
-    prepareSvelteComponent(pausingEveryLabel(source)),
-    1
-  );
-  const page = await openPage({ viewport: { width: 1200, height: 800 } });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setContent(sandboxDocument('', javascript, 0, 1));
-  await page.waitForFunction(() =>
-    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
-  );
-  const steps: { edge: string; head: boolean; shown: boolean }[][] = [];
-  for (let step = 0; step < labels.length; step++) {
-    await showStep(page, step);
-    steps.push(
-      await page.evaluate(() =>
-        [
-          ...document.querySelectorAll<SVGPathElement>(
-            '.sv-layer:not(.pending):not(.sv-leaving) path.link'
-          )
-        ]
-          .map((path) => ({
-            edge: path.dataset.svEdge ?? '',
-            head: path.hasAttribute('marker-end'),
-            shown: path.style.opacity !== '0'
-          }))
-          .sort((a, b) => a.edge.localeCompare(b.edge))
-      )
-    );
-  }
-  await page.close();
-  return { steps, errors };
+  const { steps } = await drawnSteps(pausingEveryLabel(source));
+  return {
+    steps: steps.map((step) =>
+      step.links
+        .map((link) => ({ edge: edgeOf(link), head: !!link.heads?.end, shown: true }))
+        .sort((a, b) => a.edge.localeCompare(b.edge))
+    ),
+    errors: [] as string[]
+  };
 }
 
-it.skipIf(!enabled)(
+it(
   'draws an edge listed from both its ends as one line, and one listed from its source as an arrow',
-  { timeout: 180_000 },
+  { timeout: 60_000 },
   async () => {
     const both = await linksAtEachStep(undirected);
     const lines = [
@@ -82,9 +55,9 @@ it.skipIf(!enabled)(
   }
 );
 
-it.skipIf(!enabled)(
+it(
   'keeps both ways arrows at every step where they are not shown at the same steps',
-  { timeout: 180_000 },
+  { timeout: 60_000 },
   async () => {
     // Each vertex draws its links once it is seen, so A–B shows from A at once, from B later.
     const { steps, errors } = await linksAtEachStep(
@@ -106,9 +79,9 @@ it.skipIf(!enabled)(
   }
 );
 
-it.skipIf(!enabled)(
+it(
   'draws partners naming each other in a row as one line over the cells',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     const pairs = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
