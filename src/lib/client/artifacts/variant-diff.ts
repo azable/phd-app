@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+import { keptValues, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /**
@@ -42,11 +42,17 @@ export function choiceEdits(
     return {
       error: `${wrong[0]} must be a string, a number or a boolean, not ${JSON.stringify(wrong[1])}.`
     };
+  // Compared as the app keeps them: the document writes its keys in the written form.
+  const kept = keptValues(Object.fromEntries(entries) as DesignValues, (key) =>
+    Object.hasOwn(shown, key)
+  );
   return {
     chosen: Object.fromEntries(
-      entries.filter(([key, value]) => !Object.hasOwn(shown, key) || shown[key] !== value)
+      Object.entries(kept).filter(
+        ([key, value]) => !Object.hasOwn(shown, key) || shown[key] !== value
+      )
     ) as DesignValues,
-    unset: Object.keys(shown).filter((key) => !Object.hasOwn(edited, key))
+    unset: Object.keys(shown).filter((key) => !Object.hasOwn(kept, key))
   };
 }
 

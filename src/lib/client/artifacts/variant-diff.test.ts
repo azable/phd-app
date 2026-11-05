@@ -130,6 +130,22 @@ describe("a developer's edit of the choices", () => {
     expect(choiceEdits(shown, variantDocument(shown))).toEqual({ chosen: {}, unset: [] });
   });
 
+  it('reads the keys as written against the variant as kept, so a renamed key is no change', () => {
+    const kept = {
+      'views.Int': 'IntCell',
+      'pointers.Index@lo': 'LoMark',
+      'IntCell@target.stroke': 'violet-500',
+      'Card.stroke@true': 'amber-500'
+    };
+    expect(choiceEdits(kept, variantDocument(kept))).toEqual({ chosen: {}, unset: [] });
+    const edited = JSON.parse(variantDocument(kept)) as Record<string, string>;
+    edited['{Index}:lo'] = 'HiMark';
+    expect(choiceEdits(kept, JSON.stringify(edited))).toEqual({
+      chosen: { 'pointers.Index@lo': 'HiMark' },
+      unset: []
+    });
+  });
+
   it('says why text is not a document of choices', () => {
     expect(choiceEdits(shown, '{ "IntCell.fill": ')).toMatchObject({
       error: expect.stringContaining('not valid JSON')
