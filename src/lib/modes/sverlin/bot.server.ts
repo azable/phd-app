@@ -5,7 +5,8 @@ import {
   parseRecoveryExplanation,
   recoveryExplanationJsonSchema,
   generatedMessageContentJsonSchema,
-  type ChatBotConfig
+  type ChatBotConfig,
+  type ChatResponseFormat
 } from '$lib/server/chat-bots/types';
 import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
 import {
@@ -72,6 +73,40 @@ function listingMaps(source: string): Record<string, unknown> | undefined {
   }
 }
 
+/** The reply, its decision, the brief it updates, and a fallback's recovery. */
+const responseFormat = {
+  name: 'chat_result',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reply: generatedMessageContentJsonSchema,
+      decision: sourceDecisionJsonSchema,
+      brief: briefUpdateJsonSchema,
+      recovery: recoveryExplanationJsonSchema
+    },
+    required: ['reply', 'decision', 'brief', 'recovery']
+  }
+} satisfies ChatResponseFormat;
+
+/** The same, with the type the view helpers should propose views of, or null for none. */
+const responseFormatWithViewHelpers = {
+  ...responseFormat,
+  schema: {
+    ...responseFormat.schema,
+    properties: {
+      ...responseFormat.schema.properties,
+      viewHelpers: {
+        type: ['string', 'null'],
+        description:
+          'A type of the source the view helpers should propose alternative views of, after this reply, or null.'
+      }
+    },
+    required: [...responseFormat.schema.required, 'viewHelpers']
+  }
+} satisfies ChatResponseFormat;
+
 /** Primary visualization-authoring chatbot definition. */
 export default {
   id: 'sverlin-assistant',
@@ -93,27 +128,17 @@ export default {
     };
   },
   attemptProfiles: visualizationAttemptProfiles(12000),
-  responseFormat: {
-    name: 'chat_result',
-    strict: true,
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        reply: generatedMessageContentJsonSchema,
-        decision: sourceDecisionJsonSchema,
-        brief: briefUpdateJsonSchema,
-        recovery: recoveryExplanationJsonSchema
-      },
-      required: ['reply', 'decision', 'brief', 'recovery']
-    }
-  },
+  responseFormat,
+  // Where the view helpers are on, the reply may name a type for them (see view-helpers.ts).
+  responseFormatFor: ({ project }) =>
+    project.viewHelpers ? responseFormatWithViewHelpers : responseFormat,
   parseOutput(value) {
     const output = value as {
       reply?: unknown;
       decision?: unknown;
       brief?: unknown;
       recovery?: unknown;
+      viewHelpers?: unknown;
     };
     const decision = v.safeParse(sourceDecisionSchema, output?.decision);
     if (!decision.success) throw new Error('The chatbot returned an invalid structured response.');
@@ -125,7 +150,10 @@ export default {
       reply: v.parse(generatedMessageContentSchema, output.reply),
       decision: decision.output,
       ...(entries.length ? { brief: entries } : {}),
-      ...(recovery ? { recovery } : {})
+      ...(recovery ? { recovery } : {}),
+      ...(typeof output.viewHelpers === 'string' && output.viewHelpers.trim()
+        ? { viewHelpers: output.viewHelpers.trim() }
+        : {})
     };
   }
 } satisfies ChatBotConfig<AiProjectContext>;

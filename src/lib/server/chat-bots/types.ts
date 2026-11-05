@@ -128,7 +128,13 @@ export type BuildFeedback = {
 };
 
 /** Role of one bounded generation profile in an agent's attempt ladder. */
-export type ChatAttemptPurpose = 'intake' | 'initial' | 'repair' | 'fallback' | 'choosing';
+export type ChatAttemptPurpose =
+  | 'intake'
+  | 'initial'
+  | 'repair'
+  | 'fallback'
+  | 'choosing'
+  | 'helper';
 
 /** Recordable identity of the profile selected for one generation request. */
 export type ChatAttempt = {
@@ -186,6 +192,8 @@ export type SourceArtifactChatOutput = {
   decision: SourceDecision;
   brief?: BriefEntry[];
   recovery?: RecoveryExplanation;
+  /** A type the view helpers should propose alternative views of, where they are on. */
+  viewHelpers?: string;
 };
 
 /** Candidate-based modes share one orchestration shape; each mode validates its own manifest. */
@@ -205,6 +213,8 @@ export type ChatBotConfig<Project, Output extends object = SourceArtifactChatOut
   buildContext: (input: ChatContextInput<Project>) => ChatContext | Promise<ChatContext>;
   attemptProfiles: readonly [ChatBotAttemptProfile, ...ChatBotAttemptProfile[]];
   responseFormat: ChatResponseFormat;
+  /** The response format for one request, where it depends on the project. */
+  responseFormatFor?: (request: ChatbotRequest<Project>) => ChatResponseFormat;
   parseOutput: (value: unknown) => Output;
 };
 

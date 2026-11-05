@@ -467,6 +467,12 @@ defines the counterbalanced order, 15-minute task duration, and
 interaction-capture policy; the comments beside its limits explain their
 sampling and delivery tradeoffs.
 
+View helpers are off unless a study condition sets `viewHelpers: true` or an
+administrator turns them on for a project in dev mode. When on, a turn may add
+up to three short calls that propose alternative views for the assistant to
+offer; each turn records whether they were on
+([`view-helpers-config.ts`](src/lib/server/projects/view-helpers-config.ts)).
+
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):
 before a project's first version, “Making a first version…” over the blank

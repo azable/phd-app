@@ -50,6 +50,19 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
+import {
+  checkCandidate,
+  mainViewType,
+  proposedViewsFormat,
+  viewHelperDirections,
+  viewHelperPrompt,
+  viewHelperTask,
+  type ProposedView
+} from '$lib/modes/sverlin/view-helpers.server';
+import { openAIAdapter } from '$lib/server/chat-adapters/openai';
+import type { ChatAdapter } from '$lib/server/chat-adapters/types';
+import { turnViewHelpers } from './view-helpers-config';
+import { viewHelperCalls, viewHelpersContext, viewHelperTimeoutMs } from './view-helpers';
 import { modeBuilders, type BuildRequest } from '$lib/modes/server';
 import {
   nextParticipantIntakeStep,
@@ -145,6 +158,8 @@ export type ProjectCommandDependencies = {
   getParticipantIntakeClassifier: typeof getParticipantIntakeClassifier;
   /** Draws whether each comparison shows its sides the other way round (below 0.5 keeps them). */
   comparisonOrder?: () => number;
+  /** The provider the view helpers call, the default's where absent. */
+  viewHelperAdapter?: ChatAdapter;
 };
 
 export const defaultProjectCommandDependencies: ProjectCommandDependencies = {
@@ -767,8 +782,11 @@ async function runSverlinAssistantTurn(
   // Whether a built picture went back to the assistant for a soft problem, text too small to read
   // or warnings: one does once a turn, then the picture shows as built.
   let softReturned = false;
+  // The type the assistant asked the view helpers to propose views of, where they are on.
+  let helperType: string | undefined;
+  const startedFrom = entrySource(document);
 
-  return runAttemptLadder(
+  const done = await runAttemptLadder(
     document,
     operationId,
     chatbot,
@@ -793,6 +811,7 @@ async function runSverlinAssistantTurn(
       // brief entries of every attempt this turn, the latest for each attribute, steer this
       // decision's comparisons and are recorded with the accepted reply.
       for (const entry of generation.result.brief ?? []) turnBrief.set(entry.key, entry);
+      helperType = generation.result.viewHelpers ?? helperType;
       const brief = turnBrief.size ? [...turnBrief.values()] : undefined;
 
       // The reply is recorded last, once its decision is accepted and has presented its version (a
@@ -1248,6 +1267,15 @@ async function runSverlinAssistantTurn(
       };
     }
   );
+  // After a first version, the helpers propose views of its main type; else of the type asked.
+  if (!turnViewHelpers(done)) return done;
+  const source = entrySource(done);
+  const starter = modeCatalog[projectSnapshotAt(done).mode].starter.source;
+  const firstVersion = startedFrom === starter && source !== starter;
+  const type = helperType ?? (firstVersion ? mainViewType(source) : undefined);
+  return type && source !== starter
+    ? runViewHelpers(done, operationId, source, type, dependencies)
+    : done;
 }
 
 async function submitCandidateFeedback(
@@ -1437,7 +1465,10 @@ async function runSverlinGeneration(
   try {
     prompt = await options.chatbot.preparePrompt({
       messages: projectConversationMessages(options.document.events),
-      project: projectAiContext(options.document, options.contextSelection),
+      project: withViewHelpers(
+        projectAiContext(options.document, options.contextSelection),
+        options.document
+      ),
       attempt: options.attempt,
       turn: options.turn,
       ...(options.buildFeedback ? { buildFeedback: options.buildFeedback } : {})
@@ -2056,6 +2087,172 @@ async function presentAfterRebase(
     dependencies.projectService,
     { kind: 'system' },
     pair
+  );
+}
+
+/** The assistant's context, with the view helpers' where the turn runs them. */
+function withViewHelpers(project: AiProjectContext, document: ProjectDocument): AiProjectContext {
+  if (!turnViewHelpers(document)) return project;
+  const snapshot = projectSnapshotAt(document);
+  const sha256 = snapshot.artifacts[snapshot.entryArtifactId]?.content.sha256 ?? '';
+  return { ...project, viewHelpers: viewHelpersContext(document, sha256) };
+}
+
+/** The view helpers' model and effort (see attempt-profiles.ts for why they cost no waiting). */
+const viewHelperParameters = {
+  model: 'gpt-5.6-luna',
+  reasoningEffort: 'low',
+  maxOutputTokens: 8000
+} as const;
+
+/**
+ * Ask the view helpers for alternative views of one type of a source, once the turn's reply has
+ * shown: their calls run at once, each time-boxed, then each proposal is built and checked, and
+ * those that build and read are recorded for the assistant's next turn. A helper that fails, is
+ * late, or proposes nothing usable costs the turn nothing; none starts with too little time left.
+ */
+async function runViewHelpers(
+  document: ProjectDocument,
+  operationId: string,
+  source: string,
+  type: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  const deadline = currentProjectOperationDeadline();
+  if (deadline !== undefined && deadline - Date.now() < viewHelperTimeoutMs) return document;
+  const adapter = dependencies.viewHelperAdapter ?? openAIAdapter;
+  const operation = currentProjectOperationSignal();
+  const prompts: ChatbotPrompt[] = viewHelperDirections
+    .slice(0, viewHelperCalls)
+    .map((direction, index) => ({
+      initialPrompt: viewHelperPrompt,
+      messages: [{ role: 'user', content: viewHelperTask(type, 1, source, direction) }],
+      context: {},
+      attempt: { number: index + 1, purpose: 'helper' },
+      parameters: { ...viewHelperParameters },
+      responseFormat: proposedViewsFormat as unknown as ChatbotPrompt['responseFormat']
+    }));
+  const replies = await Promise.all(
+    prompts.map(async (prompt) => {
+      const startedAt = performance.now();
+      const timeout = AbortSignal.timeout(viewHelperTimeoutMs);
+      const signal = operation ? AbortSignal.any([operation, timeout]) : timeout;
+      try {
+        const result = await adapter.generateReply({ ...prompt, signal });
+        const views = (
+          (result.output as { views?: ProposedView[] } | undefined)?.views ?? []
+        ).filter(
+          (view) =>
+            typeof view?.name === 'string' &&
+            typeof view.description === 'string' &&
+            typeof view.markup === 'string'
+        );
+        return {
+          prompt,
+          ok: true as const,
+          result,
+          views,
+          durationMs: performance.now() - startedAt
+        };
+      } catch (error) {
+        return { prompt, ok: false as const, error, durationMs: performance.now() - startedAt };
+      }
+    })
+  );
+  let current = document;
+  const generationEventIds: EventId[] = [];
+  for (const reply of replies) {
+    current = await appendProjectEvents(
+      current,
+      [
+        draftEvent<'ai.generation-requested'>({
+          type: 'ai.generation-requested',
+          actor: { kind: 'system' },
+          operationId,
+          payload: {
+            attempt: reply.prompt.attempt.number,
+            purpose: 'helper',
+            prompt: recordText(JSON.stringify(reply.prompt), 'application/json'),
+            promptTemplateSha256: sourceSha256(reply.prompt.initialPrompt),
+            requestedModel: reply.prompt.parameters.model,
+            parameters: { ...reply.prompt.parameters }
+          }
+        }),
+        reply.ok
+          ? draftEvent<'ai.generation-succeeded'>({
+              type: 'ai.generation-succeeded',
+              actor: { kind: 'assistant', botId: 'sverlin-view-helper' },
+              operationId,
+              payload: {
+                attempt: reply.prompt.attempt.number,
+                adapterId: adapter.id,
+                requestedModel: reply.prompt.parameters.model,
+                ...(reply.result.generation?.model ? { model: reply.result.generation.model } : {}),
+                ...(reply.result.generation?.responseId
+                  ? { responseId: reply.result.generation.responseId }
+                  : {}),
+                durationMs: Math.round(reply.durationMs),
+                ...(reply.result.generation?.usage ? { usage: reply.result.generation.usage } : {}),
+                response: recordText(
+                  JSON.stringify(reply.result.providerResponse ?? { views: reply.views }),
+                  'application/json'
+                )
+              }
+            })
+          : draftEvent<'ai.generation-failed'>({
+              type: 'ai.generation-failed',
+              actor: { kind: 'system' },
+              operationId,
+              payload: {
+                attempt: reply.prompt.attempt.number,
+                failureKind: generationFailureKind(reply.error),
+                durationMs: Math.round(reply.durationMs),
+                message: safeErrorMessage(reply.error),
+                details: recordText(
+                  generationErrorDetails(reply.error).value,
+                  generationErrorDetails(reply.error).mediaType
+                )
+              }
+            })
+      ],
+      dependencies.projectService
+    );
+    generationEventIds.push(projectHead(current).id);
+  }
+  const proposed = replies.flatMap((reply) => (reply.ok ? reply.views : []));
+  if (!proposed.length) return current;
+  const checked = [];
+  for (const view of proposed) checked.push(await checkCandidate(source, type, view));
+  return appendProjectEvents(
+    current,
+    [
+      draftEvent<'visualization.view-candidates'>({
+        type: 'visualization.view-candidates',
+        actor: { kind: 'system' },
+        operationId,
+        payload: {
+          sourceSha256: sourceSha256(source),
+          type,
+          generationEventIds,
+          candidates: checked.flatMap((candidate) =>
+            candidate.kept
+              ? [
+                  {
+                    name: candidate.name,
+                    description: candidate.description,
+                    markup: candidate.markup,
+                    ...(candidate.readability ? { readability: candidate.readability } : {})
+                  }
+                ]
+              : []
+          ),
+          dropped: checked.flatMap((candidate) =>
+            candidate.kept ? [] : [{ name: candidate.name, reason: candidate.reason }]
+          )
+        }
+      })
+    ],
+    dependencies.projectService
   );
 }
 

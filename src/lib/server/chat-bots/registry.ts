@@ -38,7 +38,7 @@ export function createChatbot<Project, Output extends object>(
         request.turn === 'feedback' && profile.feedbackParameters
           ? { ...profile.parameters, ...profile.feedbackParameters }
           : profile.parameters,
-      responseFormat: config.responseFormat
+      responseFormat: config.responseFormatFor?.(request) ?? config.responseFormat
     };
   };
   const generatePrepared = async (

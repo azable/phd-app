@@ -234,6 +234,13 @@ export type AiSelectedElement = {
   }>;
 };
 
+/** The view helpers' note and candidates (see AiProjectContext.viewHelpers). */
+export type AiViewHelpers = {
+  note: string;
+  type?: string;
+  candidates: { name: string; description: string; markup: string; readability?: string }[];
+};
+
 /** Strongly typed, consumer-specific context supplied to the AI assistant. */
 export type AiProjectContext = {
   projectId: string;
@@ -283,6 +290,12 @@ export type AiProjectContext = {
    * of comparisons. It weights preferences' askNext.
    */
   brief: AiBrief;
+  /**
+   * Present only where the view helpers are on: what they are, and the alternative views they last
+   * proposed for the base source, each built and readable, for you to add (edit) and compare
+   * (vary), or to leave out.
+   */
+  viewHelpers?: AiViewHelpers;
   timelineWindow: {
     totalEventCount: number;
     omittedEventCount: number;

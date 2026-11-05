@@ -81,9 +81,21 @@ export const proposedViewsFormat = {
   }
 } as const;
 
-/** The task a helper is given: the type, how many views, and the source as it is. */
-export const viewHelperTask = (type: string, count: number, source: string): string =>
-  `Write ${count} alternative views of the type ${type}. Return JSON {"views":[{"name","description","markup"}]}.\n\nThe source:\n\n${source}`;
+/** The task a helper is given: the type, how many views, a direction to try, and the source. */
+export const viewHelperTask = (
+  type: string,
+  count: number,
+  source: string,
+  direction?: string
+): string =>
+  `Write ${count} alternative view${count === 1 ? '' : 's'} of the type ${type}${direction ? `, trying ${direction}` : ''}. Return JSON {"views":[{"name","description","markup"}]}.\n\nThe source:\n\n${source}`;
+
+/** What each of the parallel helpers tries, so that their proposals differ. */
+export const viewHelperDirections = [
+  'a shape that shows the size, such as a bar or a column',
+  'an icon or a word',
+  'a compact mark without a box, or a card'
+];
 
 /**
  * The type the source draws most as values: the type of its first value view, that is a view
