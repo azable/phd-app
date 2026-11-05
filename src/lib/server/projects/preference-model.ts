@@ -20,6 +20,7 @@ import {
   preferredPresentation
 } from '$lib/shared/projects/events/visualization-presented';
 import { seededRandom } from '$lib/modes/sverlin/algorithm/random.server';
+import { listingAlias } from '$lib/modes/sverlin/library/node/design';
 
 type DesignValue = string | number | boolean;
 
@@ -176,7 +177,11 @@ export function varyValues(response: string): { variable: string; value: DesignV
       const vary = decision as
         | { action?: unknown; values?: { variable: string; value: DesignValue }[] }
         | undefined;
-      if (vary?.action === 'vary' && Array.isArray(vary.values)) return vary.values;
+      if (vary?.action === 'vary' && Array.isArray(vary.values))
+        return vary.values.map(({ variable, value }) => ({
+          variable: listingAlias(variable),
+          value
+        }));
     }
   } catch {
     // Not a recorded response with a decision.

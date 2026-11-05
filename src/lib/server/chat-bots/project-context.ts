@@ -38,8 +38,18 @@ import {
   listingOptions,
   listingPlacesOptions,
   listingPropOptions,
+  groupKey,
+  groupOf,
+  groupOptions,
+  groupProps,
+  isToken,
   overflowOptions,
-  propOptions
+  propOptions,
+  roleLooks,
+  tagOf,
+  tokenProps,
+  type DesignProp,
+  type KindRole
 } from '$lib/modes/sverlin/library/node/design';
 
 type DesignValue = string | number | boolean;
@@ -96,6 +106,11 @@ export type AiVariable = {
   options: string | readonly DesignValue[];
   value: DesignValue;
   origin?: string;
+  /**
+   * For a kind's prop holding the value of what it follows, that: its group, as <Node>.padding, or
+   * the token its role's look names, as $spacing.
+   */
+  follows?: string;
 };
 
 /** A label's runs, and how many of them change what the view draws (compile.server.ts LabelRuns). */
@@ -128,6 +143,13 @@ export type AiDesignContext = {
   options: Record<string, readonly DesignValue[] | string>;
   variables: AiVariable[];
   values: Record<string, Record<string, DesignValue>>;
+  /**
+   * The levels above the kinds: each token by its key, and each group a variant sets by its tag, as
+   * <Node>, with the kinds following it; a kind's prop following its group is told only there, and
+   * one following a token is told as the token. A project's 700 variables were mostly kinds
+   * repeating their role's starter look.
+   */
+  levels?: Record<string, DesignValue | Record<string, DesignValue>>;
 };
 
 /**
@@ -150,16 +172,34 @@ function patternOf(set: readonly DesignValue[]): string | undefined {
 
 export function designContext({ options, variables }: AiDesign): AiDesignContext {
   const values: Record<string, Record<string, DesignValue>> = {};
-  const full = variables.filter(({ variable, options: set, value, origin }) => {
+  const levels: Record<string, DesignValue | Record<string, DesignValue>> = {};
+  const followers = new Map<string, Set<string>>();
+  const own = variables.filter(({ variable, value, follows }) => {
+    const group = groupOf(variable);
+    if (isToken(variable)) levels[variable] = value;
+    else if (group) ((levels[group.tag] ??= {}) as Record<string, DesignValue>)[group.prop] = value;
+    else if (follows && !isToken(follows)) {
+      const group = follows.slice(0, follows.lastIndexOf('.'));
+      followers.set(
+        group,
+        (followers.get(group) ?? new Set()).add(variable.slice(0, variable.lastIndexOf('.')))
+      );
+    } else return true;
+    return false;
+  });
+  for (const [group, kinds] of followers)
+    if (typeof levels[group] === 'object')
+      (levels[group] as Record<string, DesignValue>).kinds = [...kinds].join(', ');
+  const full = own.filter(({ variable, options: set, value, origin, follows }) => {
     const dot = variable.lastIndexOf('.');
     const prop = variable.slice(dot + 1);
     const brief =
       dot > 0 &&
       typeof set === 'string' &&
       set === prop &&
-      origin !== 'chosen' &&
-      origin !== 'random';
-    if (brief) (values[variable.slice(0, dot)] ??= {})[prop] = value;
+      ((origin !== 'chosen' && origin !== 'random') || follows !== undefined);
+    // A prop following a token is told as the token, whose value levels gives.
+    if (brief) (values[variable.slice(0, dot)] ??= {})[prop] = follows ?? value;
     return !brief;
   });
   // Kinds whose values are all alike are told once, under their names joined by commas: most text
@@ -178,7 +218,12 @@ export function designContext({ options, variables }: AiDesign): AiDesignContext
   const toldOptions = Object.fromEntries(
     Object.entries(options).map(([name, set]) => [name, patternOf(set) ?? set])
   );
-  return { options: toldOptions, variables: full, values: told };
+  return {
+    options: toldOptions,
+    variables: full,
+    values: told,
+    ...(Object.keys(levels).length ? { levels } : {})
+  };
 }
 
 /** One version of the source, named as the participant sees it, by the start of its hash. */
@@ -1133,14 +1178,46 @@ export function viewedPresentation(
 /** A presentation's design space and variant, each prop's options named once. */
 export function designVariables(
   presentation:
-    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'pointers' | 'listings'>
+    | Pick<
+        BrowserBundlePresentation,
+        'variant' | 'origins' | 'views' | 'pointers' | 'listings' | 'roles'
+      >
     | undefined,
   /** Each free layout's structure, by its kind (see SourceBuildFacts): only layers take layered. */
   structures?: Readonly<Record<string, string>>
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
-  const variables = Object.entries(presentation?.variant ?? {}).map(([key, value]): AiVariable => {
+  const variant = presentation?.variant ?? {};
+  const roles = (presentation?.roles ?? {}) as Readonly<Record<string, KindRole>>;
+  // What a kind's prop follows where it holds that value (see buildVariant): its group where
+  // set, as <Node>.padding, or the token its role's look names, as $spacing.
+  const followed = (key: string): string | undefined => {
+    const kind = key.slice(0, Math.max(0, key.lastIndexOf('.')));
+    const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
+    const prop = key.slice(kind.length + 1) as DesignProp;
+    if (!role || !groupProps(role).includes(prop)) return undefined;
+    const group = groupKey(tagOf(role), prop);
+    const level = Object.hasOwn(variant, group) ? variant[group] : roleLooks[role][prop];
+    const value = isToken(level) ? variant[level] : level;
+    if (value === undefined || value !== variant[key]) return undefined;
+    return Object.hasOwn(variant, group) ? group : isToken(level) ? level : undefined;
+  };
+  const rolesOfTag = (tag: string) =>
+    [...new Set(Object.values(roles))].filter((role) => tagOf(role) === tag);
+  const variables = Object.entries(variant).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
+    // A token's options are its prop's; a role level's, its prop's and the tokens that fit it.
+    if (isToken(key)) {
+      const set = tokenProps[key];
+      options[set] = propOptions[set];
+      return { variable: key, options: set, value, ...(origin ? { origin } : {}) };
+    }
+    const group = groupOf(key);
+    if (group) {
+      options[key] = groupOptions(rolesOfTag(group.tag), group.prop);
+      return { variable: key, options: key, value, ...(origin ? { origin } : {}) };
+    }
+    const follows = followed(key);
     // A place's own choice, as views.Int@swap.held or views.Ask.Int@g.a, has its type's options.
     const typeIn = (rest: string) => rest.split('@')[0].split('.').at(-1) ?? rest;
     const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
@@ -1183,7 +1260,8 @@ export function designVariables(
             ? [...presentation.listings, ...listingOptions['listing.language']]
             : set,
       value,
-      ...(origin ? { origin } : {})
+      ...(origin ? { origin } : {}),
+      ...(follows ? { follows } : {})
     };
   });
   return { options, variables };

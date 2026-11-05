@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
+import { buildVariant } from '$lib/modes/sverlin/design.server';
 import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
 import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
 import { propOptions } from '$lib/modes/sverlin/library/node/design';
@@ -333,6 +334,31 @@ describe('design variables in the AI context', () => {
       'none, white, or a hue-shade, as red-300: hues neutral, red, blue, green, amber; shades 100, 200, 300, 400, 500'
     );
     expect(design.options.gap).toEqual([0.5, 1]);
+  });
+
+  it('tells tokens and groups once, a kind following a group not at all, and one following a token as the token', () => {
+    const { design: built } = prepareSvelteComponent(bfs);
+    const chosen = { $spacing: 0.25, '<Node>.fill': 'sky-100' };
+    const { values, origins } = buildVariant(
+      built.space,
+      built.starter,
+      { chosen },
+      1,
+      built.fallbacks,
+      built.roles
+    );
+    const design = designContext(designVariables({ variant: values, origins, roles: built.roles }));
+    expect(design.levels?.['$spacing']).toBe(0.25);
+    const node = design.levels?.['<Node>'] as Record<string, string>;
+    expect(node.fill).toBe('sky-100');
+    const valueKind = Object.keys(built.roles).find((kind) => built.roles[kind] === 'value')!;
+    expect(node.kinds.split(', ')).toContain(valueKind);
+    const told = Object.entries(design.values).find(([kinds]) =>
+      kinds.split(', ').includes(valueKind)
+    )?.[1];
+    expect(told?.fill).toBeUndefined();
+    expect(told?.padding).toBe('$spacing');
+    expect(design.variables.some(({ variable }) => variable === `${valueKind}.fill`)).toBe(false);
   });
 
   it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {

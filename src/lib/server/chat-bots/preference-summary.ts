@@ -7,6 +7,7 @@
  * context whatever the design's size.
  */
 
+import { isToken, tokenProps } from '$lib/modes/sverlin/library/node/design';
 import type { ChoiceFamily } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import {
@@ -30,7 +31,10 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
     return { family: 'views', impact: 1 };
   if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
-  const prop = variable.slice(variable.lastIndexOf('.') + 1);
+  // A token is of the family of its prop, as $accent of colour.
+  const prop = isToken(variable)
+    ? tokenProps[variable]
+    : variable.slice(variable.lastIndexOf('.') + 1);
   switch (prop) {
     case 'form':
     case 'direction':

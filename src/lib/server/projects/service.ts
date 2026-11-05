@@ -1170,6 +1170,7 @@ export async function activateBuiltPresentations(
         : {}),
       ...(bundle.listings?.length ? { listings: bundle.listings } : {}),
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
+      ...(bundle.roles && Object.keys(bundle.roles).length ? { roles: bundle.roles } : {}),
       ...(bundle.renders ? { renders: bundle.renders } : {}),
       ...(bundle.leftOut ? { leftOut: bundle.leftOut } : {}),
       ...(bundle.readability ? { readability: bundle.readability } : {}),

@@ -56,6 +56,7 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
+import { listingAlias } from '$lib/modes/sverlin/library/node/design';
 import {
   bestCandidates,
   checkCandidate,
@@ -2193,7 +2194,10 @@ function comparisonBriefProblem({ brief }: Comparisons[number]): string | undefi
 }
 
 function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
-  return Object.fromEntries(values.map(({ variable, value }) => [variable, value])) as DesignValues;
+  // <Listing>.syntax is listing.syntax, the key the variant keeps.
+  return Object.fromEntries(
+    values.map(({ variable, value }) => [listingAlias(variable), value])
+  ) as DesignValues;
 }
 
 /**
@@ -3811,7 +3815,7 @@ function variedValues(
 ): { base?: DesignValues; chosen: DesignValues; randomise: string[] } {
   return {
     ...(viewed ? { base: viewed } : {}),
-    chosen: Object.fromEntries(decision.values.map(({ variable, value }) => [variable, value])),
-    randomise: [...decision.randomise]
+    chosen: designValues(decision.values),
+    randomise: decision.randomise.map(listingAlias)
   };
 }

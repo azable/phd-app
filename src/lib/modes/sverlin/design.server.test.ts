@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { linearSearchSource } from './contract';
 import bst from './fixtures/bst.sverlin?raw';
+import pseudocode from './fixtures/listing-pseudocode.sverlin?raw';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import { forms } from './library/node/forms';
@@ -28,6 +29,8 @@ describe('design space', () => {
           (key) =>
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
+            !key.startsWith('<') &&
+            !key.startsWith('$') &&
             key !== 'layout' &&
             !key.startsWith('Main.') &&
             !key.includes('@')
@@ -72,7 +75,12 @@ describe('design space', () => {
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
-    expect(Object.keys(starter).sort()).toEqual(Object.keys(space).sort());
+    // A group, as <Node>.padding, is set only where a variant sets it.
+    expect(Object.keys(starter).sort()).toEqual(
+      Object.keys(space)
+        .filter((key) => !key.startsWith('<'))
+        .sort()
+    );
     expect(starter['views.Int']).toBe('IntCell');
     for (const [key, value] of Object.entries(starter)) expect(space[key]).toContain(value);
   });
@@ -386,5 +394,77 @@ describe('a bare icon', () => {
     );
     expect(starter['CurrentMark.icon']).toBe('arrow-up');
     expect(starter['Legend.icon']).toBe('circle-dot');
+  });
+});
+
+describe('design tokens and tag groups', () => {
+  // IntCell and IntDot are values, Cells a container and Note a text, all made by <Node>;
+  // Arrow.Pointed is a pointer mark, made by <Pointed>; `{v}` is a place, IntCell@v.
+  const levelled = prepareSvelteComponent(
+    `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main i={i} values={values} /></Scene></Storyboard>`
+  ).design;
+  const build = (request: Parameters<typeof buildVariant>[2]) =>
+    buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles)
+      .values;
+
+  it('starts every kind at its role look, which names the tokens it shares, and no group set', () => {
+    expect(levelled.starter['$spacing']).toBe(0.375);
+    expect(levelled.space['<Node>.padding']).toContain('$spacing');
+    expect(levelled.starter['<Node>.padding']).toBeUndefined();
+    expect(levelled.space['<Node>.shown']).toBeUndefined();
+    expect(levelled.space['<Pointed>.expand']).toBeDefined();
+    expect(levelled.space['<Node>.expand']).toBeUndefined();
+    const values = build({});
+    for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
+  });
+
+  it('changes every kind following a token, and a group overrides the token for its tag', () => {
+    const spacing = build({ chosen: { $spacing: 0.25 } });
+    expect([spacing['IntCell.padding'], spacing['IntDot.padding']]).toEqual([0.25, 0.25]);
+    expect(spacing['Arrow.Pointed.padding']).toBe(0.25);
+    expect(spacing['Cells.padding']).toBe(0);
+    const group = build({ chosen: { $spacing: 0.25, '<Node>.padding': 0.5 } });
+    expect([group['IntCell.padding'], group['Cells.padding'], group['Note.padding']]).toEqual([
+      0.5, 0.5, 0.5
+    ]);
+    // <Node> never reaches a pointer mark.
+    expect(group['Arrow.Pointed.padding']).toBe(0.25);
+    const named = build({ chosen: { '<Node>.fill': '$highlight' } });
+    expect([named['IntCell.fill'], named['Note.fill']]).toEqual(['amber-100', 'amber-100']);
+  });
+
+  it("keeps a kind's own value and a place's over its group", () => {
+    const own = build({ chosen: { '<Node>.padding': 0.5, 'IntCell.padding': 0.125 } });
+    expect([own['IntCell.padding'], own['IntDot.padding']]).toEqual([0.125, 0.5]);
+    const placed = build({ chosen: { '<Node>.fill': 'sky-100', 'IntCell@v.fill': 'rose-100' } });
+    expect([placed['IntCell.fill'], placed['IntCell@v.fill']]).toEqual(['sky-100', 'rose-100']);
+    // A place not set apart follows its kind, and so the group.
+    expect(build({ chosen: { '<Node>.fill': 'sky-100' } })['IntCell@v.fill']).toBe('sky-100');
+    // A value set apart in the base stays when a token changes later.
+    const base = build({ chosen: { 'IntCell.padding': 0.125 } });
+    expect(build({ base, chosen: { $spacing: 0.5 } })['IntCell.padding']).toBe(0.125);
+    expect(build({ base, chosen: { $spacing: 0.5 } })['IntDot.padding']).toBe(0.5);
+  });
+
+  it('refuses a token or a group outside its options, naming them', () => {
+    expect(() => build({ chosen: { $radius: 5 } })).toThrow(
+      /\$radius cannot be 5; its options are 0, 2, 4, 6, 8, 12, 999/u
+    );
+    expect(() => build({ chosen: { '<Node>.padding': '$radius' } })).toThrow(
+      /<Node>\.padding cannot be "\$radius"/u
+    );
+  });
+
+  it('draws tokens with the kinds holding their value, so kinds following one stay alike', () => {
+    const drawn = build({ randomise: true });
+    expect(drawn['IntCell.padding']).toBe(drawn['$spacing']);
+    expect(drawn['IntCell.color']).toBe(drawn['$text']);
+  });
+
+  it('takes the listing group as the listing settings', () => {
+    const { design } = prepareSvelteComponent(pseudocode);
+    const chosen = { '<Listing>.syntax': 'colour' };
+    const values = buildVariant(design.space, design.starter, { chosen }, 1).values;
+    expect(values['listing.syntax']).toBe('colour');
   });
 });

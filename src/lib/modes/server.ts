@@ -42,6 +42,8 @@ export type ModeBuildResult =
         listings?: string[];
         // The kind of each tag, by its line:column.
         kinds?: Record<string, string[]>;
+        // Each kind of node's role, whose role levels its props follow.
+        roles?: Record<string, string>;
         // The variable each render of a type by name reads, by its line:column.
         renders?: Record<string, string>;
         // The <Node> tags the presentation leaves out, by their line:column.

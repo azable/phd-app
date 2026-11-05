@@ -55,6 +55,10 @@ export function choiceName(key: string): string {
     const name = `${words(type)} ${viewCategories[category]}`;
     return sentence(tail ? `${name} for ${tail}` : name);
   }
+  // A group, as `<Node>.padding`, sets every kind of its tag: “Every node padding”.
+  const tag = /^<(\w+)>$/u.exec(category);
+  if (tag && type && !rest.length && tail === undefined)
+    return sentence(`every ${words(tag[1])} ${words(type)}`);
   // A kind's prop: the key's last part, after the place where there is one.
   const parts = tail === undefined ? head.split('.') : [...head.split('.'), tail];
   let place: string | undefined;

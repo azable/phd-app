@@ -57,6 +57,7 @@ export async function buildBatch(
           pointers: prepared.design.pointers,
           listings: prepared.ownListings,
           kinds: prepared.design.tags,
+          roles: prepared.design.roles,
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
           ...(bundle.warnings ? { warnings: bundle.warnings.slice(0, 200).map(within(1000)) } : {}),

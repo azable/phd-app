@@ -11,18 +11,30 @@ import {
   colourParts,
   frameOptions,
   freeLayoutProps,
+  isToken,
   listingOptions,
   listingPropOptions,
   listingRegionProps,
   optionsOf,
   placePaint,
   placeProps,
+  groupKey,
+  groupOf,
+  groupOptions,
+  groupProps,
+  listingAlias,
+  propOptions,
+  roleLooks,
   roleProps,
   starterFrame,
   starterFreeLayout,
   starterListing,
   starterLooks,
+  starterTokens,
+  tagOf,
+  tokenProps,
   type DesignProp,
+  type DesignToken,
   type DesignValues,
   type KindRole
 } from './library/node/design';
@@ -121,6 +133,90 @@ function layoutStarter(names: readonly string[]): Record<string, DesignValue> {
 }
 
 const kindOf = (key: string) => key.slice(0, Math.max(0, key.lastIndexOf('.')));
+
+const tokens = Object.keys(tokenProps) as DesignToken[];
+
+/** The roles of a source's kinds, each once, in the order roleProps lists them. */
+const rolesOf = (kinds: readonly DesignKind[]) =>
+  (Object.keys(roleProps) as KindRole[]).filter((role) => kinds.some((kind) => kind.role === role));
+
+/**
+ * The design's levels above its kinds (see Shared design values in the language guide): every
+ * token, and a group for each prop of each tag the source's kinds are made by, as `<Node>.padding`,
+ * taking the options of every kind it reaches, or a token that fits them all. A group is set only
+ * where a variant sets it, so the starter has none: each kind starts at its role's look.
+ */
+function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
+  if (!kinds.length) return {};
+  const roles = rolesOf(kinds);
+  return {
+    ...Object.fromEntries(tokens.map((token) => [token, propOptions[tokenProps[token]]])),
+    ...Object.fromEntries(
+      (['<Node>', '<Pointed>', '<Link>'] as const).flatMap((tag) => {
+        const reached = roles.filter((role) => tagOf(role) === tag);
+        return [...new Set(reached.flatMap(groupProps))].map((prop) => [
+          groupKey(tag, prop),
+          groupOptions(reached, prop)
+        ]);
+      })
+    )
+  };
+}
+
+/** The level a kind's variable follows: its role and prop, as value and padding for IntCell.padding. */
+function levelOf(
+  roles: Readonly<Record<string, KindRole>>,
+  key: string
+): { role: KindRole; prop: DesignProp } | undefined {
+  const kind = kindOf(key);
+  const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
+  const prop = key.slice(kind.length + 1) as DesignProp;
+  return role && groupProps(role).includes(prop) ? { role, prop } : undefined;
+}
+
+/** The variable a kind's level value comes from: its group where set, else its role look's token. */
+function levelSource(
+  values: Readonly<Record<string, DesignValue>>,
+  { role, prop }: { role: KindRole; prop: DesignProp }
+): string | undefined {
+  const group = groupKey(tagOf(role), prop);
+  const value = Object.hasOwn(values, group) ? values[group] : roleLooks[role][prop];
+  return isToken(value) ? value : Object.hasOwn(values, group) ? group : undefined;
+}
+
+/**
+ * Why a group cannot take a value that some kinds it reaches can: the kinds that cannot, by name.
+ * Undefined where none of them can, for the group's options to say.
+ */
+function groupUnfit(
+  space: DesignSpace,
+  roles: Readonly<Record<string, KindRole>>,
+  key: string,
+  value: unknown
+): string | undefined {
+  const group = groupOf(key);
+  if (!group) return undefined;
+  const reached = Object.entries(roles)
+    .filter(([, role]) => tagOf(role) === group.tag && groupProps(role).includes(group.prop))
+    .map(([kind]) => kind)
+    .filter((kind) => Object.hasOwn(space, `${kind}.${group.prop}`));
+  const cannot = reached.filter(
+    (kind) => !space[`${kind}.${group.prop}`]?.includes(value as never)
+  );
+  return cannot.length && cannot.length < reached.length
+    ? `${key} cannot be ${JSON.stringify(value)}: it sets every kind of ${group.tag} with ${group.prop}, and ${cannot.join(', ')} cannot take it; set the others one by one, as ${reached.find((kind) => !cannot.includes(kind))}.${group.prop}.`
+    : undefined;
+}
+
+/** The value a kind's level gives: its group's where set, else its role's look, through tokens. */
+function levelValue(
+  values: Readonly<Record<string, DesignValue>>,
+  { role, prop }: { role: KindRole; prop: DesignProp }
+): DesignValue | undefined {
+  const group = groupKey(tagOf(role), prop);
+  const value = Object.hasOwn(values, group) ? values[group] : roleLooks[role][prop];
+  return isToken(value) ? values[value] : value;
+}
 
 /** The layouts of a space: the kinds with a frame. */
 const framedKinds = (space: DesignSpace) =>
@@ -253,6 +349,7 @@ export function designSpace(
           'listing.language': [...ownListings, ...listingOptions['listing.language']]
         }
       : {}),
+    ...levelSpace(kinds),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, kindOptions(kind, prop)])
@@ -307,6 +404,7 @@ export function starterVariant(
           'listing.language': ownListings[0] ?? starterListing['listing.language']
         }
       : {}),
+    ...(kinds.length ? starterTokens : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [
@@ -396,25 +494,40 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
  * and `dropped` says why, for the build to warn of. A place's variable (`fallbacks`, by key, the variable it
  * falls back to) then takes the value of its own unless it is chosen, drawn by name, or set apart
  * in the base, so a place looks as its type and kinds do until a variant sets it.
+ *
+ * A kind of a role (`roles`, by kind) takes its role level's value, or that level's token's, for
+ * each prop it has not set apart: one whose value differs from its level's in the starter or the
+ * base, or that is chosen or drawn by name. So a token or a role level chosen changes every kind
+ * following it, and a kind's own value overrides both; a level whose value some kind following it
+ * cannot take is an error naming that kind.
  */
 export function buildVariant(
   space: DesignSpace,
   starter: Readonly<Record<string, DesignValue>>,
   request: VariantRequest,
   seed: number,
-  fallbacks: Readonly<Record<string, Fallback>> = {}
+  fallbacks: Readonly<Record<string, Fallback>> = {},
+  roles: Readonly<Record<string, KindRole>> = {}
 ): {
   values: Record<string, DesignValue>;
   origins: Record<string, DesignOrigin>;
   dropped: string[];
 } {
-  const given = Object.entries(request.chosen ?? {});
+  // The listing's group, <Listing>, names its settings: <Listing>.syntax is listing.syntax.
+  const aliased = (entries: Record<string, unknown> | undefined) =>
+    Object.fromEntries(
+      Object.entries(entries ?? {}).map(([key, value]) => [listingAlias(key), value])
+    );
+  const given = Object.entries(aliased(request.chosen));
   const chosen = given.filter(([key]) => Object.hasOwn(space, key));
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
-    .map(([key, value]) => unfit(space, key, value));
+    .map(([key, value]) => groupUnfit(space, roles, key, value) ?? unfit(space, key, value));
   if (problems.length) throw new DesignValueError(problems.join(' '));
-  const asked = request.randomise === true ? [] : (request.randomise ?? []);
+  const isLevel = (key: string) => isToken(key) || groupOf(key) !== undefined;
+  const following = Object.keys(starter).filter((key) => levelOf(roles, key));
+  const asked =
+    request.randomise === true ? [] : (request.randomise ?? []).map((key) => listingAlias(key));
   const named = asked.filter((key) => Object.hasOwn(space, key));
   const dropped = [
     ...given
@@ -426,13 +539,37 @@ export function buildVariant(
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
   );
-  const base = request.base ?? {};
+  const base = aliased(request.base);
   for (const [key, value] of Object.entries(base)) {
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
       origins[key] = 'kept';
     }
   }
+  // A kind's prop set apart from its level stays its own; every other follows its level.
+  const own = new Set(
+    following.filter((key) => values[key] !== levelValue(values, levelOf(roles, key)!))
+  );
+  // Each kind following a level takes the level's value; one that cannot is the level's error
+  // where the level was chosen, and otherwise keeps its own value, as a base kept where it fits.
+  const follow = (checked: ReadonlySet<string>) => {
+    const unfits: string[] = [];
+    for (const key of following) {
+      if (own.has(key)) continue;
+      const level = levelOf(roles, key)!;
+      const value = levelValue(values, level);
+      if (value === undefined || value === values[key]) continue;
+      const from = levelSource(values, level);
+      if (!fits(space, key, value)) {
+        if (from && checked.has(from))
+          unfits.push(`${from} is ${JSON.stringify(value)}, but ${unfit(space, key, value)}`);
+        continue;
+      }
+      values[key] = value;
+      origins[key] = (from ? origins[from] : undefined) ?? 'starter';
+    }
+    if (unfits.length) throw new DesignValueError(unfits.join(' '));
+  };
   const drawn =
     request.randomise === true
       ? randomised(space, values, seed)
@@ -441,8 +578,17 @@ export function buildVariant(
     if (value === values[key]) continue;
     values[key] = value;
     origins[key] = 'random';
+    if (request.randomise !== true && levelOf(roles, key)) own.add(key);
   }
-  for (const [key, value] of chosen) {
+  follow(new Set());
+  // Levels first, so the kinds following them change; then each kind chosen, its own.
+  for (const [key, value] of chosen.filter(([key]) => isLevel(key))) {
+    values[key] = value as DesignValue;
+    origins[key] = 'chosen';
+  }
+  for (const [key] of chosen) if (levelOf(roles, key)) own.add(key);
+  follow(new Set(chosen.map(([key]) => key).filter(isLevel)));
+  for (const [key, value] of chosen.filter(([key]) => !isLevel(key))) {
     values[key] = value as DesignValue;
     origins[key] = 'chosen';
   }
@@ -467,6 +613,8 @@ export function buildVariant(
  */
 function propOf(key: string): string {
   if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
+  // A token draws with the kinds of its prop that hold its value, so they stay alike.
+  if (isToken(key)) return tokenProps[key];
   return key.slice(key.lastIndexOf('.') + 1).replace(/@.*/u, '');
 }
 
@@ -529,7 +677,9 @@ function drawOne(
   stream = key
 ): DesignValue {
   const prop = propOf(key);
-  const options = space[key];
+  // A role level naming a token keeps naming it: the token is drawn instead.
+  if (isToken(value)) return value;
+  const options = space[key].filter((option) => !isToken(option));
   const pick = (candidates: readonly DesignValue[]) =>
     candidates.length
       ? candidates[Math.floor(keyedRandom(seed, stream) * candidates.length)]

@@ -1107,6 +1107,8 @@ The design space is every variable of a component's look, found in its markup:
 - Each prop a view binds to its value, as `VertexCard.fill@true` or
   `LevelCell.textSize@from`, or a length's unit, as `Bar.height@unit` (see Props
   bound to a view's value).
+- The design's tokens and groups, which set many kinds at once (see Shared
+  values).
 
 A view's or layout's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
@@ -1367,6 +1369,29 @@ colour only.
 In a key the last part is the prop, and the dots after `@` the place's. A label
 and a variable rendered by one type with one name would share a place, which is
 an error: rename the label.
+
+### Shared values
+
+A key's mark says what it sets: `$` a token, `<…>` every kind its tag makes, `@`
+a place, and no mark one kind.
+
+- A token is one value the starter's kinds share: `$text` (text colour),
+  `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight` (a
+  pointer's stroke and fill), `$spacing` (framed values' and pointers' padding),
+  `$radius` and `$lineWidth`. Every kind that starts with a token's value
+  follows it, so `{"$spacing": 0.25}` tightens every framed value and pointer.
+- A group sets one prop for every kind its tag makes that has it:
+  `<Node>.padding` for every node's kind (never a `<Pointed>`'s or a
+  `<Link>`'s), `<Pointed>.fill` for every pointer, `<Link>.strokeWidth` for
+  every link, and `<Listing>.syntax` for the listing, as `listing.syntax`. Its
+  value is one of the prop's options or a token, as
+  `{"<Node>.fill": "$highlight"}`. A group is set only where a variant sets it,
+  and never sets `shown`.
+- A kind's own value overrides its group, and its group the token: with
+  `{"$spacing": 0.25, "<Node>.padding": 0.5, "IntCell.padding": 0}`, pointers
+  take 0.25, every node's kind 0.5, and IntCell none. A kind set apart once
+  stays apart when its token or group changes later, and a place, as
+  `IntCell@v.fill`, overrides its kind as before.
 
 ### Variants
 

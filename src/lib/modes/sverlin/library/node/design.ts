@@ -741,6 +741,120 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
   }
 };
 
+/**
+ * The design's tokens, each written with `$` and holding one value of one prop, as `$accent` a
+ * stroke: the values the starter looks share across roles, so one token changes all of them. A
+ * role's value can name a token of a prop with no more options than its own (see tokenFits).
+ */
+export const tokenProps = {
+  $text: 'color',
+  $font: 'font',
+  $surface: 'fill',
+  $accent: 'stroke',
+  $highlight: 'fill',
+  $spacing: 'padding',
+  $radius: 'radius',
+  $lineWidth: 'strokeWidth'
+} as const satisfies Record<`$${string}`, DesignProp>;
+
+export type DesignToken = keyof typeof tokenProps;
+
+/** Whether a key or a value names a token, as `$accent`. */
+export const isToken = (name: unknown): name is DesignToken =>
+  typeof name === 'string' && Object.hasOwn(tokenProps, name);
+
+/**
+ * Each token's starter value, today's look: text black in the first font on white values, pointers
+ * amber, and the padding, corners and line width framed values and pointers share.
+ */
+export const starterTokens: Record<DesignToken, string | number> = {
+  $text: 'black',
+  $font: fontValues[0],
+  $surface: 'white',
+  $accent: 'amber-500',
+  $highlight: 'amber-100',
+  $spacing: 0.375,
+  $radius: 8,
+  $lineWidth: 1.5
+};
+
+/**
+ * The tags whose kinds a group sets together, as `<Node>.padding` for every kind a <Node> makes
+ * that has padding: <Node> for every node role, <Pointed> for pointer marks, <Link> for links.
+ * The listing's own group, <Listing>, names its settings (see listingAlias).
+ */
+export type DesignTag = '<Node>' | '<Pointed>' | '<Link>';
+
+/** The tag making each role's kinds. */
+export const tagOf = (role: KindRole): DesignTag =>
+  role === 'pointed' ? '<Pointed>' : role === 'link' ? '<Link>' : '<Node>';
+
+/** The variable setting a prop for every kind of a tag, as `<Node>.padding`. */
+export const groupKey = (tag: DesignTag, prop: string): string => `${tag}.${prop}`;
+
+/** A group's tag and prop, as `<Node>` and padding for `<Node>.padding`. */
+export function groupOf(key: string): { tag: DesignTag; prop: DesignProp } | undefined {
+  const match = /^(<Node>|<Pointed>|<Link>)\.([A-Za-z]+)$/u.exec(key);
+  return match ? { tag: match[1] as DesignTag, prop: match[2] as DesignProp } : undefined;
+}
+
+/** `<Listing>.syntax` is listing.syntax, as every listing setting: the listing's group is its own. */
+export const listingAlias = (key: string): string =>
+  key.startsWith('<Listing>.') ? `listing.${key.slice('<Listing>.'.length)}` : key;
+
+/**
+ * The props a role's kinds take from their group: their role's, but whether a kind is shown, which
+ * stays each kind's own, so no one value hides every kind of a tag.
+ */
+export const groupProps = (role: KindRole): readonly DesignProp[] =>
+  roleProps[role].filter((prop) => prop !== 'shown');
+
+/** Whether a role's prop can name a token: every value the token can hold is one of the prop's. */
+export function tokenFits(role: KindRole, prop: DesignProp, token: DesignToken): boolean {
+  const options = optionsOf(role, prop);
+  return propOptions[tokenProps[token]].every((option) => options.includes(option as never));
+}
+
+/**
+ * A group's options for a prop over the roles of the kinds it reaches: those every one of them
+ * takes, and each token that fits them all.
+ */
+export function groupOptions(
+  roles: readonly KindRole[],
+  prop: DesignProp
+): readonly (string | number | boolean)[] {
+  const reached = roles.filter((role) => groupProps(role).includes(prop));
+  const [first, ...rest] = reached.map((role) => optionsOf(role, prop));
+  return [
+    ...(first ?? []).filter((option) => rest.every((options) => options.includes(option as never))),
+    ...(Object.keys(tokenProps) as DesignToken[]).filter((token) =>
+      reached.every((role) => tokenFits(role, prop, token))
+    )
+  ];
+}
+
+/**
+ * Each role's starting look, which no variable names (a kind's role gives it its props and this
+ * look): its value for each prop, naming a token where it is the token's for the same prop, so the
+ * starter resolves to starterLooks exactly.
+ */
+export const roleLooks: Record<
+  KindRole,
+  Record<string, string | number | boolean>
+> = Object.fromEntries(
+  Object.entries(starterLooks).map(([role, look]) => [
+    role,
+    Object.fromEntries(
+      groupProps(role as KindRole).map((prop) => {
+        const token = (Object.keys(tokenProps) as DesignToken[]).find(
+          (name) => tokenProps[name] === prop && starterTokens[name] === look[prop]
+        );
+        return [prop, token ?? look[prop]];
+      })
+    )
+  ])
+) as Record<KindRole, Record<string, string | number | boolean>>;
+
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {
   ratio: 'fit',
   justify: 'center',

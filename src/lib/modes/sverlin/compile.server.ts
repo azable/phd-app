@@ -371,6 +371,8 @@ export type PreparedComponent = {
     places: Record<string, { key: string; base: string; options: string[]; pointer: boolean }>;
     /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
     fallbacks: Record<string, Fallback>;
+    /** Each kind of node's role, by its key, whose role levels its props follow (see buildVariant). */
+    roles: Record<string, KindRole>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
     /** Each free layout kind's structure, as its data makes it, for the assistant. */
@@ -2419,6 +2421,7 @@ function prepareViews(
         }),
         renders: renderVariables,
         places: placeChoices,
+        roles: Object.fromEntries(kinds.map(({ key, role }) => [key, role])),
         fallbacks: Object.fromEntries([
           ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
           ...[...placeKinds].flatMap(([key, { base, role, unboxed }]) =>
@@ -2561,7 +2564,14 @@ export async function bundlePresentation(
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
   try {
-    variant = buildVariant(design.space, design.starter, request, seed, design.fallbacks);
+    variant = buildVariant(
+      design.space,
+      design.starter,
+      request,
+      seed,
+      design.fallbacks,
+      design.roles
+    );
   } catch (cause) {
     if (!(cause instanceof DesignValueError)) throw cause;
     throw new InvalidSvelteSourceError(cause.message, { code: 'design_value' });

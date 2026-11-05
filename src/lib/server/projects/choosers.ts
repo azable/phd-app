@@ -6,6 +6,7 @@
 
 import type { AiDesign, SourceBuildFacts } from '$lib/server/chat-bots/project-context';
 import type { BuildRequest } from '$lib/modes/server';
+import { listingAlias } from '$lib/modes/sverlin/library/node/design';
 import type { BrowserBundlePresentation, DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
@@ -90,7 +91,7 @@ export function offeredOptions(
   design: AiDesign,
   key: string
 ): AiDesign['options'][string] | undefined {
-  const found = design.variables.find(({ variable }) => variable === key);
+  const found = design.variables.find(({ variable }) => variable === listingAlias(key));
   if (!found) return undefined;
   return typeof found.options === 'string' ? design.options[found.options] : found.options;
 }

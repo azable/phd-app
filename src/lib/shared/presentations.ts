@@ -128,6 +128,10 @@ export const browserBundlePresentationSchema = v.strictObject({
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
+  /** Each kind of node's role, by its key, whose role levels (role.value.padding) its props follow. */
+  roles: v.optional(
+    v.record(v.pipe(v.string(), v.maxLength(200)), v.pipe(v.string(), v.maxLength(40)))
+  ),
   /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
   renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */

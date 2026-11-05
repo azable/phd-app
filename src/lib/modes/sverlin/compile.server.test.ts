@@ -33,6 +33,8 @@ const kindsOf = (space: Record<string, unknown>) =>
           (key) =>
             !key.startsWith('views.') &&
             !key.startsWith('pointers.') &&
+            !key.startsWith('<') &&
+            !key.startsWith('$') &&
             key !== 'layout' &&
             !key.startsWith('Main.') &&
             !key.includes('@')
