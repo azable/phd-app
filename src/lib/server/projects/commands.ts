@@ -43,7 +43,11 @@ import { differingSteps } from '$lib/shared/differing-steps';
 import { unreadableProblem } from '$lib/shared/readability';
 import { cutText } from '$lib/shared/text';
 import { interfaceReferenceFor } from '$lib/shared/interface-parts';
-import { assistantTurnClaim, projectOperation } from '$lib/shared/projects/operations';
+import {
+  assistantTurnClaim,
+  pendingAssistantTurnRequests,
+  projectOperation
+} from '$lib/shared/projects/operations';
 import {
   getChatbot,
   getCandidateChatbot,
@@ -381,7 +385,8 @@ export async function runQueuedAssistantTurn(
       (event) =>
         event?.type !== 'feedback.submitted' &&
         event?.type !== 'visualization.preference-recorded' &&
-        event?.type !== 'visualization.runtime-failed'
+        event?.type !== 'visualization.runtime-failed' &&
+        event?.type !== 'visualization.view-candidates'
     )
   ) {
     throw new Error('The assistant turn claim references an unknown interaction.');
@@ -1337,9 +1342,57 @@ async function runSverlinAssistantTurn(
   const firstVersion = startedFrom === starter && source !== starter;
   const firstType = firstVersion ? mainViewType(source) : undefined;
   const request = helperRequest ?? (firstType ? { type: firstType } : undefined);
-  return request && source !== starter
-    ? runViewHelpers(done, operationId, source, request, dependencies)
-    : done;
+  if (!request || source === starter) return done;
+  const helped = await runViewHelpers(done, operationId, source, request, dependencies);
+  return helperRequest
+    ? followAfterHelpers(helped, operationId, contextSelection, dependencies)
+    : helped;
+}
+
+/**
+ * A reply that only asked the helpers showed nothing, so once their candidates are recorded the
+ * assistant goes on by itself, once, offering them (see the interaction kind view-helpers): not
+ * after such a follow-up, nor where the participant has written meanwhile (their turn takes the
+ * candidates), nor past the phase deadline. Candidates all dropped still continue, the assistant
+ * then showing something of its own.
+ */
+async function followAfterHelpers(
+  document: ProjectDocument,
+  operationId: string,
+  contextSelection: AiContextSelection,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  const ours = document.events.filter((event) => event.operationId === operationId);
+  const candidates = ours.findLast((event) => event.type === 'visualization.view-candidates');
+  const interactions = contextSelection.interactionEventIds ?? [];
+  const deadline = currentProjectOperationDeadline();
+  if (
+    !candidates ||
+    ours.some((event) => event.type === 'visualization.presented') ||
+    (interactions.length > 0 &&
+      interactions.every(
+        (id) => document.events[id - 1]?.type === 'visualization.view-candidates'
+      )) ||
+    pendingAssistantTurnRequests(document).length > 0 ||
+    (deadline !== undefined && Date.now() >= deadline)
+  )
+    return document;
+  return appendProjectEvents(
+    document,
+    [
+      draftEvent({
+        type: 'assistant.turn-requested',
+        actor: { kind: 'system' },
+        operationId,
+        payload: {
+          interactionEventId: candidates.id,
+          presentationCount: 1,
+          ...(deadline === undefined ? {} : { deadlineAt: new Date(deadline).toISOString() })
+        }
+      })
+    ],
+    dependencies.projectService
+  );
 }
 
 async function submitCandidateFeedback(

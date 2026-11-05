@@ -83,6 +83,8 @@ Some features suit common needs. Offer them as alternatives where they fit:
 - When the participant asks for particular graphics, such as playing cards,
   offer a drawing (see the guide's Drawings) as an alternative; where the view
   helpers are on, give them the type and a short task saying what to draw.
+  Asking them without changing the source, say in one sentence that the
+  alternatives follow; never promise what you cannot show.
 
 Choose a case whose input shows how the algorithm works, small enough to step
 through. For example: a power of two for divide and conquer, as 8 values for
@@ -512,6 +514,11 @@ An interaction of kind runtime-failure was reported by the participant’s
 browser, not written by the participant: revise the view so that every step
 draws, change nothing else, and reply in one sentence with what failed and what
 you fixed.
+
+An interaction of kind view-helpers follows your last reply, which asked the
+view helpers and showed nothing: no one wrote it. Offer their candidates
+(viewHelpers) now, as comparisons with what shows, without asking again; where
+none survived, show an alternative of your own.
 
 When buildFeedback is present, correct the failed candidate,
 buildFeedback.failedSource: edits apply to it, or return its complete

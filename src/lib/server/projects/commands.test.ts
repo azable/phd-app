@@ -741,6 +741,138 @@ describe('submitProjectFeedback', () => {
     expect(projectHead(queued.document).id).toBe(head + 4);
   });
 
+  describe('a reply that only asks the view helpers', () => {
+    const helperAdapter = {
+      id: 'test-helpers',
+      generateReply: async () => ({
+        output: {
+          views: [
+            {
+              name: 'IntDot',
+              description: 'a dot',
+              markup: '<View of="Int" name="IntDot"><Node value={this} /></View>'
+            }
+          ]
+        }
+      })
+    } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+
+    /** A linear-search project with one message queued and claimed by a turn with helpers on. */
+    async function claimedWithHelpers(writtenMeanwhile = false) {
+      const { getProjectTemplate } = await import('./starter-catalog');
+      const { createProject } = await import('./service');
+      const created = await createProject(
+        { creation: { templateId: getProjectTemplate('linear-search').id } },
+        serviceDependencies
+      );
+      const feedbackOperationId = crypto.randomUUID();
+      const assistantOperationId = crypto.randomUUID();
+      const head = projectHead(created).id;
+      const message = (id: number, text: string, createdAt: string) =>
+        [
+          {
+            type: 'feedback.submitted',
+            actor: { kind: 'user' },
+            operationId: feedbackOperationId,
+            createdAt,
+            payload: { content: markdownMessage(text), focus: [], presentationCount: 1 }
+          },
+          {
+            type: 'assistant.turn-requested',
+            actor: { kind: 'system' },
+            operationId: feedbackOperationId,
+            createdAt,
+            payload: { interactionEventId: id, presentationCount: 1 }
+          }
+        ] as const;
+      await serviceDependencies.repository.append(created.projectId, head, [
+        ...message(head + 1, 'Try other ways to draw the numbers.', '2026-08-30T12:00:00.000Z'),
+        {
+          type: 'operation.accepted',
+          actor: { kind: 'system' },
+          operationId: assistantOperationId,
+          createdAt: '2026-08-30T12:00:02.000Z',
+          payload: { kind: 'assistant-turn' }
+        },
+        {
+          type: 'assistant.turn-started',
+          actor: { kind: 'system' },
+          operationId: assistantOperationId,
+          createdAt: '2026-08-30T12:00:03.000Z',
+          payload: {
+            requestEventIds: [head + 2],
+            interactionEventIds: [head + 1],
+            viewHelpers: true
+          }
+        },
+        ...(writtenMeanwhile ? message(head + 5, 'Hello?', '2026-08-30T12:00:04.000Z') : [])
+      ]);
+      mocks.generatePrepared.mockReset().mockResolvedValue({
+        ...generation(undefined, 'Alternatives for the numbers follow.'),
+        viewHelpers: { type: 'Int', task: 'draw each number another way' }
+      });
+      const { runQueuedAssistantTurn } = await import('./commands');
+      return runQueuedAssistantTurn(
+        { projectId: created.projectId, operationId: assistantOperationId },
+        { ...commandDependencies, viewHelperAdapter: helperAdapter }
+      );
+    }
+
+    it('goes on by itself once the candidates are recorded, once', async () => {
+      const { document, appendedEvents } = await claimedWithHelpers();
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      const request = appendedEvents.at(-1);
+      expect(candidates).toBeDefined();
+      expect(request).toMatchObject({
+        type: 'assistant.turn-requested',
+        payload: { interactionEventId: candidates?.id, presentationCount: 1 }
+      });
+      // The follow-up offers the candidates; asking the helpers again starts no other.
+      const followUpId = crypto.randomUUID();
+      await serviceDependencies.repository.append(document.projectId, projectHead(document).id, [
+        {
+          type: 'operation.accepted',
+          actor: { kind: 'system' },
+          operationId: followUpId,
+          createdAt: '2026-08-30T12:01:00.000Z',
+          payload: { kind: 'assistant-turn' }
+        },
+        {
+          type: 'assistant.turn-started',
+          actor: { kind: 'system' },
+          operationId: followUpId,
+          createdAt: '2026-08-30T12:01:01.000Z',
+          payload: {
+            requestEventIds: [request!.id],
+            interactionEventIds: [candidates!.id],
+            viewHelpers: true
+          }
+        }
+      ]);
+      const { runQueuedAssistantTurn } = await import('./commands');
+      const followed = await runQueuedAssistantTurn(
+        { projectId: document.projectId, operationId: followUpId },
+        { ...commandDependencies, viewHelperAdapter: helperAdapter }
+      );
+      expect(followed.appendedEvents.some((event) => event.type === 'assistant.responded')).toBe(
+        true
+      );
+      expect(
+        followed.appendedEvents.some((event) => event.type === 'assistant.turn-requested')
+      ).toBe(false);
+    });
+
+    it('leaves the candidates to the turn of a message written meanwhile', async () => {
+      const { appendedEvents } = await claimedWithHelpers(true);
+      expect(appendedEvents.some((event) => event.type === 'visualization.view-candidates')).toBe(
+        true
+      );
+      expect(appendedEvents.some((event) => event.type === 'assistant.turn-requested')).toBe(false);
+    });
+  });
+
   it('repairs a view failure the browser reports without the participant asking', async () => {
     const { getProjectTemplate } = await import('./starter-catalog');
     const { createProject, reportRuntimeFailure } = await import('./service');

@@ -170,6 +170,8 @@ export type VariantDifference = {
 export type AiInteraction =
   | { kind: 'feedback'; eventIds: EventId[] }
   | { kind: 'runtime-failure'; eventId: EventId }
+  /** The view helpers' candidates, recorded after a reply that only asked for them. */
+  | { kind: 'view-helpers'; eventId: EventId }
   | {
       kind: 'preference';
       eventId: EventId;
@@ -711,7 +713,8 @@ function assistantInteraction(
     if (
       event?.type !== 'feedback.submitted' &&
       event?.type !== 'visualization.preference-recorded' &&
-      event?.type !== 'visualization.runtime-failed'
+      event?.type !== 'visualization.runtime-failed' &&
+      event?.type !== 'visualization.view-candidates'
     ) {
       throw new Error('The assistant turn references an unknown interaction event.');
     }
@@ -752,6 +755,9 @@ function assistantInteraction(
   }
   if (interactions.length === 1 && interactions[0].type === 'visualization.runtime-failed') {
     return { kind: 'runtime-failure', eventId: interactions[0].id };
+  }
+  if (interactions.length === 1 && interactions[0].type === 'visualization.view-candidates') {
+    return { kind: 'view-helpers', eventId: interactions[0].id };
   }
   if (interactions.length <= 1) return { kind: 'feedback', eventIds: [...eventIds] };
   return { kind: 'batch', eventIds: [...eventIds], preferences };
