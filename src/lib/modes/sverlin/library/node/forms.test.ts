@@ -272,6 +272,31 @@ describe('form placement', () => {
     expect(b.y - a.y).toBe(40 + 100);
   });
 
+  it('keeps nodes a link joins within one layer its room and its label’s apart', () => {
+    // Layers by distance from A, as an undirected graph's: B and C share a layer and a link.
+    const graph: Structure = {
+      kind: 'layers',
+      nodes: [0, 1, 2],
+      parents: new Map([
+        [1, [0]],
+        [2, [0, 1]]
+      ]),
+      depths: new Map([
+        [0, 0],
+        [1, 1],
+        [2, 1]
+      ])
+    };
+    const centres = formCentres('natural', graph, () => ({ width: 60, height: 40 }), {
+      room: 100,
+      apart: 28,
+      random: keyedRandom(1, 'layers'),
+      direction: 'down'
+    });
+    const [b, c] = [1, 2].map((node) => centres.get(node)!);
+    expect(Math.abs(b.x - c.x)).toBe(60 + 100);
+  });
+
   it('scatters nodes no further apart than a line steps, never onto each other', () => {
     const count = 10;
     const path = linked(

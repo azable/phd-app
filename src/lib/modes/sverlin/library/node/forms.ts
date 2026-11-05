@@ -252,7 +252,18 @@ export function formCentres(
     // keeping the widest label's room both ways spread project c0dc2b85's ten small vertices over
     // 813×897 px, drawn at 61% with 10 px text.
     const sideways = runs === 'x';
-    const apart = options.apart ?? options.room;
+    // Where a link joins two nodes of one layer, as in an undirected graph laid out by distance,
+    // it runs between them, so they keep its room and its label's (dijkstra-fields' weights
+    // overlapped its vertices, 28 px apart, otherwise).
+    const linkedInLayer =
+      structure.kind === 'layers' &&
+      structure.depths !== undefined &&
+      structure.nodes.some((node) =>
+        (structure.parents.get(node) ?? []).some(
+          (parent) => structure.depths?.get(parent) === structure.depths?.get(node)
+        )
+      );
+    const apart = linkedInLayer ? options.room : (options.apart ?? options.room);
     const fanned = {
       along: (sideways ? down : across) - options.room + apart,
       deep: sideways ? across : down
