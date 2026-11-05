@@ -357,7 +357,8 @@ label given a kind of its own.
   `while (@test[j > 0 && values[j - 1] > key])`, or `@name{` on a block the code
   already has, a loop's, an `if`'s, or a function's body, as `for (…) @insert{`.
   A name is one word, without dots, and the algorithm runs as if the marks were
-  spaces.
+  spaces, but a span beside an operator groups its code as parentheses do:
+  `@seen[a] && @cheaper[b || c]` means `a && (b || c)`.
 - A span of a label is one execution of the code it marks, from where it begins
   to where it ends: one evaluation of an expression, one pass of a loop's body,
   one call of a function, recursive calls included. Spans nest, a span ends
@@ -1854,9 +1855,8 @@ it: text, as `<Link from={k} to={w}>next</Link>`, or views of values and nodes,
 as `<Link from={u} to={v}>{cost}</Link>`, each of its own kind, so a weight can
 be a white pill on the line, followed from step to step as any value is. A type
 drawn only on links, as a weight, starts as plain small text on the stage's
-white, kept room for as its words; the design can still box it. The
-line breaks round a label, and a labelled link keeps room for an arrow on either
-side of it.
+white, kept room for as its words; the design can still box it. The line breaks
+round a label, and a labelled link keeps room for an arrow on either side of it.
 
 A link from a node to itself, as a state's transition back to the same state
 (`<Link from={k} to={k}>b</Link>`), is a loop over the node: it leaves the top

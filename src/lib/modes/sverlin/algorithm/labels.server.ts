@@ -134,6 +134,12 @@ export function readMarkers(body: string): {
       if (marker) {
         markers.push({ ...marker, kind: 'span', end: at });
         blank(at, at + 1);
+        // A span that is an operand groups its code as parentheses do, so @a[x] && @b[y || z]
+        // reads as x && (y || z), as written; the brackets' places keep every offset.
+        if (operand(marker.at, marker.start, at)) {
+          code[marker.start - 1] = '(';
+          code[at] = ')';
+        }
       }
     }
   }
@@ -146,6 +152,21 @@ export function readMarkers(body: string): {
     problems,
     bodies
   };
+
+  /**
+   * Whether a span from its @ to its ] stands beside an operator, a part of a larger expression,
+   * where its code must group to stay one: never a statement or a declaration.
+   */
+  function operand(marker: number, start: number, end: number): boolean {
+    const inside = body.slice(start, end).trim();
+    if (!inside || /;|^(let|const|var|return|break|continue)\b/u.test(inside)) return false;
+    const before = body.slice(0, marker).trimEnd();
+    const after = body.slice(end + 1).trimStart();
+    return (
+      /(&&|\|\||\?\?|[=!<>+\-*/%?:,])$/u.test(before) ||
+      /^(&&|\|\||\?\?|[=!<>+\-*/%?:])/u.test(after)
+    );
+  }
 
   /**
    * What a marker here would be the body of, an if's, an else's, a loop's or a function's, where
@@ -251,6 +272,16 @@ export function readLabels(
   if (complete) checkParts();
   return { labels, problems };
 
+  /** Whether every parenthesis in this code closes within it. */
+  function balanced(text: string): boolean {
+    let depth = 0;
+    for (const character of text) {
+      if (character === '(') depth += 1;
+      if (character === ')' && (depth -= 1) < 0) return false;
+    }
+    return depth === 0;
+  }
+
   function fullName(label: Label): string {
     return label.parent ? `${fullName(label.parent)}.${label.name}` : label.name;
   }
@@ -276,7 +307,7 @@ export function readLabels(
 
   function spanned(marker: Marker): AnyNode[] | undefined {
     const inside = code.slice(marker.start, marker.end);
-    const start = marker.start + (inside.length - inside.trimStart().length);
+    let start = marker.start + (inside.length - inside.trimStart().length);
     let end = marker.end - (inside.length - inside.trimEnd().length);
     if (end <= start) {
       problems.push({ message: `@${marker.name}[ ] wraps no code.`, at: marker.at });
@@ -295,6 +326,17 @@ export function readLabels(
     }
     const at = (to: number) =>
       nodes.filter((node) => spanOf(node).start === start && spanOf(node).end === to);
+    // Code in parentheses of its own, over lines or not, is the expression inside them.
+    while (
+      !at(end).length &&
+      code[start] === '(' &&
+      code[end - 1] === ')' &&
+      balanced(code.slice(start + 1, end - 1))
+    ) {
+      const inner = code.slice(start + 1, end - 1);
+      start += 1 + (inner.length - inner.trimStart().length);
+      end -= 1 + (inner.length - inner.trimEnd().length);
+    }
     // A statement with its semicolon, or what is inside it.
     let exact = at(end);
     if (!exact.length && code[end - 1] === ';') exact = at((end -= 1));

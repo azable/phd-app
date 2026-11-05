@@ -99,6 +99,26 @@ describe('labels', () => {
     ).not.toThrow();
   });
 
+  it('group a span beside an operator as parentheses do, its code one operand as written', () => {
+    // Project 763e0a02's test: without grouping, a && b || c parses as (a && b) || c, and the
+    // second label wrapped no single expression.
+    const loop = (cheaper: string) => `
+      @init[let best = Int(9);]
+      for (@first[let i = Int(0)]; @more[i < 3]; @next[i++]) @scan{
+        if (@seen[i > 0] && @cheaper[${cheaper}]) @improve{
+          best = i;
+        }
+      }
+    `;
+    for (const cheaper of [
+      'best === Int(9) || i < best',
+      '(\n          best === Int(9) ||\n          i < best\n        )'
+    ])
+      expect(labelsOf(loop(cheaper))).toContainEqual(['scan.cheaper', 'LogicalExpression']);
+    const { code } = readMarkers('@r[let r = @a[x] && @b[y || z];]');
+    expect(code).toBe('   let r =   (x) &&   (y || z); ');
+  });
+
   it('report a marker on no code, or written wrong, each with the fix', () => {
     expect(problemOf('@a{\n  let n = Int(1);\n}')).toThrow(
       '@a{ here is on a block of its own, whose declarations later code could not see; wrap the statements as @a[…] instead. (As the body of an if, an else, a loop or a function, @a{ is right.)'
