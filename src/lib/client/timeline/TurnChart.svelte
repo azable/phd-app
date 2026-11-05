@@ -23,6 +23,7 @@
 <!-- An operation's model calls and builds on one time axis, for the developer view. -->
 <details
   class="ml-6 w-[calc(100%-1.5rem)] min-w-0 rounded-lg border border-dashed px-2 py-1 text-xs text-muted-foreground open:border-solid open:text-foreground"
+  open
 >
   <summary class="cursor-pointer">
     {chart.followUp ? 'Follow-up turn' : 'Turn'} · {calls.length}
