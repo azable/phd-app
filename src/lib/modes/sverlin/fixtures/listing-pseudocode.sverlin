@@ -20,12 +20,12 @@
 
 <script listing="textbook">
 LINEAR-SEARCH(A, x)
-@start[i = 1]
-while @more[i ≤ n] do
-  @scan[if @hit[A[i] = x] then
-    @found[return i]
-  @next[i = i + 1]]
-@missing[return NIL]
+  @start[i = 1]
+  while @more[i ≤ n] do
+    @scan[if @hit[A[i] = x] then
+      @found[return i]
+    @next[i = i + 1]]
+  @missing[return NIL]
 </script>
 
 <View of="Int" name="Cell"><Node value={this} /></View>

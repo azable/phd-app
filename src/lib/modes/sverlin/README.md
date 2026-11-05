@@ -1409,9 +1409,10 @@ A short name that more than one label has is refused, and the message names
 them. A `for` header's labels sit beside its body's label, not inside it (see
 Steps). Regions nest as finely as needed, for example
 `while @test[@bound[j > 0] and @cmp[A[j] > key]]`. A `[` without a name, as in
-`A[i]`, is text, and the marks are not shown. Write `<`, `>` and `&` as they
-are: a listing needs no escaping, and an escape such as `&lt;` is refused. Every
-region must have a label. A label a scene pauses at needs a region, lit where it
+`A[i]`, is text, and the marks are not shown. Under a procedure's name, indent
+its body one level, as a textbook does. Write `<`, `>` and `&` as they are: a
+listing needs no escaping, and an escape such as `&lt;` is refused. Every region
+must have a label. A label a scene pauses at needs a region, lit where it
 pauses; without one, that step lights nothing and the build warns. A label no
 scene pauses at needs none. A region holds the text of what its label marks and
 no more: a loop's or an `if`'s own line goes with its test's label or none,
