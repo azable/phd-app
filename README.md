@@ -14,7 +14,7 @@ its starter artifact, assistant, validation/build code, and playback component:
 
 | Mode      | Authored artifact                                      | Playback                                                                                                  |
 | --------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `sverlin` | One Svelte 5 component (`Main.svelte`) without imports | Bundled Svelte runtime, component library, and component, seeded and stepped in an isolated browser frame |
+| `sverlin` | One Svelte 5 component (`Main.svelte`) without imports | Each step's scene, drawn by the server from the component, shown and stepped in an isolated browser frame |
 | `html`    | A JSON manifest of script-free, complete HTML frames   | Sanitized HTML, one frame per step                                                                        |
 
 For study blinding, the app shows each mode only by its catalogue title (System
@@ -38,8 +38,9 @@ complete examples and checks its `Node` and `Link` props and named values
 against the compiler.
 [`src/lib/modes/sverlin/assembly/`](src/lib/modes/sverlin/assembly/) holds what
 the compiler adds around every authored component: `prelude.ts` is the import
-line injected into the module script (its names are reserved), and `entry.ts`
-mounts the component with the selected step and seed. The `sverlin` alias in
+line injected into the module script (its names are reserved), `layout.ts`
+lays every step out on the server, and `entry.ts` is the page, which draws the
+scenes the server drew (see below). The `sverlin` alias in
 [`svelte.config.js`](svelte.config.js) lets the editor resolve the library from
 those files. Projects keep the source they were created with, so starter or
 library changes do not rewrite existing artifacts.
@@ -181,14 +182,16 @@ question about the new version name what the turn presented. Every presentation
 currently shows every master step. Every array and object is made by a
 collection or record type the domain block defines, and each step records the
 domain type of every value by path beside its plain values. Every view is
-mounted inside the page frame,
-[`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), which lays
-it out at a fixed logical size and scales it to fit the page, as a zoomable,
-pannable canvas with a dashed outline; the sandboxed page loads once per
-presentation and the app sends each later step as a `sverlin:step` message: the
-page mounts the step in a hidden layer and swaps it in once its layout settles,
-so zoom and pan carry over and neither a blank page nor an unfinished layout
-shows, while `sverlin:view` messages report the view to the app. Every
+rendered on the server inside the page frame,
+[`library/Frame.svelte`](src/lib/modes/sverlin/library/Frame.svelte), at a fixed
+logical size, and the page draws each step's scene with
+[`library/SceneView.svelte`](src/lib/modes/sverlin/library/SceneView.svelte),
+fitted to the page as a zoomable, pannable canvas with a dashed outline; the
+sandboxed page loads once per presentation and the app sends each later step as
+a `sverlin:step` message, and each step's scene as the page asks for it
+(`sverlin:scenes-wanted`, `sverlin:scenes`): SceneView moves to it, pairing
+what each step draws by the value it draws, so zoom and pan carry over, while
+`sverlin:view` messages report the view to the app. Every
 arrangement is a set of constraints over a node's measured children, and a node
 hugs them: rows, columns, and grids are solved by CSS, with any links drawn over
 them, while `layout="free"` is solved by WebCola
@@ -222,13 +225,13 @@ The server does this as it builds each presentation
 ([`layout.server.ts`](src/lib/modes/sverlin/layout.server.ts)), running the
 presentation's code in an isolate with no access to the server, bounded in
 memory and time, and measuring text with HarfBuzz in the fonts every page embeds
-([`fonts/`](src/lib/modes/sverlin/fonts/README.md)); it gives the page the
-result with its bundle, so the page mounts only the step it shows, and keeps it
-by what it was made from. The server's layout is the only one: the page draws
-every step with it as given, in the frame and at the scale the server worked out
-([`library/fit.ts`](src/lib/modes/sverlin/library/fit.ts)), whatever fonts its
-browser loaded, and a page given none shows an error instead of laying out
-itself. A presentation the server cannot lay out, as one too large or slow to
+([`fonts/`](src/lib/modes/sverlin/fonts/README.md)), and draws every step's
+scene from it
+([`library/model/scene-of.ts`](src/lib/modes/sverlin/library/model/scene-of.ts)),
+keeping the result by what it was made from. The server's layout is the only
+one: the page draws the scenes as given, in the frame and at the scale the
+server worked out ([`library/fit.ts`](src/lib/modes/sverlin/library/fit.ts)),
+and runs no authored code. A presentation the server cannot lay out, as one too large or slow to
 lay out within the isolate's limits or with a character no embedded face has,
 fails its build, and the assistant repairs it like a compile error. The server
 also measures how large each version draws on a typical stage
@@ -242,8 +245,8 @@ the largest size any of them reaches, so items line up even when only some
 change, and each arrangement is solved once over the union of every step, with
 every child and link that ever appears
 ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)), the node
-holding it sized with it; nodes alike are laid out once. Showing a step mounts
-it and places children where that solution put them, drawing only that step's
+holding it sized with it; nodes alike are laid out once. Each step's scene
+places children where that solution put them, drawing only that step's
 links, at a root fit shared by all steps, so positions are valid across the
 whole animation, so a seed gives the same layout for each step whichever step is
 shown first, and only what changes moves. The page frame is the root
@@ -254,7 +257,7 @@ reference nodes in feedback: the compiler stamps every `<Node>` with its tag's
 it, and a keyed node from its tag and key too, so it keeps its id as other nodes
 come and go
 ([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)),
-and the frame reports selections as `sverlin:selection` messages, which the app
+and SceneView reports selections as `sverlin:selection` messages, which the app
 validates and keeps per presentation and step. Feedback records them as
 `element-ref` segments at the start of the message; the server checks each id
 names a `<Node>` in that presentation's source
@@ -298,23 +301,20 @@ the blank starter; Sverlin also offers linear search.
 
 Each presentation's **Export** menu lists the render targets its mode offers
 ([`render-targets.ts`](src/lib/modes/render-targets.ts)); a mode's playback
-component offers them. Sverlin renders every target from scene data: each node's
-box, look, text lines, and palette names, and each link's curve, in the frame's
-logical coordinates. The sandboxed page lays every step out once more in hidden
-layers and describes it
-([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)); the app checks
-what it sends ([`scene.ts`](src/lib/modes/sverlin/scene.ts)), then renders a
+component offers them. Sverlin renders every target from scene data
+([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)): each node's box,
+look, text lines, and palette names, and each link's curve, in the frame's
+logical coordinates, as the server draws them for the page. The app fetches a
+version's scenes from `/api/projects/[projectId]/scenes`
+([`server-scenes.ts`](src/lib/modes/sverlin/server-scenes.ts)), which rebuilds
+the version from its source, seed and variant and keeps the last few
+([`scenes.server.ts`](src/lib/modes/sverlin/scenes.server.ts)), then renders a
 target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with
-a page per step, its text set in the embedded fonts the page drew it in, with
-DejaVu for characters none of them has, or the scene data itself as JSON.
-Presentations built before scene export cannot describe their steps; build them
-again. The server also draws every step's scene from the layout model, with no
-browser
-([`library/model/scene-of.ts`](src/lib/modes/sverlin/library/model/scene-of.ts)),
-and can make the PDF from it
-([`targets/pdf.server.ts`](src/lib/modes/sverlin/targets/pdf.server.ts));
-`scene-parity.browser.test.ts` compares those scenes with the page's. The Export
-menu still uses the page's scenes.
+a page per step, its text set in the embedded fonts, with DejaVu for characters
+none of them has, or the scene data itself as JSON; the server can make the PDF
+too ([`targets/pdf.server.ts`](src/lib/modes/sverlin/targets/pdf.server.ts)). A
+version an older app built, which a rebuild no longer gives the same page code,
+has no scenes: its stage says so, and it must be built again.
 
 Generated JavaScript is compiled but **never executed by the server** or in the
 application origin; Sverlin algorithm blocks are interpreted by trusted server
@@ -418,10 +418,12 @@ pnpm run export:data -- --scope projects
 ```
 
 `test:postgres` creates an isolated test database and requires only PostgreSQL
-to be running. `test:browser` runs what only a browser shows, such as where a
-Sverlin step's moves start in two presentations stacked as the comparison view
-shows them
-([`motion.browser.test.ts`](src/lib/modes/sverlin/motion.browser.test.ts));
+to be running. `test:browser` runs what only a browser shows: how the page
+moves between steps
+([`scene-motion.browser.test.ts`](src/lib/modes/sverlin/scene-motion.browser.test.ts)),
+how it is used, and how soon it is ready; what each step draws is tested on the
+server's scenes, with no browser
+([`testing/scenes.ts`](src/lib/modes/sverlin/testing/scenes.ts));
 devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it
 to a local Chrome or Chromium executable. It starts one browser for the run,
 gives each test a context of its own, and waits for a presentation's
