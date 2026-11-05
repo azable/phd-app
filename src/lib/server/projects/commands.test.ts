@@ -932,6 +932,40 @@ describe('submitProjectFeedback', () => {
       );
     });
 
+    it('keeps the candidates for the next turn while the participant has comparisons to answer', async () => {
+      // A reply with two comparisons and a task for the helpers: the candidates arrive while the
+      // pairs wait, and no turn starts by itself (project 180c7b48's follow-up asked its held
+      // question and added a pair over five unanswered ones).
+      const pair = (question: string, variable: string, left: string, right: string) => ({
+        question,
+        left: { label: left, values: [{ variable, value: left }] },
+        right: { label: right, values: [{ variable, value: right }] }
+      });
+      const replied = {
+        ...generation(undefined, 'Two to compare.'),
+        viewHelpers: { type: 'Int', task: 'draw each number another way' },
+        decision: {
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: [
+            pair('Cells or tallies?', 'views.Int', 'IntCell', 'IntTally'),
+            pair('Amber or blue marks?', 'Highlight.Pointed.fill', 'amber-100', 'blue-100')
+          ],
+          summary: 'Asks two questions'
+        }
+      };
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, () => [replied]);
+      expect(
+        appendedEvents.filter((event) => event.type === 'visualization.presented').length
+      ).toBeGreaterThanOrEqual(2);
+      expect(appendedEvents.some((event) => event.type === 'visualization.view-candidates')).toBe(
+        true
+      );
+      expect(appendedEvents.some((event) => event.type === 'assistant.turn-requested')).toBe(false);
+    });
+
     it('takes an app-started round’s task from the request, and offers what it keeps', async () => {
       // The reply only answers in words; the round the app starts follows the participant's
       // request for graphics, and its candidates, each labelled with what it tried, are offered
@@ -3926,6 +3960,18 @@ describe('several variants from chat', () => {
       const last = await prefer(projectId, ids.slice(2, 4), { preferred: ids[2] });
       expect(replies(last.appendedEvents)[0]).toMatchObject({ releases: expect.any(Number) });
       expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+      // In order: the picks applied, the held question asked, then the turn's one reply.
+      const order = last.appendedEvents
+        .filter(({ type }) => type === 'visualization.presented' || type === 'assistant.responded')
+        .map((event) =>
+          event.type === 'assistant.responded'
+            ? 'releases' in event.payload && event.payload.releases
+              ? 'question'
+              : 'reply'
+            : 'picks'
+        );
+      expect(order.slice(0, 2)).toEqual(['picks', 'question']);
+      expect(order.filter((kind) => kind === 'reply')).toHaveLength(1);
     });
 
     it('shows the picks applied once the last pair is answered, with no model call', async () => {
