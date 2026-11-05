@@ -1,15 +1,9 @@
-/**
- * <When of="@label"> and <OneOf> drawn in a real browser. Run with `pnpm run test:browser`, which the devenv
- * gives a browser (SVERLIN_TEST_BROWSER).
- */
+/** <When of="@label"> and <OneOf> in the scenes the server draws of each step. */
 
 import { expect, it } from 'vitest';
 
-import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
-
-import { sandboxDocument } from '../sandbox';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingAt } from './testing/every-pause';
+import { drawnSteps, isInside, ofKind } from './testing/scenes';
 
 const insertion = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -55,59 +49,29 @@ const insertion = `<script domain>
  * board's size and the row's cells' places, sorted.
  */
 async function stepsOf(pause: string, count: number, source = insertion) {
-  const prepared = prepareSvelteComponent(pausingAt(source, pause));
-  const { javascript } = await bundlePresentation(prepared, 1, {});
-  const page = await openPage({ viewport: { width: 1200, height: 700 } });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setContent(sandboxDocument('', javascript, 0, 1));
-  await page.waitForFunction(() =>
-    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
-  );
-  const seen: {
-    swap: boolean;
-    asked: boolean;
-    at: { swap?: string; asked?: string };
-    board: string;
-    cells: number[];
-  }[] = [];
-  for (let step = 1; step <= count; step++) {
-    await showStep(page, step);
-    seen.push(
-      await page.evaluate(() => {
-        const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
-        const caption = layer.querySelector<HTMLElement>('[data-sv-kind="Caption"]');
-        const question = layer.querySelector<HTMLElement>('[data-sv-kind="Ask"]');
-        const board = layer.querySelector<HTMLElement>('[data-sv-kind="Board"]')!;
-        const box = board.getBoundingClientRect();
-        const shows = (node: HTMLElement | null) =>
-          Boolean(node) && node?.dataset.svHidden !== 'true';
-        const place = (node: HTMLElement | null) => {
-          if (!node) return undefined;
-          const { top, height } = node.getBoundingClientRect();
-          return `${Math.round(top + height / 2)}`;
-        };
-        return {
-          swap: shows(caption),
-          asked: shows(question),
-          at: { swap: place(caption), asked: place(question) },
-          board: `${Math.round(box.width)}x${Math.round(box.height)}`,
-          cells: [...layer.querySelectorAll<HTMLElement>('[data-sv-kind="IntCell"]')]
-            .filter((cell) => !cell.closest('[data-sv-kind="Ask"]'))
-            .map((cell) => Math.round(cell.getBoundingClientRect().left))
-            .toSorted((a, b) => a - b)
-        };
-      })
-    );
-  }
-  expect(errors).toEqual([]);
-  await page.close();
-  return seen;
+  const { steps } = await drawnSteps(pausingAt(source, pause));
+  return steps.slice(1, count + 1).map((step) => {
+    const [caption] = ofKind(step, 'Caption');
+    const [question] = ofKind(step, 'Ask');
+    const [board] = ofKind(step, 'Board');
+    const place = (node: { box: { y: number; height: number } } | undefined) =>
+      node && `${Math.round(node.box.y + node.box.height / 2)}`;
+    return {
+      swap: !!caption,
+      asked: !!question,
+      at: { swap: place(caption), asked: place(question) },
+      board: `${Math.round(board.box.width)}x${Math.round(board.box.height)}`,
+      cells: ofKind(step, 'IntCell')
+        .filter((cell) => !isInside(step, cell, question))
+        .map(({ box }) => Math.round(box.x))
+        .toSorted((a, b) => a - b)
+    };
+  });
 }
 
-it.skipIf(!enabled)(
+it(
   'shows its contents at the steps inside a run of the label, keeping their room elsewhere',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     // Coarse: each comparison, then each swap. "Swap" shows at the swaps alone. The first
     // comparison draws what the input as given drew, as the board draws no comparison, so it is
@@ -123,9 +87,9 @@ it.skipIf(!enabled)(
   }
 );
 
-it.skipIf(!enabled)(
+it(
   'draws a chain of branches in one place, each at its label’s steps',
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     const chained = insertion
       .replace(

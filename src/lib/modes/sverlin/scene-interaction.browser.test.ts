@@ -1,16 +1,13 @@
 /**
- * Using a presentation drawn from the server's scenes (library/SceneView.svelte) as the mounted
- * page is used, in a real browser, each hosted in a frame as the app hosts it: the same clicks,
- * Shift-clicks, drags, Escape, references from the app, wheel zooms, middle-button pans and double
- * clicks must report the same selections (ids, labels and layouts) and views, and outline the same
- * boxes; hovering a place's reference must outline as many references. Each check's agreement is
- * written to test-results/scene-interaction.json. Run with `pnpm run test:browser`.
+ * Using a presentation as the app hosts it, in a real browser: clicks, Shift-clicks, drags, Escape,
+ * references from the app, wheel zooms, middle-button pans, double clicks and hovering must report
+ * the selections (ids, labels and layouts) and views, and outline the boxes, that the page mounting
+ * the view reported for the same gestures, recorded at `legacy-renderer` (c41a661d), the last
+ * commit with it. Run with `pnpm run test:browser`.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
-
 import type { Frame } from 'playwright-core';
-import { afterAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
@@ -20,46 +17,29 @@ import { pausingAt, pausingEveryLabel } from './testing/every-pause';
 
 type Hosted = Awaited<ReturnType<typeof openHosted>>;
 type Box = { x: number; y: number; width: number; height: number };
-const tolerance = 2;
+type Selected = { id: string; label: string; layouts: unknown[] };
+const graphLayout = {
+  node: '74:3',
+  kind: 'Graph',
+  seed: 1,
+  form: 'natural',
+  direction: 'right',
+  curve: 'straight'
+};
 
-const rows: { check: string; mounted: string; scenes: string; alike: boolean }[] = [];
-afterAll(() => {
-  if (!rows.length) return;
-  mkdirSync('test-results', { recursive: true });
-  writeFileSync('test-results/scene-interaction.json', `${JSON.stringify(rows, null, 2)}\n`);
-  console.table(rows);
-});
-
-/** Both pages, built and hosted alike, settled at a step. */
-async function bothAt(source: string, step: number, chosen = {}): Promise<[Hosted, Hosted]> {
+/** A page built and hosted as the app hosts it, settled at a step. */
+async function hostedAt(source: string, step: number, chosen = {}): Promise<Hosted> {
   const built = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
-  const pages = await Promise.all([
-    openHosted(built.javascript),
-    openHosted(built.javascript, { served: built.layout.scenes! })
-  ]);
-  for (const page of pages) {
-    await page.send({ type: 'sverlin:step', step, selection: [] });
-    await settled(page.frame, step);
-  }
-  return pages;
+  const hosted = await openHosted(built);
+  await hosted.send({ type: 'sverlin:step', step, selection: [] });
+  await settled(hosted.frame, step);
+  return hosted;
 }
 
 const lastOf = async (page: Hosted, type: string) => (await page.messages(type)).at(-1);
+const selected = async (page: Hosted) =>
+  ((await lastOf(page, 'sverlin:selection')) as { elements: Selected[] }).elements;
 
-/** Compare what both pages last reported of a type, noting it in the table. */
-async function agree(check: string, pages: [Hosted, Hosted], type: string) {
-  const [mounted, scenes] = await Promise.all(pages.map((page) => lastOf(page, type)));
-  const shown = (message: unknown) => JSON.stringify(message ?? null).slice(0, 300);
-  rows.push({
-    check,
-    mounted: shown(mounted),
-    scenes: shown(scenes),
-    alike: shown(mounted) === shown(scenes)
-  });
-  return [mounted, scenes];
-}
-
-/** The box on screen of what a page draws for a node, or of its outline. */
 function boxOf(frame: Frame, selector: string): Promise<Box | undefined> {
   return frame.evaluate((selector) => {
     const element = document.querySelector(selector);
@@ -69,21 +49,20 @@ function boxOf(frame: Frame, selector: string): Promise<Box | undefined> {
   }, selector);
 }
 
-const near = (a: Box | undefined, b: Box | undefined) =>
+const near = (a: Box | undefined, b: Box) =>
   !!a &&
-  !!b &&
   [a.x - b.x, a.y - b.y, a.width - b.width, a.height - b.height].every(
-    (difference) => Math.abs(difference) <= tolerance
+    (difference) => Math.abs(difference) <= 2
   );
 
 it.skipIf(!enabled)(
-  'selects, references, zooms and pans as the mounted page does',
+  'selects, references, zooms and pans as the mounted page did',
   { timeout: 300_000 },
   async () => {
-    const pages = await bothAt(pausingEveryLabel(dijkstra), 3);
-    const [mounted, scenes] = pages;
-    // Three leaf nodes of the step, their centres on screen as the scene draws them.
-    const leaves = await scenes.frame.evaluate(() => {
+    const hosted = await hostedAt(pausingEveryLabel(dijkstra), 3);
+    const { page, frame } = hosted;
+    // Three leaf nodes of the step, their centres on screen.
+    const leaves = await frame.evaluate(() => {
       const groups = [
         ...document.querySelectorAll<SVGGElement>('svg[data-sv-scene] g[data-sv-node]')
       ];
@@ -95,136 +74,93 @@ it.skipIf(!enabled)(
           return { id: group.dataset.svNode!, x: x + width / 2, y: y + height / 2 };
         });
     });
-    expect(leaves.length).toBeGreaterThan(2);
     const chosen = [leaves[0], leaves[Math.floor(leaves.length / 2)], leaves.at(-1)!];
-    const click = async (x: number, y: number, modifiers: 'Shift'[] = []) => {
-      for (const { page } of pages) {
-        for (const key of modifiers) await page.keyboard.down(key);
-        await page.mouse.click(x, y);
-        for (const key of modifiers) await page.keyboard.up(key);
-      }
+    const click = async (x: number, y: number, shift = false) => {
+      if (shift) await page.keyboard.down('Shift');
+      await page.mouse.click(x, y);
+      if (shift) await page.keyboard.up('Shift');
     };
 
     await click(chosen[0].x, chosen[0].y);
-    const [one, other] = await agree('click a node', pages, 'sverlin:selection');
-    expect(other).toEqual(one);
-    await click(chosen[1].x, chosen[1].y, ['Shift']);
-    await click(chosen[2].x, chosen[2].y, ['Shift']);
-    const [both, again] = await agree('shift-click two more', pages, 'sverlin:selection');
-    expect((again as { elements: { id: string }[] }).elements.map(({ id }) => id)).toEqual(
-      (both as { elements: { id: string }[] }).elements.map(({ id }) => id)
-    );
+    expect(await selected(hosted)).toEqual([
+      { id: '84:22', label: "Dijkstra's shortest paths", layouts: [] }
+    ]);
+    await click(chosen[1].x, chosen[1].y, true);
+    await click(chosen[2].x, chosen[2].y, true);
+    const three = await selected(hosted);
+    expect(three.slice(0, 2)).toEqual([
+      { id: '84:22', label: "Dijkstra's shortest paths", layouts: [] },
+      { id: '60:5#4', label: 'distance 99', layouts: [graphLayout] }
+    ]);
+    expect(three[2]).toMatchObject({ id: '49:33#2', label: 'B' });
     // The frame's empty space selects the page: a corner just inside the frame's edge.
-    const frameBox = await boxOf(scenes.frame, 'svg[data-sv-scene]');
-    await click(frameBox!.x + 4, frameBox!.y + 4);
-    const [page, pageAgain] = await agree('click the page', pages, 'sverlin:selection');
-    expect(pageAgain).toEqual(page);
-    await Promise.all(pages.map(({ page }) => page.keyboard.press('Escape')));
-    const [none, noneAgain] = await agree('Escape', pages, 'sverlin:selection');
-    expect(noneAgain).toEqual(none);
-    // A box dragged round the middle of the frame.
+    const { x, y, width, height } = (await boxOf(frame, 'svg[data-sv-scene]'))!;
+    await click(x + 4, y + 4);
+    expect(await selected(hosted)).toEqual([
+      { id: '93:3', label: 'the page, as Main', layouts: [] }
+    ]);
+    await page.keyboard.press('Escape');
+    expect(await selected(hosted)).toEqual([]);
     const drag = async (from: [number, number], to: [number, number], button?: 'middle') => {
-      for (const { page } of pages) {
-        await page.mouse.move(...from);
-        await page.mouse.down(button ? { button } : {});
-        await page.mouse.move(...to, { steps: 4 });
-        await page.mouse.up(button ? { button } : {});
-      }
+      await page.mouse.move(...from);
+      await page.mouse.down(button ? { button } : {});
+      await page.mouse.move(...to, { steps: 4 });
+      await page.mouse.up(button ? { button } : {});
     };
-    const { x, y, width, height } = frameBox!;
     await drag([x + width * 0.3, y + height * 0.2], [x + width * 0.7, y + height * 0.8]);
-    const [boxed, boxedAgain] = await agree('drag a box', pages, 'sverlin:selection');
-    const ids = (message: unknown) =>
-      (message as { elements: { id: string }[] }).elements.map(({ id }) => id).sort();
-    expect(ids(boxedAgain)).toEqual(ids(boxed));
+    expect((await selected(hosted)).slice(0, 2)).toEqual([
+      { id: '58:3#2', label: 'B distance 99 open', layouts: [graphLayout] },
+      { id: '50:31#3', label: '99', layouts: [graphLayout] }
+    ]);
 
-    // A reference the app opens is outlined round the same box.
-    await Promise.all(
-      pages.map((page) => page.send({ type: 'sverlin:select', ids: [chosen[0].id] }))
-    );
-    const outline = async () => [
-      await mounted.frame
-        .waitForSelector('.sv-selected')
-        .then(() => boxOf(mounted.frame, '.sv-selected')),
-      await scenes.frame
-        .waitForSelector('.sv-scene-selected')
-        .then(() => boxOf(scenes.frame, '.sv-scene-selected'))
-    ];
-    const [shownBox, drawnBox] = await outline();
-    rows.push({
-      check: 'reference outline',
-      mounted: JSON.stringify(shownBox),
-      scenes: JSON.stringify(drawnBox),
-      alike: near(shownBox, drawnBox)
-    });
-    expect(near(shownBox, drawnBox)).toBe(true);
-
-    // Zooming about a point, then panning, report the same view, and draw the node in the same place.
-    for (const { page } of pages) {
-      await page.mouse.move(x + width * 0.4, y + height * 0.4);
-      await page.mouse.wheel(0, -300);
-    }
-    await expect
-      .poll(async () =>
-        (await Promise.all(pages.map((page) => page.messages('sverlin:view')))).map(
-          (views) => views.length
-        )
-      )
-      .toEqual([1, 1]);
-    const [zoomed, zoomedAgain] = await agree('wheel zoom', pages, 'sverlin:view');
-    for (const key of ['zoom', 'panX', 'panY'] as const)
-      expect(Number((zoomedAgain as Record<string, number>)[key])).toBeCloseTo(
-        Number((zoomed as Record<string, number>)[key]),
-        1
-      );
+    // A reference the app opens is outlined round its box, before and after zooming and panning.
+    await hosted.send({ type: 'sverlin:select', ids: [chosen[0].id] });
+    const outline = () =>
+      frame.waitForSelector('.sv-scene-selected').then(() => boxOf(frame, '.sv-scene-selected'));
+    expect(near(await outline(), { x: 504.2, y: 124.2, width: 191.6, height: 25.1 })).toBe(true);
+    await page.mouse.move(x + width * 0.4, y + height * 0.4);
+    await page.mouse.wheel(0, -300);
+    await expect.poll(async () => (await hosted.messages('sverlin:view')).length).toBe(1);
+    const view = async () => (await lastOf(hosted, 'sverlin:view')) as Record<string, number>;
+    const zoomed = await view();
+    expect([zoomed.zoom, zoomed.panX, zoomed.panY].map((n) => Math.round(n * 100) / 100)).toEqual([
+      1.33, 38.73, 21.85
+    ]);
     await drag([x + 100, y + 100], [x + 160, y + 130], 'middle');
-    const [panned, pannedAgain] = await agree('middle-button pan', pages, 'sverlin:view');
-    expect(Number((pannedAgain as Record<string, number>).panX)).toBeCloseTo(
-      Number((panned as Record<string, number>).panX),
-      0
-    );
-    const [movedShown, movedDrawn] = await outline();
-    rows.push({
-      check: 'outline after zoom and pan',
-      mounted: JSON.stringify(movedShown),
-      scenes: JSON.stringify(movedDrawn),
-      alike: near(movedShown, movedDrawn)
-    });
-    expect(near(movedShown, movedDrawn)).toBe(true);
+    const panned = await view();
+    expect([panned.panX, panned.panY].map(Math.round)).toEqual([99, 52]);
+    expect(near(await outline(), { x: 571.2, y: 101.3, width: 255, height: 33.4 })).toBe(true);
     // A double click outside the frame resets the view.
-    for (const { page } of pages) await page.mouse.dblclick(3, 3);
-    const [reset, resetAgain] = await agree('double-click reset', pages, 'sverlin:view');
-    expect(resetAgain).toEqual(reset);
+    await page.mouse.dblclick(3, 3);
+    expect(await lastOf(hosted, 'sverlin:view')).toEqual({
+      type: 'sverlin:view',
+      zoom: 1,
+      panX: 0,
+      panY: 0
+    });
   }
 );
 
 it.skipIf(!enabled)(
-  'outlines every reference to a place hovered, as the mounted page does',
+  'outlines every reference to a place hovered, as the mounted page did',
   { timeout: 300_000 },
   async () => {
-    const pages = await bothAt(pausingAt(search, '@probe.low'), 1, {
+    const { page, frame } = await hostedAt(pausingAt(search, '@probe.low'), 1, {
       'IntCell@target.stroke': 'violet-500',
       'listing.places': 'fill'
     });
-    const [mounted, scenes] = pages;
-    const token = await boxOf(
-      mounted.frame,
-      '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind="listing-token"][data-sv-place="@target"]'
-    );
-    expect(token).toBeDefined();
-    for (const { page } of pages)
-      await page.mouse.move(token!.x + token!.width / 2, token!.y + token!.height / 2);
-    const counted = await Promise.all([
-      mounted.frame.evaluate(() => document.querySelectorAll('[data-sv-hovered]').length),
-      scenes.frame.evaluate(() => document.querySelectorAll('.sv-scene-hovered').length)
-    ]);
-    rows.push({
-      check: 'hover a listing token',
-      mounted: `${counted[0]} outlined`,
-      scenes: `${counted[1]} outlined`,
-      alike: counted[0] === counted[1]
+    const token = await frame.evaluate(() => {
+      const text = [...document.querySelectorAll('svg[data-sv-scene] text[data-sv-place]')].find(
+        (element) => element.getAttribute('data-sv-place') === '@target'
+      );
+      const box = text?.getBoundingClientRect();
+      return box && { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     });
-    expect(counted[0]).toBeGreaterThan(1);
-    expect(counted[1]).toBe(counted[0]);
+    expect(token).toBeDefined();
+    await page.mouse.move(token!.x, token!.y);
+    // The token and the target's cell, as the mounted page outlined.
+    expect(await frame.evaluate(() => document.querySelectorAll('.sv-scene-hovered').length)).toBe(
+      2
+    );
   }
 );

@@ -1,15 +1,10 @@
-/**
- * A step's application of an operator, drawn by {@sweep.pair.test}, in a real
- * browser. Run with `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
- */
+/** A step's application of an operator, drawn by {@sweep.pair.test}, in the server's scenes. */
 
 import { expect, it } from 'vitest';
 
-import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
-
-import { sandboxDocument } from '../sandbox';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
 import { pausingAt } from './testing/every-pause';
+import { drawnSteps, textOf } from './testing/scenes';
 
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -62,7 +57,7 @@ const source = `<script domain>
   <Scene name="main" case="main"><Main values={values} /></Scene>
 </Storyboard>`;
 
-/** The caption Ask draws at a step, and whether it is hidden. */
+/** The caption Ask draws at a step; none where it is hidden or not drawn at all. */
 async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
   // The loop headers move no value the view draws, so the steps are the comparisons and swaps.
   const headers = ['last', 'more', 'shrink', 'sweep.first', 'sweep.inside', 'sweep.step'];
@@ -70,42 +65,21 @@ async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
     .pauses.labels.filter((label) => !headers.includes(label))
     .map((label) => `@${label}`)
     .join(', ');
-  const prepared = prepareSvelteComponent(pausingAt(source, pause));
-  const { javascript } = await bundlePresentation(prepared, 1, { chosen });
-  const page = await openPage({ viewport: { width: 1200, height: 700 } });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setContent(sandboxDocument('', javascript, 0, 1));
-  await page.waitForFunction(() =>
-    document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
-  );
-  if (step) {
-    await showStep(page, step);
-  }
-  const caption = await page.evaluate(() => {
-    const node = document.querySelector<HTMLElement>(
-      '.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind^="Ask"]'
-    );
-    return (
-      node && { text: node.innerText.replace(/\s+/gu, ' ').trim(), hidden: node.dataset.svHidden }
-    );
-  });
-  await page.close();
-  expect(errors).toEqual([]);
-  return caption;
+  const { steps } = await drawnSteps(pausingAt(source, pause), { chosen });
+  const node = steps[step].nodes.find(({ kind }) => kind?.startsWith('Ask'));
+  return node ? { text: textOf(steps[step], node) } : null;
 }
 
-it.skipIf(!enabled)(
+it(
   "draw a step's one application of an operator, and nothing where it made none or several",
-  { timeout: 120_000 },
+  { timeout: 60_000 },
   async () => {
     // Step 0 is the input as given, step 1 the first comparison, step 2 its swap.
-    expect((await captionAt(0))?.hidden).toBe('true');
+    expect(await captionAt(0)).toBeNull();
     const first = await captionAt(1);
     // A comparison gives a plain boolean, drawn as text (see the guide's Views of what a step computed).
     expect(first?.text).toMatch(/^is 5 > 1 ?\? true$/u);
-    expect(first?.hidden).toBeUndefined();
-    expect((await captionAt(2))?.hidden).toBe('true');
+    expect(await captionAt(2)).toBeNull();
     // With the comparison's view hidden, nothing draws it.
     expect(await captionAt(1, { 'views.@sweep.pair.test': 'none' })).toBeNull();
   }
