@@ -41,3 +41,6 @@ temp.txt
 
 # Development demo project (see src/lib/server/dev-demo.ts)
 /.demo/
+
+# Test reports and traces.
+test-results/

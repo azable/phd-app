@@ -51,6 +51,11 @@ export default defineConfig({
           // Tests that build real presentations take seconds on CI's slower machines; none should
           // fail on time alone.
           testTimeout: 30_000,
+          // One browser for the browser tests' run, which each file connects to; idle otherwise.
+          globalSetup: ['src/lib/modes/sverlin/testing/browser-setup.ts'],
+          // A browser test that fails in CI runs once more, its trace kept (testing/browser.ts), so a
+          // flaky test shows as one rather than passing unseen; locally a failure is a failure.
+          retry: process.env.CI && process.env.SVERLIN_RUN_BROWSER_TESTS === '1' ? 1 : 0,
           include: ['src/**/*.{test,spec}.{js,ts}'],
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }

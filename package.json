@@ -21,7 +21,7 @@
     "lint": "prettier --check . ; eslint .",
     "test:unit": "vitest run --configLoader native",
     "test:postgres": "SVERLIN_RUN_POSTGRES_TESTS=1 node scripts/run-with-test-database.mjs pnpm exec vitest run --no-file-parallelism src/lib/server/*.postgres.integration.test.ts src/lib/server/projects/*.postgres.integration.test.ts",
-    "test:browser": "SVERLIN_RUN_BROWSER_TESTS=1 vitest run --configLoader native src/lib/modes/sverlin/*.browser.test.ts",
+    "test:browser": "mkdir -p test-results && SVERLIN_RUN_BROWSER_TESTS=1 timeout 1200 vitest run --configLoader native --maxWorkers=3 --reporter=default --reporter=json --outputFile.json=test-results/browser.json src/lib/modes/sverlin/*.browser.test.ts; status=$?; node scripts/browser-summary.mjs; exit $status",
     "test": "pnpm run test:unit && pnpm run test:postgres && pnpm run test:browser",
     "format": "prettier --write ."
   },

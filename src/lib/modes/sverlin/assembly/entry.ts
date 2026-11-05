@@ -184,6 +184,42 @@ let leaving: Shown | undefined;
 
 const showStep = (step: number) => show(afterOf(step));
 
+/**
+ * Marks the page settled at a step: once it is shown, its motion and the leaving step's fade have
+ * ended, the fonts have loaded and a frame has passed for layouts that lay out again after motion.
+ * `data-sv-settled` on the page's root holds the step, cleared as another is asked for, so a test
+ * waits for it rather than for a fixed time; looping animations never hold it back.
+ */
+let settling = 0;
+function settleAt(step: number) {
+  const token = ++settling;
+  delete root.dataset.svSettled;
+  const running = () =>
+    document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState !== 'finished' &&
+          animation.playState !== 'idle' &&
+          animation.effect?.getTiming().iterations !== Infinity
+      );
+  const frame = () => new Promise((resume) => requestAnimationFrame(() => resume(undefined)));
+  void (async () => {
+    await document.fonts.ready;
+    for (let rounds = 0; rounds < 20; rounds++) {
+      await frame();
+      await frame();
+      const left = running();
+      if (!left.length && !pending && !leaving) break;
+      await Promise.race([
+        Promise.allSettled(left.map((animation) => animation.finished)),
+        new Promise((resume) => setTimeout(resume, 250))
+      ]);
+    }
+    if (token === settling && !pending) root.dataset.svSettled = String(step);
+  })();
+}
+
 function show(state: number) {
   if (pending) remove(pending);
   pendingTiming?.cancel();
@@ -218,6 +254,7 @@ function show(state: number) {
       window.parent.postMessage({ type: 'sverlin:ready' }, '*');
     ready = true;
     pending = undefined;
+    settleAt((state - 1) / 2);
   });
 }
 
@@ -396,7 +433,11 @@ addEventListener('message', (event: MessageEvent) => {
   const step = clampStep(data.step);
   playback.__sverlinSelection = Array.isArray(data.selection) ? data.selection : [];
   requested = step;
+  // No longer settled at the step before: a test waits for this one.
+  settling++;
+  delete root.dataset.svSettled;
   if (recorded && afterOf(step) !== (pending ?? current)?.step) showStep(step);
+  else if (recorded && !pending) settleAt(step);
 });
 
 // The page says it has loaded; it reports when its first step is shown, however long laying out
