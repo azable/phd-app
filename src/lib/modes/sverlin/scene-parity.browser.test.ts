@@ -232,65 +232,80 @@ afterAll(() => {
   console.table(rows.map(({ examples: _, ...row }) => row));
 });
 
+// Where the stage shows a presentation: alone, half of a comparison of two (each pane about half
+// the stage), and alone on a high-density screen; the last two for a few fixtures.
+const stages: { label: string; viewport: { width: number; height: number }; dpr?: number }[] = [
+  { label: '', viewport: { width: 1200, height: 700 } },
+  { label: ' in the comparison layout', viewport: { width: 590, height: 620 } },
+  { label: ' at DPR 2', viewport: { width: 1200, height: 700 }, dpr: 2 }
+];
+const staged = ['dijkstra', 'bfs-captions', 'binary-search-bars', 'merge-sort-overview'];
+
 describe('steps drawn from their scenes', () => {
-  for (const [name, source, chosen] of cases) {
-    it.skipIf(!enabled)(
-      `${name} draws as the mounted page does`,
-      { timeout: 300_000 },
-      async () => {
-        const built = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
-        const errors: string[] = [];
-        const options = { viewport: { width: 1200, height: 700 }, still: true, errors };
-        const mounted = await openPresentation(built.javascript, options);
-        const scene = await openPresentation(built.javascript, {
-          ...options,
-          served: built.layout.scenes!
-        });
-        const steps = Math.min(built.labels.length, stepsCompared);
-        const row: Row = {
-          fixture: name,
-          steps,
-          nodes: 0,
-          boxesOff: 0,
-          textsOff: 0,
-          links: 0,
-          linksOff: 0,
-          pixels: 0,
-          examples: []
-        };
-        for (let step = 0; step < steps; step++) {
-          if (step) await Promise.all([showStep(mounted, step), showStep(scene, step)]);
-          const at = compare(await drawnOn(mounted), await drawnOn(scene));
-          row.nodes += at.nodes;
-          row.boxesOff += at.boxesOff.length;
-          row.textsOff += at.textsOff.length;
-          row.links += at.links;
-          row.linksOff += at.linksOff;
-          row.examples.push(
-            ...at.boxesOff.slice(0, 2).map((id) => `step ${step} box ${id}`),
-            ...at.textsOff.slice(0, 2).map((id) => `step ${step} text ${id}`)
-          );
-          const [page, drawn] = [await mounted.screenshot(), await scene.screenshot()];
-          row.pixels += await likeness(page, drawn);
-          if (process.env.SCENE_PARITY_SHOTS) {
-            mkdirSync('test-results/scene-parity', { recursive: true });
-            writeFileSync(`test-results/scene-parity/${name}-${step}-page.png`, page);
-            writeFileSync(`test-results/scene-parity/${name}-${step}-scene.png`, drawn);
+  for (const [name, source, chosen] of cases)
+    for (const stage of stages.filter((_, index) => !index || staged.includes(name))) {
+      it.skipIf(!enabled)(
+        `${name}${stage.label} draws as the mounted page does`,
+        { timeout: 300_000 },
+        async () => {
+          const built = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
+          const errors: string[] = [];
+          const options = {
+            viewport: stage.viewport,
+            ...(stage.dpr ? { deviceScaleFactor: stage.dpr } : {}),
+            still: true,
+            errors
+          };
+          const mounted = await openPresentation(built.javascript, options);
+          const scene = await openPresentation(built.javascript, {
+            ...options,
+            served: built.layout.scenes!
+          });
+          const steps = Math.min(built.labels.length, stepsCompared);
+          const row: Row = {
+            fixture: `${name}${stage.label}`,
+            steps,
+            nodes: 0,
+            boxesOff: 0,
+            textsOff: 0,
+            links: 0,
+            linksOff: 0,
+            pixels: 0,
+            examples: []
+          };
+          for (let step = 0; step < steps; step++) {
+            if (step) await Promise.all([showStep(mounted, step), showStep(scene, step)]);
+            const at = compare(await drawnOn(mounted), await drawnOn(scene));
+            row.nodes += at.nodes;
+            row.boxesOff += at.boxesOff.length;
+            row.textsOff += at.textsOff.length;
+            row.links += at.links;
+            row.linksOff += at.linksOff;
+            row.examples.push(
+              ...at.boxesOff.slice(0, 2).map((id) => `step ${step} box ${id}`),
+              ...at.textsOff.slice(0, 2).map((id) => `step ${step} text ${id}`)
+            );
+            const [page, drawn] = [await mounted.screenshot(), await scene.screenshot()];
+            row.pixels += await likeness(page, drawn);
+            if (process.env.SCENE_PARITY_SHOTS) {
+              mkdirSync('test-results/scene-parity', { recursive: true });
+              writeFileSync(`test-results/scene-parity/${row.fixture}-${step}-page.png`, page);
+              writeFileSync(`test-results/scene-parity/${row.fixture}-${step}-scene.png`, drawn);
+            }
           }
+          row.pixels = Math.round((row.pixels / steps) * 1000) / 1000;
+          row.examples = row.examples.slice(0, 8);
+          rows.push(row);
+          expect(errors).toEqual([]);
+          expect(await scene.evaluate(() => document.getElementById('app')?.dataset.svScenes)).toBe(
+            'served'
+          );
+          // Gross failures only: most of what the page draws is drawn alike.
+          expect(row.boxesOff / Math.max(1, row.nodes)).toBeLessThan(0.25);
+          expect(row.pixels).toBeGreaterThan(0.5);
         }
-        row.pixels = Math.round((row.pixels / steps) * 1000) / 1000;
-        row.examples = row.examples.slice(0, 8);
-        rows.push(row);
-        expect(errors).toEqual([]);
-        expect(await scene.evaluate(() => document.getElementById('app')?.dataset.svScenes)).toBe(
-          'served'
-        );
-        // Gross failures only: most of what the page draws is drawn alike.
-        expect(row.boxesOff / Math.max(1, row.nodes)).toBeLessThan(0.25);
-        expect(row.pixels).toBeGreaterThan(0.5);
-      }
-    );
-  }
+      );
+    }
 });
 
 type Sample = {
