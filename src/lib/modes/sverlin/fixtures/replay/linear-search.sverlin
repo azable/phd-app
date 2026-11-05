@@ -1,0 +1,130 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+
+<script algorithm>
+  for (
+    @start[let i = Index(values, 0)];
+    @more[i < values.length];
+    @next[i++]
+  ) @scan{
+    if (@check[values[i] === target]) @found{
+      return;
+    }
+  }
+  @missing[return;]
+</script>
+
+<script listing="textbook">
+LINEAR-SEARCH(A, target)
+1  @start[start at i = 0]
+2  @more[while i is inside A]
+3      @scan.check[if A[$i[i]] = target]
+4          @scan.found[return $i[i]]
+5      @next[i = i + 1]
+6  @missing[return not found]
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+
+<View of="Values" name="Cells">
+  <Node>
+    {#each this as value}
+      {value}
+    {/each}
+  </Node>
+</View>
+
+<View of="Values" name="IndexedCells">
+  <Node>
+    {#each this as value, k}
+      <Node layout="column">
+        {value}
+        <Node kind="IndexLabel">{k}</Node>
+      </Node>
+    {/each}
+  </Node>
+</View>
+
+<View of="Index" name="IndexNumber">
+  <Node value={this} />
+</View>
+
+<View of="Index" name="ScanMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="PointerLabel">i</Node>
+  </Node>
+</View>
+
+<View of="@scan.check" name="Comparison">
+  <Node>
+    Is {this.left} equal to {this.right}? {this.value}
+  </Node>
+</View>
+
+<Layout name="Heading" of="target">
+  <Node kind="Title">Linear search for {target}</Node>
+</Layout>
+
+<Layout name="SearchRow" of="values">
+  <Node>{values}</Node>
+</Layout>
+
+<Layout name="Status" of="target, i, @scan.check, @scan.found, @missing">
+  <Node layout="column">
+    <OneOf>
+      <When of="@scan.check">
+        {@scan.check}
+      </When>
+      <When of="@scan.found">
+        <Node kind="Outcome">Found {target} at index {i}.</Node>
+      </When>
+      <When of="@missing">
+        <Node kind="Outcome">{target} is not in the array.</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout
+  name="Stacked"
+  of="values, target, i, @scan.check, @scan.found, @missing"
+>
+  <Node layout="column">
+    <Heading target={target} />
+    <Node layout="row">
+      <Listing />
+      <Node layout="column">
+        <SearchRow values={values} />
+        <Status target={target} i={i} />
+      </Node>
+    </Node>
+    {i}
+  </Node>
+</Layout>
+
+<Case
+  name="present"
+  values={[7, 2, 9, 4, 6, 1]}
+  target={6}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="present"
+    pause="@scan.check, @scan.found, @missing"
+  >
+    <Stacked values={values} target={target} i={i} />
+  </Scene>
+</Storyboard>

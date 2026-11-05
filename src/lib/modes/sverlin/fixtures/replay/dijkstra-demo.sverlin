@@ -1,0 +1,120 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E']);
+  const Int = type('integer', { min: 0, max: 99 });
+  const Weight = type('integer', { min: 1, max: 9 });
+  const Flag = type('boolean');
+
+  const Vertex = record({ name: Name, distance: Int, done: Flag });
+  const Vertices = array(Vertex, { max: 5 });
+  const VertexIndex = index(Vertices);
+  const Edge = record({ from: VertexIndex, to: VertexIndex, weight: Weight });
+  const Edges = array(Edge, { max: 7 });
+  const EdgeIndex = index(Edges);
+
+</script>
+
+<script input>
+  const vertices = Vertices;
+
+  const edges = Edges;
+</script>
+
+<script algorithm>
+  @none[let current = VertexIndex(-1);]
+
+  for (@firstRound[let round = VertexIndex(0)]; @moreRounds[round < vertices.length]; @nextRound[round++]) @round{
+    @reset[current = VertexIndex(-1);]
+
+    for (@firstVertex[let v = VertexIndex(0)]; @moreVertices[v < vertices.length]; @nextVertex[v++]) @choose{
+      if (@closer[!vertices[v].done && (current === VertexIndex(-1) || vertices[v].distance < vertices[current].distance)]) @select{
+        current = v;
+      }
+    }
+
+    if (@found[current !== VertexIndex(-1)]) @visit{
+      @settle[vertices[current].done = true;]
+
+      for (@firstEdge[let e = EdgeIndex(0)]; @moreEdges[e < edges.length]; @nextEdge[e++]) @edge{
+        if (@outgoing[edges[e].from === current]) @relax{
+          @candidate[const candidate = vertices[current].distance + Int(edges[e].weight);]
+          if (@check[candidate < vertices[edges[e].to].distance]) @update{
+            vertices[edges[e].to].distance = candidate;
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Weight" name="WeightText"><Node value={this} /></View>
+<View of="Flag" name="FlagWord"><Node>{this ? 'done' : 'open'}</Node></View>
+<View of="VertexIndex" name="IndexText"><Node value={this} /></View>
+<View of="VertexIndex" name="CurrentMark"><Pointed /></View>
+<View of="EdgeIndex" name="EdgeMark"><Pointed /></View>
+
+<View of="Vertex" name="VertexCard">
+  <Node layout="column">
+    {this.name}
+    <Node>distance {this.distance}</Node>
+    {this.done}
+  </Node>
+</View>
+
+<View of="Edge" name="EdgeLink">
+  <Link from={this.from} to={this.to}>{this.weight}</Link>
+</View>
+
+<View of="@round.visit.edge.relax.check" name="LessQuestion">
+  <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
+</View>
+
+<Layout name="Graph" of="vertices, edges">
+  <Node layout="free">
+    {#each vertices as vertex}
+      {vertex}
+    {/each}
+    {#each edges as edge}
+      {edge}
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="Title"><Node>Dijkstra's shortest paths</Node></Layout>
+<Layout name="Status" of="current, @round.visit.edge.relax.check">
+  <Node layout="column">
+    <Node>Nearest chosen: {current}</Node>
+    {@round.visit.edge.relax.check}
+  </Node>
+</Layout>
+
+<Layout name="Main" of="current, e, vertices, edges, @round.visit.edge.relax.check">
+  <Node>
+    <Title />
+    <Graph vertices={vertices} edges={edges} />
+    <Status current={current} />
+    {current}
+    {e}
+  </Node>
+</Layout>
+
+<Case name="main" vertices={[
+    { name: 'A', distance: 0, done: false },
+    { name: 'B', distance: 99, done: false },
+    { name: 'C', distance: 99, done: false },
+    { name: 'D', distance: 99, done: false },
+    { name: 'E', distance: 99, done: false }
+  ]} edges={[
+    { from: 0, to: 1, weight: 4 },
+    { from: 0, to: 2, weight: 1 },
+    { from: 2, to: 1, weight: 2 },
+    { from: 2, to: 3, weight: 5 },
+    { from: 1, to: 3, weight: 1 },
+    { from: 1, to: 4, weight: 7 },
+    { from: 3, to: 4, weight: 3 }
+  ]} />
+
+<Storyboard>
+  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+</Storyboard>

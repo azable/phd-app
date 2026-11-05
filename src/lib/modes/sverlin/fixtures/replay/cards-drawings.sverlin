@@ -1,0 +1,86 @@
+<script domain>
+  const Rank = type('integer', { min: 1, max: 13 });
+  const Suit = type(['hearts', 'diamonds', 'clubs', 'spades']);
+  const Card = record({ rank: Rank, suit: Suit });
+  const Hand = array(Card, { max: 5 });
+  const Index = index(Hand);
+</script>
+
+<script input>
+  const hand = Hand;
+</script>
+
+<script algorithm>
+  for (@first[let i = Index(1)]; @more[i < hand.length]; @next[i++]) @pass{
+    @key[const key = hand[i];]
+    @init[let j = i;]
+    while (@test[j > 0 && hand[j - 1].rank > key.rank]) @shift{
+      hand[j] = hand[j - 1];
+      j--;
+    }
+    @put[hand[j] = key;]
+  }
+</script>
+
+<View of="Rank" name="RankText"><Node value={this} /></View>
+<View of="Suit" name="SuitMark">
+  <Node>
+    <Svg viewBox="0 0 24 24" height="1.6" label={this}>
+      {#if this === 'hearts'}
+        <path d="M12 21 C5 15 2 11.5 2 8 C2 5 4.5 3 7 3 C9 3 11 4.5 12 6.5 C13 4.5 15 3 17 3 C19.5 3 22 5 22 8 C22 11.5 19 15 12 21 Z" />
+      {:else if this === 'diamonds'}
+        <polygon points="12,2 20,12 12,22 4,12" />
+      {:else if this === 'clubs'}
+        <circle cx="12" cy="7" r="4.5" />
+        <circle cx="7" cy="13.5" r="4.5" />
+        <circle cx="17" cy="13.5" r="4.5" />
+        <path d="M11 13 L9.5 22 H14.5 L13 13 Z" />
+      {:else}
+        <path d="M12 2 C5 9 2 12 2 15 C2 18 4.5 20 7 20 C9 20 10.5 19 11.3 17.5 L10 22 H14 L12.7 17.5 C13.5 19 15 20 17 20 C19.5 20 22 18 22 15 C22 12 19 9 12 2 Z" />
+      {/if}
+    </Svg>
+  </Node>
+</View>
+<View of="Suit" name="SuitColourGlyph">
+  <Node color={this === 'hearts' || this === 'diamonds'}>
+    {#if this === 'hearts'}
+      ♥
+    {:else if this === 'diamonds'}
+      ♦
+    {:else if this === 'clubs'}
+      ♣
+    {:else}
+      ♠
+    {/if}
+  </Node>
+</View>
+<View of="Suit" name="SuitName">
+  <Node value={this} />
+</View>
+<View of="Card" name="CardFace"><Node layout="column">{this.rank}{this.suit}</Node></View>
+<View of="Hand" name="Row"><Node layout="row">{#each this as card}{card}{/each}</Node></View>
+<View of="Index" name="Mark"><Pointed /></View>
+
+<Layout name="Board" of="hand, i, j, key">
+  <Node>
+    <Node>Insertion sort on a hand of cards, by rank</Node>
+    {hand}
+    {i}
+    {j}
+    <Node kind="KeyRow" layout="row">key {key}</Node>
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  hand={[
+    { rank: 7, suit: 'hearts' },
+    { rank: 3, suit: 'spades' },
+    { rank: 9, suit: 'diamonds' },
+    { rank: 2, suit: 'clubs' },
+    { rank: 5, suit: 'hearts' }
+  ]} />
+
+<Storyboard>
+  <Scene name="sort" case="main" pause="@pass.shift, @pass.put"><Board hand={hand} i={i} j={j} key={key} /></Scene>
+</Storyboard>

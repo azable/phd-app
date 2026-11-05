@@ -1,0 +1,190 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 40 });
+  const Values = array(Int, { max: 7 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+
+<script algorithm>
+  @begin[
+    let lo = Index(values, 0);
+    let hi = Index(values, values.length - 1);
+  ]
+  while (@open[lo <= hi]) @probe{
+    const mid = Index(
+      values,
+      Math.floor((lo + hi) / 2)
+    );
+    if (@equal[values[mid] === target]) @found{
+      return;
+    }
+    if (@below[values[mid] < target]) @right{
+      lo = mid + 1;
+    } else @left{
+      hi = mid - 1;
+    }
+  }
+  @missing[return;]
+</script>
+
+<script listing="textbook">
+BINARY-SEARCH(A, target)
+  @begin[lo ← 0
+  hi ← length(A) − 1]
+  while lo ≤ hi
+    mid ← floor((lo + hi) / 2)
+    if @probe.equal[A[mid] = target]
+      @probe.found[return mid]
+    if A[mid] < target
+      @probe.right[lo ← mid + 1]
+    else
+      @probe.left[hi ← mid − 1]
+  @missing[return not found]
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+
+<View of="Int" name="IntBarGlyph">
+  <Node layout="column">
+    <Svg viewBox="0 0 24 40" height="1.5" label={this}>
+      {#if this === 0}
+        <circle
+          cx="12"
+          cy="35"
+          r="3"
+          fill="currentColor"
+        />
+      {:else}
+        <rect
+          x="5"
+          y={40 - this}
+          width="14"
+          height={this}
+          fill="currentColor"
+        />
+      {/if}
+      <line
+        x1="2"
+        y1="39"
+        x2="22"
+        y2="39"
+        stroke="currentColor"
+        stroke-width="2"
+      />
+    </Svg>
+    <Node value={this} />
+  </Node>
+</View>
+
+<View of="Index" name="IndexText">
+  <Node value={this} />
+</View>
+
+<View of="Index" name="Mark">
+  <Pointed />
+</View>
+
+<View of="Index" name="LoMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="LoLabel">lo</Node>
+  </Node>
+</View>
+
+<View of="Index" name="MidMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="MidLabel">mid</Node>
+  </Node>
+</View>
+
+<View of="Index" name="HiMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="HiLabel">hi</Node>
+  </Node>
+</View>
+
+<Layout name="Title">
+  <Node>Binary search for {target}</Node>
+</Layout>
+
+<Layout name="Cells">
+  <Node>
+    {#each values as value, k}
+      {#if lo <= k && k <= hi}
+        <Node kind="Candidate">{value}</Node>
+      {:else}
+        <Node kind="Discarded">{value}</Node>
+      {/if}
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="Range">
+  <Node>Possible positions: {lo} to {hi}</Node>
+</Layout>
+
+<Layout name="Status">
+  <Node layout="stack">
+    <Node when="@probe.equal">
+      Compare {values[mid]} with the target {target}.
+    </Node>
+    <Node when="@probe.right">
+      The target is larger, so discard the left part.
+    </Node>
+    <Node when="@probe.left">
+      The target is smaller, so discard the right part.
+    </Node>
+    <Node when="@probe.found">
+      Found {target} at index {mid}.
+    </Node>
+    <Node when="@missing">
+      {target} is not in the array.
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Board">
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      <Cells />
+      <Range />
+      <Status />
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Stacked">
+  <Node layout="column">
+    <Title />
+    <Board />
+    {lo}
+    {mid}
+    {hi}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  values={[2, 5, 8, 12, 16, 23, 38]}
+  target={16}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@begin, @probe.equal, @probe.right, @probe.left,
+      @probe.found, @missing"
+  >
+    <Stacked />
+  </Scene>
+</Storyboard>

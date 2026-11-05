@@ -1,0 +1,194 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Scratch = array(Int, { max: 8 });
+  const Position = index(Values);
+  const ScratchPosition = index(Scratch);
+</script>
+
+<script input>
+  const values = Values;
+</script>
+
+<script algorithm>
+  @setup[
+    let scratch = Scratch.ofLength(values.length, Int(0));
+    let width = Position(values, 1);
+  ]
+  while (@more[width < values.length]) @pass{
+    for (
+      @start[let left = Position(values, 0)];
+      @pairs[left < values.length];
+      @advance[left = left + width + width]
+    ) @pair{
+      const middle = Position(
+        values,
+        Math.min(left + width, values.length)
+      );
+      const right = Position(
+        values,
+        Math.min(left + width + width, values.length)
+      );
+      let i = Position(values, left);
+      let j = Position(values, middle);
+      let k = ScratchPosition(scratch, left);
+
+      while (@both[i < middle && j < right]) @merge{
+        if (@choose[values[i] <= values[j]]) @takeLeft{
+          scratch[@to[k]] = values[@from[i]];
+          i++;
+          k++;
+        } else @takeRight{
+          scratch[@to[k]] = values[@from[j]];
+          j++;
+          k++;
+        }
+      }
+
+      while (@leftMore[i < middle]) @leftTail{
+        scratch[@to[k]] = values[@from[i]];
+        i++;
+        k++;
+      }
+
+      while (@rightMore[j < right]) @rightTail{
+        scratch[@to[k]] = values[@from[j]];
+        j++;
+        k++;
+      }
+
+      @copyStart[let back = Position(values, left);]
+      while (@copyMore[back < right]) @copy{
+        values[@dest[back]] =
+          scratch[@source[ScratchPosition(scratch, back)]];
+        back++;
+      }
+    }
+    @grow[width = width * 2;]
+  }
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+
+<View of="Int" name="IntDots">
+  <Node layout="column">
+    <Node kind="DotValue" value={this} />
+    <Node kind="Dots" layout="grid">
+      {#each count(this) as dot}
+        <Node
+          kind="Dot"
+          row={Math.floor(dot / 5)}
+          col={dot % 5}
+        >•</Node>
+      {/each}
+    </Node>
+  </Node>
+</View>
+
+<View of="Position" name="PositionNumber">
+  <Node value={this} />
+</View>
+
+<View of="Position" name="SourceMark">
+  <Pointed />
+</View>
+
+<View of="ScratchPosition" name="ScratchNumber">
+  <Node value={this} />
+</View>
+
+<View of="ScratchPosition" name="ScratchMark">
+  <Pointed />
+</View>
+
+<Layout name="Title">
+  <Node>Merge sort: merge neighbouring sorted runs</Node>
+</Layout>
+
+<Layout name="PassInfo">
+  <Node>Current run width: {width}</Node>
+</Layout>
+
+<Layout name="SourceRow">
+  <Node layout="column">
+    <Node kind="RowLabel">source array</Node>
+    <Node kind="Items">
+      {#each values as value}{value}{/each}
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="ScratchRow">
+  <Node layout="column">
+    <Node kind="RowLabel">temporary row</Node>
+    <Node kind="Items">
+      {#each scratch as value}{value}{/each}
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Explanation">
+  <Node layout="stack">
+    <Node kind="Action" when="@pass.pair.merge.takeLeft">
+      Take the smaller front value from the left run.
+    </Node>
+    <Node kind="Action" when="@pass.pair.merge.takeRight">
+      Take the smaller front value from the right run.
+    </Node>
+    <Node kind="Action" when="@pass.pair.leftTail">
+      The right run is empty, so copy the left remainder.
+    </Node>
+    <Node kind="Action" when="@pass.pair.rightTail">
+      The left run is empty, so copy the right remainder.
+    </Node>
+    <Node kind="Action" when="@pass.pair.copy">
+      Copy the merged run back into the source array.
+    </Node>
+    <Node kind="Action" when="@pass.grow">
+      Double the run width for the next pass.
+    </Node>
+    <Node kind="Result" when=":after">
+      Every run has been merged; the array is sorted.
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Stacked">
+  <Node layout="column">
+    <Title />
+    <PassInfo />
+    <SourceRow />
+    <ScratchRow />
+    <Explanation />
+
+    {@pass.pair.merge.takeLeft.from}
+    {@pass.pair.merge.takeLeft.to}
+    {@pass.pair.merge.takeRight.from}
+    {@pass.pair.merge.takeRight.to}
+    {@pass.pair.leftTail.from}
+    {@pass.pair.leftTail.to}
+    {@pass.pair.rightTail.from}
+    {@pass.pair.rightTail.to}
+    {@pass.pair.copy.dest}
+    {@pass.pair.copy.source}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  values={[8, 3, 7, 4, 9, 2, 6, 5]}
+/>
+
+<Storyboard>
+  <Scene
+    name="merging"
+    case="main"
+    pause="@setup, @pass.pair.merge.takeLeft,
+      @pass.pair.merge.takeRight, @pass.pair.leftTail,
+      @pass.pair.rightTail, @pass.pair.copy, @pass.grow"
+  >
+    <Stacked />
+  </Scene>
+</Storyboard>

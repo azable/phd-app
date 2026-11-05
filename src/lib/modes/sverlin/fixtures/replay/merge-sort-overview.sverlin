@@ -1,0 +1,274 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Index = index(Values);
+  const Done = type('boolean');
+</script>
+
+<script input>
+  const values = Values;
+</script>
+
+<script algorithm>
+  function sort(a, lo, hi) @sort{
+    if (@small[hi - lo <= 1]) @done{
+      return;
+    }
+    @split[
+      const mid = Index(a, Math.floor((lo + hi) / 2));
+    ]
+    @left[sort(a, lo, mid);]
+    @right[sort(a, mid, hi);]
+    @start[
+      let i = Index(a, lo);
+      let j = Index(a, mid);
+    ]
+    while (@both[i < j && j < hi]) @merge{
+      if (@ordered[a[i] <= a[j]]) @keep{
+        i++;
+      } else @insert{
+        @lift[const held = a[j];]
+        for (
+          @shiftStart[let k = Index(a, j)];
+          @shiftMore[i < k];
+          @shiftNext[k--]
+        ) @shift{
+          @move[a[k] = a[k - 1];]
+        }
+        @place[
+          a[i] = held;
+          i++;
+          j++;
+        ]
+      }
+    }
+  }
+
+  @run[
+    sort(values, Index(values, 0), Index(values, values.length));
+  ]
+  @complete[const complete = Done(true);]
+</script>
+
+<script listing="textbook">
+MERGE-SORT(A, lo, hi)
+  @sort[@small[if hi - lo ≤ 1, return]
+  @split[mid = floor((lo + hi) / 2)]
+  @left[MERGE-SORT(A, lo, mid)]
+  @right[MERGE-SORT(A, mid, hi)]
+  @start[i = lo; j = mid]
+  @merge[while @both[i < j and j < hi]
+    if @ordered[A[i] ≤ A[j]]
+      @keep[i = i + 1]
+    else @insert[@lift[held = A[j]]
+      @shift[for k = j down to i + 1
+        @move[A[k] = A[k - 1]]]
+      @place[A[i] = held; i = i + 1; j = j + 1]]]]
+
+@run[MERGE-SORT(A, 0, length(A))]
+@complete[the array is sorted]
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+<View of="Int" name="IntBar">
+  <Node layout="column">
+    <Node kind="Length" height={this} />
+    <Node kind="BarValue" value={this} />
+  </Node>
+</View>
+<View of="Index" name="IndexText">
+  <Node value={this} />
+</View>
+<View of="Index" name="Mark">
+  <Pointed />
+</View>
+<View of="Index" name="IMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="ILabel">i</Node>
+  </Node>
+</View>
+<View of="Index" name="JMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="JLabel">j</Node>
+  </Node>
+</View>
+<View of="Index" name="KMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="KLabel">k</Node>
+  </Node>
+</View>
+<View of="@sort.merge.ordered" name="MergeQuestion">
+  <Node>
+    Is {this.left} ≤ {this.right}? {this.value}
+  </Node>
+</View>
+
+<Layout name="Title">
+  <Node>Merge sort: split, then merge</Node>
+</Layout>
+
+<Layout name="Cells" of="values">
+  <Node>
+    {#each values as value}
+      {value}
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="SplitNote" of="lo, mid, hi">
+  <Node kind="SplitCaption">
+    Split the range {lo} to {hi} at {mid}.
+  </Node>
+</Layout>
+
+<Layout name="SplitTree" of="values">
+  <Node layout="column">
+    <Node kind="TreeTitle">Intermediate lists as a tree</Node>
+    <Node kind="TreeLevel">
+      {#each values as value}{value}{/each}
+    </Node>
+    <Node layout="row" kind="TreeBranches">
+      <Node layout="column" kind="TreeBranch">
+        <Node kind="TreeLevel">
+          {values[0]}{values[1]}{values[2]}{values[3]}
+        </Node>
+        <Node layout="row" kind="TreeBranches">
+          <Node layout="column" kind="TreeBranch">
+            <Node kind="TreeLevel">{values[0]}{values[1]}</Node>
+            <Node layout="row" kind="TreeLeaves">
+              <Node>{values[0]}</Node>
+              <Node>{values[1]}</Node>
+            </Node>
+          </Node>
+          <Node layout="column" kind="TreeBranch">
+            <Node kind="TreeLevel">{values[2]}{values[3]}</Node>
+            <Node layout="row" kind="TreeLeaves">
+              <Node>{values[2]}</Node>
+              <Node>{values[3]}</Node>
+            </Node>
+          </Node>
+        </Node>
+      </Node>
+      <Node layout="column" kind="TreeBranch">
+        <Node kind="TreeLevel">
+          {values[4]}{values[5]}{values[6]}{values[7]}
+        </Node>
+        <Node layout="row" kind="TreeBranches">
+          <Node layout="column" kind="TreeBranch">
+            <Node kind="TreeLevel">{values[4]}{values[5]}</Node>
+            <Node layout="row" kind="TreeLeaves">
+              <Node>{values[4]}</Node>
+              <Node>{values[5]}</Node>
+            </Node>
+          </Node>
+          <Node layout="column" kind="TreeBranch">
+            <Node kind="TreeLevel">{values[6]}{values[7]}</Node>
+            <Node layout="row" kind="TreeLeaves">
+              <Node>{values[6]}</Node>
+              <Node>{values[7]}</Node>
+            </Node>
+          </Node>
+        </Node>
+      </Node>
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="TreePage" of="values">
+  <Node>
+    <SplitTree values={values} />
+  </Node>
+</Layout>
+
+<Layout name="Board" of="values, lo, mid, hi, i, j, k,
+    @sort.split, @sort.merge.ordered,
+    @sort.merge.insert.shift.move, @sort.merge.insert.place,
+    @complete">
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      <Title />
+      <Cells values={values} />
+      {i}
+      {j}
+      {k}
+      <OneOf>
+        <When of="@sort.split">
+          <SplitNote lo={lo} mid={mid} hi={hi} />
+        </When>
+        <When of="@sort.merge.ordered">
+          {@sort.merge.ordered}
+        </When>
+        <When of="@sort.merge.insert.shift.move">
+          <Node kind="MoveCaption">
+            Shift a value right to open a place.
+          </Node>
+        </When>
+        <When of="@sort.merge.insert.place">
+          <Node kind="PlaceCaption">
+            Put the held value into the open place.
+          </Node>
+        </When>
+        <When of="@complete">
+          <Node kind="CompleteCaption">The array is sorted.</Node>
+        </When>
+      </OneOf>
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Stacked" of="values, lo, mid, hi, i, j, k,
+    @sort.split, @sort.merge.ordered,
+    @sort.merge.insert.shift.move, @sort.merge.insert.place,
+    @complete">
+  <Node>
+    <Board
+      values={values}
+      lo={lo}
+      mid={mid}
+      hi={hi}
+      i={i}
+      j={j}
+      k={k}
+    />
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  values={[7, 2, 6, 3, 8, 1, 5, 4]}
+/>
+
+<Storyboard>
+  <Scene
+    name="split-tree"
+    title="Intermediate lists"
+    case="main"
+    at=":before"
+  >
+    <TreePage values={values} />
+  </Scene>
+  <Scene
+    name="merge-sort"
+    title="Split and merge"
+    case="main"
+    pause="@sort.split, @sort.merge.ordered,
+      @sort.merge.insert.shift.move,
+      @sort.merge.insert.place, @complete"
+  >
+    <Stacked
+      values={values}
+      lo={lo}
+      mid={mid}
+      hi={hi}
+      i={i}
+      j={j}
+      k={k}
+    />
+  </Scene>
+</Storyboard>

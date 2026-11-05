@@ -1,0 +1,209 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 40 });
+  const Values = array(Int, { max: 7 });
+  const Index = index(Values);
+  const SearchStatus = type(['searching', 'not-found']);
+  const SearchResult = union(Index, SearchStatus);
+</script>
+
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+
+<script algorithm>
+  @range[let lo = Index(values, 0);
+  let hi = Index(values, values.length - 1);
+  let result = SearchResult(SearchStatus('searching'));]
+
+  while (@open[lo <= hi]) @probe{
+    const mid = Index(
+      values,
+      Math.floor((lo + hi) / 2)
+    );
+
+    if (@equal[values[mid] === target]) @found{
+      result = mid;
+      return;
+    }
+
+    if (@less[values[mid] < target]) @right{
+      lo = mid + 1;
+    } else @left{
+      hi = mid - 1;
+    }
+  }
+
+  @missing[result = SearchStatus('not-found');
+  return;]
+</script>
+
+<script listing="textbook">
+  BINARY-SEARCH(A, target)
+  @range[lo = 0; hi = length(A) - 1]
+  while lo <= hi
+      mid = floor((lo + hi) / 2)
+      if @equal[A[mid] = target]
+          @found[return mid]
+      if A[mid] < target
+          @right[lo = mid + 1]
+      else
+          @left[hi = mid - 1]
+  @missing[return not found]
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+
+<View of="Values" name="Cells">
+  <Node>
+    {#each this as value}
+      {value}
+    {/each}
+  </Node>
+</View>
+
+<View of="Values" name="Bars">
+  <Node layout="row">
+    {#each this as value}
+      <Node kind="BarItem" layout="column">
+        <Node kind="Bar" height={value} />
+        <Node kind="BarLabel" value={value} />
+      </Node>
+    {/each}
+  </Node>
+</View>
+
+<View of="Index" name="IndexNumber">
+  <Node value={this} />
+</View>
+
+<View of="Index" name="Lower">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="LowerLabel">lo</Node>
+  </Node>
+</View>
+
+<View of="Index" name="Middle">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="MiddleLabel">mid</Node>
+  </Node>
+</View>
+
+<View of="Index" name="Upper">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="UpperLabel">hi</Node>
+  </Node>
+</View>
+
+<View of="SearchStatus" name="StatusWord">
+  <Node>
+    {#if this === 'searching'}
+      searching
+    {:else}
+      not found
+    {/if}
+  </Node>
+</View>
+
+<Layout name="Title" of="target">
+  <Node>Binary search for {target}</Node>
+</Layout>
+
+<Layout name="ArrayLine" of="values">
+  <Node>{values}</Node>
+</Layout>
+
+<Layout name="RangeNote" of="lo, hi">
+  <Node>Active range: index {lo} through {hi}</Node>
+</Layout>
+
+<Layout name="Explanation"
+  of="values, target, mid, result, @probe.equal,
+      @probe.right, @probe.left, @probe.found, @missing">
+  <Node layout="column">
+    <OneOf>
+      <When of="@probe.equal">
+        <Node>Compare {target} with {values[mid]} at index {mid}.</Node>
+      </When>
+      <When of="@probe.right">
+        <Node>The target is larger, so move lo to the right.</Node>
+      </When>
+      <When of="@probe.left">
+        <Node>The target is smaller, so move hi to the left.</Node>
+      </When>
+      <When of="@probe.found">
+        <Node>Found {target} at index {mid}.</Node>
+      </When>
+      <When of="@missing">
+        <Node>{target} is not in the array.</Node>
+      </When>
+      <When of=":after">
+        <Node>Search result: {result}</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout name="Board"
+  of="values, target, lo, mid, hi, result, @probe.equal,
+      @probe.right, @probe.left, @probe.found, @missing">
+  <Node layout="column">
+    <Title target={target} />
+    <ArrayLine values={values} />
+    <RangeNote lo={lo} hi={hi} />
+    <Explanation
+      values={values}
+      target={target}
+      mid={mid}
+      result={result}
+    />
+  </Node>
+</Layout>
+
+<Layout name="SideBySide"
+  of="values, target, lo, mid, hi, result, @probe.equal,
+      @probe.right, @probe.left, @probe.found, @missing">
+  <Node layout="row">
+    <Listing />
+    <Board
+      values={values}
+      target={target}
+      lo={lo}
+      mid={mid}
+      hi={hi}
+      result={result}
+    />
+    {lo}
+    {mid}
+    {hi}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  values={[3, 8, 12, 17, 23, 31, 38]}
+  target={31}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@range, @probe.equal, @probe.right, @probe.left,
+      @probe.found, @missing"
+  >
+    <SideBySide
+      values={values}
+      target={target}
+      lo={lo}
+      mid={mid}
+      hi={hi}
+      result={result}
+    />
+  </Scene>
+</Storyboard>

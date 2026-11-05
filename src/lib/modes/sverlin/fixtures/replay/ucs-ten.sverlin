@@ -1,0 +1,234 @@
+<script domain>
+  const Name = type([
+    'S', 'A', 'B', 'C', 'D', 'E', 'F', 'H', 'I', 'G'
+  ]);
+  const Cost = type('integer', { min: 0, max: 30 });
+  const Infinity = type(['∞']);
+  const Distance = union(Cost, Infinity);
+  const Done = type('boolean');
+  const Vertex = record({ name: Name, cost: Distance, done: Done });
+  const Vertices = array(Vertex, { max: 10 });
+  const VertexPos = index(Vertices);
+  const Weight = type('integer', { min: 1, max: 9 });
+  const Edge = record({
+    from: VertexPos,
+    to: VertexPos,
+    weight: Weight
+  });
+  const Edges = array(Edge, { max: 12 });
+  const EdgePos = index(Edges);
+  const NoVertex = type(['none']);
+  const Choice = union(VertexPos, NoVertex);
+</script>
+
+<script input>
+  const vertices = Vertices;
+  const edges = Edges;
+  const goal = VertexPos;
+</script>
+
+<script algorithm>
+  @setup[vertices[0].cost = Cost(0);]
+  while (@open[!vertices[goal].done]) @search{
+    let pick = Choice(NoVertex('none'));
+    let best = Distance(Infinity('∞'));
+    for (
+      @scanStart[let i = VertexPos(vertices, 0)];
+      @scanMore[i < vertices.length];
+      @scanNext[i++]
+    ) @scan{
+      if (
+        @better[
+          !vertices[i].done &&
+          vertices[i].cost !== '∞' &&
+          (best === '∞' ||
+            Cost(vertices[i].cost) < Cost(best))
+        ]
+      ) @choose{
+        pick = i;
+        best = vertices[i].cost;
+      }
+    }
+    if (@empty[pick === 'none']) @missing{
+      return;
+    }
+    @select[
+      const current = VertexPos(vertices, pick);
+      const settledCost = Cost(best);
+    ]
+    @take[vertices[current].done = true;]
+    if (@isGoal[current === goal]) @goal{
+      return;
+    }
+    for (
+      @edgeStart[let e = EdgePos(edges, 0)];
+      @edgeMore[e < edges.length];
+      @edgeNext[e++]
+    ) @edges{
+      const edge = edges[e];
+      if (@leaves[edge.from === current]) @consider{
+        const next = edge.to;
+        const candidate = Cost(
+          settledCost + Cost(edge.weight)
+        );
+        if (
+          @improves[
+            !vertices[next].done &&
+            (vertices[next].cost === '∞' ||
+              candidate < Cost(vertices[next].cost))
+          ]
+        ) @relax{
+          @update[vertices[next].cost = candidate;]
+        }
+      }
+    }
+  }
+</script>
+
+<View of="Name" name="NameText">
+  <Node value={this} />
+</View>
+<View of="Cost" name="CostValue">
+  <Node value={this} />
+</View>
+<View of="Infinity" name="UnknownCost">
+  <Node>∞</Node>
+</View>
+<View of="Weight" name="WeightPill">
+  <Node value={this} />
+</View>
+<View of="Vertex" name="VertexCard">
+  <Node layout="column">
+    <Node kind="VertexName">{this.name}</Node>
+    <Node kind="DistanceLabel">cost {this.cost}</Node>
+  </Node>
+</View>
+<View of="VertexPos" name="CurrentMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="CurrentLabel">current</Node>
+  </Node>
+</View>
+<View of="VertexPos" name="GoalMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="GoalLabel">goal</Node>
+  </Node>
+</View>
+
+<Layout name="Title" of="goal">
+  <Node>Uniform cost search from S to {at(goal).name}</Node>
+</Layout>
+
+<Layout name="Graph" of="vertices, edges">
+  <Node layout="free">
+    {#each vertices as vertex}
+      {vertex}
+    {/each}
+    {#each edges as edge}
+      <Link from={edge.from} to={edge.to}>
+        {edge.weight}
+      </Link>
+    {/each}
+  </Node>
+</Layout>
+
+<Layout
+  name="StatusLine"
+  of="current, settledCost, next, candidate, @setup,
+    @search.take, @search.edges.consider.relax, @search.goal"
+>
+  <Node>
+    <OneOf>
+      <When of="@setup">
+        <Node>Begin with S in the frontier at cost 0.</Node>
+      </When>
+      <When of="@search.take">
+        <Node>
+          Settle {at(current).name}, the lowest-cost frontier node,
+          at cost {settledCost}.
+        </Node>
+      </When>
+      <When of="@search.edges.consider.relax">
+        <Node>
+          Improve {at(next).name}: its new cost is {candidate}.
+        </Node>
+      </When>
+      <When of="@search.goal">
+        <Node>
+          Goal reached at {at(current).name} with cost {settledCost}.
+        </Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout
+  name="Stacked"
+  of="vertices, edges, goal, current, settledCost, next,
+    candidate, @setup, @search.take,
+    @search.edges.consider.relax, @search.goal"
+>
+  <Node layout="column">
+    <Title goal={goal} />
+    <Graph vertices={vertices} edges={edges} />
+    <StatusLine
+      current={current}
+      settledCost={settledCost}
+      next={next}
+      candidate={candidate}
+    />
+    {current}
+    {goal}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  vertices={[
+    { name: 'S', cost: '∞', done: false },
+    { name: 'A', cost: '∞', done: false },
+    { name: 'B', cost: '∞', done: false },
+    { name: 'C', cost: '∞', done: false },
+    { name: 'D', cost: '∞', done: false },
+    { name: 'E', cost: '∞', done: false },
+    { name: 'F', cost: '∞', done: false },
+    { name: 'H', cost: '∞', done: false },
+    { name: 'I', cost: '∞', done: false },
+    { name: 'G', cost: '∞', done: false }
+  ]}
+  edges={[
+    { from: 0, to: 1, weight: 4 },
+    { from: 0, to: 2, weight: 1 },
+    { from: 2, to: 1, weight: 2 },
+    { from: 2, to: 4, weight: 5 },
+    { from: 2, to: 5, weight: 8 },
+    { from: 1, to: 3, weight: 1 },
+    { from: 1, to: 4, weight: 7 },
+    { from: 3, to: 6, weight: 3 },
+    { from: 4, to: 5, weight: 2 },
+    { from: 5, to: 7, weight: 2 },
+    { from: 6, to: 8, weight: 2 },
+    { from: 8, to: 9, weight: 2 }
+  ]}
+  goal={3}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@setup, @search.take,
+      @search.edges.consider.relax.update, @search.goal"
+  >
+    <Stacked
+      vertices={vertices}
+      edges={edges}
+      goal={goal}
+      current={current}
+      settledCost={settledCost}
+      next={next}
+      candidate={candidate}
+    />
+  </Scene>
+</Storyboard>

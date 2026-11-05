@@ -1,0 +1,159 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 40 });
+  const Values = array(Int, { max: 7 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+
+<script algorithm>
+  @range[
+    let lo = Index(values, 0);
+    let hi = Index(values, values.length - 1);
+  ]
+  while (@open[lo <= hi]) @probe{
+    const mid = Index(
+      values,
+      Math.floor((lo + hi) / 2)
+    );
+    if (@equal[values[mid] === target]) @found{
+      return;
+    }
+    if (@below[values[mid] < target]) @right{
+      lo = mid + 1;
+    } else @left{
+      hi = mid - 1;
+    }
+  }
+  @missing[return;]
+</script>
+
+<script listing="textbook">
+  BINARY-SEARCH(A, target)
+  @range[lo = 0; hi = length(A) - 1]
+  while lo <= hi
+      @probe[mid = floor((lo + hi) / 2)
+      @equal[if A[mid] = target]
+          @found[return mid]
+      if A[mid] < target
+          @right[lo = mid + 1]
+      else
+          @left[hi = mid - 1]]
+  @missing[return not found]
+</script>
+
+<View of="Int" name="IntCell">
+  <Node value={this} />
+</View>
+<View of="Int" name="IntBar">
+  <Node layout="column">
+    <Node kind="Length" height={this} />
+    <Node kind="BarLabel" value={this} />
+  </Node>
+</View>
+<View of="Index" name="IndexText">
+  <Node value={this} />
+</View>
+<View of="Index" name="LowMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="LowLabel">lo</Node>
+  </Node>
+</View>
+<View of="Index" name="MidMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="MidLabel">mid</Node>
+  </Node>
+</View>
+<View of="Index" name="HighMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="HighLabel">hi</Node>
+  </Node>
+</View>
+<View of="@probe.equal" name="EqualityQuestion">
+  <Node>
+    Is {this.left} equal to {this.right}? {this.value}
+  </Node>
+</View>
+
+<Layout name="Title" of="target">
+  <Node>Binary search for {target}</Node>
+</Layout>
+<Layout name="Cells" of="values">
+  <Node>
+    {#each values as value}
+      {value}
+    {/each}
+  </Node>
+</Layout>
+<Layout name="Range" of="lo, hi">
+  <Node>Remaining range: index {lo} to {hi}</Node>
+</Layout>
+<Layout name="Status" of="target, mid, @probe.equal, @probe.right,
+    @probe.left, @probe.found, @missing">
+  <Node>
+    <OneOf>
+      <When of="@probe.equal">
+        {@probe.equal}
+      </When>
+      <When of="@probe.right">
+        <Node>The middle value is too small, so search right.</Node>
+      </When>
+      <When of="@probe.left">
+        <Node>The middle value is too large, so search left.</Node>
+      </When>
+      <When of="@probe.found">
+        <Node>Found {target} at index {mid}.</Node>
+      </When>
+      <When of="@missing">
+        <Node>{target} is not in the array.</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout name="Stacked" of="values, target, lo, mid, hi,
+    @probe.equal, @probe.right, @probe.left, @probe.found, @missing">
+  <Node layout="column">
+    <Title target={target} />
+    <Node layout="row">
+      <Listing />
+      <Node layout="column">
+        <Cells values={values} />
+        <Range lo={lo} hi={hi} />
+        <Status target={target} mid={mid} />
+      </Node>
+    </Node>
+    {lo}
+    {mid}
+    {hi}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  values={[2, 5, 8, 12, 16, 23, 38]}
+  target={16}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@range, @probe.equal, @probe.right, @probe.left,
+      @probe.found, @missing"
+  >
+    <Stacked
+      values={values}
+      target={target}
+      lo={lo}
+      mid={mid}
+      hi={hi}
+    />
+  </Scene>
+</Storyboard>

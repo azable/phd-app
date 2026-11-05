@@ -1,0 +1,229 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = array(Vertex, { max: 6 });
+  const VertexRef = index(Vertices);
+  const Neighbours = array(VertexRef, { max: 2 });
+  const Slot = index(Neighbours);
+  const Adjacency = array(Neighbours, { max: 6 });
+  const Queue = array(VertexRef, { max: 6 });
+</script>
+
+<script input>
+  const vertices = Vertices;
+  const out = Adjacency;
+  const start = VertexRef;
+</script>
+
+<script algorithm>
+  @init[let frontier = Queue([start]);]
+  while (@more[frontier.length > 0]) @visit{
+    @take[const current = frontier[0];
+    frontier.shift();
+    const around = out[current];]
+    for (
+      @first[let slot = Slot(around, 0)];
+      @another[slot < around.length];
+      @step[slot++]
+    ) @look{
+      const next = around[slot];
+      if (@unseen[!vertices[next].seen]) @discover{
+        vertices[next].seen = true;
+        frontier.push(next);
+      }
+    }
+  }
+  @done[return;]
+</script>
+
+<script listing="textbook">
+  BREADTH-FIRST-SEARCH(G, start)
+  @init[frontier ← [start]]
+  while frontier is not empty
+      @visit.take[current ← remove the front of frontier]
+      for each neighbour of current
+          @visit.look.unseen[if the neighbour is undiscovered]
+              @visit.look.discover[mark it discovered and reveal its card
+              add it to the frontier]
+  @done[all reachable vertices have been visited]
+</script>
+
+<View of="Name" name="NameText">
+  <Node value={this} />
+</View>
+
+<View of="Seen" name="SeenWord">
+  <Node>{this ? 'discovered' : 'undiscovered'}</Node>
+</View>
+
+<View of="Seen" name="SeenIcon">
+  <Node icon={this} />
+</View>
+
+<View of="Vertex" name="VertexCard">
+  {#if this.seen}
+    <Node layout="column">
+      {this.name}
+      <Node kind="State">{this.seen}</Node>
+    </Node>
+  {/if}
+</View>
+
+<View of="VertexRef" name="VertexName">
+  <Node>{at(this).name}</Node>
+</View>
+
+<View of="VertexRef" name="Current">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="CurrentLabel">current</Node>
+  </Node>
+</View>
+
+<View of="VertexRef" name="Neighbour">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="NeighbourLabel">next</Node>
+  </Node>
+</View>
+
+<View of="VertexRef" name="CurrentIcon">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="CurrentMarker" icon />
+  </Node>
+</View>
+
+<View of="VertexRef" name="NeighbourIcon">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="NeighbourMarker" icon />
+  </Node>
+</View>
+
+<View of="Queue" name="QueueItems">
+  <Node>{#each this as vertex}{vertex}{/each}</Node>
+</View>
+
+<Layout name="Title" of="start">
+  <Node>Breadth-first search from {start}</Node>
+</Layout>
+
+<Layout name="Graph" of="vertices, out">
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      <Node kind="VertexPlace" layout="stack">
+        <Node kind="Position">
+          <Node kind="PositionDot" />
+        </Node>
+        {vertex}
+      </Node>
+      {#each out[k] as neighbour}
+        <Link from={k} to={neighbour} />
+      {/each}
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="QueueLine" of="frontier">
+  <Node layout="row">
+    <Node kind="QueueLabel">frontier</Node>
+    {frontier}
+  </Node>
+</Layout>
+
+<Layout
+  name="Status"
+  of="start, current, next, @init, @visit.take,
+      @visit.look.unseen, @visit.look.discover, @done"
+>
+  <Node>
+    <OneOf>
+      <When of="@init">
+        <Node kind="StatusLine" layout="row">
+          <Node>Begin by adding</Node>
+          <Node kind="StatusVertex">{start}</Node>
+          <Node>to the frontier.</Node>
+        </Node>
+      </When>
+      <When of="@visit.take">
+        <Node kind="StatusLine" layout="row">
+          <Node>Remove</Node>
+          <Node kind="StatusVertex">{current}</Node>
+          <Node>from the front of the frontier.</Node>
+        </Node>
+      </When>
+      <When of="@visit.look.unseen">
+        <Node kind="StatusLine" layout="row">
+          <Node>Check whether neighbour</Node>
+          <Node kind="StatusVertex">{next}</Node>
+          <Node>is undiscovered.</Node>
+        </Node>
+      </When>
+      <When of="@visit.look.discover">
+        <Node kind="StatusLine" layout="row">
+          <Node>Discover</Node>
+          <Node kind="StatusVertex">{next}</Node>
+          <Node>and add it to the frontier.</Node>
+        </Node>
+      </When>
+      <When of="@done">
+        <Node>The frontier is empty, so BFS is complete.</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout
+  name="Stacked"
+  of="vertices, out, start, frontier, current, next, @init,
+      @visit.take, @visit.look.unseen,
+      @visit.look.discover, @done"
+>
+  <Node>
+    <Title start={start} />
+    <Node kind="Content" layout="row">
+      <Graph vertices={vertices} out={out} />
+      <Node kind="Side" layout="column">
+        <Listing />
+        <QueueLine frontier={frontier} />
+        <Status start={start} current={current} next={next} />
+      </Node>
+    </Node>
+    {current}
+    {next}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false },
+    { name: 'F', seen: false }
+  ]}
+  out={[[1, 2], [3, 4], [3], [5], [5], []]}
+  start={0}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@init, @visit.take, @visit.look.unseen,
+      @visit.look.discover, @done"
+  >
+    <Stacked
+      vertices={vertices}
+      out={out}
+      start={start}
+      frontier={frontier}
+      current={current}
+      next={next}
+    />
+  </Scene>
+</Storyboard>
