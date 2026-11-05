@@ -8,7 +8,7 @@
 
 import { expect, it } from 'vitest';
 
-import { browserTestsOn as enabled, openPage } from './testing/browser';
+import { describedScene, browserTestsOn as enabled, openPage } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
@@ -28,44 +28,8 @@ const fixtures = import.meta.glob<string>('./fixtures/*.sverlin', {
 type Drawn = { frame: SceneFrame; steps: SceneStep[] };
 
 /** Every step of a presentation as the page draws it. */
-async function drawn(
-  javascript: string,
-  { fonts = true, deviceScaleFactor = 1 } = {}
-): Promise<Drawn> {
-  const page = await openPage({
-    viewport: { width: 1200, height: 800 },
-    deviceScaleFactor
-  });
-  await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
-<script>
-  addEventListener('message', ({ data }) => {
-    if (data?.type === 'sverlin:ready') window.ready = true;
-    if (data?.type === 'sverlin:scene') window.scene = data;
-  });
-</script>`);
-  await page.evaluate(
-    (document) => {
-      window.document.querySelector('iframe')!.srcdoc = document;
-    },
-    sandboxDocument('', javascript, 0, 1, undefined, undefined, fonts ? embeddedFontsHead : '')
-  );
-  await page.waitForFunction(() => (window as { ready?: boolean }).ready, null, {
-    timeout: 60_000
-  });
-  await page.evaluate(() =>
-    document
-      .querySelector('iframe')
-      ?.contentWindow?.postMessage({ type: 'sverlin:describe', request: 'server' }, '*')
-  );
-  await page.waitForFunction(() => (window as { scene?: unknown }).scene, null, {
-    timeout: 120_000
-  });
-  const scene = await page.evaluate(
-    () => (window as unknown as { scene: { frame: SceneFrame; steps: SceneStep[] } }).scene
-  );
-  await page.close();
-  return scene;
-}
+const drawn = (javascript: string, { fonts = true, deviceScaleFactor = 1 } = {}): Promise<Drawn> =>
+  describedScene(javascript, { head: fonts ? embeddedFontsHead : '', deviceScaleFactor });
 
 /** The geometry a bundle gives its page (see compile.server.ts). */
 function geometriesOf(javascript: string): Geometry[] {

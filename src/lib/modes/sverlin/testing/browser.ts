@@ -10,6 +10,7 @@ import { chromium, type Browser, type Frame, type Page } from 'playwright-core';
 import { inject, onTestFinished } from 'vitest';
 
 import { sandboxDocument } from '../../sandbox';
+import type { SceneFrame, SceneStep } from '../library';
 
 /** Whether the browser tests run: `pnpm run test:browser` sets SVERLIN_RUN_BROWSER_TESTS=1. */
 export const browserTestsOn = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
@@ -122,6 +123,46 @@ export async function holdMotion(page: Page, step: number, fraction: number): Pr
       if (typeof duration === 'number') animation.currentTime = delay + duration * fraction;
     }
   }, fraction);
+}
+
+/**
+ * Every step of a built presentation as its page describes it (see describeSteps in
+ * assembly/entry.ts), asked for as the app asks, from a frame the size of the app's.
+ */
+export async function describedScene(
+  javascript: string,
+  { head = '', deviceScaleFactor = 1 }: { head?: string; deviceScaleFactor?: number } = {}
+): Promise<{ frame: SceneFrame; steps: SceneStep[] }> {
+  const page = await openPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor });
+  await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
+<script>
+  addEventListener('message', ({ data }) => {
+    if (data?.type === 'sverlin:ready') window.ready = true;
+    if (data?.type === 'sverlin:scene') window.scene = data;
+  });
+</script>`);
+  await page.evaluate(
+    (document) => {
+      window.document.querySelector('iframe')!.srcdoc = document;
+    },
+    sandboxDocument('', javascript, 0, 1, undefined, undefined, head)
+  );
+  await page.waitForFunction(() => (window as { ready?: boolean }).ready, null, {
+    timeout: 60_000
+  });
+  await page.evaluate(() =>
+    document
+      .querySelector('iframe')
+      ?.contentWindow?.postMessage({ type: 'sverlin:describe', request: 'test' }, '*')
+  );
+  await page.waitForFunction(() => (window as { scene?: unknown }).scene, null, {
+    timeout: 120_000
+  });
+  const scene = await page.evaluate(
+    () => (window as unknown as { scene: { frame: SceneFrame; steps: SceneStep[] } }).scene
+  );
+  await page.close();
+  return scene;
 }
 
 /** Lets held motion finish, and waits until the page has settled at the step. */
