@@ -6,7 +6,9 @@
 
 import { headDrawing } from './node/heads';
 import type {
+  ArrangementLayout,
   SceneBox,
+  SceneFrame,
   SceneHead,
   SceneLink,
   SceneLook,
@@ -20,10 +22,19 @@ import type {
 
 /** A node as drawn: its box and look, its opacity with its parents', and what it holds. */
 export type DrawnNode = {
+  /** What it is drawn by: its id, or, fading out where a new node took its id, its id marked old. */
+  key: string;
   id: string;
+  parent?: string;
+  type?: string;
   kind?: string;
-  /** What a selection names it by: its text, its value, or its type. */
-  label: string;
+  places?: string[];
+  identity?: string;
+  arrangement?: SceneNode['arrangement'];
+  /** Fading out, gone from the step moved to. */
+  leaving?: true;
+  /** The node it moves from, where that had another id. */
+  was?: string;
   box: SceneBox;
   look: SceneLook;
   opacity: number;
@@ -35,6 +46,11 @@ export type DrawnNode = {
 /** A link as drawn: its path, its paint, its heads, and its opacity. */
 export type DrawnLink = {
   key: string;
+  /** The id of the <Link> drawing it, which a selection names it by, with its ends. */
+  id?: string;
+  label: string;
+  /** Round its path's points, a curve's control points included. */
+  bounds: SceneBox;
   d: string;
   stroke: string;
   strokeWidth: number;
@@ -43,12 +59,77 @@ export type DrawnLink = {
   opacity: number;
 };
 
-export type DrawnScene = { nodes: DrawnNode[]; links: DrawnLink[] };
+export type DrawnScene = {
+  nodes: DrawnNode[];
+  links: DrawnLink[];
+  /** Its nodes by id, but those fading out. */
+  byId: ReadonlyMap<string, DrawnNode>;
+};
 
-const label = (node: SceneNode) =>
-  (node.text || node.value || node.runs?.map(({ text }) => text).join(' ') || node.type || 'node')
-    .replace(/\s+/gu, ' ')
-    .trim();
+/** A scene from its nodes and links, indexed. */
+export function indexed(nodes: DrawnNode[], links: DrawnLink[]): DrawnScene {
+  return {
+    nodes,
+    links,
+    byId: new Map(nodes.flatMap((node) => (node.leaving ? [] : [[node.id, node]])))
+  };
+}
+
+/** Round a path's points, read from its numbers in pairs. */
+function boundsOf(d: string): SceneBox {
+  const numbers = (d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/giu) ?? []).map(Number);
+  const xs = numbers.filter((_, i) => i % 2 === 0);
+  const ys = numbers.filter((_, i) => i % 2 === 1);
+  const [x, y] = [Math.min(...xs), Math.min(...ys)];
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+}
+
+/** A part of a step a selection can name: a node, a link drawn by a <Link>, or the page. */
+export type SelectablePart = { label: string; box: SceneBox; parent?: string };
+
+/**
+ * Every part of a scene a selection can name, by id, with what the page names it by: a node's text
+ * and its nodes' in order, or its type; a link's ends; the page as the frame calls it.
+ */
+export function selectableParts(
+  scene: DrawnScene,
+  frame: SceneFrame
+): ReadonlyMap<string, SelectablePart> {
+  const parts = new Map<string, SelectablePart>();
+  if (frame.node)
+    parts.set(frame.node.id, {
+      label: frame.node.label,
+      box: { x: 0, y: 0, width: frame.width, height: frame.height }
+    });
+  const inside = new Map<string, string[]>();
+  for (const node of scene.nodes) {
+    const texts = node.runs.map(({ text }) => text);
+    for (let id: string | undefined = node.id; id; id = scene.byId.get(id)?.parent)
+      inside.set(id, [...(inside.get(id) ?? []), ...texts]);
+  }
+  for (const node of scene.nodes) {
+    const text = (inside.get(node.id) ?? []).join(' ').replace(/\s+/gu, ' ').trim();
+    parts.set(node.id, {
+      label: text || node.type || 'node',
+      box: node.box,
+      ...(node.parent ? { parent: node.parent } : {})
+    });
+  }
+  for (const link of scene.links)
+    if (link.id) parts.set(link.id, { label: link.label, box: link.bounds });
+  return parts;
+}
+
+/** The free layouts round a node: the one placing its own children, and the one placing it. */
+export function layoutsAround(scene: DrawnScene, id: string): ArrangementLayout[] {
+  const own = scene.byId.get(id);
+  let placing = own?.parent ? scene.byId.get(own.parent) : undefined;
+  while (placing && !placing.arrangement)
+    placing = placing.parent ? scene.byId.get(placing.parent) : undefined;
+  return [own, placing].flatMap((node) =>
+    node?.arrangement ? [{ node: node.id, ...node.arrangement }] : []
+  );
+}
 
 /** A scene's nodes and links as drawn, a nested node's opacity multiplied with its parents'. */
 export function drawnScene(step: SceneStep): DrawnScene {
@@ -58,9 +139,14 @@ export function drawnScene(step: SceneStep): DrawnScene {
       (node.look.opacity ?? 1) * (node.parent ? (opacities.get(node.parent) ?? 1) : 1);
     opacities.set(node.id, opacity);
     return {
+      key: node.id,
       id: node.id,
+      ...(node.parent ? { parent: node.parent } : {}),
+      ...(node.type ? { type: node.type } : {}),
       ...(node.kind ? { kind: node.kind } : {}),
-      label: label(node),
+      ...(node.places ? { places: node.places } : {}),
+      ...(node.identity ? { identity: node.identity } : {}),
+      ...(node.arrangement ? { arrangement: node.arrangement } : {}),
       box: node.box,
       look: node.look,
       opacity,
@@ -80,6 +166,9 @@ export function drawnScene(step: SceneStep): DrawnScene {
     return [
       {
         key: count ? `${base}#${count}` : base,
+        ...(link.id ? { id: link.id } : {}),
+        label: `${link.from} ${link.directed ? '→' : '–'} ${link.to}`,
+        bounds: boundsOf(d),
         d,
         stroke: link.stroke,
         strokeWidth: link.strokeWidth,
@@ -89,7 +178,7 @@ export function drawnScene(step: SceneStep): DrawnScene {
       }
     ];
   });
-  return { nodes, links };
+  return indexed(nodes, links);
 }
 
 const num = (value: number) => Math.round(value * 100) / 100;
@@ -188,7 +277,7 @@ export function mixPath(from: string, to: string, t: number): string | undefined
  */
 export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): DrawnScene {
   if (t >= 1) return to;
-  const before = new Map(from.nodes.map((node) => [node.id, node]));
+  const before = from.byId;
   const after = new Set(to.nodes.map(({ id }) => id));
   const nodes: DrawnNode[] = to.nodes.map((node) => {
     const old = before.get(node.id);
@@ -208,7 +297,13 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
     };
   });
   for (const node of from.nodes)
-    if (!after.has(node.id)) nodes.push({ ...node, opacity: node.opacity * (1 - t) });
+    if (!node.leaving && !after.has(node.id))
+      nodes.push({
+        ...node,
+        key: `${node.id}~old`,
+        leaving: true,
+        opacity: node.opacity * (1 - t)
+      });
   const oldLinks = new Map(from.links.map((link) => [link.key, link]));
   const newKeys = new Set(to.links.map(({ key }) => key));
   const links: DrawnLink[] = [];
@@ -232,5 +327,5 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
   }
   for (const link of from.links)
     if (!newKeys.has(link.key)) links.push({ ...link, opacity: link.opacity * (1 - t) });
-  return { nodes, links };
+  return indexed(nodes, links);
 }

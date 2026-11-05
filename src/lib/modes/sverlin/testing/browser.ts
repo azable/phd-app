@@ -88,20 +88,72 @@ export async function openPresentation(
   return page;
 }
 
+type Served = { frame: SceneFrame; steps: SceneStep[] };
+
 /**
- * A script answering the page's requests for scenes as Viewport.svelte does, from the scenes given;
- * the page is its own parent here, so it hears what it posts.
+ * A script answering a presentation's requests for scenes as Viewport.svelte does, from the scenes
+ * given: the page's own, which is its own parent, or, hosted, its frame's, whose every message it
+ * keeps in `__messages`.
  */
-function servingScript(served: { frame: SceneFrame; steps: SceneStep[] }): string {
-  const scenes = JSON.stringify(served).replace(/</gu, '\\u003c');
+function servingScript(served: Served | undefined, hosted = false): string {
+  const scenes = JSON.stringify(served ?? null).replace(/</gu, '\\u003c');
+  const presentation = hosted ? "document.querySelector('iframe')?.contentWindow" : 'window';
   return `<script>(() => {
     const served = ${scenes};
-    addEventListener('message', ({ data }) => {
-      if (data?.type !== 'sverlin:scenes-wanted') return;
+    window.__messages = [];
+    addEventListener('message', ({ data, source }) => {
+      const presentation = ${presentation};
+      if (!presentation || source !== presentation) return;
+      if (${hosted}) window.__messages.push(data);
+      if (!served || data?.type !== 'sverlin:scenes-wanted') return;
       const steps = data.steps.map((step) => [step, served.steps[step]]);
-      postMessage({ type: 'sverlin:scenes', frame: served.frame, steps }, '*');
+      presentation.postMessage({ type: 'sverlin:scenes', frame: served.frame, steps }, '*');
     });
   })();</script>`;
+}
+
+/**
+ * A built presentation in a sandboxed frame filling a page, as the app hosts it, settled at its
+ * first step: the page keeps every message the frame sends (`messages`), answers its requests for
+ * scenes from those given, as Viewport.svelte does, and passes messages on to it (`send`).
+ */
+export async function openHosted(
+  javascript: string,
+  options: PageOptions & { served?: Served } = {}
+): Promise<{
+  page: Page;
+  frame: Frame;
+  send(message: object): Promise<void>;
+  messages(type: string): Promise<Record<string, unknown>[]>;
+}> {
+  const page = await openPage(options);
+  const { width, height } = options.viewport ?? { width: 1200, height: 700 };
+  const presentation = sandboxDocument('', javascript, 0, 1, undefined, undefined, '', {
+    scenes: options.served ? 'served' : false
+  });
+  const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+  // The host listens before the frame loads, so it hears the frame's first requests.
+  await page.setContent(
+    `<body style="margin:0">${servingScript(options.served, true)}<iframe sandbox="allow-scripts" style="display:block;width:${width}px;height:${height}px;border:0" srcdoc="${escape(presentation)}"></iframe></body>`
+  );
+  const frame = page.frames()[1];
+  await settled(frame, 0);
+  return {
+    page,
+    frame,
+    send: (message) =>
+      page.evaluate((message) => {
+        document.querySelector('iframe')!.contentWindow!.postMessage(message, '*');
+      }, message),
+    messages: (type) =>
+      page.evaluate(
+        (type) =>
+          (window as typeof window & { __messages: Record<string, unknown>[] }).__messages.filter(
+            (message) => message?.type === type
+          ),
+        type
+      )
+  };
 }
 
 /**

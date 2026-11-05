@@ -2,8 +2,10 @@
   A presentation's steps drawn as one SVG from their scene data (see scene-render.ts), in place of
   the mounted view: boxes, text, drawings and links in the frame's logical coordinates, fitted to the
   page as Frame.svelte fits its frame, and moved from one step's scene to the next by identity,
-  measuring nothing on the page. A click selects the node under the pointer, Shift, Ctrl or Cmd
-  adding or removing one, as on the mounted page.
+  measuring nothing on the page. It is used as Frame.svelte is: a click selects the node under the
+  pointer, or, on the frame's empty space, the page, Shift, Ctrl or Cmd adding or removing one, and
+  dragging draws a box; the wheel zooms, dragging with the middle button or with Space held pans,
+  and a double click on empty space resets; hovering a reference to a place outlines every other.
 -->
 <script lang="ts">
   import { motionDuration } from './motion';
@@ -12,36 +14,50 @@
     ease,
     headShape,
     headTransform,
+    indexed,
+    layoutsAround,
+    selectableParts,
     sceneBetween,
     shapePath,
     strokeInside,
     type DrawnNode,
     type DrawnScene
   } from './scene-render';
-  import type { SceneFrame, SceneStep, SceneText } from './scene';
+  import type { ArrangementLayout, SceneBox, SceneFrame, SceneStep, SceneText } from './scene';
+
+  type CanvasView = { zoom: number; panX: number; panY: number };
+  type Selected = { id: string; label: string; layouts: ArrangementLayout[] };
 
   let {
     frame,
     selection = [],
+    view,
     onselection,
+    onview,
     onsettled
   }: {
     frame: SceneFrame;
     selection?: readonly string[];
-    /** Told the nodes selected, with what a selection names each by. */
-    onselection?: (elements: { id: string; label: string }[]) => void;
+    /** The zoom and pan to start from, as the app restores them. */
+    view?: Partial<CanvasView>;
+    /** Told the nodes selected, with what a selection names each by and the layouts round each. */
+    onselection?: (elements: Selected[]) => void;
+    /** Told the zoom and pan once a gesture changes them. */
+    onview?: (view: CanvasView) => void;
     /** Told once a step's move has ended. */
     onsettled?: (step: number) => void;
   } = $props();
 
   // The scene moved to, the one moved from, and how far through the move it is.
-  let target = $state<DrawnScene>({ nodes: [], links: [] });
-  let origin = $state<DrawnScene | undefined>();
+  let target = $state.raw<DrawnScene>(indexed([], []));
+  let origin = $state.raw<DrawnScene | undefined>();
   let progress = $state(1);
   let shownStep = -1;
   let animation = 0;
+  const maxSelected = 50;
+  const maxLabel = 60;
   // svelte-ignore state_referenced_locally
-  let selected = $state<string[]>([...selection]);
+  let selected = $state<string[]>(selection.slice(0, maxSelected));
 
   const drawn = $derived(origin ? sceneBetween(origin, target, ease(progress)) : target);
 
@@ -73,20 +89,12 @@
 
   /** Show these nodes selected, as when the app opens a reference. */
   export function select(ids: readonly string[]): void {
-    selected = [...ids];
+    selected = ids.slice(0, maxSelected);
   }
 
   // The canvas fills the page, and the frame fits inside it with a margin, as Frame.svelte fits it.
   let viewport = $state({ width: window.innerWidth, height: window.innerHeight });
   let canvas = $state<HTMLDivElement>();
-  $effect(() => {
-    if (!canvas) return;
-    const observer = new ResizeObserver(([entry]) => {
-      viewport = { width: entry.contentRect.width, height: entry.contentRect.height };
-    });
-    observer.observe(canvas);
-    return () => observer.disconnect();
-  });
   const margin = 16;
   const scale = $derived(
     viewport.width > 2 * margin && viewport.height > 2 * margin
@@ -97,27 +105,236 @@
       : 1
   );
 
-  function report() {
-    const byId = new Map(target.nodes.map((node) => [node.id, node]));
+  const minZoom = 0.25;
+  const maxZoom = 8;
+  // svelte-ignore state_referenced_locally
+  const restored =
+    view && [view.zoom, view.panX, view.panY].every(Number.isFinite)
+      ? (view as CanvasView)
+      : { zoom: 1, panX: 0, panY: 0 };
+  let zoom = $state(Math.min(Math.max(restored.zoom, minZoom), maxZoom));
+  let panX = $state(restored.panX);
+  let panY = $state(restored.panY);
+  const shown = $derived(scale * zoom);
+  // Where the frame's top left corner is on the canvas.
+  const corner = $derived({
+    x: viewport.width / 2 + panX - (frame.width * shown) / 2,
+    y: viewport.height / 2 + panY - (frame.height * shown) / 2
+  });
+  /** A box in the frame's coordinates, on the canvas. */
+  const onCanvas = (box: SceneBox) => ({
+    left: corner.x + box.x * shown,
+    top: corner.y + box.y * shown,
+    width: box.width * shown,
+    height: box.height * shown
+  });
+
+  type Point = { x: number; y: number };
+  // The pointer gesture in progress: panning, or a press that becomes a click or a selection box.
+  let gesture = $state<
+    | { kind: 'pan'; pointer: number; last: Point }
+    | { kind: 'select'; pointer: number; start: Point; at: Point; node?: string; additive: boolean }
+    | undefined
+  >();
+  let spaceHeld = $state(false);
+  // A press only becomes a selection box once it has moved this far, so a click stays a click.
+  const dragThreshold = 4;
+  const area = $derived(
+    gesture?.kind === 'select' &&
+      Math.max(
+        Math.abs(gesture.at.x - gesture.start.x),
+        Math.abs(gesture.at.y - gesture.start.y)
+      ) >= dragThreshold
+      ? {
+          left: Math.min(gesture.start.x, gesture.at.x),
+          top: Math.min(gesture.start.y, gesture.at.y),
+          right: Math.max(gesture.start.x, gesture.at.x),
+          bottom: Math.max(gesture.start.y, gesture.at.y)
+        }
+      : undefined
+  );
+
+  function reportView() {
+    onview?.({ zoom, panX, panY });
+  }
+
+  const selectable = $derived(selectableParts(target, frame));
+
+  // Cut whole code points, so an emoji is never split into a lone surrogate the server refuses.
+  const shortened = (label: string) =>
+    label.length > maxLabel
+      ? `${Array.from(label)
+          .slice(0, maxLabel - 1)
+          .join('')}…`
+      : label;
+
+  function setSelection(ids: string[]) {
+    selected = [...new Set(ids)].slice(0, maxSelected);
     onselection?.(
       selected.flatMap((id) => {
-        const node = byId.get(id);
-        return node ? [{ id, label: node.label.slice(0, 120) }] : [];
+        const part = selectable.get(id);
+        return part
+          ? [{ id, label: shortened(part.label), layouts: layoutsAround(target, id) }]
+          : [];
       })
     );
   }
 
-  function choose(event: MouseEvent) {
-    const id = (event.target as Element | null)
-      ?.closest<SVGElement>('[data-sv-node]')
-      ?.getAttribute('data-sv-node');
-    const adding = event.shiftKey || event.ctrlKey || event.metaKey;
-    if (!id) selected = adding ? selected : [];
-    else if (adding)
-      selected = selected.includes(id) ? selected.filter((each) => each !== id) : [...selected, id];
-    else selected = [id];
-    report();
+  /** The innermost part at an event's target, if any. */
+  const partAt = (target: EventTarget | null) =>
+    target instanceof Element
+      ? (target.closest<SVGElement>('[data-sv-node]')?.getAttribute('data-sv-node') ?? undefined)
+      : undefined;
+
+  /** The parts lying wholly inside an area of the canvas, keeping only the outermost. */
+  function partsInside(within: { left: number; top: number; right: number; bottom: number }) {
+    const inside = new Set(
+      [...selectable].flatMap(([id, { box }]) => {
+        const { left, top, width, height } = onCanvas(box);
+        return left >= within.left &&
+          left + width <= within.right &&
+          top >= within.top &&
+          top + height <= within.bottom
+          ? [id]
+          : [];
+      })
+    );
+    const outermost = (id: string) => {
+      for (let up = selectable.get(id)?.parent; up; up = selectable.get(up)?.parent)
+        if (inside.has(up)) return false;
+      return true;
+    };
+    return [...inside].filter(outermost);
   }
+
+  /** A position relative to the canvas, which fills the page. */
+  function local(event: { clientX: number; clientY: number }): Point {
+    const rect = canvas?.getBoundingClientRect();
+    return { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) };
+  }
+
+  function onWheel(event: WheelEvent) {
+    event.preventDefault();
+    // As Frame.svelte zooms: a mouse wheel notch zooms by 10%, a pinch counts more, and sideways
+    // scrolling pans; the point under the pointer stays still.
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.height : 1;
+    panX -= event.deltaX * unit;
+    const rate = event.ctrlKey ? 0.01 : Math.log(1.1) / 100;
+    const next = Math.min(Math.max(zoom * Math.exp(-event.deltaY * unit * rate), minZoom), maxZoom);
+    const at = local(event);
+    const x = at.x - viewport.width / 2;
+    const y = at.y - viewport.height / 2;
+    panX = x - (x - panX) * (next / zoom);
+    panY = y - (y - panY) * (next / zoom);
+    zoom = next;
+    reportView();
+  }
+
+  function onPointerDown(event: PointerEvent) {
+    canvas?.focus({ preventScroll: true });
+    const pans = event.button === 1 || (event.button === 0 && spaceHeld);
+    if (!pans && event.button !== 0) return;
+    // The middle button would otherwise start the browser's autoscroll.
+    event.preventDefault();
+    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    const at = local(event);
+    gesture = pans
+      ? { kind: 'pan', pointer: event.pointerId, last: at }
+      : {
+          kind: 'select',
+          pointer: event.pointerId,
+          start: at,
+          at,
+          node: partAt(event.target),
+          additive: event.shiftKey || event.ctrlKey || event.metaKey
+        };
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (gesture?.pointer !== event.pointerId) return;
+    const at = local(event);
+    if (gesture.kind === 'pan') {
+      panX += at.x - gesture.last.x;
+      panY += at.y - gesture.last.y;
+      gesture = { ...gesture, last: at };
+    } else gesture = { ...gesture, at };
+  }
+
+  function onPointerUp(event: PointerEvent) {
+    if (gesture?.pointer !== event.pointerId) return;
+    const ended = gesture;
+    const within = area;
+    gesture = undefined;
+    if (ended.kind === 'pan') return reportView();
+    if (event.type === 'pointercancel') return;
+    if (within) {
+      const ids = partsInside(within);
+      setSelection(ended.additive ? [...selected, ...ids] : ids);
+    } else if (ended.node)
+      setSelection(
+        ended.additive
+          ? selected.includes(ended.node)
+            ? selected.filter((id) => id !== ended.node)
+            : [...selected, ended.node]
+          : [ended.node]
+      );
+    else if (!ended.additive && selected.length) setSelection([]);
+  }
+
+  function onDoubleClick(event: MouseEvent) {
+    const part = partAt(event.target);
+    // The page is selectable as a whole, but empty space all the same.
+    if (part && part !== frame.node?.id) return;
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    reportView();
+  }
+
+  function onKey(event: KeyboardEvent) {
+    if (event.key === ' ') {
+      event.preventDefault();
+      spaceHeld = event.type === 'keydown';
+    } else if (event.key === 'Escape' && event.type === 'keydown' && selected.length)
+      setSelection([]);
+  }
+
+  // The places of the reference under the pointer, whose every reference is outlined.
+  let hovered = $state<string[]>([]);
+  function onPointerOver(event: PointerEvent) {
+    const over =
+      frame.places && event.target instanceof Element
+        ? event.target.closest('[data-sv-place]')
+        : undefined;
+    hovered = over?.getAttribute('data-sv-place')?.split(' ') ?? [];
+  }
+  /** Every reference to a hovered place, on the canvas, in the first shared place's colour. */
+  const hoverOutlines = $derived.by(() => {
+    if (!hovered.length || !frame.places) return [];
+    const colourOf = (places: readonly string[] | undefined) => {
+      const shared = places?.find((place) => hovered.includes(place));
+      return shared === undefined ? undefined : (frame.places?.[shared] ?? 'currentColor');
+    };
+    return drawn.nodes.flatMap((node) => {
+      const own = colourOf(node.places);
+      return [
+        ...(own ? [{ box: onCanvas(node.box), colour: own }] : []),
+        ...node.runs.flatMap((run) => {
+          const colour = colourOf(run.places);
+          return colour ? [{ box: onCanvas(run.box), colour }] : [];
+        })
+      ];
+    });
+  });
+
+  // Outlines round the selected parts, on the canvas, so they keep their width at any zoom.
+  const outlines = $derived(
+    selected.flatMap((id) => {
+      const node = drawn.byId.get(id);
+      const box = node?.box ?? selectable.get(id)?.box;
+      return box ? [{ id, ...onCanvas(box) }] : [];
+    })
+  );
 
   const dash = (style: string | undefined, width: number) =>
     style === 'dashed'
@@ -131,7 +348,14 @@
     node.look.stroke && node.look.strokeWidth
       ? strokeInside(node.box, node.look.strokeWidth)
       : node.box;
-  const selectedNodes = $derived(drawn.nodes.filter(({ id }) => selected.includes(id)));
+
+  // The edge is drawn unscaled, just outside the frame, so its dashes keep their size on screen.
+  const edgeOffset = 6;
+  const edgeWidth = 1;
+  const edge = $derived({
+    width: frame.width * shown + 2 * edgeOffset,
+    height: frame.height * shown + 2 * edgeOffset
+  });
 </script>
 
 {#snippet text(node: DrawnNode, overLinks: boolean)}
@@ -162,49 +386,58 @@
       text-decoration={run.decoration === 'strike' ? 'line-through' : run.decoration}
       textLength={run.box.width > 0 ? run.box.width : undefined}
       lengthAdjust="spacingAndGlyphs"
+      data-sv-place={run.places?.join(' ')}
       opacity={node.opacity}>{cased(run)}</text
     >
   {/each}
 {/snippet}
 
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+<svelte:window onkeydown={onKey} onkeyup={onKey} onblur={() => (spaceHeld = false)} />
+
 <div
   class="sv-scenes"
+  class:panning={gesture?.kind === 'pan'}
+  class:pan-ready={spaceHeld}
   bind:this={canvas}
+  bind:clientWidth={viewport.width}
+  bind:clientHeight={viewport.height}
   role="application"
   tabindex="-1"
-  aria-label="Visualization canvas: click to select nodes"
-  onclick={choose}
+  aria-label="Visualization canvas: click or drag to select nodes, scroll to zoom, drag with the middle button or Space held to pan, double-click to reset"
+  onwheel={onWheel}
+  onpointerdown={onPointerDown}
+  onpointermove={onPointerMove}
+  onpointerup={onPointerUp}
+  onpointercancel={onPointerUp}
+  onpointerover={onPointerOver}
+  onpointerleave={() => (hovered = [])}
+  ondblclick={onDoubleClick}
 >
-  <!-- The frame's dashed edge, unscaled and just outside it, as Frame.svelte draws it. -->
-  <svg
-    class="sv-scene-edge"
-    width={frame.width * scale + 12}
-    height={frame.height * scale + 12}
-    aria-hidden="true"
-  >
-    <rect
-      x="0.5"
-      y="0.5"
-      width={frame.width * scale + 11}
-      height={frame.height * scale + 11}
-      rx="4"
-      stroke-dasharray="14 9"
-    />
-  </svg>
   <svg
     class="sv-scene"
     data-sv-scene="true"
     viewBox="0 0 {frame.width} {frame.height}"
-    width={frame.width * scale}
-    height={frame.height * scale}
+    width={frame.width * shown}
+    height={frame.height * shown}
+    style:left="{corner.x}px"
+    style:top="{corner.y}px"
     role="img"
     aria-label="The visualization at this step"
   >
-    <rect width={frame.width} height={frame.height} fill={frame.background} />
-    {#each drawn.nodes as node (node.id)}
+    <rect
+      width={frame.width}
+      height={frame.height}
+      fill={frame.background}
+      data-sv-node={frame.node?.id}
+    />
+    {#each drawn.nodes as node (node.key)}
       {@const box = rect(node)}
-      <g data-sv-node={node.id} data-sv-kind={node.kind}>
+      <g
+        data-sv-node={node.leaving ? undefined : node.id}
+        data-sv-kind={node.kind}
+        data-sv-was={node.was}
+        data-sv-place={node.places?.join(' ')}
+      >
         {#if node.look.fill || node.look.stroke}
           <rect
             x={box.x}
@@ -259,49 +492,123 @@
               />
             {/if}
           {/each}
+          {#if link.id && link.opacity === 1}
+            <!-- A wider stroke to click, as LinkLines.svelte draws it. -->
+            <path class="sv-scene-hit" d={link.d} data-sv-node={link.id} />
+          {/if}
         </g>
       {/each}
     </g>
-    {#each drawn.nodes as node (node.id)}
+    {#each drawn.nodes as node (node.key)}
       {#if node.runs.some((run) => run.overLinks) || node.marks.some((mark) => mark.overLinks)}
-        <g data-sv-node={node.id}>{@render text(node, true)}</g>
+        <g data-sv-node={node.leaving ? undefined : node.id}>{@render text(node, true)}</g>
       {/if}
     {/each}
-    {#each selectedNodes as node (node.id)}
-      <rect
-        class="sv-scene-selected"
-        x={node.box.x - 2}
-        y={node.box.y - 2}
-        width={node.box.width + 4}
-        height={node.box.height + 4}
-        fill="none"
-        stroke="#2563eb"
-        stroke-width={2 / scale}
-        pointer-events="none"
-      />
-    {/each}
   </svg>
+  <svg
+    class="sv-scene-edge"
+    width={edge.width}
+    height={edge.height}
+    style:left="{corner.x - edgeOffset}px"
+    style:top="{corner.y - edgeOffset}px"
+    aria-hidden="true"
+  >
+    <rect
+      x={edgeWidth / 2}
+      y={edgeWidth / 2}
+      width={edge.width - edgeWidth}
+      height={edge.height - edgeWidth}
+      rx="4"
+      stroke-width={edgeWidth}
+      stroke-dasharray="14 9"
+    />
+  </svg>
+  {#each hoverOutlines as outline, i (i)}
+    <div
+      class="sv-scene-hovered"
+      style:left="{outline.box.left}px"
+      style:top="{outline.box.top}px"
+      style:width="{outline.box.width}px"
+      style:height="{outline.box.height}px"
+      style:--sv-hover={outline.colour}
+    ></div>
+  {/each}
+  {#each outlines as outline (outline.id)}
+    <div
+      class="sv-scene-selected"
+      style:left="{outline.left}px"
+      style:top="{outline.top}px"
+      style:width="{outline.width}px"
+      style:height="{outline.height}px"
+    ></div>
+  {/each}
+  {#if area}
+    <div
+      class="sv-scene-box"
+      style:left="{area.left}px"
+      style:top="{area.top}px"
+      style:width="{area.right - area.left}px"
+      style:height="{area.bottom - area.top}px"
+    ></div>
+  {/if}
 </div>
 
 <style>
   .sv-scenes {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
+    outline: none;
+    /* Dragging selects nodes or pans, so it never selects the text inside. */
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
   }
-  .sv-scene {
+  .sv-scenes.pan-ready {
+    cursor: grab;
+  }
+  .sv-scenes.panning {
+    cursor: grabbing;
+  }
+  .sv-scene,
+  .sv-scene-edge {
+    position: absolute;
     display: block;
   }
   .sv-scene-edge {
-    position: absolute;
     pointer-events: none;
+    overflow: visible;
   }
   .sv-scene-edge rect {
     fill: none;
     stroke: var(--sv-muted);
     stroke-opacity: 0.4;
+  }
+  .sv-scene-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 12;
+    pointer-events: stroke;
+  }
+  .sv-scene-selected,
+  .sv-scene-hovered,
+  .sv-scene-box {
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .sv-scene-selected {
+    outline: 2px solid var(--sv-select);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Every reference to the place hovered, dashed in its colour. */
+  .sv-scene-hovered {
+    outline: 2px dashed var(--sv-hover);
+    outline-offset: 2px;
+  }
+  .sv-scene-box {
+    border: 1px solid var(--sv-select);
+    background: color-mix(in srgb, var(--sv-select) 10%, transparent);
   }
 </style>

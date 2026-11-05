@@ -44,6 +44,8 @@ document.head.append(theme);
 const playback = window as typeof window & {
   __sverlinStep?: number;
   __sverlinSelection?: unknown;
+  /** The zoom and pan the app restores, as it last had them (see sandboxDocument). */
+  __sverlinView?: { zoom?: number; panX?: number; panY?: number };
   /** How recording sized the nodes, for whoever looks on, as the timing harness does. */
   __sverlinReservation?: Reservation;
   /**
@@ -499,15 +501,14 @@ async function showScene(step: number) {
         selection: Array.isArray(playback.__sverlinSelection)
           ? playback.__sverlinSelection.map(String)
           : [],
-        onselection: (elements: { id: string; label: string }[]) => {
+        view: playback.__sverlinView,
+        onselection: (elements: unknown[]) => {
           if (window.parent !== window)
-            window.parent.postMessage(
-              {
-                type: 'sverlin:selection',
-                elements: elements.map((element) => ({ ...element, layouts: [] }))
-              },
-              '*'
-            );
+            window.parent.postMessage({ type: 'sverlin:selection', elements }, '*');
+        },
+        onview: (view: { zoom: number; panX: number; panY: number }) => {
+          if (window.parent !== window)
+            window.parent.postMessage({ type: 'sverlin:view', ...view }, '*');
         },
         onsettled: (settledStep: number) => {
           if (!ready) {
