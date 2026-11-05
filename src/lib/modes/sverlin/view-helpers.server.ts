@@ -7,6 +7,7 @@
 import { readabilityText, unreadableProblem } from '$lib/shared/readability';
 
 import guide from './README.md?raw';
+import layoutHelper from './layout-helper.md?raw';
 import helper from './view-helper.md?raw';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { viewKey } from './design.server';
@@ -108,12 +109,103 @@ export const viewHelperTask = ({
     `The source:\n\n${source}`
   ].join('\n\n');
 
-/** What each of the parallel helpers tries toward the task, so that their proposals differ. */
+/**
+ * What each of the parallel helpers tries toward the task, so that their proposals differ: one
+ * direction each, as many as a round runs at most (defaultHelperCounts in study/definition.ts).
+ */
 export const viewHelperDirections = [
   'a shape that shows the size, such as a bar or a column',
   'an icon, a word, or a compact mark without a box',
-  'a drawing, an <Svg> of a few simple shapes chosen by the value'
+  'a drawing, an <Svg> of a few simple shapes chosen by the value',
+  'a card or badge that groups the value with what it means',
+  'the plainest form that still reads: the value as text, with at most one mark'
 ];
+
+/** What each layout helper tries, so that their arrangements differ. */
+export const layoutHelperDirections = [
+  'the main structure beside the other parts, in a row',
+  'the main structure above the other parts, in a column, the rest in one row under it',
+  'fewer panels: merge small parts into one, or into the main structure',
+  'more panels: split the page into a grid of two by two',
+  'a side table or list folded into the main structure, its values in the nodes or links',
+  'the captions and explanations under the part they explain, close to it',
+  'the listing beside the structure, the explanations under both',
+  'the main structure as large as the frame allows, the rest small at one side',
+  'the parts in a stack where they show at different steps, so they share one place',
+  'the plainest page: the main structure alone, with one caption'
+];
+
+/** The guide's sections a layout needs: layouts and scenes, stacks, grids, free layouts and links. */
+const layoutSections = [
+  '## View',
+  '## Storyboard',
+  '## Pointers',
+  '## Queries',
+  '## Node',
+  '### Props',
+  '## Stack',
+  '## Grid',
+  '## Free layout and links',
+  '## Link',
+  '## The subset'
+];
+
+/** The layout helpers' prompt: their instructions, then the guide's sections on layouts. */
+export const layoutHelperPrompt = [
+  promptText(layoutHelper),
+  promptText(guideSections(guide, layoutSections))
+].join('\n\n');
+
+/** The task a layout helper is given, as viewHelperTask for a view. */
+export const layoutHelperTask = ({
+  layout,
+  source,
+  direction,
+  task,
+  background
+}: {
+  layout: string;
+  source: string;
+  direction?: string;
+  task?: string;
+  background?: string;
+}): string =>
+  [
+    `Write another arrangement of the layout ${layout}${direction ? `, trying ${direction}` : ''}: the whole <Layout name="${layout}">…</Layout>. Return JSON {"views":[{"name","description","markup"}]}, its name "${layout}".`,
+    ...(task ? [`The task, from the assistant: ${task}`] : []),
+    ...(background ? [`What the participant has said and settled:\n${background}`] : []),
+    `The source:\n\n${source}`
+  ].join('\n\n');
+
+/** A layout's whole block in a source, or undefined. Layouts are top-level, so none nests. */
+export function layoutBlock(source: string, layout: string): string | undefined {
+  return new RegExp(`<Layout\\b[^>]*\\bname="${layout}"[^>]*>[\\s\\S]*?</Layout>`, 'u').exec(
+    source
+  )?.[0];
+}
+
+/**
+ * The page layout that draws a free layout, a graph's or a tree's, where its arrangement among the
+ * other parts is decided; the free layout itself where no other layout draws it. None without one.
+ */
+export function freeLayoutName(source: string): string | undefined {
+  const blocks = [...source.matchAll(/<Layout\b[^>]*>[\s\S]*?<\/Layout>/gu)].map(([block]) => ({
+    block,
+    name: /\bname="(\w+)"/u.exec(block)?.[1]
+  }));
+  const free = blocks.find(({ block }) => block.includes('layout="free"'))?.name;
+  if (!free) return undefined;
+  return blocks.find(({ block }) => new RegExp(`<${free}\\b`, 'u').test(block))?.name ?? free;
+}
+
+/** A layout's declared inputs, sorted, where it lists them. */
+const declaredInputs = (block: string) =>
+  (/\bof="([^"]*)"/u.exec(block)?.[1] ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .sort()
+    .join(',');
 
 /**
  * The type the source draws most as values: the type of its first value view, that is a view
@@ -147,8 +239,92 @@ export type ViewCandidate =
       markup: string;
       /** How large the picture draws with it, told as the readability note is. */
       readability?: string;
+      /** What ranks it among the others, and what it draws at each step, to drop one alike. */
+      measured?: { score: number; drawn: string };
     }
   | { kept: false; name: string; reason: string };
+
+type Built = Awaited<ReturnType<typeof bundlePresentation>>;
+
+/**
+ * A candidate as built: kept with its facts, or left out where unreadable. Its score puts readable
+ * text first, then how much of the frame it fills, each part beyond the first costing a little, as
+ * the arrangements are ranked (shared/readability.ts).
+ */
+function measured(
+  built: Built,
+  candidate: { type: string; name: string; description: string; markup: string }
+): ViewCandidate {
+  const readability = built.layout.readability;
+  const unreadable = readability ? unreadableProblem(readability) : undefined;
+  if (unreadable) return { kept: false, name: candidate.name, reason: unreadable };
+  const score = readability
+    ? 1 + (readability.fill ?? 0) - 0.05 * Math.max(0, readability.parts.length - 1)
+    : 0;
+  return {
+    kept: true,
+    ...candidate,
+    markup: candidate.markup.trim(),
+    ...(readability ? { readability: readabilityText(readability) } : {}),
+    measured: { score, drawn: JSON.stringify(built.layout.drawn ?? []) }
+  };
+}
+
+/**
+ * The candidates the assistant is given: those kept, one of each that draws alike at every step,
+ * best first, at most `most`.
+ */
+export function bestCandidates(checked: readonly ViewCandidate[], most: number): ViewCandidate[] {
+  const seen = new Set<string>();
+  return checked
+    .filter((candidate) => candidate.kept)
+    .toSorted(
+      (a, b) => (b.kept ? (b.measured?.score ?? 0) : 0) - (a.kept ? (a.measured?.score ?? 0) : 0)
+    )
+    .filter((candidate) => {
+      const drawn = candidate.kept ? candidate.measured?.drawn : undefined;
+      if (drawn === undefined) return true;
+      if (seen.has(drawn)) return false;
+      seen.add(drawn);
+      return true;
+    })
+    .slice(0, most);
+}
+
+/**
+ * Check a proposed arrangement of a layout: it must be that layout, reading what the old one read,
+ * build in its place, and read on a typical stage.
+ */
+export async function checkLayoutCandidate(
+  source: string,
+  layout: string,
+  proposal: ProposedView
+): Promise<ViewCandidate> {
+  const old = layoutBlock(source, layout);
+  const block = layoutBlock(proposal.markup, layout);
+  if (!old || !block || block.trim() !== proposal.markup.trim())
+    return { kept: false, name: proposal.name, reason: `not one layout named ${layout}` };
+  if (declaredInputs(block) !== declaredInputs(old))
+    return {
+      kept: false,
+      name: proposal.name,
+      reason: `changes the inputs of ${layout}: keep of="${/\bof="([^"]*)"/u.exec(old)?.[1] ?? ''}"`
+    };
+  try {
+    const built = await bundlePresentation(
+      prepareSvelteComponent(source.replace(old, block)),
+      1,
+      {}
+    );
+    return measured(built, { type: layout, ...proposal, name: layout });
+  } catch (cause) {
+    return {
+      kept: false,
+      name: proposal.name,
+      reason: cause instanceof Error ? cause.message : String(cause)
+    };
+  }
+}
 
 /**
  * Check a proposed view: it must build with the source, drawn as its type's view, and its
@@ -164,17 +340,7 @@ export async function checkCandidate(
   try {
     const prepared = prepareSvelteComponent(withView(source, view.markup));
     const built = await bundlePresentation(prepared, 1, { chosen: { [viewKey(type)]: view.name } });
-    const readability = built.layout.readability;
-    const unreadable = readability ? unreadableProblem(readability) : undefined;
-    if (unreadable) return { kept: false, name: view.name, reason: unreadable };
-    return {
-      kept: true,
-      type,
-      name: view.name,
-      description: view.description,
-      markup: view.markup.trim(),
-      ...(readability ? { readability: readabilityText(readability) } : {})
-    };
+    return measured(built, { type, ...view });
   } catch (cause) {
     return {
       kept: false,

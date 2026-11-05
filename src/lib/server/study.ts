@@ -12,6 +12,7 @@ import { createProject, buildProjectPresentations } from '$lib/server/projects/s
 import { projectSnapshotAt } from '$lib/shared/projects/projection';
 import {
   resolveStudyArm,
+  type HelperCounts,
   type ResolvedStudyPhase,
   type StudyCondition
 } from '$lib/shared/study/definition';
@@ -63,6 +64,8 @@ export type StudyProjectContext = {
   presentationBufferTarget?: number;
   /** Whether the task's condition runs the view helpers; off when absent. */
   viewHelpers?: boolean;
+  /** How many helpers its rounds run, where the condition says. */
+  helperCounts?: HelperCounts;
   interactionCapture?: StudyInteractionCapturePolicy;
   layout?: string;
   view?: string;
@@ -327,6 +330,9 @@ export async function studyProjectContext(
     ...(row.deadlineAt ? { deadlineAt: row.deadlineAt.toISOString() } : {}),
     ...(phase?.kind === 'task' && phase.condition.presentationBufferTarget
       ? { presentationBufferTarget: phase.condition.presentationBufferTarget }
+      : {}),
+    ...(phase?.kind === 'task' && phase.condition.helperCounts
+      ? { helperCounts: phase.condition.helperCounts }
       : {}),
     ...(phase?.kind === 'task' && phase.condition.viewHelpers !== undefined
       ? { viewHelpers: phase.condition.viewHelpers }

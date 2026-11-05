@@ -891,17 +891,18 @@ describe('submitProjectFeedback', () => {
       const candidates = appendedEvents.find(
         (event) => event.type === 'visualization.view-candidates'
       );
-      // Each of the three helpers misnamed its view, and each fixed it when told.
+      // Each of the five helpers misnamed its view; the three retried fixed it when told, and as
+      // they draw alike the assistant is given one.
       expect(
         candidates?.type === 'visualization.view-candidates' &&
           candidates.payload.candidates.map(({ name }) => name)
-      ).toEqual(['IntDot', 'IntDot', 'IntDot']);
+      ).toEqual(['IntDot']);
       const attempts = appendedEvents.flatMap((event) =>
         event.type === 'ai.generation-requested' && event.payload.purpose === 'helper'
           ? [event.payload.attempt]
           : []
       );
-      expect(attempts).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(attempts).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     });
 
     it('sends a reply to a request for graphics back once to give the helpers a task', async () => {

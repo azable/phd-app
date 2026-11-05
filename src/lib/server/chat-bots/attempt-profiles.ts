@@ -12,11 +12,13 @@ import type { ChatBotAttemptProfile } from './types';
  * feedback turn's first attempt thinks less, as it mostly edits, varies, compares, or replies, and
  * waiting on it is most of the participant's wait; a first source, and every repair, keep the
  * ladder's effort. Where a study condition, or an administrator's dev-mode switch, turns the view
- * helpers on (projects/view-helpers.ts), a turn adds at most three Luna calls at low effort after its
- * reply has shown, each time-boxed to 30 seconds, and one retry for each view that did not build or
- * read, so at most six: they add cost, about 40k input tokens and 2k output tokens a turn with the
- * guide's extract and some 15k more for each retry, but never delay the reply, and none counts
- * against the ladder's four.
+ * helpers on (projects/view-helpers.ts), a turn adds one round of Luna calls at low effort after its
+ * reply has shown, all at once, each time-boxed to 30 seconds: five views of a type or eight
+ * arrangements of a layout by default (study/definition.ts), and a retry for at most three that did
+ * not build or read. Each call sends its extract of the guide and the source, about 11k input
+ * tokens for a view and 10k for a layout, the extract alike across a round's calls, so a round is
+ * some 55k–80k input tokens and 5k–10k output, but never delays the reply, and none counts against
+ * the ladder's four.
  */
 
 export function visualizationAttemptProfiles(

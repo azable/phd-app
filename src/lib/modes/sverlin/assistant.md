@@ -93,6 +93,11 @@ Some features suit common needs. Offer them as alternatives where they fit:
   alternatives follow; never promise what you cannot show. The helpers'
   candidates (viewHelpers.candidates) wait until offered: offer them in the next
   reply that touches their type, or say in a few words why not.
+- Where the view helpers are on and the arrangement of the page is open, or the
+  participant asks where things go ("put the queue beside the graph"), set
+  viewHelpers to the layout and a short task; each arrangement comes with how it
+  draws (its shape, fill and parts), so compare the best against the current
+  one.
 - When the participant gives code in a real language, such as C, name its
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against

@@ -197,10 +197,13 @@ export type SourceArtifactChatOutput = {
 };
 
 /**
- * The view helpers' request: the type to propose views of, and the task, what the views should show
- * in the assistant's words, from what the participant asked and settled.
+ * The helpers' request: the type to propose views of, or the layout to propose arrangements of, and
+ * the task, what they should show in the assistant's words, from what the participant asked and
+ * settled.
  */
-export type ViewHelpersRequest = { type: string; task?: string };
+export type ViewHelpersRequest =
+  | { type: string; layout?: undefined; task?: string }
+  | { layout: string; type?: undefined; task?: string };
 
 /** The longest task the helpers are given, in characters: a sentence or two. */
 export const maximumViewHelpersTask = 300;

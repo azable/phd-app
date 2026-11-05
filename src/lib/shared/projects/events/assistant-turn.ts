@@ -23,6 +23,13 @@ export const assistantTurnStartedEventSchema = v.object({
     requestEventIds: v.pipe(v.array(positiveSchema), v.minLength(1)),
     interactionEventIds: v.pipe(v.array(positiveSchema), v.minLength(1)),
     /** Whether the view helpers were on for this turn; absent before they existed, as off. */
-    viewHelpers: v.optional(v.boolean())
+    viewHelpers: v.optional(v.boolean()),
+    /** How many helpers its view and layout rounds run, where they are on. */
+    helperCounts: v.optional(
+      v.object({
+        views: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10)),
+        layouts: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10))
+      })
+    )
   })
 });

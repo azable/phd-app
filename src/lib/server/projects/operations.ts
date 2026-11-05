@@ -33,7 +33,7 @@ import {
 } from './commands';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
-import { projectViewHelpers } from './view-helpers-config';
+import { conditionHelperCounts, projectViewHelpers } from './view-helpers-config';
 import {
   operationGraceUntil,
   projectOperationDeadlineError,
@@ -809,6 +809,9 @@ async function executeProjectCommand(options: {
           event?.type === 'assistant.turn-requested' ? event.payload.interactionEventId : 0
         );
         const viewHelpers = await projectViewHelpers(document);
+        const helperCounts = viewHelpers
+          ? await conditionHelperCounts(document.projectId)
+          : undefined;
         await projectRepository.append(options.projectId, document.events.length, [
           {
             type: 'assistant.turn-started',
@@ -818,7 +821,8 @@ async function executeProjectCommand(options: {
             payload: {
               requestEventIds: command.requestEventIds,
               interactionEventIds,
-              viewHelpers
+              viewHelpers,
+              ...(helperCounts ? { helperCounts } : {})
             }
           }
         ]);

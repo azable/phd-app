@@ -57,18 +57,27 @@ import {
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
 import {
+  bestCandidates,
   checkCandidate,
+  checkLayoutCandidate,
+  freeLayoutName,
+  layoutHelperDirections,
+  layoutHelperPrompt,
+  layoutHelperTask,
   mainViewType,
   proposedViewsFormat,
   viewHelperDirections,
   viewHelperPrompt,
   viewHelperTask,
-  type ProposedView
+  type ProposedView,
+  type ViewCandidate
 } from '$lib/modes/sverlin/view-helpers.server';
 import { openAIAdapter } from '$lib/server/chat-adapters/openai';
 import type { ChatAdapter } from '$lib/server/chat-adapters/types';
-import { turnViewHelpers } from './view-helpers-config';
+import { turnHelperCounts, turnViewHelpers } from './view-helpers-config';
 import {
+  candidatesGiven,
+  helperBuildBudgetMs,
   viewHelperBackground,
   viewHelperCalls,
   viewHelpersContext,
@@ -1367,8 +1376,13 @@ async function runSverlinAssistantTurn(
   const source = entrySource(done);
   const starter = modeCatalog[projectSnapshotAt(done).mode].starter.source;
   const firstVersion = startedFrom === starter && source !== starter;
+  // A first version's riskiest choice goes to the helpers: the arrangement of a page drawing a
+  // graph or tree, a first automatic layout being a guess, else how its main type is drawn.
+  const firstLayout = firstVersion ? freeLayoutName(source) : undefined;
   const firstType = firstVersion ? mainViewType(source) : undefined;
-  const request = helperRequest ?? (firstType ? { type: firstType } : undefined);
+  const request: ViewHelpersRequest | undefined =
+    helperRequest ??
+    (firstLayout ? { layout: firstLayout } : firstType ? { type: firstType } : undefined);
   if (!request || source === starter) return done;
   const helped = await runViewHelpers(done, operationId, source, request, dependencies);
   return helperRequest
@@ -2520,7 +2534,7 @@ async function runViewHelpers(
   document: ProjectDocument,
   operationId: string,
   source: string,
-  { type, task }: ViewHelpersRequest,
+  request: ViewHelpersRequest,
   dependencies: ProjectCommandDependencies
 ): Promise<ProjectDocument> {
   const deadline = currentProjectOperationDeadline();
@@ -2528,21 +2542,35 @@ async function runViewHelpers(
   const adapter = dependencies.viewHelperAdapter ?? openAIAdapter;
   const operation = currentProjectOperationSignal();
   const background = viewHelperBackground(document);
-  const prompts: ChatbotPrompt[] = viewHelperDirections
-    .slice(0, viewHelperCalls)
-    .map((direction, index) => ({
-      initialPrompt: viewHelperPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: viewHelperTask({ type, count: 1, source, direction, task, background })
+  const { task } = request;
+  // A round proposes views of a type, or arrangements of a layout: the same calls and checks,
+  // each kind with its own prompt, directions and build.
+  const round =
+    request.layout !== undefined
+      ? {
+          part: request.layout,
+          prompt: layoutHelperPrompt,
+          directions: layoutHelperDirections.slice(0, turnHelperCounts(document).layouts),
+          ask: (direction: string) =>
+            layoutHelperTask({ layout: request.layout, source, direction, task, background }),
+          check: (view: ProposedView) => checkLayoutCandidate(source, request.layout, view)
         }
-      ],
-      context: {},
-      attempt: { number: index + 1, purpose: 'helper' },
-      parameters: { ...viewHelperParameters },
-      responseFormat: proposedViewsFormat as unknown as ChatbotPrompt['responseFormat']
-    }));
+      : {
+          part: request.type,
+          prompt: viewHelperPrompt,
+          directions: viewHelperDirections.slice(0, turnHelperCounts(document).views),
+          ask: (direction: string) =>
+            viewHelperTask({ type: request.type, count: 1, source, direction, task, background }),
+          check: (view: ProposedView) => checkCandidate(source, request.type, view)
+        };
+  const prompts: ChatbotPrompt[] = round.directions.map((direction, index) => ({
+    initialPrompt: round.prompt,
+    messages: [{ role: 'user', content: round.ask(direction) }],
+    context: {},
+    attempt: { number: index + 1, purpose: 'helper' },
+    parameters: { ...viewHelperParameters },
+    responseFormat: proposedViewsFormat as unknown as ChatbotPrompt['responseFormat']
+  }));
   const call = (batch: ChatbotPrompt[]) =>
     Promise.all(
       batch.map(async (prompt) => {
@@ -2654,10 +2682,22 @@ async function runViewHelpers(
     reply.ok ? reply.views.map((view) => ({ view, prompt: reply.prompt })) : []
   );
   if (!proposed.length) return current;
-  const checked = [];
-  for (const { view } of proposed) checked.push(await checkCandidate(source, type, view));
-  // A view that did not build or read goes back once to its helper with the reason, as a repair
-  // does, rather than the helpers' prompt growing a rule for each mistake seen.
+  // Each proposal is built in turn within one budget for the round: one that would end past it,
+  // judged by the longest so far, is not started (as arrangements.server.ts bounds its layouts).
+  const started = performance.now();
+  let longest = 0;
+  const built = async (view: ProposedView): Promise<ViewCandidate> => {
+    if (performance.now() - started + longest > helperBuildBudgetMs)
+      return { kept: false, name: view.name, reason: 'not built within the round’s time' };
+    const begun = performance.now();
+    const result = await round.check(view);
+    longest = Math.max(longest, performance.now() - begun);
+    return result;
+  };
+  const checked: ViewCandidate[] = [];
+  for (const { view } of proposed) checked.push(await built(view));
+  // A proposal that did not build or read goes back once to its helper with the reason, as a
+  // repair does, rather than the helpers' prompt growing a rule for each mistake seen.
   const retried = checked
     .map((candidate, index) => ({ candidate, ...proposed[index] }))
     .filter(({ candidate }) => !candidate.kept)
@@ -2672,20 +2712,21 @@ async function runViewHelpers(
           { role: 'assistant', content: JSON.stringify({ views: [view] }) },
           {
             role: 'user',
-            content: `The view ${view.name} was left out: ${candidate.kept ? '' : candidate.reason} Return it fixed, as {"views":[{"name","description","markup"}]}.`
+            content: `${view.name} was left out: ${candidate.kept ? '' : candidate.reason} Return it fixed, as {"views":[{"name","description","markup"}]}.`
           }
         ],
-        attempt: { number: viewHelperCalls + index + 1, purpose: 'helper' }
+        attempt: { number: round.directions.length + index + 1, purpose: 'helper' }
       }))
     );
     await record(again);
     for (const [index, reply] of again.entries()) {
       const fixed = reply.ok ? reply.views[0] : undefined;
       if (!fixed) continue;
-      const result = await checkCandidate(source, type, fixed);
+      const result = await built(fixed);
       if (result.kept) checked[checked.indexOf(retried[index].candidate)] = result;
     }
   }
+  const best = bestCandidates(checked, candidatesGiven);
   return appendProjectEvents(
     current,
     [
@@ -2695,10 +2736,10 @@ async function runViewHelpers(
         operationId,
         payload: {
           sourceSha256: sourceSha256(source),
-          type,
+          ...(request.layout !== undefined ? { layout: request.layout } : { type: request.type }),
           ...(task ? { task } : {}),
           generationEventIds,
-          candidates: checked.flatMap((candidate) =>
+          candidates: best.flatMap((candidate) =>
             candidate.kept
               ? [
                   {
@@ -2711,7 +2752,11 @@ async function runViewHelpers(
               : []
           ),
           dropped: checked.flatMap((candidate) =>
-            candidate.kept ? [] : [{ name: candidate.name, reason: candidate.reason }]
+            candidate.kept
+              ? best.includes(candidate)
+                ? []
+                : [{ name: candidate.name, reason: 'drew alike, or ranked below the best' }]
+              : [{ name: candidate.name, reason: candidate.reason }]
           )
         }
       })

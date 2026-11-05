@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import bars from './fixtures/bars.sverlin?raw';
+import bfs from './fixtures/bfs-undirected.sverlin?raw';
 import bot, { viewHelpersRequest } from './bot.server';
 import {
+  bestCandidates,
   checkCandidate,
+  checkLayoutCandidate,
+  freeLayoutName,
+  layoutHelperDirections,
+  layoutHelperPrompt,
   fullGuidePrompt,
   guideSections,
   mainViewType,
@@ -89,5 +95,87 @@ describe('view helpers', () => {
     expect(asked).toContain('The task, from the assistant: draw each card as a playing card');
     expect(asked).toContain('- audience: first-year students');
     expect(viewHelperTask({ type: 'Int', count: 1, source: '' })).not.toContain('task');
+  });
+});
+
+describe('layout helpers', () => {
+  const main = (body: string) =>
+    `<Layout name="Main" of="vertices, neighbours, queue">\n  ${body}\n</Layout>`;
+  const beside = main(
+    '<Node>\n    <Title />\n    <Node layout="row"><Graph vertices={vertices} neighbours={neighbours} /><QueueLine queue={queue} /></Node>\n  </Node>'
+  );
+
+  it('arrange the page that draws a graph, not the graph alone', () => {
+    expect(freeLayoutName(bfs)).toBe('Main');
+    expect(freeLayoutName(bars)).toBeUndefined();
+  });
+
+  it('keep an arrangement that builds in place of the old layout, with how it draws', async () => {
+    const kept = await checkLayoutCandidate(bfs, 'Main', {
+      name: 'Main',
+      description: 'the queue beside the graph',
+      markup: beside
+    });
+    expect(kept).toMatchObject({
+      kept: true,
+      name: 'Main',
+      readability: expect.stringMatching(/^Layout /u)
+    });
+  });
+
+  it('leave out an arrangement that reads other inputs, or is no layout of that name', async () => {
+    const narrowed = beside.replace(
+      'of="vertices, neighbours, queue"',
+      'of="vertices, neighbours"'
+    );
+    expect(
+      await checkLayoutCandidate(bfs, 'Main', { name: 'Main', description: '', markup: narrowed })
+    ).toMatchObject({ kept: false, reason: expect.stringContaining('changes the inputs of Main') });
+    expect(
+      await checkLayoutCandidate(bfs, 'Main', {
+        name: 'Main',
+        description: '',
+        markup: beside.replace('name="Main"', 'name="Page"')
+      })
+    ).toMatchObject({ kept: false, reason: 'not one layout named Main' });
+  });
+
+  it('give the assistant the best few, one of each that draws alike', () => {
+    const candidate = (name: string, score: number, drawn: string) =>
+      ({
+        kept: true,
+        type: 'Main',
+        name,
+        description: '',
+        markup: '',
+        measured: { score, drawn }
+      }) as const;
+    const best = bestCandidates(
+      [
+        candidate('a', 1.2, 'x'),
+        candidate('b', 1.6, 'y'),
+        candidate('c', 1.5, 'y'),
+        candidate('d', 1.4, 'z')
+      ],
+      2
+    );
+    expect(best.map(({ name }) => name)).toEqual(['b', 'd']);
+  });
+
+  it('each try a direction of their own, as many as a round runs', () => {
+    expect(new Set(layoutHelperDirections).size).toBe(layoutHelperDirections.length);
+    expect(layoutHelperDirections.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(viewHelperDirections).size).toBe(viewHelperDirections.length);
+    expect(viewHelperDirections.length).toBeGreaterThanOrEqual(5);
+    expect(layoutHelperPrompt).toContain('## Free layout and links');
+  });
+
+  it('are asked by a layout in a reply, as views are by a type', () => {
+    expect(viewHelpersRequest({ type: '', layout: 'Main', task: 'queue beside' })).toEqual({
+      viewHelpers: { layout: 'Main', task: 'queue beside' }
+    });
+    expect(viewHelpersRequest({ type: 'Int', layout: '', task: '' })).toEqual({
+      viewHelpers: { type: 'Int' }
+    });
   });
 });

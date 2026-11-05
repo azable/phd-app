@@ -107,7 +107,13 @@ const responseFormatWithViewHelpers = {
             properties: {
               type: {
                 type: 'string',
-                description: 'The type of the source to propose views of, as Card.'
+                description:
+                  'The type of the source to propose views of, as Card, or an empty string to propose arrangements of a layout.'
+              },
+              layout: {
+                type: 'string',
+                description:
+                  'The layout of the source to propose arrangements of, as Main, or an empty string to propose views of a type.'
               },
               task: {
                 type: 'string',
@@ -115,7 +121,7 @@ const responseFormatWithViewHelpers = {
                   'What the views should show, in one short sentence from what the participant asked and settled, or an empty string.'
               }
             },
-            required: ['type', 'task']
+            required: ['type', 'layout', 'task']
           },
           { type: 'null' }
         ],
@@ -181,11 +187,14 @@ export default {
  * alone. None where it names no type.
  */
 export function viewHelpersRequest(value: unknown): { viewHelpers?: ViewHelpersRequest } {
-  const { type, task } =
+  const { type, layout, task } =
     typeof value === 'string'
-      ? { type: value, task: undefined }
-      : ((value ?? {}) as { type?: unknown; task?: unknown });
-  if (typeof type !== 'string' || !type.trim()) return {};
+      ? { type: value, layout: undefined, task: undefined }
+      : ((value ?? {}) as { type?: unknown; layout?: unknown; task?: unknown });
   const asked = typeof task === 'string' ? task.trim().slice(0, maximumViewHelpersTask) : '';
-  return { viewHelpers: { type: type.trim(), ...(asked ? { task: asked } : {}) } };
+  const tasked = asked ? { task: asked } : {};
+  if (typeof layout === 'string' && layout.trim())
+    return { viewHelpers: { layout: layout.trim(), ...tasked } };
+  if (typeof type !== 'string' || !type.trim()) return {};
+  return { viewHelpers: { type: type.trim(), ...tasked } };
 }

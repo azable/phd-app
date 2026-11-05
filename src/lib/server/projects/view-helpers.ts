@@ -9,11 +9,25 @@ import {
   type AiViewHelpers
 } from '$lib/server/chat-bots/project-context';
 import { preferenceSummary } from '$lib/server/chat-bots/preference-summary';
+import { layoutBlock } from '$lib/modes/sverlin/view-helpers.server';
 import { projectBrief } from '$lib/shared/projects/brief';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
-/** How many helper calls run at once, each proposing one view (see attempt-profiles.ts). */
+/** How many proposals that did not build or read get one retry a round (see attempt-profiles.ts). */
 export const viewHelperCalls = 3;
+
+/**
+ * How long a round's builds of its proposals may take in all. Warm builds on a laptop took 0.2 s
+ * (bfs-undirected), 0.26 s (bst) and 0.54 s (Dijkstra) on 2026-11-05, a cold first one 1.2–3.4 s:
+ * five seconds builds ten graph proposals warm, and one slow source still gets a few.
+ */
+export const helperBuildBudgetMs = 5_000;
+
+/**
+ * The most candidates the assistant is given from a round, the best by readability: enough for a
+ * few comparisons, few enough to read in its context.
+ */
+export const candidatesGiven = 5;
 
 /**
  * How long the helpers' calls may take after the reply has shown, about three times their median
@@ -22,7 +36,7 @@ export const viewHelperCalls = 3;
 export const viewHelperTimeoutMs = 30_000;
 
 const note =
-  'The view helpers are on: short calls that propose alternative views of one type, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, and they run after your reply. The task says in one short sentence what the views should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank"; leave it empty when the look is open. Their views arrive in candidates with the next turn, with the task they answered. Choose which, if any, to offer: add one with edit, as written, and compare it with vary; leave out any that would not suit.';
+  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit.';
 
 /** A source's views of one type, as written: a candidate stays offerable while they are unchanged. */
 function viewsOf(source: string, type: string): string {
@@ -54,17 +68,29 @@ export function viewHelpersContext(
     (event) => event.type === 'visualization.view-candidates'
   );
   if (proposed?.type !== 'visualization.view-candidates') return { note, candidates: [] };
-  const { type, task, candidates, sourceSha256 } = proposed.payload;
+  const { type, layout, task, candidates, sourceSha256 } = proposed.payload;
+  // What the candidates replace: the views of their type, or their layout.
+  const part = (text: string) =>
+    layout !== undefined ? (layoutBlock(text, layout) ?? '') : viewsOf(text, type ?? '');
   const written = sourceSha256 === source.sha256 ? source.text : sourceText(document, sourceSha256);
-  if (written === undefined || viewsOf(written, type) !== viewsOf(source.text, type))
-    return { note, candidates: [] };
-  const waiting = candidates.filter(({ name }) => !source.text.includes(`name="${name}"`));
+  if (written === undefined || part(written) !== part(source.text)) return { note, candidates: [] };
+  const offered = (markup: string, name: string) =>
+    layout !== undefined
+      ? part(source.text).trim() === markup.trim()
+      : source.text.includes(`name="${name}"`);
+  const waiting = candidates.filter(({ name, markup }) => !offered(markup, name));
   if (!waiting.length) return { note, candidates: [] };
   const repliesSince = document.events.filter(
     (event) =>
       event.id > proposed.id && event.type === 'assistant.responded' && !event.payload.releases
   ).length;
-  return { note, type, ...(task ? { task } : {}), candidates: waiting, repliesSince };
+  return {
+    note,
+    ...(layout !== undefined ? { layout } : { type }),
+    ...(task ? { task } : {}),
+    candidates: waiting,
+    repliesSince
+  };
 }
 
 /**

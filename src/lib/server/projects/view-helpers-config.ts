@@ -5,6 +5,7 @@
  */
 
 import type { ProjectDocument } from '$lib/shared/projects/model';
+import { defaultHelperCounts, type HelperCounts } from '$lib/shared/study/definition';
 import { viewHelpersSwitch } from '$lib/shared/projects/view-helpers';
 import { projectTrialCondition, studyProjectContext } from '$lib/server/study';
 
@@ -18,6 +19,24 @@ export async function conditionViewHelpers(projectId: string): Promise<boolean> 
 /** Whether the next turn of this project runs the view helpers. */
 export async function projectViewHelpers(document: ProjectDocument): Promise<boolean> {
   return viewHelpersSwitch(document.events) ?? (await conditionViewHelpers(document.projectId));
+}
+
+/** How many helpers a round runs for a project: its study or trial condition's, else the defaults. */
+export async function conditionHelperCounts(projectId: string): Promise<HelperCounts> {
+  const study = await studyProjectContext(projectId);
+  const counts = study
+    ? study.helperCounts
+    : (await projectTrialCondition(projectId, study))?.helperCounts;
+  return { ...defaultHelperCounts, ...counts };
+}
+
+/** How many helpers the turn now running runs, as its start recorded. */
+export function turnHelperCounts(document: ProjectDocument): HelperCounts {
+  const started = document.events.findLast((event) => event.type === 'assistant.turn-started');
+  return (
+    (started?.type === 'assistant.turn-started' && started.payload.helperCounts) ||
+    defaultHelperCounts
+  );
 }
 
 /** Whether the turn now running runs the view helpers, as its start recorded. */

@@ -7,6 +7,15 @@ import type {
 } from '$lib/shared/presentations';
 import type { StudyInteractionCapturePolicy } from './interactions';
 
+export type HelperCounts = { views: number; layouts: number };
+
+/**
+ * A round's helpers, each trying a direction of its own: up to five ways to draw a value, and up to
+ * ten arrangements of a page, which differ more. Their builds share one time budget, and only the
+ * best few reach the assistant (projects/view-helpers.ts), so more helpers add cost, not waiting.
+ */
+export const defaultHelperCounts: HelperCounts = { views: 5, layouts: 8 };
+
 export type StudyCondition = {
   mode: VisualizationMode;
   presentationBufferTarget?: number;
@@ -14,6 +23,8 @@ export type StudyCondition = {
   chooser?: string;
   /** Whether short parallel calls propose alternative views for the assistant; off when absent. */
   viewHelpers?: boolean;
+  /** How many helpers a round of view or layout helpers runs; defaultHelperCounts when absent. */
+  helperCounts?: HelperCounts;
   workspace: {
     view: WorkspaceView;
     layout: PresentationLayout;

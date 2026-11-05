@@ -53,6 +53,23 @@ describe('the view helpers in the assistant context', () => {
     expect(names(viewHelpersContext(proposed(), { sha256: 'e', text: edited }))).toEqual(['Dot']);
   });
 
+  it('shows arrangements of a layout, until one is in place or the layout changes', () => {
+    const main = '<Layout name="Main"><Node>{values}</Node></Layout>';
+    const row = '<Layout name="Main"><Node layout="row">{values}</Node></Layout>';
+    const document = proposed();
+    const event = document.events[1] as unknown as { payload: Record<string, unknown> };
+    event.payload = {
+      ...event.payload,
+      type: undefined,
+      layout: 'Main',
+      candidates: [{ name: 'Main', description: 'in a row', markup: row }]
+    };
+    const context = viewHelpersContext(document, { sha256: 'w', text: written });
+    expect(context).toMatchObject({ layout: 'Main', candidates: [{ markup: row }] });
+    const placed = written.replace(main, row);
+    expect(names(viewHelpersContext(document, { sha256: 'p', text: placed }))).toEqual([]);
+  });
+
   it('drops one the source now has, as offered, and all once their type’s views change', () => {
     const offered = written.replace(cell, `${cell}\n${dot}`);
     expect(names(viewHelpersContext(proposed(), { sha256: 'o', text: offered }))).toEqual([]);
