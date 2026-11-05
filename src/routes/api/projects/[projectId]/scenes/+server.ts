@@ -23,7 +23,7 @@ const querySchema = v.object({
 /**
  * Some steps of a version the project presented, as scene data drawn on the server (all, where no
  * steps are named), with its frame; 409 where the server has none for it, for the page to describe
- * its own steps instead.
+ * its own steps instead, marked `stale` where an older app built it, which a rebuild then draws.
  */
 export const GET: RequestHandler = async ({ params, url, locals }) => {
   try {
@@ -42,7 +42,10 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
   } catch (cause) {
     if (isHttpError(cause)) return json({ error: cause.body.message }, { status: cause.status });
     if (cause instanceof UnavailableScenesError)
-      return json({ error: cause.message }, { status: 409 });
+      return json(
+        { error: cause.message, ...(cause.stale ? { stale: true } : {}) },
+        { status: 409 }
+      );
     return json(
       { error: cause instanceof Error ? cause.message : 'The scenes could not be drawn.' },
       { status: 422 }

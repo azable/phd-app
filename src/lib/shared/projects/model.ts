@@ -92,7 +92,17 @@ export const projectCommandSchema = v.variant('type', [
     type: v.literal('report-runtime-error'),
     ...runtimeFailureSchema.entries
   }),
-  v.strictObject({ ...commandBase, type: v.literal('rebuild'), seed: positiveSchema }),
+  v.strictObject({
+    ...commandBase,
+    type: v.literal('rebuild'),
+    /** The seed to build with: with `presentation`, the one that presentation was built with. */
+    seed: positiveSchema,
+    /**
+     * A version to build again as it was, from its source, seed and values, as one an older app
+     * built no longer draws; without it, the newest source with a new look from this seed.
+     */
+    presentation: v.optional(presentationIdSchema)
+  }),
   v.strictObject({
     ...commandBase,
     type: v.literal('resample'),

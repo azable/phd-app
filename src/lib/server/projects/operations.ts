@@ -772,11 +772,17 @@ async function executeProjectCommand(options: {
           : { deadlineAt: new Date(options.deadlineAt).toISOString() })
       });
     case 'rebuild':
-      return buildProjectPresentations({
-        ...common,
-        seed: options.command.seed,
-        purpose: 'seed-change'
-      });
+      return buildProjectPresentations(
+        options.command.presentation
+          ? {
+              ...common,
+              seed: options.command.seed,
+              purpose: 'rebuild',
+              from: options.command.presentation,
+              asBuilt: true
+            }
+          : { ...common, seed: options.command.seed, purpose: 'seed-change' }
+      );
     case 'resample':
       return buildProjectPresentations({
         ...common,

@@ -39,7 +39,10 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
   } catch (cause) {
     if (isHttpError(cause)) return json({ error: cause.body.message }, { status: cause.status });
     if (cause instanceof UnavailableScenesError)
-      return json({ error: cause.message }, { status: 409 });
+      return json(
+        { error: cause.message, ...(cause.stale ? { stale: true } : {}) },
+        { status: 409 }
+      );
     return json(
       { error: cause instanceof Error ? cause.message : 'The export could not be made.' },
       { status: 422 }

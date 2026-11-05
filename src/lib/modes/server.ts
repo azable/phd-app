@@ -83,9 +83,18 @@ export type SourceBatchBuilder = (
   signal?: AbortSignal
 ) => Promise<ModeBuildResult[]>;
 
-/** Why a version has no scenes from the server, for the page to describe its own instead. */
+/**
+ * Why a version has no scenes from the server, for the page to describe its own instead; `stale`
+ * where an older app built it, so building it again from its source draws it (the rebuild command).
+ */
 export class UnavailableScenesError extends Error {
   override name = 'UnavailableScenesError';
+  constructor(
+    message: string,
+    readonly stale = false
+  ) {
+    super(message);
+  }
 }
 
 /**

@@ -6,11 +6,24 @@ import { alignPresentationFrames } from '$lib/shared/presentations';
 import { appendProjectPreference } from '$lib/server/projects/presentations';
 import { linearSearchSource } from './contract';
 import {
+  appendProjectEvents,
   createProjectSkeleton,
   buildProjectPresentations,
+  draftEvent,
   updateProjectArtifact,
   type ProjectServiceDependencies
 } from '$lib/server/projects/service';
+import type { ProjectEvent } from '$lib/shared/projects/events';
+import type { BrowserBundlePresentation } from '$lib/shared/presentations';
+import { versionScenes } from './scenes.server';
+
+const presented = (events: readonly ProjectEvent[]): BrowserBundlePresentation[] =>
+  events.flatMap((event) =>
+    event.type === 'visualization.presented' &&
+    event.payload.presentation.format === 'browser-bundle-v1'
+      ? [event.payload.presentation]
+      : []
+  );
 
 describe('Svelte-backed project lifecycle', () => {
   it('records a bundled presentation and step labels from one edited component', async () => {
@@ -101,6 +114,84 @@ describe('Svelte-backed project lifecycle', () => {
     // The kind that followed the token still does, and the one removed is the starter's again.
     expect(second.presentation.variant?.['IntCell.padding']).toBe(0.125);
     expect(second.presentation.origins?.['IntCell.fill']).toBe('starter');
+  });
+
+  it('builds a version an older app built again, as it was, so its scenes draw', async () => {
+    const repository = new MemoryProjectRepository();
+    const dependencies: ProjectServiceDependencies = { repository };
+    const { document: created } = await createProjectSkeleton({}, dependencies);
+    const saved = await updateProjectArtifact(
+      {
+        projectId: created.projectId,
+        expectedHead: created.events.length,
+        artifactId: 'main',
+        source: linearSearchSource,
+        presentationCount: 1,
+        operationId: crypto.randomUUID(),
+        variant: { 'IntCell.fill': 'sky-100' }
+      },
+      dependencies
+    );
+    const [built] = presented(saved.appendedEvents);
+    // As an older app built it: the page code it stored is not what the app builds today.
+    const old = (source: string) => ({
+      ...built,
+      presentationId: crypto.randomUUID(),
+      source: { ...built.source, text: source },
+      javascript: { ...built.javascript, text: '' }
+    });
+    const stale = old(linearSearchSource);
+    const broken = old('<script domain>const Int = type(');
+    let document = await appendProjectEvents(
+      saved.document,
+      [stale, broken].map((presentation, slot) =>
+        draftEvent({
+          type: 'visualization.presented',
+          actor: { kind: 'system' },
+          operationId: crypto.randomUUID(),
+          payload: { displaySetId: crypto.randomUUID(), slot: slot as 0 | 1, presentation }
+        })
+      ),
+      dependencies
+    );
+    await expect(versionScenes(stale)).rejects.toMatchObject({ stale: true });
+
+    const rebuild = (presentation: typeof stale, seed = presentation.seed) =>
+      buildProjectPresentations(
+        {
+          projectId: created.projectId,
+          expectedHead: document.events.length,
+          seed,
+          purpose: 'rebuild',
+          from: presentation.presentationId,
+          asBuilt: true,
+          operationId: crypto.randomUUID()
+        },
+        dependencies
+      );
+    await expect(rebuild(stale, stale.seed + 1)).rejects.toThrow(/the seed it was built with/);
+    const again = await rebuild(stale);
+    const [rebuilt] = presented(again.appendedEvents);
+    // A new presentation of the same version: its source, seed and values, none drawn anew.
+    expect(rebuilt.presentationId).not.toBe(stale.presentationId);
+    expect(rebuilt.source.sha256).toBe(stale.source.sha256);
+    expect(rebuilt.seed).toBe(stale.seed);
+    expect(rebuilt.variant).toEqual(stale.variant);
+    expect(again.appendedEvents).toContainEqual(
+      expect.objectContaining({
+        type: 'build.requested',
+        payload: expect.objectContaining({ purpose: 'rebuild' })
+      })
+    );
+    const scenes = await versionScenes(rebuilt);
+    expect(scenes.steps).toHaveLength(rebuilt.labels.length);
+
+    // A source that no longer builds records the build's problems and presents nothing.
+    document = again.document;
+    const failed = await rebuild(broken);
+    expect(presented(failed.appendedEvents)).toHaveLength(0);
+    const failure = failed.appendedEvents.find((event) => event.type === 'build.failed');
+    expect(failure?.type === 'build.failed' && failure.payload.diagnostics.length).toBeTruthy();
   });
 
   it('records two seeded designs of one master trace as an aligned display set', async () => {

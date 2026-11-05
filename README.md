@@ -320,7 +320,16 @@ export from those scenes
 a PDF with a page per step, its text set in the embedded fonts, with DejaVu for
 characters none of them has, or the scene data itself as JSON. A version an
 older app built, which a rebuild no longer gives the same page code, has no
-scenes: its stage says so, and it must be built again.
+scenes: the endpoint answers 409 marked `stale`, and its stage offers whoever
+may change the project a Rebuild button. That sends the `rebuild` command with
+the version (`presentation`) and its seed, which builds its source again with
+its seed and values kept, none drawn anew, as a new presentation of the same
+version (build purpose `rebuild`); a source that no longer builds records its
+problems, shown under the button. The Timeline keeps the old presentation, and a
+comparison or answer stays with the presentations it was given; each side of an
+old pair is rebuilt on its own
+([`service.ts`](src/lib/server/projects/service.ts)
+`buildProjectPresentations`).
 
 Generated JavaScript is compiled but **never executed by the server** or in the
 application origin; Sverlin algorithm blocks are interpreted by trusted server

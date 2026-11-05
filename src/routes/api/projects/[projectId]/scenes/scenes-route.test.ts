@@ -4,7 +4,14 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   presented: vi.fn(),
   scenes: vi.fn(),
-  Unavailable: class UnavailableScenesError extends Error {}
+  Unavailable: class UnavailableScenesError extends Error {
+    constructor(
+      message: string,
+      readonly stale = false
+    ) {
+      super(message);
+    }
+  }
 }));
 
 vi.mock('$lib/server/authorization', () => ({ requireProjectAccess: mocks.access }));
@@ -42,9 +49,19 @@ describe('scenes API', () => {
   });
 
   it('answers 409 where the server has no scenes, for the page to describe its own', async () => {
-    mocks.scenes.mockRejectedValueOnce(new mocks.Unavailable('Built by an earlier app.'));
+    mocks.scenes.mockRejectedValueOnce(new mocks.Unavailable('Built by an earlier app.', true));
     const { GET } = await import('./+server');
-    expect((await GET(request())).status).toBe(409);
+    const earlier = await GET(request());
+    expect(earlier.status).toBe(409);
+    // Marked stale, so the page offers to build it again.
+    await expect(earlier.json()).resolves.toEqual({
+      error: 'Built by an earlier app.',
+      stale: true
+    });
+    mocks.scenes.mockRejectedValueOnce(new mocks.Unavailable('Its steps could not be drawn.'));
+    await expect((await GET(request())).json()).resolves.toEqual({
+      error: 'Its steps could not be drawn.'
+    });
     mocks.presented.mockResolvedValueOnce({ ...version, format: 'html-frames-v1', mode: 'html' });
     expect((await GET(request())).status).toBe(409);
   });

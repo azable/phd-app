@@ -268,7 +268,15 @@ export function buildProjectPresentations(
     /** The candidate whose source to build, when it is not the newest. */
     from?: string;
   } & (
-    | { seed: number; purpose: BuildPurpose }
+    | {
+        seed: number;
+        purpose: BuildPurpose;
+        /**
+         * Build `from` again as it was: its seed and its values kept, none drawn anew, so today's
+         * app draws the version an older one built (the seed must be the one it was built with).
+         */
+        asBuilt?: boolean;
+      }
     | { presentationCount: 1 | 2; requestVariants?: VariantRequester }
   ),
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
@@ -302,6 +310,13 @@ export function buildProjectPresentations(
         return commandResult(before, document);
       }
     }
+    if ('seed' in options && options.asBuilt) {
+      const presentation = options.from ? presentationIn(before, options.from) : undefined;
+      if (presentation?.format !== 'browser-bundle-v1')
+        throw new Error('Only a version built from a source can be built again.');
+      if (presentation.seed !== options.seed)
+        throw new Error('A version is built again with the seed it was built with.');
+    }
     const based = options.from
       ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
       : before;
@@ -313,7 +328,7 @@ export function buildProjectPresentations(
         options.operationId,
         dependencies,
         options.from ? presentedValues(before, options.from) : undefined,
-        true
+        !options.asBuilt
       );
       return commandResult(before, document);
     }
@@ -1342,7 +1357,14 @@ export async function presentedVersion(
   presentationId: string,
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<RenderablePresentation | undefined> {
-  const document = await dependencies.repository.load(projectId);
+  return presentationIn(await dependencies.repository.load(projectId), presentationId);
+}
+
+/** A presentation a document presented, by its id. */
+function presentationIn(
+  document: ProjectDocument,
+  presentationId: string
+): RenderablePresentation | undefined {
   const presented = document.events.findLast(
     (event) =>
       event.type === 'visualization.presented' &&
@@ -1356,13 +1378,6 @@ export function presentedValues(
   document: ProjectDocument,
   presentationId: string
 ): DesignValues | undefined {
-  const presented = document.events.findLast(
-    (event) =>
-      event.type === 'visualization.presented' &&
-      event.payload.presentation.presentationId === presentationId
-  );
-  const presentation =
-    presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
-  const variant = presentationVariant(presentation);
+  const variant = presentationVariant(presentationIn(document, presentationId));
   return Object.keys(variant).length ? variant : undefined;
 }

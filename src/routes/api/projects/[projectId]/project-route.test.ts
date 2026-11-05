@@ -70,6 +70,14 @@ describe('project JSON API', () => {
     });
   });
 
+  it('accepts a rebuild of one version, as an older app built it', async () => {
+    const { POST } = await import('./+server');
+    const presentation = '12345678-1234-4123-8123-123456789abc';
+    const command = { type: 'rebuild', operationId, expectedHead: 4, seed: 3, presentation };
+    expect((await POST(request('POST', command))).status).toBe(202);
+    expect(mocks.accept).toHaveBeenCalledWith(expect.objectContaining({ command }));
+  });
+
   it('returns structured client and conflict errors', async () => {
     const { POST } = await import('./+server');
     const invalid = await POST(request('POST', { type: 'rebuild', seed: 1 }));

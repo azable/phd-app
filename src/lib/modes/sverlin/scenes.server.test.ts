@@ -41,4 +41,5 @@ it('gives a version the scenes its build drew, of the steps asked for', async ()
 
   const earlier = { ...presentation, presentationId: crypto.randomUUID(), javascript: text('') };
   await expect(versionScenes(earlier)).rejects.toThrow(UnavailableScenesError);
+  await expect(versionScenes(earlier)).rejects.toMatchObject({ stale: true });
 });

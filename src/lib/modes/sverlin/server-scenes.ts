@@ -5,9 +5,14 @@ import type { SceneFrame, SceneStep } from './library';
 
 export type ServedScenes = { frame: SceneFrame; steps: SceneStep[] };
 
+/** The server has no scenes for a version an older app built, which building it again draws. */
+export class StaleScenesError extends Error {
+  override name = 'StaleScenesError';
+}
+
 /**
  * Some steps of a version (all, where none are named) from the project's scenes endpoint; throws
- * where the server has none, so the page describes its own.
+ * where the server has none, so the page describes its own, a StaleScenesError for an old build.
  */
 export async function fetchScenes(
   projectId: string,
@@ -21,9 +26,12 @@ export async function fetchScenes(
   );
   const body = (await response.json().catch(() => ({}))) as Partial<ServedScenes> & {
     error?: string;
+    stale?: boolean;
   };
-  if (!response.ok || !body.frame || !body.steps)
-    throw new Error(body.error ?? `The server gave no scenes (${response.status}).`);
+  if (!response.ok || !body.frame || !body.steps) {
+    const message = body.error ?? `The server gave no scenes (${response.status}).`;
+    throw body.stale ? new StaleScenesError(message) : new Error(message);
+  }
   return { frame: body.frame, steps: body.steps };
 }
 

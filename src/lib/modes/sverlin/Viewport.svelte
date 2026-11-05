@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { Button } from '$lib/client/components/ui/button';
   import { Spinner } from '$lib/client/components/ui/spinner';
   import * as v from 'valibot';
 
@@ -15,7 +16,7 @@
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
-  import { fetchExport, fetchScenes } from './server-scenes';
+  import { fetchExport, fetchScenes, StaleScenesError } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
 
@@ -28,7 +29,8 @@
     onSelectionChange = () => {},
     onViewChange = () => {},
     onRuntimeError = () => {},
-    onLoadTiming = () => {}
+    onLoadTiming = () => {},
+    onRebuild
   }: {
     presentation: BrowserBundlePresentation;
     /** The project the presentation is in, whose server draws its scenes (see server-scenes.ts). */
@@ -44,6 +46,11 @@
     onRuntimeError?: (failure: { step?: number; message: string }) => void;
     /** How long the page took to show its first step, or that it had not after a while. */
     onLoadTiming?: (timing: PresentationLoadTiming) => void;
+    /**
+     * Build the version again from its source, where an older app built it; why that failed, if it
+     * did. Offered only where the viewer may change the project.
+     */
+    onRebuild?: () => Promise<string | undefined>;
   } = $props();
 
   let iframe = $state<HTMLIFrameElement>();
@@ -109,10 +116,29 @@
   // Why the server has no scenes for this presentation, such as one an older app built, shown
   // in place of it; not the view's own failure, so nothing asks the assistant to repair it.
   let unavailable = $state<string>();
+  // Whether an older app built it, so building it again from its source shows it.
+  let stale = $state(false);
+  let rebuilding = $state(false);
+  let rebuildFailure = $state<string>();
   $effect(() => {
     void document;
     unavailable = undefined;
+    stale = false;
+    rebuildFailure = undefined;
   });
+
+  async function rebuild() {
+    if (!onRebuild || rebuilding) return;
+    rebuilding = true;
+    rebuildFailure = undefined;
+    try {
+      rebuildFailure = await onRebuild();
+    } catch (cause) {
+      rebuildFailure = cause instanceof Error ? cause.message : String(cause);
+    } finally {
+      rebuilding = false;
+    }
+  }
 
   /** Send the page some steps' scenes drawn on the server, or why there are none. */
   function serveScenes(steps: number[]) {
@@ -141,6 +167,7 @@
         const message = cause instanceof Error ? cause.message : String(cause);
         console.warn(`${logName()} has no scenes from the server`, cause);
         unavailable = message;
+        stale = cause instanceof StaleScenesError;
         ready = true;
         page.postMessage({ type: 'sverlin:scenes', failure: message }, '*');
       }
@@ -341,12 +368,21 @@
     </div>
   {/if}
   {#if unavailable}
-    <p
-      role="alert"
-      class="absolute inset-0 flex items-center justify-center bg-white px-6 text-center text-sm text-muted-foreground"
+    <div
+      class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white px-6 text-center text-sm text-muted-foreground"
     >
-      {unavailable}
-    </p>
+      <p role="alert">
+        {stale && onRebuild ? 'An older version of the app built this version.' : unavailable}
+      </p>
+      {#if stale && onRebuild}
+        <Button size="sm" disabled={rebuilding} onclick={rebuild}>
+          {#if rebuilding}<Spinner />Rebuilding…{:else}Rebuild{/if}
+        </Button>
+        {#if rebuildFailure}
+          <p role="alert" class="max-w-md text-red-800">{rebuildFailure}</p>
+        {/if}
+      {/if}
+    </div>
   {/if}
   {#if failure}
     <p

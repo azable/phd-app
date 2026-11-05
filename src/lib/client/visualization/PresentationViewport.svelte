@@ -26,6 +26,11 @@
     onRuntimeError?: (failure: { step?: number; message: string }) => void;
     /** How long the presentation took to appear, in modes that report it. */
     onLoadTiming?: (timing: PresentationLoadTiming) => void;
+    /**
+     * Build the presentation again from its source, in modes that cannot show one an older app
+     * built; why that failed, if it did. Given only where the viewer may change the project.
+     */
+    onRebuild?: () => Promise<string | undefined>;
   };
 
   let {
@@ -37,7 +42,8 @@
     onSelectionChange,
     onViewChange,
     onRuntimeError,
-    onLoadTiming
+    onLoadTiming,
+    onRebuild
   }: Omit<ViewportProps, 'presentation'> & { presentation?: RenderablePresentation } = $props();
   /** What a mode's playback component may offer: the files its presentations export as. */
   type ViewportExports = {
@@ -83,6 +89,7 @@
       {onViewChange}
       {onRuntimeError}
       {onLoadTiming}
+      {onRebuild}
     />
   {:else}
     <div class="flex min-h-full items-center justify-center p-6">

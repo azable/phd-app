@@ -46,7 +46,8 @@ async function rebuilt(presentation: BrowserBundlePresentation): Promise<ServerS
   );
   if (bundle.javascript !== javascript.text)
     throw new UnavailableScenesError(
-      'This version was built by an older version of the app, which draws it differently; rebuild it to show it.'
+      'This version was built by an older version of the app, which draws it differently; rebuild it to show it.',
+      true
     );
   const scenes = bundle.layout.scenes;
   if (!scenes || scenes.steps.length !== labels.length)

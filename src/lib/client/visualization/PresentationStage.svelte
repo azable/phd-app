@@ -363,6 +363,27 @@
     }
   }
 
+  /**
+   * Build a version an older app built again, as it was, so it shows on the stage; why that failed,
+   * its build's problems where its source no longer builds.
+   */
+  async function rebuild(entry: (typeof visible)[number]): Promise<string | undefined> {
+    const { presentation } = entry;
+    if (presentation.format !== 'browser-bundle-v1')
+      return 'Only a version built from a source can be built again.';
+    const after = session.head;
+    const done = await session.runCommand({
+      type: 'rebuild',
+      seed: presentation.seed,
+      presentation: presentation.presentationId
+    });
+    if (!done) return session.error ?? 'The version could not be built again.';
+    const failed = session.events.find(({ id, type }) => id > after && type === 'build.failed');
+    if (failed?.type !== 'build.failed') return undefined;
+    const problems = failed.payload.diagnostics.map(({ message }) => message).join(' ');
+    return problems || failed.payload.error || 'Its source no longer builds.';
+  }
+
   function localStep(entry: (typeof visible)[number]) {
     return localPresentationStep(playbackContext, entry.presentation.presentationId, step);
   }
@@ -671,6 +692,7 @@
               onRuntimeError={(failure) =>
                 session.reportRuntimeFailure({ presentationId, ...failure })}
               onLoadTiming={(timing) => session.reportLoadTiming(timing)}
+              onRebuild={session.readOnly || !session.atHead ? undefined : () => rebuild(entry)}
             />
           </div>
         </div>
