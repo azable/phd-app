@@ -164,14 +164,15 @@ paragraph of its reply, which is left without a last sentence or paragraph that
 repeats it, the next message being its answer, and each comparison pair as its
 card ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with
 an option its variable lacks (in the changed source, for `edit` and `revise`),
-sides alike, or a side hiding the layout itself or most of the picture
-(`allowedComparisonSide` in
+sides alike or drawing alike at every step, or a side hiding the layout itself
+or most of the picture (`allowedComparisonSide` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a random
 draw, the assistant may hide a top-level part such as a title) is recorded as
-rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired
-as edits that did not apply are, the repair told to keep unchanged the
-comparisons that could be built; on the last attempt those are built without the
-others (`kept`), the reply saying which were left out. The assistant's reply,
+rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and left
+out, costing no repair: the others are built (`kept`), a changed source that
+builds showing alone where none can be, and the reply says which were left out;
+the next turn reads why in the Timeline. Only a `vary` of the shown source with
+no comparison left is repaired, having nothing to show. The assistant's reply,
 with its question, is recorded last, once its decision is accepted and has
 presented its version (or first comparison pair), so a reply whose decision was
 set aside is never shown and the reply, its pill and its question arrive

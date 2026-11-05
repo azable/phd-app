@@ -2995,55 +2995,20 @@ describe('several variants from chat', () => {
     expect(presented(result.appendedEvents).length).toBeGreaterThan(0);
   });
 
-  it('repairs comparisons some of which cannot be built, telling the assistant to keep the others', async () => {
+  it('builds the comparisons that can be built at once, the reply saying which were left out', async () => {
     const result = await attempts(
-      ({ attempt }) =>
-        attempt.number === 1
-          ? vary('Two wait.', { comparisons: [views('IntCell', 'IntBogus'), marks] })
-          : vary('One to answer.', { comparisons: [marks] }),
+      () => vary('Two wait.', { comparisons: [views('IntCell', 'IntBogus'), marks] }),
       'Partly invalid'
     );
 
-    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'comparison_not_built',
-        message: expect.stringMatching(/^Comparison 1 .*IntBogus/u)
-      }),
-      expect.objectContaining({
-        code: 'comparison_kept',
-        message: expect.stringContaining('Comparison 2 (“Amber or blue marks?”) can be built')
-      })
-    ]);
-    expect(replies(result.appendedEvents).map(({ content }) => content)).toEqual([
-      markdownMessage('One to answer.')
-    ]);
-    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
-      'Amber or blue marks?',
-      'Amber or blue marks?'
-    ]);
-  });
-
-  it('builds the comparisons that can be built on the last attempt, the reply saying which were left out', async () => {
-    const result = await attempts(
-      ({ attempt }) => ({
-        ...vary('Two wait.', { comparisons: [views('IntCell', 'IntBogus'), marks] }),
-        ...(attempt.purpose === 'fallback'
-          ? { recovery: { struggledWith: 'the views', simplified: 'the questions' } }
-          : {})
-      }),
-      'Last attempt'
-    );
-
+    // A comparison that cannot be built costs no repair.
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
     const rejected = result.appendedEvents.filter(
       (event): event is ProjectEventOf<'revision.edits-rejected'> =>
         event.type === 'revision.edits-rejected'
     );
-    expect(rejected.map(({ payload }) => payload.kept)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [2]
+    expect(rejected.map(({ payload }) => payload)).toMatchObject([
+      { problems: [expect.stringMatching(/^Comparison 1 .*IntBogus/u)], kept: [2] }
     ]);
     expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
       'Amber or blue marks?',
@@ -3231,43 +3196,29 @@ describe('several variants from chat', () => {
     expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
   });
 
-  it('sends back a comparison whose sides draw alike at every step, and records where a pair differs', async () => {
+  it('leaves out a comparison whose sides draw alike, showing the next first, and records where a pair differs', async () => {
     const result = await attempts(
-      ({ attempt }) =>
-        attempt.number === 1
-          ? vary('Two wait.', { comparisons: [sizes, marks] })
-          : vary('One to answer.', { comparisons: [marks] }),
+      () => vary('Two wait.', { comparisons: [sizes, marks] }),
       'Drawn alike'
     );
 
-    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'comparison_not_built',
-        message:
-          'Comparison 1 (“Smaller or larger cells?”): its two sides draw the same at every step: IntCell.minSize changes nothing visible here. Compare a choice that shows, or leave it out.'
-      })
-    );
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+    expect(
+      result.appendedEvents.find(({ type }) => type === 'revision.edits-rejected')?.payload
+    ).toMatchObject({
+      problems: [
+        'Comparison 1 (“Smaller or larger cells?”): its two sides draw the same at every step: IntCell.minSize changes nothing visible here. Compare a choice that shows, or leave it out.'
+      ],
+      kept: [2]
+    });
+    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
+      'Amber or blue marks?',
+      'Amber or blue marks?'
+    ]);
     // The highlight shows from the second step, where the search first sets its position.
     expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
       [1, 2, 3, 4, 5, 6, 7, 8, 9],
       [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    ]);
-  });
-
-  it('leaves out a comparison drawing alike on the last attempt, showing the next first', async () => {
-    const result = await attempts(
-      ({ attempt }) => ({
-        ...vary('Two wait.', { comparisons: [sizes, marks] }),
-        ...(attempt.purpose === 'fallback'
-          ? { recovery: { struggledWith: 'the sizes', simplified: 'the questions' } }
-          : {})
-      }),
-      'Alike to the last'
-    );
-
-    expect(presented(result.appendedEvents).map(({ payload }) => payload.question)).toEqual([
-      'Amber or blue marks?',
-      'Amber or blue marks?'
     ]);
     expect(replies(result.appendedEvents)[0].content.at(-1)).toEqual({
       type: 'markdown',
@@ -3378,55 +3329,47 @@ describe('several variants from chat', () => {
     expect(waitingBehind(buffer, buffer.available[0].presentationId)).toHaveLength(2);
   });
 
-  it('sends a changed source’s comparison naming a value it does not offer back to the assistant', async () => {
+  it('shows a changed source alone where its one comparison names a value it does not offer', async () => {
     const { createProject } = await import('./service');
     const { submitProjectFeedback } = await import('./commands');
     const document = await createProject(
       { title: 'Unoffered', creation: { templateId: 'linear-search' }, presentationCount: 2 },
       serviceDependencies
     );
-    const decision = (action: object) => ({
+    mocks.generatePrepared.mockReset().mockResolvedValue({
       ...generation(undefined, 'Asking.'),
-      decision: action
+      decision: {
+        action: 'edit',
+        edits: caption,
+        comparisons: [views('IntCell', 'IntDots')],
+        summary: 'Adds a caption and asks'
+      }
     });
-    mocks.generatePrepared
-      .mockReset()
-      // The first pair names it, so it cannot be built.
-      .mockResolvedValueOnce(
-        decision({
-          action: 'edit',
-          edits: caption,
-          comparisons: [views('IntCell', 'IntDots')],
-          summary: 'Adds a caption and asks'
-        })
-      )
-      // A later pair names it, found once the changed source is built.
-      .mockResolvedValueOnce(
-        decision({
-          action: 'vary',
-          values: [],
-          randomise: [],
-          count: null,
-          comparisons: [views('IntCell', 'IntTally'), views('IntCell', 'IntDots')],
-          summary: 'Asks two questions'
-        })
-      )
-      .mockResolvedValue(generation(undefined, 'Sorry.'));
 
     const result = await submitProjectFeedback(
       feedbackOptions(document, 'Compare.', '94345678-1234-4123-8123-123456789abc'),
       commandDependencies
     );
 
-    const rejected = result.appendedEvents.filter(
-      (event): event is ProjectEventOf<'revision.edits-rejected'> =>
-        event.type === 'revision.edits-rejected'
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+    expect(
+      result.appendedEvents.find(({ type }) => type === 'revision.edits-rejected')?.payload
+    ).toMatchObject({
+      rejected: 'comparisons',
+      problems: [expect.stringMatching(/^Comparison 1 .*IntDots/u)],
+      kept: []
+    });
+    expect(result.appendedEvents).toContainEqual(
+      expect.objectContaining({ type: 'artifact.version-created' })
     );
-    expect(rejected.slice(0, 2).map(({ payload }) => payload)).toMatchObject([
-      { rejected: 'comparisons', problems: [expect.stringMatching(/^Comparison 1 .*IntDots/u)] },
-      { rejected: 'comparisons', problems: [expect.stringMatching(/^Comparison 2 .*IntDots/u)] }
-    ]);
-    expect(presented(result.appendedEvents)).toEqual([]);
+    const shown = presented(result.appendedEvents);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].payload.question).toBeUndefined();
+    expect(replies(result.appendedEvents)[0].content.at(-1)).toMatchObject({
+      text: expect.stringMatching(
+        /^Asking\. I left out “.*”, which could not be built as asked\.$/u
+      )
+    });
   });
 
   it('sets aside the comparisons an answer makes moot, and asks the assistant once none waits', async () => {

@@ -868,8 +868,7 @@ async function runSverlinAssistantTurn(
       const reject = async (
         kind: 'edits' | 'comparisons' | 'picture' | 'warnings' | 'alternatives',
         problems: string[],
-        failedSource: string,
-        advice: string[] = []
+        failedSource: string
       ) => {
         const outcome = {
           edits: 'the edits could not be applied',
@@ -928,12 +927,6 @@ async function runSverlinAssistantTurn(
               }[kind],
               message,
               raw: message
-            })),
-            ...advice.map((message) => ({
-              severity: 'warning' as const,
-              code: 'comparison_kept',
-              message,
-              raw: message
             }))
           ],
           priorFailureSummaries: [...failureSummaries]
@@ -948,36 +941,20 @@ async function runSverlinAssistantTurn(
       let variant: { base?: DesignValues; chosen?: DesignValues; randomise?: string[] | true } = {
         base: viewed
       };
-      // Of comparisons some of which cannot be built as given (problems, by comparison): with
-      // attempts left, a repair is told to keep the others unchanged, so its reply counts only
-      // what is built; on the last, the others are built without them and the reply says which
-      // were left out. None buildable, or a changed source's first pair, built already, among them,
-      // the comparisons are repaired as a whole; a first pair drawing alike gives way to the next.
+      // Of comparisons some of which cannot be built as given (problems, by comparison), the others
+      // are built without them, a source that builds showing alone where none can be, and the reply
+      // says which were left out; the Timeline tells the next turn why. A comparison costs no repair:
+      // only a vary of the shown source, with no comparison left, has nothing to show and is repaired.
       let leftOut: string | undefined;
       const droppedQuestions: string[] = [];
-      const screen = async (problems: string[][], firstBuilt: boolean) => {
+      const screen = async (problems: string[][]) => {
         if (!pairs || candidate === undefined || !problems.flat().length) return undefined;
         const asked = pairs;
         const kept = asked.flatMap((pair, index) => (problems[index]?.length ? [] : [index]));
         const list = (items: string[]) =>
           new Intl.ListFormat('en', { type: 'conjunction' }).format(items);
-        const named = (indexes: number[]) =>
-          list(indexes.map((index) => `${index + 1} (“${asked[index].question}”)`));
-        if (
-          attempt < chatbot.config.attemptProfiles.length ||
-          !kept.length ||
-          (firstBuilt && problems[0]?.length)
-        )
-          return reject(
-            'comparisons',
-            problems.flat(),
-            candidate,
-            kept.length
-              ? [
-                  `Comparison${kept.length > 1 ? 's' : ''} ${named(kept)} can be built as given: return ${kept.length > 1 ? 'them' : 'it'} unchanged, leaving out or correcting the others, and count in your reply only the comparisons you return.`
-                ]
-              : []
-          );
+        if (!kept.length && candidate === entrySource(current))
+          return reject('comparisons', problems.flat(), candidate);
         const dropped = asked.flatMap((pair, index) => (problems[index]?.length ? [pair] : []));
         current = await appendProjectEvents(
           current,
@@ -997,7 +974,7 @@ async function runSverlinAssistantTurn(
           ],
           dependencies.projectService
         );
-        pairs = kept.map((index) => asked[index]);
+        pairs = kept.length ? kept.map((index) => asked[index]) : undefined;
         droppedQuestions.push(...dropped.map(({ question }) => `“${question}”`));
         leftOut = `I left out ${list(droppedQuestions)}, which could not be built as asked.`;
         return undefined;
@@ -1037,8 +1014,7 @@ async function runSverlinAssistantTurn(
               ),
               { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
               briefSteering(projectBrief(current.events, brief))
-            ),
-            false
+            )
           );
           if (screened) return screened;
           checked = true;
@@ -1104,18 +1080,22 @@ async function runSverlinAssistantTurn(
       const batchSeeds = seeds.slice(0, size);
       const randomised = variant.randomise;
       // Comparisons build their first pair alone, so it shows before the rest are built; one whose
-      // sides draw alike, left out on the last attempt, gives way to the next.
+      // sides draw alike, or that cannot be built, gives way to the next, the source alone after the last.
       let built: Awaited<ReturnType<typeof buildCandidateBatch>>;
       // The steps at which the first pair's sides draw differently, where the server laid them out.
       let differsAt: number[] | undefined;
       for (;;) {
         const requests = pairs
           ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs.slice(0, 1))
-          : basedRequests(batchSeeds, variant.base, variant.chosen, randomised === true).map(
-              (request, index) =>
-                index === 0 && Array.isArray(randomised) && randomised.length
-                  ? { ...request, variant: { ...request.variant, randomise: randomised } }
-                  : request
+          : basedRequests(
+              batchSeeds.slice(0, queued ?? 1),
+              variant.base,
+              variant.chosen,
+              randomised === true
+            ).map((request, index) =>
+              index === 0 && Array.isArray(randomised) && randomised.length
+                ? { ...request, variant: { ...request.variant, randomise: randomised } }
+                : request
             );
         built = await buildCandidateBatch(
           { document: current, candidate, requests, operationId, attempt },
@@ -1123,7 +1103,21 @@ async function runSverlinAssistantTurn(
         );
         current = built.document;
         const [first] = built.recorded.builds;
-        if (!pairs || !batchSucceeded(built.recorded) || !first?.result.ok) break;
+        if (!pairs) break;
+        const asked = pairs[0];
+        if (!batchSucceeded(built.recorded) || !first?.result.ok) {
+          // A value the first comparison sets that the source does not offer leaves it out; any
+          // other failure is the source's.
+          const unoffered = designValueProblems(built.recorded).map(
+            (problem) => `Comparison 1 (“${asked.question}”): ${problem}`
+          );
+          const screened = unoffered.length
+            ? await screen(pairs.map((_, index) => (index ? [] : unoffered)))
+            : undefined;
+          if (screened) return screened;
+          if (pairs?.[0] === asked) break;
+          continue;
+        }
         const guard = {
           tree: pictureTree(candidate),
           base: { ...viewed, ...variant.chosen },
@@ -1139,24 +1133,11 @@ async function runSverlinAssistantTurn(
               briefSteering(projectBrief(current.events, brief))
             );
         checked = true;
-        const designed = problems[0].length > 0;
         differsAt = pairDifferences(built.recorded.builds);
         if (differsAt?.length === 0) problems[0].push(drawnAlikeProblem(pairs[0], guard.base));
-        const asked = pairs[0];
-        const screened = await screen(problems, designed);
+        const screened = await screen(problems);
         if (screened) return screened;
-        if (pairs[0] === asked) break;
-      }
-      if (pairs && !batchSucceeded(built.recorded)) {
-        // A value the first comparison sets that the source does not offer.
-        const unoffered = designValueProblems(built.recorded);
-        const { question } = pairs[0];
-        if (unoffered.length)
-          return reject(
-            'comparisons',
-            unoffered.map((problem) => `Comparison 1 (“${question}”): ${problem}`),
-            candidate
-          );
+        if (pairs?.[0] === asked) break;
       }
       // A picture whose text would be too small to read on a typical stage, or one built with
       // warnings, goes back once a turn, with an attempt left to show less at once or to settle the
@@ -1187,7 +1168,10 @@ async function runSverlinAssistantTurn(
       // pointer or a free layout's arrangement, goes back once to offer a comparison; one the
       // participant directs is made as asked.
       const alternatives =
-        !pairs && (decision.action === 'revise' || decision.action === 'edit') && bundles[0]
+        !pairs &&
+        !droppedQuestions.length &&
+        (decision.action === 'revise' || decision.action === 'edit') &&
+        bundles[0]
           ? unofferedAlternatives(bundles[0])
           : undefined;
       if (

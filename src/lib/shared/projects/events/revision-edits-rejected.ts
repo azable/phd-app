@@ -9,8 +9,8 @@ import { eventEnvelope, positiveSchema } from './values';
  * occur exactly once; or, as `rejected` says, a vary's comparisons that could not be built as given,
  * a built picture too large to read (see shared/readability.ts), a built picture with warnings, or one offering alternatives no comparison showed,
  * as a step drawing what the step before drew.
- * Nothing was built from them; the next attempt, if any, repairs them, or, where `kept` names the
- * comparisons that could be built, those were built without them.
+ * Nothing was built from them and the next attempt, if any, repairs them; or, where `kept` is
+ * given, the source was built with only the comparisons it names, or alone where it names none.
  */
 export const revisionEditsRejectedEventSchema = v.object({
   ...eventEnvelope,
@@ -25,7 +25,10 @@ export const revisionEditsRejectedEventSchema = v.object({
      */
     rejected: v.optional(v.picklist(['comparisons', 'picture', 'warnings', 'alternatives'])),
     problems: v.pipe(v.array(v.string()), v.minLength(1)),
-    /** The comparisons, by number from 1, built without those rejected. */
-    kept: v.optional(v.pipe(v.array(positiveSchema), v.minLength(1)))
+    /**
+     * The comparisons, by number from 1, built without those rejected; none where the source was
+     * shown alone.
+     */
+    kept: v.optional(v.array(positiveSchema))
   })
 });
