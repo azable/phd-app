@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
-import { viewHelpersContext } from './view-helpers';
+import { helpersHaveRun, viewHelpersContext } from './view-helpers';
 
 const cell = '<View of="Int" name="Cell"><Node value={this} /></View>';
 const dot = '<View of="Int" name="Dot"><Node value={this} /></View>';
@@ -51,6 +51,19 @@ describe('the view helpers in the assistant context', () => {
   it('keeps them through a change that leaves their type’s views alone', () => {
     const edited = written.replace('{values}', 'Values: {values}');
     expect(names(viewHelpersContext(proposed(), { sha256: 'e', text: edited }))).toEqual(['Dot']);
+  });
+
+  it('says plainly whether and when the helpers have run', () => {
+    const switched = {
+      events: [{ id: 7, type: 'project.view-helpers-set', payload: { enabled: true } }]
+    } as unknown as ProjectDocument;
+    expect(viewHelpersContext(switched, { sha256: 'w', text: written }).status).toBe(
+      'The helpers are on since event 7; no round has run yet.'
+    );
+    expect(helpersHaveRun(switched)).toBe(false);
+    expect(viewHelpersContext(proposed(), { sha256: 'w', text: written }).status).toBe(
+      'The helpers are on; 1 round so far, the last at event 2: views of Int, 1 kept, 0 left out.'
+    );
   });
 
   it('shows arrangements of a layout, until one is in place or the layout changes', () => {

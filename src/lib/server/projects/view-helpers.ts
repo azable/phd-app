@@ -36,7 +36,7 @@ export const candidatesGiven = 5;
 export const viewHelperTimeoutMs = 30_000;
 
 const note =
-  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit.';
+  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit. status says whether and when they have run in this project: never say they ran, or proposed nothing, where it says no round has run.';
 
 /** A source's views of one type, as written: a candidate stays offerable while they are unchanged. */
 function viewsOf(source: string, type: string): string {
@@ -67,30 +67,72 @@ export function viewHelpersContext(
   const proposed = document.events.findLast(
     (event) => event.type === 'visualization.view-candidates'
   );
-  if (proposed?.type !== 'visualization.view-candidates') return { note, candidates: [] };
+  const status = helpersStatus(document);
+  if (proposed?.type !== 'visualization.view-candidates') return { note, status, candidates: [] };
   const { type, layout, task, candidates, sourceSha256 } = proposed.payload;
   // What the candidates replace: the views of their type, or their layout.
   const part = (text: string) =>
     layout !== undefined ? (layoutBlock(text, layout) ?? '') : viewsOf(text, type ?? '');
   const written = sourceSha256 === source.sha256 ? source.text : sourceText(document, sourceSha256);
-  if (written === undefined || part(written) !== part(source.text)) return { note, candidates: [] };
+  if (written === undefined || part(written) !== part(source.text))
+    return { note, status, candidates: [] };
   const offered = (markup: string, name: string) =>
     layout !== undefined
       ? part(source.text).trim() === markup.trim()
       : source.text.includes(`name="${name}"`);
   const waiting = candidates.filter(({ name, markup }) => !offered(markup, name));
-  if (!waiting.length) return { note, candidates: [] };
+  if (!waiting.length) return { note, status, candidates: [] };
   const repliesSince = document.events.filter(
     (event) =>
       event.id > proposed.id && event.type === 'assistant.responded' && !event.payload.releases
   ).length;
   return {
     note,
+    status,
     ...(layout !== undefined ? { layout } : { type }),
     ...(task ? { task } : {}),
     candidates: waiting,
     repliesSince
   };
+}
+
+/** The event that switched the helpers on in dev mode, where one did and none switched them off. */
+function switchedOn(document: ProjectDocument): number | undefined {
+  const last = document.events.findLast((event) => event.type === 'project.view-helpers-set');
+  return last?.type === 'project.view-helpers-set' && last.payload.enabled ? last.id : undefined;
+}
+
+/** Whether a helper round has run since the helpers were switched on, or ever, if not switched. */
+export function helpersHaveRun(document: ProjectDocument): boolean {
+  const since = switchedOn(document) ?? 0;
+  return document.events.some(
+    (event) =>
+      event.id > since &&
+      event.type === 'ai.generation-requested' &&
+      event.payload.purpose === 'helper'
+  );
+}
+
+/**
+ * Whether and when the helpers have run, in plain words, so the assistant never says they ran,
+ * or proposed nothing, when no round has run.
+ */
+function helpersStatus(document: ProjectDocument): string {
+  const since = switchedOn(document);
+  const on = since !== undefined ? `on since event ${since}` : 'on';
+  const rounds = document.events.filter(
+    (event) => event.type === 'visualization.view-candidates' && event.id > (since ?? 0)
+  );
+  const last = rounds.at(-1);
+  if (last?.type !== 'visualization.view-candidates')
+    return helpersHaveRun(document)
+      ? `The helpers are ${on}; a round ran, and nothing it proposed built.`
+      : `The helpers are ${on}; no round has run yet.`;
+  const of =
+    last.payload.layout !== undefined
+      ? `arrangements of ${last.payload.layout}`
+      : `views of ${last.payload.type}`;
+  return `The helpers are ${on}; ${rounds.length} round${rounds.length === 1 ? '' : 's'} so far, the last at event ${last.id}: ${of}, ${last.payload.candidates.length} kept, ${last.payload.dropped.length} left out.`;
 }
 
 /**

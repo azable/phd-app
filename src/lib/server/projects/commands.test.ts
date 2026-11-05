@@ -924,6 +924,21 @@ describe('submitProjectFeedback', () => {
       );
     });
 
+    it('runs a round on the first turn after the helpers are on, the reply asking or not', async () => {
+      const replied = { ...generation(undefined, 'Noted.'), decision: { action: 'respond' } };
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, () => [replied]);
+      expect(appendedEvents.some((event) => event.type === 'visualization.view-candidates')).toBe(
+        true
+      );
+    });
+
+    it('takes a request about the arrangement as one for the layout helpers', async () => {
+      const { asksForLayouts } = await import('./commands');
+      expect(asksForLayouts('Try lots of different layouts')).toBe(true);
+      expect(asksForLayouts('Still very sparse')).toBe(true);
+      expect(asksForLayouts('Make the numbers bigger')).toBe(false);
+    });
+
     it('takes requests about other things than graphics as they are', async () => {
       const { asksForGraphics } = await import('./commands');
       expect(asksForGraphics('Can we try some icons for discovered and current?')).toBe(true);

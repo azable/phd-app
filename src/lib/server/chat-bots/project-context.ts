@@ -290,6 +290,8 @@ export type AiSelectedElement = {
 /** The view helpers' note and candidates (see AiProjectContext.viewHelpers). */
 export type AiViewHelpers = {
   note: string;
+  /** Whether and when the helpers have run in this project, so no claim about them is guessed. */
+  status?: string;
   /** The type the candidates are views of, or the layout they are arrangements of. */
   type?: string;
   layout?: string;

@@ -61,6 +61,7 @@ import {
   checkCandidate,
   checkLayoutCandidate,
   freeLayoutName,
+  pageLayoutName,
   layoutHelperDirections,
   layoutHelperPrompt,
   layoutHelperTask,
@@ -78,6 +79,7 @@ import { turnHelperCounts, turnViewHelpers } from './view-helpers-config';
 import {
   candidatesGiven,
   helperBuildBudgetMs,
+  helpersHaveRun,
   viewHelperBackground,
   viewHelperCalls,
   viewHelpersContext,
@@ -1377,9 +1379,16 @@ async function runSverlinAssistantTurn(
   const starter = modeCatalog[projectSnapshotAt(done).mode].starter.source;
   const firstVersion = startedFrom === starter && source !== starter;
   // A first version's riskiest choice goes to the helpers: the arrangement of a page drawing a
-  // graph or tree, a first automatic layout being a guess, else how its main type is drawn.
-  const firstLayout = firstVersion ? freeLayoutName(source) : undefined;
-  const firstType = firstVersion ? mainViewType(source) : undefined;
+  // graph or tree, a first automatic layout being a guess, else how its main type is drawn. So
+  // does a version's next turn after the helpers are switched on, where no round has run yet.
+  const unexplored = firstVersion || !helpersHaveRun(done);
+  // A request about the page's arrangement, as "try lots of different layouts", goes to the
+  // layout helpers, the reply having asked them or not.
+  const arranging = asksForLayouts(turnRequestText(done.events));
+  const firstLayout =
+    (unexplored ? freeLayoutName(source) : undefined) ??
+    (arranging ? pageLayoutName(source) : undefined);
+  const firstType = unexplored ? mainViewType(source) : undefined;
   const request: ViewHelpersRequest | undefined =
     helperRequest ??
     (firstLayout ? { layout: firstLayout } : firstType ? { type: firstType } : undefined);
@@ -2042,6 +2051,14 @@ const graphicsWords =
 
 export function asksForGraphics(text: string): boolean {
   return graphicsWords.test(text);
+}
+
+/** Words a request about the page's arrangement uses, as "try lots of different layouts". */
+const layoutWords =
+  /\b(layouts?|arrangements?|arrange|rearrange|placement|sparse|spread out|cramped|crowded)\b/iu;
+
+export function asksForLayouts(text: string): boolean {
+  return layoutWords.test(text);
 }
 
 const helpersProblem =

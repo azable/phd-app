@@ -198,6 +198,14 @@ export function freeLayoutName(source: string): string | undefined {
   return blocks.find(({ block }) => new RegExp(`<${free}\\b`, 'u').test(block))?.name ?? free;
 }
 
+/**
+ * The layout whose arrangement a request about the page is about: the page drawing a graph or tree,
+ * else the layout the first scene shows. None where the source has no scene.
+ */
+export function pageLayoutName(source: string): string | undefined {
+  return freeLayoutName(source) ?? /<Scene\b[^>]*>\s*<(\w+)\b/u.exec(source)?.[1];
+}
+
 /** A layout's declared inputs, sorted, where it lists them. */
 const declaredInputs = (block: string) =>
   (/\bof="([^"]*)"/u.exec(block)?.[1] ?? '')
