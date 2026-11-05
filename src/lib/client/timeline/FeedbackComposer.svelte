@@ -334,7 +334,7 @@
             aria-label="Project feedback"
             aria-multiline="true"
             data-placeholder={pair
-              ? 'Add a note to this comparison (optional): a change you want, or what you like…'
+              ? 'Add a note to this comparison (optional): a change you want, or what you like; select parts of a picture, then Reference, to point at them…'
               : 'Comment on the project or reference a visualization…'}
             oninput={updateContentState}
             onkeyup={rememberSelection}
