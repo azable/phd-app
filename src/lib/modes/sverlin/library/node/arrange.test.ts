@@ -374,3 +374,61 @@ describe('a tree drawn from its fields', () => {
     }
   });
 });
+
+describe('a link from a child to itself', () => {
+  const states: ArrangeBox[] = [
+    { key: 'q0', width: 40, height: 40 },
+    { key: 'q1', width: 40, height: 40 }
+  ];
+  const label = { width: 14, height: 12 };
+  const result = arrange(states, {
+    links: [
+      { from: 'q0', to: 'q0', directed: true, id: 'l0', label },
+      { from: 'q0', to: 'q0', directed: true, id: 'l1', label },
+      { from: 'q0', to: 'q1', directed: true, id: 'l2', label },
+      { from: 'q1', to: 'q1', directed: true, id: 'l3', label }
+    ],
+    flow: 'x',
+    gap: 12,
+    random: keyedRandom(1, 'test')
+  });
+  const loops = result.edges.filter(({ link }) => link === 'q0 -> q0' || link === 'q1 -> q1');
+  const box = (index: number) => {
+    const { x, y } = result.placements[index];
+    return { left: x, top: y, right: x + 40, bottom: y + 40 };
+  };
+
+  it('draws a loop over the child, leaving and meeting its top edge', () => {
+    expect(loops).toHaveLength(3);
+    for (const edge of loops) {
+      const owner = box(edge.link === 'q1 -> q1' ? 1 : 0);
+      const bounds = pathBounds(edge.path);
+      expect(bounds.bottom).toBeLessThanOrEqual(owner.top + 0.5);
+      expect(bounds.top).toBeLessThan(owner.top - 10);
+      expect(bounds.left).toBeGreaterThan(owner.left - 30);
+      expect(bounds.right).toBeLessThan(owner.right + 30);
+    }
+  });
+
+  it('nests a second loop on the same child higher than the first', () => {
+    const [first, second] = loops
+      .filter(({ link }) => link === 'q0 -> q0')
+      .map((edge) => pathBounds(edge.path).top);
+    expect(second).toBeLessThan(first);
+  });
+
+  it('keeps its loops and their labels inside the arrangement', () => {
+    for (const edge of loops) {
+      expect(pathBounds(edge.path).top).toBeGreaterThanOrEqual(0);
+      expect(edge.middle.y - label.height / 2).toBeGreaterThanOrEqual(-0.5);
+    }
+  });
+
+  it('leaves a labelled link between children room for its label and an arrow either side', () => {
+    const between = result.edges.find(({ link }) => link === 'q0 -> q1');
+    if (!between) throw new Error('no link between the children');
+    expect(Math.hypot(between.x2 - between.x1, between.y2 - between.y1)).toBeGreaterThan(
+      label.width + 40
+    );
+  });
+});

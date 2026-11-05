@@ -1,0 +1,193 @@
+<script domain>
+  const Char = type(['a', 'b']);
+  const Text = array(Char, { max: 5 });
+  const TextIndex = index(Text);
+  const StateName = type(['q0', 'q1', 'q2']);
+  const States = array(StateName, { max: 3 });
+  const StateIndex = index(States);
+</script>
+
+<script input>
+  const text = Text;
+</script>
+
+<script algorithm>
+  @setup[
+    const states = States(['q0', 'q1', 'q2']);
+    let current = StateIndex(states, 0);
+  ]
+  for (
+    @start[let i = TextIndex(text, 0)];
+    @more[i < text.length];
+    @next[i++]
+  ) @scan{
+    @read[const symbol = text[i];]
+    @transition[
+      if (@isA[symbol === 'a']) {
+        if (@beforeAccept[current < 2]) @toQ1[current = 1;]
+      } else {
+        if (@afterA[current === 1]) @toQ2[current = 2;]
+        else if (@atStart[current === 0]) @stayQ0[current = 0;]
+      }
+    ]
+  }
+  if (@accepted[current === 2]) @accept{
+    return;
+  } else @reject{
+    return;
+  }
+</script>
+
+<script listing="textbook">
+  start in @setup[q0]
+  @start[set i to 0]
+  @more[while i is within the text]
+      @scan[@read[read text[i]]
+      @transition[follow that character's transition]]
+      @next[move i right]
+  if @accepted[the current state is q2]
+      @accept[accept]
+  otherwise @reject[reject]
+</script>
+
+<View of="Char" name="CharacterCell">
+  <Node value={this} />
+</View>
+
+<View of="StateName" name="StateCell">
+  <Node layout="column">
+    <Node value={this} />
+    {#if this === 'q2'}
+      <Node kind="AcceptLabel">accept</Node>
+    {/if}
+  </Node>
+</View>
+
+<View of="States" name="StateDiagram">
+  <Node layout="free" flow="x">
+    {#each this as state, k}
+      <Node kind="StateSlot">{state}</Node>
+      {#if k === 0}
+        <Link from={k} to={k}>b</Link>
+        <Link from={k} to={k + 1}>a</Link>
+      {:else if k === 1}
+        <Link from={k} to={k}>a</Link>
+        <Link from={k} to={k + 1}>b</Link>
+      {:else}
+        <Link from={k} to={k}>a, b</Link>
+      {/if}
+    {/each}
+  </Node>
+</View>
+
+<View of="States" name="TransitionCards">
+  <Node layout="row">
+    {#each this as state}
+      <Node kind="TransitionCard" layout="column">
+        {state}
+        {#if state === 'q0'}
+          <Node kind="Rule">a → q1 · b → q0</Node>
+        {:else if state === 'q1'}
+          <Node kind="Rule">a → q1 · b → q2</Node>
+        {:else}
+          <Node kind="Rule">a, b → q2</Node>
+        {/if}
+      </Node>
+    {/each}
+  </Node>
+</View>
+
+<View of="TextIndex" name="IndexNumber">
+  <Node value={this} />
+</View>
+
+<View of="TextIndex" name="TextMarker">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="TextMarkerLabel">i</Node>
+  </Node>
+</View>
+
+<View of="StateIndex" name="StateMarker">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="StateMarkerLabel">current state</Node>
+  </Node>
+</View>
+
+<Layout name="Title">
+  <Node layout="column">
+    <Node kind="Heading">Does the text contain “ab”?</Node>
+    <Node kind="Subtitle">The accepting state q2 keeps every later input.</Node>
+  </Node>
+</Layout>
+
+<Layout name="TextRow" of="text">
+  <Node layout="column">
+    <Node kind="SectionLabel">input text</Node>
+    <Node kind="Characters">
+      {#each text as character}
+        {character}
+      {/each}
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Machine" of="states">
+  <Node layout="column">
+    <Node kind="SectionLabel">states and transitions</Node>
+    {states}
+  </Node>
+</Layout>
+
+<Layout name="Status" of="@accept, @reject">
+  <Node kind="StatusArea">
+    <OneOf>
+      <When of="@accept">
+        <Node kind="Accepted">Accepted: the DFA reached q2.</Node>
+      </When>
+      <When of="@reject">
+        <Node kind="Rejected">Rejected: the DFA never reached q2.</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout
+  name="Stacked"
+  of="text, states, current, i, @accept, @reject"
+>
+  <Node layout="column">
+    <Title />
+    <Node layout="row">
+      <Node layout="column">
+        <TextRow text={text} />
+        <Machine states={states} />
+        <Node kind="TraceStatus" layout="row">
+          <Node>position</Node>{i}<Node>current state</Node>{states[current]}
+        </Node>
+        <Status />
+      </Node>
+      <Listing />
+    </Node>
+  </Node>
+</Layout>
+
+<Case name="main" text={['b', 'a', 'a', 'a', 'b']} />
+
+<Storyboard>
+  <Scene
+    name="trace"
+    title="Read the text"
+    case="main"
+    pause="@setup, @scan.transition, @accept, @reject"
+  >
+    <Stacked
+      text={text}
+      states={states}
+      current={current}
+      i={i}
+    />
+  </Scene>
+</Storyboard>
+

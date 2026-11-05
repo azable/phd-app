@@ -400,7 +400,15 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'pointed' | 'link';
+export type KindRole =
+  | 'container'
+  | 'value'
+  | 'vertex'
+  | 'text'
+  | 'code'
+  | 'icon'
+  | 'pointed'
+  | 'link';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -442,6 +450,7 @@ const uniformSlot = {
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
   value: nodeProps,
+  vertex: nodeProps,
   text: nodeProps,
   code: nodeProps,
   icon: [...nodeProps, 'icon'],
@@ -597,6 +606,25 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'bold',
     padding: 0.375,
     radius: 8,
+    minSize: 2.5,
+    ...plainStyle,
+    ...uniformSlot
+  },
+  // A node a free layout's links join, as a graph's vertex or a machine's state: a circle, so
+  // links meet an edge and do not run into its text.
+  vertex: {
+    shown: true,
+    fill: 'white',
+    stroke: 'neutral-400',
+    strokeWidth: 1.5,
+    strokeStyle: 'solid',
+    opacity: 1,
+    color: 'neutral-900',
+    font: fontValues[0],
+    textSize: 18,
+    weight: 'bold',
+    padding: 0.5,
+    radius: 999,
     minSize: 2.5,
     ...plainStyle,
     ...uniformSlot

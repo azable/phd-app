@@ -263,6 +263,29 @@ export function routeCurve(
   return { curve, halfway };
 }
 
+// How far a link from a node to itself rises above the node, and how much higher each further
+// loop on the same node rises, so loops nest rather than overlap.
+const loopRise = 26;
+const loopStep = 16;
+
+/** How far the loops on a node reach above it: the highest, the nth loop counting from 0. */
+export const loopReach = (count: number): number => (count ? loopRise + (count - 1) * loopStep : 0);
+
+/**
+ * A link from a box to itself: a loop that leaves the top edge left of its middle and returns right
+ * of it, rising above the box, the nth loop on the box (counting from 0) higher than those before.
+ */
+export function loopCurve(box: Box, nth: number): Routed {
+  const middle = (box.left + box.right) / 2;
+  const spread = Math.max(6, Math.min(12, (box.right - box.left) / 3));
+  const rise = loopRise + nth * loopStep;
+  const start = { x: middle - spread, y: box.top };
+  const end = { x: middle + spread, y: box.top };
+  const k1 = { x: middle - spread - rise * 0.6, y: box.top - rise * 1.33 };
+  const k2 = { x: middle + spread + rise * 0.6, y: box.top - rise * 1.33 };
+  return { curve: [start, k1, k2, end], halfway: cubicAt(start, k1, k2, end, 0.5) };
+}
+
 function cubicAt(a: Point, b: Point, c: Point, d: Point, t: number): Point {
   const u = 1 - t;
   return {

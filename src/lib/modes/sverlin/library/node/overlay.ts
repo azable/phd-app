@@ -9,7 +9,7 @@ import { headDrawing, headTrim } from './heads';
 import type { Line } from './LinkLines.svelte';
 import { labelsIn, markerLook } from './markers';
 import { descendants, type Reader } from './reader';
-import { curvePath, pathBounds, routeCurve, wirePath, type Box } from './route';
+import { curvePath, loopCurve, pathBounds, routeCurve, wirePath, type Box } from './route';
 import { seenParts, unionOf } from './visible';
 import { routeWires } from './wires';
 
@@ -68,10 +68,12 @@ export function routeOverlay<E>(
   const linked = markers.flatMap((marker) => {
     const from = anchors[read.attribute(marker, 'data-from') ?? ''];
     const to = anchors[read.attribute(marker, 'data-to') ?? ''];
-    return from && to && from !== to
+    return from && to
       ? [{ marker, from, to, ...markerLook((name) => read.attribute(marker, name)) }]
       : [];
   });
+  // A link from a box to itself loops over it, each further loop on the box higher (see loopCurve).
+  const loopsBefore = new Map<Box, number>();
   // Wires are routed together round the cells, so their runs keep apart: each between the cells
   // holding its ends, or the boxes inside them it meets.
   const cellOf = (end: Box) => boxes.findIndex((box) => overlaps(box, end));
@@ -113,7 +115,13 @@ export function routeOverlay<E>(
     let path: string;
     let middle: { x: number; y: number };
     let ends: { start: { x: number; y: number }; end: { x: number; y: number } };
-    if (corners?.length) ({ path, middle, ...ends } = wirePath(corners, trim));
+    if (from === to) {
+      const nth = loopsBefore.get(from) ?? 0;
+      loopsBefore.set(from, nth + 1);
+      const looped = loopCurve(from, nth);
+      ({ path, ...ends } = curvePath(looped.curve, trim));
+      middle = looped.halfway;
+    } else if (corners?.length) ({ path, middle, ...ends } = wirePath(corners, trim));
     else {
       const [p, q] = [centre(from), centre(to)];
       // Ends side by side arc over them, ends one above the other beside them, wherever the link

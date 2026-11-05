@@ -25,12 +25,15 @@
   .sv-link-label {
     position: absolute;
     z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
+    text-align: center;
     white-space: nowrap;
     font-size: 0.75em;
     color: var(--sv-muted);
+    /* The line breaks round the label, so it reads over the line it sits on. */
+    background: var(--sv-surface);
+    padding: 0 0.25em;
+    border-radius: 2px;
   }
   .sv-link-label:not([data-sv-placed]),
   .sv-link-label[data-sv-hidden='true'] {

@@ -1731,7 +1731,19 @@ A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
 it: text, as `<Link from={k} to={w}>next</Link>`, or views of values and nodes,
 as `<Link from={u} to={v}>{cost}</Link>`, each of its own kind, so a weight can
-be a white pill on the line, followed from step to step as any value is.
+be a white pill on the line, followed from step to step as any value is. The
+line breaks round a label, and a labelled link keeps room for an arrow on either
+side of it.
+
+A link from a node to itself, as a state's transition back to the same state
+(`<Link from={k} to={k}>b</Link>`), is a loop over the node: it leaves the top
+of the node and returns to it, with its label at the top of the loop. A second
+loop on the same node goes over the first. The node keeps room above it for its
+loops, so the nodes round it stay clear of them.
+
+In a free layout with links, a node directly among its children starts as a
+circle, as a graph's vertex or a machine's state, so links meet its edge; a node
+drawn by a view, or one with a layout of its own, keeps its own look.
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each

@@ -3756,11 +3756,36 @@ function withNodeRefs(
       return 'icon';
     // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
     if (has('icon') && !has('value') && !children.length) return 'text';
+    if (vertices.has(entry.start)) return 'vertex';
     if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
+  // The nodes a free layout's links join, its children inside its blocks: a graph's vertices or a
+  // machine's states, which start as circles, so a link meets an edge rather than run into text.
+  const vertices = new Set<number>();
+  const childNodes = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(childNodes);
+    const part = value as Tag;
+    if (part.type === 'InlineComponent') {
+      if (part.name === 'Node' && part.start !== undefined) vertices.add(part.start);
+      return;
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key === 'children' || key === 'else' || key === 'body' || key === 'consequent')
+        childNodes(child);
+  };
   // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'pointed', 'link'];
+  const plainest: KindRole[] = [
+    'container',
+    'icon',
+    'text',
+    'code',
+    'value',
+    'vertex',
+    'pointed',
+    'link'
+  ];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes and the flow they set.
@@ -3779,6 +3804,7 @@ function withNodeRefs(
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
+  for (const entry of tags) if (entry.links && laidOutFreely(entry)) childNodes(entry.tag.children);
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
     // or in a row or column; one holding a collection's {#each} and links runs as the collection.

@@ -12,6 +12,8 @@ import { headDrawing, headTrim, type HeadEnds } from './heads';
 import {
   curvePath,
   labelPoint,
+  loopCurve,
+  loopReach,
   pathBounds,
   routeCurve,
   shiftPath,
@@ -200,10 +202,12 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     const text = linkText(spec);
     const from = anchorOf(spec.start ?? spec.from, text);
     const to = anchorOf(spec.to, text);
-    return !from || !to || from.box === to.box
+    // A link from a child to itself is a loop over it (see loopCurve), which pulls on nothing.
+    return !from || !to
       ? []
       : [
           {
+            loop: from.box === to.box,
             source: from.box,
             target: to.box,
             from,
@@ -226,16 +230,23 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   const flowExtent = options.flow === 'y' ? 'height' : 'width';
   const labelRoom = ({ label }: { label?: { width: number; height: number } }) =>
     label ? Math.max(label.width, label.height) : 0;
-  const room = Math.max(3 * options.gap, arrowRoom) + Math.max(0, ...links.map(labelRoom));
-  const laidLinks = links.map((link) => {
-    const { source, target, from, to, directed, id, key } = link;
-    const own = Math.max(3 * options.gap, arrowRoom) + labelRoom(link);
-    const along = (from[flowExtent] + to[flowExtent]) / 2 + own;
-    const ideal = options.flow
-      ? along
-      : (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + own;
-    return { source, target, from, to, ideal, along, directed, id, key };
-  });
+  // A label sits on its link's line, which breaks round it, so a labelled link keeps an arrow's room
+  // on either side of its label: its line still shows, and its head, wherever the label goes.
+  const spare = Math.max(3 * options.gap, arrowRoom);
+  const roomFor = (link: { label?: { width: number; height: number } }) =>
+    spare + (link.label ? labelRoom(link) + spare : 0);
+  const room = Math.max(spare, ...links.map(roomFor));
+  const laidLinks = links
+    .filter(({ loop }) => !loop)
+    .map((link) => {
+      const { source, target, from, to, directed, id, key } = link;
+      const own = roomFor(link);
+      const along = (from[flowExtent] + to[flowExtent]) / 2 + own;
+      const ideal = options.flow
+        ? along
+        : (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + own;
+      return { source, target, from, to, ideal, along, directed, id, key };
+    });
   const solvedLinks: { source: number; target: number; ideal: number }[] = [...laidLinks];
 
   // The links of a free arrangement are read for the structure they make, such as a path, a tree,
@@ -307,13 +318,27 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     }
   }
 
+  // A child's loops rise above it, with their labels: it keeps that room above, so the children
+  // round it stay clear of them.
+  const loopsOn = boxes.map(() => [] as number[]);
+  links.forEach(({ loop, source }, i) => {
+    if (loop) loopsOn[source].push(i);
+  });
+  const above = loopsOn.map((loops) =>
+    loops.length
+      ? loopReach(loops.length) +
+        Math.max(0, ...loops.map((i) => links[i].label?.height ?? 0)) +
+        options.gap
+      : 0
+  );
+
   // Children start where the seed puts them in the start area, round its middle.
   const middle = { x: startArea.width / 2, y: startArea.height / 2 };
   const nodes: { width: number; height: number; x?: number; y?: number; fixed?: number }[] =
-    boxes.map((box) => ({
+    boxes.map((box, i) => ({
       // The gap is added to each box, so overlap removal keeps boxes that far apart.
       width: box.width + options.gap,
-      height: box.height + options.gap,
+      height: box.height + options.gap + above[i],
       ...(options.random
         ? {
             x: options.random(`${box.key}.x`) * startArea.width,
@@ -336,7 +361,12 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     for (const [node, point] of formed) {
       const anchor = anchorOfBox(node);
       nodes[node].x = startArea.width / 2 + point.x - meanX - (anchor ? offsetOf(anchor, 'x') : 0);
-      nodes[node].y = startArea.height / 2 + point.y - meanY - (anchor ? offsetOf(anchor, 'y') : 0);
+      nodes[node].y =
+        startArea.height / 2 +
+        point.y -
+        meanY -
+        (anchor ? offsetOf(anchor, 'y') : 0) -
+        above[node] / 2;
       nodes[node].fixed = 1;
     }
   }
@@ -379,7 +409,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     layout.settle(1000);
   }
 
-  const centres = nodes.slice(0, boxes.length).map(({ x = 0, y = 0 }) => ({ x, y }));
+  // A child sits at the bottom of the room it keeps, its loops' room above it.
+  const centres = nodes
+    .slice(0, boxes.length)
+    .map(({ x = 0, y = 0 }, i) => ({ x, y: y + above[i] / 2 }));
   // Placements are relative to the top-left of everything placed.
   const left = Math.min(...boxes.map((box, i) => centres[i].x - box.width / 2));
   const top = Math.min(...boxes.map((box, i) => centres[i].y - box.height / 2));
@@ -409,7 +442,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
   // Wires turn only at right angles, routed all together so their runs keep apart, between the
   // boxes they meet: a child, or a box inside it, as a vertex's name cell, they may run in to reach.
-  const wired = links.filter(({ route }) => route === 'wire');
+  const wired = links.filter(({ route, loop }) => route === 'wire' && !loop);
   const smaller = (anchor: Anchor) =>
     anchor.width < boxes[anchor.box].width - 1 || anchor.height < boxes[anchor.box].height - 1;
   const inner = boxes.map(() => [] as Anchor[]);
@@ -463,6 +496,19 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       link: text,
       ...(id ? { id } : {})
     };
+    if (link.loop) {
+      const looped = loopCurve(boxAt(tail), loopsOn[tail.box].indexOf(links.indexOf(link)));
+      const drawn = curvePath(looped.curve, trim);
+      return {
+        x1: drawn.start.x,
+        y1: drawn.start.y,
+        x2: drawn.end.x,
+        y2: drawn.end.y,
+        path: drawn.path,
+        middle: looped.halfway,
+        ...shown
+      };
+    }
     const corners = wires.get(link);
     if (corners?.length) {
       const wire = wirePath(corners, trim);

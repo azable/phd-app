@@ -2904,6 +2904,17 @@ describe('starter looks of a graph', () => {
     expect(design.starter['VertexCard.StateText@this.state.stroke']).toBe('none');
     expect(design.fallbacks['VertexCard.NameText@this.name.fill']).toBeUndefined();
   });
+
+  it('starts the nodes a free layout’s links join as circles, a state machine’s states', async () => {
+    const { readFileSync } = await import('node:fs');
+    const dfa = readFileSync('src/lib/modes/sverlin/fixtures/dfa-loops.sverlin', 'utf8');
+    const { design } = prepareSvelteComponent(dfa);
+    expect(design.starter['StateDiagram.StateSlot.radius']).toBe(999);
+    expect(design.starter['StateDiagram.StateSlot.fill']).toBe('white');
+    expect(design.starter['StateDiagram.StateSlot.stroke']).toBe('neutral-400');
+    // A row of cells beside the graph keeps its cells' box.
+    expect(design.starter['TextRow.Characters.radius']).not.toBe(999);
+  });
 });
 
 describe('views of a union', () => {
