@@ -255,7 +255,11 @@ export function declaredNames(body: string, kind: BlockKind, domain?: DomainRegi
  * The names a block's code refers to, its declarations' own names left out: an identifier read,
  * written or called, never a member's property name or an object's key.
  */
-export function referencedNames(body: string, kind: BlockKind, domain?: DomainRegistry): Set<string> {
+export function referencedNames(
+  body: string,
+  kind: BlockKind,
+  domain?: DomainRegistry
+): Set<string> {
   const { root } = parseBlock(body, kind, domain);
   const names = new Set<string>();
   const visit = (node: unknown, parent?: { type?: string; computed?: boolean }, key?: string) => {

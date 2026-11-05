@@ -18,7 +18,7 @@
     "export:data": "pnpm run build:data && node build-data/index.js",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "prettier --check . && eslint .",
+    "lint": "prettier --check . ; eslint .",
     "test:unit": "vitest run --configLoader native",
     "test:postgres": "SVERLIN_RUN_POSTGRES_TESTS=1 node scripts/run-with-test-database.mjs pnpm exec vitest run --no-file-parallelism src/lib/server/*.postgres.integration.test.ts src/lib/server/projects/*.postgres.integration.test.ts",
     "test:browser": "SVERLIN_RUN_BROWSER_TESTS=1 vitest run --configLoader native src/lib/modes/sverlin/*.browser.test.ts",
