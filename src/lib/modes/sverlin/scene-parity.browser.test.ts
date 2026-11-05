@@ -14,6 +14,8 @@ import type { Page } from 'playwright-core';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import costsVariant from './fixtures/dijkstra-costs.json';
+import costs from './fixtures/dijkstra-costs.sverlin?raw';
 import replay from './fixtures/replay/replay.json';
 import natural from './fixtures/ucs-compare-natural.json';
 import type { DesignValues } from './library/node/design';
@@ -285,7 +287,13 @@ describe('steps drawn from their scenes', () => {
   }
 });
 
-type Sample = { nodes: Record<string, Box>; links: Record<string, number[]> };
+type Sample = {
+  nodes: Record<string, Box>;
+  links: Record<string, number[]>;
+  /** The node each moves from, where it had another id, and each node's own text. */
+  was: Record<string, string>;
+  texts: Record<string, string>;
+};
 
 /** SceneView's nodes and links each frame, in the frame's coordinates, until the step settles. */
 async function framesTo(page: Page, step: number): Promise<Sample[]> {
@@ -296,6 +304,8 @@ async function framesTo(page: Page, step: number): Promise<Sample[]> {
         const root = document.getElementById('app')!;
         const sample = () => {
           const nodes: Sample['nodes'] = {};
+          const was: Sample['was'] = {};
+          const texts: Sample['texts'] = {};
           const scene = document.querySelector('svg[data-sv-scene]')!;
           for (const group of scene.querySelectorAll<SVGGElement>(':scope > g[data-sv-node]')) {
             // A node's text drawn over the links is a group of its own, with no box.
@@ -303,6 +313,10 @@ async function framesTo(page: Page, step: number): Promise<Sample[]> {
             if (!box) continue;
             const { x, y, width, height } = (box as SVGRectElement).getBBox();
             nodes[group.dataset.svNode!] ??= { x, y, width, height };
+            if (group.dataset.svWas) was[group.dataset.svNode!] = group.dataset.svWas;
+            texts[group.dataset.svNode!] ??= [...group.querySelectorAll(':scope > text')]
+              .map((text) => text.textContent)
+              .join(' ');
           }
           const links: Sample['links'] = {};
           for (const group of scene.querySelectorAll<SVGGElement>('g[data-sv-link]')) {
@@ -311,7 +325,7 @@ async function framesTo(page: Page, step: number): Promise<Sample[]> {
             const end = path.getPointAtLength(path.getTotalLength());
             links[group.dataset.svLink!] = [start.x, start.y, end.x, end.y];
           }
-          samples.push({ nodes, links });
+          samples.push({ nodes, links, was, texts });
           if (root.dataset.svSettled === String(step)) resolve(samples);
           else requestAnimationFrame(sample);
         };
@@ -360,7 +374,7 @@ function jumps(samples: Sample[]): string[] {
   const corners = ({ x, y, width, height }: Box) => [x, y, x + width, y + height];
   for (const sample of samples.slice(1, -1)) {
     for (const [id, box] of Object.entries(sample.nodes)) {
-      const [from, to] = [first.nodes[id], last.nodes[id]];
+      const [from, to] = [first.nodes[sample.was[id] ?? id], last.nodes[id]];
       check(`node ${id}`, corners(box), from && corners(from), to && corners(to));
     }
     for (const [key, ends] of Object.entries(sample.links)) {
@@ -392,4 +406,36 @@ describe('SceneView’s motion', () => {
       expect(moving).toBeGreaterThan(0);
     });
   }
+
+  // A participant's Dijkstra (project d20bd3f6): every vertex's cost shows ∞ until it is updated,
+  // each ∞ a node whose id counts the renders before it, so when one cost turns finite the others'
+  // ids shift; each must stay in its own vertex, not travel to the next.
+  it.skipIf(!enabled)(
+    'keeps each ∞ cost in its own vertex as another updates',
+    { timeout: 300_000 },
+    async () => {
+      const built = await bundlePresentation(prepareSvelteComponent(costs), 625810341, {
+        base: costsVariant
+      });
+      const page = await openPresentation(built.javascript, { served: built.layout.scenes! });
+      const travelled: string[] = [];
+      let checked = 0;
+      for (let step = 1; step < Math.min(built.labels.length, 17); step++) {
+        const samples = await framesTo(page, step);
+        const [first, last] = [samples[0], samples.at(-1)!];
+        for (const [id, box] of Object.entries(last.nodes)) {
+          if (last.texts[id] !== '∞') continue;
+          checked += 1;
+          const start = first.nodes[samples.find((sample) => sample.was[id])?.was[id] ?? id];
+          if (start && Math.hypot(start.x - box.x, start.y - box.y) > tolerance)
+            travelled.push(
+              `step ${step}: ${id} from ${Math.round(start.x)},${Math.round(start.y)}`
+            );
+        }
+        expect(jumps(samples), `step ${step}`).toEqual([]);
+      }
+      expect(travelled).toEqual([]);
+      expect(checked).toBeGreaterThan(10);
+    }
+  );
 });

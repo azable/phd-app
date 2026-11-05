@@ -6,6 +6,7 @@ import {
   headTransform,
   linkPath,
   mixPath,
+  pairNodes,
   sceneBetween,
   strokeInside
 } from './scene-render';
@@ -111,5 +112,39 @@ describe('scenes drawn as SVG', () => {
     );
     const half = sceneBetween(from, to, 0.25);
     expect(half.links.map(({ opacity }) => opacity)).toEqual([0.25, 0.75].reverse());
+  });
+
+  it('moves a value by its identity when its node’s id shifts, keeping each in its own card', () => {
+    // Three cards each drawing ∞; the first value goes, so the others' render counts shift down.
+    const cards = ['a', 'b', 'c'].map((id, i) => node(id, i * 100, { kind: 'Card' }));
+    const value = (id: string, card: string, identity: string, x: number) =>
+      node(id, x, { parent: card, identity, runs: [] });
+    const from = drawnScene(
+      step([
+        ...cards,
+        value('v', 'a', '18', 0),
+        value('v#2', 'b', '21', 100),
+        value('v#3', 'c', '24', 200)
+      ])
+    );
+    const to = drawnScene(
+      step([...cards, value('v', 'b', '21', 100), value('v#2', 'c', '24', 200)])
+    );
+    const half = sceneBetween(from, to, 0.5);
+    const at = (key: string) => half.nodes.find((node) => node.key === key);
+    expect([at('v')?.box.x, at('v')?.was]).toEqual([100, 'v#2']);
+    expect([at('v#2')?.box.x, at('v#2')?.was]).toEqual([200, 'v#3']);
+    expect([at('v~old')?.box.x, at('v~old')?.opacity]).toEqual([0, 0.5]);
+  });
+
+  it('pairs a value drawn in several places with the place in the same node first', () => {
+    // Every ∞ is one constant: each stays in its card however the cards are ordered.
+    const cards = ['a', 'b'].map((id, i) => node(id, i * 100, { kind: 'Card' }));
+    const inf = (id: string, card: string, x: number) =>
+      node(id, x, { parent: card, identity: 'inf', kind: 'Cost' });
+    const from = drawnScene(step([...cards, inf('x', 'a', 0), inf('x#2', 'b', 100)]));
+    const to = drawnScene(step([...cards, inf('x', 'b', 100), inf('x#2', 'a', 0)]));
+    const pairs = pairNodes(from, to);
+    expect([pairs.get('x')?.id, pairs.get('x#2')?.id]).toEqual(['x#2', 'x']);
   });
 });

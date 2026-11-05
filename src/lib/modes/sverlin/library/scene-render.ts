@@ -268,23 +268,133 @@ export function mixPath(from: string, to: string, t: number): string | undefined
   });
 }
 
+/** The ancestors of a node in a scene, nearest first. */
+function ancestors(scene: DrawnScene, node: DrawnNode): DrawnNode[] {
+  const found: DrawnNode[] = [];
+  for (
+    let up = node.parent && scene.byId.get(node.parent);
+    up;
+    up = up.parent && scene.byId.get(up.parent)
+  )
+    found.push(up);
+  return found;
+}
+
+/** A scene's nodes drawing a value, outermost only, as a component's root and a node inside it draw one. */
+function byIdentity(scene: DrawnScene): Map<string, DrawnNode[]> {
+  const found = new Map<string, DrawnNode[]>();
+  for (const node of scene.nodes) {
+    if (!node.identity || node.leaving) continue;
+    if (ancestors(scene, node).some(({ identity }) => identity === node.identity)) continue;
+    found.set(node.identity, [...(found.get(node.identity) ?? []), node]);
+  }
+  return found;
+}
+
+/** How many of two lists agree, from the first, up to the first that differs. */
+function sharedFromStart(a: readonly unknown[], b: readonly unknown[]): number {
+  let shared = 0;
+  while (shared < a.length && shared < b.length && a[shared] === b[shared]) shared += 1;
+  return shared;
+}
+
+/**
+ * Each node of the scene moved to, by key, with the node of the scene moved from that it moves
+ * from, as motion.ts pairs the mounted page's. A node drawing a value pairs with a node that drew
+ * the same value (its identity), whatever their ids, as a value's node's id counts its renders and
+ * shifts when one before it goes; where the value is drawn in several places, each pairs with the
+ * place most like it: in the same node, then among the same kinds round it (see pairByRole), then
+ * the nearest, so a value staying in its place never travels to another's. What a paired value's
+ * node holds pairs in order with what the other held; every other node pairs by id.
+ */
+export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNode> {
+  const pairs = new Map<string, DrawnNode>();
+  const claimed = new Set<DrawnNode>();
+  const pair = (now: DrawnNode, was: DrawnNode) => {
+    pairs.set(now.key, was);
+    claimed.add(was);
+  };
+  const before = byIdentity(from);
+  const kinds = (scene: DrawnScene, node: DrawnNode) =>
+    ancestors(scene, node).map(({ kind }) => kind);
+  const centre = ({ box }: DrawnNode) => [box.x + box.width / 2, box.y + box.height / 2];
+  for (const [identity, nodes] of byIdentity(to)) {
+    const olds = before.get(identity) ?? [];
+    const candidates = nodes
+      .flatMap((now, fresh) =>
+        olds.map((was, old) => {
+          const [a, b] = [centre(now), centre(was)];
+          return {
+            now,
+            was,
+            fresh,
+            old,
+            sameParent: now.parent === was.parent ? 1 : 0,
+            role: sharedFromStart(kinds(to, now), kinds(from, was)),
+            distance: Math.hypot(a[0] - b[0], a[1] - b[1])
+          };
+        })
+      )
+      .toSorted(
+        (a, b) =>
+          b.sameParent - a.sameParent ||
+          b.role - a.role ||
+          a.distance - b.distance ||
+          a.fresh - b.fresh ||
+          a.old - b.old
+      );
+    for (const { now, was } of candidates)
+      if (!pairs.has(now.key) && !claimed.has(was)) pair(now, was);
+  }
+  // What a value's node holds, where it paired with a node of another id, pairs in order.
+  const inside = (scene: DrawnScene, node: DrawnNode) =>
+    scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
+  for (const now of to.nodes) {
+    const was = pairs.get(now.key);
+    if (!was || was.id === now.id || !now.identity) continue;
+    const olds = inside(from, was);
+    inside(to, now).forEach((held, index) => {
+      const old = olds[index];
+      if (old && old.kind === held.kind && !claimed.has(old) && !pairs.has(held.key))
+        pair(held, old);
+    });
+  }
+  for (const now of to.nodes) {
+    if (pairs.has(now.key)) continue;
+    const was = from.byId.get(now.id);
+    if (was && !claimed.has(was)) pair(now, was);
+  }
+  return pairs;
+}
+
+// Each move pairs its scenes once, not at every frame it draws.
+const paired = new WeakMap<DrawnScene, { from: DrawnScene; pairs: Map<string, DrawnNode> }>();
+function pairsOf(from: DrawnScene, to: DrawnScene): Map<string, DrawnNode> {
+  const known = paired.get(to);
+  if (known?.from === from) return known.pairs;
+  const pairs = pairNodes(from, to);
+  paired.set(to, { from, pairs });
+  return pairs;
+}
+
 /**
  * The scene part way through the move from one step to the next, `t` from 0 to 1 already eased: a
- * node both draw moves and grows from its old box to its new, its text with it, and takes its new
- * look; a node only the new step draws fades in where it is, and one only the old step drew fades
- * out where it was. A link both draw eases from its old path to its new where they are written
- * alike, and otherwise fades across; its heads move with it.
+ * node paired with one the old step drew (see pairNodes) moves and grows from its old box to its
+ * new, its text with it, and takes its new look; a node paired with none fades in where it is, and
+ * an old one paired with none fades out where it was. A link both draw eases from its old path to
+ * its new where they are written alike, and otherwise fades across; its heads move with it.
  */
 export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): DrawnScene {
   if (t >= 1) return to;
-  const before = from.byId;
-  const after = new Set(to.nodes.map(({ id }) => id));
+  const pairs = pairsOf(from, to);
+  const moving = new Set(pairs.values());
   const nodes: DrawnNode[] = to.nodes.map((node) => {
-    const old = before.get(node.id);
+    const old = pairs.get(node.key);
     if (!old) return { ...node, opacity: node.opacity * t };
     const sameRuns = old.runs.length === node.runs.length;
     return {
       ...node,
+      ...(old.id === node.id ? {} : { was: old.id }),
       box: mixBox(old.box, node.box, t),
       opacity: mix(old.opacity, node.opacity, t),
       runs: sameRuns
@@ -297,7 +407,7 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
     };
   });
   for (const node of from.nodes)
-    if (!node.leaving && !after.has(node.id))
+    if (!node.leaving && !moving.has(node))
       nodes.push({
         ...node,
         key: `${node.id}~old`,
