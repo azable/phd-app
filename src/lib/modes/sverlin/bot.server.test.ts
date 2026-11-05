@@ -17,9 +17,9 @@ describe('single-component Svelte assistant', () => {
       ['repair', 'gpt-5.6-sol', 'xhigh'],
       ['fallback', 'gpt-5.6-sol', 'xhigh']
     ]);
-    expect(
-      aiAssistant.attemptProfiles.every(({ parameters }) => parameters.maxOutputTokens === 12_000)
-    ).toBe(true);
+    expect(aiAssistant.attemptProfiles.map(({ parameters }) => parameters.maxOutputTokens)).toEqual(
+      [12_000, 12_000, 12_000, 20_000, 20_000]
+    );
   });
 
   it('specifies the complete source and isolated step contract', () => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { visualizationAttemptProfiles } from './attempt-profiles';
 
 describe('visualization attempt profiles', () => {
-  it('keeps the shared five-stage Sol ladder bounded, a feedback turn first thinking less', () => {
+  it('keeps the shared five-stage Sol ladder bounded, a feedback turn first thinking less, xhigh with room to reason', () => {
     expect(visualizationAttemptProfiles(12_000)).toEqual([
       {
         purpose: 'initial',
@@ -35,7 +35,7 @@ describe('visualization attempt profiles', () => {
         parameters: {
           model: 'gpt-5.6-sol',
           reasoningEffort: 'xhigh',
-          maxOutputTokens: 12_000
+          maxOutputTokens: 20_000
         }
       },
       {
@@ -43,7 +43,7 @@ describe('visualization attempt profiles', () => {
         parameters: {
           model: 'gpt-5.6-sol',
           reasoningEffort: 'xhigh',
-          maxOutputTokens: 12_000
+          maxOutputTokens: 20_000
         }
       }
     ]);

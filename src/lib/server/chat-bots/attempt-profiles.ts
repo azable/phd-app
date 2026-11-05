@@ -13,6 +13,11 @@ import type { ChatBotAttemptProfile } from './types';
  * output tokens a turn with the guide's extract, but never delay the reply, and none counts
  * against the ladder's five.
  */
+// The output budget of the xhigh attempts. Reasoning counts against it: project 0c34d124's xhigh
+// repair spent 12000 tokens in 113 seconds without answering, ending its turn. At that rate the
+// 180-second request ceiling ends a call near 19000, so the ceiling, not the budget, bounds these.
+const xhighOutputTokens = 20000;
+
 export function visualizationAttemptProfiles(
   maxOutputTokens: number
 ): readonly [ChatBotAttemptProfile, ...ChatBotAttemptProfile[]] {
@@ -32,11 +37,19 @@ export function visualizationAttemptProfiles(
     },
     {
       purpose: 'repair',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'xhigh', maxOutputTokens }
+      parameters: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'xhigh',
+        maxOutputTokens: Math.max(maxOutputTokens, xhighOutputTokens)
+      }
     },
     {
       purpose: 'fallback',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'xhigh', maxOutputTokens }
+      parameters: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'xhigh',
+        maxOutputTokens: Math.max(maxOutputTokens, xhighOutputTokens)
+      }
     }
   ];
 }
