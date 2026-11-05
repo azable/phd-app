@@ -294,6 +294,8 @@ export type AiViewHelpers = {
   /** The task the candidates answered, as the assistant gave it. */
   task?: string;
   candidates: { name: string; description: string; markup: string; readability?: string }[];
+  /** Replies given since they were proposed, none of them offering these. */
+  repliesSince?: number;
 };
 
 /** Strongly typed, consumer-specific context supplied to the AI assistant. */

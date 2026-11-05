@@ -2446,8 +2446,14 @@ async function presentPicks(
 function withViewHelpers(project: AiProjectContext, document: ProjectDocument): AiProjectContext {
   if (!turnViewHelpers(document)) return project;
   const snapshot = projectSnapshotAt(document);
-  const sha256 = snapshot.artifacts[snapshot.entryArtifactId]?.content.sha256 ?? '';
-  return { ...project, viewHelpers: viewHelpersContext(document, sha256) };
+  const content = snapshot.artifacts[snapshot.entryArtifactId]?.content;
+  return {
+    ...project,
+    viewHelpers: viewHelpersContext(document, {
+      sha256: content?.sha256 ?? '',
+      text: content?.text ?? ''
+    })
+  };
 }
 
 /** The view helpers' model and effort (see attempt-profiles.ts for why they cost no waiting). */

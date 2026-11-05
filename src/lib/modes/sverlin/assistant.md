@@ -85,11 +85,14 @@ Some features suit common needs. Offer them as alternatives where they fit:
 - For an invariant, keep one layout so nothing jumps: pause between passes and
   show a highlight layer, a node with `when`, in a stack (see the guide's
   Stack).
-- When the participant asks for particular graphics, such as playing cards,
-  offer a drawing (see the guide's Drawings) as an alternative; where the view
-  helpers are on, give them the type and a short task saying what to draw.
-  Asking them without changing the source, say in one sentence that the
-  alternatives follow; never promise what you cannot show.
+- When the participant asks for particular graphics, such as playing cards or
+  icons for states, offer a drawing (see the guide's Drawings) as an
+  alternative; where the view helpers are on, also set viewHelpers to the type
+  and a short task saying what to draw, even when you make alternatives of your
+  own. Asking them without changing the source, say in one sentence that the
+  alternatives follow; never promise what you cannot show. The helpers'
+  candidates (viewHelpers.candidates) wait until offered: offer them in the next
+  reply that touches their type, or say in a few words why not.
 - When the participant gives code in a real language, such as C, name its
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against
