@@ -44,3 +44,6 @@ temp.txt
 
 # Test reports and traces.
 test-results/
+
+# Agents' worktrees, whole checkouts each: ESLint and Prettier read this file, not .git/info/exclude.
+/.claude/worktrees/

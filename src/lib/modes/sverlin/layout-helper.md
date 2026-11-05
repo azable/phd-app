@@ -21,8 +21,8 @@ side table folded into the structure's nodes, a caption under or over its
 subject, a grid of panels. Keep every view as it is; change only how the layout
 places what it draws, and draw everything the old layout drew.
 
-Keep the page readable: the main structure as large as the frame allows, text
-no smaller than the source's, and no part drawn twice.
+Keep the page readable: the main structure as large as the frame allows, text no
+smaller than the source's, and no part drawn twice.
 
 Give the proposal's `name` as the layout's name, and a one-line description of
 the arrangement in plain words for a participant.

@@ -38,9 +38,9 @@ complete examples and checks its `Node` and `Link` props and named values
 against the compiler.
 [`src/lib/modes/sverlin/assembly/`](src/lib/modes/sverlin/assembly/) holds what
 the compiler adds around every authored component: `prelude.ts` is the import
-line injected into the module script (its names are reserved), `layout.ts`
-lays every step out on the server, and `entry.ts` is the page, which draws the
-scenes the server drew (see below). The `sverlin` alias in
+line injected into the module script (its names are reserved), `layout.ts` lays
+every step out on the server, and `entry.ts` is the page, which draws the scenes
+the server drew (see below). The `sverlin` alias in
 [`svelte.config.js`](svelte.config.js) lets the editor resolve the library from
 those files. Projects keep the source they were created with, so starter or
 library changes do not rewrite existing artifacts.
@@ -189,12 +189,12 @@ logical size, and the page draws each step's scene with
 fitted to the page as a zoomable, pannable canvas with a dashed outline; the
 sandboxed page loads once per presentation and the app sends each later step as
 a `sverlin:step` message, and each step's scene as the page asks for it
-(`sverlin:scenes-wanted`, `sverlin:scenes`): SceneView moves to it, pairing
-what each step draws by the value it draws, so zoom and pan carry over, while
-`sverlin:view` messages report the view to the app. Every
-arrangement is a set of constraints over a node's measured children, and a node
-hugs them: rows, columns, and grids are solved by CSS, with any links drawn over
-them, while `layout="free"` is solved by WebCola
+(`sverlin:scenes-wanted`, `sverlin:scenes`): SceneView moves to it, pairing what
+each step draws by the value it draws, so zoom and pan carry over, while
+`sverlin:view` messages report the view to the app. Every arrangement is a set
+of constraints over a node's measured children, and a node hugs them: rows,
+columns, and grids are solved by CSS, with any links drawn over them, while
+`layout="free"` is solved by WebCola
 ([`library/node/arrange.ts`](src/lib/modes/sverlin/library/node/arrange.ts))
 from starting positions drawn from its kind's `layoutSeed`, with nested
 arrangements laying out again as their children settle. A free layout takes a
@@ -231,10 +231,10 @@ scene from it
 keeping the result by what it was made from. The server's layout is the only
 one: the page draws the scenes as given, in the frame and at the scale the
 server worked out ([`library/fit.ts`](src/lib/modes/sverlin/library/fit.ts)),
-and runs no authored code. A presentation the server cannot lay out, as one too large or slow to
-lay out within the isolate's limits or with a character no embedded face has,
-fails its build, and the assistant repairs it like a compile error. The server
-also measures how large each version draws on a typical stage
+and runs no authored code. A presentation the server cannot lay out, as one too
+large or slow to lay out within the isolate's limits or with a character no
+embedded face has, fails its build, and the assistant repairs it like a compile
+error. The server also measures how large each version draws on a typical stage
 ([`readability.server.ts`](src/lib/modes/sverlin/readability.server.ts)), from
 that same frame and scale, which the assistant sees with each version and gets
 back once when its text would be too small to read. Sizes compose bottom up: a
@@ -246,16 +246,15 @@ change, and each arrangement is solved once over the union of every step, with
 every child and link that ever appears
 ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)), the node
 holding it sized with it; nodes alike are laid out once. Each step's scene
-places children where that solution put them, drawing only that step's
-links, at a root fit shared by all steps, so positions are valid across the
-whole animation, so a seed gives the same layout for each step whichever step is
-shown first, and only what changes moves. The page frame is the root
-arrangement, scaled down when it would not fit and up, to 1.6 times, when it
-would leave the frame mostly empty. Participants' selections inside the frame
-reference nodes in feedback: the compiler stamps every `<Node>` with its tag's
-`line:column` as the reserved `__ref` prop, each rendered node gets an id from
-it, and a keyed node from its tag and key too, so it keeps its id as other nodes
-come and go
+places children where that solution put them, drawing only that step's links, at
+a root fit shared by all steps, so positions are valid across the whole
+animation, so a seed gives the same layout for each step whichever step is shown
+first, and only what changes moves. The page frame is the root arrangement,
+scaled down when it would not fit and up, to 1.6 times, when it would leave the
+frame mostly empty. Participants' selections inside the frame reference nodes in
+feedback: the compiler stamps every `<Node>` with its tag's `line:column` as the
+reserved `__ref` prop, each rendered node gets an id from it, and a keyed node
+from its tag and key too, so it keeps its id as other nodes come and go
 ([`library/type-context.ts`](src/lib/modes/sverlin/library/type-context.ts)),
 and SceneView reports selections as `sverlin:selection` messages, which the app
 validates and keeps per presentation and step. Feedback records them as
@@ -418,16 +417,16 @@ pnpm run export:data -- --scope projects
 ```
 
 `test:postgres` creates an isolated test database and requires only PostgreSQL
-to be running. `test:browser` runs what only a browser shows: how the page
-moves between steps
+to be running. `test:browser` runs what only a browser shows: how the page moves
+between steps
 ([`scene-motion.browser.test.ts`](src/lib/modes/sverlin/scene-motion.browser.test.ts)),
 how it is used, and how soon it is ready; what each step draws is tested on the
 server's scenes, with no browser
-([`testing/scenes.ts`](src/lib/modes/sverlin/testing/scenes.ts));
-devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it
-to a local Chrome or Chromium executable. It starts one browser for the run,
-gives each test a context of its own, and waits for a presentation's
-`data-sv-settled` marker at each step rather than for a fixed time
+([`testing/scenes.ts`](src/lib/modes/sverlin/testing/scenes.ts)); devenv
+provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it to a
+local Chrome or Chromium executable. It starts one browser for the run, gives
+each test a context of its own, and waits for a presentation's `data-sv-settled`
+marker at each step rather than for a fixed time
 ([`testing/browser.ts`](src/lib/modes/sverlin/testing/browser.ts)); it runs two
 files at a time under a 20-minute limit and writes its outcome to
 `test-results/browser-summary.txt`. One file runs as
