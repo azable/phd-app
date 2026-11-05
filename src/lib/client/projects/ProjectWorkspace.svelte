@@ -628,7 +628,6 @@
                 mode={session.snapshot.mode}
                 viewer={study?.context === 'participant' ? study.participantId : 'local'}
                 auto={!session.readOnly && !expired && !developerView && (!!study || !isAdmin)}
-                canReset={isAdmin}
                 onShown={(shown) => (tourObservation = shown)}
               />
               {#if showAdminControls}

@@ -156,7 +156,9 @@ export const interfaceParts: readonly InterfacePart[] = [
   {
     id: 'help',
     name: 'Help',
-    descriptions: everySystem('Shows this introduction to the interface again.'),
+    descriptions: everySystem(
+      'Shows this help again: the introduction, and the hints for what is on screen now.'
+    ),
     locator: { selector: '[data-interface-part="help"]' }
   }
 ];

@@ -5,7 +5,6 @@
   import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
 
   import { Button } from '$lib/client/components/ui/button';
-  import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import type { VisualizationMode } from '$lib/shared/presentations';
 
   import TourOverlay from './TourOverlay.svelte';
@@ -18,13 +17,11 @@
     viewer: string;
     /** Start the introduction and hints by themselves, for participants. */
     auto: boolean;
-    /** Offer resetting what has been seen, to try the tour again. */
-    canReset?: boolean;
     /** Told the tour step on screen, or none, for the interaction recording. */
     onShown?: (shown: { id: string; step: number; count: number } | undefined) => void;
   };
 
-  let { mode, viewer, auto, canReset = false, onShown }: Props = $props();
+  let { mode, viewer, auto, onShown }: Props = $props();
 
   // The workspace is keyed by project, so the system and viewer are fixed for this instance.
   // svelte-ignore state_referenced_locally
@@ -75,6 +72,18 @@
     const shown = intro.steps.filter(({ part }) => findPart(part, root));
     const owed = deferred.filter(({ step }) => !shown.includes(step)).map(({ owed }) => owed);
     start({ ...intro, steps: shown }, { dim: true, quiet: false }, [intro.id, ...owed]);
+  }
+
+  // The help button: the introduction and every hint whose part is on screen, in one tour.
+  function startHelp() {
+    const root = document.querySelector(workspace) ?? document;
+    const steps = [...intro.steps, ...hints.flatMap(({ steps }) => steps)].filter(({ part }) =>
+      findPart(part, root)
+    );
+    const unique = steps.filter(
+      (step, index) => steps.findIndex((s) => s.part === step.part) === index
+    );
+    start({ id: intro.id, steps: unique }, { dim: true, quiet: false });
   }
 
   // Seen once closed (Done, Skip, Got it or Escape), so a reload while it shows shows it again.
@@ -156,41 +165,16 @@
   });
 </script>
 
-{#if canReset}
-  <DropdownMenu.Root>
-    <DropdownMenu.Trigger>
-      {#snippet child({ props })}
-        <Button
-          {...props}
-          size="icon-sm"
-          variant="ghost"
-          class="ml-auto"
-          aria-label="Interface help"
-          title="Interface help"
-          data-interface-part="help"
-          data-interaction="tour-help"><CircleQuestionMarkIcon /></Button
-        >
-      {/snippet}
-    </DropdownMenu.Trigger>
-    <DropdownMenu.Content align="end">
-      <DropdownMenu.Item onSelect={startIntro}>Show the introduction</DropdownMenu.Item>
-      <DropdownMenu.Item onSelect={() => seen.reset()}>
-        Reset introduction and hints
-      </DropdownMenu.Item>
-    </DropdownMenu.Content>
-  </DropdownMenu.Root>
-{:else}
-  <Button
-    size="icon-sm"
-    variant="ghost"
-    class="ml-auto"
-    aria-label="Interface help"
-    title="Interface help"
-    data-interface-part="help"
-    data-interaction="tour-help"
-    onclick={startIntro}><CircleQuestionMarkIcon /></Button
-  >
-{/if}
+<Button
+  size="icon-sm"
+  variant="ghost"
+  class="ml-auto"
+  aria-label="Interface help"
+  title="Interface help"
+  data-interface-part="help"
+  data-interaction="tour-help"
+  onclick={startHelp}><CircleQuestionMarkIcon /></Button
+>
 
 <Portal to={workspace}>
   <TourOverlay
