@@ -5,6 +5,7 @@ import * as v from 'valibot';
 import { presentationIdSchema, renderablePresentationSchema } from '$lib/shared/presentations';
 
 import { briefKeys } from '../brief';
+import { messageContentSchema } from './message-content';
 import { eventEnvelope, naturalSchema } from './values';
 
 /** Runtime schema for one visualization becoming visible in a display set. */
@@ -43,7 +44,9 @@ export const visualizationPresentedEventSchema = v.object({
 const comparisonAnswer = {
   displaySetId: v.optional(v.pipe(v.string(), v.uuid())),
   presentations: v.tuple([presentationIdSchema, presentationIdSchema]),
-  step: naturalSchema
+  step: naturalSchema,
+  /** What the participant wrote in the chat with the answer: a change they want, or what they like. */
+  comment: v.optional(messageContentSchema)
 };
 
 /**

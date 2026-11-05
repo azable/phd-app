@@ -109,7 +109,9 @@ export const projectCommandSchema = v.variant('type', [
     /** The presentation preferred; without one, the outcome: either is fine or unsure. */
     preferred: v.optional(presentationIdSchema),
     outcome: v.optional(v.picklist(['tie', 'skip'])),
-    step: naturalSchema
+    step: naturalSchema,
+    /** What the participant wrote in the chat with the answer. */
+    comment: v.optional(messageContentSchema)
   }),
   v.strictObject({
     ...commandBase,

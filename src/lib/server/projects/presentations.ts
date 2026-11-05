@@ -1,6 +1,7 @@
 /** Preference commands for compatible retained presentations. */
 
 import type { EventId } from '$lib/shared/projects/events';
+import type { MessageContent } from '$lib/shared/projects/events/message-content';
 import type { ProjectCommandResult, ProjectDocument } from '$lib/shared/projects/model';
 import {
   isSverlinPresentation,
@@ -74,6 +75,7 @@ export async function appendProjectPreference(
     answer: PreferenceAnswer;
     step: number;
     operationId: string;
+    comment?: MessageContent;
   },
   dependencies: ProjectServiceDependencies
 ): Promise<ProjectDocument> {
@@ -127,7 +129,8 @@ export async function appendProjectPreference(
           ...(displaySetId ? { displaySetId } : {}),
           presentations: options.presentations,
           ...options.answer,
-          step: options.step
+          step: options.step,
+          ...(options.comment?.length ? { comment: options.comment } : {})
         }
       })
     ],

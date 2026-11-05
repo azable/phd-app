@@ -524,7 +524,7 @@ describe('comparisons in the conversation', () => {
       'the two draw differently only at steps 2–3 (@scan.check#1 to @scan.check#2) and 5 (@done#1), alike at every other step';
 
     expect(projectConversationMessages(value.events)[0].content).toBe(
-      `(comparing presentation ${ids[0]} at step 1, start with presentation ${ids[1]} at step 1, start; ${differs})\nIs there a difference?`
+      `(comparing presentation ${ids[0]} at step 1, start with presentation ${ids[1]} at step 1, start; your comparison “How large should the marker be?”; they differ in Marker.textSize 20 or 24; ${differs})\nIs there a difference?`
     );
     expect(
       projectAiContext(value, { eventIds: [], interactionEventIds: [at + 4] }).interaction
@@ -598,6 +598,55 @@ describe('comparisons in the conversation', () => {
         content: '[Answering your question “Should the swap stand out more?”] Yes, much more.'
       }
     ]);
+  });
+
+  it('reads a comment with its answer, and a message written during a pair with the pair', () => {
+    const value = document();
+    const ids: [string, string] = [
+      '12345678-1234-4123-8123-123456789ac1',
+      '12345678-1234-4123-8123-123456789ac2'
+    ];
+    const displaySetId = '12345678-1234-4123-8123-123456789abd';
+    pair(value, ids, displaySetId);
+    const at = value.events.length;
+    value.events.push(
+      {
+        id: at + 1,
+        type: 'feedback.submitted',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:07.000Z',
+        payload: {
+          content: [{ type: 'markdown', text: 'Which is clearer for small numbers?' }],
+          focus: [],
+          viewing: { presentations: [{ presentationId: ids[0] }, { presentationId: ids[1] }] }
+        }
+      },
+      {
+        id: at + 2,
+        type: 'visualization.preference-recorded',
+        operationId,
+        actor: { kind: 'user' },
+        createdAt: '2026-01-01T00:00:08.000Z',
+        payload: {
+          displaySetId,
+          presentations: ids,
+          preferred: ids[1],
+          step: 0,
+          comment: [{ type: 'markdown', text: 'but make the tallies thinner' }]
+        }
+      }
+    );
+    const [message, answer] = projectConversationMessages(value.events).map(
+      ({ content }) => content
+    );
+    expect(message).toContain(
+      '; your comparison “Cells or tallies for the numbers?”; they differ in views.Int IntCell or IntTally)'
+    );
+    expect(answer).toMatch(/\nWith this choice I wrote: but make the tallies thinner$/u);
+    expect(
+      projectAiContext(value, { eventIds: [], interactionEventIds: [at + 2] }).interaction
+    ).toMatchObject({ kind: 'preference', comment: 'but make the tallies thinner' });
   });
 
   it('notes what was on screen before the participant’s words', () => {

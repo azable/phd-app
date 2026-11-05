@@ -787,6 +787,7 @@ async function executeProjectCommand(options: {
         presentations: options.command.presentations,
         answer: preferenceAnswer(options.command),
         step: options.command.step,
+        ...(options.command.comment ? { comment: options.command.comment } : {}),
         ...(options.deadlineAt === undefined
           ? {}
           : { deadlineAt: new Date(options.deadlineAt).toISOString() })

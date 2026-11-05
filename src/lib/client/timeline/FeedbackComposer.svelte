@@ -44,6 +44,11 @@
     baseSource?: string;
     /** The step each visible presentation shows, by its id. */
     steps?: Readonly<Record<string, number>>;
+    /**
+     * The pair on the stage, which a message goes with: picking a side sends the draft with the
+     * answer, and Enter sends it on its own, noting the pair.
+     */
+    pair?: { question?: string };
   };
 
   let {
@@ -55,7 +60,8 @@
     onDraftChange = (_content: MessageContent, _focused: boolean) => {},
     base,
     baseSource,
-    steps = {}
+    steps = {},
+    pair
   }: Props = $props();
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
@@ -75,6 +81,22 @@
 
   export function referenceSelection(selection: VisualSelection): void {
     insertReferences(selectionReferences(selection));
+  }
+
+  /** The draft, as a message would send it, to go with an answer to the pair; none when empty. */
+  export function takeComment(): MessageContent | undefined {
+    const draft = serializeEditor();
+    return draft.length ? feedbackSubmissionContent(draft, selected) : undefined;
+  }
+
+  /** Empty the box once what it held is sent. */
+  export function clear(): void {
+    editorRevision += 1;
+    hasContent = false;
+    hasExplicitReferences = false;
+    savedRange = undefined;
+    session.focusedEvents = [];
+    onDraftChange([], false);
   }
 
   async function send(editorContent: MessageContent): Promise<boolean> {
@@ -98,12 +120,7 @@
     const editorContent = serializeEditor();
     if (editorContent.length === 0) return;
     if (await send(editorContent)) {
-      editorRevision += 1;
-      hasContent = false;
-      hasExplicitReferences = false;
-      savedRange = undefined;
-      session.focusedEvents = [];
-      onDraftChange([], false);
+      clear();
       onSubmitted();
     }
   }
@@ -287,6 +304,15 @@
       <div
         class="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring"
       >
+        {#if pair && session.atHead}
+          <div
+            class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+            data-testid="feedback-pair"
+          >
+            About the pair on the stage{pair.question ? `: “${pair.question}”` : ''}. Pick a side to
+            send this with your choice, or press Enter to send it on its own.
+          </div>
+        {/if}
         {#if selected.length > 0 && !hasExplicitReferences}
           <div
             class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
@@ -304,7 +330,9 @@
             role="textbox"
             aria-label="Project feedback"
             aria-multiline="true"
-            data-placeholder="Comment on the project or reference a visualization…"
+            data-placeholder={pair
+              ? 'Add a note to your choice (optional): a change you want, or what you like…'
+              : 'Comment on the project or reference a visualization…'}
             oninput={updateContentState}
             onkeyup={rememberSelection}
             onmouseup={rememberSelection}

@@ -309,6 +309,7 @@ export function queueProjectPreference(
     presentations: [string, string];
     answer: PreferenceAnswer;
     step: number;
+    comment?: MessageContent;
     deadlineAt?: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -318,7 +319,11 @@ export function queueProjectPreference(
     const before = await dependencies.repository.load(options.projectId);
     assertAcceptedInteraction(before, options.operationId, 'prefer');
     const based = await basedOnAnswer(before, options.answer, options.operationId, dependencies);
-    let document = await appendProjectPreference(based, options, dependencies.projectService);
+    let document = await appendProjectPreference(
+      based,
+      { ...options, comment: await validatedComment(before, options.comment) },
+      dependencies.projectService
+    );
     const preference = document.events.findLast(
       (event) =>
         event.operationId === options.operationId &&
@@ -392,7 +397,10 @@ export async function runQueuedAssistantTurn(
       { type: 'visualization.preference-recorded' }
     > => event?.type === 'visualization.preference-recorded'
   );
-  const content = feedback.flatMap((event) => event.payload.content);
+  const content = [
+    ...feedback.flatMap((event) => event.payload.content),
+    ...preferences.flatMap((event) => event.payload.comment ?? [])
+  ];
   const contextSelection: AiContextSelection = {
     eventIds: [...new Set(feedback.flatMap((event) => event.payload.focus))],
     presentationIds: [
@@ -588,6 +596,7 @@ export function submitProjectPreference(
     presentations: [string, string];
     answer: PreferenceAnswer;
     step: number;
+    comment?: MessageContent;
     operationId: string;
   },
   dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
@@ -596,7 +605,11 @@ export function submitProjectPreference(
     const before = await dependencies.repository.load(options.projectId);
     assertHead(before, options.expectedHead);
     const based = await basedOnAnswer(before, options.answer, options.operationId, dependencies);
-    let document = await appendProjectPreference(based, options, dependencies.projectService);
+    let document = await appendProjectPreference(
+      based,
+      { ...options, comment: await validatedComment(before, options.comment) },
+      dependencies.projectService
+    );
     const preference = document.events.findLast(
       (event) =>
         event.operationId === options.operationId &&
@@ -3036,6 +3049,14 @@ function validatePresentations(document: ProjectDocument, presentationIds: strin
     if (!available.has(id)) throw new Error(`Unknown selected presentation ${id}.`);
   }
   return unique;
+}
+
+/** A comment written with an answer, checked as a message is; none where it is empty. */
+async function validatedComment(
+  document: ProjectDocument,
+  comment: MessageContent | undefined
+): Promise<MessageContent | undefined> {
+  return comment?.length ? validateMessageContent(document, comment) : undefined;
 }
 
 async function validateMessageContent(

@@ -231,41 +231,20 @@ export function participantTimeline(
       for (const event of related) {
         if (event.type === 'feedback.submitted') {
           items.push(userMessage(`user-${event.id}`, event.payload.content, event.id));
+        } else if (event.type === 'visualization.preference-recorded' && event.payload.comment) {
+          // A comment written with an answer shows as the participant's message, after the choice.
+          items.push(
+            userMessage(
+              `preference-${event.id}`,
+              [...answerSegments(event), ...event.payload.comment],
+              event.id
+            )
+          );
         } else if (
           event.type === 'visualization.preference-recorded' &&
           !answeredPairs.has(event.id)
         ) {
-          const [first, second] = event.payload.presentations;
-          const preferred = 'preferred' in event.payload ? event.payload.preferred : undefined;
-          const other = event.payload.presentations.find((id) => id !== preferred);
-          if (!other) continue;
-          const said =
-            'outcome' in event.payload
-              ? event.payload.outcome === 'tie'
-                ? 'Either is fine:'
-                : 'Unsure:'
-              : undefined;
-          items.push(
-            userMessage(
-              `preference-${event.id}`,
-              preferred
-                ? [
-                    { type: 'markdown', text: 'Preferred' },
-                    { type: 'presentation-ref', presentationId: preferred },
-                    { type: 'markdown', text: 'over' },
-                    { type: 'presentation-ref', presentationId: other },
-                    { type: 'markdown', text: `at step ${event.payload.step + 1}.` }
-                  ]
-                : [
-                    { type: 'markdown', text: said ?? '' },
-                    { type: 'presentation-ref', presentationId: first },
-                    { type: 'markdown', text: 'or' },
-                    { type: 'presentation-ref', presentationId: second },
-                    { type: 'markdown', text: `at step ${event.payload.step + 1}.` }
-                  ],
-              event.id
-            )
-          );
+          items.push(userMessage(`preference-${event.id}`, answerSegments(event), event.id));
         }
       }
       if (options.audit)
@@ -440,6 +419,31 @@ function userMessage(
   eventId: number
 ): Extract<ParticipantTimelineItem, { kind: 'message' }> {
   return { id, kind: 'message', actor: 'user', content, eventId };
+}
+
+/** An answer to a pair in words: “Preferred [A] over [B] at step 3.”, or either or unsure. */
+function answerSegments(
+  event: ProjectEventOf<'visualization.preference-recorded'>
+): MessageContent {
+  const [first, second] = event.payload.presentations;
+  const at = { type: 'markdown', text: `at step ${event.payload.step + 1}.` } as const;
+  if ('preferred' in event.payload) {
+    const { preferred } = event.payload;
+    return [
+      { type: 'markdown', text: 'Preferred' },
+      { type: 'presentation-ref', presentationId: preferred },
+      { type: 'markdown', text: 'over' },
+      { type: 'presentation-ref', presentationId: preferred === first ? second : first },
+      at
+    ];
+  }
+  return [
+    { type: 'markdown', text: event.payload.outcome === 'tie' ? 'Either is fine:' : 'Unsure:' },
+    { type: 'presentation-ref', presentationId: first },
+    { type: 'markdown', text: 'or' },
+    { type: 'presentation-ref', presentationId: second },
+    at
+  ];
 }
 
 function sideMarks({ answer, presentationIds }: ProjectQuestion): MarkedComparison['answer'] {

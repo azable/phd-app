@@ -189,6 +189,8 @@ export type AiInteraction =
       outcome?: 'tie' | 'skip';
       /** For a comparison, the steps at which its two sides draw differently, where known. */
       differsAt?: string;
+      /** What the participant wrote in the chat with the answer: a request to act on with it. */
+      comment?: string;
     }
   | {
       kind: 'batch';
@@ -203,6 +205,7 @@ export type AiInteraction =
         answer?: string;
         outcome?: 'tie' | 'skip';
         differsAt?: string;
+        comment?: string;
       }>;
     };
 
@@ -463,7 +466,7 @@ export function projectConversationMessages(
       return [];
     const messages =
       event.type === 'feedback.submitted'
-        ? [{ role: 'user' as const, content: feedbackMessage(event, questions) }]
+        ? [{ role: 'user' as const, content: feedbackMessage(event, questions, variants) }]
         : matchProjectEvent<ConversationMessage[]>(event, conversationCases);
     // A held question is read with its reply as held, and asked where the application asks it.
     const held = event.type === 'assistant.responded' ? event.payload.heldQuestion : undefined;
@@ -608,16 +611,19 @@ function preferenceMessage(
   // A comparison's answer, as the preferred side's label: “Cells or tallies?” → tallies.
   const { question, label } = questions.get(preferred) ?? {};
   const where = `${event.payload.displaySetId ? ` in display set ${event.payload.displaySetId}` : ''} at step ${event.payload.step}`;
+  const commented = event.payload.comment
+    ? `\nWith this choice I wrote: ${plainMessageText(event.payload.comment)}`
+    : '';
   if (outcome !== 'preferred') {
     const said = outcome === 'tie' ? 'either is fine' : 'unsure';
     const meaning =
       outcome === 'tie'
         ? 'I find the two equally good, so this choice does not matter to me.'
         : 'I am unsure which I prefer; ask it again another time, perhaps in other words.';
-    return `${question ? `${question} → ${said}. ` : ''}${meaning} (Presentations ${preferred} and ${other ?? 'the alternative'}${where}.)${differed}`;
+    return `${question ? `${question} → ${said}. ` : ''}${meaning} (Presentations ${preferred} and ${other ?? 'the alternative'}${where}.)${differed}${commented}`;
   }
   const answer = question ? `${question} → ${label ?? 'the presentation preferred'}. ` : '';
-  return `${answer}I preferred presentation ${preferred} over the alternative${where}.${differed}`;
+  return `${answer}I preferred presentation ${preferred} over the alternative${where}.${differed}${commented}`;
 }
 
 /** Build the pure, explicitly bounded project context supplied to the AI assistant. */
@@ -674,7 +680,7 @@ export function projectAiContext(
     // and on reading the participant's messages.
     interfaceCapabilities: [
       'The application owns the step controls; never draw replacement controls inside a visualization.',
-      'A participant’s message starts with a note of what was on screen when they sent it, as (viewing presentation id at step 3, @insert.swap#1) or (comparing … with …): the number they saw in that presentation and the step’s name, as recordedSteps name it. It says where they were, not something they pointed at; a reference in their words, as [Presentation id at @insert.swap#1 (step 3)], is one they made.',
+      'A participant’s message starts with a note of what was on screen when they sent it, as (viewing presentation id at step 3, @insert.swap#1) or (comparing … with …; your comparison “…”; they differ in …): the number they saw in that presentation and the step’s name, as recordedSteps name it, and for a pair, your question and the values its two sides differ in, so you know which pair the message is about. It says where they were, not something they pointed at; a reference in their words, as [Presentation id at @insert.swap#1 (step 3)], is one they made.',
       ...(snapshot.mode === 'sverlin'
         ? [
             'selected.elements traces each element a participant referenced to the <Node> tag that drew it.',
@@ -729,6 +735,7 @@ function assistantInteraction(
         ...(label && outcome === 'preferred' ? { answer: label } : {}),
         ...(outcome === 'preferred' ? {} : { outcome }),
         ...(differs ? { differsAt: differs } : {}),
+        ...(event.payload.comment ? { comment: plainMessageText(event.payload.comment) } : {}),
         eventId: event.id,
         preferredPresentationId: preferred,
         alternativePresentationId,
@@ -883,11 +890,12 @@ function runtimeFailureText(event: ProjectEventOf<'visualization.runtime-failed'
 
 function feedbackMessage(
   event: ProjectEventOf<'feedback.submitted'>,
-  questions: ReadonlyMap<string, PresentedQuestion> = new Map()
+  questions: ReadonlyMap<string, PresentedQuestion> = new Map(),
+  variants: ReadonlyMap<string, DesignValues> = new Map()
 ): string {
   const { viewing } = event.payload;
   const said = plainMessageText(event.payload.content);
-  const details = [viewing ? `${viewingNote(viewing, questions)}\n${said}` : said];
+  const details = [viewing ? `${viewingNote(viewing, questions, variants)}\n${said}` : said];
   if (event.payload.focus.length > 0) {
     details.push(`Focused timeline events: ${event.payload.focus.join(', ')}`);
   }
@@ -896,11 +904,13 @@ function feedbackMessage(
 
 /**
  * What was on screen when a message was sent, as the note before it; for one of the assistant's
- * comparisons, with the steps at which its two sides draw differently.
+ * comparisons, with its question and the steps at which its two sides draw differently; for any
+ * pair, the values its two sides differ in, so a message about the pair says which pair it was.
  */
 function viewingNote(
   viewing: FeedbackViewing,
-  questions: ReadonlyMap<string, PresentedQuestion>
+  questions: ReadonlyMap<string, PresentedQuestion>,
+  variants: ReadonlyMap<string, DesignValues>
 ): string {
   if ('source' in viewing) return `(viewing source ${viewing.source} on its own)`;
   const [first, second] = viewing.presentations.map(
@@ -911,9 +921,20 @@ function viewingNote(
   const [left, right] = viewing.presentations.map(({ presentationId }) =>
     questions.get(presentationId)
   );
-  const differs =
-    left && left.displaySetId === right?.displaySetId ? differencesText(left) : undefined;
-  return `(comparing ${first} with ${second}${differs ? `; ${differs}` : ''})`;
+  const comparison = left && left.displaySetId === right?.displaySetId ? left : undefined;
+  const [firstId, secondId] = viewing.presentations.map(({ presentationId }) => presentationId);
+  const values = variantDifferences(variants.get(firstId), variants.get(secondId))
+    .slice(0, namedDifferences)
+    .map(
+      ({ variable, preferred, other }) =>
+        `${variable} ${String(preferred ?? 'unset')} or ${String(other ?? 'unset')}`
+    );
+  const notes = [
+    comparison && `your comparison “${comparison.question}”`,
+    values.length && `they differ in ${values.join('; ')}`,
+    differencesText(comparison)
+  ].filter(Boolean);
+  return `(comparing ${first} with ${second}${notes.length ? `; ${notes.join('; ')}` : ''})`;
 }
 
 /**

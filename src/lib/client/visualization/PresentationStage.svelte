@@ -20,6 +20,7 @@
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
   import type { ProjectCommandInput } from '$lib/shared/projects/model';
+  import type { MessageContent as Message } from '$lib/shared/projects/events/message-content';
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import {
     isStepName,
@@ -58,6 +59,10 @@
     disabled?: boolean;
     /** Kept loaded but out of sight, as while a source is chosen on its own. */
     hidden?: boolean;
+    /** What the participant wrote in the chat, sent with an answer to the pair as its comment. */
+    takeComment?: () => Message | undefined;
+    /** The comment was sent with the answer, so the chat can let it go. */
+    onCommentSent?: () => void;
   };
 
   let {
@@ -69,7 +74,9 @@
     onReferenceSelection = () => {},
     onViewChange = () => {},
     disabled = false,
-    hidden = false
+    hidden = false,
+    takeComment = () => undefined,
+    onCommentSent = () => {}
   }: Props = $props();
   // Whether an answer to the shown pair is being saved.
   let answering = $state(false);
@@ -304,11 +311,13 @@
     const answered = visible;
     const at = step;
     const tieOrSkip = answer === 'tie' || answer === 'skip';
+    const comment = takeComment();
     const command: ProjectCommandInput = {
       type: 'prefer',
       presentations: [selectedIds[0], selectedIds[1]],
       ...(tieOrSkip ? { outcome: answer } : { preferred: answer }),
-      step: at
+      step: at,
+      ...(comment ? { comment } : {})
     };
     answering = true;
     picked = {
@@ -322,6 +331,7 @@
         session.head
       );
       if (!saved) playback.seek(presentationPlaybackContext(answered), at);
+      else if (comment) onCommentSent();
     } finally {
       answering = false;
       picked = undefined;

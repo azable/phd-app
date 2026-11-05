@@ -36,6 +36,7 @@
   } from '$lib/client/visualization/presentation-selection.svelte';
   import {
     candidateId,
+    pairQuestion,
     timelinePresentations
   } from '$lib/client/visualization/presentation-history';
   import { VisualSelections } from '$lib/client/visualization/visual-selection.svelte';
@@ -274,6 +275,16 @@
   // panel fills the stage with its source and what it changes from its parent, until a variant is
   // chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
+  // The pair on the stage, which a message goes with: its answer can carry the draft as a comment.
+  const pairOnStage = $derived(
+    layout === 'comparison' &&
+      visiblePresentations.length === 2 &&
+      !chosenOf &&
+      auditedRequest === undefined &&
+      chosenFailure === undefined
+      ? { question: pairQuestion(visiblePresentations) }
+      : undefined
+  );
   const chosen = $derived.by(() => {
     if (!chosenOf) return undefined;
     const { sourceHash, parentHash } = chosenOf;
@@ -706,6 +717,7 @@
                   base={chosen?.presentationId}
                   baseSource={chosen?.sourceHash.slice(0, 6)}
                   steps={viewedSteps}
+                  pair={pairOnStage}
                   visualSelections={visualSelections.current}
                   onSubmitted={() => {
                     chosenOf = undefined;
@@ -794,6 +806,8 @@
             {layout}
             {visualSelections}
             onReferenceSelection={(selected) => feedbackComposer?.referenceSelection(selected)}
+            takeComment={() => feedbackComposer?.takeComment()}
+            onCommentSent={() => feedbackComposer?.clear()}
             onViewChange={(presentationId, view) =>
               (canvasViews = { ...canvasViews, [presentationId]: view })}
             disabled={mutationsDisabled}

@@ -3434,7 +3434,12 @@ describe('several variants from chat', () => {
     );
     expect(ids).toHaveLength(6);
     const projectId = result.document.projectId;
-    const answer = async (left: string, right: string, preferred: string) => {
+    const answer = async (
+      left: string,
+      right: string,
+      preferred: string,
+      comment?: [{ type: 'markdown'; text: string }]
+    ) => {
       const operationId = crypto.randomUUID();
       const head = projectHead(await serviceDependencies.repository.load(projectId)).id;
       await serviceDependencies.repository.append(projectId, head, [
@@ -3447,7 +3452,14 @@ describe('several variants from chat', () => {
         }
       ]);
       const answered = await queueProjectPreference(
-        { projectId, operationId, presentations: [left, right], answer: { preferred }, step: 0 },
+        {
+          projectId,
+          operationId,
+          presentations: [left, right],
+          answer: { preferred },
+          step: 0,
+          ...(comment ? { comment } : {})
+        },
         commandDependencies
       );
       return answered.appendedEvents;
@@ -3457,7 +3469,18 @@ describe('several variants from chat', () => {
 
     // The third question repeats the first, just answered, so it is set aside, and the
     // assistant waits for the marks to be answered.
-    const first = await answer(ids[0], ids[1], ids[1]);
+    const first = await answer(ids[0], ids[1], ids[1], [
+      { type: 'markdown', text: 'but with thinner tallies' }
+    ]);
+    // A comment written with the answer is kept on it.
+    expect(first).toContainEqual(
+      expect.objectContaining({
+        type: 'visualization.preference-recorded',
+        payload: expect.objectContaining({
+          comment: [{ type: 'markdown', text: 'but with thinner tallies' }]
+        })
+      })
+    );
     expect(first).toContainEqual(
       expect.objectContaining({
         type: 'visualization.candidates-advanced',

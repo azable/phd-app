@@ -321,7 +321,9 @@ differed in. The answers to your comparisons come to you once the last of them
 is answered or set aside (with a question asked with them, once its answer is
 given), each message starting with its question and the answer.
 project.waitingComparisons lists the questions still waiting when the
-participant writes meanwhile; comparisons you give then replace them.
+participant writes meanwhile; comparisons you give then replace them. An answer
+can come with a comment (“With this choice I wrote: …”, the interaction’s
+comment): act on it with the side chosen, as a change to make or a part to keep.
 
 Each comparison’s card in the chat already shows its answer, so never restate
 what was picked (not “I’ll keep the pseudocode alongside the cells, as in

@@ -95,7 +95,7 @@ export const interfaceParts: readonly InterfacePart[] = [
     name: 'Answer buttons',
     descriptions: {
       sverlin:
-        'When the assistant shows two versions, top and bottom, say which you prefer: Top, Bottom, Either, or Unsure if you would rather not decide. Choose again to change your answer.'
+        'When the assistant shows two versions, top and bottom, say which you prefer: Top, Bottom, Either, or Unsure if you would rather not decide. Choose again to change your answer. To add a note to your choice, such as a change you want, write it in the message box first.'
     },
     locator: { selector: '[role="group"][aria-label="Your answer"]' }
   },
@@ -138,7 +138,7 @@ export const interfaceParts: readonly InterfacePart[] = [
     name: 'Message box',
     descriptions: {
       sverlin:
-        'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Elements and versions you reference appear in your message.',
+        'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Elements and versions you reference appear in your message. While two versions are shown, write a note and then pick a side to send it with your choice, for example to ask for a change or to say what you like.',
       ...singleVersionSystems(
         'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Versions you add appear in your message.'
       )
