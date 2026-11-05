@@ -69,9 +69,12 @@ export function mathsSvg(written: string): Rendered {
     / width="([\d.]+)ex" height="([\d.]+)ex"/u.exec(markup) ?? [];
   // Its size and baseline as a style, which the page and the layout model both read.
   const style = `display: inline-block; vertical-align: ${em(Number(align))}; width: ${em(Number(width))}; height: ${em(Number(height))};`;
+  // MathJax copies each group's TeX into data-latex, unescaped, so `k < i` there would read as a
+  // tag <i; the page needs none of it.
   const svg = markup
     .replace(/^<svg style="[^"]*"/u, `<svg style="${style}"`)
-    .replace(/ width="[\d.]+ex" height="[\d.]+ex"/u, '');
+    .replace(/ width="[\d.]+ex" height="[\d.]+ex"/u, '')
+    .replace(/\sdata-latex="[^"]*"/gu, '');
   // The page draws the SVG as markup, so it holds only shapes: no link, script, or handler, which
   // TeX such as \href or \class could otherwise bring.
   const tags = [...svg.matchAll(/<\/?([a-zA-Z][\w-]*)/gu)].map(([, tag]) => tag);

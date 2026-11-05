@@ -101,6 +101,15 @@ describe('inline maths drawn by MathJax', () => {
     }
   );
 
+  it.each(['\\max_{k < i} a_k', '\\sum_{k<n} k'])(
+    'draws %s, a < in a group being TeX, not a tag',
+    (tex) => {
+      const drawn = mathsSvg(tex);
+      if (!('svg' in drawn)) throw new Error(drawn.problem);
+      expect(drawn.svg).not.toContain('<i');
+    }
+  );
+
   it('refuses a link, as \\href would bring', () => {
     const drawn = mathsSvg('\\href{https://example.com}{x}');
     expect('problem' in drawn && drawn.problem).toMatch(/draws shapes only|href/u);
