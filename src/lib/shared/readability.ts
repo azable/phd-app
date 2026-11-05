@@ -95,13 +95,29 @@ export const arrangementSchema = v.strictObject({
 
 export type Arrangement = v.InferOutput<typeof arrangementSchema>;
 
+/** The shape layouts aim at: wide, as a slide or a laptop's stage, unless asked otherwise. */
+const targetAspect = 16 / 9;
+
 /**
- * Arrangements best first: text readable on the typical stage before anything, then a fuller frame
- * with fewer crossings, each crossing costing a tenth of the frame; the shown one first of equals.
+ * How near a layout's content is to 16:9, from 1 there to 0 at a third or three times as wide: a
+ * square scores about 0.5, a 9:16 column nothing, so tall layouts rank below wide ones.
+ */
+export function wideCloseness({ content }: Readability): number {
+  const aspect = content.width / content.height;
+  return Math.max(0, 1 - Math.abs(Math.log(aspect / targetAspect)) / Math.log(3));
+}
+
+/**
+ * Arrangements best first: text readable on the typical stage before anything, then a shape near
+ * 16:9 and a fuller frame with fewer crossings, each crossing costing a tenth of the frame; the
+ * shown one first of equals.
  */
 export function rankedArrangements(arrangements: readonly Arrangement[]): Arrangement[] {
   const score = ({ readability, crossings }: Arrangement) =>
-    (readability.text >= smallestReadableText ? 1 : 0) + (readability.fill ?? 0) - crossings / 10;
+    (readability.text >= smallestReadableText ? 2 : 0) +
+    3 * wideCloseness(readability) +
+    (readability.fill ?? 0) -
+    crossings / 10;
   return arrangements.toSorted(
     (a, b) => score(b) - score(a) || Number(b.shown ?? false) - Number(a.shown ?? false)
   );

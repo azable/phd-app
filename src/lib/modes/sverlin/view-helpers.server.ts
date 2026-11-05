@@ -4,7 +4,7 @@
  * becomes part of the source and which to compare; a helper never changes a version itself.
  */
 
-import { readabilityText, unreadableProblem } from '$lib/shared/readability';
+import { readabilityText, unreadableProblem, wideCloseness } from '$lib/shared/readability';
 
 import guide from './README.md?raw';
 import layoutHelper from './layout-helper.md?raw';
@@ -256,8 +256,8 @@ type Built = Awaited<ReturnType<typeof bundlePresentation>>;
 
 /**
  * A candidate as built: kept with its facts, or left out where unreadable. Its score puts readable
- * text first, then how much of the frame it fills, each part beyond the first costing a little, as
- * the arrangements are ranked (shared/readability.ts).
+ * text first, then a shape near 16:9 and how much of the frame it fills, each part beyond the first
+ * costing a little, as the arrangements are ranked (shared/readability.ts).
  */
 function measured(
   built: Built,
@@ -267,7 +267,10 @@ function measured(
   const unreadable = readability ? unreadableProblem(readability) : undefined;
   if (unreadable) return { kept: false, name: candidate.name, reason: unreadable };
   const score = readability
-    ? 1 + (readability.fill ?? 0) - 0.05 * Math.max(0, readability.parts.length - 1)
+    ? 2 +
+      3 * wideCloseness(readability) +
+      (readability.fill ?? 0) -
+      0.05 * Math.max(0, readability.parts.length - 1)
     : 0;
   return {
     kept: true,

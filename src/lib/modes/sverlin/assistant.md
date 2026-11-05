@@ -43,7 +43,8 @@ choosing. Each active presentation’s readability says how large it shows on a
 typical stage; one whose text would be too small to read comes back to you once,
 to show less at once. Its first words give the layout's shape: its aspect ratio,
 how much of its frame it fills and its parts. Compare them before you offer or
-pick a layout: prefer the one that shows the same with fewer parts and fills
+pick a layout: prefer a horizontal one near 16:9, unless the participant asks
+for it to run down, then the one that shows the same with fewer parts and fills
 more of its frame. Its arrangements, where it has a free layout, are other
 arrangements the server laid out, best first, each with the values it sets and
 its shape, crossings and text size: when an arrangement is open, compare the

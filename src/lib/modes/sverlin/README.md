@@ -1202,13 +1202,13 @@ graph each node after its parents, or breadth first where it has cycles),
 `line`, `snake` (rows read back and forth), `wave`, `arc`, or `scatter` (free
 positions that keep each node near the next). `direction`, `down` or `right`, is
 the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
-would: it starts `right` for a path, a cycle or a layered graph, across the wide
-stage, and `down` for a tree, as trees are drawn, and a layout with a `flow` has
-none. A layout whose data makes no structure has no `form` or `direction` and is
-laid out freely, unless the page finds a structure in the links it draws, which
-it draws `natural`. `curve`, `straight` (the start) or `curved`, is how its
-arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are
-drawn from: the order each layer of a layered graph starts in, a `wave`'s,
+would: it starts `right`, across the wide stage, a tree too, so a page starts
+near 16:9; set `down` where the participant asks for it. A layout with a `flow`
+has none. A layout whose data makes no structure has no `form` or `direction`
+and is laid out freely, unless the page finds a structure in the links it draws,
+which it draws `natural`. `curve`, `straight` (the start) or `curved`, is how
+its arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges
+are drawn from: the order each layer of a layered graph starts in, a `wave`'s,
 `arc`'s or `scatter`'s shape, and where a layout with no structure starts; a
 tree or a path drawn `natural` is the same at every seed. A free layout keeps
 its form's own proportions and takes the size of everything it draws, its links'

@@ -25,6 +25,27 @@ const wide: Readability = {
   fill: 0.38
 };
 
+describe('the shape layouts aim at', () => {
+  it('ranks a layout near 16:9 above a square one filling more, and a tall one last', async () => {
+    const { rankedArrangements } = await import('./readability');
+    const shaped = (width: number, height: number, fill: number) => ({
+      values: { 'Graph.form': `${width}x${height}` },
+      crossings: 0,
+      readability: { ...wide, content: { width, height }, fill }
+    });
+    const ranked = rankedArrangements([
+      shaped(600, 1800, 0.9),
+      shaped(800, 800, 0.85),
+      shaped(1120, 400, 0.6)
+    ]);
+    expect(ranked.map(({ values }) => values['Graph.form'])).toEqual([
+      '1120x400',
+      '800x800',
+      '600x1800'
+    ]);
+  });
+});
+
 describe('the layout shape told with each version', () => {
   it('gives its aspect ratio, how much of its frame it fills and its parts first', () => {
     expect(layoutShape(wide)).toBe('2.4:1 wide, filling 38% of its frame, 2 parts side by side');
