@@ -158,7 +158,22 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
       size,
       describing
     );
-    scope.__sverlinScenes = described ? JSON.stringify(described) : undefined;
+    // Each step's copies, as the page moves to it from the step before (see animateStep).
+    const shownSteps = [...Array(steps.stepCount).keys()].filter(
+      (step) => !describing?.steps || describing.steps.includes(step)
+    );
+    const withCopies = described && {
+      ...described,
+      steps: described.steps.map((scene, index) => {
+        const state = steps.states[2 * shownSteps[index] + 1] as {
+          __copies?: Record<number, number>;
+        };
+        return state?.__copies && Object.keys(state.__copies).length
+          ? { ...scene, copies: state.__copies }
+          : scene;
+      })
+    };
+    scope.__sverlinScenes = withCopies ? JSON.stringify(withCopies) : undefined;
   }
   if (devicePixelRatio === 1) {
     const size = frame && drawnSize(extents, frame, characters);

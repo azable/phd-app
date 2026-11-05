@@ -65,7 +65,9 @@
   /** Show a step's scene, moving from the one shown, if any. */
   export function show(step: number, scene: SceneStep): void {
     cancelAnimationFrame(animation);
-    const next = drawnScene(scene);
+    // Copies start where their sources were only when moving on from the step before.
+    const drawnStep = drawnScene(scene);
+    const next = step === shownStep + 1 ? drawnStep : { ...drawnStep, copies: undefined };
     const first = shownStep < 0;
     origin = first ? undefined : drawn;
     target = next;

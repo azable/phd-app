@@ -147,6 +147,11 @@ export type SceneStep = {
   links: SceneLink[];
   /** Why the step could not be drawn, if it could not. */
   error?: string;
+  /**
+   * The value each value it copies was copied from, by the identities' places (see copiedFrom in
+   * motion.ts), when moving to it from the step before it.
+   */
+  copies?: Record<string, number>;
 };
 
 export type SceneFrame = {

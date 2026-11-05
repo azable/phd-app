@@ -64,6 +64,8 @@ export type DrawnScene = {
   links: DrawnLink[];
   /** Its nodes by id, but those fading out. */
   byId: ReadonlyMap<string, DrawnNode>;
+  /** The values it copies, when moved to from the step before it (see SceneStep). */
+  copies?: Record<string, number>;
 };
 
 /** A scene from its nodes and links, indexed. */
@@ -178,7 +180,7 @@ export function drawnScene(step: SceneStep): DrawnScene {
       }
     ];
   });
-  return indexed(nodes, links);
+  return { ...indexed(nodes, links), ...(step.copies ? { copies: step.copies } : {}) };
 }
 
 const num = (value: number) => Math.round(value * 100) / 100;
@@ -322,6 +324,16 @@ function byIdentity(scene: DrawnScene): Map<string, DrawnNode[]> {
   return found;
 }
 
+/**
+ * The identity a copied value was copied from, as 29 for 31 where 31 is a copy of 29; for a value
+ * read through a position, its place's, with the rest, as 29.seen for 31.seen (see motion.ts).
+ */
+function copiedFrom(identity: string, copies: Record<string, number> | undefined) {
+  const [, place = '', below = ''] = /^(\d+)(.*)$/su.exec(identity) ?? [];
+  const copied = copies?.[place];
+  return copied === undefined ? undefined : `${copied}${below}`;
+}
+
 /** How many of two lists agree, from the first, up to the first that differs. */
 function sharedFromStart(a: readonly unknown[], b: readonly unknown[]): number {
   let shared = 0;
@@ -350,7 +362,9 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
     ancestors(scene, node).map(({ kind }) => kind);
   const centre = ({ box }: DrawnNode) => [box.x + box.width / 2, box.y + box.height / 2];
   for (const [identity, nodes] of byIdentity(to)) {
-    const olds = before.get(identity) ?? [];
+    // A copy, new at this step, moves from where its source was, which keeps its own place.
+    const copied = before.has(identity) ? undefined : copiedFrom(identity, to.copies);
+    const olds = before.get(identity) ?? before.get(copied ?? '') ?? [];
     const candidates = nodes
       .flatMap((now, fresh) =>
         olds.map((was, old) => {
@@ -374,15 +388,18 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
           a.fresh - b.fresh ||
           a.old - b.old
       );
-    for (const { now, was } of candidates)
-      if (!pairs.has(now.key) && !claimed.has(was)) pair(now, was);
+    for (const { now, was } of candidates) {
+      if (pairs.has(now.key) || claimed.has(was)) continue;
+      if (copied) pairs.set(now.key, was);
+      else pair(now, was);
+    }
   }
   // What a value's node holds, where it paired with a node of another id, pairs in order.
   const inside = (scene: DrawnScene, node: DrawnNode) =>
     scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
   for (const now of to.nodes) {
     const was = pairs.get(now.key);
-    if (!was || was.id === now.id || !now.identity) continue;
+    if (!was || was.id === now.id || !now.identity || was.identity !== now.identity) continue;
     const olds = inside(from, was);
     inside(to, now).forEach((held, index) => {
       const old = olds[index];
@@ -418,7 +435,15 @@ function pairsOf(from: DrawnScene, to: DrawnScene): Map<string, DrawnNode> {
 export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): DrawnScene {
   if (t >= 1) return to;
   const pairs = pairsOf(from, to);
-  const moving = new Set(pairs.values());
+  // A copy moves from its source, which stays or fades as its own pairing says.
+  const copy = (now: DrawnNode, was: DrawnNode) =>
+    !!now.identity && !!was.identity && now.identity !== was.identity;
+  const moving = new Set(
+    to.nodes.flatMap((node) => {
+      const was = pairs.get(node.key);
+      return was && !copy(node, was) ? [was] : [];
+    })
+  );
   const nodes: DrawnNode[] = to.nodes.map((node) => {
     const old = pairs.get(node.key);
     if (!old) return { ...node, opacity: node.opacity * t };

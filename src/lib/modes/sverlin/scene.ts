@@ -140,7 +140,8 @@ const sceneLinkSchema = v.strictObject({
 const sceneStepSchema = v.strictObject({
   nodes: v.pipe(v.array(sceneNodeSchema), v.maxLength(maximumNodes)),
   links: v.pipe(v.array(sceneLinkSchema), v.maxLength(maximumNodes)),
-  error: v.optional(text)
+  error: v.optional(text),
+  copies: v.optional(v.record(text, v.number()))
 });
 
 const sceneFrameSchema = v.strictObject({

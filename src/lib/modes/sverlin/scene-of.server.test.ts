@@ -55,6 +55,7 @@ it(
     });
     const nodes = steps.flatMap((step) => step.nodes);
     expect(nodes.some(({ identity }) => identity)).toBe(true);
+    expect(steps.some(({ copies }) => copies && Object.keys(copies).length)).toBe(true);
     // Each run's baseline lies in its box, its ascent below the top.
     const runs = nodes.flatMap(({ runs = [] }) => runs);
     expect(runs.length).toBeGreaterThan(0);

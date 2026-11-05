@@ -158,4 +158,19 @@ describe('scenes drawn as SVG', () => {
     const pairs = pairNodes(from, to);
     expect([pairs.get('x')?.id, pairs.get('x#2')?.id]).toEqual(['x#2', 'x']);
   });
+
+  it('starts a copy where its source was, the source keeping its own place', () => {
+    // 31 copies 29 at this step; 29 stays where it is.
+    const from = drawnScene(step([node('s', 0, { identity: '29' })]));
+    const to = drawnScene({
+      ...step([node('s', 0, { identity: '29' }), node('c', 200, { identity: '31.seen' })]),
+      copies: { '31': 29 }
+    });
+    expect(drawnScene(step([])).copies).toBeUndefined();
+    const half = sceneBetween(drawnScene(step([node('s', 0, { identity: '29.seen' })])), to, 0.5);
+    expect(half.nodes.find(({ key }) => key === 'c')?.box.x).toBe(100);
+    const stays = sceneBetween(from, to, 0.5);
+    expect(stays.nodes.find(({ key }) => key === 's')?.box.x).toBe(0);
+    expect(stays.nodes.find(({ key }) => key === 'c')?.opacity).toBe(0.5);
+  });
 });
