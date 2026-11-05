@@ -64,6 +64,23 @@ describe('laying out on the server', () => {
     expect(failure).toBe('no embedded font has 漢 字');
   });
 
+  it('routes each free layout’s links at every state, the page drawing them as given', async () => {
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/bfs-captions.sverlin', 'utf8');
+    const prepared = prepareSvelteComponent(source);
+    const { javascript, labels } = await bundlePresentation(prepared, 1, {});
+    const given = JSON.parse(
+      /window\.__sverlinGeometry=(\[.*?\]);\n/su.exec(javascript)?.[1] ?? '[]'
+    ) as Geometry[];
+    // At every device pixel ratio laid out, every state of every step has its routes.
+    expect(given.length).toBeGreaterThan(0);
+    for (const geometry of given) {
+      const [[, sets]] = geometry.routes ?? [];
+      const states = new Set(sets.flatMap(([drawing]) => drawing));
+      for (let step = 0; step < labels.length; step++) expect(states).toContain(2 * step + 1);
+      expect(sets.every(([, edges]) => edges.every(({ path }) => path.startsWith('M')))).toBe(true);
+    }
+  });
+
   it('gives every step of a presentation, and keeps it for the next asking', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const prepared = prepareSvelteComponent(source);

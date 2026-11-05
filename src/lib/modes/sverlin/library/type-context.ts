@@ -7,6 +7,7 @@ import { getContext, setContext, type Snippet } from 'svelte';
 
 import { placedKind, type DesignValues, type Place } from './node/design';
 import type { ShownFrame } from './fit';
+import type { ArrangeEdge } from './node/arrange';
 import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
 import type { ListingPlaces, ListingSyntax } from './steps';
@@ -230,6 +231,11 @@ export type LayoutMemory = {
   extents?: Map<number, FrameExtent>;
   /** The pairs of links drawn as one two-way line at every step (see node/lines.ts). */
   lines: Set<string>;
+  /**
+   * Each free layout's links as the server drew them at each state, by scope: what the page draws,
+   * so no link is ever routed from boxes the page reads mid-move (see model/reserve.ts routesOf).
+   */
+  routes?: Map<string, Map<number, ArrangeEdge[]>>;
 };
 
 type Size = { width: number; height: number };

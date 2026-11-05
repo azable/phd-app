@@ -6,6 +6,7 @@
  */
 
 import { drawingOf, type DrawnSummary } from './drawing';
+import type { ArrangeEdge } from './node/arrange';
 import { linePairs } from './node/lines';
 import { parseSheet, type Rule } from './model/css';
 import type { TextMeasure } from './model/layout';
@@ -16,6 +17,7 @@ import {
   elementsUnder,
   probeComponent,
   reserveSizes,
+  routesOf,
   withLines,
   type Drawing,
   type Reservation,
@@ -65,6 +67,11 @@ export type RecordOptions = {
    * presentation or two, have the same key where they draw the same picture.
    */
   drawn?: string[];
+  /**
+   * Whether to record each free layout's links at every state as the page will draw them, for a
+   * version shown (see LayoutMemory.routes); not for other arrangements only measured.
+   */
+  routes?: boolean;
   /** Told what the step drawing the most draws, in kinds and links, for the assistant (drawing.ts). */
   drawing?: (drawing: DrawnSummary) => void;
   /** Gives the page back for a moment between the parts of the work. */
@@ -245,30 +252,86 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     if (fit !== undefined) layouts.fits.set(step, fit);
   });
   options.timed?.('recording');
-  if (options.drawn) options.drawn.push(...drawnKeys(options, reserveOptions()));
+  if (options.drawn || options.routes) {
+    const shown = shownStates(options);
+    if (options.routes) layouts.routes = stateRoutes(options, reserveOptions(), shown);
+    if (options.drawn) options.drawn.push(...drawnKeys(options, reserveOptions(), shown));
+  }
   return reservation;
+}
+
+/** Each state drawn as it is shown, with the layout memory now complete; none where it fails. */
+function shownStates(options: RecordOptions): Map<number, ModelElement | undefined> {
+  const { steps, layouts } = options;
+  const shown = new Map<number, ModelElement | undefined>();
+  for (const state of steps.distinct) {
+    try {
+      const { body } = options.render(steps.drawingOf(state, 'showing', layouts));
+      shown.set(state, withLines(readMarkup(body, layer), layouts.lines));
+    } catch {
+      // A state the view fails to draw is reported as it is measured.
+      shown.set(state, undefined);
+    }
+  }
+  return shown;
+}
+
+/**
+ * Each free layout's links at every state, as the page draws them: worked out once for each of the
+ * states drawn alike, then shared by them all.
+ */
+function stateRoutes(
+  options: RecordOptions,
+  reserve: ReserveOptions,
+  shown: ReadonlyMap<number, ModelElement | undefined>
+): NonNullable<LayoutMemory['routes']> {
+  const { steps } = options;
+  const routes: NonNullable<LayoutMemory['routes']> = new Map();
+  const byState = new Map<number, [string, ArrangeEdge[]][]>();
+  for (const [state, markup] of shown) {
+    if (!markup) continue;
+    const memory = { ...reserve.memory, step: state, routes: undefined };
+    try {
+      byState.set(state, routesOf(markup, { ...reserve, memory }));
+    } catch {
+      // A state the model cannot lay out as drawn leaves its links to the page, as before.
+    }
+  }
+  steps.states.forEach((_, state) => {
+    for (const [scope, edges] of byState.get(steps.drawnLike[state]) ?? []) {
+      if (!routes.has(scope)) routes.set(scope, new Map());
+      routes.get(scope)!.set(state, edges);
+    }
+  });
+  return routes;
 }
 
 /**
  * Each step's key: its two states (see stepsOf), each drawn as it is shown, with the layout memory
  * now complete, and the fit it is drawn at.
  */
-function drawnKeys(options: RecordOptions, reserve: ReserveOptions): string[] {
+function drawnKeys(
+  options: RecordOptions,
+  reserve: ReserveOptions,
+  shown: ReadonlyMap<number, ModelElement | undefined>
+): string[] {
   const { steps, layouts } = options;
   const described = new Map<number, string>();
   // The state seeing the most is the one described to the assistant.
   let fullest: { markup: ModelElement; seen: SeenBox[] } | undefined;
-  for (const state of steps.distinct) {
-    try {
-      const { body } = options.render(steps.drawingOf(state, 'showing', layouts));
-      const markup = withLines(readMarkup(body, layer), layouts.lines);
-      const seen: SeenBox[] = [];
-      described.set(state, describeDrawn(markup, reserve, (box) => seen.push(box)) ?? '');
-      if (!fullest || seen.length > fullest.seen.length) fullest = { markup, seen };
-    } catch {
-      // A state the view fails to draw is reported as it is measured.
+  for (const [state, markup] of shown) {
+    if (!markup) {
       described.set(state, 'failed');
+      continue;
     }
+    const seen: SeenBox[] = [];
+    try {
+      described.set(state, describeDrawn(markup, reserve, (box) => seen.push(box)) ?? '');
+    } catch {
+      described.set(state, 'failed');
+      continue;
+    }
+    if (!fullest || seen.length > fullest.seen.length) fullest = { markup, seen };
   }
   if (fullest) options.drawing?.(drawingOf(fullest.markup, fullest.seen));
   return Array.from({ length: steps.stepCount }, (_, step) =>

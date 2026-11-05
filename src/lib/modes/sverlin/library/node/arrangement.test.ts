@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { arrangeChildren } from './arrangement';
+import { arrangeChildren, arrangementInput } from './arrangement';
+import type { LayoutMemory } from '../type-context';
 import type { Reader } from './reader';
 
 /** An element of a fake page: its attributes, its children and its box in the host. */
@@ -94,5 +95,41 @@ describe('a free layout’s arrows', () => {
 
   it('keep their place where a pointer paints a box round the vertex', () => {
     for (const edge of arrowsFrom(false, true)) expect(edge.y1).toBeCloseTo(74, 5);
+  });
+});
+
+describe('a free layout laid out over every step', () => {
+  it('draws the links the server routed for the step, not routes from boxes it reads', () => {
+    const host = fake({}, { x: 0, y: 0, width: 0, height: 0 }, [
+      vertex(0, false),
+      vertex(1, false),
+      vertex(2, false),
+      link(0, 1),
+      link(0, 2)
+    ]);
+    const props = {
+      form: 'natural',
+      direction: 'down',
+      curve: 'straight',
+      gap: 0.5,
+      scope: 'graph'
+    } as const;
+    const solved = arrangeChildren(reader, host, props, undefined);
+    const keys = arrangementInput(reader, host, props).input.boxes.map(({ key }) => key);
+    const positions = Object.fromEntries(keys.map((key, index) => [key, solved.placements[index]]));
+    const given = solved.edges.map((edge) => ({ ...edge, path: `M0,0 L${edge.x2},${edge.y2}` }));
+    const memory = {
+      step: 3,
+      reserved: new Map(),
+      tracks: new Map(),
+      components: new Map(),
+      fits: new Map(),
+      lines: new Set<string>(),
+      scopes: new Map([['graph', { inputs: new Map(), span: { ...solved, positions } }]]),
+      routes: new Map([['graph', new Map([[3, given]])]])
+    } as unknown as LayoutMemory;
+    expect(arrangeChildren(reader, host, props, memory).edges).toBe(given);
+    // A step the server gave no routes for is routed from the boxes, as before.
+    expect(arrangeChildren(reader, host, props, { ...memory, step: 5 }).edges).not.toBe(given);
   });
 });

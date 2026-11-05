@@ -9,13 +9,14 @@
 import type { ShownFrame } from './fit';
 import { snappedBorder } from './model/look';
 import type { Reservation } from './model/reserve';
+import type { ArrangeEdge } from './node/arrange';
 import type { SpanLayout } from './node/span';
 import type { Layouts } from './steps';
 
 type Size = { width: number; height: number };
 
 /** Raised whenever what geometry holds, or how it is read, changes. */
-export const geometryVersion = 5;
+export const geometryVersion = 6;
 
 export type Geometry = {
   version: number;
@@ -33,6 +34,11 @@ export type Geometry = {
   frame?: ShownFrame;
   lines: string[];
   reservation?: Reservation;
+  /**
+   * Each free layout's links as drawn at each state, by scope: each set of links with the states
+   * that draw it (see LayoutMemory.routes).
+   */
+  routes?: [string, [number[], ArrangeEdge[]][]][];
 };
 
 export function geometryOf(
@@ -53,8 +59,18 @@ export function geometryOf(
     ),
     ...(frame ? { frame } : {}),
     lines: [...layouts.lines],
-    ...(reservation ? { reservation } : {})
+    ...(reservation ? { reservation } : {}),
+    ...(layouts.routes?.size ? { routes: groupedRoutes(layouts.routes) } : {})
   };
+}
+
+/** Routes by scope, each set of links once with every state drawing it. */
+function groupedRoutes(routes: NonNullable<Layouts['routes']>): NonNullable<Geometry['routes']> {
+  return [...routes].map(([scope, states]) => {
+    const sets = new Map<ArrangeEdge[], number[]>();
+    for (const [state, edges] of states) sets.set(edges, [...(sets.get(edges) ?? []), state]);
+    return [scope, [...sets].map(([edges, drawing]) => [drawing, edges])];
+  });
 }
 
 /**
@@ -88,4 +104,12 @@ export function applyGeometry(layouts: Layouts, geometry: Geometry): void {
     layouts.scopes.set(scope, { inputs: new Map(), span });
   if (geometry.frame) layouts.frame = geometry.frame;
   for (const pair of geometry.lines) layouts.lines.add(pair);
+  if (geometry.routes) {
+    layouts.routes = new Map();
+    for (const [scope, sets] of geometry.routes) {
+      const states = new Map<number, ArrangeEdge[]>();
+      for (const [drawing, edges] of sets) for (const state of drawing) states.set(state, edges);
+      layouts.routes.set(scope, states);
+    }
+  }
 }

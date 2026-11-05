@@ -113,6 +113,9 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
     devicePixelRatio,
     borders,
     ancestors: pageAncestors,
+    // A version shown draws its links from the server (LayoutMemory.routes); other arrangements are
+    // only measured.
+    routes: !values && !representative,
     drawn,
     drawing: (drawing) => {
       if (drawn) scope.__sverlinDrawing = JSON.stringify(drawing);

@@ -346,7 +346,7 @@ export function arrangeChildren<E>(
       placements,
       width: span.width,
       height: span.height,
-      edges: reaching(span.edges, placements),
+      edges: memory?.routes?.get(props.scope)?.get(memory.step) ?? reaching(span.edges, placements),
       choices: span.choices,
       styles,
       labels,

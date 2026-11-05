@@ -855,6 +855,26 @@ export function seenBox(element: ModelElement, text: string): boolean {
 }
 
 /**
+ * Each free layout's links in a step's markup as the page draws them, by scope: the markup as drawn,
+ * hidden parts and kept room included, each arrangement placed as Arranged.svelte places it.
+ */
+export function routesOf(markup: ModelElement, options: ReserveOptions): [string, ArrangedEdges][] {
+  const model = sizer(options);
+  const at = model.read({ markup });
+  if (!at) return [];
+  return [...elementsUnder(markup)].flatMap((element) => {
+    if (!classesOf(element).includes('sv-arranged')) return [];
+    const host = elementsOf(element).find((child) => classesOf(child).includes('placed'));
+    if (!host) return [];
+    const props = JSON.parse(element.attributes['data-sv-arrange'] ?? '{}') as ArrangementProps;
+    const arranged = arrangeChildren(model.hostReader(at, host), host, props, options.memory);
+    return [[props.scope, arranged.edges] as [string, ArrangedEdges]];
+  });
+}
+
+type ArrangedEdges = ReturnType<typeof arrangeChildren>['edges'];
+
+/**
  * Markup as far as it is seen: without what the page hides (page.ts), as a node keeping its room
  * until it shows, unless something inside it shows again; and without the room a node showing no
  * box keeps, the largest size it reaches (Node's least size in pixels), keeping its own least size.
