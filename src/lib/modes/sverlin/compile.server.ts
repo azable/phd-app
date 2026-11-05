@@ -3720,8 +3720,11 @@ function withNodeRefs(
       return;
     }
     if (!inNode && ((tag.type === 'Text' && tag.data?.trim()) || tag.type === 'MustacheTag')) {
+      const written = tag.type === 'MustacheTag' ? source.slice(tag.start, tag.end as number) : '';
       reject(
-        'Text outside a <Node> cannot be selected or given a look; put it in a node, such as <Node>Linear search</Node>.',
+        written && page
+          ? `${written} is outside a <Node>, so it draws as nothing here. A position draws as a mark only in the root of the layout that draws the array it points into, so draw a position there, declaring it in that layout's of; any other value goes in a node, as <Node>${written}</Node>.`
+          : 'Text outside a <Node> cannot be selected or given a look; put it in a node, such as <Node>Linear search</Node>.',
         'view_text',
         // Point at the text itself, not the whitespace before it.
         (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0)
