@@ -2919,6 +2919,14 @@ describe('starter looks of a graph', () => {
 });
 
 describe('views of a union', () => {
+  /** The geometry the page is given, with each component's box. */
+  const unionGeometry = (javascript: string) =>
+    (
+      JSON.parse(
+        javascript.slice('window.__sverlinGeometry='.length, javascript.indexOf(';\n'))
+      ) as { components: [string, { width: number }][] }[]
+    )[0];
+
   it('gives the views of a union’s members one box, so a cell holding the narrower member is as wide as the rest', async () => {
     const source = `<script domain>
   const Distance = type('integer', { min: 0, max: 999 });
@@ -2945,6 +2953,35 @@ describe('views of a union', () => {
     expect(probe('InfinityCell')?.unions).toEqual(['Dist']);
     const order = prepared.components.map(({ name }) => name);
     expect(order.indexOf('Cells')).toBeGreaterThan(order.indexOf('InfinityCell'));
-    await bundlePresentation(prepared, 1, {});
+    const { javascript } = await bundlePresentation(prepared, 1, {});
+    const boxes = new Map(unionGeometry(javascript).components);
+    expect(boxes.get('InfinityCell|Dist')?.width).toBe(boxes.get('DistanceCell|Dist')?.width);
+  });
+
+  it('keeps a member’s own box where it draws a value outside the union, as an index drawn alone', async () => {
+    // Project 97eba2f1: every index was as wide as "not found", the search result's other member,
+    // whatever its text size.
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 4 });
+  const Index = index(Values);
+  const Status = type(['not found']);
+  const Result = union(Index, Status);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  @look[let lo = Index(values, 0); let result = Result(Status('not found'));]
+</script>
+<View of="Index" name="IndexNumber"><Node value={this} /></View>
+<View of="Status" name="StatusWord"><Node value={this} /></View>
+<Layout name="Main" of="lo, result"><Node layout="row">{lo}{result}</Node></Layout>
+<Case name="main" values={[1, 2, 3]} />
+<Storyboard><Scene name="main" case="main" pause="@look"><Main lo={lo} result={result} /></Scene></Storyboard>`;
+    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const boxes = new Map(unionGeometry(javascript).components);
+    expect(boxes.get('IndexNumber|Result')?.width).toBe(boxes.get('StatusWord|Result')?.width);
+    expect(boxes.get('IndexNumber')!.width).toBeLessThan(boxes.get('StatusWord')!.width);
   });
 });

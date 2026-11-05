@@ -256,6 +256,18 @@ export function insideComponentBox(): boolean {
   return getContext<boolean | undefined>('sverlin:in-component-box') === true;
 }
 
+/** Inside a union's value, whose member's view takes the box the union's members share. */
+export function provideUnion(union: string): void {
+  setContext('sverlin:union', union);
+}
+
+export function unionContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:union');
+}
+
+/** The key of the box a member's view takes inside a value of its union (see record.ts). */
+export const unionBoxKey = (view: string, union: string): string => `${view}|${union}`;
+
 /** Inside a typed view, whose every copy shares one set of tracks for each grid it draws. */
 export function provideInView(): void {
   setContext('sverlin:in-view', true);

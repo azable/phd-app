@@ -25,6 +25,8 @@
     hiddenSitesContext,
     provideHidden,
     insideComponentBox,
+    unionBoxKey,
+    unionContext,
     insideView,
     provideInView,
     leftOutContext,
@@ -393,9 +395,12 @@
   // holds every way they can be drawn; any other node keeps the largest size it reaches at any step
   // (see LayoutMemory).
   const memory = layoutMemoryContext();
+  // Inside a value of a union, a member's view takes the box the union's members share.
+  const union = unionContext();
   const box = untrack(() =>
     !pointers.length && __component && memory && (!memory.measuring || memory.probing)
-      ? memory.components.get(__component)
+      ? ((union ? memory.components.get(unionBoxKey(__component, union)) : undefined) ??
+        memory.components.get(__component))
       : undefined
   );
   const insideBox = insideComponentBox();

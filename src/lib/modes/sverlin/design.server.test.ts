@@ -116,6 +116,13 @@ describe('variants', () => {
         'The design has no variable pointers.Index@found; its view choices are views.Int'
       )
     ]);
+    // Where no position draws as a mark, it says where one does (project 97eba2f1 set three).
+    const unmarked = Object.fromEntries(
+      Object.entries(space).filter(([key]) => !key.startsWith('pointers.'))
+    );
+    expect(
+      buildVariant(unmarked, starter, { chosen: { 'pointers.Index@found': 'Arrow' } }, 1).dropped[0]
+    ).toContain("a position draws as a mark only where it is rendered in a page layout's root");
   });
 
   it('leaves out a place setting what takes room, which holds for its kind at every step', () => {

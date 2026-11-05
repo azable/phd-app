@@ -24,7 +24,7 @@ import {
 } from './model/reserve';
 import type { ModelElement } from './model/tree';
 import { withValue, type Layouts, type StepDrawing, type Steps, type StepState } from './steps';
-import type { LayoutMemory } from './type-context';
+import { unionBoxKey, type LayoutMemory } from './type-context';
 import { widestInteger } from './widest-number';
 
 /**
@@ -219,8 +219,9 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
       if (!cases.includes(widest)) for (const way of ways) probe([widest], way);
     }
     measured.add(name);
-    // Once every member's view of a union is measured, each takes the largest box among them,
-    // before any view that holds the union is measured with it.
+    // Once every member's view of a union is measured, each takes the largest box among them
+    // where it draws a value of the union, before any view that holds the union is measured with
+    // it; elsewhere, as an index drawn alone, it keeps its own.
     for (const union of unions) {
       const views = unionViews.get(union) ?? [];
       if (!views.every((view) => measured.has(view))) continue;
@@ -232,7 +233,10 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
       };
       for (const view of views)
         if (layouts.components.has(view))
-          layouts.components.set(view, { ...layouts.components.get(view)!, ...shared });
+          layouts.components.set(unionBoxKey(view, union), {
+            ...layouts.components.get(view)!,
+            ...shared
+          });
     }
   }
   const reservation = reserveSizes(drawings, reserveOptions());

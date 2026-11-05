@@ -406,6 +406,7 @@ export const starterListingPlaces: ListingPlacesLook = 'fill';
 export type KindRole =
   | 'container'
   | 'value'
+  | 'bar'
   | 'vertex'
   | 'text'
   | 'code'
@@ -453,6 +454,7 @@ const uniformSlot = {
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
   value: nodeProps,
+  bar: nodeProps,
   vertex: nodeProps,
   text: nodeProps,
   code: nodeProps,
@@ -609,6 +611,26 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'bold',
     padding: 0.375,
     radius: 8,
+    minSize: 2.5,
+    ...plainStyle,
+    ...uniformSlot
+  },
+  // A node sized by its value, as <Node height={this} />: a filled bar with square corners, so a
+  // short one stays a bar rather than rounding into a pill, as wide as a value's frame beside it
+  // (its least size holds across its length only, which is its value).
+  bar: {
+    shown: true,
+    fill: 'neutral-300',
+    stroke: 'neutral-500',
+    strokeWidth: 1,
+    strokeStyle: 'solid',
+    opacity: 1,
+    color: 'black',
+    font: fontValues[0],
+    textSize: 20,
+    weight: 'normal',
+    padding: 0,
+    radius: 2,
     minSize: 2.5,
     ...plainStyle,
     ...uniformSlot

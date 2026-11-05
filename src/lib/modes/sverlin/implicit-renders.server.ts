@@ -328,7 +328,7 @@ export function unionViews(
           : `{${index ? ':else if' : '#if'} ${test}}{@render ${member}(${viewThis})}`
       )
       .join('');
-    text += `\n{#snippet ${unionViewName(union)}(${viewThis}: ${union})}${branches}{/if}{/snippet}`;
+    text += `\n{#snippet ${unionViewName(union)}(${viewThis}: ${union})}<SverlinUnion name="${union}">${branches}{/if}</SverlinUnion>{/snippet}`;
   }
   return { text, problems };
 }

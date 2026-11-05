@@ -336,7 +336,13 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       const choices = Object.keys(space).filter(
         (other) => other.startsWith('views.') || other.startsWith('pointers.')
       );
-      return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.`;
+      // A position draws as a mark only in the root of a layout a scene shows (see Pointers).
+      const type = /^pointers\.([^@]+)/u.exec(key)?.[1];
+      const unmarked =
+        type && !Object.hasOwn(space, `pointers.${type}`)
+          ? ` No ${type} draws as a pointer: a position draws as a mark only where it is rendered in a page layout's root itself, outside other nodes; inside a node it draws as its number (views.${type}), and in a layout another layout draws by its tag it draws nothing.`
+          : '';
+      return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.${unmarked}`;
     }
     const kind = key.slice(0, key.lastIndexOf('.'));
     // A place sets only its paint and whether it is shown: every other prop holds for its kind.

@@ -1140,7 +1140,8 @@ function prepareViews(
       paths,
       linkedTypes,
       new Map(found.components.map(({ name, type }) => [name, type])),
-      typing?.domain
+      typing?.domain,
+      authored
     );
     // Each layout is a kind, its frame's values the variables of its root's tag.
     const kindNames = new Set([...paths.keys(), ...paths.values()]);
@@ -3440,7 +3441,9 @@ function withNodeRefs(
   linkedTypes: ReadonlySet<string> = new Set(),
   /** Each view's type, by its name, and the domain, for the props a view binds to its value. */
   viewTypes: ReadonlyMap<string, string> = new Map(),
-  domain?: DomainRegistry
+  domain?: DomainRegistry,
+  /** Where the views added after the authored ones begin, as each union's (see unionViews). */
+  authored = svelteSource.length
 ): {
   /** The props views bind to their values (see bound-props.server.ts). */
   bindings: Binding[];
@@ -3665,6 +3668,15 @@ function withNodeRefs(
         reject(message, 'view_markup', start);
       return;
     }
+    // The wrapper a union's added view draws its member's view in (see unionViews) draws nothing.
+    if (
+      tag.type === 'InlineComponent' &&
+      tag.name === 'SverlinUnion' &&
+      (tag.start ?? 0) >= authored
+    ) {
+      walk(tag.children, around, inNode, view, page, names);
+      return;
+    }
     const library =
       tag.type === 'InlineComponent' &&
       (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
@@ -3846,6 +3858,8 @@ function withNodeRefs(
     // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
     if (has('icon') && !has('value') && !children.length) return 'text';
     if (vertices.has(entry.start)) return 'vertex';
+    // A node sized by its value holds nothing (see boundLength): it is a bar.
+    if ((has('height') || has('width')) && !has('value') && !children.length) return 'bar';
     if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
@@ -3870,6 +3884,7 @@ function withNodeRefs(
     'icon',
     'text',
     'code',
+    'bar',
     'value',
     'vertex',
     'pointed',
