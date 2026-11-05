@@ -264,6 +264,21 @@ describe('layout', () => {
     expect(boxes.get(line)).toEqual({ x: 0, y: 0, width: 45, height: 40 });
   });
 
+  it('sits inline maths, an svg sized in em, with its baseline lowered by its vertical-align', () => {
+    const maths = element(
+      'svg',
+      {},
+      { display: 'inline-block', 'vertical-align': '-0.5em', width: '2em', height: '3em' },
+      element('path', { d: 'M0 0' }, {})
+    );
+    const line = div({ 'font-size': '10px', 'line-height': '20px' }, 'ab ', maths, ' c');
+    const { boxes } = lay(line);
+    // 20 wide and 30 tall; its bottom 5 below the baseline (13 below the strut's top), so its top
+    // is 25 above the baseline, which raises the line's top by 12 and lowers its bottom by 0.
+    expect(boxes.get(maths)).toEqual({ x: 15, y: 0, width: 20, height: 30 });
+    expect(boxes.get(line)?.width).toBe(45);
+  });
+
   it('puts half the leading above the text in whole pixels', () => {
     const span = element('span', {}, {}, 'x');
     const line = div({ 'font-size': '10px', 'line-height': '15px' }, span);

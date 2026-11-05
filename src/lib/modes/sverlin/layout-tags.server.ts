@@ -10,7 +10,8 @@
  */
 
 import { fitted } from './layouts.server';
-import { mathsSpans, mathsText, tokenInMaths, unclosedMaths } from './maths.server';
+import { mathsSvg } from './maths-svg.server';
+import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -51,10 +52,6 @@ const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
 /** How a layout is written, for messages. */
 const layoutAdvice =
   'a layout is written <Layout name="Window" of="values, lo, hi">…</Layout>, named, with the state it reads, and rendered by another as <Window values={values} lo={lo} hi={hi} />';
-
-/** Text as Svelte markup reads it literally: no expression, tag, or entity in it. */
-const escapeText = (text: string) =>
-  text.replace(/[&<>{}]/gu, (character) => `&#${character.codePointAt(0)};`);
 
 /** Blank text, keeping its lines. */
 const blank = (text: string) => text.replace(/[^\n]/gu, ' ');
@@ -122,8 +119,9 @@ export function layoutTags(source: string): {
 } {
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
   let scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, blank);
-  // Inline maths, \(…\), becomes its Unicode text in a node of kind Math, and is read as spaces
-  // by every scan after, so its braces and $ are no Svelte expression or token.
+  // Inline maths, $$…$$, becomes a node of kind Math holding MathJax's SVG and the text the PDF
+  // draws in its place (see maths-svg), and is read as spaces by every scan after, so its braces
+  // and $ are no Svelte expression or token.
   const mathsProblems: Problem[] = [];
   const mathsEdits: { start: number; length: number; text: string }[] = [];
   for (const { start, end, inside } of mathsSpans(scanned)) {
@@ -132,13 +130,13 @@ export function layoutTags(source: string): {
       break;
     }
     const token = /\$[A-Za-z_]\w*\[/u.exec(inside);
-    const converted = token ? { problem: tokenInMaths(token[0]) } : mathsText(inside);
+    const converted = token ? { problem: tokenInMaths(token[0]) } : mathsSvg(inside);
     if ('problem' in converted) mathsProblems.push({ message: converted.problem, start });
     else
       mathsEdits.push({
         start,
         length: end - start,
-        text: `<Node kind="Math">${escapeText(converted.text)}</Node>`
+        text: `<Node kind="Math" __math={${JSON.stringify(converted.svg)}} __mathText={${JSON.stringify(converted.text)}} />`
       });
     scanned = scanned.slice(0, start) + blank(scanned.slice(start, end)) + scanned.slice(end);
   }
@@ -353,6 +351,11 @@ export function layoutTags(source: string): {
     problems.push({
       message:
         '__code is reserved for the library: write a token in the text, as $i[A[i]], to refer to the place @i.',
+      start: match.index ?? 0
+    });
+  for (const match of scanned.matchAll(/\b__math(?:Text)?\b/gu))
+    problems.push({
+      message: `${match[0]} is reserved for the library: write inline maths in the text, as $$O(n \\log n)$$.`,
       start: match.index ?? 0
     });
   edits.sort((a, b) => b.start - a.start);

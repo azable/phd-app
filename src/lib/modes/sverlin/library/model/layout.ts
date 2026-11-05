@@ -119,8 +119,9 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
   };
 
   // A box's in-flow items: text, and elements laid out in flow, with display: contents unwrapped.
+  // An svg is sized by its own width and height, never by what it draws.
   const itemsOf = (element: ModelElement): Item[] =>
-    element.children.flatMap((child): Item[] => {
+    (element.tag === 'svg' ? [] : element.children).flatMap((child): Item[] => {
       if (!isElement(child)) return child.length ? [{ text: child, look: lookAt(element) }] : [];
       const look = lookAt(child);
       if (look.display === 'none' || look.position === 'absolute' || look.position === 'fixed')
@@ -208,6 +209,14 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     items.some((item) => ('text' in item ? item.text.trim() : inlineLevel(item.look.display)));
 
   const margins = (look: Look) => look.margin.map((side) => (side === 'auto' ? 0 : laid(side)));
+
+  /** A vertical-align written as a length, in px or em, as inline maths has: how far it raises. */
+  const lengthAlign = (look: Look): number | undefined => {
+    const length = /^(-?[\d.]+)(px|em)$/u.exec(look.verticalAlign.trim());
+    if (!length) return undefined;
+    const value = Number(length[1]);
+    return laid(length[2] === 'em' ? value * look.fontSize : value);
+  };
 
   function block(look: Look, items: readonly Item[], width?: number): Content {
     if (hasInline(items)) {
@@ -657,8 +666,12 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       confirmSpace(line);
       line.x += left;
       let boxTop: number;
+      const raised = lengthAlign(own);
       if (own.verticalAlign === 'middle') {
         boxTop = -line.xHeight / 2 - fragment.height / 2;
+      } else if (raised !== undefined) {
+        // A length raises the box's bottom, its baseline, above the line's: inline maths sits so.
+        boxTop = -raised - fragment.height;
       } else {
         problems.add(`vertical-align: ${own.verticalAlign} on ${own.display}`);
         boxTop = -fragment.height;

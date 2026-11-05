@@ -383,6 +383,24 @@ function textRuns(
     }
     finish();
   }
+  // Inline maths is an SVG the PDF cannot draw, so its text stands in its place, in its box.
+  for (const maths of element.querySelectorAll<HTMLElement>('[data-sv-math-text]')) {
+    if (!ownedBy(maths.parentElement, element)) continue;
+    const rect = maths.getBoundingClientRect();
+    const style = getComputedStyle(maths);
+    runs.push({
+      text: maths.dataset.svMathText ?? '',
+      box: {
+        ...point(rect.left, rect.top),
+        width: round(rect.width * ratio),
+        height: round(rect.height * ratio)
+      },
+      color: style.color,
+      font: style.fontFamily,
+      fontSize: round((parseFloat(style.fontSize) || 0) * scale),
+      fontWeight: Number(style.fontWeight) || 400
+    });
+  }
   return runs;
 }
 

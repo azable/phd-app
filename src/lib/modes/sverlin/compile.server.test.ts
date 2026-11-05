@@ -1245,9 +1245,9 @@ describe('view choices and prop values', () => {
   it('checks every value an expression can give a prop with fixed options', () => {
     expect(() =>
       prepareSvelteComponent(
-        `${domain}{#snippet A()}<Node layout={1 > 0 ? 'row' : 'stack'}><Node>a</Node></Node>{/snippet}<Layout name="Main"><Node>{@render A()}</Node></Layout>`
+        `${domain}{#snippet A()}<Node layout={1 > 0 ? 'row' : 'spiral'}><Node>a</Node></Node>{/snippet}<Layout name="Main"><Node>{@render A()}</Node></Layout>`
       )
-    ).toThrow(`layout={1 > 0 ? 'row' : 'stack'} can be "stack"`);
+    ).toThrow(`layout={1 > 0 ? 'row' : 'spiral'} can be "spiral"`);
   });
 });
 

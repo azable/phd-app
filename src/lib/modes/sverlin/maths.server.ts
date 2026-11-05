@@ -523,34 +523,49 @@ export function mathsText(written: string): Converted {
   try {
     return { text: convert(latex).trim() };
   } catch (cause) {
-    if (cause instanceof MathsProblem) return { problem: `\\(${written}\\): ${cause.message}.` };
+    if (cause instanceof MathsProblem) return { problem: `$$${written}$$: ${cause.message}.` };
     throw cause;
   }
 }
 
 class MathsProblem extends Error {}
 
-/** Each inline maths span in some text: `\(…\)`, from its `\(` to just past its `\)`. */
-export function mathsSpans(text: string): { start: number; end: number; inside: string }[] {
-  const spans: { start: number; end: number; inside: string }[] = [];
-  let from = 0;
-  for (;;) {
-    const start = text.indexOf('\\(', from);
-    if (start < 0) return spans;
-    const close = text.indexOf('\\)', start + 2);
-    if (close < 0) {
-      spans.push({ start, end: -1, inside: text.slice(start + 2) });
-      return spans;
-    }
-    spans.push({ start, end: close + 2, inside: text.slice(start + 2, close) });
-    from = close + 2;
-  }
+/** The fences inline maths is written between: `$$…$$`, as the guide shows, or `\(…\)`. */
+const fences = [
+  ['$$', '$$'],
+  ['\\(', '\\)']
+] as const;
+
+/**
+ * The inline maths fence opening at an offset of some text, if one does. A second `$` is no name
+ * character, so `$$` never opens a token, `$name[…]`, and a lone `$` stays text.
+ */
+export function mathsFenceAt(text: string, at: number): (typeof fences)[number] | undefined {
+  return fences.find(([open]) => text.startsWith(open, at));
 }
 
-/** The message for a `\(` with no `\)` after it. */
+/** Each inline maths span in some text, from its opening fence to just past its closing one. */
+export function mathsSpans(text: string): { start: number; end: number; inside: string }[] {
+  const spans: { start: number; end: number; inside: string }[] = [];
+  for (let at = 0; at < text.length; at++) {
+    const fence = mathsFenceAt(text, at);
+    if (!fence) continue;
+    const [open, close] = fence;
+    const end = text.indexOf(close, at + open.length);
+    if (end < 0) {
+      spans.push({ start: at, end: -1, inside: text.slice(at + open.length) });
+      return spans;
+    }
+    spans.push({ start: at, end: end + close.length, inside: text.slice(at + open.length, end) });
+    at = end + close.length - 1;
+  }
+  return spans;
+}
+
+/** The message for an opening fence with no closing one after it. */
 export const unclosedMaths =
-  'This \\( is never closed with \\): write inline maths as \\(O(n \\log n)\\).';
+  'This inline maths is never closed: write it between $$ and $$, as $$O(n \\log n)$$.';
 
 /** The message for a token inside maths. */
 export const tokenInMaths = (token: string): string =>
-  `${token}…] is inside maths, \\(…\\): a token refers to a place in text, so write it beside the maths, never inside.`;
+  `${token}…] is inside maths, $$…$$: a token refers to a place in text, so write it beside the maths, never inside.`;

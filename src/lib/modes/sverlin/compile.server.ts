@@ -3061,7 +3061,8 @@ function checkProps(
   for (const attribute of attributes) {
     if (attribute.type !== 'Attribute' || !attribute.name) continue;
     // A caption token's node, which the build writes (see captionTokens in layout-tags).
-    if (component === 'Node' && attribute.name === '__code') continue;
+    if (component === 'Node' && ['__code', '__math', '__mathText'].includes(attribute.name))
+      continue;
     const at = { start: sourcePosition(source, attribute.start ?? start) };
     // A length a view binds is taken out before this (see bind), so one left is written elsewhere.
     if (component === 'Node' && lengthProps.has(attribute.name)) {
@@ -3547,7 +3548,7 @@ function withNodeRefs(
       const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
       // A caption token's node carries the place it names (see captionTokens in layout-tags).
       const reserved = tag.attributes?.find(
-        ({ name }) => name?.startsWith('__') && name !== '__code'
+        ({ name }) => name?.startsWith('__') && !['__code', '__math', '__mathText'].includes(name)
       );
       if (reserved)
         problems.push(
@@ -3680,6 +3681,7 @@ function withNodeRefs(
     const attributes = tag.attributes ?? [];
     const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
     if (has('__code')) return 'code';
+    if (has('__math')) return 'text';
     const children = (tag.children ?? []).filter(
       (child) => !(child.type === 'Text' && !child.data?.trim())
     );

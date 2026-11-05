@@ -109,6 +109,8 @@
     __items,
     __places,
     __code,
+    __math,
+    __mathText,
     __extent,
     __domains,
     __packedAlong,
@@ -156,6 +158,12 @@
     __places?: readonly string[];
     /** Internal: the place a caption's token names, as @i for $i[A[i]] (see captionTokens in layout-tags). */
     __code?: string;
+    /**
+     * Internal: inline maths, the SVG MathJax drew for it when the presentation was built, and the
+     * text the PDF draws in its place (see maths-svg.server.ts).
+     */
+    __math?: string;
+    __mathText?: string;
     /**
      * Internal: the values a view binds props to, as __bound_fill for fill={this.state}, set by the
      * compiler, with the values each can take (see bound.ts).
@@ -838,6 +846,13 @@
           <LinkOverlay axis={overlaid} />
         {/if}
       </div>
+    {:else if __math}
+      <!-- MathJax's SVG, built on the server and checked to hold only shapes (see maths-svg.server.ts). -->
+      <!-- eslint-disable svelte/no-at-html-tags -->
+      <span class="math" role="img" aria-label={__mathText} data-sv-math-text={__mathText}
+        >{@html __math}</span
+      >
+      <!-- eslint-enable svelte/no-at-html-tags -->
     {:else if children}
       {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}{@render children()}
     {:else if value !== undefined}

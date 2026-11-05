@@ -4,6 +4,7 @@ import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { serverMeasure } from './fonts/measure.server';
 import { fontList, fontValues } from './library/fonts';
 import { readRegions } from './listing/mapped.server';
+import { mathsSvg } from './maths-svg.server';
 import { mathsCharacters, mathsText } from './maths.server';
 
 const text = (latex: string) => {
@@ -61,11 +62,47 @@ describe('inline maths written as Unicode', () => {
     expect(readRegions('while @test[\\(a_i \\le key\\)]').text).toBe('while aᵢ ≤ key');
   });
 
-  it('refuses an unclosed \\( and a token inside maths', () => {
-    const { problems } = readRegions('if \\(a_i');
-    expect(problems.map(({ message }) => message)).toEqual([
-      'This \\( is never closed with \\): write inline maths as \\(O(n \\log n)\\).'
-    ]);
+  it('refuses an unclosed fence and a token inside maths', () => {
+    const unclosed =
+      'This inline maths is never closed: write it between $$ and $$, as $$O(n \\log n)$$.';
+    expect(readRegions('if \\(a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
+    expect(readRegions('if $$a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
     expect(readRegions('\\($i[i] + 1\\)').problems[0].message).toContain('inside maths');
+    expect(readRegions('$$$i[i] + 1$$').problems[0].message).toContain('inside maths');
+  });
+
+  it('reads $$…$$ as maths, never as a token, and a lone $ as text', () => {
+    expect(readRegions('while @test[$$a_i \\le key$$]').text).toBe('while aᵢ ≤ key');
+    expect(readRegions('costs $5 and $$O(n)$$').text).toBe('costs $5 and O(n)');
+  });
+});
+
+describe('inline maths drawn by MathJax', () => {
+  it('draws a caption fraction and sum as one SVG each, sized in em with its baseline', () => {
+    const drawn = mathsSvg('\\frac{n(n+1)}{2}');
+    if (!('svg' in drawn)) throw new Error(drawn.problem);
+    expect(drawn.svg).toMatch(
+      /^<svg style="display: inline-block; vertical-align: -[\d.]+em; width: [\d.]+em; height: [\d.]+em;"/u
+    );
+    expect(drawn.svg).toContain('currentColor');
+    expect(drawn.svg).not.toMatch(/\d+ex"/u);
+    // The PDF draws the text in its place, the source where Unicode has no form for it.
+    expect(drawn.text).toBe('\\frac{n(n+1)}{2}');
+    const sum = mathsSvg('\\sum_{i=1}^{n} i');
+    expect('svg' in sum && sum.text).toBe('∑ᵢ₌₁ⁿ i');
+  });
+
+  it("refuses TeX MathJax cannot read, with MathJax's reason", () => {
+    const drawn = mathsSvg('\\frac{a');
+    expect('problem' in drawn && drawn.problem).toMatch(/^\$\$\\frac\{a\$\$: .*/u);
+  });
+
+  it('builds a caption written $$…$$ and lays its SVG out on the server', async () => {
+    const caption = `<script algorithm>
+</script>
+<Layout name="Main"><Node><Node>Pairs: $$\\frac{n(n-1)}{2}$$, so $$O(n^2)$$.</Node></Node></Layout>
+<Storyboard><Scene name="main"><Main /></Scene></Storyboard>`;
+    const { labels } = await bundlePresentation(prepareSvelteComponent(caption), 1, {});
+    expect(labels).toHaveLength(1);
   });
 });

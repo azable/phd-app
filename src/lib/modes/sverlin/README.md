@@ -1528,22 +1528,22 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 ### Maths
 
-Write inline maths as LaTeX between `\(` and `\)`, in a node's text or in a
-listing, for example `\(O(n \log n)\)` or `\(a_i \le a_{i+1}\)`. The build
-writes it as Unicode text, `O(n log n)` and `aᵢ ≤ aᵢ₊₁`. In a node it is a node
-of kind `Math`, which has its own looks in the design.
+Write inline maths as LaTeX between `$$` and `$$`, in a node's text or in a
+listing, for example `$$O(n \log n)$$` or `$$\frac{n(n+1)}{2}$$`. `\(…\)` works
+too.
 
-- Greek letters, named operators such as `\log` and `\max`, relations such as
-  `\le` and `\in`, operators such as `\cdot` and `\sum`, arrows, `\infty`, and
-  brackets such as `\lceil` and `\langle` all convert.
-- `^` and `_` convert where Unicode has a superscript or subscript for every
-  character, as `n^2` and `a_{i+1}`.
-- `\mathbb{N}` gives ℕ, `\text{…}` keeps words upright, and `\sqrt{n}` gives √n.
-- The build refuses what has no form on one line, and says what to write: a
-  fraction (write `(n+1)/2`), stacked limits, accents, a subscript Unicode has
-  no letters for (write `A[mid]`, not `A_{mid}`), or a long `\sqrt`.
+- In a node, the maths is typeset as in LaTeX: fractions, sums with limits,
+  roots, sub- and superscripts, Greek letters and every command of LaTeX's base
+  and `amsmath`. It is a node of kind `Math`, with its own looks in the design,
+  and it takes the text colour.
+- The build refuses TeX it cannot read, giving the reason.
+- In a listing, the maths is written as Unicode text on the line, as `aᵢ ≤ aᵢ₊₁`
+  for `$$a_i \le a_{i+1}$$`. There, the build refuses what has no form on one
+  line, and says what to write: a fraction (write `(n+1)/2`), stacked limits,
+  accents, or a subscript Unicode has no letters for (write `A[mid]`, not
+  `A_{mid}`).
 - A token, `$i[…]`, or a region, `@x[…]`, cannot be inside maths: write it
-  beside the maths.
+  beside the maths. A single `$`, as in `$5`, is text.
 
 ## Node
 
