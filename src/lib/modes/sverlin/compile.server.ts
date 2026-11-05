@@ -2487,7 +2487,8 @@ export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
   request: VariantRequest = {},
-  options: { arrange?: boolean; arrangeSteps?: ArrangedSteps } = {}
+  // arrangeBudgetMs: a test comparing rankings lays every arrangement out, whatever the load.
+  options: { arrange?: boolean; arrangeSteps?: ArrangedSteps; arrangeBudgetMs?: number } = {}
 ): Promise<SvelteBundle> {
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
@@ -2761,7 +2762,8 @@ export async function bundlePresentation(
           values,
           { size, geometry: geometries[0] },
           frame.ratio,
-          options.arrangeSteps
+          options.arrangeSteps,
+          options.arrangeBudgetMs
         )
       : undefined;
   const layout: SvelteBundle['layout'] = {

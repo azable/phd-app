@@ -75,7 +75,8 @@ export async function measuredArrangements(
   values: Readonly<Record<string, DesignValue>>,
   shown: { size: DrawnSize; geometry: Geometry },
   ratio: FrameRatio,
-  steps: ArrangedSteps = 'representative'
+  steps: ArrangedSteps = 'representative',
+  budget = budgetMs
 ): Promise<Arrangement[] | undefined> {
   const designs = arrangementDesigns(space, values);
   if (!designs.length) return undefined;
@@ -93,7 +94,7 @@ export async function measuredArrangements(
     const [first, ...others] = await arrangementsOnServer(
       code,
       [{}, ...designs],
-      budgetMs,
+      budget,
       new Set(),
       seedOnly,
       undefined,
@@ -107,7 +108,7 @@ export async function measuredArrangements(
       ...(index === 0 ? { shown: true } : {})
     }));
   }
-  const measured = await arrangementsOnServer(code, designs, budgetMs, seen, seedOnly);
+  const measured = await arrangementsOnServer(code, designs, budget, seen, seedOnly);
   if (!measured.length) return undefined;
   return [
     {

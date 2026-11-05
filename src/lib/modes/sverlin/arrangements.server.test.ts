@@ -58,7 +58,8 @@ describe('arrangements laid out by the server', () => {
           prepared,
           1,
           {},
-          { arrange: true, arrangeSteps }
+          // No budget: under load the every-step run would stop early and rank fewer.
+          { arrange: true, arrangeSteps, arrangeBudgetMs: Number.POSITIVE_INFINITY }
         );
         return rankedArrangements(layout.arrangements ?? [])
           .slice(0, 3)
