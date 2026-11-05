@@ -33,5 +33,6 @@
     {devMode}
     study={data.study}
     trial={data.trial}
+    conditionViewHelpers={data.conditionViewHelpers}
   />
 {/key}

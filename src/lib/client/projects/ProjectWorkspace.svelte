@@ -47,6 +47,7 @@
     MessageContent
   } from '$lib/shared/projects/events/message-content';
   import { activeProjectOperation, studyPhaseGraceMs } from '$lib/shared/projects/operations';
+  import { viewHelpersSwitch } from '$lib/shared/projects/view-helpers';
   import type {
     StudyInteractionCapturePolicy,
     StudyWorkspaceObservation
@@ -105,6 +106,8 @@
     study?: StudyTask;
     /** Outside a study, the settings of the study condition for the project's mode. */
     trial?: Pick<StudyTask, 'layout' | 'presentationBufferTarget'>;
+    /** Whether the project's study condition runs the view helpers, for the dev-mode switch. */
+    conditionViewHelpers?: boolean;
   };
 
   let {
@@ -116,7 +119,8 @@
     devMode = false,
     readOnly = false,
     study,
-    trial
+    trial,
+    conditionViewHelpers = false
   }: Props = $props();
 
   // The route keys this component by project ID, dev mode and study task, so these are
@@ -221,6 +225,8 @@
   const adminPreview = $derived(study?.context === 'admin-preview');
   const showAdminControls = $derived(isAdmin && !adminPreview && !session.readOnly);
   const developerView = $derived(isAdmin && !adminPreview && !session.readOnly && devMode);
+  const helpersSwitch = $derived(viewHelpersSwitch(session.events));
+  const viewHelpersOn = $derived(helpersSwitch ?? conditionViewHelpers);
   // The tab's title: the task, in a study, or the project's title; never the system's name.
   const pageTitle = $derived(
     study?.title || (session.resource ? session.snapshot.title : '') || 'Visualization'
@@ -736,6 +742,22 @@
                       presentationSelection.returnToLatest();
                     }}
                   />
+                {/if}
+                {#if developerView && session.snapshot.mode === 'sverlin'}
+                  <div class="flex items-center gap-1">
+                    <Switch
+                      id="view-helpers"
+                      size="sm"
+                      checked={viewHelpersOn}
+                      disabled={mutationsDisabled}
+                      onCheckedChange={(enabled) =>
+                        session.runCommand({ type: 'view-helpers', enabled })}
+                    />
+                    <Label for="view-helpers" class="text-sm"
+                      >View helpers: {viewHelpersOn ? 'on' : 'off'}
+                      ({helpersSwitch === undefined ? 'study condition' : 'dev switch'})</Label
+                    >
+                  </div>
                 {/if}
                 <div class="flex items-center gap-1">
                   <Switch

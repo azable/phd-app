@@ -5,13 +5,8 @@
  */
 
 import type { ProjectDocument } from '$lib/shared/projects/model';
+import { viewHelpersSwitch } from '$lib/shared/projects/view-helpers';
 import { projectTrialCondition, studyProjectContext } from '$lib/server/study';
-
-/** The latest dev-mode switch on the project, where an administrator set one. */
-export function projectViewHelpersSwitch(document: ProjectDocument): boolean | undefined {
-  const set = document.events.findLast((event) => event.type === 'project.view-helpers-set');
-  return set?.type === 'project.view-helpers-set' ? set.payload.enabled : undefined;
-}
 
 /** The study condition's setting for a project, or its trial condition's outside a study. */
 export async function conditionViewHelpers(projectId: string): Promise<boolean> {
@@ -22,7 +17,7 @@ export async function conditionViewHelpers(projectId: string): Promise<boolean> 
 
 /** Whether the next turn of this project runs the view helpers. */
 export async function projectViewHelpers(document: ProjectDocument): Promise<boolean> {
-  return projectViewHelpersSwitch(document) ?? (await conditionViewHelpers(document.projectId));
+  return viewHelpersSwitch(document.events) ?? (await conditionViewHelpers(document.projectId));
 }
 
 /** Whether the turn now running runs the view helpers, as its start recorded. */

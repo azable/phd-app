@@ -3,6 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { projectInspectionContext, requireAdmin } from '$lib/server/authorization';
 import { buildSha } from '$lib/server/runtime-config';
 import { listProjectTemplates } from '$lib/server/projects/starter-catalog';
+import { conditionViewHelpers } from '$lib/server/projects/view-helpers-config';
 import { forceStudyPreview, projectTrialCondition, studyRunState } from '$lib/server/study';
 
 import type { Actions, PageServerLoad } from './$types';
@@ -55,6 +56,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     isAdmin: principal.kind === 'admin',
     readOnly: inspection.readOnly,
     templates: principal.kind === 'admin' && !inspection.readOnly ? listProjectTemplates() : [],
+    // What the view helpers' dev-mode switch falls back to, for administrators.
+    ...(principal.kind === 'admin'
+      ? { conditionViewHelpers: await conditionViewHelpers(params.projectId) }
+      : {}),
     study,
     ...(trial
       ? {
