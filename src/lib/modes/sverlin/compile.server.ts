@@ -1293,9 +1293,6 @@ function prepareViews(
       (ast.html as { children?: unknown[] }).children ?? [],
       declaredLayouts,
       stateNames,
-      references.flatMap((reference) =>
-        reference.path === undefined ? [] : [{ path: reference.path, start: reference.start }]
-      ),
       (node) => readsOf(node as Parameters<typeof readsOf>[0]),
       layoutNameOf
     );

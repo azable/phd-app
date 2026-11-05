@@ -23,9 +23,8 @@ of a pair should differ in how they show the algorithm.
 
 Most refused first sources break one of these rules, each explained below:
 
-- A layout's `of` lists every variable and label it reads, those in
-  `<When of="…">` and `{@label}` included, and those of the layouts it draws by
-  tag.
+- A layout's `of` lists every variable it reads, and those of the layouts it
+  draws by tag. Labels need no listing.
 - Inside a labelled block every statement is in a label, except declarations at
   its top.
 - A label is named by its full path, `@pass.scan.newMin`, never `@pass.newMin`.
@@ -76,17 +75,17 @@ layout, a view, or a node with a `kind`.
   Storyboard): every source declares its layouts, and one without is refused. A
   layout,
   `<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>`,
-  names its inputs in `of`, the input and algorithm variables and labels it
-  reads, as `values` and `@insert.compare`, and reads nothing else: a variable
-  or label it reads without declaring is refused, naming what to add, and a
-  label declared covers the labels inside it, as `@insert` covers
-  `@insert.compare`. Its two props are written as they are, never computed.
+  names its inputs in `of`, the input and algorithm variables it reads, as
+  `values`, and reads no other variable: one it reads without declaring is
+  refused, naming what to add. Labels are the whole algorithm's, so a layout
+  reads any label, as `{@insert.compare}` or `<When of="@scan.found">`, without
+  listing it. Its two props are written as they are, never computed.
 - A layout is drawn in another by its tag, `<Range lo={lo} hi={hi} />`, which
   passes every variable it declares by name, each as the state of its own name;
   one missing, extra, or passed another value is refused. The layout drawing it
-  declares what it passes, and the labels it reads too, which reach it by name.
-  A tag is closed at once, `/>`, and a layout drawn inside itself is refused. A
-  tag in a node of text and values is drawn inline, as a value is, as
+  declares what it passes. A tag is closed at once, `/>`, and a layout drawn
+  inside itself is refused. A tag in a node of text and values is drawn inline,
+  as a value is, as
   `<Node>Searching for <Target target={target} /> in the list</Node>`.
 - A layout a scene shows (see Storyboard) arranges the whole page: its body is
   one root `<Node>`, the frame (see Page frame), which holds values, layout
@@ -874,17 +873,17 @@ their cells, and the swap after it says why they trade places. With
 `views.@sweep.pair.test` none the question is left out and the steps stay as
 they were.
 
-A label is read in a layout that declares it, never in a view, by its full name,
-the labels around it first, as `@insert.key` for `@key` inside `@insert`; a
-shorter ending is refused with the full names it could stand for, so adding a
-label never changes or breaks what a name reads, in the markup or a variant.
-Only a label on an expression gives a value, as `const key = @key[values[i]];`:
-`@name` is what that expression gave since the step before, drawn at the step's
-after, and missing where it gave none or several. It is held at the step ending
-the span around it (see Steps), which shows that span whole. So a view shows
-what a step's code held though no variable holds it, as the key a whole
-insertion inserts, `{@insert.key}`, out of scope once its block ends. A label
-giving a position is drawn by a pointer, pointing while that code runs.
+A label is read in a layout, never in a view, by its full name, the labels
+around it first, as `@insert.key` for `@key` inside `@insert`; a shorter ending
+is refused with the full names it could stand for, so adding a label never
+changes or breaks what a name reads, in the markup or a variant. Only a label on
+an expression gives a value, as `const key = @key[values[i]];`: `@name` is what
+that expression gave since the step before, drawn at the step's after, and
+missing where it gave none or several. It is held at the step ending the span
+around it (see Steps), which shows that span whole. So a view shows what a
+step's code held though no variable holds it, as the key a whole insertion
+inserts, `{@insert.key}`, out of scope once its block ends. A label giving a
+position is drawn by a pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable

@@ -46,6 +46,10 @@ const reserved = new Set([
 
 const name = /^[A-Za-z_$][\w$]*$/u;
 const label = /^@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/u;
+// A label named in a layout's body, as {@insert.compare} or <When of="@scan.found">.
+const labelReference = /(?<![\w$.@])@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/gu;
+// Svelte's own tags, {@render …} and {@html …}, written with an @ that names no label.
+const svelteTags = new Set(['render', 'html', 'const', 'debug', 'attach']);
 const layoutOpening = /<Layout\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
 const layoutProp = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
@@ -211,6 +215,28 @@ export function layoutTags(source: string): {
         start: layout.start
       });
     else byName.set(layout.name, layout);
+  // Labels are global, so a layout reads every label its body names, and those of the layouts it
+  // draws, whether or not its of lists them.
+  const named = new Map(
+    declared.map((layout) => {
+      const body = scanned.slice(layout.body.start, layout.body.end);
+      const labels = [...body.matchAll(labelReference)]
+        .map((match) => match[1])
+        .filter((path) => !svelteTags.has(path.split('.')[0]));
+      const drawn = [...byName.keys()].filter((other) =>
+        new RegExp(`<${other.replace('$', '\\$')}\\b`, 'u').test(body)
+      );
+      return [layout.name, { labels, drawn }];
+    })
+  );
+  const readLabels = (layoutName: string, seen = new Set<string>()): string[] => {
+    if (seen.has(layoutName)) return [];
+    seen.add(layoutName);
+    const own = named.get(layoutName);
+    return own ? [...own.labels, ...own.drawn.flatMap((other) => readLabels(other, seen))] : [];
+  };
+  for (const layout of declared)
+    layout.inputs.labels = [...new Set([...layout.inputs.labels, ...readLabels(layout.name)])];
   const views = [...scanned.matchAll(/<View\b[\s\S]*?<\/View\s*>/gu)].map((match) => ({
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
@@ -277,12 +303,6 @@ export function layoutTags(source: string): {
       else if (!around.inputs.variables.includes(input))
         problem = `${around.name} passes ${input} to ${tagged} without reading it: add ${input} to ${around.name}'s inputs, of="${[...around.inputs.variables, input].join(', ')}".`;
     }
-    for (const read of layout.inputs.labels)
-      if (
-        !problem &&
-        !around.inputs.labels.some((each) => read === each || read.startsWith(`${each}.`))
-      )
-        problem = `${tagged} reads @${read}, which ${around.name} gives it by name: add @${read} to ${around.name}'s inputs.`;
     if (problem) {
       problems.push({ message: problem, start });
       continue;
@@ -420,15 +440,13 @@ type Markup = { type?: string; start?: number; end?: number; children?: unknown[
 
 /**
  * What each layout reads that it does not declare, or declares that is no variable, once the view
- * is parsed: a part as its snippet, a page as its block. Variables are read by name; a label, by the
- * references marked in the view (see label-values.ts), is declared by it or a label it is inside,
- * @insert.compare declaring @insert.compare.left.
+ * is parsed: a part as its snippet, a page as its block. Variables are read by name. Labels are
+ * global, so a layout reads those its body names without declaring them (see layoutTags).
  */
 export function layoutReadProblems(
   top: readonly unknown[],
   layouts: readonly DeclaredLayout[],
   stateNames: readonly string[],
-  labelReads: readonly { path: string; start: number }[],
   readsOf: (node: { children?: unknown[] }) => Set<string>,
   pageNameOf: (block: unknown) => string | undefined
 ): Problem[] {
@@ -454,16 +472,6 @@ export function layoutReadProblems(
         problems.push({
           message: `${layout.name} reads ${read} without declaring it: a layout reads only its inputs, so add it, of="${[...layout.inputs.variables, read].join(', ')}".`,
           start
-        });
-    for (const { path, start: at } of labelReads)
-      if (
-        at >= start &&
-        at < (node.end ?? start) &&
-        !layout.inputs.labels.some((each) => path === each || path.startsWith(`${each}.`))
-      )
-        problems.push({
-          message: `${layout.name} reads @${path} without declaring it: a layout reads only its inputs, so add @${path.split('.').slice(0, -1).join('.') || path} or @${path} to its of.`,
-          start: at
         });
   }
   return problems;

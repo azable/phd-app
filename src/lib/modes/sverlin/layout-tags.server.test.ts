@@ -59,6 +59,18 @@ describe('layouts with inputs', () => {
     expect(Object.keys(prepared.design.space)).not.toContain('Main.Target.fill');
   });
 
+  it('reads labels without listing them, its own and those of the layouts it draws', () => {
+    // Quicksort's first source in benchmark run 4 read @partition.less in a <When> of its root
+    // layout, unlisted, and was refused; labels are the whole algorithm's.
+    const asked =
+      '<Layout name="Asked"><When of="@probe.check"><Node>checking</Node></When></Layout>\n';
+    expect(
+      problemOf(`${asked}${main('<Asked /><When of="@probe.right"><Node>right</Node></When>')}`)
+    ).toBe('');
+    const prepared = prepareSvelteComponent(`${blocks}${asked}${main('<Asked />')}`);
+    expect(prepared.storyboard.scenes[0].layout).toBe('Main');
+  });
+
   it('takes a label declared by a shorter one around it', () => {
     const reading =
       '<Layout name="Asked" of="@probe"><When of="@probe.check"><Node>checking</Node></When></Layout>\n' +
@@ -86,11 +98,6 @@ describe('layouts with inputs', () => {
       'an input the drawing layout does not declare',
       `${target}${main('<Target target={target} />', 'values, lo, hi')}`,
       'Main passes target to Target without reading it: add target to Main\'s inputs, of="values, lo, hi, target".'
-    ],
-    [
-      'a label the drawing layout does not declare',
-      `<Layout name="Asked" of="@probe.check"><When of="@probe.check"><Node>checking</Node></When></Layout>\n${main('<Asked />')}`,
-      "Asked reads @probe.check, which Main gives it by name: add @probe.check to Main's inputs."
     ],
     [
       'a tag left open',
@@ -121,11 +128,6 @@ describe('layouts with inputs', () => {
       'a variable read without declaring it',
       main('', 'values, lo'),
       'Main reads hi without declaring it: a layout reads only its inputs, so add it, of="values, lo, hi".'
-    ],
-    [
-      'a label read without declaring it',
-      main('<When of="@probe.check"><Node>checking</Node></When>'),
-      'Main reads @probe.check without declaring it'
     ],
     [
       'a prop other than name and of',
