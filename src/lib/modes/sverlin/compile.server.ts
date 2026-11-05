@@ -4229,8 +4229,13 @@ const allowedImports: Record<string, (path: string) => boolean> = {
     ].includes(path),
   component: (path) => runtime(path) || path === 'sverlin',
   // The constraint layout engine and the grid router wires take (see library/node/wires.ts), by
-  // their own modules, which need none of WebCola's d3 adaptor.
-  library: (path) => runtime(path) || /^\.\.?\//u.test(path) || webcolaModules.includes(path)
+  // their own modules, which need none of WebCola's d3 adaptor; and dagre, the layered layout
+  // engine (see library/node/engines.ts), plain JavaScript with no host access.
+  library: (path) =>
+    runtime(path) ||
+    /^\.\.?\//u.test(path) ||
+    webcolaModules.includes(path) ||
+    path === '@dagrejs/dagre'
 };
 // The same, compiled to render strings.
 allowedImports['component-server'] = allowedImports.component;
