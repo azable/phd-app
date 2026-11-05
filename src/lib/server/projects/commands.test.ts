@@ -1166,6 +1166,24 @@ describe('submitProjectFeedback', () => {
       expect(shown).toHaveLength(2);
     });
 
+    it('draws at random without asking the chooser in the grace after the phase deadline', async () => {
+      const choose = vi.fn();
+      const { shown } = await runWithProjectOperationSignal(
+        new AbortController().signal,
+        () =>
+          resample({
+            ...commandDependencies,
+            getChooser: () => chooserWith(choose),
+            chooserFor: async () => 'model'
+          }),
+        Date.now() - 1_000,
+        Date.now() + 60_000
+      );
+
+      expect(choose).not.toHaveBeenCalled();
+      expect(shown).toHaveLength(2);
+    });
+
     it('uses the chooser picked in dev mode over the configured one', async () => {
       const choose = vi.fn();
       const { shown } = await resample(

@@ -5,10 +5,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { InvalidProjectDocumentError } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
-import { pendingAssistantTurnRequests, projectOperation } from '$lib/shared/projects/operations';
+import {
+  pendingAssistantTurnRequests,
+  projectOperation,
+  studyPhaseGraceMs
+} from '$lib/shared/projects/operations';
 
 import { MemoryProjectRepository } from './memory-repository.test-support';
-import { currentProjectOperationDeadline } from './operation-context';
+import {
+  assertCurrentProjectOperationActive,
+  currentProjectOperationDeadline,
+  currentProjectOperationPastDeadline
+} from './operation-context';
 import { ProjectOperationExecutor } from './operations';
 import { assertNoActiveProjectOperations, ProjectNotFoundError } from './repository';
 
@@ -551,45 +559,114 @@ describe('ProjectOperationExecutor', () => {
     ).toBe('completed');
   });
 
-  it('propagates and enforces a study deadline for accepted asynchronous work', async () => {
-    const repository = new MemoryProjectRepository();
-    const projectId = randomUUID();
-    const operationId = randomUUID();
-    await repository.create(rootDocument(projectId, randomUUID()), 'owner');
-    let observedDeadline: number | undefined;
-    const executor = new ProjectOperationExecutor(
-      repository,
-      { acquire: async () => ({ release: async () => undefined }) },
-      async ({ signal }) => {
-        observedDeadline = currentProjectOperationDeadline();
-        if (signal.aborted) throw signal.reason;
-        await new Promise<void>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-        });
-        throw new Error('unreachable');
-      }
-    );
-    const deadlineAt = new Date(Date.now() + 20).toISOString();
-
-    await executor.accept({
-      projectId,
-      operationId,
-      expectedHead: 1,
-      command: { type: 'initial-build', seed: 1 },
-      deadlineAt
-    });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    await terminal(repository, projectId, operationId);
-
-    expect(observedDeadline).toBe(Date.parse(deadlineAt));
-    expect(projectOperation(await repository.load(projectId), operationId)).toMatchObject({
-      status: 'failed',
-      terminalEvent: {
-        payload: {
-          failureKind: 'cancelled',
-          message: expect.stringContaining('study phase ended')
+  describe('a study deadline', () => {
+    /** An executor whose work waits for `release`, or for its abort. */
+    async function waiting(release: Promise<void>, onRun?: () => void) {
+      const repository = new MemoryProjectRepository();
+      const projectId = randomUUID();
+      await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+      const executor = new ProjectOperationExecutor(
+        repository,
+        { acquire: async () => ({ release: async () => undefined }) },
+        async ({ signal }) => {
+          if (signal.aborted) throw signal.reason;
+          await Promise.race([
+            release,
+            new Promise<void>((_resolve, reject) =>
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+            )
+          ]);
+          onRun?.();
+          return { document: await repository.load(projectId), appendedEvents: [] };
         }
+      );
+      return { repository, projectId, executor };
+    }
+    const accept = (
+      executor: ProjectOperationExecutor,
+      projectId: string,
+      operationId: string,
+      deadlineAt: number
+    ) =>
+      executor.accept({
+        projectId,
+        operationId,
+        expectedHead: 1,
+        command: { type: 'initial-build', seed: 1 },
+        deadlineAt: new Date(deadlineAt).toISOString()
+      });
+
+    it('lets work running at the deadline finish in the grace, recording how far past it', async () => {
+      vi.useFakeTimers();
+      try {
+        let release!: () => void;
+        let pastDeadline: boolean | undefined;
+        let observedDeadline: number | undefined;
+        const { repository, projectId, executor } = await waiting(
+          new Promise((resolve) => (release = resolve)),
+          () => {
+            observedDeadline = currentProjectOperationDeadline();
+            pastDeadline = currentProjectOperationPastDeadline();
+            assertCurrentProjectOperationActive();
+          }
+        );
+        const operationId = randomUUID();
+        const deadlineAt = Date.now() + 1_000;
+        const accepted = accept(executor, projectId, operationId, deadlineAt);
+        await vi.advanceTimersByTimeAsync(3_000);
+        release();
+        await accepted;
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(observedDeadline).toBe(deadlineAt);
+        expect(pastDeadline).toBe(true);
+        expect(projectOperation(await repository.load(projectId), operationId)).toMatchObject({
+          status: 'completed',
+          terminalEvent: { payload: { pastDeadlineMs: expect.any(Number) } }
+        });
+      } finally {
+        vi.useRealTimers();
       }
+    });
+
+    it('stops work still running when the grace ends', async () => {
+      vi.useFakeTimers();
+      try {
+        const { repository, projectId, executor } = await waiting(new Promise(() => {}));
+        const operationId = randomUUID();
+        const accepted = accept(executor, projectId, operationId, Date.now() + 1_000);
+        await vi.advanceTimersByTimeAsync(1_000 + studyPhaseGraceMs - 10);
+        expect(projectOperation(await repository.load(projectId), operationId)?.status).toBe(
+          'accepted'
+        );
+        await vi.advanceTimersByTimeAsync(20);
+        await accepted;
+
+        expect(projectOperation(await repository.load(projectId), operationId)).toMatchObject({
+          status: 'failed',
+          terminalEvent: {
+            payload: {
+              failureKind: 'cancelled',
+              message: expect.stringContaining('study phase ended'),
+              pastDeadlineMs: expect.any(Number)
+            }
+          }
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('gives no grace to work that starts after the deadline', async () => {
+      const { repository, projectId, executor } = await waiting(new Promise(() => {}));
+      const operationId = randomUUID();
+      await accept(executor, projectId, operationId, Date.now() - 1_000);
+      await terminal(repository, projectId, operationId);
+
+      expect(projectOperation(await repository.load(projectId), operationId)).toMatchObject({
+        status: 'failed',
+        terminalEvent: { payload: { failureKind: 'cancelled' } }
+      });
     });
   });
 

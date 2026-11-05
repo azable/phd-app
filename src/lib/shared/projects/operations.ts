@@ -3,6 +3,14 @@
 import type { EventId, ProjectEvent, ProjectOperationKind } from './events';
 import type { ProjectDocument } from './model';
 
+/**
+ * How long an operation still running when its study phase ends may go on to publish its result,
+ * and the page waits for it: one model call at its 180-second request ceiling
+ * (readRequestTimeoutMs) plus that attempt's build, as no further attempt starts after the
+ * deadline; five minutes bounds a build that runs long.
+ */
+export const studyPhaseGraceMs = 5 * 60_000;
+
 /** One durable interaction waiting to be claimed by a background assistant turn. */
 export type PendingAssistantTurnRequest = Extract<
   ProjectEvent,

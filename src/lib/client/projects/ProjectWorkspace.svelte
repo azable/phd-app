@@ -46,7 +46,7 @@
     ElementReference,
     MessageContent
   } from '$lib/shared/projects/events/message-content';
-  import { activeProjectOperation } from '$lib/shared/projects/operations';
+  import { activeProjectOperation, studyPhaseGraceMs } from '$lib/shared/projects/operations';
   import type {
     StudyInteractionCapturePolicy,
     StudyWorkspaceObservation
@@ -228,6 +228,16 @@
   // The tab's title: the task, in a study, or the project's title; never the system's name.
   const pageTitle = $derived(
     study?.title || (session.resource ? session.snapshot.title : '') || 'Visualization'
+  );
+  // A request still running when the phase ends may finish within the grace (studyPhaseGraceMs), so
+  // the participant waits for it before continuing; the server stops it at the grace's end.
+  let graceOpen = $state(false);
+  const finishingLastRequest = $derived(
+    expired &&
+      graceOpen &&
+      (session.assistantResponding ||
+        (activeProjectOperation(session.events)?.kind ?? 'presentation-refill') !==
+          'presentation-refill')
   );
   const busy = $derived(!!session.pending || session.creating);
   const mutationsDisabled = $derived(busy || expired || session.readOnly || editMode === 'editing');
@@ -450,6 +460,11 @@
     expired = true;
     interactionRecorder?.stop();
     session.disablePresentationBuffer();
+    const deadline = study?.deadlineAt ? Date.parse(study.deadlineAt) : Date.now();
+    const remaining = deadline + studyPhaseGraceMs - Date.now();
+    if (remaining <= 0) return;
+    graceOpen = true;
+    setTimeout(() => (graceOpen = false), remaining);
   }
 
   function recordDraft(content: MessageContent, focused: boolean) {
@@ -826,6 +841,11 @@
     </div>
   {/if}
   {#if study && shouldShowPhaseExpiredDialog(isAdmin, study.context)}
-    <PhaseExpiredDialog open={expired} context={study.context} phaseId={study.phaseId} />
+    <PhaseExpiredDialog
+      open={expired}
+      context={study.context}
+      phaseId={study.phaseId}
+      finishing={finishingLastRequest}
+    />
   {/if}
 </div>

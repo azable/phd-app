@@ -98,6 +98,7 @@ import { appendProjectPreference, type PreferenceAnswer } from './presentations'
 import {
   assertCurrentProjectOperationActive,
   currentProjectOperationDeadline,
+  currentProjectOperationPastDeadline,
   currentProjectOperationSignal
 } from './operation-context';
 import { projectRepository, type ProjectRepository } from './repository';
@@ -199,6 +200,9 @@ function botChooser(
   return {
     id,
     async choose(request) {
+      // After the phase's deadline, in the grace that lets a running request finish, no model call
+      // starts: no choices, so the variants are drawn at random.
+      if (currentProjectOperationPastDeadline()) return { document: request.document };
       const design = designVariables(request.design);
       const prompt = await bot.preparePrompt({
         messages: projectConversationMessages(request.document.events),

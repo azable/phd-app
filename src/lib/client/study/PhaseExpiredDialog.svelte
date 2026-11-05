@@ -10,8 +10,10 @@
     context?: 'participant' | 'admin-preview';
     /** The phase that ended, so continuing advances from it at most once. */
     phaseId?: string;
+    /** Whether the last request is still finishing, which continuing waits for. */
+    finishing?: boolean;
   };
-  let { open, context = 'participant', phaseId }: Props = $props();
+  let { open, context = 'participant', phaseId, finishing = false }: Props = $props();
   let advancing = $state(false);
 </script>
 
@@ -22,7 +24,9 @@
       <AlertDialog.Description>
         {context === 'admin-preview'
           ? 'This preview has reached its configured time limit. Advance it or return to administration.'
-          : 'This phase has ended. Your work has been saved and this project is now read-only.'}
+          : finishing
+            ? 'This phase has ended. Your last request is still finishing; you can continue when it is done.'
+            : 'This phase has ended. Your work has been saved and this project is now read-only.'}
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
@@ -47,11 +51,14 @@
           {#if phaseId}<input type="hidden" name="phaseId" value={phaseId} />{/if}
           <Button
             type="submit"
-            disabled={advancing}
-            aria-busy={advancing}
+            disabled={advancing || finishing}
+            aria-busy={advancing || finishing}
             aria-label={advancing ? 'Continuing study' : undefined}
           >
-            {#if advancing}<Spinner data-icon="inline-start" />Continuing…{:else}Continue study{/if}
+            {#if advancing}<Spinner
+                data-icon="inline-start"
+              />Continuing…{:else if finishing}<Spinner data-icon="inline-start" />Finishing your
+              last request…{:else}Continue study{/if}
           </Button>
         </form>
       {/if}

@@ -33,7 +33,11 @@ import {
 } from './commands';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
-import { projectOperationDeadlineError, runWithProjectOperationSignal } from './operation-context';
+import {
+  operationGraceUntil,
+  projectOperationDeadlineError,
+  runWithProjectOperationSignal
+} from './operation-context';
 import { recoveryEventsForInterruptedOperations } from './recovery';
 import { ProjectNotFoundError, projectRepository, type ProjectRepository } from './repository';
 import {
@@ -345,12 +349,14 @@ export class ProjectOperationExecutor {
       });
       const acceptedEventId = accepted.events[0].id;
       const controller = new AbortController();
+      const graceUntil =
+        options.deadlineAt === undefined ? undefined : operationGraceUntil(options.deadlineAt);
       const deadlineTimer =
-        options.deadlineAt === undefined
+        graceUntil === undefined
           ? undefined
           : setTimeout(
               () => controller.abort(projectOperationDeadlineError()),
-              Math.max(0, options.deadlineAt - Date.now())
+              Math.max(0, graceUntil - Date.now())
             );
       deadlineTimer?.unref();
       try {
@@ -365,10 +371,17 @@ export class ProjectOperationExecutor {
               signal: controller.signal,
               ...(options.deadlineAt === undefined ? {} : { deadlineAt: options.deadlineAt })
             }),
-          options.deadlineAt
+          options.deadlineAt,
+          graceUntil
         );
         await this.appendCurrent(options.projectId, [
-          lifecycleEvent('operation.completed', options.operationId, options.kind)
+          lifecycleEvent(
+            'operation.completed',
+            options.operationId,
+            options.kind,
+            'user',
+            pastDeadline(options.deadlineAt)
+          )
         ]);
       } catch (cause) {
         await this.closeFailedOperation(
@@ -376,7 +389,8 @@ export class ProjectOperationExecutor {
           options.operationId,
           options.kind,
           controller.signal.aborted ? 'cancelled' : 'infrastructure',
-          controller.signal.aborted ? cancellationMessage(controller.signal) : messageFor(cause)
+          controller.signal.aborted ? cancellationMessage(controller.signal) : messageFor(cause),
+          pastDeadline(options.deadlineAt)
         );
       } finally {
         if (deadlineTimer) clearTimeout(deadlineTimer);
@@ -551,11 +565,19 @@ export class ProjectOperationExecutor {
   ): Promise<void> {
     const kind = commandKind(options.command);
     const deadlineAt = options.deadlineAt;
+    // A repair the page asks for after a runtime failure is no participant's request, so it gets no
+    // grace: it stops at the deadline.
+    const graceUntil =
+      deadlineAt === undefined
+        ? undefined
+        : kind === 'report-runtime-error'
+          ? deadlineAt
+          : operationGraceUntil(deadlineAt);
     const deadlineTimer =
-      deadlineAt !== undefined
+      graceUntil !== undefined
         ? setTimeout(
             () => controller.abort(projectOperationDeadlineError()),
-            Math.max(0, deadlineAt - Date.now())
+            Math.max(0, graceUntil - Date.now())
           )
         : undefined;
     deadlineTimer?.unref();
@@ -563,7 +585,8 @@ export class ProjectOperationExecutor {
       const result = await runWithProjectOperationSignal(
         controller.signal,
         () => this.execute({ ...options, signal: controller.signal }),
-        deadlineAt
+        deadlineAt,
+        graceUntil
       );
       const terminalFailure = terminalFailureFor(kind, result.appendedEvents);
       await this.appendCurrent(options.projectId, [
@@ -572,9 +595,16 @@ export class ProjectOperationExecutor {
               options.operationId,
               kind,
               terminalFailure.failureKind,
-              terminalFailure.message
+              terminalFailure.message,
+              pastDeadline(deadlineAt)
             )
-          : lifecycleEvent('operation.completed', options.operationId, kind)
+          : lifecycleEvent(
+              'operation.completed',
+              options.operationId,
+              kind,
+              'user',
+              pastDeadline(deadlineAt)
+            )
       ]);
     } catch (cause) {
       const cancelled =
@@ -585,7 +615,8 @@ export class ProjectOperationExecutor {
         options.operationId,
         kind,
         cancelled ? 'cancelled' : 'infrastructure',
-        controller.signal.aborted ? cancellationMessage(controller.signal) : messageFor(cause)
+        controller.signal.aborted ? cancellationMessage(controller.signal) : messageFor(cause),
+        pastDeadline(deadlineAt)
       );
     } finally {
       if (deadlineTimer) clearTimeout(deadlineTimer);
@@ -598,7 +629,8 @@ export class ProjectOperationExecutor {
     operationId: string,
     kind: ProjectOperationKind,
     failureKind: 'infrastructure' | 'cancelled',
-    message: string
+    message: string,
+    pastDeadlineMs?: number
   ): Promise<void> {
     try {
       await runProjectCommand(projectId, async () => {
@@ -610,7 +642,7 @@ export class ProjectOperationExecutor {
         );
         await this.repository.append(projectId, document.events.length, [
           ...recoveryEventsForInterruptedOperations(related),
-          lifecycleFailure(operationId, kind, failureKind, message)
+          lifecycleFailure(operationId, kind, failureKind, message, pastDeadlineMs)
         ]);
       });
     } catch (cause) {
@@ -806,14 +838,15 @@ function lifecycleEvent<Type extends 'operation.accepted' | 'operation.completed
   type: Type,
   operationId: string,
   kind: ProjectOperationKind,
-  acceptedActor: 'user' | 'system' = 'user'
+  acceptedActor: 'user' | 'system' = 'user',
+  pastDeadlineMs?: number
 ): NewProjectEvent<Type> {
   return {
     type,
     actor: type === 'operation.accepted' ? { kind: acceptedActor } : { kind: 'system' },
     operationId,
     createdAt: new Date().toISOString(),
-    payload: { kind }
+    payload: { kind, ...(pastDeadlineMs ? { pastDeadlineMs } : {}) }
   } as NewProjectEvent<Type>;
 }
 
@@ -821,15 +854,26 @@ function lifecycleFailure(
   operationId: string,
   kind: ProjectOperationKind,
   failureKind: 'domain' | 'infrastructure' | 'cancelled',
-  message: string
+  message: string,
+  pastDeadlineMs?: number
 ): NewProjectEvent<'operation.failed'> {
   return {
     type: 'operation.failed',
     actor: { kind: 'system' },
     operationId,
     createdAt: new Date().toISOString(),
-    payload: { kind, failureKind, message: cutText(message, 4_000) || 'Project operation failed.' }
+    payload: {
+      kind,
+      failureKind,
+      message: cutText(message, 4_000) || 'Project operation failed.',
+      ...(pastDeadlineMs ? { pastDeadlineMs } : {})
+    }
   };
+}
+
+/** How long after its phase's deadline an operation ends, in whole milliseconds, where it does. */
+function pastDeadline(deadlineAt: number | undefined, now = Date.now()): number | undefined {
+  return deadlineAt !== undefined && now > deadlineAt ? Math.ceil(now - deadlineAt) : undefined;
 }
 
 function terminalFailureFor(

@@ -2,20 +2,35 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { studyPhaseGraceMs } from '$lib/shared/projects/operations';
+
 type ProjectOperationContext = {
   signal: AbortSignal;
+  /** The study phase's deadline: no attempt or model call starts after it. */
   deadlineAt?: number;
+  /** Until when an operation running at the deadline may still publish (see studyPhaseGraceMs). */
+  graceUntil?: number;
 };
+
+/** Until when an operation started at `startedAt` may publish: with the grace only if it began in time. */
+export function operationGraceUntil(deadlineAt: number, startedAt = Date.now()): number {
+  return startedAt < deadlineAt ? deadlineAt + studyPhaseGraceMs : deadlineAt;
+}
 
 const operationContexts = new AsyncLocalStorage<ProjectOperationContext>();
 
 export function runWithProjectOperationSignal<T>(
   signal: AbortSignal,
   callback: () => Promise<T>,
-  deadlineAt?: number
+  deadlineAt?: number,
+  graceUntil?: number
 ): Promise<T> {
   return operationContexts.run(
-    { signal, ...(deadlineAt === undefined ? {} : { deadlineAt }) },
+    {
+      signal,
+      ...(deadlineAt === undefined ? {} : { deadlineAt }),
+      ...(graceUntil === undefined ? {} : { graceUntil })
+    },
     callback
   );
 }
@@ -29,13 +44,21 @@ export function currentProjectOperationDeadline(): number | undefined {
   return operationContexts.getStore()?.deadlineAt;
 }
 
-/** Fail immediately before publishing a result if cancellation or a phase deadline won the race. */
+/** Whether the current operation's study phase has ended, so nothing new may start. */
+export function currentProjectOperationPastDeadline(): boolean {
+  const deadline = currentProjectOperationDeadline();
+  return deadline !== undefined && Date.now() >= deadline;
+}
+
+/**
+ * Fail immediately before publishing a result if cancellation or a phase deadline won the race; an
+ * operation running at the deadline may still publish until its grace ends.
+ */
 export function assertCurrentProjectOperationActive(): void {
   const context = operationContexts.getStore();
   if (context?.signal.aborted) throw context.signal.reason ?? abortError();
-  if (context?.deadlineAt !== undefined && Date.now() >= context.deadlineAt) {
-    throw projectOperationDeadlineError();
-  }
+  const until = context?.graceUntil ?? context?.deadlineAt;
+  if (until !== undefined && Date.now() >= until) throw projectOperationDeadlineError();
 }
 
 /** Shared cancellation reason for work that reaches its server-authoritative study deadline. */

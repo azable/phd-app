@@ -2,7 +2,7 @@
 
 import * as v from 'valibot';
 
-import { eventEnvelope, textSchema } from './values';
+import { eventEnvelope, positiveSchema, textSchema } from './values';
 
 /** Stable project operation kinds understood outside the execution mechanism. */
 export const projectOperationKindSchema = v.picklist([
@@ -22,6 +22,13 @@ export const projectOperationKindSchema = v.picklist([
 
 const operationPayloadSchema = v.object({ kind: projectOperationKindSchema });
 
+/**
+ * How many milliseconds after its study phase's deadline an operation ended, where it was still
+ * running at the deadline and finished in the grace that lets it (see studyPhaseGraceMs), so an
+ * analysis can keep each phase to its exact length.
+ */
+const pastDeadlineSchema = v.optional(positiveSchema);
+
 /** Runtime schema for a command accepted for asynchronous execution. */
 export const operationAcceptedEventSchema = v.object({
   ...eventEnvelope,
@@ -33,7 +40,7 @@ export const operationAcceptedEventSchema = v.object({
 export const operationCompletedEventSchema = v.object({
   ...eventEnvelope,
   type: v.literal('operation.completed'),
-  payload: operationPayloadSchema
+  payload: v.object({ kind: projectOperationKindSchema, pastDeadlineMs: pastDeadlineSchema })
 });
 
 /** Runtime schema for an operation that reached an unsuccessful terminal outcome. */
@@ -43,7 +50,8 @@ export const operationFailedEventSchema = v.object({
   payload: v.object({
     kind: projectOperationKindSchema,
     failureKind: v.picklist(['domain', 'infrastructure', 'cancelled']),
-    message: textSchema
+    message: textSchema,
+    pastDeadlineMs: pastDeadlineSchema
   })
 });
 
