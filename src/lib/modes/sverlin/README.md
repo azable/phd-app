@@ -843,11 +843,10 @@ place:
 <Layout name="Board">
   <Node layout="column">
     <Cells />
-    <OneOf><When of="@sweep.pair.test">
-      {@sweep.pair.test}
-    </When><When of="@sweep.pair.swap">
-      <Swapping />
-    </When></OneOf>
+    <Node layout="stack">
+      <Node when="@sweep.pair.test">{@sweep.pair.test}</Node>
+      <Node when="@sweep.pair.swap"><Swapping /></Node>
+    </Node>
   </Node>
 </Layout>
 
@@ -913,24 +912,24 @@ something at some steps needs no flag, sentinel, or cast in the algorithm: a
 label, a pointer at a label, a view chosen per place, or `<When of="@label">`
 below does it.
 
-`<When of="@insert.swap">…</When>` draws its contents at each step inside a span
+`<Node when="@insert.swap">…</Node>` shows the node at each step inside a span
 of a label, any label: the step that ends a span and those inside it where
 labels within pause, whatever the pauses, never steps leading up to it or after
-it; elsewhere they are hidden, keeping their room. `of=":before"` and
-`of=":after"`, the whole case's stops, draw them at the first step, the input as
+it; elsewhere it is hidden, keeping its room. `when=":before"` and
+`when=":after"`, the whole case's stops, show it at the first step, the input as
 given, and at the last, as a note the same in every case, as "the array is now
-sorted". A `<When>` names one label or moment and never reads the label's value
-(`{#if @label}` is refused); it has no `{:else}`. Branches that take turns share
-one place, as large as the largest,
-`<OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>`, as in bubble sort
-above; a `<OneOf>` whose branches would show at one step, as a label and one
-inside it, is refused. Text that changes from step to step in one place, as a
-status line saying what each step does, is one `<OneOf>`: separate `<When>`s
-each keep their own room, so their texts stack down the page instead of
-replacing one another.
+sorted". `when` names one label or stop, written as text, and never reads the
+label's value: `when={i < n}` and `{#if @label}` are refused. Nodes that take
+turns share one place in a stack, as large as the largest,
+`<Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>`;
+give them labels that never show at one step, or their texts overlap. Text that
+changes from step to step in one place, as a status line saying what each step
+does, is one such stack: separate nodes with `when` each keep their own room, so
+their texts stack down the page instead of replacing one another. Older sources
+write `<When of="@a">…</When>` and `<OneOf>`, which are read as these.
 
 Each outcome of the algorithm, as found and not found, is a label of its own,
-and its message is a `<When>` of that label. An outcome is decided in the
+and its message a node with `when` of that label. An outcome is decided in the
 algorithm, never in a layout by testing the state at `:before` or `:after`.
 `return;` ends the algorithm at an outcome, so code after a loop runs only for
 the other:
@@ -949,10 +948,10 @@ the other:
   @missing[return;]
 </script>
 …
-<OneOf>
-  <When of="@scan.found"><Node>Found {target} at index {i}.</Node></When>
-  <When of="@missing"><Node>{target} is not in the array.</Node></When>
-</OneOf>
+<Node layout="stack">
+  <Node when="@scan.found">Found {target} at index {i}.</Node>
+  <Node when="@missing">{target} is not in the array.</Node>
+</Node>
 ```
 
 What has happened so far is a list for `{#each}`: `spans(@check.at)`, every
@@ -1714,7 +1713,7 @@ goes. For example, a cell with a highlight behind its value, shown only at the
 steps of `@next`:
 
 ```svelte
-<Node layout="stack"><When of="@next"><Node kind="Mark"></Node></When>{v}</Node>
+<Node layout="stack"><Node kind="Mark" when="@next"></Node>{v}</Node>
 ```
 
 The design gives `Mark` its fill. Give the value's own view no fill, or it

@@ -83,7 +83,8 @@ Some features suit common needs. Offer them as alternatives where they fit:
 - A `<Select>` can show a call stack, or the tree of calls so far, each call
   linked to its `parent` (see the guide's Queries and Calls).
 - For an invariant, keep one layout so nothing jumps: pause between passes and
-  show a highlight layer with `<When>` in a stack (see the guide's Stack).
+  show a highlight layer, a node with `when`, in a stack (see the guide's
+  Stack).
 - When the participant asks for particular graphics, such as playing cards,
   offer a drawing (see the guide's Drawings) as an alternative; where the view
   helpers are on, give them the type and a short task saying what to draw.
@@ -119,9 +120,10 @@ paused at in one scene within one of its spans rather than at every span. Where
 a listing shows (see the guide's Listing), pause at a loop’s or an if’s body,
 its test, either or neither, by whether a step should show a pass’s work or
 where the code goes next. Give each outcome, as found and not found, a label of
-its own and its message a `<When>` of it (see `<When>` in the guide). Keep each
-scene's pauses unless the participant asks for other steps; a request for more
-or fewer steps changes the source's pauses.
+its own and its message a node shown `when` it happens, as
+`<Node when="@scan.found">` (see the guide's Stack). Keep each scene's pauses
+unless the participant asks for other steps; a request for more or fewer steps
+changes the source's pauses.
 
 project.design gives the base’s design space (see Design in the guide) as the
 viewed variant has it. Its variables list in full the views, pointers, a

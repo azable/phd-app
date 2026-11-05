@@ -157,6 +157,41 @@ describe('layouts with inputs', () => {
   });
 });
 
+describe('nodes shown at a label', () => {
+  it("shows a node with when at its label's steps, as <When> does", async () => {
+    const shown = prepareSvelteComponent(
+      `${blocks}${main('<Node when="@probe.check">checking</Node>')}`
+    );
+    const wrapped = prepareSvelteComponent(
+      `${blocks}${main('<When of="@probe.check"><Node>checking</Node></When>')}`
+    );
+    expect(Object.keys(shown.design.space)).toEqual(Object.keys(wrapped.design.space));
+  });
+
+  it('takes turns in one place with a stack of nodes with when, and still reads <OneOf>', () => {
+    expect(
+      problemOf(
+        main(
+          '<Node layout="stack"><Node when="@probe.right">right</Node><Node when="@probe.left">left</Node></Node>'
+        )
+      )
+    ).toBe('');
+    expect(
+      problemOf(
+        main(
+          '<OneOf><When of="@probe.right"><Node>right</Node></When><When of="@probe.left"><Node>left</Node></When></OneOf>'
+        )
+      )
+    ).toBe('');
+  });
+
+  it('refuses a when worked out from the state', () => {
+    expect(problemOf(main('<Node when={lo < hi}>open</Node>'))).toContain(
+      'when takes a label or a stop of the case, written as text'
+    );
+  });
+});
+
 describe('snippets', () => {
   it.each([
     [

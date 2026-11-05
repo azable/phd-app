@@ -419,6 +419,46 @@ export function layoutTags(source: string): {
       });
     }
   }
+  // A node shown only at a label's steps, <Node when="@scan.found">, is <When> around it, and
+  // keeps its room elsewhere; a stack of such nodes takes turns in one place, as <OneOf> did.
+  const nodeOpening = /<Node\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
+  for (const match of scanned.matchAll(nodeOpening)) {
+    const [opening, props] = match;
+    const when = /\swhen\s*=\s*("([^"]*)"|'([^']*)'|\{[^}]*\})/u.exec(props);
+    if (!when) continue;
+    const start = match.index ?? 0;
+    const shownAt = when[2] ?? when[3];
+    if (shownAt === undefined) {
+      problems.push({
+        message: `when takes a label or a stop of the case, written as text, as when="@scan.found": ${when[1]} is computed. To choose by the state, write {#if …} around the node; to show it where an outcome happens, give that outcome a label and name it.`,
+        start
+      });
+      continue;
+    }
+    const bare = opening.replace(when[0], '');
+    if (props.trimEnd().endsWith('/')) {
+      edits.push({ start, length: opening.length, text: `<When of="${shownAt}">${bare}</When>` });
+      continue;
+    }
+    // Its closing tag, past the nodes inside it.
+    let depth = 1;
+    let at = start + opening.length;
+    const tags = /<Node\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>|<\/Node\s*>/gu;
+    tags.lastIndex = at;
+    let closing: RegExpExecArray | null = null;
+    for (let tag = tags.exec(scanned); tag; tag = tags.exec(scanned)) {
+      if (tag[0].startsWith('</')) depth--;
+      else if (!tag[1].trimEnd().endsWith('/')) depth++;
+      if (depth === 0) {
+        closing = tag;
+        break;
+      }
+      at = tags.lastIndex;
+    }
+    if (!closing) continue; // left to Svelte, which names the unclosed node
+    edits.push({ start, length: opening.length, text: `<When of="${shownAt}">${bare}` });
+    edits.push({ start: closing.index, length: closing[0].length, text: `${closing[0]}</When>` });
+  }
   // A token in a caption's text, $name[text], refers to the place @name as a listing's token does
   // (see listing/places.ts), and is drawn as inline code: a node of kind Code linked to that place.
   const captions = captionTokens(scanned);
