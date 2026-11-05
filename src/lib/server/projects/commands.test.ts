@@ -3688,7 +3688,8 @@ describe('several variants from chat', () => {
     const prefer = async (
       projectId: string,
       [left, right]: string[],
-      answer: { preferred: string } | { outcome: 'tie' | 'skip' }
+      answer: { preferred: string } | { outcome: 'tie' | 'skip' },
+      comment?: string
     ) => {
       const { submitProjectPreference } = await import('./commands');
       const document = await serviceDependencies.repository.load(projectId);
@@ -3698,6 +3699,7 @@ describe('several variants from chat', () => {
           expectedHead: projectHead(document).id,
           presentations: [left, right],
           answer,
+          ...(comment ? { comment: markdownMessage(comment) } : {}),
           step: 0,
           operationId: crypto.randomUUID()
         },
@@ -3752,6 +3754,26 @@ describe('several variants from chat', () => {
         payload: { answers: last.appendedEvents.at(-1)?.id }
       });
       expect(prompted()?.question).toEqual({ text, status: 'answered' });
+    });
+
+    it('runs the turn for a note written with the last answer, asking the held question first', async () => {
+      const { result } = await asking('Who is it for?');
+      const projectId = result.document.projectId;
+      const ids = presented(result.appendedEvents).map(
+        ({ payload }) => payload.presentation.presentationId
+      );
+      await prefer(projectId, ids.slice(0, 2), { preferred: ids[1] });
+      mocks.generatePrepared
+        .mockReset()
+        .mockResolvedValue({ ...generation(undefined, 'Done.'), decision: { action: 'respond' } });
+      const last = await prefer(
+        projectId,
+        ids.slice(2, 4),
+        { preferred: ids[2] },
+        'Without the faint outline'
+      );
+      expect(replies(last.appendedEvents)[0]).toMatchObject({ releases: expect.any(Number) });
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
     });
 
     it('shows the picks applied once the last pair is answered, with no model call', async () => {

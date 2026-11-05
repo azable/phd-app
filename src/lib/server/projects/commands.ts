@@ -464,8 +464,12 @@ export async function runQueuedAssistantTurn(
       concurrentDependencies
     );
   // A question held back with comparisons is asked once the last is answered, or when the
-  // participant writes first; answers alone then wait with it for the participant's reply.
-  const answersOnly = preferences.length === interactions.length;
+  // participant writes first; answers alone then wait with it for the participant's reply. A
+  // note written with an answer is the participant writing, so the turn runs for it.
+  const noted = preferences.some(
+    (event) => event.type === 'visualization.preference-recorded' && event.payload.comment?.length
+  );
+  const answersOnly = preferences.length === interactions.length && !noted;
   if (heldQuestion(current.events) && !(answersOnly && waitingComparisons(current).length)) {
     current = await releaseHeldQuestion(current, options.operationId, concurrentDependencies);
     if (answersOnly) return { document: current, appendedEvents: appendedSince(current) };
@@ -641,11 +645,11 @@ export function submitProjectPreference(
     document = answered.document;
     if (answered.waiting) return finishMutation(before, document);
     document = await presentPicks(document, [preference.id], options.operationId, dependencies);
-    if (heldQuestion(document.events))
-      return finishMutation(
-        before,
-        await releaseHeldQuestion(document, options.operationId, dependencies)
-      );
+    if (heldQuestion(document.events)) {
+      document = await releaseHeldQuestion(document, options.operationId, dependencies);
+      // A note written with the answer is the participant writing, so the turn runs for it.
+      if (!preference.payload.comment?.length) return finishMutation(before, document);
+    }
     document = await runSverlinAssistantTurn(
       document,
       options.operationId,
