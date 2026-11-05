@@ -308,7 +308,13 @@ target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with
 a page per step, its text set in the embedded fonts the page drew it in, with
 DejaVu for characters none of them has, or the scene data itself as JSON.
 Presentations built before scene export cannot describe their steps; build them
-again.
+again. The server also draws every step's scene from the layout model, with no
+browser
+([`library/model/scene-of.ts`](src/lib/modes/sverlin/library/model/scene-of.ts)),
+and can make the PDF from it
+([`targets/pdf.server.ts`](src/lib/modes/sverlin/targets/pdf.server.ts));
+`scene-parity.browser.test.ts` compares those scenes with the page's. The Export
+menu still uses the page's scenes.
 
 Generated JavaScript is compiled but **never executed by the server** or in the
 application origin; Sverlin algorithm blocks are interpreted by trusted server
