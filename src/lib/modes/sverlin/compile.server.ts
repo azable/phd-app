@@ -1169,9 +1169,14 @@ function prepareViews(
             { code: 'view_kinds', start: sourcePosition(source, start) }
           )
       );
+    // Where the algorithm fails to run, no value has a type, so each {value} would read as text
+    // outside a node: only the algorithm's own problem is told.
+    const untyped = (problem: InvalidSvelteSourceError) =>
+      problem.code === 'view_text' &&
+      source.split('\n')[(problem.line ?? 0) - 1]?.[(problem.column ?? 0) - 1] === '{';
     viewProblems = [
       ...viewProblems,
-      ...problems,
+      ...(typed && 'failure' in typed ? problems.filter((problem) => !untyped(problem)) : problems),
       ...layoutProblems,
       ...kindLayoutProblems,
       ...linkProblems,

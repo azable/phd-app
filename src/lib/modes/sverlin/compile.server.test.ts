@@ -3024,4 +3024,42 @@ describe('cases', () => {
 </Storyboard>`;
     expect(() => prepareCurrent(source)).not.toThrow();
   });
+
+  it('tells an algorithm that fails to run alone, not each value it would have typed as text', () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 4 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  for (@first[let i = Index(values, 0)]; @more[i < values.length]; @next[i++]) @scan{
+    if (@big[values[i] > 5]) @stop{ break; }
+    values[i] = values[i] + 1;
+  }
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<Layout name="Board" of="values, i">
+  <Node>
+    <Node>{#each values as v}{v}{/each}</Node>
+    {i}
+  </Node>
+</Layout>
+<Case name="main" values={[3, 1, 7]} />
+<Storyboard>
+  <Scene name="main" case="main" pause="@scan"><Board values={values} i={i} /></Scene>
+</Storyboard>`;
+    let messages = '';
+    try {
+      prepareCurrent(source);
+    } catch (cause) {
+      const error = cause as Error & { others?: Error[] };
+      messages = [error, ...(error.others ?? [])].map(({ message }) => message).join('\n');
+    }
+    expect(messages).toContain('in none of the labels beside it');
+    expect(messages).not.toContain('Text outside a <Node>');
+  });
 });
