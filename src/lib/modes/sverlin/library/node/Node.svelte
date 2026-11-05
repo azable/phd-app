@@ -108,6 +108,7 @@
     __itemAt,
     __items,
     __places,
+    __code,
     __extent,
     __domains,
     __packedAlong,
@@ -153,6 +154,8 @@
     __items?: ArrayLike<unknown>;
     /** Internal: the places of the root's pointers at the element this node draws again, by their names (see Pointed). */
     __places?: readonly string[];
+    /** Internal: the place a caption's token names, as @i for $i[A[i]] (see captionTokens in layout-tags). */
+    __code?: string;
     /**
      * Internal: the values a view binds props to, as __bound_fill for fill={this.state}, set by the
      * compiler, with the values each can take (see bound.ts).
@@ -362,7 +365,7 @@
   const hidden = hiddenHere ? true : hiddenContext();
   // A node only keeping its room refers to nothing.
   const places = untrack(() =>
-    hidden ? [] : namedPlaces(listing, [...ownPlaces, ...(__places ?? [])])
+    hidden ? [] : namedPlaces(listing, [...ownPlaces, ...(__places ?? []), __code])
   );
   const light = untrack(() => {
     const colour = lightOf(listing, places);

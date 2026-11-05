@@ -400,7 +400,7 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'text' | 'pointed' | 'link';
+export type KindRole = 'container' | 'value' | 'text' | 'code' | 'pointed' | 'link';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -443,6 +443,7 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
   value: nodeProps,
   text: nodeProps,
+  code: nodeProps,
   pointed: [
     ...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)),
     'overflow',
@@ -612,6 +613,24 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     weight: 'normal',
     padding: 0,
     radius: 0,
+    minSize: 0,
+    ...plainStyle,
+    ...uniformSlot
+  },
+  // A caption's token, text naming a place (see listing/places.ts), drawn as inline code.
+  code: {
+    shown: true,
+    fill: 'neutral-100',
+    stroke: 'none',
+    strokeWidth: 0,
+    strokeStyle: 'solid',
+    opacity: 1,
+    color: 'neutral-800',
+    font: fontValues.includes('mono') ? 'mono' : fontValues[0],
+    textSize: 16,
+    weight: 'normal',
+    padding: 0,
+    radius: 4,
     minSize: 0,
     ...plainStyle,
     ...uniformSlot

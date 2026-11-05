@@ -388,7 +388,10 @@ the participant liked, vary it as the guide describes under Free layout.
 Where the source has a listing of its own, the context’s listingMaps gives each
 of its regions, the source each label resolved to (by its text and line), and
 whether the algorithm runs its code: check them against the listing before
-replying, and relabel a region mapped to the wrong code or never run.
+replying, and relabel a region mapped to the wrong code or never run. A caption
+can name what the listing names with the same tokens, for example
+`Lift $i[A[i]] into $key[key].`, so the words, the listing and the picture light
+together.
 
 The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),

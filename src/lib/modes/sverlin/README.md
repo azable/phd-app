@@ -1389,6 +1389,12 @@ the scenes' pauses decide whether to pause there.
   light: `fill` (the start: the token filled, a 3px band round the node),
   `underline`, `outline` (a ring), or `none`, which lights nothing and links
   nothing on hover; none takes room.
+- A token can also go in the text of a layout or a view, for example
+  `<Node kind="Note">Lift $i[A[i]] into $key[key].</Node>`. It means the same as
+  in the listing. It is drawn as inline code, a kind of its own named `Code`
+  (here `Board.Note.Code`) that starts in monospace. It lights at the same steps
+  as the listing's tokens for its place, and hovering it outlines the place's
+  other references. A token naming a place nothing renders is refused.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes

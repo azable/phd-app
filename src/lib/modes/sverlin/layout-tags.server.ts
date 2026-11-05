@@ -112,6 +112,8 @@ export function layoutTags(source: string): {
    * lacks its storyboard first.
    */
   unshown: Problem[];
+  /** The places caption tokens name, as @i for $i[A[i]], each where it is written. */
+  captions: { place: string; start: number }[];
 } {
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
   const scanned = source.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>/gu, blank);
@@ -311,6 +313,23 @@ export function layoutTags(source: string): {
       });
     }
   }
+  // A token in a caption's text, $name[text], refers to the place @name as a listing's token does
+  // (see listing/places.ts), and is drawn as inline code: a node of kind Code linked to that place.
+  const captions = captionTokens(scanned);
+  for (const token of captions) {
+    edits.push({
+      start: token.start,
+      length: token.open,
+      text: `<Node kind="Code" __code="@${token.place}">`
+    });
+    edits.push({ start: token.end, length: 1, text: '</Node>' });
+  }
+  for (const match of scanned.matchAll(/\b__code\b/gu))
+    problems.push({
+      message:
+        '__code is reserved for the library: write a token in the text, as $i[A[i]], to refer to the place @i.',
+      start: match.index ?? 0
+    });
   edits.sort((a, b) => b.start - a.start);
   let rewritten = source;
   for (const { start, length, text } of edits)
@@ -353,7 +372,8 @@ export function layoutTags(source: string): {
     problems,
     shifts,
     scenes: storyboard.scenes,
-    unshown
+    unshown,
+    captions: captions.map(({ place, start }) => ({ place: `@${place}`, start }))
   };
 }
 
@@ -411,4 +431,55 @@ export function layoutReadProblems(
         });
   }
   return problems;
+}
+
+/**
+ * Each token in the markup's text, `$name[text]`, outside tags and braces: where it starts, how long
+ * its opening is, where its closing `]` is, and the place it names; its text keeps any `[…]` in it.
+ */
+function captionTokens(
+  scanned: string
+): { start: number; open: number; end: number; place: string }[] {
+  const tokens: { start: number; open: number; end: number; place: string }[] = [];
+  let tag = false;
+  let braces = 0;
+  for (let at = 0; at < scanned.length; at++) {
+    const character = scanned[at];
+    if (braces) {
+      if (character === '{') braces++;
+      else if (character === '}') braces--;
+      continue;
+    }
+    if (character === '{') {
+      braces = 1;
+      continue;
+    }
+    if (tag) {
+      if (character === '>') tag = false;
+      continue;
+    }
+    if (character === '<') {
+      tag = true;
+      continue;
+    }
+    if (character !== '$') continue;
+    const opening = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(scanned.slice(at));
+    if (!opening) continue;
+    let depth = 0;
+    let end = -1;
+    for (let inner = at + opening[0].length; inner < scanned.length; inner++) {
+      if (scanned[inner] === '[') depth++;
+      else if (scanned[inner] === ']') {
+        if (!depth) {
+          end = inner;
+          break;
+        }
+        depth--;
+      } else if ('<{\n'.includes(scanned[inner])) break;
+    }
+    if (end < 0) continue;
+    tokens.push({ start: at, open: opening[0].length, end, place: opening[1] });
+    at = end;
+  }
+  return tokens;
 }

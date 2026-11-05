@@ -2780,3 +2780,46 @@ describe('tests of a union in a view', () => {
     ).not.toThrow();
   });
 });
+
+describe('tokens in captions', () => {
+  const captioned = (caption: string) => `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 4 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  @start[let i = Index(values, 0);]
+  while (@more[i < values.length]) @next[i++;]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<Layout name="Board" of="values, i">
+  <Node layout="column">
+    <Node layout="row">{#each values as v}{v}{/each}</Node>
+    <Node kind="Note">${caption}</Node>
+    {i}
+  </Node>
+</Layout>
+<Case name="main" values={[3, 1]} />
+<Storyboard>
+  <Scene name="scan" case="main" pause="@next"><Board values={values} i={i} /></Scene>
+</Storyboard>`;
+
+  it('draws a token as inline code, a kind of its own in monospace, linked to its place', () => {
+    const { design } = prepareSvelteComponent(captioned('Look at $i[A[i]].'));
+    expect(design.starter['Board.Note.Code.font']).toBe('mono');
+    expect(design.space).toHaveProperty('listing.places');
+  });
+
+  it('refuses a token naming a place nothing renders, and a node written with __code', () => {
+    expect(() => prepareSvelteComponent(captioned('Look at $j[A[j]].'))).toThrow(
+      'The token $j[…] names @j, which the view renders nowhere'
+    );
+    expect(() => prepareSvelteComponent(captioned('<Node __code="@i">A[i]</Node>'))).toThrow(
+      '__code is reserved for the library'
+    );
+  });
+});

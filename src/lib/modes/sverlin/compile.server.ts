@@ -803,7 +803,20 @@ export function prepareSvelteComponent(written: string): PreparedComponent {
   }));
   return {
     ...withColumnShifts(laid.shifts, () =>
-      prepareViews(tags.source, tags.views, laid.layouts, scenes, unshown)
+      prepareViews(tags.source, tags.views, laid.layouts, scenes, unshown, {
+        places: laid.captions.map(({ place }) => place),
+        unrendered: (place, rendered) =>
+          new InvalidSvelteSourceError(
+            `The token $${place.slice(1)}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.join(', ')}` : ''}.`,
+            {
+              code: 'view_markup',
+              start: sourcePosition(
+                written,
+                laid.captions.find((caption) => caption.place === place)?.start ?? 0
+              )
+            }
+          )
+      })
     ),
     source: written
   };
@@ -815,7 +828,11 @@ function prepareViews(
   viewStarts: readonly number[],
   declaredLayouts: readonly DeclaredLayout[] = [],
   scenes: readonly Scene[] = [],
-  unshown: readonly InvalidSvelteSourceError[] = []
+  unshown: readonly InvalidSvelteSourceError[] = [],
+  captions: {
+    places: readonly string[];
+    unrendered: (place: string, rendered: readonly string[]) => InvalidSvelteSourceError;
+  } = { places: [], unrendered: (place) => new InvalidSvelteSourceError(place) }
 ): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   let listingAlone = (): InvalidSvelteSourceError[] => [];
@@ -1748,6 +1765,10 @@ function prepareViews(
     for (const entry of Object.values(labelled))
       entry.sample = seen.flatMap((step) => step.labelled?.[entry.label] ?? [])[0];
     const written = listingsFrom(source, traced, algorithm, listingBlocks, [...rootPlaces.keys()]);
+    // A caption's token names a place the root renders, as a listing's does.
+    for (const place of new Set(captions.places))
+      if (!rootPlaces.has(place))
+        written.problems.push(captions.unrendered(place, [...rootPlaces.keys()].sort()));
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
@@ -1778,11 +1799,12 @@ function prepareViews(
       : undefined;
     // What the root renders at each place a shown listing's token names, which its paint is read
     // from (see placePaint).
-    const tokenPlaces = Object.fromEntries(
-      Object.values(listings ?? {}).flatMap(({ tokens = [] }) =>
+    const tokenPlaces = Object.fromEntries([
+      ...Object.values(listings ?? {}).flatMap(({ tokens = [] }) =>
         tokens.map(({ place }) => [place, rootPlaces.get(place) as RenderedPlace])
-      )
-    );
+      ),
+      ...captions.places.map((place) => [place, rootPlaces.get(place) as RenderedPlace])
+    ]);
     const placesSpace: DesignSpace = Object.keys(tokenPlaces).length
       ? { 'listing.places': [...listingPlacesOptions] }
       : {};
@@ -2954,6 +2976,8 @@ function checkProps(
   const props = libraryProps[component];
   for (const attribute of attributes) {
     if (attribute.type !== 'Attribute' || !attribute.name) continue;
+    // A caption token's node, which the build writes (see captionTokens in layout-tags).
+    if (component === 'Node' && attribute.name === '__code') continue;
     const at = { start: sourcePosition(source, attribute.start ?? start) };
     // A length a view binds is taken out before this (see bind), so one left is written elsewhere.
     if (component === 'Node' && lengthProps.has(attribute.name)) {
@@ -3437,7 +3461,10 @@ function withNodeRefs(
     }
     if (library && tag.start !== undefined) {
       const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
-      const reserved = tag.attributes?.find(({ name }) => name?.startsWith('__'));
+      // A caption token's node carries the place it names (see captionTokens in layout-tags).
+      const reserved = tag.attributes?.find(
+        ({ name }) => name?.startsWith('__') && name !== '__code'
+      );
       if (reserved)
         problems.push(
           new InvalidSvelteSourceError(
@@ -3568,6 +3595,7 @@ function withNodeRefs(
     if (name === 'Link') return 'link';
     const attributes = tag.attributes ?? [];
     const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
+    if (has('__code')) return 'code';
     const children = (tag.children ?? []).filter(
       (child) => !(child.type === 'Text' && !child.data?.trim())
     );
@@ -3577,7 +3605,7 @@ function withNodeRefs(
     return 'text';
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = ['container', 'text', 'value', 'pointed', 'link'];
+  const plainest: KindRole[] = ['container', 'text', 'code', 'value', 'pointed', 'link'];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes and the flow they set.
