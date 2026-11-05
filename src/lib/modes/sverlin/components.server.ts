@@ -783,8 +783,16 @@ export function pointerCalls(
    * has a choice of its own, of the pointer view it draws and of the choice, which its paint and
    * kinds then follow in place of its type's.
    */
-  places: ReadonlyMap<number, { view?: string; choice?: string; place: string }> = new Map()
-): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[] } {
+  places: ReadonlyMap<number, { view?: string; choice?: string; place: string }> = new Map(),
+  /**
+   * Each position type, rendered by name, with the collection it points into, the view drawing its
+   * number, and its pointer views: one drawn as its number, bare, beside its array, is warned of.
+   */
+  positions: ReadonlyMap<
+    string,
+    { into: string; numberView?: string; markViews: readonly string[] }
+  > = new Map()
+): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[]; warnings: string[] } {
   type Part = Record<string, unknown> & {
     type?: string;
     name?: string;
@@ -794,27 +802,61 @@ export function pointerCalls(
   const removals: Insertion[] = [];
   const calls: string[] = [];
   const problems: ComponentProblem[] = [];
+  const warnings: string[] = [];
+  const warned = new Set<number>();
   const text = (node: Part) => source.slice(node.start, node.end);
   // The layout a pointer is rendered in, so a presentation showing another neither draws it nor
   // keeps room for it.
   let layout: string | undefined;
   // The layout drawn by tag a pointer is written in, where a position draws nothing.
   let drawnByTag: string | undefined;
+  // What each type's render draws, as values for {@render Values(values)}: the first of each.
+  const rendered = new Map<string, string>();
+  const gather = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(gather);
+    const part = node as Part;
+    if (part.type === 'RenderTag') {
+      const call = part.expression as Part;
+      const name = (call?.callee as Part | undefined)?.name;
+      const [argument] = (call?.arguments as Part[] | undefined) ?? [];
+      if (typeof name === 'string' && argument && !rendered.has(name))
+        rendered.set(name, text(argument));
+    }
+    for (const [key, child] of Object.entries(part)) if (key !== 'parent') gather(child);
+  };
+  gather(markup);
   const visit = (
     node: unknown,
     where: 'top' | 'block' | 'component',
     conditions: readonly string[] = [],
-    inNode = false
+    inNode = false,
+    // Whether the node around holds words of its own, as at {i}, which a number reads in.
+    words = false
   ): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
-      for (const item of node) visit(item, where, conditions, inNode);
+      for (const item of node) visit(item, where, conditions, inNode, words);
       return;
     }
     const part = node as Part;
     if (part.type === 'RenderTag') {
       const call = part.expression as Part;
       const name = (call?.callee as Part | undefined)?.name;
+      const numbered = typeof name === 'string' ? positions.get(name) : undefined;
+      if (numbered && inNode && !words && !warned.has(part.start ?? 0)) {
+        // A bare position, in no words, in a source drawing its array, was likely meant as a mark.
+        const [argument] = (call.arguments as Part[] | undefined) ?? [];
+        // Its collection drawn in the source, as a render of the collection's type.
+        const drawn = rendered.get(numbered.into);
+        if (drawn && argument) {
+          warned.add(part.start ?? 0);
+          const written = `{${text(argument)}}`;
+          warnings.push(
+            `${written} draws as its number${numbered.numberView ? ` (${numbered.numberView})` : ''}, not on the element of ${drawn} it points to, because it is inside a node within the layout's root. To mark the element, put ${written} directly in the root's node; to show the number, put it in words, as <Node>at ${written}</Node>.${numbered.markViews.length ? ` ${numbered.markViews.join(', ')}, a pointer view of its type, is drawn only from the root.` : ''}`
+          );
+        }
+      }
       if (typeof name !== 'string' || !pointers.has(name)) return;
       if (inNode && pointers.get(name)?.plainInNode) return;
       const [argument] = (call.arguments as Part[] | undefined) ?? [];
@@ -877,14 +919,14 @@ export function pointerCalls(
     const named = where === 'top' ? layoutNameOf(part) : undefined;
     if (named !== undefined) {
       layout = named;
-      visit(part.children, where, conditions, inNode);
+      visit(part.children, where, conditions, inNode, words);
       layout = undefined;
       return;
     }
     if (part.type === 'IfBlock' && where === 'top') {
       const test = `(${text(part.expression as Part)})`;
-      visit(part.children, where, [...conditions, test], inNode);
-      visit(part.else, where, [...conditions, `!${test}`], inNode);
+      visit(part.children, where, [...conditions, test], inNode, words);
+      visit(part.else, where, [...conditions, `!${test}`], inNode, words);
       return;
     }
     // A layout drawn by tag is a snippet with no parameters by now; a view's takes its value.
@@ -909,9 +951,15 @@ export function pointerCalls(
             part.type !== 'Fragment'
           ? 'block'
           : where;
-    const inside = inNode || (part.type === 'InlineComponent' && part.name === 'Node');
+    const isNode = part.type === 'InlineComponent' && part.name === 'Node';
+    const inside = inNode || isNode;
+    const worded = isNode
+      ? ((part.children as Part[] | undefined) ?? []).some(
+          (child) => child.type === 'Text' && String(child.data ?? '').trim()
+        )
+      : words;
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions, inside);
+      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions, inside, worded);
   };
   /** An {#each} over a label's values so far whose only content is a pointer at each. */
   const listPointer = (each: Part): { view: string; list: string } | undefined => {
@@ -939,7 +987,7 @@ export function pointerCalls(
       : undefined;
   };
   visit(markup, 'top');
-  return { removals, calls, problems };
+  return { removals, calls, problems, warnings };
 }
 
 /**

@@ -294,6 +294,8 @@ export type PreparedComponent = {
   listingWarnings?: string[];
   /** Each input the view draws but neither the algorithm nor another input reads, told to the assistant. */
   inputWarnings?: string[];
+  /** Each bare position drawn as its number where a mark was likely meant, told to the assistant. */
+  positionWarnings?: string[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -2061,7 +2063,18 @@ function prepareViews(
         })
       ),
       scoped,
-      pointerPlaces
+      pointerPlaces,
+      // Each position type with a view drawing its number, for a bare one drawn beside its array.
+      new Map(
+        Object.entries(chosen).flatMap(([type, options]) => {
+          const into = viewing.atoms[type]?.index;
+          if (!into) return [];
+          const markViews = found.components
+            .filter((view) => view.type === type && found.pointers.has(view.name))
+            .map((view) => view.name);
+          return [[type, { into, numberView: options[0], markViews }] as const];
+        })
+      )
     );
     if (pointers.problems.length)
       throw InvalidSvelteSourceError.combine(
@@ -2304,6 +2317,7 @@ function prepareViews(
       ownListings,
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
+      ...(pointers.warnings.length ? { positionWarnings: pointers.warnings } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2500,6 +2514,7 @@ export async function bundlePresentation(
   const warnings: string[] = [
     ...(prepared.listingWarnings ?? []),
     ...(prepared.inputWarnings ?? []),
+    ...(prepared.positionWarnings ?? []),
     ...variant.dropped
   ];
   const entries = scenes.flatMap((scene, sceneIndex) => {

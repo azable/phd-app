@@ -833,6 +833,31 @@ describe('pointers', () => {
     expect(built.layout.drawing).toContain('Mark.Pointed: 1 box');
   });
 
+  it('warns of a bare position drawn as its number beside the array it points into', async () => {
+    // Project 10c556d3 drew {i} in a column beside {values}, nested in the root, printing a lone
+    // number under the row, with its pointer view PositionMark unused.
+    const page = (inner: string) =>
+      `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 4 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[3, 1]} /><script algorithm>for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @scan{ @look[const v = values[i];] }</script><View of="Int" name="Cell"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<View of="Index" name="IndexNumber"><Node value={this} /></View>\n<View of="Index" name="PositionMark"><Pointed /></View>\n<Layout name="Main"><Node>${inner}</Node></Layout>\n<Storyboard><Scene name="main" case="main" pause="@scan.look"><Main /></Scene></Storyboard>`;
+    const warned = await bundlePresentation(
+      prepareSvelteComponent(page('<Node layout="column">{values}{i}</Node>')),
+      1,
+      {}
+    );
+    expect(warned.warnings).toContainEqual(
+      expect.stringContaining(
+        "{i} draws as its number (IndexNumber), not on the element of values it points to, because it is inside a node within the layout's root. To mark the element, put {i} directly in the root's node"
+      )
+    );
+    expect(warned.warnings?.join(' ')).toContain('PositionMark');
+    // In words a number is meant.
+    const worded = await bundlePresentation(
+      prepareSvelteComponent(page('<Node layout="column">{values}<Node>at {i}</Node></Node>')),
+      1,
+      {}
+    );
+    expect(worded.warnings?.join(' ') ?? '').not.toContain('draws as its number');
+  });
+
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
       view(
