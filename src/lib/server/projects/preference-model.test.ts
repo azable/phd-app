@@ -183,7 +183,17 @@ describe('settling', () => {
     answer('IntCell', 'IntTally', 'right');
     answer('IntCell', 'IntTally', 'right');
     answer('IntCell', 'IntTally', 'left');
-    expect(stateOf(events)).toMatchObject({ state: 'open' });
+    expect(stateOf(events)).toMatchObject({
+      state: 'open',
+      reversed: { earlier: 'IntTally', later: 'IntCell' }
+    });
+  });
+
+  it('marks no reversal where answers agree', () => {
+    const { events, answer } = project();
+    answer('IntCell', 'IntTally', 'right');
+    answer('IntTally', 'IntCell', 'left');
+    expect(stateOf(events)).not.toHaveProperty('reversed');
   });
 
   it('makes a choice either while either is fine is its latest answer', () => {

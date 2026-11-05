@@ -443,6 +443,8 @@ export type ChoiceState = {
   answers: number;
   /** The options the answers compared. */
   compared: DesignValue[];
+  /** Where a later answer preferred the option an earlier one turned down: the two, earlier first. */
+  reversed?: { earlier: DesignValue; later: DesignValue };
 };
 
 /**
@@ -481,10 +483,19 @@ export function choiceStates(evidence: PreferenceEvidence): Map<string, ChoiceSt
         )
       )
     ];
+    const won = new Set<string>();
+    let reversed: ChoiceState['reversed'];
+    for (const entry of entries) {
+      if (entry.kind !== 'answer' || entry.duel.outcome !== 'win') continue;
+      const [winner, loser] = [entry.duel.first[variable], entry.duel.second[variable]];
+      if (won.has(JSON.stringify([loser, winner]))) reversed = { earlier: loser, later: winner };
+      won.add(JSON.stringify([winner, loser]));
+    }
     const common = {
       variable,
       answers: entries.length,
       compared,
+      ...(reversed ? { reversed } : {}),
       ...(belief ? { likeliest: belief.likeliest, probability: belief.probability } : {})
     };
     const last = entries.at(-1)!;

@@ -80,6 +80,8 @@ export type AiChoice = {
   compared: number;
   /** Options it has that no answer compared. */
   unexplored: number;
+  /** A later answer preferred what an earlier one turned down. */
+  reversed?: { earlier: DesignValue; later: DesignValue };
 };
 
 /** A question worth asking next: one choice, or a family's choices asked together (colours). */
@@ -268,6 +270,7 @@ export function preferenceSummary(
       answers: state.answers,
       compared,
       unexplored: Math.max(0, options.length - compared),
+      ...(state.reversed ? { reversed: state.reversed } : {}),
       impact
     });
   }
@@ -293,7 +296,10 @@ export function preferenceSummary(
     .toSorted((a, b) => b.worth - a.worth)
     .slice(0, listedAskNext)
     .map((entry) => ({ ...entry, worth: rounded(entry.worth) }));
-  const listed = touched.toSorted((a, b) => b.impact - a.impact).slice(0, listedChoices);
+  // A reversed choice first, so the bound never hides one the assistant should ask about.
+  const listed = touched
+    .toSorted((a, b) => Number(!!b.reversed) - Number(!!a.reversed) || b.impact - a.impact)
+    .slice(0, listedChoices);
   return {
     answered: answered.size,
     later: evidence.skipped,
