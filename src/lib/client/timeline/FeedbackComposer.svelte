@@ -49,7 +49,7 @@
      * The pair on the stage, answered here in place of Submit: picking an answer sends the draft
      * with it as its comment (see PresentationStage.svelte, `pairAnswers`).
      */
-    pair?: PairAnswers & { question?: string; onanswer: (answer: string) => void };
+    pair?: PairAnswers & { key: string; question?: string; onanswer: (answer: string) => void };
   };
 
   let {
@@ -62,8 +62,11 @@
     base,
     baseSource,
     steps = {},
-    pair
+    pair: offered
   }: Props = $props();
+  // The pair the participant chose to write about something else instead, until another shows.
+  let writingInstead = $state<string>();
+  const pair = $derived(offered && offered.key !== writingInstead ? offered : undefined);
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
   let hasContent = $state(false);
@@ -364,6 +367,18 @@
                 {text}
               </Button>
             {/each}
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Write a message about something else; the pair stays open"
+              onclick={() => {
+                writingInstead = pair?.key;
+                enterWithPair = false;
+              }}
+              disabled={session.readOnly}
+            >
+              Write instead
+            </Button>
           </div>
           {#if enterWithPair && hasContent && !pair.waiting}
             <p class="border-t px-3 py-1.5 text-sm text-muted-foreground" role="status">

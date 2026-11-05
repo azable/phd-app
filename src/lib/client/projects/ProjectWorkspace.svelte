@@ -287,6 +287,7 @@
       chosenFailure === undefined &&
       answers
       ? {
+          key: visiblePresentations.map(({ presentation }) => presentation.presentationId).join(),
           question: pairQuestion(visiblePresentations),
           ...answers,
           onanswer: (answer: string) => presentationStage?.prefer(answer)
