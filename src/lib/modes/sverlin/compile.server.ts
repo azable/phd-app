@@ -2874,7 +2874,9 @@ export function leftOutOf(
 }
 
 const sverlinBlock = /<script\s+(domain|input|algorithm|design)\s*>([\s\S]*?)<\/script\s*>/giu;
-const listingBlock = /<script\s+listing\s*=\s*(["'])([\w-]*)\1\s*>([\s\S]*?)<\/script\s*>/giu;
+// A listing's name may be words, as "C code" or "c++", its first word choosing the language
+// (see listing/syntax.ts languageOf).
+const listingBlock = /<script\s+listing\s*=\s*(["'])([\w+#. -]*)\1\s*>([\s\S]*?)<\/script\s*>/giu;
 /** A script's own attributes, as Svelte's (`lang="ts"`, `module`) on a view's script by habit. */
 const scriptOpening = /<script\b([^>]*)>/giu;
 const svelteAttributes =

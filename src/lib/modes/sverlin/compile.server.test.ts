@@ -20,6 +20,7 @@ import bst from './fixtures/bst.sverlin?raw';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import heapTree from './fixtures/heap-tree.sverlin?raw';
 import listMarkers from './fixtures/list-markers.sverlin?raw';
+import listingPython from './fixtures/listing-python.sverlin?raw';
 import { buildVariant } from './design.server';
 import { iconNames } from './library/fonts';
 
@@ -3062,4 +3063,17 @@ describe('cases', () => {
     expect(messages).toContain('in none of the labels beside it');
     expect(messages).not.toContain('Text outside a <Node>');
   });
+});
+
+describe('listing names', () => {
+  it.each(['C code', 'c++', 'Python 3'])(
+    'takes a listing named %s, whose first word chooses its language',
+    (name) => {
+      const source = listingPython.replace(
+        '<script listing="python">',
+        `<script listing="${name}">`
+      );
+      expect(() => prepareCurrent(source)).not.toThrow();
+    }
+  );
 });
