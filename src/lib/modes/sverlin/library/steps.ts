@@ -35,7 +35,15 @@ export type StepListing = {
   lit: [number, number][][];
   /** Where its tokens name places the variant lights: those places, and which each step touches. */
   places?: ListingPlaces & { touched: string[][] };
+  /** Its keywords to draw in bold, and with colour every kind of word in its colour too. */
+  syntax?: ListingSyntax;
 } | null;
+
+/** A listing's syntax as the page draws it (see listing/syntax.ts). */
+export type ListingSyntax = {
+  colour: boolean;
+  spans: { kind: 'keyword' | 'string' | 'comment' | 'number'; start: number; end: number }[];
+};
 
 /**
  * A listing's tokens, each naming a place (see listing/places.server.ts), how a place lights
@@ -252,6 +260,7 @@ export function stepsOf(
                 text: listing.text,
                 regions: listing.regions,
                 lit: listing.lit[stepOf(step)] ?? [],
+                ...(listing.syntax ? { syntax: listing.syntax } : {}),
                 ...(listing.places
                   ? {
                       places: {

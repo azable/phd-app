@@ -1,0 +1,46 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 99 });
+  const Values = array(Int, { max: 6 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+  const target = Int;
+</script>
+
+<script algorithm>
+  @start[let i = Index(values, 0);]
+  while (@more[i < values.length]) @scan{
+    if (@hit[values[i] === target]) @found{ return; }
+    @next[i++;]
+  }
+  @missing[return;]
+</script>
+
+<script listing="python">
+def linear_search(values, target):
+    @start[i = 0]
+    while @more[i < len(values)]:
+        @scan[if @hit[values[i] == target]:
+            @found[return i]  # found it
+        @next[i += 1]]
+    @missing[return None]
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+
+<Layout name="Search" of="values, i">
+  <Node layout="row">
+    <Listing />
+    <Node>{#each values as v}{v}{/each}</Node>
+    {i}
+  </Node>
+</Layout>
+
+<Case name="main" values={[4, 9, 2, 7, 5]} target={7} />
+
+<Storyboard>
+  <Scene name="search" case="main" pause="@more, @scan.hit, @scan.next"><Search values={values} i={i} /></Scene>
+</Storyboard>

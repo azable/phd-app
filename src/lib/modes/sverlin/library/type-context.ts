@@ -9,7 +9,7 @@ import { placedKind, type DesignValues, type Place } from './node/design';
 import type { ShownFrame } from './fit';
 import type { Layout } from './node/props';
 import type { SpanInput, SpanLayout } from './node/span';
-import type { ListingPlaces } from './steps';
+import type { ListingPlaces, ListingSyntax } from './steps';
 
 export type TypeContext = {
   /** The atomic type name of item `index` of a container taken from the props, if typed. */
@@ -160,6 +160,8 @@ export type ShownListing = {
   /** Where its tokens name places the variant lights, those, and the places the step touches. */
   places?: ListingPlaces;
   touched?: readonly string[];
+  /** Its keywords in bold, and with colour every kind of word in its colour too. */
+  syntax?: ListingSyntax;
 };
 
 export function listingContext(): ShownListing | undefined {

@@ -1466,6 +1466,12 @@ the scenes' pauses decide whether to pause there.
   to its label's mark where the root draws the label as a pointer, so the code a
   mark stands for looks as its cell does, otherwise to `listing.lit`. A region
   in another paint than the region around it is drawn inside it.
+- `listing.syntax` sets how the listing's words look: `keywords` (the starter)
+  draws its keywords in bold, as textbooks print them; `colour` also colours
+  keywords, strings, comments and numbers; `none` draws plain text. The
+  listing's name chooses its keywords: `python`, `javascript`, `java` or `c`,
+  and any other name, such as `textbook`, reads as pseudocode (for, while, if,
+  then, return, to, …). Lit code keeps its own colour over the syntax colour.
 
 Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 `key`:

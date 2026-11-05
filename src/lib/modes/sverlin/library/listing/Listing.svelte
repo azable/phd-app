@@ -25,24 +25,50 @@
   const id = ref ? nodeIds?.claim(ref) : undefined;
 
   type Paint = { fill: unknown; stroke: unknown; color: unknown };
-  /** Text, as a token naming a place where it is one (see listing/places.ts). */
-  type Leaf = { text: string; place?: string };
+  type Kind = 'keyword' | 'string' | 'comment' | 'number';
+  /** Text, as a token naming a place where it is one (see listing/places.ts), and its syntax. */
+  type Leaf = { text: string; place?: string; kind?: Kind; lit?: boolean };
   type Piece = Leaf | { paint: Paint; outer: boolean; pieces: Piece[] };
-  type Character = { text: string; lit: boolean; chain: readonly string[]; place?: string };
+  type Character = {
+    text: string;
+    lit: boolean;
+    chain: readonly string[];
+    place?: string;
+    kind?: Kind;
+  };
 
   const regions = listing?.regions ?? [];
   const tokens = listing?.places?.tokens ?? [];
   const tokenAt = (at: number) => tokens.find(({ start, end }) => start <= at && at < end)?.place;
-  // Text split where tokens start and end, each token a leaf of its own.
+  const syntax = listing?.syntax;
+  const kindAt = (at: number) =>
+    syntax?.spans.find(({ start, end }) => start <= at && at < end)?.kind;
+  // Text split where tokens and syntax spans start and end, each a leaf of its own.
   const leavesOf = (characters: readonly Character[]): Leaf[] => {
     const leaves: Leaf[] = [];
-    for (const { text, place } of characters) {
+    for (const { text, place, kind, lit } of characters) {
       const last = leaves.at(-1);
-      if (last && last.place === place) last.text += text;
-      else leaves.push(place ? { text, place } : { text });
+      if (last && last.place === place && last.kind === kind) last.text += text;
+      else leaves.push({ text, ...(place ? { place } : {}), ...(kind ? { kind, lit } : {}) });
     }
     return leaves;
   };
+  // A keyword in bold; with colour each kind in its colour, except in lit code, which keeps its own.
+  const syntaxColours: Record<Kind, string> = {
+    keyword: 'violet-700',
+    string: 'emerald-700',
+    comment: 'neutral-500',
+    number: 'amber-700'
+  };
+  const syntaxStyle = (leaf: Leaf) =>
+    leaf.kind
+      ? [
+          leaf.kind === 'keyword' ? 'font-weight:700' : '',
+          syntax?.colour && !leaf.lit ? `color:${colourCss(syntaxColours[leaf.kind])}` : ''
+        ]
+          .filter(Boolean)
+          .join(';')
+      : undefined;
   // A token lights in its place's colour at a step touching the place.
   const tokenStyle = (place: string) => {
     const colour = lightOf(listing, [place]);
@@ -99,7 +125,8 @@
         text: character,
         lit: at >= first && at < last && litAt(offset + at),
         chain: chainOf(offset + at),
-        place: tokenAt(offset + at)
+        place: tokenAt(offset + at),
+        kind: kindAt(offset + at)
       }));
       offset += text.length + 1;
       return {
@@ -137,7 +164,10 @@
       >{:else if piece.place}<span
         data-sv-place={piece.place}
         data-sv-kind="listing-token"
-        style={tokenStyle(piece.place)}>{piece.text}</span
+        style={[tokenStyle(piece.place), syntaxStyle(piece)].filter(Boolean).join(';')}
+        >{piece.text}</span
+      >{:else if piece.kind}<span data-sv-syntax={piece.kind} style={syntaxStyle(piece)}
+        >{piece.text}</span
       >{:else}{piece.text}{/if}{/each}{/snippet}
 
 {#if listing}

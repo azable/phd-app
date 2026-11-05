@@ -49,6 +49,7 @@ import {
 } from './label-values';
 import type { Listing, PlaceToken } from './listing/listing';
 import { mappedListing, type RegionMap } from './listing/mapped.server';
+import { syntaxSpans } from './listing/syntax';
 import {
   placePaint,
   tokenProblems,
@@ -2695,9 +2696,22 @@ export function shownListing(
   const look = values['listing.places'] as ListingPlacesLook | undefined;
   const tokens = listed.tokens ?? [];
   const placed = prepared.tokenPlaces ?? {};
+  const syntax = values['listing.syntax'];
   return {
     text: listed.text,
     regions: listed.regions,
+    ...(syntax === 'keywords' || syntax === 'colour'
+      ? {
+          syntax: {
+            colour: syntax === 'colour',
+            spans: syntaxSpans(
+              listed.text,
+              language as string,
+              syntax === 'colour' ? 'all' : 'keywords'
+            )
+          }
+        }
+      : {}),
     lit: steps.map(({ current, earlier }) =>
       [...current, ...earlier].map(([start, end]): [number, number] => [start, end])
     ),

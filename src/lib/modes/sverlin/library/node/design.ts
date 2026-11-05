@@ -373,6 +373,8 @@ export const listingOptions: Record<string, readonly (string | number)[]> & {
   'listing.language': readonly string[];
 } = {
   'listing.language': ['none'],
+  // Keywords in bold, as textbooks print them, or every kind of word in its colour too.
+  'listing.syntax': ['none', 'keywords', 'colour'],
   ...Object.fromEntries(
     Object.entries(listingLitOptions).map(([prop, options]) => [`listing.lit.${prop}`, options])
   )
@@ -380,6 +382,7 @@ export const listingOptions: Record<string, readonly (string | number)[]> & {
 
 export const starterListing: Record<string, string | number> & { 'listing.language': string } = {
   'listing.language': 'none',
+  'listing.syntax': 'keywords',
   'listing.lit.fill': 'amber-200',
   'listing.lit.stroke': 'none',
   'listing.lit.strokeWidth': 0,

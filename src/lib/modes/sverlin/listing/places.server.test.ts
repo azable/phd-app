@@ -148,7 +148,7 @@ describe('tokens naming places in a listing', () => {
       prepareSvelteComponent(binarySearch(tokened)).listings?.pseudocode.text
     );
     const listing = shownListing(prepared, prepared.design.starter, prepared.paced(new Set()).lit);
-    expect(listing && Object.keys(listing)).toEqual(['text', 'regions', 'lit']);
+    expect(listing && Object.keys(listing)).toEqual(['text', 'regions', 'syntax', 'lit']);
   });
 
   it('touch a place where a token overlaps the code the step itself ran', () => {
