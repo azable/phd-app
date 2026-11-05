@@ -1,0 +1,141 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = array(Vertex, { max: 6 });
+  const VertexRef = index(Vertices);
+  const Neighbours = array(VertexRef, { max: 3 });
+  const Slot = index(Neighbours);
+  const Adjacency = array(Neighbours, { max: 6 });
+  const Row = index(Adjacency);
+  const Queue = array(VertexRef, { max: 6 });
+</script>
+
+<script input>
+  const vertices = Vertices;
+  const adjacency = Adjacency;
+</script>
+
+<script algorithm>
+  @init[let queue = Queue([0]);]
+  while (@more[queue.length > 0]) @visit{
+    @take[const current = queue[0];
+    queue.shift();
+    const row = Row(adjacency, current);
+    const around = adjacency[row];]
+    for (
+      @first[let slot = Slot(around, 0)];
+      @another[slot < around.length];
+      @step[slot++]
+    ) @look{
+      const w = around[slot];
+      if (@check[!vertices[w].seen]) @add{
+        vertices[w].seen = true;
+        queue.push(w);
+      }
+    }
+  }
+</script>
+
+<View of="Name" name="NameText">
+  <Node value={this} />
+</View>
+
+<View of="Vertex" name="VertexCard">
+  <Node fill={this.seen}>{this.name}</Node>
+</View>
+
+<View of="Queue" name="QueueItems">
+  <Node>
+    {#each this as item}
+      {at(item).name}
+    {/each}
+  </Node>
+</View>
+
+<View of="VertexRef" name="CurrentMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="CurrentLabel">current</Node>
+  </Node>
+</View>
+
+<View of="VertexRef" name="NeighbourMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="NeighbourLabel">neighbour</Node>
+  </Node>
+</View>
+
+<Layout name="Title">
+  <Node>Breadth-first search from A</Node>
+</Layout>
+
+<Layout name="Graph">
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      {vertex}
+      {#each adjacency[k] as neighbour}
+        <Link from={k} to={neighbour} />
+      {/each}
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="QueueLine">
+  <Node layout="row">
+    <Node kind="QueueLabel">queue</Node>
+    {queue}
+  </Node>
+</Layout>
+
+<Layout name="Status">
+  <Node layout="stack">
+    <Node when="@init">Start with A in the queue.</Node>
+    <Node when="@visit.take">
+      Remove the front vertex and inspect its neighbours.
+    </Node>
+    <Node when="@visit.look.check">
+      Check whether this neighbour has already been discovered.
+    </Node>
+    <Node when="@visit.look.add">
+      Mark the new neighbour and add it to the back of the queue.
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Stacked">
+  <Node layout="column">
+    <Title />
+    <Graph />
+    <QueueLine />
+    <Status />
+    {current}
+    {w}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false },
+    { name: 'F', seen: false }
+  ]}
+  adjacency={[[1, 2], [3, 4], [3], [5], [5], []]}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    title="BFS from A"
+    case="main"
+    pause="@init, @visit.take, @visit.look.check, @visit.look.add"
+  >
+    <Stacked />
+  </Scene>
+</Storyboard>
+

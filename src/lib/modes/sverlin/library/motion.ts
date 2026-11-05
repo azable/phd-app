@@ -289,7 +289,7 @@ export function animateStep(
   before: HTMLElement,
   after: HTMLElement,
   copies: Readonly<Record<number, number>>
-): { gone: HTMLElement[] } {
+): { gone: Element[] } {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return { gone: [] };
   const old = placedByIdentity(before);
   const now = placedByIdentity(after);
@@ -435,46 +435,152 @@ export function animateStep(
       easing
     });
 
-  // A link drawn anew, or along another route, is drawn where its ends will be once the moves end,
-  // so while a pointer's caption or a node is still moving it would hang in empty space: it waits
-  // for the moves, then fades in.
-  const routes = (layer: HTMLElement) =>
-    [...layer.querySelectorAll<SVGPathElement>('path[data-sv-edge]')].map((path) => ({
-      path,
-      key: path.dataset.svEdgeId ?? path.dataset.svEdge ?? '',
-      route: path.getAttribute('d') ?? ''
-    }));
-  const redrawn = rerouted(routes(before), routes(after));
-  for (const { path } of redrawn)
+  // A link both steps draw follows its ends: its route changes over the move, in step with the
+  // nodes, whether they move or a pointer's caption under one comes or goes, so it never detaches
+  // or vanishes. A link new here is drawn where its ends will be once the moves end, so it fades in
+  // as they finish; one the step before drew alone fades out with that step's gone values.
+  const links = linkChanges(routesOf(before), routesOf(after));
+  for (const { path, from, to } of links.follow) followRoute(path, from, to);
+  for (const { path } of links.appear)
     path.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], {
       duration: motionDuration,
       easing
     });
 
   // Gone too: a value drawn in a place before that no place now pairs with.
-  const gone = [...old].flatMap(([identity, placed]) =>
+  const gone: Element[] = [...old].flatMap(([identity, placed]) =>
     now.has(identity)
       ? placed.filter(({ element }) => !paired.has(element)).map(({ element }) => element)
       : placed.map(({ element }) => element)
   );
-  for (const element of gone) element.dataset.svGone = '';
+  gone.push(...links.gone.map(({ path }) => path));
+  for (const element of gone) element.setAttribute('data-sv-gone', '');
   return { gone };
 }
 
-/** The links of the step shown now that the one before drew elsewhere, or not at all, by key. */
-export function rerouted<T extends { key: string; route: string }>(
-  before: readonly { key: string; route: string }[],
-  after: readonly T[]
-): T[] {
-  const was = new Map(before.map(({ key, route }) => [key, route]));
-  return after.filter(({ key, route }) => was.get(key) !== route);
+type Route<P> = { path: P; key: string; route: string };
+
+/** A layer's link lines, each keyed by its link, a second line of one link by its place among them. */
+function routesOf(layer: HTMLElement): Route<SVGPathElement>[] {
+  const seen = new Map<string, number>();
+  return [...layer.querySelectorAll<SVGPathElement>('path[data-sv-edge]')].map((path) => {
+    const link = path.dataset.svEdgeId || path.dataset.svEdge || '';
+    const nth = seen.get(link) ?? 0;
+    seen.set(link, nth + 1);
+    return { path, key: `${link}#${nth}`, route: path.getAttribute('d') ?? '' };
+  });
+}
+
+/**
+ * How a step's links relate to the step before's, by key: those both draw along another route,
+ * which follow their ends from the old route to the new; those new here; those gone.
+ */
+export function linkChanges<P>(
+  before: readonly Route<P>[],
+  after: readonly Route<P>[]
+): {
+  follow: { path: P; from: string; to: string }[];
+  appear: Route<P>[];
+  gone: Route<P>[];
+} {
+  const was = new Map(before.map((route) => [route.key, route]));
+  const now = new Set(after.map(({ key }) => key));
+  return {
+    follow: after.flatMap(({ path, key, route }) => {
+      const old = was.get(key);
+      return old && old.route !== route ? [{ path, from: old.route, to: route }] : [];
+    }),
+    appear: after.filter(({ key }) => !was.has(key)),
+    gone: before.filter(({ key }) => !now.has(key))
+  };
+}
+
+const numbers = /-?\d*\.?\d+(?:e-?\d+)?/giu;
+
+/**
+ * The route between two at a share `t` of the way, where both are written alike, the same commands
+ * with only their numbers differing, as a curve between the same ends moving; undefined otherwise.
+ */
+export function routeAt(from: string, to: string, t: number): string | undefined {
+  const a = from.match(numbers) ?? [];
+  const b = to.match(numbers) ?? [];
+  if (a.length !== b.length || from.replace(numbers, '#') !== to.replace(numbers, '#'))
+    return undefined;
+  let index = 0;
+  return to.replace(numbers, () => {
+    const start = Number(a[index]);
+    const end = Number(b[index]);
+    index += 1;
+    return String(Math.round((start + (end - start) * t) * 100) / 100);
+  });
+}
+
+/** Points along a route, evenly by length, so two routes written differently can be eased between. */
+function pointsAlong(svg: SVGSVGElement, route: string, count: number): DOMPoint[] {
+  const probe = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  probe.setAttribute('d', route);
+  probe.style.visibility = 'hidden';
+  svg.append(probe);
+  const length = probe.getTotalLength();
+  const points = Array.from({ length: count }, (_, i) =>
+    probe.getPointAtLength((length * i) / (count - 1))
+  );
+  probe.remove();
+  return points;
+}
+
+// The links following their ends now, each finished at once by finishMotion.
+const following = new Map<SVGPathElement, () => void>();
+
+/**
+ * Ease a link's line from its old route to its new over the move, in step with the nodes it joins:
+ * its numbers where the two are written alike, else points along each. It stops where anything else
+ * redraws the line meanwhile, as its layout laid out again.
+ */
+function followRoute(path: SVGPathElement, from: string, to: string): void {
+  following.get(path)?.();
+  const svg = path.ownerSVGElement;
+  let at = (t: number) => routeAt(from, to, t);
+  if (routeAt(from, to, 0) === undefined && svg) {
+    const [a, b] = [pointsAlong(svg, from, 33), pointsAlong(svg, to, 33)];
+    at = (t) =>
+      a
+        .map((p, i) => {
+          const q = b[i];
+          const x = Math.round((p.x + (q.x - p.x) * t) * 100) / 100;
+          const y = Math.round((p.y + (q.y - p.y) * t) * 100) / 100;
+          return `${i ? 'L' : 'M'}${x},${y}`;
+        })
+        .join(' ');
+  }
+  if (at(0) === undefined) return;
+  // An empty animation keeps the move's time and easing, so the line keeps pace with the nodes.
+  const clock = path.animate([{}, {}], { duration: motionDuration, easing });
+  let written = at(0)!;
+  path.setAttribute('d', written);
+  const finish = () => {
+    following.delete(path);
+    if (path.getAttribute('d') === written) path.setAttribute('d', to);
+  };
+  following.set(path, finish);
+  const frame = () => {
+    if (following.get(path) !== finish) return;
+    if (path.getAttribute('d') !== written) return void following.delete(path);
+    const progress = clock.effect?.getComputedTiming().progress;
+    if (clock.playState === 'finished' || progress === null || progress === undefined)
+      return finish();
+    written = at(progress) ?? to;
+    path.setAttribute('d', written);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 
 /**
  * Keep the layer shown before over the new one while its gone values fade out, then call `done`
  * to remove it. Everything else in it is hidden at once.
  */
-export function leaveLayer(layer: HTMLElement, gone: HTMLElement[], done: () => void): void {
+export function leaveLayer(layer: HTMLElement, gone: Element[], done: () => void): void {
   if (!gone.length) return done();
   layer.classList.add('sv-leaving');
   const fades = gone.map((element) =>
@@ -490,4 +596,5 @@ export function leaveLayer(layer: HTMLElement, gone: HTMLElement[], done: () => 
 /** Finish every move and fade still running in a layer, so it is measured where it ends. */
 export function finishMotion(layer: HTMLElement): void {
   for (const animation of layer.getAnimations({ subtree: true })) animation.finish();
+  for (const [path, finish] of following) if (layer.contains(path)) finish();
 }
