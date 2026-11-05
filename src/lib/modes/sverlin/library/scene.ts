@@ -92,6 +92,8 @@ export type SceneText = {
   overLinks?: true;
   /** The places it refers to, as a listing's token names them (see listing/places.ts). */
   places?: string[];
+  /** Where its baseline is, its font's ascent below the top of its box, as the page draws it. */
+  baseline?: number;
 };
 
 /** Paint behind a stretch of text: its box, colours, corners, and stroke drawn inside it. */

@@ -37,7 +37,8 @@ const sceneTextSchema = v.strictObject({
   decoration: v.optional(v.picklist(['underline', 'strike'])),
   case: v.optional(v.picklist(['uppercase', 'small-caps'])),
   overLinks: v.optional(v.literal(true)),
-  places: v.optional(v.pipe(v.array(text), v.maxLength(100)))
+  places: v.optional(v.pipe(v.array(text), v.maxLength(100))),
+  baseline: v.optional(coordinate)
 });
 
 const sceneMarkSchema = v.strictObject({

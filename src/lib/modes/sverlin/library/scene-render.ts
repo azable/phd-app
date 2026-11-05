@@ -433,7 +433,10 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
         ? node.runs.map((run, i) => ({
             ...run,
             box: mixBox(old.runs[i].box, run.box, t),
-            color: mixColour(old.runs[i].color, run.color, t) ?? run.color
+            color: mixColour(old.runs[i].color, run.color, t) ?? run.color,
+            ...(run.baseline !== undefined && old.runs[i].baseline !== undefined
+              ? { baseline: mix(old.runs[i].baseline!, run.baseline, t) }
+              : {})
           }))
         : node.runs,
       marks:

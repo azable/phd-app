@@ -343,7 +343,9 @@
       : style === 'dotted'
         ? `0 ${2 * width}`
         : undefined;
-  // Text is drawn as the page set it, in its font and case, centred in the box it filled there.
+  // Text is drawn as the page set it, in its font and case, from the left of the box it filled
+  // there on its baseline, its glyphs at their own width and spaced to fill the width the server
+  // measured, so a run a browser sets a little wider or narrower is never stretched.
   const cased = (run: SceneText) => (run.case === 'uppercase' ? run.text.toUpperCase() : run.text);
   /**
    * The paint round a node's box, behind it, as its CSS box-shadow draws it (see boxEffects): its
@@ -415,10 +417,9 @@
   {/each}
   {#each node.runs.filter((run) => !!run.overLinks === overLinks) as run, i (i)}
     <text
-      x={run.box.x + run.box.width / 2}
-      y={run.box.y + run.box.height / 2}
-      text-anchor="middle"
-      dominant-baseline="central"
+      x={run.box.x}
+      y={run.baseline ?? run.box.y + run.box.height / 2}
+      dominant-baseline={run.baseline === undefined ? 'central' : undefined}
       fill={run.color}
       font-family={run.font}
       font-size={run.fontSize}
@@ -426,7 +427,7 @@
       font-variant={run.case === 'small-caps' ? 'small-caps' : undefined}
       text-decoration={run.decoration === 'strike' ? 'line-through' : run.decoration}
       textLength={run.box.width > 0 ? run.box.width : undefined}
-      lengthAdjust="spacingAndGlyphs"
+      lengthAdjust="spacing"
       data-sv-place={run.places?.join(' ')}
       opacity={node.opacity}>{cased(run)}</text
     >

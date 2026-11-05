@@ -55,6 +55,12 @@ it(
     });
     const nodes = steps.flatMap((step) => step.nodes);
     expect(nodes.some(({ identity }) => identity)).toBe(true);
+    // Each run's baseline lies in its box, its ascent below the top.
+    const runs = nodes.flatMap(({ runs = [] }) => runs);
+    expect(runs.length).toBeGreaterThan(0);
+    expect(
+      runs.filter(({ box, baseline = NaN }) => !(baseline > box.y && baseline < box.y + box.height))
+    ).toEqual([]);
     expect(nodes.find(({ arrangement }) => arrangement)?.arrangement).toEqual(
       expect.objectContaining({ seed: expect.any(Number), form: expect.any(String) })
     );
@@ -70,7 +76,10 @@ it(
     expect(scenes.frame.places).toHaveProperty('@target', colourCss('violet-500'));
     const step = scenes.steps[1];
     const tokens = step.nodes.flatMap(({ runs = [] }) => runs).filter(({ places }) => places);
-    expect(tokens.map(({ text, places }) => [text, places])).toContainEqual(['target', ['@target']]);
+    expect(tokens.map(({ text, places }) => [text, places])).toContainEqual([
+      'target',
+      ['@target']
+    ]);
     expect(step.nodes.some(({ places }) => places?.includes('@target'))).toBe(true);
   }
 );

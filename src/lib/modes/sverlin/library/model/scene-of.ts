@@ -24,7 +24,7 @@ import {
   type SceneStep,
   type SceneText
 } from '../scene';
-import type { ModelLayout } from './layout';
+import { fontOf, type ModelLayout } from './layout';
 import { substitutedOrNone, type Styled } from './look';
 import { sizerFor, type ReserveOptions } from './reserve';
 import { svgShapes } from './svg-shapes';
@@ -457,7 +457,9 @@ export function sceneOf(
       ...(marked === 'underline' || marked === 'strike' ? { decoration: marked } : {}),
       ...(textCase ? { case: textCase } : {}),
       ...(overLinks ? { overLinks: true as const } : {}),
-      ...(places?.length ? { places } : {})
+      ...(places?.length ? { places } : {}),
+      // Rounded to whole pixels, as lines take the ascent (see metricsOf in layout.ts).
+      baseline: round(box.y + Math.round(options.measure.metrics(fontOf(look)).ascent) * fit)
     };
   }
 

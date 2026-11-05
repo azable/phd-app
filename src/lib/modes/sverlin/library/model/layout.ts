@@ -74,7 +74,8 @@ const advance = (value: number) => Math.ceil(value * units - 1e-6) / units;
 const halved = (value: number) => Math.trunc((value * units) / 2) / units;
 const divided = (value: number, by: number) => Math.trunc((value * units) / by) / units;
 
-const fontOf = (look: Look) =>
+/** A look's font, as CSS writes it and the text measure takes it. */
+export const fontOf = (look: Look): string =>
   `${look.fontStyle} ${look.fontWeight} ${look.fontSize}px ${look.fontFamily}`;
 const inlineLevel = (display: string) => display.startsWith('inline');
 const lengthPx = (length: Length) => length.px;
