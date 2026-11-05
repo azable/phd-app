@@ -213,7 +213,14 @@ export function describeStep(layer: HTMLElement): SceneStep {
           !element.closest('.sv-link-label:not([data-sv-placed])')
       )
       .map((element) => describeNode(element, point, ratio)),
+    // A link in what is hidden, as the nearest mark says (the layer described is itself hidden), in
+    // what is not displayed, or itself transparent, is not seen.
     links: [...frame.querySelectorAll<SVGPathElement>('path[data-sv-edge]')].flatMap((path) => {
+      if (
+        path.closest<HTMLElement>('[data-sv-hidden]')?.dataset.svHidden === 'true' ||
+        !path.checkVisibility({ opacityProperty: true })
+      )
+        return [];
       const link = describeLink(path, point, ratio);
       return link ? [link] : [];
     }),
@@ -554,28 +561,59 @@ function describeLink(
   ratio: number
 ): SceneLink | undefined {
   const svg = path.ownerSVGElement;
-  const spec = linkSpecOf(path.dataset.svEdge ?? '');
-  // A link is drawn as one cubic curve, M x,y C x,y x,y x,y, or a wire, M x,y L x,y …
-  // (see node/route.ts).
-  const d = path.getAttribute('d') ?? '';
-  const numbers = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/giu)?.map(Number) ?? [];
-  const curved = d.includes('C');
-  if (!svg || !spec || (curved ? numbers.length !== 8 : numbers.length < 4 || numbers.length % 2))
-    return undefined;
+  if (!svg) return undefined;
   const area = svg.getBoundingClientRect();
   const units = svg.width.baseVal.value;
   // Screen pixels per unit of the drawing, which the frame and the root's fit both scale.
   const toScreen = units ? area.width / units : 1;
-  const at = (x: number, y: number) => point(area.left + x * toScreen, area.top + y * toScreen);
   const scale = toScreen * ratio;
   const style = getComputedStyle(path);
+  return sceneLink({
+    d: path.getAttribute('d') ?? '',
+    link: path.dataset.svEdge ?? '',
+    id: path.dataset.svEdgeId,
+    at: (x, y) => point(area.left + x * toScreen, area.top + y * toScreen),
+    head: path.dataset.head,
+    headSize: Number(path.dataset.headSize) * scale,
+    start: path.hasAttribute('marker-start'),
+    end: path.hasAttribute('marker-end'),
+    strokeStyle: path.dataset.strokeStyle,
+    stroke: style.stroke,
+    strokeWidth: round((parseFloat(style.strokeWidth) || 0) * scale)
+  });
+}
+
+/**
+ * A link as a scene draws it, from its path as drawn (see node/route.ts) and its look: `at` takes
+ * a point of the path to frame pixels, and `headSize` is in frame pixels. The page reads these
+ * from the drawn path, and the server from the route it gives (see model/scene.ts).
+ */
+export function sceneLink(drawn: {
+  d: string;
+  link: string;
+  id?: string;
+  at: (x: number, y: number) => ScenePoint;
+  head?: string;
+  headSize: number;
+  start: boolean;
+  end: boolean;
+  strokeStyle?: string;
+  stroke: string;
+  strokeWidth: number;
+}): SceneLink | undefined {
+  const spec = linkSpecOf(drawn.link);
+  // A link is drawn as one cubic curve, M x,y C x,y x,y x,y, or a wire, M x,y L x,y …
+  const numbers = drawn.d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/giu)?.map(Number) ?? [];
+  const curved = drawn.d.includes('C');
+  if (!spec || (curved ? numbers.length !== 8 : numbers.length < 4 || numbers.length % 2))
+    return undefined;
   const corners = Array.from({ length: numbers.length / 2 }, (_, i) =>
-    at(numbers[2 * i], numbers[2 * i + 1])
+    drawn.at(numbers[2 * i], numbers[2 * i + 1])
   );
   // A head lies along the line where it ends, pointing away from the point before that end: its
   // back at the end where the line stops short for it, else its tip there.
-  const shape = headShapes.find((each) => each === path.dataset.head);
-  const size = Number(path.dataset.headSize) * scale;
+  const shape = headShapes.find((each) => each === drawn.head);
+  const size = drawn.headSize;
   const head = (end: ScenePoint, before: readonly ScenePoint[]): SceneHead | undefined => {
     if (!shape || !Number.isFinite(size)) return undefined;
     const from = before.find(({ x, y }) => x !== end.x || y !== end.y);
@@ -590,17 +628,17 @@ function describeLink(
   };
   const reversed = [...corners].reverse();
   const heads = {
-    ...(path.hasAttribute('marker-start') ? { start: head(corners[0], corners.slice(1)) } : {}),
-    ...(path.hasAttribute('marker-end') ? { end: head(reversed[0], reversed.slice(1)) } : {})
+    ...(drawn.start ? { start: head(corners[0], corners.slice(1)) } : {}),
+    ...(drawn.end ? { end: head(reversed[0], reversed.slice(1)) } : {})
   };
   return {
-    ...(path.dataset.svEdgeId ? { id: path.dataset.svEdgeId } : {}),
+    ...(drawn.id ? { id: drawn.id } : {}),
     from: spec.from,
     to: spec.to,
     directed: spec.directed,
-    ...broken(path.dataset.strokeStyle),
-    stroke: style.stroke,
-    strokeWidth: round((parseFloat(style.strokeWidth) || 0) * scale),
+    ...broken(drawn.strokeStyle),
+    stroke: drawn.stroke,
+    strokeWidth: drawn.strokeWidth,
     ...(curved
       ? { curve: corners as [ScenePoint, ScenePoint, ScenePoint, ScenePoint] }
       : { wire: corners }),
