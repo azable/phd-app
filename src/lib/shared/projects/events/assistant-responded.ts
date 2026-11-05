@@ -9,8 +9,11 @@ import { elementIdSchema, messageContentSchema } from './message-content';
 import { participantIntakeStepSchema } from './assistant-intake';
 import { eventEnvelope, positiveSchema } from './values';
 
+/** The most characters of a question the assistant asks: the decision allows as many (chat-bots/source-decisions.ts), so a long question is never refused once decided. */
+export const maximumQuestionText = 400;
+
 const questionSchema = v.object({
-  text: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  text: v.pipe(v.string(), v.minLength(1), v.maxLength(maximumQuestionText)),
   presentationId: v.optional(presentationIdSchema),
   elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
 });

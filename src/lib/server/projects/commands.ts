@@ -120,6 +120,7 @@ import type {
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
 import { heldQuestion, openQuestion } from '$lib/shared/projects/questions';
+import { maximumQuestionText } from '$lib/shared/projects/events/assistant-responded';
 import {
   briefAttribute,
   projectBrief,
@@ -3235,7 +3236,7 @@ function releaseHeldQuestion(
   if (!held || !question || held.actor.kind !== 'assistant') return Promise.resolve(document);
   const open = /\bor (?:tell|ask)\b|\bsuggest/iu.test(question.text);
   const opened = `${question.text} ${openAlternative}`;
-  const text = open || opened.length > 200 ? question.text : opened;
+  const text = open || opened.length > maximumQuestionText ? question.text : opened;
   return appendAssistantResponse(document, text, held.actor.botId, operationId, dependencies, [], {
     question: { ...question, text },
     releases: held.id

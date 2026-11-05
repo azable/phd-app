@@ -16,6 +16,7 @@ import {
   maximumBriefText,
   type BriefEntry
 } from '$lib/shared/projects/brief';
+import { maximumQuestionText } from '$lib/shared/projects/events/assistant-responded';
 
 /** What a first source shows, or what a change does: one short sentence. */
 const summary = v.pipe(
@@ -190,7 +191,7 @@ const question = v.optional(
         v.string(),
         v.trim(),
         v.minLength(1),
-        v.maxLength(400),
+        v.maxLength(maximumQuestionText),
         v.description(
           'The question, in the participant’s terms, shown under your reply (so not repeated in it) until they answer it in a message, saying briefly why it is asked, as “To help me refine it further, who is it for?”.'
         )
