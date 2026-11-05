@@ -191,6 +191,38 @@ describe('scenes drawn as SVG', () => {
     expect(sceneBetween(from, to, 0.5).nodes.find(({ key }) => key === 'hiTip#5')?.box.x).toBe(200);
   });
 
+  it('starts a copy from its source when the source stays drawn, not from what it overwrites', () => {
+    // values[j] = values[j - 1]: 29 stays at j - 1, and 31, its copy, replaces 5 at j.
+    const from = drawnScene(
+      step([node('a', 0, { identity: '29' }), node('b', 100, { identity: '5' })])
+    );
+    const to = drawnScene({
+      ...step([node('a', 0, { identity: '29' }), node('b', 100, { identity: '31' })]),
+      copies: { '31': 29 }
+    });
+    expect(pairNodes(from, to).get('b')?.identity).toBe('29');
+    const half = sceneBetween(from, to, 0.5);
+    expect(half.nodes.find(({ key }) => key === 'a')?.box.x).toBe(0);
+    expect(half.nodes.find(({ key }) => key === 'b')?.box.x).toBe(50);
+  });
+
+  it("moves a copy's parts with it from its source's, not from what it overwrites", () => {
+    // Each column holds a bar of no value of its own, as a column view's length does.
+    const column = (id: string, x: number, identity: string) => [
+      node(id, x, { identity, kind: 'Column' }),
+      node(`${id}.bar`, x, { parent: id, kind: 'Column.Bar' })
+    ];
+    const from = drawnScene(step([...column('a', 0, '29'), ...column('b', 100, '5')]));
+    const to = drawnScene({
+      ...step([...column('a', 0, '29'), ...column('b', 100, '31')]),
+      copies: { '31': 29 }
+    });
+    expect(pairNodes(from, to).get('b.bar')?.id).toBe('a.bar');
+    const half = sceneBetween(from, to, 0.5);
+    expect(half.nodes.find(({ key }) => key === 'a.bar')?.box.x).toBe(0);
+    expect(half.nodes.find(({ key }) => key === 'b.bar')?.box.x).toBe(50);
+  });
+
   it('starts a copy where its source was, the source keeping its own place', () => {
     // 31 copies 29 at this step; 29 stays where it is.
     const from = drawnScene(step([node('s', 0, { identity: '29' })]));

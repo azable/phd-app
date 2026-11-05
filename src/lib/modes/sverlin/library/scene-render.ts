@@ -389,24 +389,30 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
           a.old - b.old
       );
     for (const { now, was } of candidates) {
-      if (pairs.has(now.key) || claimed.has(was)) continue;
+      if (pairs.has(now.key)) continue;
+      // A copy starts from its source even where the source stays and has paired already, as
+      // values[j] = values[j - 1] leaves the value at j - 1 in its place.
       if (copied) pairs.set(now.key, was);
-      else pair(now, was);
+      else if (!claimed.has(was)) pair(now, was);
     }
   }
   // What a value's node holds, where it paired with a node of another id, pairs in order within
   // each kind, so a pointer's arrow and label still move with it when the element it points at
-  // nests in another pointer that has come to the same element, and leaves its list.
+  // nests in another pointer that has come to the same element, and leaves its list. A copy's
+  // parts start from its source's, as the copy does, though the source keeps them where it stays.
   const inside = (scene: DrawnScene, node: DrawnNode) =>
     scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
   for (const now of to.nodes) {
     const was = pairs.get(now.key);
-    if (!was || was.id === now.id || !now.identity || was.identity !== now.identity) continue;
+    if (!was || was.id === now.id || !now.identity) continue;
+    // Only a copy pairs with a node of another identity (see the pairing above).
+    const copy = was.identity !== now.identity;
     const olds = inside(from, was);
     for (const held of inside(to, now)) {
       if (pairs.has(held.key)) continue;
-      const old = olds.find((other) => other.kind === held.kind && !claimed.has(other));
-      if (old) pair(held, old);
+      const old = olds.find((other) => other.kind === held.kind && (copy || !claimed.has(other)));
+      if (old && copy) pairs.set(held.key, old);
+      else if (old) pair(held, old);
     }
   }
   // A node drawing no value, as a caption or the column holding it and a value, moves with the
