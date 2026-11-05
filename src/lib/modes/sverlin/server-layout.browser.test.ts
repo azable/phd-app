@@ -6,8 +6,9 @@
  * test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
@@ -18,22 +19,11 @@ import type { Geometry, SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
 import type { VariantRequest } from './design.server';
 
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 const fixtures = import.meta.glob<string>('./fixtures/*.sverlin', {
   query: '?raw',
   import: 'default',
   eager: true
 });
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 type Drawn = { frame: SceneFrame; steps: SceneStep[] };
 
@@ -42,7 +32,7 @@ async function drawn(
   javascript: string,
   { fonts = true, deviceScaleFactor = 1 } = {}
 ): Promise<Drawn> {
-  const page = await browser!.newPage({
+  const page = await openPage({
     viewport: { width: 1200, height: 800 },
     deviceScaleFactor
   });
@@ -158,7 +148,7 @@ it.skipIf(!enabled)(
       expect(other.frame).toEqual(server.frame);
       expect(other.steps).toHaveLength(server.steps.length);
     }
-    const page = await browser!.newPage();
+    const page = await openPage();
     await page.setContent(
       sandboxDocument('', javascript.slice(javascript.indexOf(';\n') + 2), 0, 1)
     );

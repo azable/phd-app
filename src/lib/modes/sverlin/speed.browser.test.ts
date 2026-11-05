@@ -7,8 +7,9 @@
  * when the machine is busy.
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
@@ -16,18 +17,6 @@ import { pausingEveryLabel } from './testing/every-pause';
 import { embeddedFontsHead } from './fonts';
 import bfs from './fixtures/bfs-dequeue.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 type Timing = { phase: string; step?: number; ms: number; waiting?: boolean; layout?: string };
 
@@ -40,7 +29,7 @@ async function timingsOf(source: string) {
     prepareSvelteComponent(pausingEveryLabel(source)),
     1
   );
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await openPage({ viewport: { width: 1200, height: 800 } });
   await page.setContent(`<iframe style="border: 0; width: 1200px; height: 800px"></iframe>
 <script>
   window.timings = [];

@@ -3,8 +3,9 @@
  * which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
@@ -12,18 +13,6 @@ import { pausingEveryLabel } from './testing/every-pause';
 import bfs from './fixtures/bfs-queue-names.sverlin?raw';
 import dequeue from './fixtures/bfs-dequeue.sverlin?raw';
 import search from './fixtures/search-at.sverlin?raw';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 /** The page of a source built with chosen values, and the text of a kind's node at a step. */
 async function open(source: string, chosen: Record<string, string>) {
@@ -34,7 +23,7 @@ async function open(source: string, chosen: Record<string, string>) {
       chosen
     }
   );
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await openPage({ viewport: { width: 1200, height: 800 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -42,8 +31,7 @@ async function open(source: string, chosen: Record<string, string>) {
     document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
   );
   const show = async (step: number) => {
-    await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), step);
-    await page.waitForTimeout(800);
+    await showStep(page, step);
   };
   const text = (kind: string) =>
     page.evaluate(

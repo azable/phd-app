@@ -4,24 +4,13 @@
  * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingEveryLabel } from './testing/every-pause';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 const list = (algorithm: string) => `<script domain>
   const Name = type(['A', 'B', 'C']);
@@ -58,7 +47,7 @@ const list = (algorithm: string) => `<script domain>
 async function play(source: string, count: number) {
   const prepared = prepareSvelteComponent(pausingEveryLabel(source));
   const { javascript } = await bundlePresentation(prepared, 1, {});
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+  const page = await openPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -67,8 +56,7 @@ async function play(source: string, count: number) {
   );
   const steps: { arrows: string[]; nodes: string[]; attached: string[] }[] = [];
   for (let step = 0; step < count; step++) {
-    await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
-    await page.waitForTimeout(2500);
+    await showStep(page, step);
     steps.push(
       await page.evaluate(() => {
         const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;

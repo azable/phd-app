@@ -4,23 +4,12 @@
  * moves as the sentence changes. Run with `pnpm run test:browser`.
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -67,7 +56,7 @@ it.skipIf(!enabled)(
     const { javascript, labels } = await bundlePresentation(prepareSvelteComponent(source), 1, {
       chosen: { 'Cell.shadow': 'hard' }
     });
-    const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
+    const page = await openPage({ viewport: { width: 900, height: 500 } });
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
@@ -75,11 +64,7 @@ it.skipIf(!enabled)(
     const seen: { title: number; lines: number[] }[] = [];
     // Every step but the input as given and the end, where neither sentence shows.
     for (let step = 1; step < labels.length - 1; step++) {
-      await page.evaluate(
-        (to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'),
-        step
-      );
-      await page.waitForTimeout(900);
+      await showStep(page, step);
       seen.push(
         await page.evaluate(() => {
           const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;

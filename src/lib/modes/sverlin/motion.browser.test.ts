@@ -6,15 +6,15 @@
  * browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser, type Frame } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import type { Frame } from 'playwright-core';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep, settled } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingAt, pausingEveryLabel } from './testing/every-pause';
 import { motionDuration } from './library/motion';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 
 const merge = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -60,16 +60,6 @@ const merge = `<script domain>
 <Storyboard>
   <Scene name="main" case="main"><Main i={i} j={j} k={k} left={left} right={right} merged={merged} /></Scene>
 </Storyboard>`;
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 /** Where each visible node with an identity is, by identity, on the layer shown. */
 function placed(frame: Frame): Promise<Record<string, [number, number]>> {
@@ -133,7 +123,7 @@ it.skipIf(!enabled)(
       [1300, 300],
       [700, 380]
     ]) {
-      const page = await browser!.newPage({ viewport: { width, height: 2 * height + 8 } });
+      const page = await openPage({ viewport: { width, height: 2 * height + 8 } });
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.setContent(
@@ -255,7 +245,7 @@ it.skipIf(!enabled)(
   async () => {
     const prepared = prepareSvelteComponent(pausingEveryLabel(walk));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
-    const page = await browser!.newPage({ viewport: { width: 1000, height: 600 } });
+    const page = await openPage({ viewport: { width: 1000, height: 600 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:1000px;height:600px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
     );
@@ -288,8 +278,7 @@ it.skipIf(!enabled)(
         { timeout: 20_000, polling: 5 }
       );
       expect(await check.jsonValue(), `step ${index + 1}`).toEqual({ foreign: 0 });
-      // A step forward plays its before, then its after.
-      await page.waitForTimeout(1200);
+      await settled(frame, index);
     }
     await page.close();
   }
@@ -344,7 +333,7 @@ it.skipIf(!enabled)(
   async () => {
     const prepared = prepareSvelteComponent(pausingEveryLabel(taken));
     const { javascript } = await bundlePresentation(prepared, 1);
-    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const page = await openPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
     );
@@ -369,8 +358,7 @@ it.skipIf(!enabled)(
     expect(slots).toEqual([3, 3]);
     for (let index = 1; index < prepared.master.length; index++) {
       await step(index);
-      // A step forward plays its before, then its after.
-      await page.waitForTimeout(1500);
+      await settled(frame, index);
       await frame.evaluate(() => {
         for (const animation of document.getAnimations()) animation.finish();
       });
@@ -425,7 +413,7 @@ it.skipIf(!enabled)(
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: { 'pointers.Index@i': 'Short', 'pointers.Index@j': 'Long' }
     });
-    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const page = await openPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
     );
@@ -443,7 +431,7 @@ it.skipIf(!enabled)(
     const first = await placed(frame);
     for (let index = 2; index < prepared.master.length; index++) {
       await step(index);
-      await page.waitForTimeout(1500);
+      await settled(frame, index);
       await frame.evaluate(() => {
         for (const animation of document.getAnimations()) animation.finish();
       });
@@ -506,7 +494,7 @@ it.skipIf(!enabled)(
   async () => {
     const prepared = prepareSvelteComponent(pausingEveryLabel(far));
     const { javascript } = await bundlePresentation(prepared, 1);
-    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const page = await openPage({ viewport: { width: 800, height: 500 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(
@@ -538,11 +526,10 @@ it.skipIf(!enabled)(
     // Step 0 is the input as given, the pointer not yet declared; step 1 sets it.
     expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
     await step(1);
-    // A step forward plays its before, then its after.
-    await page.waitForTimeout(1500);
+    await settled(frame, 1);
     expect(await drawn()).toEqual({ slots: 6, pointers: 1 });
     await step(2);
-    await page.waitForTimeout(1500);
+    await settled(frame, 2);
     expect(await drawn()).toEqual({ slots: 6, pointers: 0 });
     expect(errors).toEqual([]);
     await page.close();
@@ -577,7 +564,7 @@ it.skipIf(!enabled)(
     const { javascript } = await bundlePresentation(prepared, 1, {
       chosen: { ...cursorViews, 'ICursor.shown': false, 'JCursor.shown': false }
     });
-    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const page = await openPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
     );
@@ -615,7 +602,7 @@ async function cursorRows(chosen: Record<string, string>) {
   const { javascript } = await bundlePresentation(prepared, 1, {
     chosen: { ...cursorViews, ...chosen }
   });
-  const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+  const page = await openPage({ viewport: { width: 800, height: 500 } });
   await page.setContent(
     `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
   );
@@ -631,8 +618,7 @@ async function cursorRows(chosen: Record<string, string>) {
       await frame.waitForFunction(() => document.querySelector('.sv-layer:not(.pending)'), null, {
         timeout: 60_000
       });
-    // A step forward plays its before, then its after.
-    await page.waitForTimeout(1500);
+    await settled(frame, index);
     steps.push(
       await frame.evaluate(() => {
         const layer = document.querySelector('.sv-layer:not(.pending):not(.sv-leaving)')!;
@@ -702,7 +688,7 @@ it.skipIf(!enabled)(
         'Pair.Link.strokeStyle': 'dotted'
       }
     });
-    const page = await browser!.newPage({ viewport: { width: 800, height: 500 } });
+    const page = await openPage({ viewport: { width: 800, height: 500 } });
     await page.setContent(
       `<body style="margin:0"><iframe sandbox="allow-scripts" style="width:800px;height:500px;border:0" srcdoc="${sandboxDocument('', javascript, 0, 1).replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"></iframe></body>`
     );
@@ -781,7 +767,7 @@ it.skipIf(!enabled)(
     const first = prepared.master.find(({ name }) => name === labels[at])!;
     const operands = first.applied!['ℓcompareˑgreater'][0].identities!;
     const copies = first.identities!.copies;
-    const page = await browser!.newPage({ viewport: { width: 900, height: 500 } });
+    const page = await openPage({ viewport: { width: 900, height: 500 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(
@@ -865,7 +851,7 @@ async function scanCells(
 ): Promise<Cell[][]> {
   const prepared = prepareSvelteComponent(pausingEveryLabel(scan));
   const { javascript } = await bundlePresentation(prepared, 1, { chosen });
-  const page = await browser!.newPage({ viewport: { width: 900, height: 400 } });
+  const page = await openPage({ viewport: { width: 900, height: 400 } });
   await page.setContent(sandboxDocument('', javascript, 0, 1));
   await page.waitForFunction(() =>
     document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
@@ -875,8 +861,7 @@ async function scanCells(
   const drawn: Cell[][] = [];
   for (const step of steps) {
     const halfway = step < 0;
-    await go(halfway ? -step - 1 : step);
-    await page.waitForTimeout(1500);
+    await showStep(page, halfway ? -step - 1 : step);
     if (halfway) {
       await go(-step);
       await page.waitForFunction(() =>

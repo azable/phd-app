@@ -3,24 +3,13 @@
  * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingEveryLabel } from './testing/every-pause';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 it.skipIf(!enabled)(
   'paints each element in the kind of the pointer at it, though a pointer written later is elsewhere',
@@ -62,7 +51,7 @@ it.skipIf(!enabled)(
         chosen: { 'pointers.Index@j': 'Second' }
       }
     );
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -70,8 +59,7 @@ it.skipIf(!enabled)(
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
     // Step 0 is the input as given, before i and j are declared; step 1 has both.
-    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
-    await page.waitForTimeout(1500);
+    await showStep(page, 1);
     const kinds = await page.evaluate(() =>
       [
         ...document.querySelectorAll<HTMLElement>(
@@ -128,15 +116,14 @@ it.skipIf(!enabled)(
       prepareSvelteComponent(pausingEveryLabel(source)),
       1
     );
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
-    await page.waitForTimeout(1500);
+    await showStep(page, 1);
     const kinds = await page.evaluate(() =>
       [
         ...document.querySelectorAll<HTMLElement>(
@@ -196,15 +183,14 @@ it.skipIf(!enabled)(
         chosen: { 'Highlight.Pointed@j.fill': 'sky-100' }
       }
     );
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
-    await page.waitForTimeout(1500);
+    await showStep(page, 1);
     const fills = await page.evaluate(() =>
       Object.fromEntries(
         [
@@ -259,15 +245,14 @@ it.skipIf(!enabled)(
         chosen: { 'views.Int@key': 'IntTally' }
       }
     );
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 1 }, '*'));
-    await page.waitForTimeout(1500);
+    await showStep(page, 1);
     const kinds = await page.evaluate(() =>
       [
         ...document.querySelectorAll<HTMLElement>(
@@ -327,7 +312,7 @@ it.skipIf(!enabled)(
       1,
       {}
     );
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -337,11 +322,7 @@ it.skipIf(!enabled)(
     // Each cell's value, by its index in the row, at each step: its position never moves.
     const positions: Record<number, Set<string>> = {};
     for (let step = 0; step < 6; step++) {
-      await page.evaluate(
-        (to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'),
-        step
-      );
-      await page.waitForTimeout(1500);
+      await showStep(page, step);
       const drawn = await page.evaluate(() =>
         [
           ...document.querySelectorAll<HTMLElement>(
@@ -394,7 +375,7 @@ async function scanned(chosen: Record<string, string | number>) {
       chosen
     }
   );
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+  const page = await openPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -403,8 +384,7 @@ async function scanned(chosen: Record<string, string | number>) {
   );
   const steps: { cells: Drawn[]; row: number }[] = [];
   for (let step = 0; step < labels.length; step++) {
-    await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
-    await page.waitForTimeout(1500);
+    await showStep(page, step);
     steps.push(
       await page.evaluate(() => {
         const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
@@ -529,7 +509,7 @@ it.skipIf(!enabled)(
         }
       }
     );
-    const page = await browser!.newPage({ viewport: { width: 1000, height: 500 } });
+    const page = await openPage({ viewport: { width: 1000, height: 500 } });
     await page.setContent(sandboxDocument('', javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
@@ -537,11 +517,7 @@ it.skipIf(!enabled)(
     const boxes: string[] = [];
     const lit = new Set<string>();
     for (let step = 0; step < 8; step++) {
-      await page.evaluate(
-        (to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'),
-        step
-      );
-      await page.waitForTimeout(900);
+      await showStep(page, step);
       const drawn = await page.evaluate(() => {
         const cells = [
           ...document.querySelectorAll<HTMLElement>(
@@ -610,7 +586,7 @@ async function transformed(
       chosen
     }
   );
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+  const page = await openPage({ viewport: { width: 1200, height: 700 } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -620,8 +596,7 @@ async function transformed(
   let fit = 1;
   const steps = [];
   for (let step = 0; step < labels.length; step++) {
-    await page.evaluate((to) => window.postMessage({ type: 'sverlin:step', step: to }, '*'), step);
-    await page.waitForTimeout(1500);
+    await showStep(page, step);
     const drawn = await page.evaluate(() => {
       const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
       const placed = (element: Element) => {

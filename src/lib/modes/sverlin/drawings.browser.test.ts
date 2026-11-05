@@ -5,24 +5,13 @@
  * (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, settled } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { embeddedFontsHead } from './fonts';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 const source = `<script domain>
   const Rank = type('integer', { min: 1, max: 13 });
@@ -60,14 +49,11 @@ it.skipIf(!enabled)(
   async () => {
     const built = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     expect(built.layout.errors).toEqual([]);
-    const page = await browser!.newPage({ viewport: { width: 900, height: 400 } });
+    const page = await openPage({ viewport: { width: 900, height: 400 } });
     await page.setContent(
       sandboxDocument('', built.javascript, 0, 1, undefined, undefined, embeddedFontsHead)
     );
-    await page.waitForFunction(() =>
-      document.querySelector('.sv-layer:not(.pending) svg[data-sv-drawing]')
-    );
-    await page.waitForTimeout(500);
+    await settled(page);
     const drawn = await page.evaluate(() =>
       [
         ...document.querySelectorAll<SVGSVGElement>('.sv-layer:not(.pending) svg[data-sv-drawing]')

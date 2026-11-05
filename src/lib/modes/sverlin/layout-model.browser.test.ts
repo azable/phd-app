@@ -4,8 +4,9 @@
  * `pnpm run test:browser`, which the devenv gives a browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
@@ -13,22 +14,11 @@ import { pausingEveryLabel } from './testing/every-pause';
 import type { LayoutCheck, SceneFrame, SceneStep } from './library';
 import { unsound } from './library/soundness';
 
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
 const fixtures = import.meta.glob<string>('./fixtures/*.sverlin', {
   query: '?raw',
   import: 'default',
   eager: true
 });
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 async function sceneOf(source: string) {
   const { javascript } = await bundlePresentation(
@@ -37,7 +27,7 @@ async function sceneOf(source: string) {
     {}
   );
   const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
-  const page = await browser!.newPage({ viewport: { width: 1200, height: 800 } });
+  const page = await openPage({ viewport: { width: 1200, height: 800 } });
   await page.route('https://sverlin.test/', (route) =>
     route.fulfill({
       contentType: 'text/html',

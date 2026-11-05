@@ -4,23 +4,12 @@
  * `pnpm run test:browser`.
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -68,16 +57,12 @@ it.skipIf(!enabled)(
     });
     const right = built.labels.indexOf('@probe.right#1');
     expect(right).toBeGreaterThan(0);
-    const page = await browser!.newPage({ viewport: { width: 700, height: 320 } });
+    const page = await openPage({ viewport: { width: 700, height: 320 } });
     await page.setContent(sandboxDocument('', built.javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    await page.evaluate(
-      (step) => window.postMessage({ type: 'sverlin:step', step }, '*'),
-      right - 1
-    );
-    await page.waitForTimeout(2000);
+    await showStep(page, right - 1);
     // Each frame's opacity of the first cell's frame, ruled out at this step.
     const opacities = await page.evaluate(async (step) => {
       const found: number[] = [];
@@ -158,13 +143,12 @@ it.skipIf(!enabled)(
     });
     const put = built.labels.indexOf('@pass.put#1');
     expect(put).toBeGreaterThan(0);
-    const page = await browser!.newPage({ viewport: { width: 760, height: 320 } });
+    const page = await openPage({ viewport: { width: 760, height: 320 } });
     await page.setContent(sandboxDocument('', built.javascript, 0, 1));
     await page.waitForFunction(() =>
       document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
     );
-    await page.evaluate((step) => window.postMessage({ type: 'sverlin:step', step }, '*'), put - 1);
-    await page.waitForTimeout(2000);
+    await showStep(page, put - 1);
     // Where the right part drew 12 before the put, then, each frame of the put, the sorted frame
     // around 12: its left edge, its fill, and whether 12 sits inside it.
     const { from, frames } = await page.evaluate(async (step) => {

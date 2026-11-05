@@ -6,7 +6,7 @@
  * is shown and its motion has ended (assembly/entry.ts); `showStep` waits for it.
  */
 
-import { chromium, type Browser, type Page } from 'playwright-core';
+import { chromium, type Browser, type Frame, type Page } from 'playwright-core';
 import { inject, onTestFinished } from 'vitest';
 
 import { sandboxDocument } from '../../sandbox';
@@ -24,6 +24,8 @@ function browser(): Promise<Browser> {
 
 export type PageOptions = {
   viewport?: { width: number; height: number };
+  /** Device pixels to a CSS pixel, as a high-density screen draws. */
+  deviceScaleFactor?: number;
   /**
    * Motion off, as `prefers-reduced-motion: reduce`: each step is drawn at once at its end state.
    * Tests about where things end up use it; tests about motion keep it on.
@@ -37,11 +39,16 @@ export type PageOptions = {
  */
 export async function openPage({
   viewport = { width: 1200, height: 700 },
+  deviceScaleFactor,
   still = false
 }: PageOptions = {}): Promise<Page> {
   const context = await (
     await browser()
-  ).newContext({ viewport, reducedMotion: still ? 'reduce' : 'no-preference' });
+  ).newContext({
+    viewport,
+    ...(deviceScaleFactor ? { deviceScaleFactor } : {}),
+    reducedMotion: still ? 'reduce' : 'no-preference'
+  });
   const traced = Boolean(process.env.CI);
   if (traced) await context.tracing.start({ screenshots: true, snapshots: true });
   onTestFinished(async ({ task }) => {
@@ -69,8 +76,11 @@ export async function openPresentation(
   return page;
 }
 
-/** Waits until the page has settled at a step, or at whichever step it shows when none is given. */
-export async function settled(page: Page, step?: number): Promise<void> {
+/**
+ * Waits until the page, or a presentation in a frame of it, has settled at a step, or at whichever
+ * step it shows when none is given.
+ */
+export async function settled(page: Page | Frame, step?: number): Promise<void> {
   await page.waitForFunction(
     (step) => {
       const at = document.getElementById('app')?.dataset.svSettled;

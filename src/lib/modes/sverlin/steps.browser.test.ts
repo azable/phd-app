@@ -3,24 +3,13 @@
  * browser (SVERLIN_TEST_BROWSER).
  */
 
-import { chromium, type Browser } from 'playwright-core';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { browserTestsOn as enabled, openPage, showStep, settled } from './testing/browser';
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import { pausingEveryLabel } from './testing/every-pause';
-
-const enabled = process.env.SVERLIN_RUN_BROWSER_TESTS === '1';
-
-let browser: Browser | undefined;
-beforeAll(async () => {
-  if (!enabled) return;
-  // The session's library path can hold libraries of another package set than the browser's.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.LD_LIBRARY_PATH;
-  browser = await chromium.launch({ executablePath: process.env.SVERLIN_TEST_BROWSER, env });
-});
-afterAll(() => browser?.close());
 
 it.skipIf(!enabled)(
   'plays a step forward straight to the state after its code, in one motion',
@@ -64,7 +53,7 @@ it.skipIf(!enabled)(
     expect(second.before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
     expect(second.state.values).toEqual([7, 7, 1]);
     const { javascript } = await bundlePresentation(prepared, 1, {});
-    const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+    const page = await openPage({ viewport: { width: 1200, height: 700 } });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setContent(sandboxDocument('', javascript, 0, 1));
@@ -101,19 +90,30 @@ it.skipIf(!enabled)(
           .map((node) => node.innerText.trim())
           .join(' ') === '7 1 1'
     );
-    // Stepping forward shows the next step's after at once, the loop moving i with it.
-    await page.evaluate(() => window.postMessage({ type: 'sverlin:step', step: 2 }, '*'));
-    await page.waitForFunction(
-      () =>
-        document.querySelectorAll('.sv-layer:not(.pending):not(.sv-leaving) [data-sv-kind]')
-          .length > 0
-    );
-    const seen: string[][] = [];
-    for (let poll = 0; poll < 40; poll++) {
-      const now = await shown();
-      if (!seen.length || seen.at(-1)!.join() !== now.join()) seen.push(now);
-      await page.waitForTimeout(50);
-    }
+    // Stepping forward shows the next step's after at once, the loop moving i with it. Every
+    // frame drawn on the way is recorded in the page, until the step has settled.
+    await settled(page, 1);
+    await page.evaluate(() => {
+      const layer = '.sv-layer:not(.pending):not(.sv-leaving)';
+      const seen: string[][] = [];
+      (window as unknown as { seen: string[][] }).seen = seen;
+      const record = () => {
+        const at = document.querySelector<HTMLElement>(`${layer} [data-sv-kind="IndexText"]`);
+        const now = [
+          at?.innerText.trim() ?? '',
+          ...[...document.querySelectorAll<HTMLElement>(`${layer} [data-sv-kind="IntCell"]`)].map(
+            (node) => node.innerText.trim()
+          )
+        ];
+        if (now.length > 1 && seen.at(-1)?.join() !== now.join()) seen.push(now);
+        if (document.getElementById('app')?.dataset.svSettled !== '2')
+          requestAnimationFrame(record);
+      };
+      requestAnimationFrame(record);
+    });
+    await showStep(page, 2);
+    const seen = await page.evaluate(() => (window as unknown as { seen: string[][] }).seen);
+    expect(await shown()).toEqual(seen.at(-1));
     expect(errors).toEqual([]);
     // From the step before, i moving and the 7 its code writes show together.
     expect(seen.map((values) => values.join(' '))).toEqual(['0 7 1 1', '1 7 7 1']);
@@ -166,7 +166,7 @@ it.skipIf(!enabled)(
     const kinds = async (text: string, chosen: Record<string, string | boolean> = {}) => {
       const prepared = prepareSvelteComponent(pausingEveryLabel(text));
       const { javascript } = await bundlePresentation(prepared, 1, { chosen });
-      const page = await browser!.newPage({ viewport: { width: 1200, height: 700 } });
+      const page = await openPage({ viewport: { width: 1200, height: 700 } });
       await page.setContent(sandboxDocument('', javascript, 0, 1));
       await page.waitForFunction(() =>
         document.querySelector('.sv-layer:not(.pending) [data-sv-kind]')
