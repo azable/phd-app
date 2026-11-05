@@ -69,6 +69,17 @@ describe('listings of the source’s own', () => {
     ]);
   });
 
+  it('show no blank line for a line of marks alone, its openings joining the next line', () => {
+    const { text, regions } = readRegions(
+      'if A[mid] < target\n    @right[@recurse[\n        return mid\n    ]]\nelse'
+    );
+    expect(text).toBe('if A[mid] < target\n    return mid\nelse');
+    expect(regions.map(({ label, start, end }) => [label, text.slice(start, end)])).toEqual([
+      ['right', 'return mid'],
+      ['right.recurse', 'return mid']
+    ]);
+  });
+
   it('light each region where the algorithm runs the code with its label, parts of a line apart', () => {
     const prepared = prepareSvelteComponent(insertion);
     expect(prepared.design.starter['listing.language']).toBe('textbook');

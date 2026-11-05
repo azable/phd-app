@@ -57,11 +57,19 @@ export function readRegions(body: string): {
   // Each character kept, with its offset in the body.
   const characters: { character: string; at: number }[] = [];
   let at = lines.slice(0, first).reduce((total, line) => total + line.length + 1, 0);
+  // A line of marks alone would show blank: openings join the next line, which takes their
+  // indentation, and closings join the line before.
+  const opensOnly = /^\s*(?:[@$][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
+  const closesOnly = /^\s*\]+\s*$/u;
   kept.forEach((line, index) => {
-    const cut = Math.min(indent, line.length);
-    for (let column = cut; column < line.length; column++)
+    const joined = (index > 0 && opensOnly.test(kept[index - 1])) || closesOnly.test(line);
+    if (closesOnly.test(line) && characters.at(-1)?.character === '\n') characters.pop();
+    const cut = joined ? line.length - line.trimStart().length : Math.min(indent, line.length);
+    const end = opensOnly.test(line) ? line.trimEnd().length : line.length;
+    for (let column = cut; column < end; column++)
       characters.push({ character: line[column], at: at + column });
-    if (index < kept.length - 1) characters.push({ character: '\n', at: at + line.length });
+    if (index < kept.length - 1 && !opensOnly.test(line))
+      characters.push({ character: '\n', at: at + line.length });
     at += line.length + 1;
   });
   const source = characters.map(({ character }) => character).join('');
