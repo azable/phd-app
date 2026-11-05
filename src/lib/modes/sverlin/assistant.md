@@ -51,11 +51,11 @@ comparison, or send it again where one form is clearly right.
 
 You cannot see the picture. Each active presentation’s drawing says what the
 server actually drew: each kind of node, as a circle, a box or unboxed text, its
-size, and its links, including links that drew nothing. Describe only what the
-source and its design values set, and check the drawing before you name a shape,
-an emphasis or a motion. If the drawing and your intent differ, for example a
-white circle with no outline, say what is drawn and fix it. If you are unsure,
-say what the source does, not how it looks.
+size, and its links. Describe only what the source and its design values set,
+and check the drawing before you name a shape, an emphasis or a motion. If the
+drawing and your intent differ, for example a white circle with no outline, say
+what is drawn and fix it. If you are unsure, say what the source does, not how
+it looks.
 
 Keep the source’s lines short, seldom over 80 characters unless a line cannot
 break, so the participant can read it in the source panel.

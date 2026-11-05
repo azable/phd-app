@@ -155,7 +155,7 @@ import {
 import { bindableProps, lengthProps, valueOnlyProps } from './library/node/bound';
 import { iconNames } from './library/fonts';
 import { readabilityOf } from './readability.server';
-import { drawingText, drawingWarnings } from './library/drawing';
+import { drawingText } from './library/drawing';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
@@ -2665,7 +2665,6 @@ export async function bundlePresentation(
     ...(size ? { readability: readabilityOf(size, frame.ratio) } : {}),
     ...(drawing ? { drawing: drawingText(drawing) } : {})
   };
-  if (drawing) warnings.push(...drawingWarnings(drawing));
   return {
     javascript,
     layout,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { drawingBudget, drawingOf, drawingText, drawingWarnings } from './drawing';
+import { drawingBudget, drawingOf, drawingText } from './drawing';
 import type { ModelElement, ModelNode } from './model/tree';
 
 const node = (
@@ -82,7 +82,7 @@ describe('what a step draws, for the assistant', () => {
     ).toBe('Cell: 1 box, about 40×30 px.');
   });
 
-  it('tells links drawn from those to their own node, which draw nothing, with a warning', () => {
+  it('counts links, saying how many are loops on their own node', () => {
     const markup = node(undefined, {}, [
       node('State', stroke, [text('q0')]),
       link('0', '1'),
@@ -90,14 +90,8 @@ describe('what a step draws, for the assistant', () => {
       link('1', '1')
     ]);
     const drawing = drawingOf(markup, []);
-    expect(drawing.links).toEqual({ drawn: 1, toSelf: 2 });
-    expect(drawingText(drawing)).toContain(
-      'links: 1 drawn; 2 to their own node, which draw nothing.'
-    );
-    expect(drawingWarnings(drawing)).toEqual([
-      '2 links from a node to itself draw nothing: a loop on one node is not drawn, so show it another way, as a label on the node.'
-    ]);
-    expect(drawingWarnings(drawingOf(node('State', stroke, [text('q0')]), []))).toEqual([]);
+    expect(drawing.links).toEqual({ drawn: 3, loops: 2 });
+    expect(drawingText(drawing)).toContain('links: 3 drawn, 2 of them a loop on its own node.');
   });
 
   it('keeps within its budget, saying how many kinds it leaves out', () => {

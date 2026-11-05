@@ -1,7 +1,7 @@
 /**
  * What a presentation draws, in a few words, for the assistant, which cannot see the picture: each
  * kind of node seen, by the shape its paint gives it and the size it is drawn at, and its links,
- * those drawn and those that draw nothing, from the server's layout of one step (see record.ts).
+ * how many are loops on their own node, from the server's layout of one step (see record.ts).
  */
 
 import { elementsUnder, hiddenHere, seenBox, type SeenBox } from './model/reserve';
@@ -16,7 +16,7 @@ export type DrawnShape =
 
 export type DrawnSummary = {
   kinds: { kind: string; shape: DrawnShape; count: number; width?: number; height?: number }[];
-  links: { drawn: number; toSelf: number };
+  links: { drawn: number; loops: number };
 };
 
 /**
@@ -128,17 +128,16 @@ export function drawingOf(markup: ModelElement, seen: readonly SeenBox[]): Drawn
           : {})
       }))
       .toSorted((a, b) => b.count - a.count || a.kind.localeCompare(b.kind)),
-    links: { drawn: links.length - toSelf, toSelf }
+    links: { drawn: links.length, loops: toSelf }
   };
 }
 
 /** The drawing in words, within the budget, the most common kinds first. */
 export function drawingText(drawing: DrawnSummary): string {
-  const { drawn, toSelf } = drawing.links;
-  const linkText =
-    drawn || toSelf
-      ? `links: ${drawn} drawn${toSelf ? `; ${toSelf} to their own node, which draw nothing` : ''}.`
-      : '';
+  const { drawn, loops } = drawing.links;
+  const linkText = drawn
+    ? `links: ${drawn} drawn${loops ? `, ${loops} of them a loop on its own node` : ''}.`
+    : '';
   const parts: string[] = [];
   let length = linkText.length;
   for (const [index, { kind, shape, count, width, height }] of drawing.kinds.entries()) {
@@ -152,14 +151,4 @@ export function drawingText(drawing: DrawnSummary): string {
     length += part.length + 2;
   }
   return [parts.join('; ') + (parts.length ? '.' : ''), linkText].filter(Boolean).join(' ');
-}
-
-/** The warning for links to their own node, which no layout draws. */
-export function drawingWarnings(drawing: DrawnSummary): string[] {
-  const { toSelf } = drawing.links;
-  return toSelf
-    ? [
-        `${toSelf} link${toSelf === 1 ? '' : 's'} from a node to itself draw${toSelf === 1 ? 's' : ''} nothing: a loop on one node is not drawn, so show it another way, as a label on the node.`
-      ]
-    : [];
 }
