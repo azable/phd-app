@@ -72,6 +72,12 @@ export type RecordOptions = {
    * version shown (see LayoutMemory.routes); not for other arrangements only measured.
    */
   routes?: boolean;
+  /**
+   * Given each state drawn as it is shown, none where the view failed, and how the model lays them
+   * out, once the layout memory is complete: for drawing each step's scene once the frame is known
+   * (see model/scene-of.ts).
+   */
+  shown?: (shown: ReadonlyMap<number, ModelElement | undefined>, reserve: ReserveOptions) => void;
   /** Told what the step drawing the most draws, in kinds and links, for the assistant (drawing.ts). */
   drawing?: (drawing: DrawnSummary) => void;
   /** Gives the page back for a moment between the parts of the work. */
@@ -252,10 +258,11 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
     if (fit !== undefined) layouts.fits.set(step, fit);
   });
   options.timed?.('recording');
-  if (options.drawn || options.routes) {
+  if (options.drawn || options.routes || options.shown) {
     const shown = shownStates(options);
     if (options.routes) layouts.routes = stateRoutes(options, reserveOptions(), shown);
     if (options.drawn) options.drawn.push(...drawnKeys(options, reserveOptions(), shown));
+    options.shown?.(shown, reserveOptions());
   }
   return reservation;
 }

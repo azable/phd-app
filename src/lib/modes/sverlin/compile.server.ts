@@ -144,7 +144,12 @@ import { packStates } from './library/trace-pack';
 import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
-import { drawFailureMessage, layOutOnServer, layoutFailureMessage } from './layout.server';
+import {
+  drawFailureMessage,
+  layOutOnServer,
+  layoutFailureMessage,
+  type ServerScenes
+} from './layout.server';
 import {
   boundDesign,
   boundDomain,
@@ -275,6 +280,8 @@ export type SvelteBundle = {
     drawing?: string;
     /** Other arrangements of its free layouts, where asked for (see arrangements.server.ts). */
     arrangements?: Arrangement[];
+    /** Every step's scene, drawn on the server (see layout.server.ts). */
+    scenes?: ServerScenes;
   };
 };
 

@@ -693,6 +693,13 @@ export function* elementsUnder(element: ModelElement): Generator<ModelElement> {
  * Ids, which tell nothing about the picture, are left out too, so two presentations drawing the
  * same picture describe it alike (see drawnText).
  */
+export type Sizer = ReturnType<typeof sizer>;
+
+/** What sizes nodes on the model, for drawing a step's scene from it (see scene-of.ts). */
+export function sizerFor(options: ReserveOptions): Sizer {
+  return sizer(options);
+}
+
 /** An element seen in a drawing, with the size it is drawn at (see describeDrawn). */
 export type SeenBox = { element: ModelElement; width: number; height: number; kind?: string };
 

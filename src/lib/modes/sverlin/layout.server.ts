@@ -15,6 +15,10 @@ import { fontsVersion, serverMeasure } from './fonts/measure.server';
 import type { DrawnSummary } from './library/drawing';
 import type { Geometry } from './library/geometry';
 import { snappedBorder } from './library/model/look';
+import type { SceneFrame, SceneStep } from './library/scene';
+
+/** Every step's scene, and the frame they are drawn in. */
+export type ServerScenes = { frame: SceneFrame; steps: SceneStep[] };
 
 export type ServerLayout = {
   /**
@@ -31,6 +35,11 @@ export type ServerLayout = {
   drawing?: DrawnSummary;
   /** How large it draws (see readability.server.ts); none where the server could not lay it out. */
   size?: DrawnSize;
+  /**
+   * Every step's scene at a device pixel ratio of 1, as the page describes it (see
+   * library/model/scene-of.ts); none where the model could not lay a step out.
+   */
+  scenes?: ServerScenes;
   /** Why it could not. */
   failure?: string;
   /** Steps the view failed to draw, with why. */
@@ -173,6 +182,7 @@ async function layOutIsolated(
     const drawn = await read<string[]>('__sverlinDrawn');
     const drawing = await read<DrawnSummary>('__sverlinDrawing');
     const size = await read<DrawnSize>('__sverlinSize');
+    const scenes = await read<ServerScenes>('__sverlinScenes');
     // Most screens draw at 1 or 2 device pixels a CSS pixel; at 2 a border of half a pixel, or one
     // and a half, keeps its width, where at 1 it snaps to a whole one.
     if (geometries[0].borders.some((width) => snappedBorder(width, 2) !== snappedBorder(width, 1)))
@@ -187,6 +197,7 @@ async function layOutIsolated(
       ...(drawn ? { drawn } : {}),
       ...(drawing ? { drawing } : {}),
       ...(size ? { size } : {}),
+      ...(scenes ? { scenes } : {}),
       errors
     };
   } catch (cause) {

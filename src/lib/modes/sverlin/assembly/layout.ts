@@ -3,7 +3,8 @@
 // of the server in it (see ../layout.server.ts). The host gives text widths and font metrics,
 // measured in the fonts every page embeds, and takes the geometry back as JSON, with the frame and
 // fit every step shows at, which the page draws with as given; what each step draws as
-// __sverlinDrawn (see recordLayouts); and how large it draws as __sverlinSize. Given design values,
+// __sverlinDrawn (see recordLayouts); how large it draws as __sverlinSize; and every step's scene,
+// as the page would describe it, as __sverlinScenes (see model/scene-of.ts). Given design values,
 // it lays every step out with them in place of the variant's, to measure another arrangement (see
 // arrangementsOnServer), recording nothing else; asked for representative steps only, it lays out
 // the final state and the state holding the most, which show an arrangement nearly as well as every
@@ -18,6 +19,7 @@ import {
   pageAncestors,
   pageCss,
   recordLayouts,
+  scenesOf,
   shownFrame,
   stepsOf,
   unpackStates,
@@ -47,6 +49,7 @@ const scope = globalThis as unknown as {
   __sverlinDrawn?: string;
   __sverlinDrawing?: string;
   __sverlinSize?: string;
+  __sverlinScenes?: string;
   window?: unknown;
 };
 // The frame reads the window's size as it starts, for how far its canvas scales on screen, which
@@ -87,6 +90,8 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
   const characters = new Map<number, number>();
   // What is drawn is the same at any device pixel ratio but for borders snapping, so it is read once.
   const drawn: string[] | undefined = devicePixelRatio === 1 && !values ? [] : undefined;
+  // Each step's scene is drawn with the version shown, once the frame is known.
+  let shown: Parameters<NonNullable<Parameters<typeof recordLayouts>[0]['shown']>> | undefined;
   const reservation = await recordLayouts({
     steps: representative ? representativeSteps : steps,
     layouts,
@@ -119,6 +124,7 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
     // only measured.
     routes: !values && !representative,
     drawn,
+    ...(drawn && !representative ? { shown: (...given) => (shown = given) } : {}),
     drawing: (drawing) => {
       if (drawn) scope.__sverlinDrawing = JSON.stringify(drawing);
     },
@@ -128,6 +134,11 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative) => {
   const extents = [...layouts.extents.values()];
   const frame = shownFrame(extents, ratio === 'fit', fitShapes);
   if (drawn) scope.__sverlinDrawn = JSON.stringify(drawn);
+  if (shown && frame && extents.length) {
+    const size = { width: extents[0].frame.width, height: frame.height, fit: frame.fit };
+    const scenes = scenesOf(shown[0], steps.drawnLike, steps.stepCount, shown[1], size);
+    scope.__sverlinScenes = scenes ? JSON.stringify(scenes) : undefined;
+  }
   if (devicePixelRatio === 1) {
     const size = frame && drawnSize(extents, frame, characters);
     scope.__sverlinSize = size ? JSON.stringify(size) : undefined;
