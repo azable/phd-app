@@ -4,6 +4,7 @@
  */
 
 export { default as Frame } from './Frame.svelte';
+export { default as SceneView } from './SceneView.svelte';
 export { default as Link } from './node/Link.svelte';
 export { default as Listing } from './listing/Listing.svelte';
 export { default as Node } from './node/Node.svelte';
