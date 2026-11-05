@@ -249,7 +249,11 @@ const mixBox = (a: SceneBox, b: SceneBox, t: number): SceneBox => ({
  * A colour part way from one to another, as CSS mixes them, so any colour the page wrote mixes
  * with any other; none is transparent, so a fill appearing fades in in its own colour.
  */
-export function mixColour(from: string | undefined, to: string | undefined, t: number) {
+export function mixColour(
+  from: string | undefined,
+  to: string | undefined,
+  t: number
+): string | undefined {
   if (from === to) return to;
   return `color-mix(in srgb, ${to ?? 'transparent'} ${num(t * 100)}%, ${from ?? 'transparent'})`;
 }
