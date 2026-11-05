@@ -16,6 +16,7 @@ import { isDuringKey, viewThis } from './label-values';
 import { layoutNameOf } from './layouts.server';
 import { countArgument } from './bound-props.server';
 import { siteOf } from './left-out';
+import { kindKey } from './library/node/design';
 
 /** Each component's type, by name. */
 export type ComponentSignatures = Record<string, string>;
@@ -746,6 +747,51 @@ export function withInsertions(source: string, insertions: readonly Insertion[])
   return result;
 }
 
+/** A pointer the root renders at a position, as written, and the page layout it is in, if named. */
+export type RenderedPointer = { name: string; written: string; layout?: string };
+
+/**
+ * A rendered pointer as its scenes are checked: the pointer views it can draw, the variant's
+ * choice among them where its type chooses, the collection type it points into and that type's
+ * element type.
+ */
+export type PointerMark = Omit<RenderedPointer, 'name'> & {
+  views: readonly string[];
+  choice?: string;
+  into: string;
+  element?: string;
+};
+
+/**
+ * The warning for each pointer that marks nothing at any step a scene showing its layout draws: no
+ * node takes its <Pointed>'s kind or its own, so no element of its collection is drawn whole, by a
+ * view of the element's type, for it to mark. One the variant draws as none, or hides, is left out
+ * on purpose.
+ */
+export function unmarkedPointerWarnings(
+  pointers: readonly PointerMark[],
+  kinds: ReadonlySet<string>,
+  shownLayouts: ReadonlySet<string>,
+  values: Readonly<Record<string, unknown>>
+): string[] {
+  const drawn = (kind: string) =>
+    [...kinds].some((each) => each === kind || each.startsWith(`${kind}@`));
+  return pointers.flatMap(({ written, layout, views, choice, into, element }) => {
+    if (layout !== undefined && !shownLayouts.has(layout)) return [];
+    const chosen = choice === undefined ? views : views.filter((view) => view === values[choice]);
+    const marking = chosen.filter((view) => values[`${view}.shown`] !== false);
+    if (!marking.length) return [];
+    if (marking.some((view) => drawn(kindKey(view, 'Pointed')) || drawn(view))) return [];
+    const viewed = marking.join(' or ');
+    const whole = element
+      ? `, drawn whole by a view of ${element} (as {item} with <View of="${element}">), not only by its fields`
+      : '';
+    return [
+      `${written} draws ${viewed}, a pointer into ${into}, but it marks nothing at any step: a pointer marks the element where the view draws it${whole}, and no element of ${into} is drawn so. Draw the elements of ${into} with their own view where the layout shows them, or point at a collection the view draws.`
+    ];
+  });
+}
+
 /**
  * The root's pointers, as in {@render Index(i)}: drawn around the element the position points at,
  * not where they are written, so each call is removed from the markup and registered in the root's
@@ -792,7 +838,13 @@ export function pointerCalls(
     string,
     { into: string; numberView?: string; markViews: readonly string[] }
   > = new Map()
-): { removals: Insertion[]; calls: string[]; problems: ComponentProblem[]; warnings: string[] } {
+): {
+  removals: Insertion[];
+  calls: string[];
+  problems: ComponentProblem[];
+  warnings: string[];
+  rendered: RenderedPointer[];
+} {
   type Part = Record<string, unknown> & {
     type?: string;
     name?: string;
@@ -803,6 +855,7 @@ export function pointerCalls(
   const calls: string[] = [];
   const problems: ComponentProblem[] = [];
   const warnings: string[] = [];
+  const rendered: RenderedPointer[] = [];
   const warned = new Set<number>();
   const text = (node: Part) => source.slice(node.start, node.end);
   // The layout a pointer is rendered in, so a presentation showing another neither draws it nor
@@ -811,7 +864,7 @@ export function pointerCalls(
   // The layout drawn by tag a pointer is written in, where a position draws nothing.
   let drawnByTag: string | undefined;
   // What each type's render draws, as values for {@render Values(values)}: the first of each.
-  const rendered = new Map<string, string>();
+  const renders = new Map<string, string>();
   const gather = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(gather);
@@ -820,8 +873,8 @@ export function pointerCalls(
       const call = part.expression as Part;
       const name = (call?.callee as Part | undefined)?.name;
       const [argument] = (call?.arguments as Part[] | undefined) ?? [];
-      if (typeof name === 'string' && argument && !rendered.has(name))
-        rendered.set(name, text(argument));
+      if (typeof name === 'string' && argument && !renders.has(name))
+        renders.set(name, text(argument));
     }
     for (const [key, child] of Object.entries(part)) if (key !== 'parent') gather(child);
   };
@@ -848,7 +901,7 @@ export function pointerCalls(
         // A bare position, in no words, in a source drawing its array, was likely meant as a mark.
         const [argument] = (call.arguments as Part[] | undefined) ?? [];
         // Its collection drawn in the source, as a render of the collection's type.
-        const drawn = rendered.get(numbered.into);
+        const drawn = renders.get(numbered.into);
         if (drawn && argument) {
           warned.add(part.start ?? 0);
           const written = `{${text(argument)}}`;
@@ -901,6 +954,7 @@ export function pointerCalls(
           `{ ${layout ? `layout: ${JSON.stringify(layout)}, ` : ''}view: () => ${place?.view ?? pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}${place ? `place: ${place.place}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
         );
         removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
+        rendered.push({ name, written: `{${text(argument)}}`, layout });
       }
       return;
     }
@@ -987,7 +1041,7 @@ export function pointerCalls(
       : undefined;
   };
   visit(markup, 'top');
-  return { removals, calls, problems, warnings };
+  return { removals, calls, problems, warnings, rendered };
 }
 
 /**

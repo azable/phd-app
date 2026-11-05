@@ -78,6 +78,7 @@ import {
   probeMarkup,
   branchInsertions,
   pointerCalls,
+  unmarkedPointerWarnings,
   probeValues,
   positionReads,
   readsOf,
@@ -94,6 +95,7 @@ import {
   type ComponentProbe,
   type Insertion,
   type Placement,
+  type PointerMark,
   type ComponentSignatures
 } from './components.server';
 import { callTypes } from './calls.server';
@@ -186,6 +188,7 @@ import {
   storyboardOf,
   atWhen,
   leftOutWarning,
+  repeatedStepWarnings,
   type LeftOutStep,
   type Scene,
   type Storyboard
@@ -311,6 +314,8 @@ export type PreparedComponent = {
   inputWarnings?: string[];
   /** Each bare position drawn as its number where a mark was likely meant, told to the assistant. */
   positionWarnings?: string[];
+  /** The pointers the root renders, whose scenes are checked for an element each marks. */
+  pointerMarks?: PointerMark[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -2113,6 +2118,25 @@ function prepareViews(
             })
         )
       );
+    const pointerMarks = pointers.rendered.map(({ name, written, layout }): PointerMark => {
+      const own = found.pointers.has(name);
+      const views = own ? [name] : choiceOf(name).options;
+      const type = components[name] ?? components[views[0] ?? ''];
+      const structure = domain.structures[type] as { kind?: string; collection?: string };
+      const into =
+        structure?.kind === 'ref'
+          ? (structure.collection ?? '')
+          : (viewing.atoms[type]?.index ?? '');
+      const element = (domain.structures[into] as { element?: string } | undefined)?.element;
+      return {
+        written,
+        layout,
+        views,
+        ...(own ? {} : { choice: `pointers.${name}` }),
+        into,
+        ...(element ? { element } : {})
+      };
+    });
     // A type with a view is drawn, never called, rendered or not: {Index(k)} is refused too.
     const viewCalls = viewCallsOf(
       ast.html,
@@ -2345,6 +2369,7 @@ function prepareViews(
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
       ...(pointers.warnings.length ? { positionWarnings: pointers.warnings } : {}),
+      ...(pointerMarks.length ? { pointerMarks } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2770,6 +2795,25 @@ export async function bundlePresentation(
     throw new InvalidSvelteSourceError(layoutFailureMessage('its steps could not be drawn', []), {
       code: 'layout_failed'
     });
+  // What the view draws that shows nothing, told to the assistant: a pointer marking no element,
+  // and a paused step drawing the step before it again (its motion from it aside).
+  const drawnSteps = laid.scenes.steps;
+  warnings.push(
+    ...unmarkedPointerWarnings(
+      prepared.pointerMarks ?? [],
+      new Set(drawnSteps.flatMap(({ nodes }) => nodes.flatMap(({ kind }) => kind ?? []))),
+      new Set(scenes.map(({ layout }) => layout)),
+      values
+    ),
+    ...repeatedStepWarnings(
+      entries.map(({ scene, run, index }, at) => ({
+        scene,
+        name: scene.frame ? undefined : run.steps[index].name,
+        drawn: JSON.stringify({ ...drawnSteps[at], copies: undefined })
+      })),
+      scenes.length
+    )
+  );
   const arrangements =
     options.arrange && size && geometry
       ? await measuredArrangements(
