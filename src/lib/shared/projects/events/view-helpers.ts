@@ -36,7 +36,10 @@ export const visualizationViewCandidatesEventSchema = v.object({
         name: v.string(),
         description: v.string(),
         markup: v.string(),
-        readability: v.optional(v.string())
+        readability: v.optional(v.string()),
+        /** What its helper tried, as "the main structure beside the other parts": arrangements of
+         * one layout share its name, so this tells them apart. */
+        label: v.optional(v.pipe(v.string(), v.maxLength(200)))
       })
     ),
     /** How many were proposed and left out, and why. */

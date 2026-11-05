@@ -297,7 +297,14 @@ export type AiViewHelpers = {
   layout?: string;
   /** The task the candidates answered, as the assistant gave it. */
   task?: string;
-  candidates: { name: string; description: string; markup: string; readability?: string }[];
+  candidates: {
+    name: string;
+    description: string;
+    markup: string;
+    readability?: string;
+    /** What its helper tried, telling apart arrangements of one layout, which share its name. */
+    label?: string;
+  }[];
   /** Replies given since they were proposed, none of them offering these. */
   repliesSince?: number;
 };

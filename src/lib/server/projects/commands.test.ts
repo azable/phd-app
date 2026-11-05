@@ -932,6 +932,39 @@ describe('submitProjectFeedback', () => {
       );
     });
 
+    it('takes an app-started round’s task from the request, and offers what it keeps', async () => {
+      // The reply only answers in words; the round the app starts follows the participant's
+      // request for graphics, and its candidates, each labelled with what it tried, are offered
+      // by a follow-up turn.
+      const replied = { ...generation(undefined, 'Noted.'), decision: { action: 'respond' } };
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, () => [replied]);
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      expect(candidates).toMatchObject({
+        payload: { task: 'Try other ways to draw the numbers.' }
+      });
+      expect(
+        candidates?.type === 'visualization.view-candidates' && candidates.payload.candidates[0]
+      ).toMatchObject({ label: expect.any(String) });
+      expect(appendedEvents.at(-1)).toMatchObject({
+        type: 'assistant.turn-requested',
+        payload: { interactionEventId: candidates?.id }
+      });
+    });
+
+    it('finds the type a request names, by its name or plural', async () => {
+      const { typeNamedIn } = await import('./commands');
+      const source = `<script domain>
+  const Name = type(['A', 'B']);
+  const Vertex = record({ name: Name });
+  const Index = index(Vertices);
+</script>`;
+      expect(typeNamedIn('Other ways to show which vertices are done', source)).toBe('Vertex');
+      expect(typeNamedIn('Bigger names please', source)).toBe('Name');
+      expect(typeNamedIn('Try some icons', source)).toBeUndefined();
+    });
+
     it('takes a request about the arrangement as one for the layout helpers', async () => {
       const { asksForLayouts } = await import('./commands');
       expect(asksForLayouts('Try lots of different layouts')).toBe(true);
@@ -3494,7 +3527,9 @@ describe('several variants from chat', () => {
     const asked = unofferedAlternatives(bundle, new Set(), shown);
     expect(asked).toContain('views.Seen');
     expect(asked).not.toContain('views.Int');
-    expect(unofferedAlternatives(bundle, new Set(), { views: bundle.views, pointers: {} })).toBeUndefined();
+    expect(
+      unofferedAlternatives(bundle, new Set(), { views: bundle.views, pointers: {} })
+    ).toBeUndefined();
   });
 
   it('shows a version whose source offers no other form at once', async () => {

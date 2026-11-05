@@ -1382,29 +1382,42 @@ async function runSverlinAssistantTurn(
   // graph or tree, a first automatic layout being a guess, else how its main type is drawn. So
   // does a version's next turn after the helpers are switched on, where no round has run yet.
   const unexplored = firstVersion || !helpersHaveRun(done);
-  // A request about the page's arrangement, as "try lots of different layouts", goes to the
-  // layout helpers, the reply having asked them or not.
-  const arranging = asksForLayouts(turnRequestText(done.events));
-  const firstLayout =
-    (unexplored ? freeLayoutName(source) : undefined) ??
-    (arranging ? pageLayoutName(source) : undefined);
+  // A round the app starts takes its task from what the participant asked this turn, the reply
+  // having asked the helpers or not: a request for graphics, as "other ways to show which vertices
+  // are done", goes to the view helpers on the type it names; one about the arrangement, as "try
+  // lots of different layouts", to the layout helpers. Only with no such request does a first
+  // round take the riskiest choice (project 5cb84e44's first round rearranged its page while the
+  // participant had asked how done vertices look).
+  const asked = turnRequestText(done.events);
+  const task = asked ? cutText(asked.replace(/\s+/g, ' ').trim(), 300) : undefined;
+  const askedType = asksForGraphics(asked)
+    ? (typeNamedIn(asked, source) ?? mainViewType(source))
+    : undefined;
+  const askedLayout = asksForLayouts(asked) ? pageLayoutName(source) : undefined;
+  const firstLayout = unexplored ? freeLayoutName(source) : undefined;
   const firstType = unexplored ? mainViewType(source) : undefined;
   const request: ViewHelpersRequest | undefined =
     helperRequest ??
-    (firstLayout ? { layout: firstLayout } : firstType ? { type: firstType } : undefined);
+    (askedType
+      ? { type: askedType, ...(task ? { task } : {}) }
+      : askedLayout
+        ? { layout: askedLayout, ...(task ? { task } : {}) }
+        : firstLayout
+          ? { layout: firstLayout }
+          : firstType
+            ? { type: firstType }
+            : undefined);
   if (!request || source === starter) return done;
   const helped = await runViewHelpers(done, operationId, source, request, dependencies);
-  return helperRequest
-    ? followAfterHelpers(helped, operationId, contextSelection, dependencies)
-    : helped;
+  return followAfterHelpers(helped, operationId, contextSelection, dependencies);
 }
 
 /**
- * A reply that only asked the helpers showed nothing, so once their candidates are recorded the
- * assistant goes on by itself, once, offering them (see the interaction kind view-helpers): not
- * after such a follow-up, nor where the participant has written meanwhile (their turn takes the
- * candidates), nor past the phase deadline. Candidates all dropped still continue, the assistant
- * then showing something of its own.
+ * Once a helper round has recorded candidates, the assistant goes on by itself, once, offering them
+ * (see the interaction kind view-helpers), whoever started the round: not after such a follow-up,
+ * nor where the participant has written meanwhile (their turn takes the candidates), nor past the
+ * phase deadline. A round that kept none goes on only where the reply showed nothing, the assistant
+ * then showing something of its own (project 5cb84e44's five arrangements waited unoffered).
  */
 async function followAfterHelpers(
   document: ProjectDocument,
@@ -1417,8 +1430,9 @@ async function followAfterHelpers(
   const interactions = contextSelection.interactionEventIds ?? [];
   const deadline = currentProjectOperationDeadline();
   if (
-    !candidates ||
-    ours.some((event) => event.type === 'visualization.presented') ||
+    candidates?.type !== 'visualization.view-candidates' ||
+    (!candidates.payload.candidates.length &&
+      ours.some((event) => event.type === 'visualization.presented')) ||
     (interactions.length > 0 &&
       interactions.every(
         (id) => document.events[id - 1]?.type === 'visualization.view-candidates'
@@ -2028,6 +2042,26 @@ function notedSinceReply(events: ProjectDocument['events']): boolean {
       return true;
   }
   return false;
+}
+
+/**
+ * The type of the source a request names, as "vertices" or "Vertex" for a type Vertex: a domain
+ * type whose name, or its plural, the request uses as a word. None where it names none.
+ */
+export function typeNamedIn(text: string, source: string): string | undefined {
+  const domain = /<script domain>([\s\S]*?)<\/script>/u.exec(source)?.[1] ?? '';
+  const types = [...domain.matchAll(/\bconst\s+([A-Z]\w*)\s*=/gu)].map(([, name]) => name);
+  const words = new Set(text.toLowerCase().match(/[a-z]+/gu) ?? []);
+  const plurals = (name: string) => [
+    `${name}s`,
+    `${name}es`,
+    name.replace(/y$/u, 'ies'),
+    name.replace(/(ex|ix)$/u, 'ices')
+  ];
+  return types.find((name) => {
+    const lower = name.toLowerCase();
+    return words.has(lower) || plurals(lower).some((plural) => words.has(plural));
+  });
 }
 
 /** The view and pointer choices the version shown offers, none before a first version. */
@@ -2713,6 +2747,12 @@ async function runViewHelpers(
   };
   const checked: ViewCandidate[] = [];
   for (const { view } of proposed) checked.push(await built(view));
+  // What each proposal's helper tried, so arrangements of one layout, all named after it, differ.
+  const labels = new Map<ViewCandidate, string>();
+  proposed.forEach(({ prompt }, index) => {
+    const direction = round.directions[prompt.attempt.number - 1];
+    if (direction) labels.set(checked[index], direction);
+  });
   // A proposal that did not build or read goes back once to its helper with the reason, as a
   // repair does, rather than the helpers' prompt growing a rule for each mistake seen.
   const retried = checked
@@ -2740,7 +2780,10 @@ async function runViewHelpers(
       const fixed = reply.ok ? reply.views[0] : undefined;
       if (!fixed) continue;
       const result = await built(fixed);
-      if (result.kept) checked[checked.indexOf(retried[index].candidate)] = result;
+      if (!result.kept) continue;
+      const label = labels.get(retried[index].candidate);
+      if (label) labels.set(result, label);
+      checked[checked.indexOf(retried[index].candidate)] = result;
     }
   }
   const best = bestCandidates(checked, candidatesGiven);
@@ -2763,7 +2806,8 @@ async function runViewHelpers(
                     name: candidate.name,
                     description: candidate.description,
                     markup: candidate.markup,
-                    ...(candidate.readability ? { readability: candidate.readability } : {})
+                    ...(candidate.readability ? { readability: candidate.readability } : {}),
+                    ...(labels.has(candidate) ? { label: labels.get(candidate) } : {})
                   }
                 ]
               : []

@@ -554,10 +554,12 @@ browser, not written by the participant: revise the view so that every step
 draws, change nothing else, and reply in one sentence with what failed and what
 you fixed.
 
-An interaction of kind view-helpers follows your last reply, which asked the
-view helpers and showed nothing: no one wrote it. Offer their candidates
-(viewHelpers) now, as comparisons with what shows, without asking again; where
-none survived, show an alternative of your own.
+An interaction of kind view-helpers follows a round of the view helpers, which
+your reply asked for or the app started from the participant's request: no one
+wrote it. Offer the candidates (viewHelpers) that fit what the participant asked
+now, as comparisons with what shows, without asking again, naming each by its
+label where it has one, and say in a few words why you left any out; where none
+survived, show an alternative of your own.
 
 When buildFeedback is present, correct the failed candidate,
 buildFeedback.failedSource: edits apply to it, or return its complete
