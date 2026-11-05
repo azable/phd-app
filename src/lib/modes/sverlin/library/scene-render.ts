@@ -409,12 +409,85 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
       if (old) pair(held, old);
     }
   }
+  // A node drawing no value, as a caption or the column holding it and a value, moves with the
+  // values it is drawn with to their new place, unless it shows the place itself, as an index,
+  // whose node there still says the same.
+  const ownedBefore = drawnWith(from);
+  const ownedNow = drawnWith(to);
+  const textOf = (node: DrawnNode) => node.runs.map(({ text }) => text).join(' ');
+  const seen = new Set(before.keys());
+  const asBefore = (identity: string) =>
+    seen.has(identity) ? identity : (copiedFrom(identity, to.copies) ?? identity);
+  for (const now of to.nodes) {
+    if (pairs.has(now.key) || now.identity || now.leaving) continue;
+    const owners = [...(ownedNow.get(now) ?? [])].map(asBefore);
+    if (!owners.length) continue;
+    const text = textOf(now);
+    const [best] = from.nodes
+      .filter((was) => !was.identity && !was.leaving && was.kind === now.kind && !claimed.has(was))
+      .map((was) => {
+        const had = ownedBefore.get(was) ?? new Set<string>();
+        const [a, b] = [centre(now), centre(was)];
+        return {
+          was,
+          shared: owners.filter((owner) => had.has(owner)).length,
+          sameText: textOf(was) === text ? 1 : 0,
+          distance: Math.hypot(a[0] - b[0], a[1] - b[1])
+        };
+      })
+      .filter(({ shared }) => shared > 0)
+      .toSorted(
+        (a, b) => b.shared - a.shared || b.sameText - a.sameText || a.distance - b.distance
+      );
+    if (!best) continue;
+    const stays = from.byId.get(now.id);
+    const showsPlace =
+      !best.sameText &&
+      stays &&
+      !claimed.has(stays) &&
+      stays.kind === now.kind &&
+      textOf(stays) === text;
+    if (!showsPlace) pair(now, best.was);
+  }
   for (const now of to.nodes) {
     if (pairs.has(now.key)) continue;
     const was = from.byId.get(now.id);
     if (was && !claimed.has(was)) pair(now, was);
   }
   return pairs;
+}
+
+/**
+ * The values each node drawing none is drawn with: the outermost values inside it, or where it
+ * holds none, as a caption, those of the nearest node around it holding some.
+ */
+function drawnWith(scene: DrawnScene): Map<DrawnNode, Set<string>> {
+  const children = new Map<string, DrawnNode[]>();
+  for (const node of scene.nodes)
+    if (!node.leaving && node.parent)
+      children.set(node.parent, [...(children.get(node.parent) ?? []), node]);
+  const inside = new Map<DrawnNode, Set<string>>();
+  const valuesIn = (node: DrawnNode): Set<string> => {
+    const known = inside.get(node);
+    if (known) return known;
+    const values = node.identity
+      ? new Set([node.identity])
+      : new Set((children.get(node.id) ?? []).flatMap((child) => [...valuesIn(child)]));
+    inside.set(node, values);
+    return values;
+  };
+  const owned = new Map<DrawnNode, Set<string>>();
+  const ownersOf = (node: DrawnNode): Set<string> => {
+    const known = owned.get(node);
+    if (known) return known;
+    const values = valuesIn(node);
+    const parent = node.parent ? scene.byId.get(node.parent) : undefined;
+    const owners = values.size || !parent ? values : ownersOf(parent);
+    owned.set(node, owners);
+    return owners;
+  };
+  for (const node of scene.nodes) if (!node.identity && !node.leaving) ownersOf(node);
+  return owned;
 }
 
 // Each move pairs its scenes once, not at every frame it draws.
