@@ -904,7 +904,6 @@
       class="sv-room"
       data-sv-scale={scaleRoom}
       style:padding={reachPadding}
-      style:display="flex"
       style:justify-content={xAnchor}
       style:align-items={yAnchor}
       style:min-width={slotWidth ? leastOf(undefined, reserved?.width) : undefined}
@@ -959,6 +958,14 @@
     display: inline-grid;
     place-items: center;
     vertical-align: middle;
+  }
+  /* A view with room round it for its paint sits in the line as the view alone would. */
+  .text > :global(.sv-room) {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+  .sv-room {
+    display: flex;
   }
   .value {
     white-space: nowrap;
