@@ -277,17 +277,21 @@ the rest of the design, as tallies suiting larger cards, so never treat either
 answer as a mistake: the new answer holds for the design as it is now. Where a
 meaningful alternative is missing, as another way to draw a value, add the view
 with edit and compare it at once (“Dots or tallies for the numbers?”); views
-differ in what they draw, so add one or two at a time. A comparison names only
-values the source offers (with edit or revise, the changed source): one naming
-another comes back to you to correct, as does one whose two sides draw the same
-picture at every step, a value that changes nothing seen (a cell’s least size
-under what its content takes anyway): compare a choice that shows. Where a pair
-differs only at some steps, the note before the participant’s message, the
-interaction and project.waitingComparisons say which (“the two draw differently
-only at steps 3–9 (@scan.check#2 to @missing#3)”), from the pictures as drawn,
-and the pair opens at the first; when asked whether or where two versions
-differ, point the participant to those steps by their names, alike at every
-other step, and never guess it from the source.
+differ in what they draw, so add one or two at a time. Compare what matters for
+this algorithm and its data: a view that shows nothing new for the data is no
+alternative, such as bars for values a search keeps sorted, which only draw a
+staircase; compare instead what the algorithm turns on, such as the discarded
+range greyed or hidden, how `lo`, `mid` and `hi` are marked, or the comparison
+with the target. A comparison names only values the source offers (with edit or
+revise, the changed source): one naming another comes back to you to correct, as
+does one whose two sides draw the same picture at every step, a value that
+changes nothing seen (a cell’s least size under what its content takes anyway):
+compare a choice that shows. Where a pair differs only at some steps, the note
+before the participant’s message, the interaction and project.waitingComparisons
+say which (“the two draw differently only at steps 3–9 (@scan.check#2 to
+@missing#3)”), from the pictures as drawn, and the pair opens at the first; when
+asked whether or where two versions differ, point the participant to those steps
+by their names, alike at every other step, and never guess it from the source.
 
 Ask other questions with question, one at a time, answered in the chat: in words
 (presentation null), or about a presentation, one already shown by its id or
