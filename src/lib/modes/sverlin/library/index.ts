@@ -22,8 +22,6 @@ export { provideEnds, providePointers } from './type-context';
 export { linePairs } from './node/lines';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';
-export { arrangementLayout, describeFrame, describeStep } from './scene';
-export { checkLayout, type LayoutCheck } from './model/check';
 export { parseSheet, type Rule } from './model/css';
 export { styler } from './model/look';
 export { readMarkup } from './model/markup';
@@ -36,7 +34,6 @@ export {
   type Reservation
 } from './model/reserve';
 export type { ModelElement } from './model/tree';
-export { animateStep, finishMotion, leaveLayer, motionCss } from './motion';
 export type {
   SceneBox,
   SceneFrame,
@@ -63,6 +60,6 @@ export {
 } from './steps';
 export { recordLayouts, type Sizing } from './record';
 export { scenesOf, type SceneRequest } from './model/scene-of';
-export { applyGeometry, geometryFor, geometryOf, geometryVersion, type Geometry } from './geometry';
+export { geometryOf, geometryVersion, type Geometry } from './geometry';
 export { shownFrame, type ShownFrame } from './fit';
 export { fitShapes } from './node/scales';

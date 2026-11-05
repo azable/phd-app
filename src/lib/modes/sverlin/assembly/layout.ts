@@ -158,7 +158,7 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
       size,
       describing
     );
-    // Each step's copies, as the page moves to it from the step before (see animateStep).
+    // Each step's copies, for SceneView to move them from their sources (see pairNodes).
     const shownSteps = [...Array(steps.stepCount).keys()].filter(
       (step) => !describing?.steps || describing.steps.includes(step)
     );

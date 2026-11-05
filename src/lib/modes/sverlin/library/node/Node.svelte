@@ -814,7 +814,7 @@
       >
         {@render contents()}
         {#if overlaid}
-          <LinkOverlay axis="grid" />
+          <LinkOverlay />
         {/if}
       </div>
     {:else if arrangement === 'stack'}
@@ -855,7 +855,7 @@
           <div class="spare" aria-hidden="true"></div>
         {/each}
         {#if overlaid}
-          <LinkOverlay axis={overlaid} />
+          <LinkOverlay />
         {/if}
       </div>
     {:else if __math}
