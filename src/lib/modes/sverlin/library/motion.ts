@@ -45,6 +45,30 @@ function placedByIdentity(layer: HTMLElement): Map<string, Placed[]> {
 }
 
 /**
+ * The nodes of a layer that draw no value of their own but frame exactly one, as a cell of a kind an
+ * {#if} chose around the value it holds, each with its box.
+ */
+function framesOf(layer: HTMLElement): Placed[] {
+  return [...layer.querySelectorAll<HTMLElement>('.sv-node:not([data-sv-identity])')].flatMap(
+    (element) => {
+      if (element.closest<HTMLElement>('[data-sv-hidden]')?.dataset.svHidden === 'true') return [];
+      // The values it holds, outermost only, as a component's root and a node inside draw one.
+      const values = [...element.querySelectorAll<HTMLElement>('[data-sv-identity]')].filter(
+        (inner) => !element.contains(inner.parentElement?.closest('[data-sv-identity]') ?? null)
+      );
+      return values.length === 1 ? [{ element, box: element.getBoundingClientRect() }] : [];
+    }
+  );
+}
+
+/** Whether two boxes are in the same place, at the same size, but for rounding. */
+const samePlace = (a: DOMRect, b: DOMRect): boolean =>
+  Math.abs(a.left - b.left) < still &&
+  Math.abs(a.top - b.top) < still &&
+  Math.abs(a.width - b.width) < still &&
+  Math.abs(a.height - b.height) < still;
+
+/**
  * The identity a copied value was copied from, as 29 for 31 where 31 is a copy of 29; for a value
  * read through a position (see movingIdentity), its place's, with the rest, as 29.seen for 31.seen.
  */
@@ -265,6 +289,17 @@ export function animateStep(
       { was: snapshot(source), is: snapshot(element) }
     ])
   );
+  // A frame around one value, in the same place, drawn as another kind than before, as a cell an
+  // {#if} draws as sorted or unsorted, fades from its old paint to its new: it is a new node, which
+  // no identity pairs, so it would otherwise switch at once.
+  const oldFrames = framesOf(before);
+  const reframed = framesOf(after).flatMap(({ element, box }) => {
+    const was = oldFrames.find(
+      (frame) =>
+        samePlace(frame.box, box) && frame.element.dataset.svKind !== element.dataset.svKind
+    );
+    return was ? [{ element, look: { was: snapshot(was.element), is: snapshot(element) } }] : [];
+  });
   const timing = { duration: motionDuration, easing };
   // A node inside one that moves moves with it, so it is translated only by the difference.
   for (const [element, move] of moves) {
@@ -290,6 +325,10 @@ export function animateStep(
     // holds is placed by its new size and moves on its own.
     const size = element.querySelector('[data-sv-identity]') ? undefined : sizeFrames(was, is);
     if (size) element.animate(size, timing);
+  }
+  for (const { element, look } of reframed) {
+    const paint = paintFrames(look.was, look.is);
+    if (paint) element.animate(paint, timing);
   }
   // A part of a value that moves, as a card's name where only the name was drawn before, rides
   // with it in view; anything else new fades in.
