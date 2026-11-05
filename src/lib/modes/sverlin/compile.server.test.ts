@@ -2905,3 +2905,34 @@ describe('starter looks of a graph', () => {
     expect(design.fallbacks['VertexCard.NameText@this.name.fill']).toBeUndefined();
   });
 });
+
+describe('views of a union', () => {
+  it('gives the views of a union’s members one box, so a cell holding the narrower member is as wide as the rest', async () => {
+    const source = `<script domain>
+  const Distance = type('integer', { min: 0, max: 999 });
+  const Infinite = type(['∞']);
+  const Dist = union(Distance, Infinite);
+  const Row = array(Dist, { max: 3 });
+</script>
+<script input>
+  const row = Row;
+</script>
+<script algorithm>
+  @look[row[0] = row[0];]
+</script>
+<View of="Distance" name="DistanceCell"><Node value={this} /></View>
+<View of="Infinite" name="InfinityCell"><Node value={this} /></View>
+<View of="Row" name="Cells"><Node layout="row">{#each this as d}<Node kind="Cell">{d}</Node>{/each}</Node></View>
+<Layout name="Main" of="row"><Node>{row}</Node></Layout>
+<Case name="main" row={[5, '∞', 12]} />
+<Storyboard><Scene name="main" case="main" pause="@look"><Main row={row} /></Scene></Storyboard>`;
+    const prepared = prepareSvelteComponent(source);
+    const probe = (name: string) =>
+      prepared.components.find((component) => component.name === name);
+    expect(probe('DistanceCell')?.unions).toEqual(['Dist']);
+    expect(probe('InfinityCell')?.unions).toEqual(['Dist']);
+    const order = prepared.components.map(({ name }) => name);
+    expect(order.indexOf('Cells')).toBeGreaterThan(order.indexOf('InfinityCell'));
+    await bundlePresentation(prepared, 1, {});
+  });
+});

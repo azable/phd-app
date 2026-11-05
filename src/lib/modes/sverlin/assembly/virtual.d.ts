@@ -42,6 +42,8 @@ declare module 'virtual:components' {
     name: string;
     cases: unknown[];
     range?: { min: number; max: number; places?: number };
+    branches?: number;
+    unions?: string[];
   }[];
   export const placements: { path: string; step: number; values: unknown[] }[];
   /** The most elements each collection type holds, by name. */

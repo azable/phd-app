@@ -1500,6 +1500,12 @@ export type ComponentProbe = {
   range?: { min: number; max: number; places?: number };
   /** Its tests, each drawn going each way, so every branch it could draw is measured. */
   branches?: number;
+  /**
+   * The unions its type is a member of: a value of a union is drawn by its member's view, so the
+   * views of a union's members share the largest box among them, and whatever holds the union has
+   * room for every member, not only the ones a step reaches.
+   */
+  unions?: string[];
 };
 
 // A component's cases are drawn in one pass of the page for each way its tests can go; this bounds
@@ -1526,12 +1532,22 @@ export function componentProbes(
   domain: DomainRegistry,
   steps: Steps
 ): { probes: ComponentProbe[]; problems: ComponentProblem[] } {
+  // Each union with its members; a value of a union draws its member's view.
+  const unions = Object.values(domain.structures).flatMap((structure) =>
+    structure.kind === 'union' ? [structure] : []
+  );
+  const viewsOfType = (type: string) => [
+    ...Object.keys(signatures).filter((name) => signatures[name] === type),
+    ...(choices[type] ?? [])
+  ];
   const renders = new Map(
     found.map(({ name, node }) => [
       name,
-      [...readsOf(node)].flatMap((read) =>
-        Object.hasOwn(signatures, read) ? [read] : (choices[read] ?? [])
-      )
+      [...readsOf(node)].flatMap((read) => {
+        const union = unions.find((each) => each.name === read);
+        if (union) return union.members.flatMap(viewsOfType);
+        return Object.hasOwn(signatures, read) ? [read] : (choices[read] ?? []);
+      })
     ])
   );
   const ordered: string[] = [];
@@ -1576,8 +1592,15 @@ export function componentProbes(
       !single(parameter)
         ? { min: atom.min!, max: atom.max!, ...(atom.places ? { places: atom.places } : {}) }
         : undefined;
+    const memberOf = unions.filter(({ members }) => members.includes(type)).map((u) => u.name);
     if (cases && cases.length * ways <= maximumCases)
-      probes.push({ name, cases, ...(range ? { range } : {}), ...(branches ? { branches } : {}) });
+      probes.push({
+        name,
+        cases,
+        ...(range ? { range } : {}),
+        ...(branches ? { branches } : {}),
+        ...(memberOf.length ? { unions: memberOf } : {})
+      });
     else
       problems.push({
         message: branches

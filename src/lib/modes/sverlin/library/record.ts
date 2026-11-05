@@ -36,6 +36,8 @@ export type Sizing = {
     range?: { min: number; max: number; places?: number };
     /** Its tests, each drawn going each way (see branchInsertions in components.server.ts). */
     branches?: number;
+    /** The unions its type is a member of (see ComponentProbe in components.server.ts). */
+    unions?: string[];
   }[];
   placements: { path: string; step: number; values: unknown[] }[];
 };
@@ -171,7 +173,12 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
   // or not this trace ever shows it. A way its tests cannot go together, as one reading what another
   // rules out, fails to draw and is passed over; only if every way fails is the failure told.
   // Components come after those they render, whose boxes they are drawn with.
-  for (const { name, cases, range, branches = 0 } of sizing.components) {
+  // The members' views of each union, to share the largest box once all are measured.
+  const unionViews = new Map<string, string[]>();
+  for (const { name, unions = [] } of sizing.components)
+    for (const union of unions) unionViews.set(union, [...(unionViews.get(union) ?? []), name]);
+  const measured = new Set<string>();
+  for (const { name, cases, range, branches = 0, unions = [] } of sizing.components) {
     const ways = Array.from({ length: 2 ** branches }, (_, way) =>
       branches
         ? Array.from({ length: branches }, (_, test) => Boolean((way >> test) & 1))
@@ -206,6 +213,22 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
         range.places
       );
       if (!cases.includes(widest)) for (const way of ways) probe([widest], way);
+    }
+    measured.add(name);
+    // Once every member's view of a union is measured, each takes the largest box among them,
+    // before any view that holds the union is measured with it.
+    for (const union of unions) {
+      const views = unionViews.get(union) ?? [];
+      if (!views.every((view) => measured.has(view))) continue;
+      const boxes = views.flatMap((view) => layouts.components.get(view) ?? []);
+      if (!boxes.length) continue;
+      const shared = {
+        width: Math.max(...boxes.map(({ width }) => width)),
+        height: Math.max(...boxes.map(({ height }) => height))
+      };
+      for (const view of views)
+        if (layouts.components.has(view))
+          layouts.components.set(view, { ...layouts.components.get(view)!, ...shared });
     }
   }
   const reservation = reserveSizes(drawings, reserveOptions());
