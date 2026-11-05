@@ -44,6 +44,7 @@
   import { assistantTurnAfter, blankStarter, stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
+  import type { PairAnswers } from './pair-answers';
 
   type PairAnswer = { kind: 'preferred'; presentationId: string } | { kind: 'tie' | 'skip' };
 
@@ -63,6 +64,8 @@
     takeComment?: () => Message | undefined;
     /** The comment was sent with the answer, so the chat can let it go. */
     onCommentSent?: () => void;
+    /** The chat shows the pair's answers in place of its Submit (see `pairAnswers`), so the stage does not. */
+    answersInChat?: boolean;
   };
 
   let {
@@ -76,7 +79,8 @@
     disabled = false,
     hidden = false,
     takeComment = () => undefined,
-    onCommentSent = () => {}
+    onCommentSent = () => {},
+    answersInChat = false
   }: Props = $props();
   // Whether an answer to the shown pair is being saved.
   let answering = $state(false);
@@ -297,6 +301,16 @@
     }
   ]);
 
+  /** The pair's answers, for the chat to show: the four buttons, the one given, and whether they wait. */
+  export function pairAnswers(): PairAnswers {
+    return {
+      answers,
+      chosen,
+      disabled: disabled || answering || !!awaiting || replyPending,
+      waiting: replyPending && !awaiting
+    };
+  }
+
   function seek(next: number) {
     playback.seek(playbackContext, next);
   }
@@ -306,7 +320,7 @@
    * shows as the selection decides (`PresentationSelection.answer`); if the answer cannot be saved,
    * the pair shows again at its step.
    */
-  async function prefer(answer: string | 'tie' | 'skip') {
+  export async function prefer(answer: string | 'tie' | 'skip'): Promise<void> {
     if (visible.length !== 2 || answering) return;
     const answered = visible;
     const at = step;
@@ -444,7 +458,7 @@
         <ChevronRightIcon data-icon="inline-end" />
       </Button>
     </div>
-    {#if layout === 'comparison' && visible.length === 2}
+    {#if layout === 'comparison' && visible.length === 2 && !answersInChat}
       <!-- The answers, on a tinted strip of their own. -->
       <div
         class="flex flex-wrap items-center justify-center gap-1.5 rounded-lg bg-muted p-1"

@@ -203,6 +203,7 @@
     visualSelections.set(reference.presentationId, step, [reference.element]);
   }
   let feedbackComposer = $state<FeedbackComposer>();
+  let presentationStage = $state<PresentationStage>();
   let editMode = $state<ProjectArtifactEditMode>('readonly');
   let renaming = $state(false);
   let titleDraft = $state('');
@@ -275,16 +276,23 @@
   // panel fills the stage with its source and what it changes from its parent, until a variant is
   // chosen.
   let chosenOf = $state<{ sourceHash: string; parentHash?: string } | undefined>();
-  // The pair on the stage, which a message goes with: its answer can carry the draft as a comment.
-  const pairOnStage = $derived(
-    layout === 'comparison' &&
+  // The pair on the stage, answered in the chat in place of Submit, the draft going with the answer.
+  const answersInChat = $derived(!expired && !session.readOnly);
+  const pairOnStage = $derived.by(() => {
+    const answers = presentationStage?.pairAnswers();
+    return layout === 'comparison' &&
       visiblePresentations.length === 2 &&
       !chosenOf &&
       auditedRequest === undefined &&
-      chosenFailure === undefined
-      ? { question: pairQuestion(visiblePresentations) }
-      : undefined
-  );
+      chosenFailure === undefined &&
+      answers
+      ? {
+          question: pairQuestion(visiblePresentations),
+          ...answers,
+          onanswer: (answer: string) => presentationStage?.prefer(answer)
+        }
+      : undefined;
+  });
   const chosen = $derived.by(() => {
     if (!chosenOf) return undefined;
     const { sourceHash, parentHash } = chosenOf;
@@ -797,6 +805,8 @@
             </div>
           {/if}
           <PresentationStage
+            bind:this={presentationStage}
+            {answersInChat}
             hidden={chosen !== undefined ||
               auditedRequest !== undefined ||
               chosenFailure !== undefined}

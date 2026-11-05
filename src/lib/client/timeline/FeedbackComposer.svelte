@@ -11,6 +11,7 @@
     knownCandidate,
     type TimelinePresentation
   } from '$lib/client/visualization/presentation-history';
+  import type { PairAnswers } from '$lib/client/visualization/pair-answers';
   import { baseCandidate } from '$lib/client/visualization/presentation-selection.svelte';
   import type { VisualSelection } from '$lib/client/visualization/visual-selection.svelte';
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
@@ -45,10 +46,10 @@
     /** The step each visible presentation shows, by its id. */
     steps?: Readonly<Record<string, number>>;
     /**
-     * The pair on the stage, which a message goes with: picking a side sends the draft with the
-     * answer, and Enter sends it on its own, noting the pair.
+     * The pair on the stage, answered here in place of Submit: picking an answer sends the draft
+     * with it as its comment (see PresentationStage.svelte, `pairAnswers`).
      */
-    pair?: { question?: string };
+    pair?: PairAnswers & { question?: string; onanswer: (answer: string) => void };
   };
 
   let {
@@ -116,7 +117,7 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (!editor) return;
+    if (!editor || pair) return;
     const editorContent = serializeEditor();
     if (editorContent.length === 0) return;
     if (await send(editorContent)) {
@@ -128,6 +129,8 @@
   function submitOnEnter(event: KeyboardEvent) {
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();
+    // With a pair open, the draft goes with its answer, never on its own.
+    if (pair) return;
     editor?.closest('form')?.requestSubmit();
   }
 
@@ -309,8 +312,8 @@
             class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
             data-testid="feedback-pair"
           >
-            About the pair on the stage{pair.question ? `: “${pair.question}”` : ''}. Pick a side to
-            send this with your choice, or press Enter to send it on its own.
+            About the pair on the stage{pair.question ? `: “${pair.question}”` : ''}. Write a note
+            if you like, then pick your answer: the note goes with it.
           </div>
         {/if}
         {#if selected.length > 0 && !hasExplicitReferences}
@@ -341,27 +344,58 @@
             onkeydown={submitOnEnter}
           ></div>
         {/key}
-        <div class="flex items-center gap-2 border-t px-2 py-1.5">
-          <span class="mr-auto text-sm text-muted-foreground">
-            {!session.atHead
-              ? 'Return to present to respond'
-              : queueing
-                ? 'The assistant reads this once it has replied'
-                : 'Enter submits · Shift+Enter adds a line'}
-          </span>
-          <Button
-            type="submit"
-            size="sm"
-            aria-label="Submit project feedback"
-            disabled={!session.atHead || !!session.pending || session.readOnly || !hasContent}
+        {#if pair && session.atHead}
+          <!-- The pair's answers stand in for Submit, each sending the draft with it. -->
+          <div
+            class="flex flex-wrap items-center justify-center gap-1.5 border-t bg-muted p-1"
+            role="group"
+            aria-label="Your answer"
           >
-            {#if thinking && !queueing}
-              <Spinner data-icon="inline-start" />Thinking
-            {:else}
-              <SendIcon data-icon="inline-start" />Submit
-            {/if}
-          </Button>
-        </div>
+            {#each pair.answers as { answer, label, text, icons } (answer)}
+              <Button
+                size="sm"
+                variant={pair.chosen === answer ? 'default' : 'outline'}
+                aria-label={label}
+                title={label}
+                onclick={() => pair?.onanswer(answer)}
+                disabled={pair.disabled || session.readOnly}
+              >
+                {#each icons as Icon, index (index)}<Icon
+                    data-icon={index === 0 ? 'inline-start' : undefined}
+                    class={index > 0 ? '-ml-1' : undefined}
+                  />{/each}
+                {text}
+              </Button>
+            {/each}
+          </div>
+          {#if pair.waiting}
+            <p class="border-t px-3 py-1.5 text-sm text-muted-foreground" role="status">
+              Answer once the assistant has replied.
+            </p>
+          {/if}
+        {:else}
+          <div class="flex items-center gap-2 border-t px-2 py-1.5">
+            <span class="mr-auto text-sm text-muted-foreground">
+              {!session.atHead
+                ? 'Return to present to respond'
+                : queueing
+                  ? 'The assistant reads this once it has replied'
+                  : 'Enter submits · Shift+Enter adds a line'}
+            </span>
+            <Button
+              type="submit"
+              size="sm"
+              aria-label="Submit project feedback"
+              disabled={!session.atHead || !!session.pending || session.readOnly || !hasContent}
+            >
+              {#if thinking && !queueing}
+                <Spinner data-icon="inline-start" />Thinking
+              {:else}
+                <SendIcon data-icon="inline-start" />Submit
+              {/if}
+            </Button>
+          </div>
+        {/if}
       </div>
     </Field.Field>
   </Field.FieldGroup>
