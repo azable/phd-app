@@ -12,6 +12,7 @@ import { expect, it } from 'vitest';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import search from './fixtures/search-places.sverlin?raw';
+import { colourCss } from './library/node/design';
 import { browserTestsOn as enabled, openHosted, settled } from './testing/browser';
 import { pausingAt, pausingEveryLabel } from './testing/every-pause';
 
@@ -147,20 +148,34 @@ it.skipIf(!enabled)(
   async () => {
     const { page, frame } = await hostedAt(pausingAt(search, '@probe.low'), 1, {
       'IntCell@target.stroke': 'violet-500',
-      'listing.places': 'fill'
+      'listing.places': 'fill',
+      'Arrow.Pointed.fill': 'amber-100',
+      'Arrow.Pointed.stroke': 'amber-500'
     });
-    const token = await frame.evaluate(() => {
-      const text = [...document.querySelectorAll('svg[data-sv-scene] text[data-sv-place]')].find(
-        (element) => element.getAttribute('data-sv-place') === '@target'
-      );
-      const box = text?.getBoundingClientRect();
-      return box && { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-    });
+    const tokenOf = (place: string) =>
+      frame.evaluate((place) => {
+        const text = [...document.querySelectorAll('svg[data-sv-scene] text[data-sv-place]')].find(
+          (element) => element.getAttribute('data-sv-place') === place
+        );
+        const box = text?.getBoundingClientRect();
+        return box && { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }, place);
+    const token = await tokenOf('@target');
     expect(token).toBeDefined();
     await page.mouse.move(token!.x, token!.y);
     // The token and the target's cell, as the mounted page outlined.
     expect(await frame.evaluate(() => document.querySelectorAll('.sv-scene-hovered').length)).toBe(
       2
     );
+    // A pointer's pale fill outlines in its stroke, darkened until it shows on the page.
+    const lo = await tokenOf('@lo');
+    await page.mouse.move(lo!.x, lo!.y);
+    const colours = await frame.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.sv-scene-hovered')].map((outline) =>
+        outline.style.getPropertyValue('--sv-hover')
+      )
+    );
+    expect(colours.length).toBeGreaterThan(0);
+    expect(new Set(colours)).toEqual(new Set([colourCss('amber-600')]));
   }
 );

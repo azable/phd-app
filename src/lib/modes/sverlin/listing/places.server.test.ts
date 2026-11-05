@@ -188,6 +188,17 @@ describe('tokens naming places in a listing', () => {
         { 'views.Int': 'IntCell', 'IntCell.fill': 'red-200' }
       )
     ).toBe('red-200');
+    // Its line takes the stroke first, as a pale fill would not show as a line; the fill where the
+    // stroke is none.
+    const pointer = { type: 'Index', pointer: true };
+    const arrow = { 'pointers.Index': 'Arrow', 'Arrow.Pointed.fill': 'amber-100' };
+    expect(
+      placePaint('@lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'amber-500' }, 'line')
+    ).toBe('amber-500');
+    expect(placePaint('@lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'none' }, 'line')).toBe(
+      'amber-100'
+    );
+    expect(listing?.places?.lines).toHaveProperty('@target', 'violet-500');
     // listing.places none lights nothing.
     const none = shownListing(
       prepared,

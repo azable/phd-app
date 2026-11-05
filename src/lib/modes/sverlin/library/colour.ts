@@ -1,6 +1,6 @@
 /**
  * CSS colours as RGBA without a browser, for scenes drawn on the server: the forms the library
- * writes (see colourCss in ../library/node/design.ts) and the browser computes, hex, rgb(), oklch()
+ * writes (see colourCss in ./node/design.ts) and the browser computes, hex, rgb(), oklch()
  * and color(srgb …), with transparent, white and black. Others read as black, as a canvas would not.
  * OKLCH converts through OKLab to linear sRGB (Ottosson, https://bottosson.github.io/posts/oklab/),
  * then to sRGB, clipped.
@@ -71,4 +71,27 @@ export function cssColour(css: string): Rgba {
     ];
   }
   return [0, 0, 0, 1];
+}
+
+const linear = (channel: number) => {
+  const value = channel / 255;
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+};
+
+/**
+ * A CSS colour's relative luminance, 0 for black to 1 for white, as WCAG 2.2 defines it
+ * (https://www.w3.org/TR/WCAG22/#dfn-relative-luminance).
+ */
+export function luminance(css: string): number {
+  const [r, g, b] = cssColour(css);
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+/**
+ * The contrast ratio of two CSS colours, 1 to 21, as WCAG 2.2 defines it
+ * (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio).
+ */
+export function contrast(a: string, b: string): number {
+  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (lighter + 0.05) / (darker + 0.05);
 }

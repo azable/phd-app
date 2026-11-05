@@ -2856,6 +2856,12 @@ export function shownListing(
                 placePaint(place, placed[place], values)
               ])
             ),
+            lines: Object.fromEntries(
+              [...new Set(tokens.map(({ place }) => place))].map((place) => [
+                place,
+                placePaint(place, placed[place], values, 'line')
+              ])
+            ),
             touched: touchedPlaces(tokens, steps)
           }
         }

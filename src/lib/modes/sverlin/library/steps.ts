@@ -47,12 +47,14 @@ export type ListingSyntax = {
 
 /**
  * A listing's tokens, each naming a place (see listing/places.server.ts), how a place lights
- * (listing.places), and the colour each place lights in, a design colour.
+ * (listing.places), and the colour each place lights in and outlines its references in, design
+ * colours.
  */
 export type ListingPlaces = {
   look: Exclude<ListingPlacesLook, 'none'>;
   tokens: { place: string; start: number; end: number }[];
   paints: Record<string, string>;
+  lines?: Record<string, string>;
 };
 
 /**
@@ -266,7 +268,8 @@ export function stepsOf(
                       places: {
                         look: listing.places.look,
                         tokens: listing.places.tokens,
-                        paints: listing.places.paints
+                        paints: listing.places.paints,
+                        ...(listing.places.lines ? { lines: listing.places.lines } : {})
                       },
                       touched: listing.places.touched[stepOf(step)] ?? []
                     }

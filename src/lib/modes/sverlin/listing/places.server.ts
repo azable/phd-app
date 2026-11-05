@@ -50,12 +50,15 @@ const unseen = new Set(['none', 'white', undefined]);
 /**
  * The colour a place lights in: the fill of its mark, the <Pointed> of the pointer view drawn there
  * (Mark.Pointed@i.fill) or the view a value there is drawn with (IntCell@key.fill), or its stroke
- * where the fill is none or white, else the listing's lit fill.
+ * where the fill is none or white, else the listing's lit fill. Its line, which outlines its
+ * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
+ * then darkens it as far as it needs, see lineColour in ../library/listing/places.ts).
  */
 export function placePaint(
   place: string,
   rendered: RenderedPlace | undefined,
-  values: Readonly<Record<string, unknown>>
+  values: Readonly<Record<string, unknown>>,
+  part: 'light' | 'line' = 'light'
 ): string {
   const prefix = rendered?.pointer ? 'pointers' : 'views';
   const view =
@@ -71,10 +74,10 @@ export function placePaint(
     kind === undefined
       ? undefined
       : ((values[`${kind}${place}.${name}`] ?? values[`${kind}.${name}`]) as string | undefined);
-  const fill = prop('fill');
-  if (!unseen.has(fill)) return fill as string;
-  const stroke = prop('stroke');
-  if (!unseen.has(stroke)) return stroke as string;
+  const seen = (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])
+    .map(prop)
+    .find((paint) => !unseen.has(paint));
+  if (seen) return seen;
   const lit = values['listing.lit.fill'] as string | undefined;
   return unseen.has(lit) ? 'amber-300' : (lit as string);
 }

@@ -5,8 +5,33 @@
  * one outlines every reference to the same place. No light takes room.
  */
 
-import { colourCss } from '../node/design';
+import { contrast, cssColour } from '../colour';
+import { colourCss, shades } from '../node/design';
 import type { ShownListing } from '../type-context';
+
+/**
+ * The least contrast a place's line keeps with the page: 3:1, WCAG 2.2's for graphics a reader
+ * must see (SC 1.4.11 Non-text Contrast,
+ * https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).
+ */
+export const lineContrast = 3;
+
+/**
+ * A place's line as CSS, which outlines its references on hover: its design colour where that
+ * keeps 3:1 with the page's background, else the nearest shade of its hue that does, darker on a
+ * light page and lighter on a dark one, else black or white.
+ */
+export function lineColour(paint: string, background: string): string | undefined {
+  if (colourCss(paint) === undefined) return undefined;
+  const page = cssColour(background)[3] === 0 ? '#ffffff' : background;
+  const darker = contrast('#000000', page) >= contrast('#ffffff', page);
+  const [, hue, shade] = /^([a-z]+)-(\d+)$/u.exec(paint) ?? [];
+  const at = shades.indexOf(Number(shade) as (typeof shades)[number]);
+  const along = at < 0 ? [] : darker ? shades.slice(at) : shades.slice(0, at + 1).reverse();
+  return [...(at < 0 ? [paint] : along.map((each) => `${hue}-${each}`)), darker ? 'black' : 'white']
+    .map((each) => colourCss(each) as string)
+    .find((css) => contrast(css, page) >= lineContrast);
+}
 
 /** The places among those given that a token names, where the variant lights places. */
 export function namedPlaces(

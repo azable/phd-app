@@ -8,6 +8,7 @@
  */
 
 import { arrangeChildren, type ArrangementProps } from '../node/arrangement';
+import { lineColour } from '../listing/places';
 import { shadows, type Shadow } from '../node/design';
 import { headDrawing } from '../node/heads';
 import type { Line, LineStyle } from '../node/LinkLines.svelte';
@@ -80,7 +81,7 @@ export function scenesOf(
   drawnLike: readonly number[],
   stepCount: number,
   options: ReserveOptions,
-  frame: SceneFrameSize & Pick<SceneFrame, 'places'>,
+  frame: SceneFrameSize & Pick<SceneFrame, 'places'> & { lines?: Record<string, string> },
   request: SceneRequest = {}
 ): { frame: SceneFrame; steps: SceneStep[] } | undefined {
   const described = new Map<number, SceneStep>();
@@ -108,13 +109,21 @@ export function scenesOf(
     }
     steps.push(scene);
   }
+  const shownBackground = background ?? '#ffffff';
+  const placeLines = Object.fromEntries(
+    Object.entries(frame.lines ?? {}).flatMap(([place, paint]) => {
+      const css = lineColour(paint, shownBackground);
+      return css ? [[place, css]] : [];
+    })
+  );
   return {
     frame: {
       width: frame.width,
       height: frame.height,
-      background: background ?? '#ffffff',
+      background: shownBackground,
       ...(page ? { node: page } : {}),
-      ...(frame.places && Object.keys(frame.places).length ? { places: frame.places } : {})
+      ...(frame.places && Object.keys(frame.places).length ? { places: frame.places } : {}),
+      ...(Object.keys(placeLines).length ? { placeLines } : {})
     },
     steps
   };

@@ -147,7 +147,8 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
       width: extents[0].frame.width,
       height: frame.height,
       fit: frame.fit,
-      places: placeColours((listing as StepListing | null)?.places?.paints)
+      places: placeColours((listing as StepListing | null)?.places?.paints),
+      lines: (listing as StepListing | null)?.places?.lines
     };
     const [markups, reserve] = shown;
     const described = scenesOf(

@@ -311,12 +311,14 @@
         : undefined;
     hovered = over?.getAttribute('data-sv-place')?.split(' ') ?? [];
   }
-  /** Every reference to a hovered place, on the canvas, in the first shared place's colour. */
+  /** Every reference to a hovered place, on the canvas, in the first shared place's line colour. */
   const hoverOutlines = $derived.by(() => {
     if (!hovered.length || !frame.places) return [];
     const colourOf = (places: readonly string[] | undefined) => {
       const shared = places?.find((place) => hovered.includes(place));
-      return shared === undefined ? undefined : (frame.places?.[shared] ?? 'currentColor');
+      return shared === undefined
+        ? undefined
+        : (frame.placeLines?.[shared] ?? frame.places?.[shared] ?? 'currentColor');
     };
     return drawn.nodes.flatMap((node) => {
       const own = colourOf(node.places);

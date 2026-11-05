@@ -1523,7 +1523,9 @@ the scenes' pauses decide whether to pause there.
   stroke where the fill is none or white. In the picture, a place is the element
   a pointer at it points at, or the outermost node of a value rendered there or
   of a pointer view with nodes around its `<Pointed>`, a caption's number
-  included. Hovering any reference outlines the others, dashed in its colour.
+  included. Hovering any reference outlines the others, dashed in the place's
+  stroke (its fill where it has none), drawn in a darker shade of its hue where
+  it would show at less than 3:1 on the page, so a pale fill still outlines.
   `listing.places`, there only where a listing has tokens, says how places
   light: `fill` (the start: the token filled, a 3px band round the node),
   `underline`, `outline` (a ring), or `none`, which lights nothing and links

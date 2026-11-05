@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { colourCss } from '../node/design';
 import type { ShownListing } from '../type-context';
-import { lightOf, namedPlaces, nodeLight } from './places';
+import { contrast } from '../colour';
+import { lightOf, lineColour, lineContrast, namedPlaces, nodeLight } from './places';
 
 const listing: ShownListing = {
   text: 'lo <= hi',
@@ -36,5 +37,26 @@ describe('a place’s references in the picture', () => {
       outlineOffset: '3px'
     });
     expect(nodeLight('underline', colour).shadow).toContain(colour);
+  });
+});
+
+describe("a place's line", () => {
+  it('keeps a colour that shows, and darkens one that does not in its own hue', () => {
+    expect(lineColour('violet-500', '#ffffff')).toBe(colourCss('violet-500'));
+    expect(lineColour('amber-500', '#ffffff')).toBe(colourCss('amber-600'));
+    const pale = lineColour('amber-100', '#ffffff')!;
+    expect(pale).toMatch(/ 70\)$/u);
+    expect(contrast(pale, '#ffffff')).toBeGreaterThanOrEqual(lineContrast);
+    // A transparent page is the white behind it.
+    expect(lineColour('amber-500', 'rgba(0, 0, 0, 0)')).toBe(colourCss('amber-600'));
+  });
+
+  it('lightens on a dark page, takes black or white where no shade shows, and has none for none', () => {
+    const dark = colourCss('neutral-900')!;
+    const line = lineColour('blue-800', dark)!;
+    expect(line).toMatch(/ 260\)$/u);
+    expect(contrast(line, dark)).toBeGreaterThanOrEqual(lineContrast);
+    expect(lineColour('white', '#ffffff')).toBe('#000000');
+    expect(lineColour('none', '#ffffff')).toBeUndefined();
   });
 });

@@ -162,6 +162,8 @@ export type SceneFrame = {
   node?: { id: string; label: string };
   /** The colour each place a listing's tokens name lights in (see listing/places.ts). */
   places?: Record<string, string>;
+  /** The colour each place outlines its references in on hover, seen on the background (lineColour). */
+  placeLines?: Record<string, string>;
 };
 
 const round = (value: number) => Math.round(value * 100) / 100;

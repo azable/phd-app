@@ -6,7 +6,7 @@
 
 import type { SceneFrame, SceneStep } from '../library';
 import type { SverlinScene } from '../scene';
-import { cssColour } from './colour';
+import { cssColour } from '../library/colour';
 import { renderPdf, type PdfResources } from './pdf';
 
 const embedded = import.meta.glob<string>('../fonts/*.ttf', {
