@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { headTrim } from './heads';
-import { curvePath, labelPoint, reachDrawn, wirePath, type Box } from './route';
+import { curvePath, labelPoint, reachDrawn, routeCurve, wirePath, type Box } from './route';
 import { routeWires } from './wires';
 
 const point = (x: number, y: number) => ({ x, y });
@@ -262,5 +262,25 @@ describe('an arrow reaching what its node draws', () => {
     expect(reachDrawn('M45,83 C45,100 45,200 45,300', drawn, { start: 9, end: 0 })).toBeUndefined();
     expect(reachDrawn(down, { start: [], end: [] }, none)).toBeUndefined();
     expect(reachDrawn('M45,180 L45,300', drawn, none)).toBeUndefined();
+  });
+});
+
+describe('straight links', () => {
+  it('join boxes side by side level, in the span they share, as a next field to the node beside', () => {
+    // Project 1323b715: a node's next field, low in its node, to the next node, taller: aimed
+    // centre to centre, each arrow ran up a slope.
+    const field: Box = { left: 0, top: 115, right: 50, bottom: 165 };
+    const node: Box = { left: 150, top: 50, right: 260, bottom: 190 };
+    const [start, , , end] = routeCurve(field, node, [], [0]).curve;
+    expect(start).toEqual(point(50, 140));
+    expect(end).toEqual(point(150, 140));
+    // One above the other, plumb.
+    const below: Box = { left: 160, top: 300, right: 200, bottom: 330 };
+    const down = routeCurve(node, below, [], [0]).curve;
+    expect(down[0].x).toBe(down[3].x);
+    // Apart both ways, centre to centre as before.
+    const corner: Box = { left: 400, top: 400, right: 420, bottom: 420 };
+    const slope = routeCurve(field, corner, [], [0]).curve;
+    expect(slope[0].y).not.toBe(slope[3].y);
   });
 });

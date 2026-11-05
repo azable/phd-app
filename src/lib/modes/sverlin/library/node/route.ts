@@ -230,6 +230,19 @@ export function routeCurve(
 ): Routed {
   const centre = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 });
   const [p, q] = [centre(from), centre(to)];
+  // Boxes side by side, or one above the other, are joined level, in the middle of the span they
+  // share, as a node's next field to the node beside it, not centre to centre up a slope.
+  const shared = (low1: number, high1: number, low2: number, high2: number) =>
+    Math.min(high1, high2) - Math.max(low1, low2) > 0
+      ? (Math.max(low1, low2) + Math.min(high1, high2)) / 2
+      : undefined;
+  const apart = (low1: number, high1: number, low2: number, high2: number) =>
+    high1 <= low2 || high2 <= low1;
+  const level = shared(from.top, from.bottom, to.top, to.bottom);
+  const plumb = shared(from.left, from.right, to.left, to.right);
+  if (level !== undefined && apart(from.left, from.right, to.left, to.right)) p.y = q.y = level;
+  else if (plumb !== undefined && apart(from.top, from.bottom, to.top, to.bottom))
+    p.x = q.x = plumb;
   const distance = Math.hypot(q.x - p.x, q.y - p.y) || 1;
   const normal = { x: -(q.y - p.y) / distance, y: (q.x - p.x) / distance };
   let best: (Routed & { hits: number }) | undefined;
@@ -240,8 +253,8 @@ export function routeCurve(
       x: p.x + (2 * (q.x - p.x)) / 3 + offset.x,
       y: p.y + (2 * (q.y - p.y)) / 3 + offset.y
     };
-    const start = endPoint(from, ends.from, c1);
-    const end = endPoint(to, ends.to, c2);
+    const start = endPoint(from, ends.from, c1, p);
+    const end = endPoint(to, ends.to, c2, q);
     // The curve's own control points lie a third of the way from where it leaves and arrives, so
     // an end moved out to its node's edge, below a vertex's captions, does not double back.
     const [k1, k2] = [1, 2].map((third) => ({
@@ -292,24 +305,6 @@ function cubicAt(a: Point, b: Point, c: Point, d: Point, t: number): Point {
     x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x,
     y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y
   };
-}
-
-/**
- * Where the line from a box's centre towards a point leaves the box: on its edge even where the
- * point lies inside it, as a curve's control point does between boxes close together, so a line
- * never starts or ends inside a box and a head stopped short of the edge meets it with its tip.
- */
-function exitPoint(box: Box, toward: Point): Point {
-  const cx = (box.left + box.right) / 2;
-  const cy = (box.top + box.bottom) / 2;
-  const dx = toward.x - cx;
-  const dy = toward.y - cy;
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-  const scale = Math.min(
-    dx === 0 ? Infinity : (box.right - box.left) / 2 / Math.abs(dx),
-    dy === 0 ? Infinity : (box.bottom - box.top) / 2 / Math.abs(dy)
-  );
-  return { x: cx + dx * scale, y: cy + dy * scale };
 }
 
 /**
@@ -414,11 +409,10 @@ export type Surround = { outer: Box; parts: readonly Box[] };
  * inside a node and the way out to the node's edge crosses the node's other content, such as another
  * field of a record, at the node's own edge instead, still in line with the box.
  */
-function endPoint(box: Box, surround: Surround | undefined, toward: Point): Point {
-  const inner = exitPoint(box, toward);
+function endPoint(box: Box, surround: Surround | undefined, toward: Point, aim: Point): Point {
+  const inner = exitFrom(box, aim, toward);
   if (!surround) return inner;
-  const centre = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
-  const outer = exitFrom(surround.outer, centre, toward);
+  const outer = exitFrom(surround.outer, aim, toward);
   for (let i = 1; i < 10; i++) {
     const t = i / 10;
     const point = { x: inner.x + (outer.x - inner.x) * t, y: inner.y + (outer.y - inner.y) * t };
@@ -433,7 +427,12 @@ function endPoint(box: Box, surround: Surround | undefined, toward: Point): Poin
   return inner;
 }
 
-/** Where a ray from a point inside a box, towards another point, leaves the box. */
+/**
+ * Where a ray from a point inside a box, towards another point, leaves the box: on its edge even
+ * where the point lies inside it, as a curve's control point does between boxes close together, so
+ * a line never starts or ends inside a box and a head stopped short of the edge meets it with its
+ * tip.
+ */
 function exitFrom(box: Box, origin: Point, toward: Point): Point {
   const dx = toward.x - origin.x;
   const dy = toward.y - origin.y;
