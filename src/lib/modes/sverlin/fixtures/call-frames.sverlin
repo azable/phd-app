@@ -1,0 +1,66 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Index = index(Values);
+  const SortCall = call('sort', { max: 4 });
+</script>
+
+<script input>
+  const values = Values;
+  const from = Values;
+</script>
+
+<script algorithm>
+  function sort(a, b, lo, hi) @sort{
+    if (@base[hi - lo < 2]) @single[return;]
+    @split[const mid = Index(a, Math.floor((lo + hi) / 2));]
+    @halves[sort(a, b, lo, mid); sort(a, b, mid, hi);]
+    @merge[
+      for (@copyStart[let c = lo]; @copyMore[c < hi]; @copyNext[c++]) @copy{
+        b[c] = a[c];
+      }
+      @ends[let i = Index(b, lo); let j = Index(b, mid);]
+      for (@start[let k = lo]; @more[k < hi]; @next[k++]) @take{
+        if (@left[i < mid && (j >= hi || b[i] <= b[j])]) {
+          a[k] = b[i];
+          i++;
+        } else {
+          a[k] = b[j];
+          j++;
+        }
+      }
+    ]
+  }
+
+  @run[sort(values, from, Index(values, 0), values.length);]
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="IndexText"><Node value={this} /></View>
+<View of="SortCall" name="Frame">
+  <Node layout="row">
+    <Node kind="Signature">sort({this.lo}, {this.hi})</Node>
+    <Node kind="Part" layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
+  </Node>
+</View>
+
+<Select name="stack" from="SortCall" where="started <= now and now < ended"
+        order="depth" />
+
+<Layout name="Stack" of="values, stack">
+  <Node layout="column">
+    {values}
+    <Node kind="StackLabel">call stack</Node>
+    <Node layout="column">{#each stack as call}{call}{/each}</Node>
+  </Node>
+</Layout>
+
+<Case name="eight" values={[7, 3, 8, 2, 6, 1, 5, 4]}
+      from={[0, 0, 0, 0, 0, 0, 0, 0]} />
+
+<Storyboard>
+  <Scene name="calls" case="eight" pause="@sort.split, @sort.merge">
+    <Stack values={values} stack={stack} />
+  </Scene>
+</Storyboard>

@@ -94,6 +94,7 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
+import { callTypes } from './calls.server';
 import {
   overSteps,
   selectsOf,
@@ -455,7 +456,8 @@ function viewSteps(source: string): MasterStep[] | undefined {
  * not it builds, as by the assistant checking what its algorithm does.
  * Throws the domain, input, or algorithm's problem.
  */
-export function recordedTrace(source: string): MasterStep[] {
+export function recordedTrace(written: string): MasterStep[] {
+  const source = callTypes(written).source;
   const shown = viewSteps(source);
   if (shown) return shown;
   const { blocks, cases } = extractBlocks(source);
@@ -747,8 +749,9 @@ function copiesSincePrevious(
  * none without such a listing.
  */
 export function listingMapsOf(
-  source: string
+  written: string
 ): Record<string, (RegionMap & { lit: boolean })[]> | undefined {
+  const source = callTypes(written).source;
   const { blocks, listings: listingBlocks, cases } = extractBlocks(source);
   if (!listingBlocks.length || !blocks.algorithm) return undefined;
   const domain = blocks.domain
@@ -792,10 +795,23 @@ export function listingMapsOf(
  * Check, interpret, and compile once per source. Only a single component is accepted; its
  * runtime and the component library are bundled locally, and only the design depends on the seed.
  */
-export function prepareSvelteComponent(written: string): PreparedComponent {
-  if (Buffer.byteLength(written, 'utf8') > maximumSourceBytes) {
+export function prepareSvelteComponent(authored: string): PreparedComponent {
+  if (Buffer.byteLength(authored, 'utf8') > maximumSourceBytes) {
     throw new InvalidSvelteSourceError('The Svelte component is too large.', { code: 'too_large' });
   }
+  // A call type declared in the domain names its function's body label (see calls.server.ts).
+  const called = callTypes(authored);
+  if (called.problems.length)
+    throw InvalidSvelteSourceError.combine(
+      called.problems.map(
+        ({ message, start }) =>
+          new InvalidSvelteSourceError(message, {
+            code: 'view_component',
+            start: sourcePosition(authored, start)
+          })
+      )
+    );
+  const written = called.source;
   // Layouts rendered by tags become the snippets they stand for, their tags renders, and snippets
   // written by the author are refused (see layout-tags.server.ts).
   const laid = layoutTags(written);

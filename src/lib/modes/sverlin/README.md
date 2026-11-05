@@ -998,6 +998,29 @@ order:
 - A scene steps over a list, or through the case's spans with `pause`, `within`
   and `at`, never both.
 
+### Calls
+
+A call type makes each call of an algorithm's function a record that a view can
+be of and a query can list. Declare it in the domain, naming the function, the
+most calls open at once, and any locals a view reads:
+
+```
+const SortCall = call('sort', { max: 4, fields: ['mid'] });
+```
+
+- The function's body has a label of its own, as
+  `function sort(a, b, lo, hi) @sort{ … }`: a call is a span of that label.
+- A view of the call reads its parameters, the locals `fields` names, and
+  `result`, the value the call returned, there once it has returned. The build
+  refuses any other name, and says to add it to `fields`.
+- A query lists calls with `from="SortCall"`, and takes the call's `max` as its
+  bound when it gives none.
+
+```
+<View of="SortCall" name="Frame"><Node>sort({this.lo}, {this.hi})</Node></View>
+<Select name="stack" from="SortCall" where="started <= now and now < ended" order="depth" />
+```
+
 ## Design
 
 The design space is every variable of a component's look, found in its markup:

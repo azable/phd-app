@@ -1729,6 +1729,15 @@ class Interpreter {
     const parent = calls.at(-2);
     const kept = this.#recording.has(label);
     const after = kept ? this.#snapshotOf(node, scope) : undefined;
+    // A call's record holds what it returned as result, once it has.
+    if (after && isCall(run) && this.#returned !== undefined) {
+      const targets = (after.targets ??= {});
+      after.state.result = this.#snapshot(this.#returned, node, 'result', {
+        types: after.types,
+        targets,
+        placed: []
+      });
+    }
     this.records.push({
       label,
       ordinal: run.ordinal,

@@ -1,0 +1,36 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 20 });
+  const FibCall = call('fib', { max: 15 });
+</script>
+
+<script input>
+  const n = Int;
+</script>
+
+<script algorithm>
+  function fib(k) @fib{
+    if (@base[k < 2]) @small[return k;]
+    @sum[return fib(k - 1) + fib(k - 2);]
+  }
+
+  @run[const answer = fib(n);]
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="FibCall" name="Frame">
+  <Node>fib({this.k}) = {this.result}</Node>
+</View>
+
+<Select name="calls" from="FibCall" where="started <= now" order="started" />
+
+<Layout name="Calls" of="calls">
+  <Node layout="column">{#each calls as call}{call}{/each}</Node>
+</Layout>
+
+<Case name="five" n={5} />
+
+<Storyboard>
+  <Scene name="calls" case="five" pause="@fib:before, @fib">
+    <Calls calls={calls} />
+  </Scene>
+</Storyboard>
