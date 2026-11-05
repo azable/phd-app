@@ -297,6 +297,8 @@ export function rowsAt(select: WrittenSelect, records: readonly SpanRecord[], no
 export const selectType = (name: string): string => `⁎${name}`;
 const groupType = (name: string) => `⁎${name}ˑgroup`;
 const rowsType = (name: string) => `⁎${name}ˑrows`;
+/** The type of a row's parent: its position in the list, as an index into it. */
+const parentType = (name: string) => `⁎${name}ˑparent`;
 
 /** The label's record type, as a view typed by the label names it (see labelApplication). */
 const recordType = (label: string) => `ℓ${label.replaceAll('.', 'ˑ')}`;
@@ -308,8 +310,16 @@ export function withSelectTypes(
 ): DomainRegistry {
   if (!selects.length) return domain;
   const structures = { ...domain.structures };
+  const atoms = { ...domain.atoms };
   for (const { name, from, group, max } of selects) {
     if (group === undefined) {
+      atoms[parentType(name)] = {
+        name: parentType(name),
+        base: 'integer',
+        index: selectType(name),
+        min: -1,
+        max
+      };
       structures[selectType(name)] = {
         kind: 'collection',
         name: selectType(name),
@@ -336,7 +346,7 @@ export function withSelectTypes(
       max
     };
   }
-  return { ...domain, structures };
+  return { ...domain, atoms, structures };
 }
 
 /** Each step with each query's rows at it, as a variable of its name. */
@@ -350,6 +360,7 @@ export function withSelectRows(
     const now = step.stop ?? 0;
     const state = { ...step.state } as Record<string, unknown>;
     const types = { ...step.types } as Record<string, string>;
+    const targets = { ...step.targets };
     for (const select of selects) {
       // The bound holds for the list: its rows, or its groups and each group's rows.
       const all = rowsAt(select, records, now);
@@ -361,7 +372,18 @@ export function withSelectRows(
       };
       types[select.name] = selectType(select.name);
       if (select.group === undefined) {
-        state[select.name] = rows.map((row, k) => element(row, `${select.name}[${k}]`));
+        // Each row whose call's caller is listed too names it as parent, its position in the list,
+        // so a link can join a call to the calls it makes.
+        const at = new Map(rows.map((row, k) => [`${row.record.label}#${row.record.ordinal}`, k]));
+        state[select.name] = rows.map((row, k) => {
+          const path = `${select.name}[${k}]`;
+          const fields = element(row, path);
+          const parent = row.record.parent === undefined ? undefined : at.get(row.record.parent);
+          if (parent === undefined) return fields;
+          types[`${path}.parent`] = parentType(select.name);
+          targets[`${path}.parent`] = select.name;
+          return { ...fields, parent };
+        });
         continue;
       }
       const groups: { key: unknown; rows: Row[] }[] = [];
@@ -381,7 +403,12 @@ export function withSelectRows(
         };
       });
     }
-    return { ...step, state: state as MasterStep['state'], types: types as MasterStep['types'] };
+    return {
+      ...step,
+      state: state as MasterStep['state'],
+      types: types as MasterStep['types'],
+      ...(Object.keys(targets).length ? { targets } : {})
+    };
   });
 }
 

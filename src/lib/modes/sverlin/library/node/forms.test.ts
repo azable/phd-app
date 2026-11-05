@@ -230,6 +230,29 @@ describe('form placement', () => {
           }
   });
 
+  it('gives each subtree of a tree only the room its own nodes need, as a tree of calls narrowing to leaves', () => {
+    // Merge sort's calls on 4 values: the whole, two halves, four leaves, each as wide as its part.
+    const calls = linked(7, [
+      [0, 1],
+      [1, 2],
+      [1, 3],
+      [0, 4],
+      [4, 5],
+      [4, 6]
+    ]) as Structure;
+    const widths = [200, 100, 50, 50, 100, 50, 50];
+    const centres = formCentres('natural', calls, (node) => ({ width: widths[node], height: 30 }), {
+      room: 20,
+      random: keyedRandom(1, 'natural')
+    });
+    const xs = calls.nodes.map((node) => centres.get(node)!.x);
+    // The leaves, a value each, sit their own width and a gap apart, not the root's width.
+    expect(xs[3] - xs[2]).toBe(80);
+    // Each parent sits over the middle of its children.
+    expect(xs[1]).toBe((xs[2] + xs[3]) / 2);
+    expect(xs[0]).toBe((xs[1] + xs[4]) / 2);
+  });
+
   it('rows a snake from its count and its nodes alone, as near a square as they go', () => {
     const rowsOf = (count: number) => {
       const path = linked(

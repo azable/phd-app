@@ -1565,6 +1565,14 @@ export function componentProbes(
   for (const name of Object.keys(signatures)) visit(name, new Set());
   const valuesOf = probeValues(domain, steps);
   const views = new Set([...Object.keys(signatures), ...Object.keys(choices)]);
+  // A query's rows are spans, each its own call or pass rather than places alike, so a view of
+  // them takes no box shared by every row: each row keeps the largest size it reaches, as any node
+  // does, and a leaf of a tree of calls is not given room for the whole array.
+  const rows = new Set(
+    Object.values(domain.structures).flatMap((structure) =>
+      structure.kind === 'collection' && structure.name.startsWith('⁎') ? [structure.element] : []
+    )
+  );
   const probes: ComponentProbe[] = [];
   const problems: ComponentProblem[] = [];
   for (const name of ordered) {
@@ -1580,6 +1588,7 @@ export function componentProbes(
       problems.push({ message: spanProblem, start: node.start ?? 0 });
       continue;
     }
+    if (rows.has(type)) continue;
     const values = valuesOf(type, parameter, single);
     const branches = branchTests(node).length;
     const ways = 2 ** branches;

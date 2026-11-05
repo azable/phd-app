@@ -976,6 +976,9 @@ beside the layouts:
   their spans began.
 - `group` puts rows with the same value of a field together. The result is then
   a list of groups, each with `key` and `rows`.
+- In a query of a function's calls, not in groups, a row whose caller is listed
+  too has `parent`, its caller's position in the list, so a link can join each
+  call to the calls it makes (see Calls).
 - `max` is the most rows any input can give, required, so the layout keeps room
   for all of them and nothing moves as rows come and go.
 - The result is state: a layout declares it, as
@@ -1020,6 +1023,35 @@ const SortCall = call('sort', { max: 4, fields: ['mid'] });
 <View of="SortCall" name="Frame"><Node>sort({this.lo}, {this.hi})</Node></View>
 <Select name="stack" from="SortCall" where="started <= now and now < ended" order="depth" />
 ```
+
+A tree of calls, as merge sort's splits and merges, is read from the run: list
+the calls started so far, draw each with a view of the call, and link each to
+its `parent` in a free layout, which draws them as a tree. Each call shows its
+part of the array as its latest stop has it: as split while it goes on, and
+sorted once it has returned, so the tree fills in as the calls run. Its `max`
+counts every call, 15 for 8 values, not only those open at once:
+
+```
+const SortCall = call('sort', { max: 15 });
+
+<View of="SortCall" name="Part">
+  <Node layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
+</View>
+<Select name="calls" from="SortCall" where="started <= now" order="started" />
+<Layout name="Tree" of="calls">
+  <Node>
+    <Node kind="Calls" layout="free">
+      {#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}
+    </Node>
+  </Node>
+</Layout>
+```
+
+- Each row's box fits its own part, a leaf one value, so the tree stays narrow;
+  `Calls.direction` turns it to run across. Pause at `@sort:before` and `@sort`
+  to add each call as it starts and show its part sorted as it returns.
+- Never type the tree's lists into the case or the domain: what the algorithm
+  does is read from its run.
 
 ## Design
 

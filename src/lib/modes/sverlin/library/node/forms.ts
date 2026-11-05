@@ -250,8 +250,14 @@ export function formCentres(
       along: (sideways ? down : across) + options.room / 2,
       deep: (sideways ? across : down) + options.room / 2
     };
+    const breadth = (node: number) => {
+      const { width, height } = sizeOf(node);
+      return sideways ? height : width;
+    };
     const placed =
-      structure.kind === 'tree' ? treeCentres(structure, fanned) : layerCentres(structure, fanned);
+      structure.kind === 'tree'
+        ? treeCentres(structure, fanned, breadth, options.room * 1.5)
+        : layerCentres(structure, fanned);
     return new Map(
       [...placed].map(([node, { along, deep }]) => [
         node,
@@ -376,20 +382,42 @@ type Spacing = { along: number; deep: number };
 
 function treeCentres(
   { root, children }: Extract<Structure, { kind: 'tree' }>,
-  { along, deep }: Spacing
+  { deep }: Spacing,
+  breadth: (node: number) => number,
+  gap: number
 ): Layered {
-  // Leaves take consecutive slots and a parent sits over the middle of its children; depth is the
-  // number of links from the root.
-  const placed: Layered = new Map();
-  let leaves = 0;
-  const visit = (node: number, level: number): number => {
+  // Each subtree takes as much room along its layer as its own nodes need, its children side by
+  // side under it with a gap, so a leaf narrower than the widest node takes only its own room, as
+  // a merge sort's tree of calls narrows to single values; a parent sits over the middle of its
+  // children. Depth is the number of links from the root.
+  const extents = new Map<number, number>();
+  const extentOf = (node: number): number => {
     const kids = children.get(node) ?? [];
-    const slots = kids.map((kid) => visit(kid, level + 1));
-    const slot = slots.length ? (slots[0] + slots[slots.length - 1]) / 2 : leaves++;
-    placed.set(node, { along: slot * along, deep: level * deep });
-    return slot;
+    const under = kids.reduce((total, kid) => total + extentOf(kid), 0) + gap * (kids.length - 1);
+    const extent = Math.max(breadth(node), kids.length ? under : 0);
+    extents.set(node, extent);
+    return extent;
   };
-  visit(root, 0);
+  extentOf(root);
+  const placed: Layered = new Map();
+  const visit = (node: number, level: number, start: number): number => {
+    const kids = children.get(node) ?? [];
+    const extent = extents.get(node)!;
+    const under =
+      kids.reduce((total, kid) => total + extents.get(kid)!, 0) + gap * (kids.length - 1);
+    let at = start + (extent - under) / 2;
+    const centres = kids.map((kid) => {
+      const centre = visit(kid, level + 1, at);
+      at += extents.get(kid)! + gap;
+      return centre;
+    });
+    const centre = centres.length
+      ? (centres[0] + centres[centres.length - 1]) / 2
+      : start + extent / 2;
+    placed.set(node, { along: centre, deep: level * deep });
+    return centre;
+  };
+  visit(root, 0, 0);
   return placed;
 }
 

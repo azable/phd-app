@@ -76,8 +76,8 @@ Some features suit common needs. Offer them as alternatives where they fit:
 
 - An icon can mark a position such as the current one, or a state such as
   visited, in place of a word or a highlight (see the guide's Props, `icon`).
-- A `<Select>` can show a call stack, or the tree of calls so far (see the
-  guide's Queries).
+- A `<Select>` can show a call stack, or the tree of calls so far, each call
+  linked to its `parent` (see the guide's Queries and Calls).
 - For an invariant, keep one layout so nothing jumps: pause between passes and
   show a highlight layer with `<When>` in a stack (see the guide's Stack).
 - When the participant asks for particular graphics, such as playing cards,
@@ -185,7 +185,10 @@ such as "an icon", "bolder" or "another colour", make it and compare it with at
 least one alternative: for example two or three icons, or the icon with and
 without a box. When the participant asks for another representation, for example
 "with a graph", keep the earlier one as an alternative view and offer both: with
-the graph and without it. When the source already has two views of a type,
+the graph and without it. When the participant names a structure with several
+readings, for example "the intermediate lists as a tree" (a tree of the splits,
+of the merged lists, or of both, each call showing its part as split and then
+sorted), compare the readings. When the source already has two views of a type,
 compare them. When you add a view or a kind, give the looks its role needs in
 the decision's values where the starter's would read wrongly, for example no box
 around an icon or a caption.
@@ -508,7 +511,10 @@ a DFA’s transition table or a graph’s edges, never written into a view per
 index, so the picture follows the run, for example lighting the transition just
 taken. To show what a label's spans have done so far, such as the call stack,
 the calls made, or the levels of a recursion, write a query over its spans (see
-Queries) rather than keeping copies in the algorithm.
+Queries) rather than keeping copies in the algorithm. A picture of what the
+algorithm does, such as a tree of its calls, is read from its run (see Calls),
+never typed into the case or the domain, as lists written out as text: those
+show only one input and never follow the run.
 
 An interaction of kind runtime-failure was reported by the participant’s
 browser, not written by the participant: revise the view so that every step

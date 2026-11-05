@@ -114,6 +114,20 @@ describe('queries', () => {
     expect(stack.map(({ lo, hi }) => `${lo}-${hi}`)).toEqual(['0-8', '0-4', '0-2']);
   });
 
+  it("names each listed call's caller as parent, its position in the list, for a tree of calls", () => {
+    const source = mergeSort(
+      frame,
+      '<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />\n<Layout name="Tree" of="calls"><Node><Node kind="Calls" layout="free">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort:before, @sort"><Tree calls={calls} /></Scene>'
+    );
+    const prepared = prepareSvelteComponent(source);
+    const calls = prepared.master.at(-1)!.state.calls as { lo: number; parent?: number }[];
+    expect(calls).toHaveLength(15);
+    // The whole has no caller; each half's caller is the whole; a quarter's, its half.
+    expect(calls.map(({ parent }) => parent ?? '-').slice(0, 4)).toEqual(['-', 0, 1, 2]);
+    expect(calls.filter(({ parent }) => parent === 0).map(({ lo }) => lo)).toEqual([0, 4]);
+  });
+
   it('builds the merge sort call stack fixture, the stack growing and shrinking', async () => {
     const prepared = prepareSvelteComponent(stackFixture);
     const { labels } = await bundlePresentation(prepared, 1);
