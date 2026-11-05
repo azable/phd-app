@@ -141,7 +141,7 @@ import { packStates } from './library/trace-pack';
 import { linkFacts, type LayoutStructure } from './structure.server';
 import type { FrameSettings } from './library/node/props';
 import { stepSignature } from '../signature.server';
-import { layOutOnServer, layoutFailureMessage } from './layout.server';
+import { drawFailureMessage, layOutOnServer, layoutFailureMessage } from './layout.server';
 import {
   boundDesign,
   boundDomain,
@@ -2661,6 +2661,9 @@ export async function bundlePresentation(
       code: 'layout_failed'
     });
   }
+  // A step the view fails to draw shows nothing of it, and every such step would seem alike.
+  if (laid.errors.length)
+    throw new InvalidSvelteSourceError(drawFailureMessage(laid.errors), { code: 'draw_failed' });
   const layout: SvelteBundle['layout'] = {
     ...laid,
     ...(size ? { readability: readabilityOf(size, frame.ratio) } : {}),

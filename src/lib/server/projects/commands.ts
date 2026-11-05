@@ -2806,6 +2806,7 @@ const buildStages: Record<string, number> = {
   listing_label: 2,
   link_placement: 3,
   layout_failed: 3,
+  draw_failed: 3,
   too_large: 3,
   too_many_steps: 3
 };

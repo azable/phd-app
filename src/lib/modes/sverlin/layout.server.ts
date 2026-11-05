@@ -187,3 +187,19 @@ export function layoutFailureMessage(
     return `The presentation is too large or slow to lay out (${failure}): draw fewer parts, or fewer steps, as a smaller input or a variant pausing at fewer labels.${failed}`;
   return `The presentation could not be laid out (${failure}).${failed}`;
 }
+
+/** The steps the view failed to draw, each reason once with the steps it stopped. */
+export function drawFailureMessage(errors: readonly string[]): string {
+  const stepsBy = new Map<string, string[]>();
+  for (const error of errors) {
+    const [, step, message] = /^step (\d+): (.*)$/su.exec(error) ?? [undefined, undefined, error];
+    const reason = message.replace(/\.$/u, '');
+    const steps = stepsBy.get(reason) ?? [];
+    if (step && !steps.includes(step)) steps.push(step);
+    stepsBy.set(reason, steps);
+  }
+  const reasons = [...stepsBy].map(([message, steps]) =>
+    steps.length ? `at step${steps.length > 1 ? 's' : ''} ${steps.join(', ')}: ${message}` : message
+  );
+  return `The view failed to draw ${reasons.join('; ')}. A step it fails at shows nothing: correct the view so it draws every step.`;
+}

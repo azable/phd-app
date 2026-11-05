@@ -125,6 +125,42 @@ describe('laying out on the server', () => {
     ).toEqual(Array.from({ length: 4 }, (_, index) => index + 1));
   }, 60_000);
 
+  it('fails a view that fails to draw its steps, which would otherwise all seem alike', async () => {
+    // Project 0c34d124's first source: its view calls the domain's DeltaIndex, which it cannot reach.
+    const source = readFileSync('src/lib/modes/sverlin/fixtures/dfa-panels.sverlin', 'utf8')
+      .replaceAll(
+        '{#each states as state, k}',
+        '{#each states as state, k}{@const row = DeltaIndex(delta, k)}'
+      )
+      .replaceAll('delta[k]', 'delta[row]');
+    const [result] = await buildBatch(source, [{ seed: 1 }]);
+    expect(result.ok || result.diagnostics[0]).toMatchObject({
+      code: 'draw_failed',
+      message: expect.stringMatching(
+        /^The view failed to draw at steps 1, 3, .*: DeltaIndex is not defined\./u
+      )
+    });
+  }, 60_000);
+
+  it('draws differently for a panel shown or not, and alike for the same choices', async () => {
+    const prepared = prepareSvelteComponent(
+      readFileSync('src/lib/modes/sverlin/fixtures/dfa-panels.sverlin', 'utf8')
+    );
+    const drawnWith = async (chosen: Record<string, string | boolean>) =>
+      (await bundlePresentation(prepared, 1, { chosen })).layout.drawn ?? [];
+    const graph = await drawnWith({ 'Graph.shown': true, 'Table.shown': false });
+    const every = graph.map((_, step) => step);
+    // The project's comparison: a graph or a table, free-layout nodes against a grid.
+    expect(
+      differingSteps(graph, await drawnWith({ 'Graph.shown': false, 'Table.shown': true }))
+    ).toEqual(every);
+    expect(
+      differingSteps(graph, await drawnWith({ 'Graph.shown': true, 'Table.shown': false }))
+    ).toEqual([]);
+    const shown = await drawnWith({});
+    expect(differingSteps(shown, await drawnWith({ 'listing.language': 'none' }))).toEqual(every);
+  }, 120_000);
+
   it('counts no step where marks differ only in the room kept for labels not yet shown', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-labels.sverlin', 'utf8');
     const prepared = everyPause(source);
@@ -307,8 +343,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     expect(tracks.rows).toHaveLength(6);
     expect(Math.min(...tracks.columns, ...tracks.rows)).toBeGreaterThan(0);
     const twice = source.replace('row={i + 1} col={j + 1}', 'row={i} col={j + 1}');
-    const clashing = await bundlePresentation(prepareSvelteComponent(twice), 1);
-    expect(clashing.layout.errors.join(' ')).toMatch(/Two cells of a grid are at row 0, col 2/);
+    await expect(bundlePresentation(prepareSvelteComponent(twice), 1)).rejects.toMatchObject({
+      code: 'draw_failed',
+      message: expect.stringMatching(/Two cells of a grid are at row 0, col 2/u)
+    });
   }, 60_000);
   it('gives a grid in a view one set of tracks, its widest over every value, that every copy shares', async () => {
     const source = `<script domain>

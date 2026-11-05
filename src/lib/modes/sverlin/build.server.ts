@@ -66,11 +66,10 @@ export async function buildBatch(
   return results;
 }
 
-/** How long the server took to lay a presentation out, and the steps the view failed to draw. */
+/** How long the server took to lay a presentation out; one the view failed to draw fails its build. */
 function logLayout(seed: number, layout: SvelteBundle['layout']): void {
-  const errors = layout.errors.length ? `; the view failed at ${layout.errors.join('; ')}` : '';
   console.info(
-    `[sverlin] seed ${seed} laid out on the server in ${layout.ms} ms${layout.cached ? ' (kept)' : ''}${errors}`
+    `[sverlin] seed ${seed} laid out on the server in ${layout.ms} ms${layout.cached ? ' (kept)' : ''}`
   );
 }
 

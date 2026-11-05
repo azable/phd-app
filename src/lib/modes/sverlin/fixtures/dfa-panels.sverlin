@@ -1,0 +1,216 @@
+<script domain>
+  const Name = type(['q0', 'q1', 'q2']);
+  const Accepting = type('boolean');
+  const State = record({ name: Name, accepting: Accepting });
+  const States = array(State, { max: 3 });
+  const StateRef = index(States);
+  const Transition = record({ zero: StateRef, one: StateRef });
+  const Delta = array(Transition, { max: 3 });
+  const DeltaIndex = index(Delta);
+  const Symbol = type(['0', '1']);
+  const Word = array(Symbol, { max: 5 });
+  const WordIndex = index(Word);
+</script>
+
+<script input>
+  const states = States;
+  const delta = Delta;
+  const word = Word;
+</script>
+
+<script algorithm>
+  @begin[let current = StateRef(states, 0);]
+  for (
+    @start[let pos = WordIndex(word, 0)];
+    @more[pos < word.length];
+    @next[pos++]
+  ) @run{
+    const symbol = word[pos];
+    const row = DeltaIndex(delta, current);
+    if (@isZero[symbol === '0']) @zero{
+      current = delta[row].zero;
+    } else @one{
+      current = delta[row].one;
+    }
+  }
+  if (@accepting[states[current].accepting]) @accepted{
+    return;
+  }
+  @rejected[return;]
+</script>
+
+<script listing="textbook">
+  RUN-DFA(word)
+  @begin[state = q0]
+  @start[for position = 0] @more[while position < length(word)]
+      @run[read symbol at position
+      if @isZero[symbol is 0]
+          @zero[state = δ(state, 0)]
+      else
+          @one[state = δ(state, 1)]]
+      @next[move to the next symbol]
+  if @accepting[state is accepting]
+      @accepted[accept]
+  @rejected[reject]
+</script>
+
+<View of="Name" name="StateName">
+  <Node value={this} />
+</View>
+
+<View of="Symbol" name="SymbolCell">
+  <Node value={this} />
+</View>
+
+<View of="State" name="StateCard">
+  <Node layout="column">
+    {this.name}
+    {#if this.accepting}
+      <Node kind="AcceptMark">accepting</Node>
+    {/if}
+  </Node>
+</View>
+
+<View of="StateRef" name="StateRefName">
+  <Node>{at(this).name}</Node>
+</View>
+
+<View of="StateRef" name="ActiveState">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="ActiveLabel">active</Node>
+  </Node>
+</View>
+
+<View of="WordIndex" name="WordIndexText">
+  <Node value={this} />
+</View>
+
+<View of="WordIndex" name="InputPosition">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="InputLabel">read</Node>
+  </Node>
+</View>
+
+<Layout name="Title">
+  <Node>DFA for binary strings ending in 01</Node>
+</Layout>
+
+<Layout name="WordLine" of="word">
+  <Node layout="column">
+    <Node kind="WordLabel">input word</Node>
+    <Node>{#each word as symbol}{symbol}{/each}</Node>
+  </Node>
+</Layout>
+
+<Layout name="Graph" of="states, delta">
+  <Node layout="free">
+    {#each states as state, k}
+      <Node layout="column">
+        {state}
+        <Node kind="StateNumber">{k}</Node>
+      </Node>
+      <Link from={k} to={delta[k].zero}>0</Link>
+      <Link from={k} to={delta[k].one}>1</Link>
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="Table" of="states, delta">
+  <Node layout="grid">
+    <Node kind="TableHeader" row={0} col={0}>state</Node>
+    <Node kind="TableHeader" row={0} col={1}>0</Node>
+    <Node kind="TableHeader" row={0} col={2}>1</Node>
+    {#each states as state, k}
+      <Node kind="RowHeader" row={k + 1} col={0}>{state}</Node>
+      <Node kind="TransitionCell" row={k + 1} col={1}>
+        {delta[k].zero}
+      </Node>
+      <Node kind="TransitionCell" row={k + 1} col={2}>
+        {delta[k].one}
+      </Node>
+    {/each}
+  </Node>
+</Layout>
+
+<Layout
+  name="Status"
+  of="states, current, symbol, @run.zero, @run.one, @accepted, @rejected"
+>
+  <Node>
+    <OneOf>
+      <When of="@run.zero">
+        <Node>Read {symbol}: follow the 0 transition.</Node>
+      </When>
+      <When of="@run.one">
+        <Node>Read {symbol}: follow the 1 transition.</Node>
+      </When>
+      <When of="@accepted">
+        <Node>Accepted: {states[current].name} is an accepting state.</Node>
+      </When>
+      <When of="@rejected">
+        <Node>Rejected: {states[current].name} is not accepting.</Node>
+      </When>
+    </OneOf>
+  </Node>
+</Layout>
+
+<Layout
+  name="Page"
+  of="states, delta, word, current, pos, symbol, @run.zero, @run.one,
+      @accepted, @rejected"
+>
+  <Node layout="column">
+    <Title />
+    <WordLine word={word} />
+    <Node layout="row">
+      <Graph states={states} delta={delta} />
+      <Table states={states} delta={delta} />
+      <Node layout="column">
+        <Listing />
+        <Status
+          states={states}
+          current={current}
+          symbol={symbol}
+        />
+      </Node>
+    </Node>
+    {current}
+    {pos}
+  </Node>
+</Layout>
+
+<Case
+  name="ending-01"
+  states={[
+    { name: 'q0', accepting: false },
+    { name: 'q1', accepting: false },
+    { name: 'q2', accepting: true }
+  ]}
+  delta={[
+    { zero: 1, one: 0 },
+    { zero: 1, one: 2 },
+    { zero: 1, one: 0 }
+  ]}
+  word={['1', '0', '1', '0', '1']}
+/>
+
+<Storyboard>
+  <Scene
+    name="run"
+    title="Run 10101"
+    case="ending-01"
+    pause="@begin, @run.zero, @run.one, @accepted, @rejected"
+  >
+    <Page
+      states={states}
+      delta={delta}
+      word={word}
+      current={current}
+      pos={pos}
+      symbol={symbol}
+    />
+  </Scene>
+</Storyboard>
+
