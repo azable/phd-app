@@ -46,6 +46,11 @@ import {
 } from './structures.server';
 
 // The domain block and the shared block vocabulary, for callers of this module.
+
+// Names of the host, never variables: a read of one is told only that it is not defined.
+const hostNames = new Set([
+  ...['undefined', 'globalThis', 'window', 'self', 'document', 'require', 'process', 'eval']
+]);
 export { interpretDomain } from './domain.server';
 export { AlgorithmError, type BlockKind } from './block.server';
 
@@ -2104,7 +2109,13 @@ class Interpreter {
         return node.value as Value;
       case 'Identifier': {
         const binding = scope.lookup(node.name);
-        if (!binding) this.#fail(node, `"${node.name}" is not defined.`);
+        if (!binding)
+          this.#fail(
+            node,
+            hostNames.has(node.name)
+              ? `"${node.name}" is not defined.`
+              : `"${node.name}" is not defined: the algorithm uses it, and neither it nor the input declares it; declare it, as let ${node.name} = …, before it is used.`
+          );
         if (binding.value === mathMarker) this.#rawCheck(node, []);
         if (binding === this.#globals.bindings.get(node.name)) return binding.value;
         // Inside a call, a collection is named as the top level holds it.

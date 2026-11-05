@@ -1216,6 +1216,25 @@ describe('scope', () => {
     expect(component).toMatch(/inherit: true,\s*reads: \["done"\]/u);
   });
 
+  it('tells a variable the algorithm uses and never declares in the algorithm, before the layout naming it', () => {
+    // Depth-first search's first source in benchmark run 4 pushed to order, never declared, and
+    // was told only that its layout declared order, which is no variable.
+    const source = `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 4 });</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} />
+<script algorithm>
+  @run[order.push(values[0]);]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<Layout name="Main" of="values, order"><Node>{values}{order}</Node></Layout>`;
+    expect(() => prepareSvelteComponent(source)).toThrow(
+      expect.objectContaining({
+        line: 3,
+        message: expect.stringContaining(
+          '"order" is not defined: the algorithm uses it, and neither it nor the input declares it'
+        )
+      })
+    );
+  });
+
   it('refuses a name the algorithm never declares', () => {
     expect(() =>
       prepareSvelteComponent(

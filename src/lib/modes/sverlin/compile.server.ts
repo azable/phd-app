@@ -1296,6 +1296,9 @@ function prepareViews(
       (node) => readsOf(node as Parameters<typeof readsOf>[0]),
       layoutNameOf
     );
+    // A layout naming what is no variable often names one the algorithm uses and never declares:
+    // where the algorithm failed to run, its own problem is told first, at its line.
+    if (undeclared.length && typed && 'failure' in typed) throw typed.failure;
     if (undeclared.length)
       throw InvalidSvelteSourceError.combine(
         undeclared.map(
