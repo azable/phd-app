@@ -299,6 +299,8 @@ type Sample = {
   /** The node each moves from, where it had another id, and each node's own text. */
   was: Record<string, string>;
   texts: Record<string, string>;
+  /** Each node's box's fill, as the browser resolves it. */
+  fills: Record<string, string>;
 };
 
 /** SceneView's nodes and links each frame, in the frame's coordinates, until the step settles. */
@@ -312,11 +314,13 @@ async function framesTo(page: Page, step: number): Promise<Sample[]> {
           const nodes: Sample['nodes'] = {};
           const was: Sample['was'] = {};
           const texts: Sample['texts'] = {};
+          const fills: Sample['fills'] = {};
           const scene = document.querySelector('svg[data-sv-scene]')!;
           for (const group of scene.querySelectorAll<SVGGElement>(':scope > g[data-sv-node]')) {
             // A node's text drawn over the links is a group of its own, with no box.
-            const box = group.querySelector(':scope > rect');
+            const box = group.querySelector(':scope > rect[data-sv-box]');
             if (!box) continue;
+            fills[group.dataset.svNode!] ??= getComputedStyle(box).fill;
             const { x, y, width, height } = (box as SVGRectElement).getBBox();
             nodes[group.dataset.svNode!] ??= { x, y, width, height };
             if (group.dataset.svWas) was[group.dataset.svNode!] = group.dataset.svWas;
@@ -331,7 +335,7 @@ async function framesTo(page: Page, step: number): Promise<Sample[]> {
             const end = path.getPointAtLength(path.getTotalLength());
             links[group.dataset.svLink!] = [start.x, start.y, end.x, end.y];
           }
-          samples.push({ nodes, links, was, texts });
+          samples.push({ nodes, links, was, texts, fills });
           if (root.dataset.svSettled === String(step)) resolve(samples);
           else requestAnimationFrame(sample);
         };
@@ -412,6 +416,28 @@ describe('SceneView’s motion', () => {
       expect(moving).toBeGreaterThan(0);
     });
   }
+
+  it.skipIf(!enabled)(
+    'eases a node’s fill from its old colour to its new',
+    { timeout: 300_000 },
+    async () => {
+      const source = graphs['./fixtures/dijkstra.sverlin'];
+      const built = await bundlePresentation(prepareSvelteComponent(source), 1);
+      const page = await openPresentation(built.javascript, { served: built.layout.scenes! });
+      const between: string[] = [];
+      for (let step = 1; step < Math.min(built.labels.length, stepsCompared); step++) {
+        const samples = await framesTo(page, step);
+        const [first, last] = [samples[0], samples.at(-1)!];
+        for (const [id, fill] of Object.entries(last.fills)) {
+          const was = first.fills[id];
+          if (!was || was === fill) continue;
+          if (samples.slice(1, -1).some((sample) => ![was, fill].includes(sample.fills[id])))
+            between.push(id);
+        }
+      }
+      expect(between.length).toBeGreaterThan(0);
+    }
+  );
 
   // A participant's Dijkstra (project d20bd3f6): every vertex's cost shows ∞ until it is updated,
   // each ∞ a node whose id counts the renders before it, so when one cost turns finite the others'

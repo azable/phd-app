@@ -245,6 +245,33 @@ const mixBox = (a: SceneBox, b: SceneBox, t: number): SceneBox => ({
   height: mix(a.height, b.height, t)
 });
 
+/**
+ * A colour part way from one to another, as CSS mixes them, so any colour the page wrote mixes
+ * with any other; none is transparent, so a fill appearing fades in in its own colour.
+ */
+export function mixColour(from: string | undefined, to: string | undefined, t: number) {
+  if (from === to) return to;
+  return `color-mix(in srgb, ${to ?? 'transparent'} ${num(t * 100)}%, ${from ?? 'transparent'})`;
+}
+
+/** A node's look part way from its old look to its new: its colours and its stroke's width. */
+function mixLook(from: SceneLook, to: SceneLook, t: number): SceneLook {
+  const colours = (['fill', 'stroke', 'glow'] as const).flatMap((use) => {
+    const mixed = mixColour(from[use], to[use], t);
+    return mixed ? [[use, mixed]] : [];
+  });
+  const width = (look: SceneLook) => (look.stroke ? (look.strokeWidth ?? 0) : undefined);
+  const [was, is] = [width(from), width(to)];
+  return {
+    ...to,
+    ...Object.fromEntries(colours),
+    color: mixColour(from.color, to.color, t) ?? to.color,
+    ...(was !== undefined || is !== undefined
+      ? { strokeWidth: mix(was ?? is ?? 0, is ?? was ?? 0, t) }
+      : {})
+  };
+}
+
 /** A path's numbers, and its commands as a template, so two paths written alike can be mixed. */
 function pathParts(d: string): { numbers: number[]; template: string } {
   const numbers: number[] = [];
@@ -396,13 +423,24 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
       ...node,
       ...(old.id === node.id ? {} : { was: old.id }),
       box: mixBox(old.box, node.box, t),
+      look: mixLook(old.look, node.look, t),
       opacity: mix(old.opacity, node.opacity, t),
       runs: sameRuns
-        ? node.runs.map((run, i) => ({ ...run, box: mixBox(old.runs[i].box, run.box, t) }))
+        ? node.runs.map((run, i) => ({
+            ...run,
+            box: mixBox(old.runs[i].box, run.box, t),
+            color: mixColour(old.runs[i].color, run.color, t) ?? run.color
+          }))
         : node.runs,
       marks:
         old.marks.length === node.marks.length
-          ? node.marks.map((mark, i) => ({ ...mark, box: mixBox(old.marks[i].box, mark.box, t) }))
+          ? node.marks.map((mark, i) => ({
+              ...mark,
+              box: mixBox(old.marks[i].box, mark.box, t),
+              ...(mark.fill || old.marks[i].fill
+                ? { fill: mixColour(old.marks[i].fill, mark.fill, t) }
+                : {})
+            }))
           : node.marks
     };
   });
@@ -429,7 +467,12 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
               tip: mixPoint(old.heads[i].tip, head.tip, t)
             }))
           : link.heads;
-      links.push({ ...link, d, heads });
+      links.push({
+        ...link,
+        d,
+        heads,
+        stroke: mixColour(old.stroke, link.stroke, t) ?? link.stroke
+      });
     } else if (old) {
       links.push({ ...old, key: `${old.key}~old`, opacity: old.opacity * (1 - t) });
       links.push({ ...link, opacity: link.opacity * t });

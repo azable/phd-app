@@ -5,6 +5,7 @@ import {
   drawnScene,
   headTransform,
   linkPath,
+  mixColour,
   mixPath,
   pairNodes,
   sceneBetween,
@@ -135,6 +136,16 @@ describe('scenes drawn as SVG', () => {
     expect([at('v')?.box.x, at('v')?.was]).toEqual([100, 'v#2']);
     expect([at('v#2')?.box.x, at('v#2')?.was]).toEqual([200, 'v#3']);
     expect([at('v~old')?.box.x, at('v~old')?.opacity]).toEqual([0, 0.5]);
+  });
+
+  it('eases colours from the old to the new, a fill appearing from transparent', () => {
+    expect(mixColour('red', 'red', 0.5)).toBe('red');
+    expect(mixColour('red', 'blue', 0.25)).toBe('color-mix(in srgb, blue 25%, red)');
+    const from = drawnScene(step([node('a', 0)]));
+    const to = drawnScene(step([node('a', 0, { look: { ...look, fill: 'blue' } })]));
+    expect(sceneBetween(from, to, 0.5).nodes[0].look.fill).toBe(
+      'color-mix(in srgb, blue 50%, transparent)'
+    );
   });
 
   it('pairs a value drawn in several places with the place in the same node first', () => {

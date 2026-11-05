@@ -499,6 +499,7 @@
             width={box.width}
             height={box.height}
             rx={node.look.radius ?? 0}
+            data-sv-box
             fill={node.look.fill ?? 'transparent'}
             stroke={node.look.stroke ?? 'none'}
             stroke-width={node.look.strokeWidth ?? 0}
@@ -507,7 +508,14 @@
           />
         {:else}
           <!-- Clickable, though it paints nothing. -->
-          <rect x={box.x} y={box.y} width={box.width} height={box.height} fill="transparent" />
+          <rect
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            fill="transparent"
+            data-sv-box
+          />
         {/if}
         {#each node.shapes as shape, i (i)}
           <path
