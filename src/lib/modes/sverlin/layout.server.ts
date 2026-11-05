@@ -224,12 +224,16 @@ export async function arrangementsOnServer(
   let loaded: Awaited<ReturnType<typeof loadIsolated>> | undefined;
   try {
     loaded = await loadIsolated(code, within, errors);
+    // The longest arrangement so far, so one that would end past the budget is not started.
+    let longest = 0;
     for (const values of designs) {
-      if (performance.now() - started > budgetMs) break;
+      if (performance.now() - started + longest > budgetMs) break;
       const among = group(values);
       if (among !== undefined && settled.has(among)) continue;
       const failed = errors.length;
+      const begun = performance.now();
       const geometry = await loaded.at(1, values).catch(() => undefined);
+      longest = Math.max(longest, performance.now() - begun);
       const size = await loaded.read<DrawnSize>('__sverlinSize');
       if (!geometry || !size || errors.length > failed) continue;
       const signature = arrangementSignature(geometry);
