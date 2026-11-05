@@ -362,4 +362,22 @@ describe('layered drawing', () => {
     ];
     expect(crossings(graph, centresOf(graph))).toBe(0);
   });
+
+  it('starts each layer in an order its seed chooses, so seeds give other arrangements', () => {
+    // A leads to B and C, both to D: B and C can sit either way round.
+    const bfs: [number, number][] = [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 3]
+    ];
+    const orders = new Set(
+      [1, 2, 3, 4, 5, 6].map((seed) => {
+        const centres = centresOf(bfs, seed);
+        return centres.get(1)!.x < centres.get(2)!.x ? 'B left' : 'C left';
+      })
+    );
+    expect(orders).toEqual(new Set(['B left', 'C left']));
+    for (const seed of [1, 2, 3]) expect(crossings(bfs, centresOf(bfs, seed))).toBe(0);
+  });
 });

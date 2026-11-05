@@ -1262,6 +1262,12 @@ export function slotInsertions(
           });
           continue;
         }
+        // The value the view draws, as to={this} in a view of a reference type: its place is the
+        // slot the view is drawn in.
+        if (slot === ' inherit') {
+          insertions.push({ at: (part.start ?? 0) + '<Link'.length, text: ` __${end}Inherit` });
+          continue;
+        }
         if (!/ (path|at)=/u.test(slot)) {
           // Neither an index nor a position the state holds: it would name no element.
           if (expression && slot === '')

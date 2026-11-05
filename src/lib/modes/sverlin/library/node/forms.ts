@@ -257,7 +257,7 @@ export function formCentres(
     const placed =
       structure.kind === 'tree'
         ? treeCentres(structure, fanned, breadth, options.room * 1.5)
-        : layerCentres(structure, fanned);
+        : layerCentres(structure, fanned, options.random);
     return new Map(
       [...placed].map(([node, { along, deep }]) => [
         node,
@@ -429,7 +429,8 @@ function treeCentres(
  */
 function layerCentres(
   { nodes, parents, depths }: Extract<Structure, { kind: 'layers' }>,
-  { along, deep }: Spacing
+  { along, deep }: Spacing,
+  random?: (key: string) => number
 ): Layered {
   // Each node sits one layer below its deepest parent, or, given depths (an undirected graph, or
   // one with cycles), at its distance from its start.
@@ -498,6 +499,10 @@ function layerCentres(
     }
     return count;
   };
+  // The seed chooses the order each layer starts in, so seeds settle into different orders, each
+  // as few crossings as the sweeps find from it, rather than all into the reading order's.
+  if (random)
+    for (const row of rows) row.sort((a, b) => random(`layers.${a}`) - random(`layers.${b}`));
   index();
   for (const row of rows.slice(1)) order(row, above);
   let best = rows.map((row) => [...row]);

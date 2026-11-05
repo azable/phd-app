@@ -706,18 +706,18 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 - `<Link to={n.next} />` with no `from`, in a node of the record's view, leaves
   that node for the node the field refers to, and the free layout around the
   nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
-  Write links there, reading the record's fields: one in a view of the reference
+  Write links there, reading the record's fields, or in a view of the reference
   type itself, as
-  `<View of="NodeRef" name="NextLink"><Link to={this} /></View>`, ends at the
-  value drawn, not at a node. Draw a node as fields, as a textbook does,
-  `[ A | next ]` or a tree's `[ left | key | right ]`: a node holding only such
-  links is a field, a kind of its own so it has its own look
-  (`NodeBox.NextField`); the arrow leaves the field, arcing over its node where
-  it points back. A tree's children are placed in the order their links leave
-  it, so the left field's child is on the left. Where the field is the end, the
-  link draws the end with its type's view (`views.End`, as `EndMark`'s ∅). A
-  pointer view of the reference, as `Here`, marks the node a variable refers to,
-  and draws nothing at the end.
+  `<View of="NodeRef" name="NextLink"><Link to={this} /></View>`, which leaves
+  each field it draws for the node that field refers to. Draw a node as fields,
+  as a textbook does, `[ A | next ]` or a tree's `[ left | key | right ]`: a
+  node holding only such links is a field, a kind of its own so it has its own
+  look (`NodeBox.NextField`); the arrow leaves the field, arcing over its node
+  where it points back. A tree's children are placed in the order their links
+  leave it, so the left field's child is on the left. Where the field is the
+  end, the link draws the end with its type's view (`views.End`, as `EndMark`'s
+  ∅). A pointer view of the reference, as `Here`, marks the node a variable
+  refers to, and draws nothing at the end.
 - References suit nodes added and linked as the algorithm runs; where it does
   arithmetic on places, or the structure is an array (an array-based tree, a
   graph over a fixed list of vertices), keep a position instead, `index(Nodes)`.
@@ -1198,10 +1198,12 @@ none. A layout whose data makes no structure has no `form` or `direction` and is
 laid out freely, unless the page finds a structure in the links it draws, which
 it draws `natural`. `curve`, `straight` (the start) or `curved`, is how its
 arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges are
-drawn from. A free layout keeps its form's own proportions and takes the size of
-everything it draws, its links' curves, heads and labels included, so the same
-values draw the same layout wherever it is, whatever the frame or what is beside
-it.
+drawn from: the order each layer of a layered graph starts in, a `wave`'s,
+`arc`'s or `scatter`'s shape, and where a layout with no structure starts; a
+tree or a path drawn `natural` is the same at every seed. A free layout keeps
+its form's own proportions and takes the size of everything it draws, its links'
+curves, heads and labels included, so the same values draw the same layout
+wherever it is, whatever the frame or what is beside it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,

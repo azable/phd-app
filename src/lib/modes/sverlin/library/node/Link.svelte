@@ -48,6 +48,8 @@
     __toAt,
     __fromIn,
     __toIn,
+    __fromInherit = false,
+    __toInherit = false,
     __reads = []
   }: {
     /** The key of the node the link starts from, or a position, as edge.from; none, the element its view draws. */
@@ -72,6 +74,12 @@
     /** Internal: the collection an end that is an {#each} index points into. */
     __fromIn?: unknown;
     __toIn?: unknown;
+    /**
+     * Internal: an end that is the value a view draws, as to={this} in a view of a reference type:
+     * its place is the slot the view is drawn in, as nodes[0].left.
+     */
+    __fromInherit?: boolean;
+    __toInherit?: boolean;
     /** Internal: the variables and labels its ends read, as a slot's (see Slot.svelte). */
     __reads?: readonly string[];
   } = $props();
@@ -83,8 +91,11 @@
     () => (hiddenContext() ?? false) || __reads.some((name) => types?.absent(name))
   );
   // A link to an end, as a list's last next, draws the end where it is, with the end's view.
+  const enclosing = slotContext();
+  const fromPath = untrack(() => __fromPath ?? (__fromInherit ? enclosing : undefined));
+  const toPath = untrack(() => __toPath ?? (__toInherit ? enclosing : undefined));
   const end = untrack(() => {
-    const path = __toPath ?? (__toAt === undefined ? undefined : elementOf(types, __toOf, __toAt));
+    const path = toPath ?? (__toAt === undefined ? undefined : elementOf(types, __toOf, __toAt));
     const type = path === undefined ? undefined : types?.typeAt(path);
     return type === undefined ? undefined : endsContext()?.[type]?.();
   });
@@ -93,8 +104,8 @@
     from:
       from === undefined
         ? (drawnContext() ?? '')
-        : linkEnd(types, from, { path: __fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
-    to: linkEnd(types, to, { path: __toPath, of: __toOf, at: __toAt, in: __toIn })
+        : linkEnd(types, from, { path: fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
+    to: linkEnd(types, to, { path: toPath, of: __toOf, at: __toAt, in: __toIn })
   }));
   // The link's look is the variant's values for its kind; one a component draws for an element, as
   // an edge, takes the stroke of the kind of the root's pointer at it, as for the current edge, the

@@ -4,7 +4,10 @@ import { rankedArrangements } from '$lib/shared/readability';
 
 import { arrangementDesigns } from './arrangements.server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bfsUndirected from './fixtures/bfs-undirected.sverlin?raw';
+import bst from './fixtures/bst.sverlin?raw';
+import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import heap from './fixtures/heap-tree.sverlin?raw';
 import { crossingsOf } from './layout.server';
 
@@ -44,6 +47,29 @@ describe('arrangements laid out by the server', () => {
       expect(new Set(ranked.map(({ values }) => JSON.stringify(values))).size).toBe(ranked.length);
     }
   );
+
+  it(
+    'arranges a tree drawn by a view of its reference type in each form, links ending at its nodes',
+    { timeout: 120_000 },
+    async () => {
+      // bst draws its children with <View of="NodeRef" name="NextLink"><Link to={this} /></View>.
+      const { layout } = await bundlePresentation(
+        prepareSvelteComponent(bst),
+        1,
+        {},
+        { arrange: true }
+      );
+      const forms = new Set((layout.arrangements ?? []).map(({ values }) => values['Tree.form']));
+      expect(forms.size).toBeGreaterThan(3);
+    }
+  );
+
+  it('offers forms to graphs whose links a view of an edge, or a field list, draws', () => {
+    // Dijkstra's <View of="Edge"><Link from={this.from} to={this.to}>; bfs-references'
+    // {#each this.out as w}<Link to={w} />, both layered graphs.
+    for (const source of [dijkstra, bfsReferences])
+      expect(prepareSvelteComponent(source).design.space['Graph.form']).toContain('natural');
+  });
 
   it('measures none for a page with no free layout', { timeout: 60_000 }, async () => {
     const { layout } = await bundlePresentation(

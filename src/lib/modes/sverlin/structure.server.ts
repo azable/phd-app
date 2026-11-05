@@ -86,6 +86,21 @@ export function linkFacts(options: {
     options.domain
   );
   const state = new Set(options.stateNames);
+  // Links with both ends written in a view of a type, as <Link from={this.from} to={this.to}> in a
+  // view of an edge: drawn wherever a free layout walks elements of that type.
+  const viewLinks = (
+    options.views as readonly { name: string; type: string; node: Node }[]
+  ).flatMap(({ name, type, node }) => {
+    const parameter = node.parameters?.[0]?.name;
+    return parameter
+      ? writtenLinks(node.children ?? [], []).map((link) => ({
+          ...link,
+          tag: `${name}:${link.tag}`,
+          type,
+          parameter
+        }))
+      : [];
+  });
   let evaluations = 0;
   // Each link drawn at some step, with the steps it is drawn at; undefined past the work allowed.
   const presence = (nodes: readonly Node[]) => {
@@ -102,8 +117,32 @@ export function linkFacts(options: {
           );
           if (ends[0] && ends[1]) drawn.push({ tag, from: ends[0], to: ends[1] });
         }
+      for (const collection of walked) {
+        const elements = valueAt(step.state, collection);
+        if (!Array.isArray(elements)) continue;
+        for (const [index, element] of elements.entries()) {
+          const path = `${collection}[${index}]`;
+          const type = step.types?.[path];
+          for (const { tag, from, to, scopes, parameter } of viewLinks.filter(
+            (link) => link.type === type
+          ))
+            for (const env of bindings(
+              scopes,
+              new Map([[parameter, { value: element, path }]]),
+              step,
+              state
+            )) {
+              if (++evaluations > evaluationLimit) return undefined;
+              const ends = [read(from, env, step, state), read(to, env, step, state)].map((end) =>
+                end ? endOf(end, step) : undefined
+              );
+              if (ends[0] && ends[1]) drawn.push({ tag, from: ends[0], to: ends[1] });
+            }
+        }
+      }
       for (const [path, target] of Object.entries(step.targets ?? {})) {
-        const field = /^(.+)\[(\d+)\]\.([A-Za-z_$][\w$]*)$/u.exec(path);
+        // A field, or an element of a list a field holds, as nodes[0].next or vertices[0].out[1].
+        const field = /^(.+)\[(\d+)\]\.([A-Za-z_$][\w$]*)(?:\[\d+\])?$/u.exec(path);
         if (!field || !walked.has(field[1])) continue;
         const record = step.types?.[`${field[1]}[${field[2]}]`];
         const value = valueAt(step.state, path);
@@ -235,15 +274,27 @@ const attribute = (node: Node, name: string): Expression | undefined => {
 
 const isLink = (node: Node) => node.type === 'InlineComponent' && node.name === 'Link';
 
-/** The to of every <Link> with no from in some markup, {#if} branches included. */
-function fromlessEnds(nodes: readonly Node[]): Expression[] {
-  return nodes.flatMap((node) => [
-    ...(isLink(node) && !attribute(node, 'from') && attribute(node, 'to')
-      ? [attribute(node, 'to') as Expression]
-      : []),
-    ...fromlessEnds(node.children ?? []),
-    ...(node.else ? fromlessEnds([node.else]) : [])
-  ]);
+/**
+ * The to of every <Link> with no from in some markup, {#if} branches included; an {#each} item, as
+ * w in `{#each this.out as w}<Link to={w} />`, stands for what its block walks, `this.out`.
+ */
+function fromlessEnds(
+  nodes: readonly Node[],
+  items: ReadonlyMap<string, Expression> = new Map()
+): Expression[] {
+  return nodes.flatMap((node) => {
+    const to = isLink(node) && !attribute(node, 'from') ? attribute(node, 'to') : undefined;
+    const walked = to?.type === 'Identifier' && to.name ? items.get(to.name) : undefined;
+    const inner =
+      node.type === 'EachBlock' && node.expression && node.context?.type === 'Identifier'
+        ? new Map([...items, [node.context.name ?? '', node.expression]])
+        : items;
+    return [
+      ...(to ? [walked ?? to] : []),
+      ...fromlessEnds(node.children ?? [], inner),
+      ...(node.else ? fromlessEnds([node.else], inner) : [])
+    ];
+  });
 }
 
 /**
