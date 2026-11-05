@@ -10,7 +10,8 @@ import {
   buildVariant,
   DesignValueError,
   listingRegionFallbacks,
-  listingRegionSpace
+  listingRegionSpace,
+  starterVariant
 } from './design.server';
 
 const prepared = prepareSvelteComponent(linearSearchSource);
@@ -356,5 +357,25 @@ describe('free layouts', () => {
     expect(prepareSvelteComponent(bfs).design.starter).toMatchObject({
       'Graph.Link.head': 'arrow'
     });
+  });
+});
+
+describe('a bare icon', () => {
+  it('starts as an arrow up in a pointer view, which marks where it points', () => {
+    const starter = starterVariant(
+      [
+        { key: 'CurrentMark', role: 'icon' },
+        { key: 'CurrentMark.Pointed', role: 'pointed' },
+        { key: 'Legend', role: 'icon' }
+      ],
+      {},
+      false,
+      [],
+      {},
+      undefined,
+      []
+    );
+    expect(starter['CurrentMark.icon']).toBe('arrow-up');
+    expect(starter['Legend.icon']).toBe('circle-dot');
   });
 });

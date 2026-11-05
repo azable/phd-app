@@ -400,7 +400,7 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'text' | 'code' | 'pointed' | 'link';
+export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'pointed' | 'link';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -444,6 +444,7 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   value: nodeProps,
   text: nodeProps,
   code: nodeProps,
+  icon: [...nodeProps, 'icon'],
   pointed: [
     ...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)),
     'overflow',
@@ -634,6 +635,25 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     minSize: 0,
     ...plainStyle,
     ...uniformSlot
+  },
+  // A node drawing one icon its kind chooses, as <Node icon />, beside other content as a word is.
+  icon: {
+    shown: true,
+    fill: 'none',
+    stroke: 'none',
+    strokeWidth: 0,
+    strokeStyle: 'solid',
+    opacity: 1,
+    color: 'neutral-900',
+    font: fontValues[0],
+    textSize: 20,
+    weight: 'normal',
+    padding: 0,
+    radius: 0,
+    minSize: 0,
+    ...plainStyle,
+    ...uniformSlot,
+    icon: 'circle-dot'
   },
   pointed: {
     fill: 'amber-100',

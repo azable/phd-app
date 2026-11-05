@@ -3063,6 +3063,8 @@ function checkProps(
     // A caption token's node, which the build writes (see captionTokens in layout-tags).
     if (component === 'Node' && ['__code', '__math', '__mathText'].includes(attribute.name))
       continue;
+    // A bare icon draws the one icon its kind's design chooses (see roleOf).
+    if (component === 'Node' && attribute.name === 'icon' && attribute.value === true) continue;
     const at = { start: sourcePosition(source, attribute.start ?? start) };
     // A length a view binds is taken out before this (see bind), so one left is written elsewhere.
     if (component === 'Node' && lengthProps.has(attribute.name)) {
@@ -3687,13 +3689,16 @@ function withNodeRefs(
     );
     if (has('layout') || links || (children.length === 1 && children[0].type === 'EachBlock'))
       return 'container';
+    // A bare icon, <Node icon />, draws the one icon its kind chooses.
+    if (attributes.some((attribute) => attribute.name === 'icon' && attribute.value === true))
+      return 'icon';
     // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
     if (has('icon') && !has('value') && !children.length) return 'text';
     if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = ['container', 'text', 'code', 'value', 'pointed', 'link'];
+  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'pointed', 'link'];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes and the flow they set.

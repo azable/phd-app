@@ -2416,6 +2416,16 @@ describe('props bound to a view’s value', () => {
       });
     });
 
+    it('gives a bare icon one variable of its kind, starting unboxed on a distinct icon', () => {
+      const { design } = withState(
+        '<View of="State" name="StateMark"><Node layout="row"><Node kind="Mark" icon /><Node value={this} /></Node></View>'
+      );
+      expect(design.space['StateMark.Mark.icon']).toEqual(iconNames);
+      expect(design.starter['StateMark.Mark.icon']).toBe('circle-dot');
+      expect(design.starter['StateMark.Mark.fill']).toBe('none');
+      expect(design.starter['StateMark.Mark.stroke']).toBe('none');
+    });
+
     it('refuses an icon written as it is, the design choosing each value’s', () => {
       expect(() =>
         withState('<View of="State" name="StateMark"><Node icon="flag" /></View>')

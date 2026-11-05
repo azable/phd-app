@@ -56,6 +56,15 @@ A scene that pauses at the top-level loop, between passes, shows the invariant
 grow. Where the participant has not asked for this, offer it as an alternative
 to compare with the plain picture.
 
+Some features suit common needs. Offer them as alternatives where they fit:
+
+- An icon can mark a position such as the current one, or a state such as
+  visited, in place of a word or a highlight (see the guide's Props, `icon`).
+- A `<Select>` can show a call stack, or the tree of calls so far (see the
+  guide's Queries).
+- For an invariant, keep one layout so nothing jumps: pause between passes and
+  show a highlight layer with `<When>` in a stack (see the guide's Stack).
+
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you
 add, steps through sensibly. As no code runs outside a label (see the guide's

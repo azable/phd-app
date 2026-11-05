@@ -1224,6 +1224,11 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
   `heart`, `skull`, `bug`, `flame`, `snowflake`, `sparkles`, `link`, `unlink`,
   `arrow-up`, `arrow-down`, `arrow-left`, `arrow-right`, `plus`, `minus`,
   `infinity`, `user`.
+- `icon` written bare, as `<Node kind="Arrow" icon />`, draws one icon its
+  kind's design chooses, the variable `Arrow.icon` over the same options. In a
+  pointer view it marks where the pointer is, for example
+  `<View of="Index" name="CurrentMark"><Node layout="column"><Pointed /><Node kind="Arrow" icon /></Node></View>`,
+  and starts as `arrow-up`. A written name, as `icon="flag"`, is refused.
 
 ```svelte
 <View of="Vertex" name="VertexCard">
@@ -1575,7 +1580,7 @@ kind's (see Design). Props starting with `__` are reserved for the library.
   root node is its frame and takes none.
 - A look, inside a view, as an expression of its value, as `fill={this.seen}`,
   or an icon, as `icon={this}` (see Props bound to a view's value); anywhere
-  else a look is its kind's, and a node has no icon.
+  else a look is its kind's, and a bare `icon` draws its kind's icon.
 - `width` and `height`, inside a view, as an expression of its value, as
   `height={this}`: a length, the value times its kind's unit (see Props bound to
   a view's value); nowhere else.

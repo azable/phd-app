@@ -94,6 +94,7 @@
     col,
     children,
     flow,
+    icon: kindIcon = false,
     __view = 'root',
     __over,
     __ref,
@@ -118,6 +119,8 @@
   }: {
     /** A primitive to display, when the node has no children. */
     value?: Primitive;
+    /** Written bare, as <Node icon />: one icon, its kind's design's. */
+    icon?: boolean;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
     /** In a grid, the cell this node is placed in: whole numbers from 0, as loop indices. */
@@ -200,11 +203,14 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
-  // The icon the view binds, as icon={this}: its value's, wherever a pointer draws it again.
+  // The icon the view binds, as icon={this}: its value's, wherever a pointer draws it again; or,
+  // written bare, the one its kind's design gives.
   const icon = $derived(
     __domains?.icon
       ? iconGlyph(boundLook(design, __view, 'icon', bound.__bound_icon, __domains.icon))
-      : undefined
+      : kindIcon
+        ? iconGlyph(look('icon'))
+        : undefined
   );
   // A length the view binds, as width={this}: its value times its kind's unit, in pixels.
   const lengthOf = (prop: 'width' | 'height') =>

@@ -278,6 +278,10 @@ export function starterVariant(
   places: DesignPlaces = { kinds: [], choices: [] },
   layouts: readonly string[]
 ): Record<string, DesignValue> {
+  // A pointer view's icon marks where it points, so it starts as an arrow up at the element.
+  const pointerViews = new Set(
+    kinds.flatMap(({ key }) => (key.endsWith('.Pointed') ? [key.slice(0, -'.Pointed'.length)] : []))
+  );
   return {
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [viewKey(type), options[0]])
@@ -294,7 +298,12 @@ export function starterVariant(
       : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLook(kind, prop)])
+        propsOf(kind).map((prop) => [
+          `${kind.key}.${prop}`,
+          prop === 'icon' && pointerViews.has(kind.key.split('.')[0])
+            ? 'arrow-up'
+            : starterLook(kind, prop)
+        ])
       )
     ),
     // A place starts as its type and kinds do.
