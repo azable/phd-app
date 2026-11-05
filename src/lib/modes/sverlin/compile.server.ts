@@ -1489,6 +1489,14 @@ function prepareViews(
     const labelMarks = new Map<string, { kinds: Record<string, string>; by?: string }>();
     // The places the root and its parts render at, which a listing's tokens can name.
     const rootPlaces = new Map<string, RenderedPlace>();
+    // A type drawn only as links' labels, as a weight, starts its views as a label: plain text, as
+    // small as its words, so the layout keeps room for the words rather than a value's box.
+    const linkLabelViews = new Set(
+      [...Map.groupBy(sites, ({ name }) => name)]
+        .filter(([type, at]) => views[type] && at.every(({ inLink }) => inLink))
+        .flatMap(([type]) => optionsOf(type).plain)
+        .filter((view) => unlaid.some(({ key, role }) => key === view && role === 'value'))
+    );
     for (const site of sites) {
       const { name, start, inNode, at, label } = site;
       if (!at || !(chosen[name] || pointerChosen[name])) continue;
@@ -2400,6 +2408,11 @@ function prepareViews(
             ...Object.fromEntries(
               [...cards].flatMap((card) =>
                 Object.entries(cardLook).map(([prop, value]) => [`${card}.${prop}`, value])
+              )
+            ),
+            ...Object.fromEntries(
+              [...linkLabelViews].flatMap((view) =>
+                Object.entries(linkLabelLook).map(([prop, value]) => [`${view}.${prop}`, value])
               )
             ),
             ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
@@ -4360,6 +4373,20 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
  * border, and the stage's white behind it, so the line breaks round it rather than crossing it.
  */
 const linkLabelPaint: Readonly<Record<string, string>> = { fill: 'white', stroke: 'none' };
+
+/**
+ * A label view's starting look, for a type drawn only on links: its words alone, smaller than a
+ * value's, on the stage's white so the line breaks round them; still a kind, so the design can
+ * box it.
+ */
+const linkLabelLook: Readonly<Record<string, string | number>> = {
+  fill: 'white',
+  stroke: 'none',
+  padding: 0,
+  radius: 0,
+  minSize: 0,
+  textSize: 14
+};
 
 /** The paint a value starts with where it is a card's field: none, the card being its box. */
 const cardFieldPaint: Readonly<Record<string, string>> = { fill: 'none', stroke: 'none' };

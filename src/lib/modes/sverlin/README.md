@@ -1852,7 +1852,9 @@ A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
 it: text, as `<Link from={k} to={w}>next</Link>`, or views of values and nodes,
 as `<Link from={u} to={v}>{cost}</Link>`, each of its own kind, so a weight can
-be a white pill on the line, followed from step to step as any value is. The
+be a white pill on the line, followed from step to step as any value is. A type
+drawn only on links, as a weight, starts as plain small text on the stage's
+white, kept room for as its words; the design can still box it. The
 line breaks round a label, and a labelled link keeps room for an arrow on either
 side of it.
 

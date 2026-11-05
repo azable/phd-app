@@ -2944,9 +2944,10 @@ describe('starter looks of a graph', () => {
     const { design } = prepareSvelteComponent(graph);
     expect(design.starter['WeightText@edge.weight.fill']).toBe('white');
     expect(design.starter['WeightText@edge.weight.stroke']).toBe('none');
-    // Its own paint, not its kind's: a weight drawn elsewhere keeps the cell's box.
+    // Its own paint, not its kind's; here the weight is drawn only on links, so its view starts as
+    // plain text too (a weight drawn elsewhere keeps its box: see layout.server.test.ts).
     expect(design.fallbacks['WeightText@edge.weight.fill']).toBeUndefined();
-    expect(design.starter['WeightText.stroke']).toBe('neutral-300');
+    expect(design.starter['WeightText.stroke']).toBe('none');
   });
 
   it('starts a view of a record arranging its parts as one boxed card, its fields unboxed', () => {

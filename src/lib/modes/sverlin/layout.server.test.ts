@@ -495,3 +495,35 @@ describe('the geometry a page draws with', () => {
     expect(geometryFor(undefined, 1)).toBeUndefined();
   });
 });
+
+describe('link labels', () => {
+  const source = readFileSync('src/lib/modes/sverlin/fixtures/dijkstra.sverlin', 'utf8');
+
+  it('start as plain text where their type is drawn only on links, keeping room for the words', async () => {
+    const prepared = prepareSvelteComponent(source);
+    expect(prepared.design.starter).toMatchObject({
+      'WeightText.padding': 0,
+      'WeightText.minSize': 0,
+      'WeightText.stroke': 'none',
+      'WeightText.fill': 'white',
+      'WeightText.textSize': 14
+    });
+    const width = async (chosen: Record<string, string | number> = {}) =>
+      (await bundlePresentation(prepared, 1, { chosen })).layout.readability?.content.width ?? 0;
+    // Boxed as a value, the labels need more room between the vertices.
+    const boxed = {
+      'WeightText.padding': 0.375,
+      'WeightText.minSize': 2.5,
+      'WeightText.textSize': 20
+    };
+    expect(await width()).toBeLessThan(await width(boxed));
+  });
+
+  it('keep the box of a type also drawn elsewhere, only unboxed on the line', () => {
+    const shared = source.replace(
+      '<View of="Weight" name="WeightText"><Node value={this} /></View>',
+      '<View of="Weight" name="WeightText"><Node value={this} /></View>\n<Layout name="Extra" of="edges"><Node>{edges[0].weight}</Node></Layout>'
+    );
+    expect(prepareSvelteComponent(shared).design.starter['WeightText.minSize']).not.toBe(0);
+  });
+});
