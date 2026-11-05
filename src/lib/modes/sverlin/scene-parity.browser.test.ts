@@ -55,7 +55,13 @@ const cases: [name: string, source: string, chosen: DesignValues][] = [
   ...Object.entries(graphs).map(([path, source]): [string, string, DesignValues] => {
     const name = path.replace(/^.*\/(.*)\.sverlin$/u, '$1');
     return [name, source, name === 'ucs-compare' ? (natural as DesignValues) : {}];
-  })
+  }),
+  // A glow and a hard shadow round every vertex card, which only paint.
+  [
+    'dijkstra-effects',
+    graphs['./fixtures/dijkstra.sverlin'],
+    { 'VertexCard.glow': 'on', 'VertexCard.shadow': 'hard' }
+  ]
 ];
 
 /** The most steps of a fixture compared, enough to reach its later states without taking long. */

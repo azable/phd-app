@@ -9,6 +9,7 @@
 -->
 <script lang="ts">
   import { motionDuration } from './motion';
+  import { glowHalo, shadows } from './node/design';
   import {
     drawnScene,
     ease,
@@ -344,6 +345,46 @@
         : undefined;
   // Text is drawn as the page set it, in its font and case, centred in the box it filled there.
   const cased = (run: SceneText) => (run.case === 'uppercase' ? run.text.toUpperCase() : run.text);
+  /**
+   * The paint round a node's box, behind it, as its CSS box-shadow draws it (see boxEffects): its
+   * glow, a halo grown by its spread and blurred, and its shadow, an offset copy, soft and lifted
+   * a blurred black and hard a solid block in its stroke colour or its text's. A CSS blur radius is
+   * twice the deviation a blur filter takes.
+   */
+  function effectsOf(node: DrawnNode) {
+    const { box, look } = node;
+    const radius = look.radius ?? 0;
+    const drawn: { box: SceneBox; radius: number; fill: string; opacity: number; blur: number }[] =
+      [];
+    if (look.glow) {
+      const { spread, blur, alpha } = glowHalo;
+      drawn.push({
+        box: {
+          x: box.x - spread,
+          y: box.y - spread,
+          width: box.width + 2 * spread,
+          height: box.height + 2 * spread
+        },
+        radius: radius + spread,
+        fill: look.glow,
+        opacity: alpha,
+        blur: blur / 2
+      });
+    }
+    if (look.shadow) {
+      const { x, y, blur, alpha } = shadows[look.shadow];
+      const hard = look.shadow === 'hard';
+      drawn.push({
+        box: { ...box, x: box.x + x, y: box.y + y },
+        radius,
+        fill: hard ? (look.stroke ?? look.color) : '#000000',
+        opacity: alpha,
+        blur: blur / 2
+      });
+    }
+    return drawn;
+  }
+
   const rect = (node: DrawnNode) =>
     node.look.stroke && node.look.strokeWidth
       ? strokeInside(node.box, node.look.strokeWidth)
@@ -438,6 +479,19 @@
         data-sv-was={node.was}
         data-sv-place={node.places?.join(' ')}
       >
+        {#each effectsOf(node) as effect, i (i)}
+          <rect
+            x={effect.box.x}
+            y={effect.box.y}
+            width={effect.box.width}
+            height={effect.box.height}
+            rx={effect.radius}
+            fill={effect.fill}
+            opacity={node.opacity * effect.opacity}
+            style:filter={effect.blur ? `blur(${effect.blur}px)` : undefined}
+            pointer-events="none"
+          />
+        {/each}
         {#if node.look.fill || node.look.stroke}
           <rect
             x={box.x}
