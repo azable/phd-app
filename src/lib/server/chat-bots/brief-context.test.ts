@@ -126,8 +126,8 @@ describe('the brief in the assistant’s context', () => {
       decides: ['lettering', 'colour']
     });
     // A label’s wording shown, other terms in words; what stands out shown, the misconception in words.
-    expect(byKey.vocabulary).toMatchObject({ prompt: 'ask', asked: 'both', decides: ['views'] });
-    expect(byKey.focus).toMatchObject({ prompt: 'ask', asked: 'both', first: true });
+    expect(byKey.vocabulary).toMatchObject({ prompt: 'show', asked: 'both', decides: ['views'] });
+    expect(byKey.focus).toMatchObject({ prompt: 'show', asked: 'both', first: true });
     expect(byKey.audience).toMatchObject({ prompt: 'ask' });
     expect(byKey.audience).not.toHaveProperty('asked');
   });
@@ -178,7 +178,7 @@ describe('the brief in the assistant’s context', () => {
     );
     expect(context.attributes.filter(({ prompt }) => prompt)).toEqual([
       expect.objectContaining({ key: 'audience', prompt: 'ask', first: true }),
-      expect.objectContaining({ key: 'focus', prompt: 'ask', first: true }),
+      expect.objectContaining({ key: 'focus', prompt: 'show', first: true }),
       // Whether to suggest alternatives, asked with the first offered.
       expect.objectContaining({ key: 'lead', prompt: 'ask', withAlternatives: true })
     ]);
@@ -225,7 +225,7 @@ describe('the brief in the assistant’s context', () => {
     expect(context).not.toHaveProperty('next');
     expect(context.askFirst[0]).toBe('focus');
     expect(context.attributes.find(({ key }) => key === 'focus')).toMatchObject({
-      prompt: 'ask',
+      prompt: 'show',
       first: true
     });
   });
@@ -295,9 +295,9 @@ describe('how the participant likes to work', () => {
       lead: { status: 'inferred', value: lead, tags: [lead] }
     });
 
-  it('starts from a draft first and a mix of suggesting and directing', () => {
+  it('starts from a draft first and suggesting by default', () => {
     const context = briefContext(brief({ algorithm }), open);
-    expect(context.working).toEqual({ questions: 'draft-first', lead: 'mix' });
+    expect(context.working).toEqual({ questions: 'draft-first', lead: 'suggest' });
     expect(byKey(context).questions).not.toHaveProperty('prompt');
   });
 

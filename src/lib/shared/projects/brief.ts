@@ -248,7 +248,7 @@ export const briefAttributes = [
     bearsOn: 'conversation',
     asked: 'words',
     withAlternatives: true,
-    assumed: 'mix',
+    assumed: 'suggest',
     tags: { suggest: {}, direct: {}, mix: {} }
   }
 ] as const satisfies readonly BriefAttribute[];
