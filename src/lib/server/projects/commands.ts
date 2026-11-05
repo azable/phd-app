@@ -1416,8 +1416,11 @@ async function runSverlinAssistantTurn(
  * Once a helper round has recorded candidates, the assistant goes on by itself, once, offering them
  * (see the interaction kind view-helpers), whoever started the round: not after such a follow-up,
  * nor where the participant has written meanwhile (their turn takes the candidates), nor past the
- * phase deadline. A round that kept none goes on only where the reply showed nothing, the assistant
- * then showing something of its own (project 5cb84e44's five arrangements waited unoffered).
+ * phase deadline, nor while the participant still has comparisons to answer, the candidates then
+ * waiting for their next turn (project 180c7b48's follow-up asked the held question and added a
+ * pair while five were unanswered). A round that kept none goes on only where the reply showed
+ * nothing, the assistant then showing something of its own (project 5cb84e44's five arrangements
+ * waited unoffered).
  */
 async function followAfterHelpers(
   document: ProjectDocument,
@@ -1438,6 +1441,7 @@ async function followAfterHelpers(
         (id) => document.events[id - 1]?.type === 'visualization.view-candidates'
       )) ||
     pendingAssistantTurnRequests(document).length > 0 ||
+    waitingComparisons(document).length > 0 ||
     (deadline !== undefined && Date.now() >= deadline)
   )
     return document;
