@@ -101,7 +101,7 @@ describe('labels', () => {
 
   it('report a marker on no code, or written wrong, each with the fix', () => {
     expect(problemOf('@a{\n  let n = Int(1);\n}')).toThrow(
-      '@a{ is on a block of its own, whose declarations later code could not see; wrap the statements as @a[…] instead.'
+      '@a{ here is on a block of its own, whose declarations later code could not see; wrap the statements as @a[…] instead. (As the body of an if, an else, a loop or a function, @a{ is right.)'
     );
     expect(problemOf('@a[let n = Int(1);]\n@b[n = n @c[+ 1];]')).toThrow(
       '@c[…] wraps + 1, which is not a statement, statements in a row, or an expression.'
@@ -109,5 +109,36 @@ describe('labels', () => {
     expect(problemOf('@a[let n = Int(1);')).toThrow('@a[ is never closed with ].');
     expect(problemOf('@a let n = Int(1);')).toThrow('@a needs code to label');
     expect(problemOf('@a.b[let n = Int(1);]')).toThrow("A label's name has no dots");
+  });
+
+  it("refuse a span written as an if's, an else's or a loop's body, saying a body takes @name{", () => {
+    // Project f47eb2ed's merge: its branches as spans, which parsed as nothing but "Unexpected token".
+    const branches = `
+      @start[let n = Int(1);]
+      while (@more[n < 3]) @merge{
+        if (@choose[n < 2]) @takeLeft[
+          n++;
+          n++;
+        ] else @takeRight[
+          n = n + 2;
+          n++;
+        ]
+      }
+    `;
+    expect(problemOf(branches)).toThrow(
+      '@takeLeft[ is the body of an if: a body takes a block label, as if (…) @takeLeft{ … } else @…{ … }; @takeLeft[…] wraps statements inside a block.'
+    );
+    expect(problemOf('@start[let n = Int(1);]\nwhile (@more[n < 3]) @step[n++; n++;]')).toThrow(
+      '@step[ is the body of a while loop: a body takes a block label, as while (…) @step{ … }'
+    );
+    // Its branches as blocks build.
+    expect(
+      problemOf(
+        branches
+          .replace('@takeLeft[', '@takeLeft{')
+          .replace('] else @takeRight[', '} else @takeRight{')
+          .replace(/\n\s*\]\n\s*\}/u, '\n}\n}')
+      )
+    ).not.toThrow();
   });
 });

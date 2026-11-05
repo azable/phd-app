@@ -33,9 +33,15 @@ export function parseBlock(
     kind === 'algorithm'
       ? { ...readMarkers(body), parameterTypes: new Map() as ParameterTypes }
       : kind === 'domain'
-        ? { ...readParameterTypes(body), markers: [], problems: [] }
-        : { code: body, markers: [], problems: [], parameterTypes: new Map() as ParameterTypes };
-  const { code, markers, problems, parameterTypes } = read;
+        ? { ...readParameterTypes(body), markers: [], problems: [], bodies: [] }
+        : {
+            code: body,
+            markers: [],
+            problems: [],
+            bodies: [],
+            parameterTypes: new Map() as ParameterTypes
+          };
+  const { code, markers, problems, bodies, parameterTypes } = read;
   const [problem] = problems;
   if (problem) throw new AlgorithmError(problem.message, problem.at, true);
   try {
@@ -47,10 +53,13 @@ export function parseBlock(
       typeof position === 'number'
         ? Math.min(Math.max(position - wrapperPrefix.length, 0), body.length)
         : undefined;
+    // A span of several statements as a body leaves an else or the next statement unparsed.
+    const asBody = bodies.findLast((span) => at === undefined || span.at < at);
+    if (asBody) throw new AlgorithmError(asBody.message, asBody.at, true);
     throw new AlgorithmError(
       at !== undefined && code[at] === ':' && /[\w$]\s*$/u.test(code.slice(0, at))
         ? "Type annotations are written only on an operator's parameters, as (q: Queue, x: Letter) => …"
-        : message.replace(/\s*\(\d+:\d+\)$/u, ''),
+        : withLine(message.replace(/\s*\(\d+:\d+\)$/u, ''), body, at),
       at,
       true
     );
@@ -65,6 +74,16 @@ export function parseBlock(
     new Set(domain ? operatorNames(domain) : [])
   );
   return { root, offset, markers, code, parameterTypes };
+}
+
+/** A parse error's message with the line it is on, which a bare "Unexpected token" never names. */
+function withLine(message: string, body: string, at: number | undefined): string {
+  if (at === undefined) return message;
+  const start = body.lastIndexOf('\n', at - 1) + 1;
+  const end = body.indexOf('\n', at);
+  const line = body.slice(start, end < 0 ? body.length : end).trim();
+  if (!line) return message;
+  return `${message}, in \`${line.length > 80 ? `${line.slice(0, 79)}…` : line}\``;
 }
 
 /** Each type written on an operator's parameter, by where the parameter's name ends, and where the type is. */

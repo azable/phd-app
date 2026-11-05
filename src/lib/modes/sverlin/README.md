@@ -31,6 +31,9 @@ Most refused first sources break one of these rules, each explained below:
 - A position draws as a mark only in the root of the layout that draws its
   array; anywhere else it goes in a node, `<Node>{i}</Node>`.
 - The algorithm declares every variable it uses, as `let order = Order([]);`.
+- A body of several statements takes `@name{`, as
+  `if (…) @left{ … } else @right{ … }`; `@name[…]` wraps statements inside a
+  block.
 - A design variable is named as the design names it: a kind inside another takes
   every kind around it, as `Cells.Item.Eliminated`, and only a free layout whose
   data makes a structure, with no `flow`, has `form` and `direction`.

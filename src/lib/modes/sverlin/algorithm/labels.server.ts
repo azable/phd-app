@@ -25,6 +25,8 @@ export type Marker = {
   kind: 'span' | 'block';
   start: number;
   end: number;
+  /** For a span written as a body, why it may wrap only one statement. */
+  asBody?: string;
 };
 
 /**
@@ -56,6 +58,8 @@ export function readMarkers(body: string): {
   code: string;
   markers: Marker[];
   problems: LabelProblem[];
+  /** Spans written as an if's, an else's, a loop's or a function's body, the problem if the parse fails. */
+  bodies: LabelProblem[];
 } {
   const code = body.split('');
   const blank = (from: number, to: number) => {
@@ -63,6 +67,7 @@ export function readMarkers(body: string): {
   };
   const markers: Marker[] = [];
   const problems: LabelProblem[] = [];
+  const bodies: LabelProblem[] = [];
   const open: (Omit<Marker, 'end' | 'kind'> | null)[] = [];
   for (let at = 0; at < body.length; at++) {
     const character = body[at];
@@ -101,7 +106,14 @@ export function readMarkers(body: string): {
         continue;
       }
       if (bracket === '[') {
-        open.push({ name, at, start: at + written.length });
+        // A span as a body works where it wraps one statement; where it wraps more, the parse fails,
+        // and the parse's problem names this (see bodySpans).
+        const body = bodyOf(at);
+        const asBody =
+          body &&
+          `@${name}[ is the body of ${body.what}: a body takes a block label, as ${body.example(name)}; @${name}[…] wraps statements inside a block.`;
+        if (asBody) bodies.push({ at, message: asBody });
+        open.push({ name, at, start: at + written.length, ...(asBody ? { asBody } : {}) });
         blank(at, at + written.length);
       } else {
         markers.push({
@@ -128,7 +140,46 @@ export function readMarkers(body: string): {
   for (const marker of open)
     if (marker)
       problems.push({ message: `@${marker.name}[ is never closed with ].`, at: marker.at });
-  return { code: code.join(''), markers: markers.sort((a, b) => a.at - b.at), problems };
+  return {
+    code: code.join(''),
+    markers: markers.sort((a, b) => a.at - b.at),
+    problems,
+    bodies
+  };
+
+  /**
+   * What a marker here would be the body of, an if's, an else's, a loop's or a function's, where
+   * `@name[` cannot stand: a span wraps statements inside a block and is no statement itself.
+   */
+  function bodyOf(at: number): { what: string; example: (name: string) => string } | undefined {
+    const before = body.slice(0, at).trimEnd();
+    if (/\belse$/u.test(before))
+      return { what: 'an else', example: (name) => `if (…) @…{ … } else @${name}{ … }` };
+    if (/\bdo$/u.test(before))
+      return { what: 'a do loop', example: (name) => `do @${name}{ … } while (…)` };
+    if (!before.endsWith(')')) return undefined;
+    let depth = 0;
+    let open = -1;
+    for (let index = before.length - 1; index >= 0; index--) {
+      if (before[index] === ')') depth += 1;
+      else if (before[index] === '(' && (depth -= 1) === 0) {
+        open = index;
+        break;
+      }
+    }
+    if (open < 0) return undefined;
+    const keyword = /([\w$]+)\s*$/u.exec(body.slice(0, open))?.[1];
+    if (keyword === 'if')
+      return { what: 'an if', example: (name) => `if (…) @${name}{ … } else @…{ … }` };
+    if (keyword === 'while' || keyword === 'for')
+      return {
+        what: `a ${keyword} loop`,
+        example: (name) => `${keyword} (…) @${name}{ … }`
+      };
+    if (/\bfunction\s+[\w$]+\s*$/u.test(body.slice(0, open)))
+      return { what: 'a function', example: (name) => `function f(…) @${name}{ … }` };
+    return undefined;
+  }
 }
 
 /**
@@ -164,6 +215,11 @@ export function readLabels(
   for (const marker of markers) {
     const marked = marker.kind === 'block' ? blockOf(marker) : spanned(marker);
     if (!marked) continue;
+    // A span of several statements as a loop's body parses, the later ones outside the loop.
+    if (marker.asBody && marked.length > 1) {
+      problems.push({ message: marker.asBody, at: marker.at });
+      continue;
+    }
     const { start } = spanOf(marked[0]);
     const { end } = spanOf(marked[marked.length - 1]);
     labels.push({
@@ -210,7 +266,7 @@ export function readLabels(
     }
     if (!parent || parent.type === 'BlockStatement') {
       problems.push({
-        message: `@${marker.name}{ is on a block of its own, whose declarations later code could not see; wrap the statements as @${marker.name}[…] instead.`,
+        message: `@${marker.name}{ here is on a block of its own, whose declarations later code could not see; wrap the statements as @${marker.name}[…] instead. (As the body of an if, an else, a loop or a function, @${marker.name}{ is right.)`,
         at: marker.at
       });
       return undefined;
@@ -250,7 +306,9 @@ export function readLabels(
       return [parent?.type === 'ExpressionStatement' ? parent : outer];
     }
     problems.push({
-      message: `@${marker.name}[…] wraps ${code.slice(start, end).trim().split('\n')[0]}, which is not a statement, statements in a row, or an expression.`,
+      message:
+        marker.asBody ??
+        `@${marker.name}[…] wraps ${code.slice(start, end).trim().split('\n')[0]}, which is not a statement, statements in a row, or an expression.`,
       at: marker.at
     });
     return undefined;
