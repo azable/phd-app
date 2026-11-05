@@ -105,7 +105,9 @@ it.skipIf(!enabled)(
     expect(await numbers.text('Bounds')).toBe('lo 0 hi 6');
     await numbers.page.close();
     // Searching past the largest value, lo ends past the end: its value draws nothing there.
-    const past = await open(search.replace('Int(42)', 'Int(99)'), { 'views.Index': 'IndexValue' });
+    const past = await open(search.replace('target={42}', 'target={99}'), {
+      'views.Index': 'IndexValue'
+    });
     await past.show(past.labels.length - 1);
     expect(await past.text('Bounds')).toBe('lo hi 71');
     expect(past.errors).toEqual([]);
