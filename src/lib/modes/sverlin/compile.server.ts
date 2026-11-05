@@ -145,6 +145,7 @@ import {
   boundDesign,
   boundDomain,
   boundLengthDomain,
+  countCalls,
   gridExtents,
   memberTestRead,
   typeOfPath,
@@ -1734,6 +1735,7 @@ function prepareViews(
         operators.has(name) ||
         name === 'Math' ||
         name === 'at' ||
+        name === 'count' ||
         name === layoutProp ||
         isLabelKey(name) ||
         isRunsKey(name) ||
@@ -1742,7 +1744,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p) and spans(@label); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), count(n) and spans(@label); a layout also reads the input and algorithm variables it declares; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -2061,9 +2063,31 @@ function prepareViews(
             )
         )
       );
+    // count(n) is the list 0, 1, … up to n − 1, its type's largest bounding the room (see countCalls).
+    const counts = countCalls(
+      ast.html,
+      domain,
+      variableTypes(master),
+      new Map(found.components.map(({ name, type }) => [name, type]))
+    );
+    const countProblems = counts.filter(({ problem }) => problem);
+    if (countProblems.length)
+      throw InvalidSvelteSourceError.combine(
+        countProblems.map(
+          ({ problem, start }) =>
+            new InvalidSvelteSourceError(problem!, {
+              code: 'view_component',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
     const slotted = new Map<number, string[]>();
     const unresolvedEnds: { end: string; written: string; start: number }[] = [];
     const tagged = withInsertions(svelteSource, [
+      ...counts.flatMap(({ start, end }) => [
+        { at: start, text: 'Array.from({ length: Math.max(0, ', remove: 'count('.length },
+        { at: end - 1, text: ') }, (_, k) => k)', remove: 1 }
+      ]),
       ...guards,
       ...branchInsertions(found.components),
       // A grid's rows and columns for any input, from its coordinates' types (see gridExtents).

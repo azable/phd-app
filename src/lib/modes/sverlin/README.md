@@ -1641,6 +1641,35 @@ cell by `row` and `col`, usually loop indices or positions:
   sits in its column and row; and `justify`, how the columns spread where the
   grid has more room than they need.
 
+### Counts
+
+`{#each count(n) as k}…{/each}` draws one copy for each of 0, 1, … up to n − 1.
+Use it in a view to draw a small number as marks, for example dots in rows of
+five, so a reader sees 7 as 5 and 2 without counting:
+
+```svelte
+<View of="Count" name="Dots">
+  <Node layout="grid">
+    {#each count(this) as k}<Node kind="Dot" row={Math.floor(k / 5)} col={k % 5}>●</Node>{/each}
+  </Node>
+</View>
+```
+
+Or a rating as a row of icons, each one icon its kind's design chooses:
+
+```svelte
+<View of="Rating" name="Stars">
+  <Node layout="row">{#each count(this) as k}<Node kind="Star" icon />{/each}</Node>
+</View>
+```
+
+- `n` is a value of an integer type with a largest value, as `this` in a view of
+  `type('integer', { min: 0, max: 10 })`. The view keeps room for that largest
+  count at every step, so a growing count never moves anything.
+- A count goes up to 100 at most. A larger value reads better as a length: draw
+  it as a bar, with `height={this}`.
+- `count(…)` is only the list an `{#each}` walks.
+
 ## Free layout and links
 
 `layout="free"` places a node's children by layout instead of in a line: use it

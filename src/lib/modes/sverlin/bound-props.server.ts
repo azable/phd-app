@@ -450,6 +450,88 @@ export function boundDesign(bindings: readonly Binding[]): {
 }
 
 /**
+ * The most a view's `{#each count(n) as k}` may draw. A view is drawn with every value of its
+ * type to size it (see probeComponents in components.server.ts), up to 256 cases, so a count up to
+ * this many is sized at its largest; past it the view would grow huge and slow to size, and a value
+ * that large reads better as a length, drawn as a bar.
+ */
+export const countLimit = 100;
+
+/** A `count(n)` call's argument, where the expression is one. */
+export function countArgument(node: unknown): Node | undefined {
+  const call = node as Node | undefined;
+  const callee = call?.callee as Node | undefined;
+  return call?.type === 'CallExpression' && callee?.type === 'Identifier' && callee.name === 'count'
+    ? ((call.arguments as Node[] | undefined) ?? [])[0]
+    : undefined;
+}
+
+/** The largest count a `count(…)` call can give, or why it can be no count. */
+function countOf(
+  call: Node,
+  scope: Scope,
+  domain: DomainRegistry
+): { max: number } | { problem: string } {
+  const args = (call.arguments as Node[] | undefined) ?? [];
+  const type = args.length === 1 ? typeOfPath(args[0], scope, domain) : undefined;
+  const atom = type === undefined ? undefined : domain.atoms[type];
+  if (!atom || atom.base !== 'integer' || atom.values || atom.max === undefined)
+    return {
+      problem:
+        "count(…) takes one value of an integer type with a largest value, as count(this) in a view of type('integer', { min: 0, max: 10 }): every count up to the largest is drawn to size the view."
+    };
+  if (atom.max > countLimit)
+    return {
+      problem: `count(…) goes up to ${atom.max}, more than the ${countLimit} a view can draw one by one: draw a value this large as a length, as a bar with height={this}.`
+    };
+  return { max: atom.max };
+}
+
+/** Each `count(…)` in the markup, by where it is, with why it cannot be drawn, if it cannot. */
+export function countCalls(
+  markup: unknown,
+  domain: DomainRegistry,
+  variables: Scope,
+  views: Scope
+): { start: number; end: number; problem?: string }[] {
+  const calls: { start: number; end: number; problem?: string }[] = [];
+  const heads = new Set<unknown>();
+  const visit = (node: unknown, scope: Scope): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => visit(child, scope));
+    const part = node as Node;
+    if (part.type === 'SnippetBlock') {
+      const view = views.get((part.expression as Node | undefined)?.name as string);
+      return visit(part.children, view === undefined ? scope : new Map([[viewThis, view]]));
+    }
+    if (part.type === 'EachBlock' && countArgument(part.expression)) heads.add(part.expression);
+    const callee = part.callee as Node | undefined;
+    if (
+      part.type === 'CallExpression' &&
+      callee?.type === 'Identifier' &&
+      callee.name === 'count'
+    ) {
+      const counted = countOf(part, scope, domain);
+      const problem =
+        'problem' in counted
+          ? counted.problem
+          : heads.has(part)
+            ? undefined
+            : 'count(…) is only the list an {#each} walks, as {#each count(this) as k}…{/each}: it draws one copy for each of 0, 1, … up to the value.';
+      calls.push({
+        start: part.start as number,
+        end: part.end as number,
+        ...(problem ? { problem } : {})
+      });
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata') visit(child, scope);
+  };
+  visit(markup, variables);
+  return calls;
+}
+
+/**
  * Each grid's rows and columns for any input, by where its tag starts: every row and every col its
  * cells can take, from the types of what their coordinates read, an {#each} index running from 0 to
  * its collection's max - 1. Null where a coordinate's values cannot be worked out, so that grid
@@ -466,6 +548,18 @@ export function gridExtents(
   const extents = new Map<number, [number[] | null, number[] | null]>();
   const inEach = (each: Node, scope: Scope): Scope => {
     const inner = new Map(scope);
+    // count(n) walks 0, 1, … up to n − 1, the most its type allows.
+    if (countArgument(each.expression)) {
+      const counted = countOf(each.expression as Node, scope, extended);
+      if ('max' in counted && counted.max > 0) {
+        const index = `count to ${counted.max}`;
+        atoms[index] ??= { name: index, base: 'integer', min: 0, max: counted.max - 1 };
+        const context = each.context as Node | undefined;
+        if (context?.type === 'Identifier') inner.set(context.name as string, index);
+        if (typeof each.index === 'string') inner.set(each.index, index);
+      }
+      return inner;
+    }
     const collection = typeOfPath(each.expression as Node, scope, extended);
     const structure = collection === undefined ? undefined : extended.structures[collection];
     if (structure?.kind !== 'collection') return inner;

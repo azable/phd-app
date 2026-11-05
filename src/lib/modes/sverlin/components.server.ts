@@ -14,6 +14,7 @@ import type { AtomType } from './algorithm/atoms.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 import { isDuringKey, viewThis } from './label-values';
 import { layoutNameOf } from './layouts.server';
+import { countArgument } from './bound-props.server';
 import { siteOf } from './left-out';
 
 /** Each component's type, by name. */
@@ -1023,6 +1024,10 @@ export function slotInsertions(
   const followedText = (node: Part, locals: ReadonlyMap<string, Local>): string => {
     const read = atCall(node);
     if (read) return `${read.target}[${followedText(read.argument, locals)}]`;
+    // count(n) is the list 0, 1, … up to n − 1 (see countCalls in bound-props.server.ts).
+    const counted = countArgument(node) as Part | undefined;
+    if (counted)
+      return `Array.from({ length: Math.max(0, ${followedText(counted, locals)}) }, (_, k) => k)`;
     if (node.type !== 'MemberExpression') return text(node);
     const object = node.object as Part;
     const heap = heapOf(object, locals);

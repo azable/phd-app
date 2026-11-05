@@ -1,0 +1,29 @@
+<script domain>
+  const Count = type('integer', { min: 0, max: 12 });
+  const Counts = array(Count, { max: 4 });
+  const Index = index(Counts);
+</script>
+<script input>
+  const counts = Counts;
+</script>
+<script algorithm>
+  for (@first[let i = Index(counts, 0)]; @more[i < counts.length]; @next[i++]) @add{
+    @grow[counts[i] = counts[i] + 3;]
+  }
+</script>
+<View of="Count" name="Dots">
+  <Node layout="grid">
+    {#each count(this) as k}<Node kind="Dot" row={Math.floor(k / 5)} col={k % 5}>●</Node>{/each}
+  </Node>
+</View>
+<View of="Index" name="Here"><Pointed /></View>
+<Layout name="Board" of="counts, i">
+  <Node layout="column">
+    <Node layout="row">{#each counts as c}{c}{/each}</Node>
+    {i}
+  </Node>
+</Layout>
+<Case name="main" counts={[1, 4, 6, 9]} />
+<Storyboard>
+  <Scene name="grow" case="main" pause="@add.grow"><Board counts={counts} i={i} /></Scene>
+</Storyboard>
