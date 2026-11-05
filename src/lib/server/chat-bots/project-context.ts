@@ -125,10 +125,28 @@ export type AiDesign = {
  * 7464186f: 63,000 of a 149,000-character context).
  */
 export type AiDesignContext = {
-  options: Record<string, readonly DesignValue[]>;
+  options: Record<string, readonly DesignValue[] | string>;
   variables: AiVariable[];
   values: Record<string, Record<string, DesignValue>>;
 };
+
+/**
+ * An option set of names written hue-shade, as colours are, told as a rule rather than listed: every
+ * hue in every shade, with the other names it has. A colour prop listed its 200-odd colours, and a
+ * design repeats them for fill, stroke, color and glow: about 9,000 characters a turn, every turn,
+ * uncached (project d20bd3f6 on 5 November). Undefined where the names are not a full grid.
+ */
+function patternOf(set: readonly DesignValue[]): string | undefined {
+  const pairs = set.flatMap((value) =>
+    typeof value === 'string' && /^[a-z]+-\d+$/u.test(value) ? [value.split('-')] : []
+  );
+  if (pairs.length < 20) return undefined;
+  const hues = [...new Set(pairs.map(([hue]) => hue))];
+  const shades = [...new Set(pairs.map(([, shade]) => shade))];
+  if (hues.length * shades.length !== pairs.length) return undefined;
+  const others = set.filter((value) => !(typeof value === 'string' && /^[a-z]+-\d+$/u.test(value)));
+  return `${others.length ? `${others.join(', ')}, or ` : ''}a hue-shade, as ${hues[1] ?? hues[0]}-${shades[Math.floor(shades.length / 2)]}: hues ${hues.join(', ')}; shades ${shades.join(', ')}`;
+}
 
 export function designContext({ options, variables }: AiDesign): AiDesignContext {
   const values: Record<string, Record<string, DesignValue>> = {};
@@ -144,7 +162,23 @@ export function designContext({ options, variables }: AiDesign): AiDesignContext
     if (brief) (values[variable.slice(0, dot)] ??= {})[prop] = value;
     return !brief;
   });
-  return { options, variables: full, values };
+  // Kinds whose values are all alike are told once, under their names joined by commas: most text
+  // and container kinds keep the same starter values (about half of design.values in a graph).
+  const grouped = new Map<string, string[]>();
+  for (const [kind, props] of Object.entries(values)) {
+    const key = JSON.stringify(props);
+    grouped.set(key, [...(grouped.get(key) ?? []), kind]);
+  }
+  const told = Object.fromEntries(
+    [...grouped].map(([key, kinds]) => [
+      kinds.join(', '),
+      JSON.parse(key) as Record<string, DesignValue>
+    ])
+  );
+  const toldOptions = Object.fromEntries(
+    Object.entries(options).map(([name, set]) => [name, patternOf(set) ?? set])
+  );
+  return { options: toldOptions, variables: full, values: told };
 }
 
 /** One version of the source, named as the participant sees it, by the start of its hash. */

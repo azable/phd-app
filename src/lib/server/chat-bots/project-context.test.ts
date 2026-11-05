@@ -310,6 +310,31 @@ describe('design variables in the AI context', () => {
     expect(design.options).toEqual({ fill: ['none', 'white'], gap: [0.5, 1] });
   });
 
+  it('tells kinds with alike values once, and a colour grid as a rule', () => {
+    const hues = ['neutral', 'red', 'blue', 'green', 'amber'];
+    const shades = [100, 200, 300, 400, 500];
+    const colours = ['none', 'white', ...hues.flatMap((hue) => shades.map((s) => `${hue}-${s}`))];
+    const design = designContext({
+      options: { fill: colours, gap: [0.5, 1] },
+      variables: [
+        { variable: 'Note.fill', options: 'fill', value: 'none', origin: 'starter' },
+        { variable: 'Note.gap', options: 'gap', value: 0.5, origin: 'starter' },
+        { variable: 'Status.fill', options: 'fill', value: 'none', origin: 'starter' },
+        { variable: 'Status.gap', options: 'gap', value: 0.5, origin: 'starter' },
+        { variable: 'Cell.fill', options: 'fill', value: 'white', origin: 'kept' },
+        { variable: 'Cell.gap', options: 'gap', value: 0.5, origin: 'kept' }
+      ]
+    });
+    expect(design.values).toEqual({
+      'Note, Status': { fill: 'none', gap: 0.5 },
+      Cell: { fill: 'white', gap: 0.5 }
+    });
+    expect(design.options.fill).toBe(
+      'none, white, or a hue-shade, as red-300: hues neutral, red, blue, green, amber; shades 100, 200, 300, 400, 500'
+    );
+    expect(design.options.gap).toEqual([0.5, 1]);
+  });
+
   it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {
     const value = document();
     const buildId = '22345678-1234-4123-8123-123456789abc';
