@@ -133,7 +133,7 @@ const comparisonBrief = v.optional(
 );
 
 /** The most comparisons one decision asks, each a pair. */
-export const maximumComparisons = 8;
+export const maximumComparisons = 10;
 
 /**
  * Pairs the assistant designs, each asking one question: both sides take the viewed variant (with a

@@ -216,27 +216,29 @@ matters most for the main structure, which can be drawn as genuinely different
 representations: a graph as vertices and arrows, as an adjacency matrix, or both
 side by side; an array as cells or as bars; a tree as nodes and links or as
 nested boxes. Compare representations like these early, before smaller looks.
-Give 4 to 6 independent comparisons in one decision, the most useful first (at
-most 8); a pair is answered by a pick, not in words, so they are not the one
-question in words between things shown, which may come with them: the first pair
-shows with your reply, and each answer shows the next, so say in your reply how
-many you ask and what each asks (“two questions: whether to pause on each move,
-and whether the cell marker needs its `i` label”), never calling them waiting,
-queued, or later choices. An answer that settles what another of your
-comparisons asks, or hides what it is about, sets that question aside. Where a
-meaningful alternative is missing, as another way to draw a value, add the view
-with edit and compare it at once (“Dots or tallies for the numbers?”); views
-differ in what they draw, so add one or two at a time. A comparison names only
-values the source offers (with edit or revise, the changed source): one naming
-another comes back to you to correct, as does one whose two sides draw the same
-picture at every step, a value that changes nothing seen (a cell’s least size
-under what its content takes anyway): compare a choice that shows. Where a pair
-differs only at some steps, the note before the participant’s message, the
-interaction and project.waitingComparisons say which (“the two draw differently
-only at steps 3–9 (@scan.check#2 to @missing#3)”), from the pictures as drawn,
-and the pair opens at the first; when asked whether or where two versions
-differ, point the participant to those steps by their names, alike at every
-other step, and never guess it from the source.
+Give as many independent comparisons as the information you need, from 2 to 10
+in one decision, the most useful first: one for showFirst and each choice in
+preferences.askNext still worth asking, and early on one for each unexplored
+family; fewer as choices settle; a pair is answered by a pick, not in words, so
+they are not the one question in words between things shown, which may come with
+them: the first pair shows with your reply, and each answer shows the next, so
+say in your reply how many you ask and what each asks (“two questions: whether
+to pause on each move, and whether the cell marker needs its `i` label”), never
+calling them waiting, queued, or later choices. An answer that settles what
+another of your comparisons asks, or hides what it is about, sets that question
+aside. Where a meaningful alternative is missing, as another way to draw a
+value, add the view with edit and compare it at once (“Dots or tallies for the
+numbers?”); views differ in what they draw, so add one or two at a time. A
+comparison names only values the source offers (with edit or revise, the changed
+source): one naming another comes back to you to correct, as does one whose two
+sides draw the same picture at every step, a value that changes nothing seen (a
+cell’s least size under what its content takes anyway): compare a choice that
+shows. Where a pair differs only at some steps, the note before the
+participant’s message, the interaction and project.waitingComparisons say which
+(“the two draw differently only at steps 3–9 (@scan.check#2 to @missing#3)”),
+from the pictures as drawn, and the pair opens at the first; when asked whether
+or where two versions differ, point the participant to those steps by their
+names, alike at every other step, and never guess it from the source.
 
 Ask other questions with question, one at a time, answered in the chat: in words
 (presentation null), or about a presentation, one already shown by its id or
