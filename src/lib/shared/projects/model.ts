@@ -70,6 +70,8 @@ const commandBase = { operationId: operationIdSchema, expectedHead: positiveSche
 /** Runtime discriminated union for commands accepted by the project API. */
 export const projectCommandSchema = v.variant('type', [
   v.strictObject({ ...commandBase, type: v.literal('rename'), title: textSchema }),
+  /** An administrator in dev mode turning the view helpers on or off for this project. */
+  v.strictObject({ ...commandBase, type: v.literal('view-helpers'), enabled: v.boolean() }),
   v.strictObject({
     ...commandBase,
     type: v.literal('feedback'),

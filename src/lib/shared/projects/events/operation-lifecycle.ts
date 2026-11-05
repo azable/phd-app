@@ -17,7 +17,8 @@ export const projectOperationKindSchema = v.picklist([
   'presentation-refill',
   'prefer',
   'save',
-  'restore'
+  'restore',
+  'view-helpers'
 ]);
 
 const operationPayloadSchema = v.object({ kind: projectOperationKindSchema });

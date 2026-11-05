@@ -351,7 +351,11 @@ const timelineCases = {
   // Left out of the index (projectAiContext).
   'visualization.loaded': (event) => `Presentation ${event.payload.presentationId} loaded.`,
   'assistant.responded': () => 'Assistant responded to the user.',
-  'system.notified': (event) => `System ${event.payload.severity}: ${event.payload.message}`
+  'system.notified': (event) => `System ${event.payload.severity}: ${event.payload.message}`,
+  'project.view-helpers-set': (event) =>
+    `View helpers turned ${event.payload.enabled ? 'on' : 'off'} for this project.`,
+  'visualization.view-candidates': (event) =>
+    `The view helpers proposed ${event.payload.candidates.length} alternative views of ${event.payload.type} that build and read (see viewHelpers).`
 } satisfies ProjectEventCases<string>;
 
 const conversationCases = {
@@ -392,7 +396,9 @@ const conversationCases = {
       content: `${event.payload.inReplyTo?.length ? `[In reply to interaction events ${event.payload.inReplyTo.join(', ')}]\n` : ''}${plainMessageText(event.payload.content)}`
     } as const
   ],
-  'system.notified': () => []
+  'system.notified': () => [],
+  'project.view-helpers-set': () => [],
+  'visualization.view-candidates': () => []
 } satisfies ProjectEventCases<ConversationMessage[]>;
 
 /** Project one immutable event into the AI's compact, body-free timeline index. */

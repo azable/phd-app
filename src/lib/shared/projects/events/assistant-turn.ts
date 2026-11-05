@@ -21,6 +21,8 @@ export const assistantTurnStartedEventSchema = v.object({
   type: v.literal('assistant.turn-started'),
   payload: v.object({
     requestEventIds: v.pipe(v.array(positiveSchema), v.minLength(1)),
-    interactionEventIds: v.pipe(v.array(positiveSchema), v.minLength(1))
+    interactionEventIds: v.pipe(v.array(positiveSchema), v.minLength(1)),
+    /** Whether the view helpers were on for this turn; absent before they existed, as off. */
+    viewHelpers: v.optional(v.boolean())
   })
 });

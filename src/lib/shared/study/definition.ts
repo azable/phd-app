@@ -12,6 +12,8 @@ export type StudyCondition = {
   presentationBufferTarget?: number;
   /** No longer used: kept so that stored definitions naming a chooser still read. */
   chooser?: string;
+  /** Whether short parallel calls propose alternative views for the assistant; off when absent. */
+  viewHelpers?: boolean;
   workspace: {
     view: WorkspaceView;
     layout: PresentationLayout;

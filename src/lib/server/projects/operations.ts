@@ -33,6 +33,7 @@ import {
 } from './commands';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
+import { projectViewHelpers } from './view-helpers-config';
 import {
   operationGraceUntil,
   projectOperationDeadlineError,
@@ -42,6 +43,7 @@ import { recoveryEventsForInterruptedOperations } from './recovery';
 import { ProjectNotFoundError, projectRepository, type ProjectRepository } from './repository';
 import {
   renameProject,
+  setProjectViewHelpers,
   advanceProjectPresentations,
   reportRuntimeFailure,
   replenishProjectPresentations,
@@ -734,6 +736,8 @@ async function executeProjectCommand(options: {
       });
     case 'rename':
       return renameProject({ ...common, title: options.command.title });
+    case 'view-helpers':
+      return setProjectViewHelpers({ ...common, enabled: options.command.enabled });
     case 'feedback':
       // Every mode's turn waits for the executor, which runs it under capacity, deadline and abort.
       return queueProjectFeedback({
@@ -798,13 +802,18 @@ async function executeProjectCommand(options: {
         const interactionEventIds = requests.map((event) =>
           event?.type === 'assistant.turn-requested' ? event.payload.interactionEventId : 0
         );
+        const viewHelpers = await projectViewHelpers(document);
         await projectRepository.append(options.projectId, document.events.length, [
           {
             type: 'assistant.turn-started',
             actor: { kind: 'system' },
             operationId: options.operationId,
             createdAt: new Date().toISOString(),
-            payload: { requestEventIds: command.requestEventIds, interactionEventIds }
+            payload: {
+              requestEventIds: command.requestEventIds,
+              interactionEventIds,
+              viewHelpers
+            }
           }
         ]);
       });

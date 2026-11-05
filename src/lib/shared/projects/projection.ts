@@ -68,7 +68,9 @@ const stateTransitions = {
   'visualization.loaded': null,
   'assistant.responded': null,
   'revision.edits-rejected': null,
-  'system.notified': null
+  'system.notified': null,
+  'project.view-helpers-set': null,
+  'visualization.view-candidates': null
 } satisfies StateTransitions;
 
 /** Return the final event in a valid project document. */

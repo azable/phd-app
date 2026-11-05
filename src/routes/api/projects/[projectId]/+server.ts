@@ -33,6 +33,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     const inspection = await requireProjectMutationAccess(locals, params.projectId);
     const command = parseProjectCommand(await request.json());
+    // The view helpers' switch is a dev-mode setting for administrators only.
+    if (command.type === 'view-helpers') requireAdmin(locals);
     const accepted = await projectOperationExecutor.accept({
       projectId: params.projectId,
       operationId: command.operationId,

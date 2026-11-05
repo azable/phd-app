@@ -236,6 +236,20 @@ const presenters = {
       event.payload.severity === 'error' ? 'failure' : 'default',
       event.payload.severity === 'error' ? 'Finishing with an error…' : 'Finishing…',
       event.payload.severity === 'error' ? 'destructive' : 'default'
+    ),
+  'project.view-helpers-set': (event) =>
+    details(
+      'View helpers',
+      event.payload.enabled ? 'On for this project' : 'Off for this project',
+      'default',
+      'Updating the project…'
+    ),
+  'visualization.view-candidates': (event) =>
+    details(
+      'Alternative views',
+      `${event.payload.candidates.length} of ${event.payload.type} proposed by the view helpers`,
+      'visualization',
+      'Checking alternative views…'
     )
 } satisfies ProjectEventCases<TimelineEventPresentation>;
 

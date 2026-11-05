@@ -61,6 +61,8 @@ export type StudyProjectContext = {
   expired: boolean;
   deadlineAt?: string;
   presentationBufferTarget?: number;
+  /** Whether the task's condition runs the view helpers; off when absent. */
+  viewHelpers?: boolean;
   interactionCapture?: StudyInteractionCapturePolicy;
   layout?: string;
   view?: string;
@@ -325,6 +327,9 @@ export async function studyProjectContext(
     ...(row.deadlineAt ? { deadlineAt: row.deadlineAt.toISOString() } : {}),
     ...(phase?.kind === 'task' && phase.condition.presentationBufferTarget
       ? { presentationBufferTarget: phase.condition.presentationBufferTarget }
+      : {}),
+    ...(phase?.kind === 'task' && phase.condition.viewHelpers !== undefined
+      ? { viewHelpers: phase.condition.viewHelpers }
       : {}),
     ...(phase?.kind === 'task' && definition.interactionCapture
       ? { interactionCapture: definition.interactionCapture }

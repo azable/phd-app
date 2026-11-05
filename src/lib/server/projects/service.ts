@@ -686,6 +686,29 @@ export function recordPresentationLoad(
   });
 }
 
+/** An administrator in dev mode turning the view helpers on or off for this project. */
+export function setProjectViewHelpers(
+  options: { projectId: string; expectedHead: EventId; enabled: boolean; operationId: string },
+  dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
+): Promise<ProjectCommandResult> {
+  return runProjectCommand(options.projectId, async () => {
+    const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
+    const document = await appendProjectEvents(
+      before,
+      [
+        draftEvent({
+          type: 'project.view-helpers-set',
+          actor: { kind: 'user' },
+          operationId: options.operationId,
+          payload: { enabled: options.enabled }
+        })
+      ],
+      dependencies
+    );
+    return commandResult(before, document);
+  });
+}
+
 /** Append a user-authored project title change. */
 export function renameProject(
   options: {

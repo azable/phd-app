@@ -38,6 +38,10 @@ import { visualizationRuntimeFailedEventSchema } from './visualization-runtime-f
 import { visualizationVariantRevertedEventSchema } from './visualization-variant-reverted';
 import { visualizationLoadedEventSchema } from './visualization-loaded';
 import {
+  projectViewHelpersSetEventSchema,
+  visualizationViewCandidatesEventSchema
+} from './view-helpers';
+import {
   visualizationPreferenceRecordedEventSchema,
   visualizationPresentedEventSchema
 } from './visualization-presented';
@@ -68,7 +72,9 @@ export const projectEventSchema = v.variant('type', [
   visualizationVariantRevertedEventSchema,
   visualizationLoadedEventSchema,
   assistantRespondedEventSchema,
-  systemNotifiedEventSchema
+  systemNotifiedEventSchema,
+  projectViewHelpersSetEventSchema,
+  visualizationViewCandidatesEventSchema
 ]);
 
 export type { ParticipantIntakeStepId } from './assistant-intake';
