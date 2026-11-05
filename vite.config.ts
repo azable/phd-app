@@ -51,6 +51,9 @@ export default defineConfig({
           // Tests that build real presentations take seconds on CI's slower machines; none should
           // fail on time alone.
           testTimeout: 30_000,
+          // Locally at most two workers, so a run leaves the machine usable beside the dev server, the
+          // editor and other runs (one per core took a 16-core machine to a load of 22); CI uses all.
+          maxWorkers: process.env.CI ? undefined : 2,
           // One browser for the browser tests' run, which each file connects to; idle otherwise.
           globalSetup: ['src/lib/modes/sverlin/testing/browser-setup.ts'],
           // A browser test that fails in CI runs once more, its trace kept (testing/browser.ts), so a
