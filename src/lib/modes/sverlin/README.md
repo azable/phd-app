@@ -1603,9 +1603,8 @@ with SVG shapes in `<Svg>`, inside a node of a view or layout:
   in em of the node's text (1.5 if left out, at most 12), and the width follows
   from the proportions. Both are written as they are, never computed, so every
   value has the same room; the shapes outside the viewBox are cut off.
-- `label` is the text the drawing stands for, as `label={this}`: a screen reader
-  reads it, and the PDF, which draws no shapes, writes it in the drawing's
-  place.
+- `label` is the text the drawing stands for, as `label={this}`, which a screen
+  reader reads.
 - The shapes are `path`, `circle`, `ellipse`, `rect`, `line`, `polyline`,
   `polygon`, `g`, and `text`, `tspan` and `title` holding words as written. They
   take their geometry (`d`, `cx`, `r`, `points`, `transform`, …) and strokes

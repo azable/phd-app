@@ -35,7 +35,32 @@ const sceneTextSchema = v.strictObject({
   fontSize: length,
   fontWeight,
   decoration: v.optional(v.picklist(['underline', 'strike'])),
-  case: v.optional(v.picklist(['uppercase', 'small-caps']))
+  case: v.optional(v.picklist(['uppercase', 'small-caps'])),
+  overLinks: v.optional(v.literal(true))
+});
+
+const sceneMarkSchema = v.strictObject({
+  box,
+  fill: v.optional(colour),
+  stroke: v.optional(colour),
+  strokeWidth: v.optional(length),
+  strokeStyle: v.optional(strokeStyle),
+  radius: v.optional(length),
+  overLinks: v.optional(v.literal(true))
+});
+
+// A drawing's shape is followed through at most a few hundred points (see drawingShapes).
+const maximumShapePoints = 2_000;
+const sceneShapeSchema = v.strictObject({
+  parts: v.pipe(
+    v.array(v.pipe(v.array(point), v.maxLength(maximumShapePoints))),
+    v.maxLength(maximumShapePoints)
+  ),
+  closed: v.boolean(),
+  fill: v.optional(colour),
+  stroke: v.optional(colour),
+  strokeWidth: v.optional(length),
+  evenOdd: v.optional(v.literal(true))
 });
 
 const sceneNodeSchema = v.strictObject({
@@ -49,6 +74,8 @@ const sceneNodeSchema = v.strictObject({
   unit: v.optional(text),
   text: v.optional(text),
   runs: v.optional(v.pipe(v.array(sceneTextSchema), v.maxLength(maximumNodes))),
+  marks: v.optional(v.pipe(v.array(sceneMarkSchema), v.maxLength(maximumNodes))),
+  shapes: v.optional(v.pipe(v.array(sceneShapeSchema), v.maxLength(maximumNodes))),
   box,
   look: v.strictObject({
     fill: v.optional(colour),

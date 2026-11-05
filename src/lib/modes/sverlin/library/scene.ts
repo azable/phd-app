@@ -60,6 +60,10 @@ export type SceneNode = {
   text?: string;
   /** Every line of text the node draws itself, value included, where the page put it. */
   runs?: SceneText[];
+  /** Paint behind parts of its text that are no nodes: a listing's lit code, a link's label. */
+  marks?: SceneMark[];
+  /** The shapes of its drawings (see drawings.server.ts), as the page drew them. */
+  shapes?: SceneShape[];
   box: SceneBox;
   look: SceneLook;
   /** The colours its variant gave it, by name, such as 'amber-100' for the current element. */
@@ -78,6 +82,30 @@ export type SceneText = {
   /** A line under or through it; `text` is as written, and `case` says how it is drawn. */
   decoration?: 'underline' | 'strike';
   case?: TextCase;
+  /** A link's label, drawn over the links, as the page draws it. */
+  overLinks?: true;
+};
+
+/** Paint behind a stretch of text: its box, colours, corners, and stroke drawn inside it. */
+export type SceneMark = {
+  box: SceneBox;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeStyle?: 'dashed' | 'dotted';
+  radius?: number;
+  /** A link's label, drawn over the links. */
+  overLinks?: true;
+};
+
+/** One shape of a drawing: its outline as lines through points, one list for each part. */
+export type SceneShape = {
+  parts: ScenePoint[][];
+  closed: boolean;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  evenOdd?: true;
 };
 
 export type SceneLink = {
@@ -210,8 +238,6 @@ function describeNode(
   const scale = screenScale(element) * ratio;
   const length = (css: string) => round((parseFloat(css) || 0) * scale);
   const style = getComputedStyle(element);
-  const transparent = (colour: string) =>
-    colour === 'transparent' || /^rgba\(.*,\s*0\)$/u.test(colour);
   const strokeWidth = length(style.borderTopWidth);
   const radius = Math.min(length(style.borderTopLeftRadius), box.width / 2, box.height / 2);
   const padding = [
@@ -251,6 +277,8 @@ function describeNode(
   const value = shown ? (shown.firstChild?.textContent ?? '') : undefined;
   const text = ownText(element);
   const runs = textRuns(element, point, ratio, scale);
+  const marks = textMarks(element, point, ratio, scale);
+  const shapes = drawingShapes(element, point, ratio);
   const colours = Object.fromEntries(
     (['fill', 'stroke', 'color'] as const).flatMap((use) => {
       const name = dataset[`sv${use[0].toUpperCase()}${use.slice(1)}`];
@@ -271,6 +299,8 @@ function describeNode(
     ...(unit ? { unit } : {}),
     ...(text ? { text } : {}),
     ...(runs.length ? { runs } : {}),
+    ...(marks.length ? { marks } : {}),
+    ...(shapes.length ? { shapes } : {}),
     box,
     look,
     ...(colours && Object.keys(colours).length ? { colours } : {})
@@ -342,7 +372,8 @@ function textRuns(
       fontSize: round((parseFloat(style.fontSize) || 0) * scale),
       fontWeight: Number(style.fontWeight) || 400,
       ...(decoration ? { decoration } : {}),
-      ...(textCase ? { case: textCase } : {})
+      ...(textCase ? { case: textCase } : {}),
+      ...(holder.closest('.sv-link-label') ? { overLinks: true as const } : {})
     };
     let line:
       | { words: string[]; left: number; top: number; right: number; bottom: number }
@@ -383,10 +414,11 @@ function textRuns(
     }
     finish();
   }
-  // Inline maths and a drawing are SVG the PDF cannot draw, so their text stands in their place,
-  // in their box.
+  // Inline maths is SVG the PDF does not draw, so its text stands in its place, in its box; as does
+  // a drawing's label where it has no shapes (see drawingShapes).
   for (const maths of element.querySelectorAll<HTMLElement>('[data-sv-math-text]')) {
     if (!ownedBy(maths.parentElement, element)) continue;
+    if (maths.hasAttribute('data-sv-drawing') && geometryOf(maths).length) continue;
     const rect = maths.getBoundingClientRect();
     const style = getComputedStyle(maths);
     runs.push({
@@ -403,6 +435,117 @@ function textRuns(
     });
   }
   return runs;
+}
+
+const transparent = (colour: string) =>
+  colour === 'transparent' || /^rgba\(.*,\s*0\)$/u.test(colour);
+
+/**
+ * The paint behind parts of a node's own text that are no nodes, one mark for each line a part
+ * spans: a listing's lit code and tokens, and a placed link label's background, which hides the
+ * line under it.
+ */
+function textMarks(
+  element: HTMLElement,
+  point: (x: number, y: number) => ScenePoint,
+  ratio: number,
+  scale: number
+): SceneMark[] {
+  const marks: SceneMark[] = [];
+  const painted = element.querySelectorAll<HTMLElement>(
+    '[data-sv-lit], [data-sv-place], .sv-link-label[data-sv-placed]'
+  );
+  for (const part of painted) {
+    if (!ownedBy(part, element)) continue;
+    const style = getComputedStyle(part);
+    const fill = transparent(style.backgroundColor) ? undefined : style.backgroundColor;
+    const outline = style.outlineStyle === 'none' ? 0 : parseFloat(style.outlineWidth) || 0;
+    const stroke = outline && !transparent(style.outlineColor) ? style.outlineColor : undefined;
+    if (!fill && !stroke) continue;
+    const radius = (parseFloat(style.borderTopLeftRadius) || 0) * scale;
+    for (const rect of part.getClientRects()) {
+      if (!rect.width || !rect.height) continue;
+      marks.push({
+        box: {
+          ...point(rect.left, rect.top),
+          width: round(rect.width * ratio),
+          height: round(rect.height * ratio)
+        },
+        ...(fill ? { fill } : {}),
+        ...(stroke
+          ? { stroke, strokeWidth: round(outline * scale), ...broken(style.outlineStyle) }
+          : {}),
+        ...(radius ? { radius: round(radius) } : {}),
+        ...(part.classList.contains('sv-link-label') ? { overLinks: true as const } : {})
+      });
+    }
+  }
+  return marks;
+}
+
+/** A drawing's shapes that have an outline to follow: all but its text. */
+function geometryOf(drawing: Element): SVGGeometryElement[] {
+  return [
+    ...drawing.querySelectorAll<SVGGeometryElement>(
+      'path, circle, ellipse, rect, line, polyline, polygon'
+    )
+  ];
+}
+
+// A shape is drawn through points about three quarters of a frame pixel apart along its outline,
+// finer than a PDF viewer shows at a page's size, and through at most 400, which a suit or an icon
+// of a few curves never reaches.
+const shapeSpacing = 0.75;
+const shapePoints = 400;
+
+/**
+ * The shapes of the drawings a node holds, each followed along its outline as the page drew it,
+ * transforms and the frame's scale included, so the PDF draws them as lines through points.
+ */
+function drawingShapes(
+  element: HTMLElement,
+  point: (x: number, y: number) => ScenePoint,
+  ratio: number
+): SceneShape[] {
+  const shapes: SceneShape[] = [];
+  for (const drawing of element.querySelectorAll<SVGSVGElement>('svg[data-sv-drawing]')) {
+    if (!ownedBy(drawing.parentElement, element)) continue;
+    for (const shape of geometryOf(drawing)) {
+      const total = shape.getTotalLength();
+      const matrix = shape.getScreenCTM();
+      if (!total || !matrix) continue;
+      // Frame pixels per unit of the shape.
+      const units = Math.hypot(matrix.a, matrix.b) * ratio;
+      const step = Math.max(shapeSpacing / units, total / shapePoints);
+      const parts: ScenePoint[][] = [];
+      let last: DOMPoint | undefined;
+      for (let at = 0; at < total + step / 2; at += step) {
+        const local = shape.getPointAtLength(Math.min(at, total));
+        // Along the outline, points are a step apart at most, so a longer jump starts a new part.
+        if (!last || Math.hypot(local.x - last.x, local.y - last.y) > 3 * step) parts.push([]);
+        last = local;
+        const screen = local.matrixTransform(matrix);
+        parts.at(-1)!.push(point(screen.x, screen.y));
+      }
+      const style = getComputedStyle(shape);
+      const fill = style.fill === 'none' || transparent(style.fill) ? undefined : style.fill;
+      const stroke =
+        style.stroke === 'none' || transparent(style.stroke) ? undefined : style.stroke;
+      const strokeWidth = round((parseFloat(style.strokeWidth) || 0) * units);
+      if (!fill && !(stroke && strokeWidth)) continue;
+      const tag = shape.tagName.toLowerCase();
+      shapes.push({
+        parts: parts.filter((part) => part.length > 1),
+        closed:
+          ['circle', 'ellipse', 'rect', 'polygon'].includes(tag) ||
+          (tag === 'path' && /z\s*$/iu.test(shape.getAttribute('d') ?? '')),
+        ...(fill ? { fill } : {}),
+        ...(stroke && strokeWidth ? { stroke, strokeWidth } : {}),
+        ...(style.fillRule === 'evenodd' ? { evenOdd: true as const } : {})
+      });
+    }
+  }
+  return shapes;
 }
 
 function describeLink(

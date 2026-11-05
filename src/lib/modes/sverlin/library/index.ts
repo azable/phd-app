@@ -41,8 +41,10 @@ export type {
   SceneHead,
   SceneLink,
   SceneLook,
+  SceneMark,
   SceneNode,
   ScenePoint,
+  SceneShape,
   SceneStep,
   SceneText
 } from './scene';

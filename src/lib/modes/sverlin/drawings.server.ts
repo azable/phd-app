@@ -152,13 +152,14 @@ export function drawingTags(scanned: string): {
       problem = `A <Svg>'s height is a number of em above 0 and at most ${maximumHeight}, as height="2".`;
     const label = given.get('label');
     if (!problem && !label?.expression?.trim() && !label?.text?.trim())
-      problem = `A <Svg> needs its label, the text it stands for, as label={this.suit}: a screen reader reads it, and the PDF, which draws no shapes, writes it in the drawing's place.`;
+      problem = `A <Svg> needs its label, the text it stands for, as label={this.suit}, which a screen reader reads.`;
     if (problem) {
       problems.push({ message: problem, start });
       continue;
     }
     const [, , width, tall] = box!;
-    // The PDF writes the label in the drawing's box, as it writes maths' text (see scene.ts).
+    // The PDF draws the shapes, writing the label in their place only where there are none, as it
+    // writes maths' text (see scene.ts).
     const { expression, text } = label!;
     const labelled =
       expression !== undefined

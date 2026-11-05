@@ -14,7 +14,7 @@
 import { GState, jsPDF } from 'jspdf';
 
 import manifest from '../fonts/faces.json';
-import type { SceneBox, SceneHead, SceneLink, SceneNode, SceneText } from '../library';
+import type { SceneBox, SceneHead, SceneLink, SceneMark, SceneNode, SceneText } from '../library';
 import { pageFont } from '../library/fonts';
 import { casedRuns, smallCapsScale } from '../library/model/text-case';
 import { fillPatterns, glowHalo, linkDashes, shadows } from '../library/node/design';
@@ -323,6 +323,85 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
     doc.line(left, y, right, y);
   }
 
+  /** A stroke inside a box, as a CSS border, or an outline drawn inside it, lies. */
+  function strokeBox(
+    box: SceneBox,
+    radius: number,
+    {
+      stroke,
+      strokeWidth: width,
+      strokeStyle
+    }: Pick<SceneMark, 'stroke' | 'strokeWidth' | 'strokeStyle'>,
+    opacity: number
+  ) {
+    if (!stroke || !width) return;
+    // A PDF stroke lies on both sides of its path.
+    const inset = width / 2;
+    const [r, g, b, a] = resources.colour(stroke);
+    setOpacity(opacity * a);
+    doc.setDrawColor(r, g, b);
+    doc.setLineWidth(px(width));
+    // A browser's dashes and dots grow with the border's width, near these.
+    setStrokeStyle(strokeStyle, { dashed: [3 * width, 2 * width], dotted: [0, 2 * width] });
+    const [x, y, w, h] = [
+      box.x + inset,
+      box.y + inset,
+      box.width - 2 * inset,
+      box.height - 2 * inset
+    ];
+    const corner = Math.max(0, radius - inset);
+    if (corner) doc.roundedRect(px(x), px(y), px(w), px(h), px(corner), px(corner), 'S');
+    else doc.rect(px(x), px(y), px(w), px(h), 'S');
+    setStrokeStyle(undefined);
+  }
+
+  /** A node's marks and text, those of its link labels (overLinks) or the rest. */
+  function drawNodeText(node: SceneNode, opacity: number, overLinks: boolean) {
+    for (const mark of node.marks ?? []) {
+      if (!!mark.overLinks !== overLinks) continue;
+      if (mark.fill) fillBox(mark.box, mark.radius ?? 0, mark.fill, opacity);
+      strokeBox(mark.box, mark.radius ?? 0, mark, opacity);
+    }
+    for (const run of node.runs ?? []) {
+      if (!!run.overLinks !== overLinks) continue;
+      const [r, g, b, a] = resources.colour(run.color);
+      setOpacity(opacity * a);
+      doc.setTextColor(r, g, b);
+      const centre = { x: run.box.x + run.box.width / 2, y: run.box.y + run.box.height / 2 };
+      drawDecoration(run, drawText(run, centre, { fit: run.box.width }));
+    }
+  }
+
+  /** A drawing's shapes, each its parts as lines through their points. */
+  function drawShapes(node: SceneNode, opacity: number) {
+    for (const shape of node.shapes ?? []) {
+      const paint = (css: string | undefined) => (css ? resources.colour(css) : undefined);
+      const [fill, stroke] = [paint(shape.fill), paint(shape.stroke)];
+      if (!shape.parts.length || !(fill || stroke)) continue;
+      for (const part of shape.parts) {
+        const [first, ...rest] = part;
+        doc.moveTo(px(first.x), px(first.y));
+        for (const point of rest) doc.lineTo(px(point.x), px(point.y));
+        if (shape.closed) doc.close();
+      }
+      if (fill) doc.setFillColor(fill[0], fill[1], fill[2]);
+      if (stroke) {
+        doc.setDrawColor(stroke[0], stroke[1], stroke[2]);
+        doc.setLineWidth(px(shape.strokeWidth ?? 0));
+        doc.setLineJoin('round');
+      }
+      // One alpha for both, the fill's where there is one, as drawings take one colour.
+      setOpacity(opacity * (fill ?? stroke)![3]);
+      if (fill && stroke) {
+        if (shape.evenOdd) doc.fillStrokeEvenOdd();
+        else doc.fillStroke();
+      } else if (fill) {
+        if (shape.evenOdd) doc.fillEvenOdd();
+        else doc.fill();
+      } else doc.stroke();
+    }
+  }
+
   function drawNode(node: SceneNode, opacity: number) {
     const { box, look } = node;
     const radius = look.radius ?? 0;
@@ -331,34 +410,9 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       fillBox(box, radius, look.fill, opacity);
       drawFillStyle(node, opacity);
     }
-    if (look.stroke && look.strokeWidth) {
-      // A CSS border lies inside the box, and a PDF stroke on both sides of its path.
-      const inset = look.strokeWidth / 2;
-      const [r, g, b, a] = resources.colour(look.stroke);
-      setOpacity(opacity * a);
-      doc.setDrawColor(r, g, b);
-      doc.setLineWidth(px(look.strokeWidth));
-      // A browser's dashes and dots grow with the border's width, near these.
-      const width = look.strokeWidth;
-      setStrokeStyle(look.strokeStyle, { dashed: [3 * width, 2 * width], dotted: [0, 2 * width] });
-      const [x, y, w, h] = [
-        box.x + inset,
-        box.y + inset,
-        box.width - 2 * inset,
-        box.height - 2 * inset
-      ];
-      const corner = Math.max(0, radius - inset);
-      if (corner) doc.roundedRect(px(x), px(y), px(w), px(h), px(corner), px(corner), 'S');
-      else doc.rect(px(x), px(y), px(w), px(h), 'S');
-      setStrokeStyle(undefined);
-    }
-    for (const run of node.runs ?? []) {
-      const [r, g, b, a] = resources.colour(run.color);
-      setOpacity(opacity * a);
-      doc.setTextColor(r, g, b);
-      const centre = { x: run.box.x + run.box.width / 2, y: run.box.y + run.box.height / 2 };
-      drawDecoration(run, drawText(run, centre, { fit: run.box.width }));
-    }
+    strokeBox(box, radius, look, opacity);
+    drawShapes(node, opacity);
+    drawNodeText(node, opacity, false);
   }
 
   /** Dash the lines drawn next, dots with round caps, by a pattern in frame pixels; solid without. */
@@ -442,6 +496,8 @@ export async function renderPdf(scene: SverlinScene, resources: PdfResources): P
       drawNode(node, opacity);
     }
     for (const link of step.links) drawLink(link);
+    // A link's label lies over the links, its background breaking the line it sits on.
+    for (const node of step.nodes) drawNodeText(node, opacities.get(node.id) ?? 1, true);
     if (step.error) {
       setOpacity(1);
       doc.setTextColor(185, 28, 28);

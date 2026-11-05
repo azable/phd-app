@@ -14,7 +14,21 @@ import { faceFiles, fallbackRuns, renderPdf } from './pdf';
 const drawn = vi.hoisted(() => [] as { method: string; args: unknown[] }[]);
 vi.mock('jspdf', async (original) => {
   const module = await original<typeof import('jspdf')>();
-  const recorded = ['roundedRect', 'rect', 'line', 'text', 'clip', 'setFontSize', 'setFillColor'];
+  const recorded = [
+    'roundedRect',
+    'rect',
+    'line',
+    'text',
+    'clip',
+    'setFontSize',
+    'setFillColor',
+    'moveTo',
+    'lineTo',
+    'close',
+    'fill',
+    'fillEvenOdd',
+    'stroke'
+  ];
   class RecordingPdf extends module.jsPDF {
     constructor(...args: ConstructorParameters<typeof module.jsPDF>) {
       super(...args);
@@ -235,5 +249,100 @@ describe('renderPdf drawing a node’s style', () => {
     expect(calls('text').map(([text]) => text)).toEqual(['S', 'WAP']);
     expect(calls('setFontSize')).toContainEqual([pt(16 * 0.7)]);
     expect(calls('line').filter(([, y1, , y2]) => y1 === y2)).toHaveLength(1);
+  });
+});
+
+describe('renderPdf drawing what lies in a node’s text', () => {
+  const pt = (pixels: number) => pixels * 0.75;
+  const run = (text: string, x: number, overLinks?: true): SceneText => ({
+    text,
+    box: { x, y: 10, width: 20, height: 20 },
+    color: 'black',
+    font: fontList('sans'),
+    fontSize: 16,
+    fontWeight: 400,
+    ...(overLinks ? { overLinks } : {})
+  });
+  const scene: SverlinScene = {
+    format: 'sverlin-scene-v1',
+    presentationId: '00000000-0000-0000-0000-000000000000',
+    seed: 1,
+    frame: { width: 200, height: 100, background: 'white' },
+    steps: [
+      {
+        label: 'Start',
+        links: [
+          {
+            from: 'p',
+            to: 'q',
+            directed: false,
+            stroke: 'black',
+            strokeWidth: 1,
+            wire: [
+              { x: 0, y: 50 },
+              { x: 200, y: 50 }
+            ]
+          }
+        ],
+        nodes: [
+          {
+            id: 'a',
+            box: { x: 0, y: 0, width: 200, height: 100 },
+            look: { color: 'black', font: fontList('sans'), fontSize: 16, fontWeight: 400 },
+            runs: [run('lit', 10), run('w', 100, true)],
+            marks: [
+              { box: { x: 8, y: 10, width: 24, height: 20 }, fill: 'orange', radius: 2 },
+              { box: { x: 96, y: 40, width: 28, height: 20 }, fill: 'white', overLinks: true }
+            ],
+            shapes: [
+              {
+                parts: [
+                  [
+                    { x: 150, y: 10 },
+                    { x: 170, y: 10 },
+                    { x: 160, y: 30 }
+                  ]
+                ],
+                closed: true,
+                fill: 'black',
+                evenOdd: true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  it('is scene data the app accepts', () => {
+    const { label, ...step } = scene.steps[0];
+    expect(label).toBe('Start');
+    const message = { type: 'sverlin:scene', request: 'r', frame: scene.frame, steps: [step] };
+    expect(v.is(sceneMessageSchema, message)).toBe(true);
+  });
+
+  it('paints lit code under its text, a link label over the links, and a drawing’s shapes', async () => {
+    drawn.length = 0;
+    await renderPdf(scene, { font: readFont, colour: () => [0, 0, 0, 1] });
+    const order = drawn.map(({ method, args }) =>
+      method === 'text' ? `text ${String(args[0])}` : method
+    );
+    const litPaint = drawn.findIndex(
+      ({ method, args }) => method === 'roundedRect' && args[0] === pt(8)
+    );
+    const labelPaint = drawn.findIndex(
+      ({ method, args }) => method === 'rect' && args[0] === pt(96)
+    );
+    // The lit code's paint, then its text; the link's line; then the label's paint and text.
+    expect(litPaint).toBeGreaterThan(-1);
+    expect(litPaint).toBeLessThan(order.indexOf('text lit'));
+    expect(order.indexOf('text lit')).toBeLessThan(order.lastIndexOf('stroke'));
+    expect(order.lastIndexOf('stroke')).toBeLessThan(labelPaint);
+    expect(labelPaint).toBeLessThan(order.indexOf('text w'));
+    // The triangle: three points, closed, filled by the even-odd rule, before the text.
+    const filled = order.indexOf('fillEvenOdd');
+    expect(order.slice(0, filled).filter((method) => method === 'lineTo')).toHaveLength(2);
+    expect(order.indexOf('close')).toBeLessThan(order.indexOf('fillEvenOdd'));
+    expect(order.indexOf('fillEvenOdd')).toBeLessThan(order.indexOf('text lit'));
   });
 });
