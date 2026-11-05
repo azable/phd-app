@@ -9,6 +9,7 @@ import type {
   EventId,
   NewProjectEvent,
   ParticipantIntakeStepId,
+  ProjectEvent,
   ProjectEventOf
 } from '$lib/shared/projects/events';
 import {
@@ -930,7 +931,7 @@ async function runSverlinAssistantTurn(
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
-        kind: 'edits' | 'comparisons' | 'picture' | 'warnings' | 'alternatives',
+        kind: 'edits' | 'comparisons' | 'picture' | 'warnings' | 'alternatives' | 'helpers',
         problems: string[],
         failedSource: string
       ) => {
@@ -939,7 +940,8 @@ async function runSverlinAssistantTurn(
           comparisons: 'the comparisons could not be built',
           picture: 'the picture drew too large to read',
           warnings: 'the picture built with warnings',
-          alternatives: 'the picture offers alternatives no comparison showed'
+          alternatives: 'the picture offers alternatives no comparison showed',
+          helpers: 'the view helpers were not asked for the graphics requested'
         }[kind];
         const summary = `Attempt ${attempt}: ${outcome}. ${problems.join(' ')}`;
         failureSummaries.push(summary);
@@ -979,7 +981,7 @@ async function runSverlinAssistantTurn(
           diagnostics: [
             ...problems.map((message) => ({
               severity:
-                kind === 'warnings' || kind === 'alternatives'
+                kind === 'warnings' || kind === 'alternatives' || kind === 'helpers'
                   ? ('warning' as const)
                   : ('error' as const),
               code: {
@@ -987,7 +989,8 @@ async function runSverlinAssistantTurn(
                 comparisons: 'comparison_not_built',
                 picture: 'picture_unreadable',
                 warnings: 'picture_warning',
-                alternatives: 'alternatives_not_offered'
+                alternatives: 'alternatives_not_offered',
+                helpers: 'helpers_not_asked'
               }[kind],
               message,
               raw: message
@@ -1230,6 +1233,17 @@ async function runSverlinAssistantTurn(
       if (warnings.length && candidate !== undefined) {
         softReturned = true;
         return reject('warnings', warnings, candidate);
+      }
+      // A request for particular graphics, where the helpers are on, goes back once to give them a
+      // task too, beside the assistant's own alternatives.
+      const unhelped =
+        bundles.length > 0 &&
+        !generation.result.viewHelpers &&
+        turnViewHelpers(current) &&
+        asksForGraphics(turnRequestText(current.events));
+      if (unhelped && candidate !== undefined) {
+        softReturned = true;
+        return reject('helpers', [helpersProblem], candidate);
       }
       // A new or changed picture shown alone, where its source offers another form of a view, a
       // pointer or a free layout's arrangement, goes back once to offer a comparison; one the
@@ -2003,6 +2017,39 @@ function shownForms(document: ProjectDocument): {
   return shown?.format === 'browser-bundle-v1'
     ? { views: shown.views ?? {}, pointers: shown.pointers ?? {} }
     : {};
+}
+
+/**
+ * Words a request for particular graphics uses, as "icons for states" or "try some drawings": few
+ * and plain, so a request about pacing or wording never sends the reply back.
+ */
+const graphicsWords =
+  /\b(icons?|symbols?|emoji|drawings?|pictures?|images?|graphics?|glyphs?|badges?|shapes?|try (some|a few|other|different))\b/iu;
+
+export function asksForGraphics(text: string): boolean {
+  return graphicsWords.test(text);
+}
+
+const helpersProblem =
+  'The participant asked for particular graphics and the view helpers are on: set viewHelpers to the type the request is about, with a short task saying what its views should show, beside your own alternatives; or send the decision again unchanged if no type fits.';
+
+/** What the participant wrote for the turn now running: its messages, and notes with answers. */
+function turnRequestText(events: readonly ProjectEvent[]): string {
+  const started = events.findLast((event) => event.type === 'assistant.turn-started');
+  if (started?.type !== 'assistant.turn-started') return '';
+  const asked = new Set(started.payload.interactionEventIds ?? []);
+  return events
+    .flatMap((event) =>
+      !asked.has(event.id)
+        ? []
+        : event.type === 'feedback.submitted'
+          ? event.payload.content
+          : event.type === 'visualization.preference-recorded'
+            ? (event.payload.comment ?? [])
+            : []
+    )
+    .flatMap((segment) => (segment.type === 'markdown' ? [segment.text] : []))
+    .join(' ');
 }
 
 /** Whether the participant directs: they would rather say what they want than choose. */

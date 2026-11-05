@@ -23,7 +23,9 @@ export const revisionEditsRejectedEventSchema = v.object({
      * What was rejected: the comparisons, the picture, its warnings, a picture offering alternatives
      * no comparison showed, or the edits where absent.
      */
-    rejected: v.optional(v.picklist(['comparisons', 'picture', 'warnings', 'alternatives'])),
+    rejected: v.optional(
+      v.picklist(['comparisons', 'picture', 'warnings', 'alternatives', 'helpers'])
+    ),
     problems: v.pipe(v.array(v.string()), v.minLength(1)),
     /**
      * The comparisons, by number from 1, built without those rejected; none where the source was

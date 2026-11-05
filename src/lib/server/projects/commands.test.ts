@@ -758,7 +758,11 @@ describe('submitProjectFeedback', () => {
     } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
 
     /** A linear-search project with one message queued and claimed by a turn with helpers on. */
-    async function claimedWithHelpers(writtenMeanwhile = false, adapter = helperAdapter) {
+    async function claimedWithHelpers(
+      writtenMeanwhile = false,
+      adapter = helperAdapter,
+      replies?: (source: string) => object[]
+    ) {
       const { getProjectTemplate } = await import('./starter-catalog');
       const { createProject } = await import('./service');
       const created = await createProject(
@@ -811,6 +815,12 @@ describe('submitProjectFeedback', () => {
         ...generation(undefined, 'Alternatives for the numbers follow.'),
         viewHelpers: { type: 'Int', task: 'draw each number another way' }
       });
+      if (replies) {
+        const version = created.events.find((event) => event.type === 'artifact.version-created');
+        const change = version?.type === 'artifact.version-created' && version.payload.changes[0];
+        const source = change && change.operation === 'upsert' ? change.artifact.content.text : '';
+        for (const reply of replies(source)) mocks.generatePrepared.mockResolvedValueOnce(reply);
+      }
       const { runQueuedAssistantTurn } = await import('./commands');
       return runQueuedAssistantTurn(
         { projectId: created.projectId, operationId: assistantOperationId },
@@ -892,6 +902,33 @@ describe('submitProjectFeedback', () => {
           : []
       );
       expect(attempts).toEqual([1, 2, 3, 4, 5, 6]);
+    });
+
+    it('sends a reply to a request for graphics back once to give the helpers a task', async () => {
+      const revised = (source: string, more: object = {}) => ({
+        ...generation(undefined, 'Other ways to draw the numbers.'),
+        decision: { action: 'revise', source: `${source}\n`, summary: 'Numbers' },
+        ...more
+      });
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, (source) => [
+        revised(source),
+        revised(source, { viewHelpers: { type: 'Int', task: 'draw each number another way' } })
+      ]);
+      const returned = appendedEvents.filter(
+        (event) => event.type === 'revision.edits-rejected' && event.payload.rejected === 'helpers'
+      );
+      expect(returned).toHaveLength(1);
+      expect(appendedEvents.some((event) => event.type === 'visualization.view-candidates')).toBe(
+        true
+      );
+    });
+
+    it('takes requests about other things than graphics as they are', async () => {
+      const { asksForGraphics } = await import('./commands');
+      expect(asksForGraphics('Can we try some icons for discovered and current?')).toBe(true);
+      expect(asksForGraphics('Draw each suit as a symbol')).toBe(true);
+      expect(asksForGraphics('Pause on every swap, and slow it down')).toBe(false);
+      expect(asksForGraphics('Who is it for? Students new to graphs.')).toBe(false);
     });
 
     it('leaves the candidates to the turn of a message written meanwhile', async () => {
