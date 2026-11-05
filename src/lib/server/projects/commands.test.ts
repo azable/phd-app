@@ -2429,9 +2429,13 @@ describe('version parents', () => {
 });
 
 describe('assistant edits', () => {
+  // The participant directs, so an edit stands as made, without offering the template's other views.
   const edit = (edits: { find: string; replace: string }[], summary: string) => ({
     ...generation(undefined, 'Edited.'),
-    decision: { action: 'edit' as const, edits, summary }
+    decision: { action: 'edit' as const, edits, summary },
+    brief: [
+      { key: 'lead' as const, value: 'direct', status: 'confirmed' as const, tags: ['direct'] }
+    ]
   });
   const created = async (title: string) => {
     const { createProject } = await import('./service');
@@ -2519,7 +2523,10 @@ describe('assistant edits', () => {
         ],
         values: [{ variable: 'Note.fill', value: 'sky-100' }],
         summary: 'Adds a caption'
-      }
+      },
+      brief: [
+        { key: 'lead' as const, value: 'direct', status: 'confirmed' as const, tags: ['direct'] }
+      ]
     });
 
     const result = await feedback(document);
@@ -3136,6 +3143,92 @@ describe('several variants from chat', () => {
     expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
       true
     );
+  });
+
+  // A linear search whose numbers have two views, so a version shown alone has an alternative.
+  const twoViews = (views: string) =>
+    [
+      '<script domain>',
+      "  const Int = type('integer', { min: 0, max: 20 });",
+      '  const Values = array(Int, { max: 5 });',
+      '  const Index = index(Values);',
+      '</script>',
+      '<script input>',
+      '  const values = Values;',
+      '  const target = Int;',
+      '</script>',
+      '<script algorithm>',
+      '  @start[let i = Index(values, 0);]',
+      '  while (@compare[values[i] !== target]) @next[i++;]',
+      '</script>',
+      views,
+      '<View of="Index" name="Mark"><Pointed /></View>',
+      '<Layout name="Scan" of="values, i">',
+      '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
+      '</Layout>',
+      '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
+      '<Storyboard>',
+      '  <Scene name="scan" case="main" pause="@next"><Scan values={values} i={i} /></Scene>',
+      '</Storyboard>'
+    ].join('\n');
+  const cellOrWord =
+    '<View of="Int" name="Cell"><Node value={this} /></View>\n<View of="Int" name="Word"><Node layout="row"><Node>n</Node><Node value={this} /></Node></View>';
+  const revised = (source: string, more: object = {}) => ({
+    ...generation(undefined, 'A version.'),
+    decision: { action: 'revise', source, summary: 'A version', ...more }
+  });
+  const alternativesReturned = (events: readonly ProjectEvent[]) =>
+    events.filter(
+      (event) =>
+        event.type === 'revision.edits-rejected' && event.payload.rejected === 'alternatives'
+    );
+
+  it('sends a version shown alone back once where its source offers another view, then shows it', async () => {
+    const result = await attempts(() => revised(twoViews(cellOrWord)), 'Alone');
+
+    const returned = alternativesReturned(result.appendedEvents);
+    expect(returned.map(({ payload }) => payload)).toEqual([
+      expect.objectContaining({
+        problems: [expect.stringContaining('Int as Cell or Word (views.Int)')]
+      })
+    ]);
+    expect(mocks.preparePrompt.mock.calls[1][0].buildFeedback.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'alternatives_not_offered', severity: 'warning' })
+    );
+    // Sent again unchanged, it shows: the return happens once a turn.
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(2);
+    expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
+      true
+    );
+  });
+
+  it('shows a version with a comparison of its views at once', async () => {
+    const result = await attempts(
+      () =>
+        revised(twoViews(cellOrWord), {
+          comparisons: [
+            {
+              question: 'Cells or words for the numbers?',
+              left: { label: 'cells', values: [{ variable: 'views.Int', value: 'Cell' }] },
+              right: { label: 'words', values: [{ variable: 'views.Int', value: 'Word' }] }
+            }
+          ]
+        }),
+      'Compared'
+    );
+
+    expect(alternativesReturned(result.appendedEvents)).toEqual([]);
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a version whose source offers no other form at once', async () => {
+    const result = await attempts(
+      () => revised(twoViews('<View of="Int" name="Cell"><Node value={this} /></View>')),
+      'Only form'
+    );
+
+    expect(alternativesReturned(result.appendedEvents)).toEqual([]);
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
   });
 
   it('sends back a comparison whose sides draw alike at every step, and records where a pair differs', async () => {

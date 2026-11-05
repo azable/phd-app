@@ -97,7 +97,12 @@ import type {
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
 import { openQuestion } from '$lib/shared/projects/questions';
-import { briefAttribute, projectBrief, type BriefEntry } from '$lib/shared/projects/brief';
+import {
+  briefAttribute,
+  projectBrief,
+  type BriefEntry,
+  type BriefItem
+} from '$lib/shared/projects/brief';
 import { briefSteering, type BriefSteering } from '$lib/server/chat-bots/brief-context';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
@@ -779,8 +784,8 @@ async function runSverlinAssistantTurn(
   const failureSummaries: string[] = [];
   let buildFeedback: BuildFeedback | undefined;
   const turnBrief = new Map<BriefEntry['key'], BriefEntry>();
-  // Whether a built picture went back to the assistant for a soft problem, text too small to read
-  // or warnings: one does once a turn, then the picture shows as built.
+  // Whether a built picture went back to the assistant for a soft problem, text too small to read,
+  // warnings, or alternatives it offered none of: one does once a turn, then it shows as built.
   let softReturned = false;
   // The type the assistant asked the view helpers to propose views of, where they are on.
   let helperType: string | undefined;
@@ -861,7 +866,7 @@ async function runSverlinAssistantTurn(
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
-        kind: 'edits' | 'comparisons' | 'picture' | 'warnings',
+        kind: 'edits' | 'comparisons' | 'picture' | 'warnings' | 'alternatives',
         problems: string[],
         failedSource: string,
         advice: string[] = []
@@ -870,7 +875,8 @@ async function runSverlinAssistantTurn(
           edits: 'the edits could not be applied',
           comparisons: 'the comparisons could not be built',
           picture: 'the picture drew too large to read',
-          warnings: 'the picture built with warnings'
+          warnings: 'the picture built with warnings',
+          alternatives: 'the picture offers alternatives no comparison showed'
         }[kind];
         const summary = `Attempt ${attempt}: ${outcome}. ${problems.join(' ')}`;
         failureSummaries.push(summary);
@@ -909,12 +915,16 @@ async function runSverlinAssistantTurn(
           assistantReply: generatedReplyText(generation.result.reply),
           diagnostics: [
             ...problems.map((message) => ({
-              severity: kind === 'warnings' ? ('warning' as const) : ('error' as const),
+              severity:
+                kind === 'warnings' || kind === 'alternatives'
+                  ? ('warning' as const)
+                  : ('error' as const),
               code: {
                 edits: 'edit_not_applied',
                 comparisons: 'comparison_not_built',
                 picture: 'picture_unreadable',
-                warnings: 'picture_warning'
+                warnings: 'picture_warning',
+                alternatives: 'alternatives_not_offered'
               }[kind],
               message,
               raw: message
@@ -1172,6 +1182,21 @@ async function runSverlinAssistantTurn(
       if (warnings.length && candidate !== undefined) {
         softReturned = true;
         return reject('warnings', warnings, candidate);
+      }
+      // A new or changed picture shown alone, where its source offers another form of a view, a
+      // pointer or a free layout's arrangement, goes back once to offer a comparison; one the
+      // participant directs is made as asked.
+      const alternatives =
+        !pairs && (decision.action === 'revise' || decision.action === 'edit') && bundles[0]
+          ? unofferedAlternatives(bundles[0])
+          : undefined;
+      if (
+        alternatives &&
+        candidate !== undefined &&
+        !directed(projectBrief(current.events, brief))
+      ) {
+        softReturned = true;
+        return reject('alternatives', [alternatives], candidate);
       }
       if (batchSucceeded(built.recorded)) {
         // The assistant is the one author of a new or edited source: its first build stands, the
@@ -1768,6 +1793,43 @@ export function shownInRandomOrder(
             : {}),
           swapped: true as const
         }
+  );
+}
+
+/**
+ * What a built picture's source offers that a comparison could show, as one message, or undefined:
+ * a type drawn by one of several views, a pointer drawn by one of several pointer views, and a free
+ * layout's arrangement.
+ */
+export function unofferedAlternatives(bundle: {
+  views?: Record<string, string[]>;
+  pointers?: Record<string, string[]>;
+  variant?: Record<string, unknown>;
+}): string | undefined {
+  const forms = [
+    ...Object.entries(bundle.views ?? {})
+      .filter(([, views]) => views.length > 1)
+      .map(([type, views]) => `${type} as ${views.join(' or ')} (views.${type})`),
+    ...Object.entries(bundle.pointers ?? {})
+      .filter(([, views]) => views.length > 1)
+      .map(([type, views]) => `the ${type} pointer as ${views.join(' or ')} (pointers.${type})`),
+    ...Object.keys(bundle.variant ?? {})
+      .filter((key) => key.endsWith('.layoutSeed'))
+      .map((key) => key.slice(0, -'.layoutSeed'.length))
+      .map((kind) => `the arrangement of ${kind} (${kind}.direction, ${kind}.layoutSeed)`)
+  ];
+  return forms.length
+    ? `This version is shown alone, but its source offers other forms: ${forms.join('; ')}. Offer a comparison of the one most worth choosing, or send the source again if one form is clearly right.`
+    : undefined;
+}
+
+/** Whether the participant directs: they would rather say what they want than choose. */
+function directed(brief: readonly BriefItem[]): boolean {
+  const lead = brief.find(({ key }) => key === 'lead');
+  return (
+    lead?.status !== undefined &&
+    lead.status !== 'unknown' &&
+    Boolean(lead.tags?.includes('direct'))
   );
 }
 

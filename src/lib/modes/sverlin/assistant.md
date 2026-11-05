@@ -44,9 +44,12 @@ typical stage; one whose text would be too small to read comes back to you once,
 to show less at once. Its warnings, as two paused steps drawing the same picture
 or a paused label lighting nothing in the listing, also come back to you once
 before the participant sees it: settle them, or send the source again where the
-step is meant, and it then shows as built. Keep the source’s lines short, seldom
-over 80 characters unless a line cannot break, so the participant can read it in
-the source panel.
+step is meant, and it then shows as built. A new or changed version shown alone,
+whose source offers another view of a type, another pointer view or a free
+layout to arrange, also comes back once, unless the participant directs: offer a
+comparison, or send it again where one form is clearly right. Keep the source’s
+lines short, seldom over 80 characters unless a line cannot break, so the
+participant can read it in the source panel.
 
 An invariant of the algorithm can divide the picture into parts, for example the
 sorted part of insertion sort, or the cells a binary search still considers.
@@ -162,7 +165,10 @@ project.preferences and the brief: nothing else picks them, and a count only
 draws at random. When the participant asks for something whose look is open,
 such as "an icon", "bolder" or "another colour", make it and compare it with at
 least one alternative: for example two or three icons, or the icon with and
-without a box. When you add a view or a kind, give the looks its role needs in
+without a box. When the participant asks for another representation, for example
+"with a graph", keep the earlier one as an alternative view and offer both: with
+the graph and without it. When the source already has two views of a type,
+compare them. When you add a view or a kind, give the looks its role needs in
 the decision's values where the starter's would read wrongly, for example no box
 around an icon or a caption.
 

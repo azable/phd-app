@@ -155,9 +155,11 @@ const presenters = {
           ? 'Picture too small to read'
           : event.payload.rejected === 'warnings'
             ? 'Picture with warnings'
-            : event.payload.rejected
-              ? 'Comparisons not built'
-              : 'Edits not applied',
+            : event.payload.rejected === 'alternatives'
+              ? 'Alternatives not offered'
+              : event.payload.rejected
+                ? 'Comparisons not built'
+                : 'Edits not applied',
       event.payload.problems[0] ?? 'The edits could not be placed in the source.',
       'failure',
       event.payload.kept
@@ -166,9 +168,11 @@ const presenters = {
           ? 'The picture drew too small to read; checking repair…'
           : event.payload.rejected === 'warnings'
             ? 'The picture has warnings; checking repair…'
-            : event.payload.rejected
-              ? 'Comparisons could not be built; checking repair…'
-              : 'Edits did not apply; checking repair…',
+            : event.payload.rejected === 'alternatives'
+              ? 'The picture has alternatives to offer; checking repair…'
+              : event.payload.rejected
+                ? 'Comparisons could not be built; checking repair…'
+                : 'Edits did not apply; checking repair…',
       'destructive'
     ),
   'artifact.version-created': (event) =>
