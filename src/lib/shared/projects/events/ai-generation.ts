@@ -56,6 +56,8 @@ export const aiGenerationFailedEventSchema = v.object({
     ]),
     durationMs: naturalSchema,
     message: v.string(),
-    details: v.optional(recordedTextSchema)
+    details: v.optional(recordedTextSchema),
+    /** The tokens a response that came back but could not be used still spent. */
+    usage: v.optional(v.record(v.string(), v.number()))
   })
 });

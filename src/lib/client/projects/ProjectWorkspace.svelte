@@ -57,6 +57,7 @@
   import NewProjectDialog from './NewProjectDialog.svelte';
   import VariantControls from './VariantControls.svelte';
   import AgentRequestAudit from './AgentRequestAudit.svelte';
+  import AiCostSummary from './AiCostSummary.svelte';
   import ProjectArtifactPanel, {
     type ProjectArtifactEditMode
   } from './ProjectArtifactPanel.svelte';
@@ -762,6 +763,9 @@
                       presentationSelection.returnToLatest();
                     }}
                   />
+                {/if}
+                {#if developerView}
+                  <AiCostSummary events={session.events} />
                 {/if}
                 {#if developerView && session.snapshot.mode === 'sverlin'}
                   <div class="flex items-center gap-1">

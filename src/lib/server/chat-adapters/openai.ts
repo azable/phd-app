@@ -230,13 +230,22 @@ export async function generateOpenAIReply(request: ChatAdapterRequest): Promise<
     { signal: request.signal }
   );
 
+  const usage = response.usage ? usageOf(response.usage) : undefined;
+  let parsed: ChatAdapterResult;
+  try {
+    parsed = parseResult(response.output_text, response);
+  } catch (error) {
+    // A response that cannot be used was still paid for.
+    if (error instanceof InvalidChatbotResponseError && usage) error.usage = usage;
+    throw error;
+  }
   return {
-    ...parseResult(response.output_text, response),
+    ...parsed,
     providerResponse: response,
     generation: {
       model: response.model,
       responseId: response.id,
-      ...(response.usage ? { usage: usageOf(response.usage) } : {})
+      ...(usage ? { usage } : {})
     }
   };
 }

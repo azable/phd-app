@@ -17,6 +17,13 @@ import { ProjectNotFoundError } from '$lib/server/projects/repository';
 import { buildSha } from '$lib/server/runtime-config';
 import { projectSchemaVersion, type ProjectDocument } from '$lib/shared/projects/model';
 import {
+  aiCalls,
+  costTotal,
+  operationCosts,
+  type AiCall,
+  type AiCostTotal
+} from '$lib/shared/projects/ai-costs';
+import {
   activeProjectOperation,
   pendingAssistantTurnRequests
 } from '$lib/shared/projects/operations';
@@ -126,6 +133,8 @@ export type DataExportManifest = {
   ownerCount: number;
   participantCount: number;
   projectCount: number;
+  /** Every exported project's model calls added up. */
+  aiCosts: AiCostTotal;
   interactions: {
     status: 'included' | 'unavailable';
     sessionCount: number;
@@ -599,8 +608,11 @@ export async function writeDataExport(
   await appendJson(sink, files, 'study/runs.json', snapshot.study.runs);
   await appendJson(sink, files, 'study/phases.json', snapshot.study.phases);
   await appendJson(sink, files, 'study/flows.json', snapshot.study.flows);
+  const allCalls: AiCall[] = [];
   for (const project of snapshot.projects) {
     const root = `projects/${safePathSegment(project.id)}`;
+    const calls = aiCalls(project.document.events);
+    allCalls.push(...calls);
     await appendJson(sink, files, `${root}/project.json`, {
       id: project.id,
       ownerUserId: project.ownerUserId,
@@ -611,6 +623,8 @@ export async function writeDataExport(
       updatedAt: project.updatedAt,
       // Each presentation by the name the page shows it by, as 3fa2c1/Misty-Falcon-09, to find it.
       presentations: namedPresentations(project.document.events),
+      // Each model call's tokens and cost, each operation's, and the project's (see ai-costs.ts).
+      aiCosts: { total: costTotal(calls), operations: operationCosts(calls), calls },
       document: project.document
     });
   }
@@ -630,6 +644,7 @@ export async function writeDataExport(
     ownerCount: snapshot.owners.length,
     participantCount: snapshot.participants.length,
     projectCount: snapshot.projects.length,
+    aiCosts: costTotal(allCalls),
     interactions: interactionExport.summary,
     files
   };

@@ -45,6 +45,8 @@ export interface ChatAdapter {
 /** Raised when a provider response does not satisfy a bot's output contract. */
 export class InvalidChatbotResponseError extends Error {
   readonly providerResponse?: unknown;
+  /** The tokens the response spent, where the provider reported them. */
+  usage?: Record<string, number>;
 
   constructor(
     message = 'The chatbot returned an invalid structured response.',

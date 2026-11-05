@@ -120,6 +120,7 @@ import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 
+import { logModelCall } from './ai-cost-log';
 import { runProjectCommand } from './command-lock';
 import { formatDiagnosticSummary } from './diagnostics';
 import { recordText, sourceSha256 } from './fingerprints';
@@ -1772,8 +1773,11 @@ async function runPreparedGeneration<Output extends object>(
     dependencies.projectService
   );
   const startedAt = performance.now();
+  // A response refused by validation was still paid for.
+  let generated: ChatbotResult<Output> | undefined;
   try {
     const result = await options.generate();
+    generated = result;
     options.validateResult(result);
     const generationEvent = draftEvent<'ai.generation-succeeded'>({
       type: 'ai.generation-succeeded',
@@ -1794,9 +1798,19 @@ async function runPreparedGeneration<Output extends object>(
       }
     });
     document = await appendProjectEvents(document, [generationEvent], dependencies.projectService);
+    logModelCall({
+      projectId: document.projectId,
+      operationId: options.operationId,
+      attempt: options.attempt,
+      purpose: options.prompt.attempt.purpose,
+      model: result.generation.model ?? options.prompt.parameters.model,
+      failed: false,
+      ...(result.generation.usage ? { usage: result.generation.usage } : {})
+    });
     return { ok: true as const, document, result, generationEvent };
   } catch (error) {
     const details = generationErrorDetails(error);
+    const usage = generated?.generation.usage ?? spentUsage(error);
     const failed = draftEvent<'ai.generation-failed'>({
       type: 'ai.generation-failed',
       actor: { kind: 'system' },
@@ -1806,10 +1820,20 @@ async function runPreparedGeneration<Output extends object>(
         failureKind: generationFailureKind(error),
         durationMs: Math.round(performance.now() - startedAt),
         message: safeErrorMessage(error),
-        details: recordText(details.value, details.mediaType)
+        details: recordText(details.value, details.mediaType),
+        ...(usage ? { usage } : {})
       }
     });
     document = await appendProjectEvents(document, [failed], dependencies.projectService);
+    logModelCall({
+      projectId: document.projectId,
+      operationId: options.operationId,
+      attempt: options.attempt,
+      purpose: options.prompt.attempt.purpose,
+      model: options.prompt.parameters.model,
+      failed: true,
+      ...(usage ? { usage } : {})
+    });
     // A response that cannot be used, incomplete, unparseable, or refused by validation, fails only
     // its attempt: the ladder goes on. Project 0c34d124's xhigh repair spent its whole output budget
     // reasoning, and its turn ended without the fallback.
@@ -2507,12 +2531,23 @@ async function runViewHelpers(
                 details: recordText(
                   generationErrorDetails(reply.error).value,
                   generationErrorDetails(reply.error).mediaType
-                )
+                ),
+                ...(spentUsage(reply.error) ? { usage: spentUsage(reply.error) } : {})
               }
             })
       ],
       dependencies.projectService
     );
+    const usage = reply.ok ? reply.result.generation?.usage : spentUsage(reply.error);
+    logModelCall({
+      projectId: current.projectId,
+      operationId,
+      attempt: reply.prompt.attempt.number,
+      purpose: 'helper',
+      model: (reply.ok && reply.result.generation?.model) || reply.prompt.parameters.model,
+      failed: !reply.ok,
+      ...(usage ? { usage } : {})
+    });
     generationEventIds.push(projectHead(current).id);
   }
   const proposed = replies.flatMap((reply) => (reply.ok ? reply.views : []));
@@ -3467,6 +3502,11 @@ function safeErrorMessage(error: unknown) {
   }
   if (error instanceof Error && error.name === 'InvalidChatbotResponseError') return error.message;
   return 'The AI service could not complete this request.';
+}
+
+/** The tokens a response that came back but could not be used still spent, where reported. */
+function spentUsage(error: unknown): Record<string, number> | undefined {
+  return error instanceof InvalidChatbotResponseError ? error.usage : undefined;
 }
 
 function generationErrorDetails(error: unknown) {

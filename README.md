@@ -424,11 +424,18 @@ interaction telemetry where available, and each `project.json` lists its
 presentations by the names the page shows them by, as `3fa2c1/Misty-Falcon-09`
 (the source's hash, then its values), which the copy button beside a name, or
 Alt+Shift+C for the presentation shown, copies to paste elsewhere; see
-[`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Each time a
-Sverlin presentation first shows a step, or is still not showing one after 10
-seconds, the browser reports how it loaded: the time per layout phase, where its
-layout came from, where a stalled page waits, the user agent and device pixel
-ratio, and how wide the page set a sample text in each embedded font; see
+[`src/lib/server/data-export.ts`](src/lib/server/data-export.ts). Each
+`project.json` also has `aiCosts`: every model call's tokens (input, cached,
+written to the cache, output, reasoning) and cost, each operation's and the
+project's, and the manifest adds them up across projects; prices are in
+[`src/lib/shared/projects/ai-costs.ts`](src/lib/shared/projects/ai-costs.ts).
+Developer view shows the project's total in the admin bar, by turn in its menu,
+and the web process logs each call as an `ai.call` JSON line and each
+operation's total as `ai.turn-cost`. Each time a Sverlin presentation first
+shows a step, or is still not showing one after 10 seconds, the browser reports
+how it loaded: the time per layout phase, where its layout came from, where a
+stalled page waits, the user agent and device pixel ratio, and how wide the page
+set a sample text in each embedded font; see
 [`src/lib/shared/presentation-load-timing.ts`](src/lib/shared/presentation-load-timing.ts).
 Once the project is quiet, it is recorded as a `visualization.loaded` event,
 which changes nothing else, so it is in the export's `project.json` (a viewer

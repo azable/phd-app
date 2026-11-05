@@ -112,9 +112,16 @@ describe('project data export traversal', () => {
       { id: 'owner-1', label: 'P001', role: 'user', enabled: true }
     ]);
     expect(Buffer.from(files.get('owners.json')!).toString()).not.toContain('@');
-    const exportedProject = JSON.parse(
+    const exportedFile = JSON.parse(
       Buffer.from(files.get('projects/project-test/project.json')!).toString()
-    ).document;
+    );
+    // A project with no model calls still says what they cost: nothing.
+    expect(exportedFile.aiCosts).toMatchObject({
+      total: { calls: 0, costUsd: 0, priced: true },
+      operations: [],
+      calls: []
+    });
+    const exportedProject = exportedFile.document;
     expect(exportedProject.events[1].payload.intakeStep).toBe('algorithm');
     expect(exportedProject.events[2].payload).toEqual({
       interactionEventId: 7,

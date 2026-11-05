@@ -39,6 +39,7 @@ import {
   projectOperationDeadlineError,
   runWithProjectOperationSignal
 } from './operation-context';
+import { logOperationCost } from './ai-cost-log';
 import { recoveryEventsForInterruptedOperations } from './recovery';
 import { ProjectNotFoundError, projectRepository, type ProjectRepository } from './repository';
 import {
@@ -489,6 +490,9 @@ export class ProjectOperationExecutor {
   private appendCurrent(projectId: string, events: NewProjectEvent[]) {
     return runProjectCommand(projectId, async () => {
       const document = await this.repository.load(projectId);
+      for (const event of events)
+        if (event.type === 'operation.completed' || event.type === 'operation.failed')
+          logOperationCost(projectId, event.operationId, document.events);
       return this.repository.append(projectId, document.events.length, events);
     });
   }
@@ -639,6 +643,7 @@ export class ProjectOperationExecutor {
         const document = await this.repository.load(projectId);
         const operation = projectOperation(document, operationId);
         if (!operation || operation.status === 'completed' || operation.status === 'failed') return;
+        logOperationCost(projectId, operationId, document.events);
         const related = document.events.filter(
           (event) => event.operationId === operationId && event.id > operation.acceptedEventId
         );
