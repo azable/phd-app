@@ -150,7 +150,7 @@ describe('single-component Svelte assistant', () => {
     for (const invalid of [
       { count: 4, comparisons: [comparison] },
       { comparisons: [] },
-      { comparisons: Array(9).fill(comparison) },
+      { comparisons: Array(11).fill(comparison) },
       right({ ...comparison.right, values: [] }),
       right({ values: comparison.right.values }),
       right({ ...comparison.right, label: '  ' }),

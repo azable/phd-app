@@ -1663,9 +1663,9 @@ Or a rating as a row of icons, each one icon its kind's design chooses:
 </View>
 ```
 
-- `n` is a value of an integer type with a largest value, as `this` in a view of
-  `type('integer', { min: 0, max: 10 })`. The view keeps room for that largest
-  count at every step, so a growing count never moves anything.
+- The count, `n`, is a value of an integer type with a largest value, as `this`
+  in a view of `type('integer', { min: 0, max: 10 })`. The view keeps room for
+  that largest count at every step, so a growing count never moves anything.
 - A count goes up to 100 at most. A larger value reads better as a length: draw
   it as a bar, with `height={this}`.
 - `count(…)` is only the list an `{#each}` walks.
