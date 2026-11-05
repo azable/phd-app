@@ -159,6 +159,15 @@ export function arrangementInput<E>(
   // Where no node draws an element itself, but only its fields, the node holding its whole {#each}
   // item stands for it, so a link given its position still meets it.
   const items: Record<string, Anchor> = {};
+  // The kinds of child whose fields link onward at this step: one of them drawing an end in its
+  // field instead, as a list's last node, is still met at its value cell, as the others are.
+  const linking = new Set(
+    elements.flatMap((element) =>
+      [...descendants(read, element)].some((inner) => isMarker(inner) && hoisted(inner))
+        ? [attribute(element, 'data-sv-kind')]
+        : []
+    )
+  );
   elements.forEach((element, box) => {
     const inside = [...descendants(read, element)];
     const anchor = (inner: E): Anchor => ({ box, ...read.boxIn(inner, element) });
@@ -203,7 +212,9 @@ export function arrangementInput<E>(
     }
     // A child drawing a node whose fields link onward, as [ A | next ], is met at its one value
     // cell, never the field an arrow leaves.
-    const fields = inside.some((inner) => isMarker(inner) && hoisted(inner));
+    const fields =
+      inside.some((inner) => isMarker(inner) && hoisted(inner)) ||
+      linking.has(attribute(element, 'data-sv-kind'));
     const nodes = inside.filter((inner) => attribute(inner, 'data-sv-node') !== undefined);
     const cells = nodes.filter((inner) =>
       read.children(inner).some((child) => hasClass(read, child, 'value'))
