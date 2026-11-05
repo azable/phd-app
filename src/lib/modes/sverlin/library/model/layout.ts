@@ -28,7 +28,16 @@ export type ModelLayout = {
   looks: Map<ModelElement, Look>;
   /** What the markup holds that the model does not lay out, so its boxes there are not exact. */
   problems: string[];
+  /** The texts each element holds itself, by the element, as laid out in its line. */
+  texts: Map<ModelElement, ModelText[]>;
 };
+
+/**
+ * A text an element holds, its spaces collapsed as the line draws them: from the left of its first
+ * character to the right of its last, the height of its font's ascent and descent, in its root's
+ * border box. `index` is its place among the element's children.
+ */
+export type ModelText = { text: string; index: number; box: Box; look: Look };
 
 export type ModelOptions = {
   rules: readonly Rule[];
@@ -52,8 +61,9 @@ export type ModelOptions = {
 
 type Fragment = { element: ModelElement; width: number; height: number; children: Placed[] };
 type Placed = { fragment: Fragment; x: number; y: number };
+type TextItem = { text: string; look: Look; owner: ModelElement; index: number };
 type Content = { width: number; height: number; children: Placed[] };
-type Item = { text: string; look: Look } | { element: ModelElement; look: Look };
+type Item = TextItem | { element: ModelElement; look: Look };
 
 const units = 64;
 /** A computed length as layout takes it: a 32-bit float in 64ths of a pixel, toward zero. */
@@ -121,8 +131,9 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
   // A box's in-flow items: text, and elements laid out in flow, with display: contents unwrapped.
   // An svg is sized by its own width and height, never by what it draws.
   const itemsOf = (element: ModelElement): Item[] =>
-    (element.tag === 'svg' ? [] : element.children).flatMap((child): Item[] => {
-      if (!isElement(child)) return child.length ? [{ text: child, look: lookAt(element) }] : [];
+    (element.tag === 'svg' ? [] : element.children).flatMap((child, index): Item[] => {
+      if (!isElement(child))
+        return child.length ? [{ text: child, look: lookAt(element), owner: element, index }] : [];
       const look = lookAt(child);
       if (look.display === 'none' || look.position === 'absolute' || look.position === 'fixed')
         return [];
@@ -205,8 +216,14 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     return { width: 0, height: 0, children: [] };
   }
 
+  // Spaces kept as written make a line of their own, as a listing's blank line has.
+  const keepsSpaces = (look: Look) => ['pre', 'pre-wrap', 'break-spaces'].includes(look.whiteSpace);
   const hasInline = (items: readonly Item[]) =>
-    items.some((item) => ('text' in item ? item.text.trim() : inlineLevel(item.look.display)));
+    items.some((item) =>
+      'text' in item
+        ? item.text.trim() || (item.text && keepsSpaces(item.look))
+        : inlineLevel(item.look.display)
+    );
 
   const margins = (look: Look) => look.margin.map((side) => (side === 'auto' ? 0 : laid(side)));
 
@@ -295,15 +312,22 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
   const stretches = (alignment: string) => alignment === 'normal' || alignment === 'stretch';
 
   function flex(look: Look, items: readonly Item[], width?: number, height?: number): Content {
-    if (items.some((item) => 'text' in item && item.text.trim()))
-      problems.add('text in a flex box');
-    const kids = items.flatMap((item) => ('element' in item ? [item] : []));
+    // Text is an anonymous item of its line, sized by it, which nothing stretches or narrows.
+    type Kid = { element: ModelElement; look: Look; fragment?: Fragment };
+    const kids = items.flatMap((item): Kid[] => {
+      if ('element' in item) return [item];
+      if (!item.text.trim()) return [];
+      const fragment = anonymousBox(inline(look, [item]));
+      return [{ element: fragment.element, look: { ...look, alignSelf: 'auto' }, fragment }];
+    });
     const row = look.flexDirection.startsWith('row');
     if (look.flexDirection.endsWith('reverse')) problems.add('reversed flex boxes');
     const gap = laid(row ? look.columnGap : look.rowGap);
     const gaps = Math.max(0, kids.length - 1) * gap;
     const alignmentOf = (own: Look) => (own.alignSelf === 'auto' ? look.alignItems : own.alignSelf);
-    const natural = kids.map(({ element }) => box(element));
+    const kidBox = (index: number, width?: number, height?: number): Fragment =>
+      kids[index].fragment ?? box(kids[index].element, width, height);
+    const natural = kids.map((_, index) => kidBox(index));
     if (row) {
       const sum = natural.reduce((total, fragment) => total + fragment.width, 0) + gaps;
       const outer = width ?? sum;
@@ -311,11 +335,11 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       const line = height ?? Math.max(0, ...natural.map((fragment) => fragment.height));
       const { start, between } = distribute(outer - sum, kids.length, look.justifyContent);
       let x = start;
-      const children = kids.map(({ element, look: own }, index): Placed => {
+      const children = kids.map(({ look: own }, index): Placed => {
         const alignment = alignmentOf(own);
         const fragment =
           stretches(alignment) && own.height === 'auto'
-            ? box(element, natural[index].width, line)
+            ? kidBox(index, natural[index].width, line)
             : natural[index];
         const placed = { fragment, x, y: aligned(line, fragment.height, alignment) };
         x += fragment.width + gap + between;
@@ -328,8 +352,8 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       };
     }
     const outer = width ?? Math.max(0, ...natural.map((fragment) => fragment.width));
-    const laidOut = kids.map(({ element, look: own }, index) =>
-      stretches(alignmentOf(own)) && own.width === 'auto' ? box(element, outer) : natural[index]
+    const laidOut = kids.map(({ look: own }, index) =>
+      stretches(alignmentOf(own)) && own.width === 'auto' ? kidBox(index, outer) : natural[index]
     );
     const sum = laidOut.reduce((total, fragment) => total + fragment.height, 0) + gaps;
     const tall = height ?? sum;
@@ -373,6 +397,7 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         stretches(justify) && !('element' in item && item.look.width !== 'auto');
       const stretchedHeight =
         stretches(align) && !('element' in item && item.look.height !== 'auto');
+      // Text is an anonymous box of its line, placed as an item, so its text is placed with it.
       const fragment =
         'element' in item
           ? box(
@@ -380,7 +405,7 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
               stretchedWidth ? cellWidth : natural[index].width,
               stretchedHeight ? cellHeight : undefined
             )
-          : undefined;
+          : anonymousBox(natural[index]);
       const size = fragment ?? natural[index];
       // Auto margins take the room before alignment does.
       const [autoTop, autoRight, autoBottom, autoLeft] =
@@ -597,19 +622,59 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     line.pending = undefined;
   }
 
+  // Anonymous boxes, which are taken out of the boxes once placed.
+  const anonymousBoxes = new Set<ModelElement>();
+  function anonymousBox({ width, height, children }: Content): Fragment {
+    const element: ModelElement = { tag: '#anonymous', attributes: {}, style: {}, children: [] };
+    anonymousBoxes.add(element);
+    return { element, width, height, children };
+  }
+
+  // Each text drawn is placed as a piece of its own standing for it, one for each text of an
+  // element, and taken out of the boxes once placed.
+  const textPieces = new Map<ModelElement, ModelElement[]>();
+  const drawnTexts = new Map<
+    ModelElement,
+    { owner: ModelElement; index: number; text: string; look: Look }
+  >();
+  function textPiece(item: TextItem, text: string, start: number, end: number): Piece {
+    const own = textPieces.get(item.owner) ?? [];
+    textPieces.set(item.owner, own);
+    const element = (own[item.index] ??= { tag: '#text', attributes: {}, style: {}, children: [] });
+    drawnTexts.set(element, { owner: item.owner, index: item.index, text, look: item.look });
+    const { ascent, descent } = metricsOf(item.look);
+    return {
+      element,
+      x: start,
+      top: -ascent,
+      width: end - start,
+      height: ascent + descent,
+      inner: []
+    };
+  }
+
   function walk(items: readonly Item[], look: Look, line: Line, pieces: Piece[]) {
     const preserved = ['pre', 'pre-wrap', 'break-spaces'].includes(look.whiteSpace);
     for (const item of items) {
       if ('text' in item) {
         // Each text is measured on its own, its width rounded up on its own.
         if (preserved) {
+          let first: number | undefined;
+          let last = line.x;
           item.text.split('\t').forEach((part, index) => {
             if (index) {
               const tab = item.look.tabSize * textWidth(' ', item.look);
               line.x = (Math.floor(line.x / tab + 1e-6) + 1) * tab;
             }
+            if (part.trim()) {
+              const leading = /^\s*/u.exec(part)?.[0] ?? '';
+              first ??= line.x + (leading ? textWidth(leading, item.look) : 0);
+              last = line.x + textWidth(part.trimEnd(), item.look);
+            }
             if (part) line.x += textWidth(part, item.look);
           });
+          if (first !== undefined)
+            pieces.push(textPiece(item, item.text.replace(/\s+/gu, ' ').trim(), first, last));
           line.space = false;
           continue;
         }
@@ -620,6 +685,11 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         if (trailing) text = text.slice(0, -1);
         confirmSpace(line);
         const measured = text ? textWidth(text, item.look) : 0;
+        const shown = text.trimStart();
+        if (shown) {
+          const end = line.x + measured;
+          pieces.push(textPiece(item, shown, end - textWidth(shown, item.look), end));
+        }
         line.x += measured;
         line.pending = trailing ? { look: item.look, text, width: measured } : undefined;
         line.space = trailing;
@@ -813,5 +883,12 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     }
   }
   record(box(root), 0, 0);
-  return { boxes, looks, problems: [...problems] };
+  for (const element of anonymousBoxes) boxes.delete(element);
+  const texts = new Map<ModelElement, ModelText[]>();
+  for (const [element, { owner, index, text, look }] of drawnTexts) {
+    const placed = boxes.get(element);
+    boxes.delete(element);
+    if (placed) texts.set(owner, [...(texts.get(owner) ?? []), { text, index, box: placed, look }]);
+  }
+  return { boxes, looks, problems: [...problems], texts };
 }

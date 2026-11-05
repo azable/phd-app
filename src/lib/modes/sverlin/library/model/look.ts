@@ -70,6 +70,8 @@ type Inherited = {
   tabSize: number;
   /** Custom properties, by name, as written: they pass down, and var() reads them where used. */
   custom: Readonly<Record<string, string>>;
+  /** The text's colour, as written, its var() references replaced. */
+  color: string;
 };
 
 const rootFontSize = 16;
@@ -84,7 +86,8 @@ const initial: Inherited = {
   lineHeight: 'normal',
   whiteSpace: 'normal',
   tabSize: 8,
-  custom: {}
+  custom: {},
+  color: '#000000'
 };
 
 /** A value with its var() references replaced by the custom properties they name, or fallbacks. */
@@ -307,7 +310,88 @@ function blockified(display: string): string {
   }
 }
 
-export type Styled = { look: Look; inherited: Inherited };
+/**
+ * What an element paints, which lays nothing out, for drawing it again from the model (see
+ * sceneOf in reserve.ts): CSS colours as written, var() references replaced and currentColor the
+ * text's colour.
+ */
+export type Paint = {
+  color: string;
+  background?: string;
+  /** The top border's colour and style, which the page's scene reads for the whole border. */
+  borderColor: string;
+  borderStyle: string;
+  /** The top left corner's radius, in pixels. */
+  radius: number;
+  opacity: number;
+  outline?: { width: number; style: string; color: string };
+};
+
+export type Styled = { look: Look; inherited: Inherited; paint: Paint };
+
+/** A value with its var() references replaced, or undefined where one names nothing. */
+export function substitutedOrNone(
+  value: string,
+  custom: Readonly<Record<string, string>>
+): string | undefined {
+  try {
+    return substituted(value, custom).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function paintOf(
+  applying: ReadonlyMap<string, string>,
+  custom: Readonly<Record<string, string>>,
+  color: string,
+  fontSize: number
+): Paint {
+  const get = (property: string) => {
+    const written = applying.get(property);
+    const value = written === undefined ? undefined : substitutedOrNone(written, custom);
+    return value !== undefined && /^currentcolor$/iu.test(value) ? color : value;
+  };
+  const length = (text: string | undefined) => {
+    try {
+      return text === undefined ? 0 : px(text, fontSize);
+    } catch {
+      return 0;
+    }
+  };
+  const words = (text: string | undefined) => text?.split(/\s+(?![^(]*\))/u) ?? [];
+  // background as the library writes it, a colour alone; border-color and border-radius, their
+  // first value, the top and the top left.
+  const background =
+    get('background-color') ?? words(get('background')).find((word) => !/^url\(/u.test(word));
+  const outline = words(get('outline'));
+  const outlineStyle =
+    get('outline-style') ??
+    outline.find((word) => /^(none|solid|dashed|dotted|double)$/u.test(word)) ??
+    'none';
+  const outlineWidth = get('outline-width') ?? outline.find((word) => /^[\d.]/u.test(word));
+  const outlineColor =
+    get('outline-color') ??
+    outline.find((word) => word !== outlineStyle && word !== outlineWidth) ??
+    color;
+  return {
+    color,
+    ...(background ? { background } : {}),
+    borderColor: get('border-top-color') ?? words(get('border-color'))[0] ?? color,
+    borderStyle: get('border-top-style') ?? words(get('border-style'))[0] ?? 'none',
+    radius: length(get('border-top-left-radius') ?? words(get('border-radius'))[0]),
+    opacity: Number(get('opacity') ?? 1),
+    ...(outlineStyle === 'none'
+      ? {}
+      : {
+          outline: {
+            width: length(outlineWidth ?? 'medium'),
+            style: outlineStyle,
+            color: outlineColor
+          }
+        })
+  };
+}
 
 /** The look of an element, from the rules, its parent's look and its ancestors (nearest last). */
 export function lookOf(
@@ -346,6 +430,13 @@ export function lookOf(
           ? { number: parseFloat(lineHeightText) }
           : { px: px(lineHeightText, fontSize) };
   const weightText = get('font-weight');
+  const colorText = applying.get('color');
+  const colorValue =
+    colorText === undefined || colorText === 'inherit'
+      ? undefined
+      : substitutedOrNone(colorText, custom);
+  const color =
+    colorValue === undefined || /^currentcolor$/iu.test(colorValue) ? from.color : colorValue;
   const inherited: Inherited = {
     fontStyle: get('font-style') ?? from.fontStyle,
     fontWeight:
@@ -363,7 +454,8 @@ export function lookOf(
     lineHeight,
     whiteSpace: get('white-space') ?? from.whiteSpace,
     tabSize: get('tab-size') === undefined ? from.tabSize : parseFloat(get('tab-size') as string),
-    custom
+    custom,
+    color
   };
   const length = (property: string, fallback = '0px'): Length =>
     evaluate(get(property) ?? fallback, { em: fontSize });
@@ -461,7 +553,7 @@ export function lookOf(
       throw new Error(
         `Layout model: ${property} is not modelled (${classesOf(element).join('.')})`
       );
-  return { look, inherited };
+  return { look, inherited, paint: paintOf(applying, custom, color, fontSize) };
 }
 
 /** An element's look given its ancestors, the nearest last, and its parent's look. */
