@@ -3795,6 +3795,21 @@ describe('several variants from chat', () => {
       expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
     });
 
+    it('runs the turn for a note written with an earlier pair, once the last is answered', async () => {
+      const { result } = await asking('Who is it for?');
+      const projectId = result.document.projectId;
+      const ids = presented(result.appendedEvents).map(
+        ({ payload }) => payload.presentation.presentationId
+      );
+      await prefer(projectId, ids.slice(0, 2), { preferred: ids[1] }, 'Show the call tree');
+      mocks.generatePrepared
+        .mockReset()
+        .mockResolvedValue({ ...generation(undefined, 'Done.'), decision: { action: 'respond' } });
+      const last = await prefer(projectId, ids.slice(2, 4), { preferred: ids[2] });
+      expect(replies(last.appendedEvents)[0]).toMatchObject({ releases: expect.any(Number) });
+      expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
+    });
+
     it('shows the picks applied once the last pair is answered, with no model call', async () => {
       const { result } = await asking('Who is it for?');
       const projectId = result.document.projectId;

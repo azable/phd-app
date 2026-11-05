@@ -467,9 +467,7 @@ export async function runQueuedAssistantTurn(
   // A question held back with comparisons is asked once the last is answered, or when the
   // participant writes first; answers alone then wait with it for the participant's reply. A
   // note written with an answer is the participant writing, so the turn runs for it.
-  const noted = preferences.some(
-    (event) => event.type === 'visualization.preference-recorded' && event.payload.comment?.length
-  );
+  const noted = notedSinceReply(current.events);
   const answersOnly = preferences.length === interactions.length && !noted;
   if (heldQuestion(current.events) && !(answersOnly && waitingComparisons(current).length)) {
     current = await releaseHeldQuestion(current, options.operationId, concurrentDependencies);
@@ -647,9 +645,11 @@ export function submitProjectPreference(
     if (answered.waiting) return finishMutation(before, document);
     document = await presentPicks(document, [preference.id], options.operationId, dependencies);
     if (heldQuestion(document.events)) {
+      // A note written with an answer is the participant writing, so the turn runs for it; read
+      // before the release, which is itself a reply.
+      const noted = notedSinceReply(document.events);
       document = await releaseHeldQuestion(document, options.operationId, dependencies);
-      // A note written with the answer is the participant writing, so the turn runs for it.
-      if (!preference.payload.comment?.length) return finishMutation(before, document);
+      if (!noted) return finishMutation(before, document);
     }
     document = await runSverlinAssistantTurn(
       document,
@@ -1975,6 +1975,22 @@ export function unofferedAlternatives(
   return forms.length
     ? `This version is shown alone, but its source offers other forms: ${forms.join('; ')}. Offer a comparison of the one most worth choosing, or send the source again if one form is clearly right.`
     : undefined;
+}
+
+/**
+ * Whether an answer since the assistant's last reply came with a note: the participant wrote, so
+ * the turn runs for it once the batch is answered, whichever pair the note went with (project
+ * fd7591a2's note on its first pair waited unread while the last, with none, asked the held
+ * question).
+ */
+function notedSinceReply(events: ProjectDocument['events']): boolean {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === 'assistant.responded') return false;
+    if (event.type === 'visualization.preference-recorded' && event.payload.comment?.length)
+      return true;
+  }
+  return false;
 }
 
 /** The view and pointer choices the version shown offers, none before a first version. */
