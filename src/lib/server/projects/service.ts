@@ -759,11 +759,18 @@ export function updateProjectArtifact(
     root?: boolean;
     /** Values to build the presentations with, each an option of its variable. */
     variant?: DesignValues;
+    /** Variables of the `from` candidate's values not to keep, each back to what it follows. */
+    unset?: readonly string[];
   },
   dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
 ): Promise<ProjectCommandResult> {
   return runProjectCommand(options.projectId, async () => {
     const before = await checkedDocument(options.projectId, options.expectedHead, dependencies);
+    const viewed = options.from ? presentedValues(before, options.from) : undefined;
+    const unset = new Set(options.unset);
+    const kept = viewed
+      ? Object.fromEntries(Object.entries(viewed).filter(([key]) => !unset.has(key)))
+      : undefined;
     const based = options.from
       ? await baseOnPresentation(before, options.from, options.operationId, dependencies)
       : before;
@@ -795,7 +802,7 @@ export function updateProjectArtifact(
       'manual-edit',
       options.operationId,
       dependencies,
-      options.from ? presentedValues(before, options.from) : undefined,
+      kept,
       false,
       options.variant
     );

@@ -59,6 +59,50 @@ describe('Svelte-backed project lifecycle', () => {
     );
   });
 
+  it("builds a developer's edit of the choices: changes chosen, removals back to their level", async () => {
+    const repository = new MemoryProjectRepository();
+    const dependencies: ProjectServiceDependencies = { repository };
+    const { document: created } = await createProjectSkeleton({}, dependencies);
+    const artifact = projectSnapshotAt(created).artifacts.main;
+    const save = async (
+      document: typeof created,
+      edit: { from?: string; variant?: Record<string, string | number>; unset?: string[] }
+    ) => {
+      const result = await updateProjectArtifact(
+        {
+          projectId: created.projectId,
+          expectedHead: document.events.length,
+          artifactId: artifact.artifactId,
+          source: linearSearchSource,
+          presentationCount: 1,
+          operationId: crypto.randomUUID(),
+          ...edit
+        },
+        dependencies
+      );
+      const [presentation] = result.appendedEvents.flatMap((event) =>
+        event.type === 'visualization.presented' ? [event.payload.presentation] : []
+      );
+      if (presentation?.format !== 'browser-bundle-v1') throw new Error('Nothing was built.');
+      return { document: result.document, presentation };
+    };
+    const first = await save(created, { variant: { 'IntCell.fill': 'sky-100' } });
+    expect(first.presentation.variant?.['IntCell.fill']).toBe('sky-100');
+    const padding = first.presentation.variant?.['IntCell.padding'];
+    expect(padding).toBe(first.presentation.variant?.$spacing);
+
+    // Only the token changes, and the kind set apart is removed from the choices.
+    const second = await save(first.document, {
+      from: first.presentation.presentationId,
+      variant: { $spacing: 0.125 },
+      unset: ['IntCell.fill']
+    });
+    expect(second.presentation.variant?.$spacing).toBe(0.125);
+    // The kind that followed the token still does, and the one removed is the starter's again.
+    expect(second.presentation.variant?.['IntCell.padding']).toBe(0.125);
+    expect(second.presentation.origins?.['IntCell.fill']).toBe('starter');
+  });
+
   it('records two seeded designs of one master trace as an aligned display set', async () => {
     const repository = new MemoryProjectRepository();
     const dependencies: ProjectServiceDependencies = { repository };

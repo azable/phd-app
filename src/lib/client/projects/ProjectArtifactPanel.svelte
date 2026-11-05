@@ -8,7 +8,12 @@
 
   import CodeMirrorEditor from '$lib/client/artifacts/CodeMirrorEditor.svelte';
   import VariantDiff from '$lib/client/artifacts/VariantDiff.svelte';
-  import { choiceRows, differingKeys, variantDocument } from '$lib/client/artifacts/variant-diff';
+  import {
+    choiceEdits,
+    choiceRows,
+    differingKeys,
+    variantDocument
+  } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
   import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
@@ -24,6 +29,7 @@
   import CopyName from '$lib/client/visualization/CopyName.svelte';
   import { sourceId, type CandidateId } from '$lib/client/visualization/presentation-history';
   import { locateElement } from '$lib/modes/sverlin/element-ref';
+  import type { DesignValues } from '$lib/shared/presentations';
 
   import type { ProjectSession } from './project-session.svelte';
   import { sourceLinksContext } from './source-links.svelte';
@@ -118,6 +124,11 @@
   // The candidate a draft was started from, and what the participant says the edit changes.
   let draftFrom = $state<string | undefined>();
   let draftSummary = $state('');
+  // In developer view, the choices of the candidate a draft starts from, and their document as
+  // edited: saving builds with only what the edit changes (see choiceEdits).
+  let choicesBase = $state<DesignValues | undefined>();
+  let choicesDraft = $state('');
+  let choicesError = $state('');
   let discardRequested = $state(false);
   let expanded = $state(false);
   // Which file the panel shows: the source, or the shown presentations' variants, their choices.
@@ -137,8 +148,13 @@
   });
   const baseSource = $derived(candidateSource ?? artifact?.content.text ?? '');
   const displayedSource = $derived(editMode === 'editing' ? draft : baseSource);
+  const choicesChanged = $derived(
+    choicesBase !== undefined && choicesDraft !== variantDocument(choicesBase)
+  );
   const dirty = $derived(
-    editMode === 'editing' && artifact !== undefined && draft !== artifact.content.text
+    editMode === 'editing' &&
+      artifact !== undefined &&
+      (draft !== artifact.content.text || choicesChanged)
   );
   // A selection's ids are tag positions in the source its presentation was built from, so they are
   // highlighted only while the editor shows that same text.
@@ -235,7 +251,7 @@
     'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
   const optionOn = 'bg-background text-foreground ring-1 ring-border';
   $effect(() => {
-    if (editMode === 'editing' || !variantJson || failed) tab = 'source';
+    if ((editMode === 'editing' && !choicesBase) || !variantJson || failed) tab = 'source';
   });
   // Problems the latest build of the artifact's source found, underlined in the editor.
   const diagnosed = $derived.by(() => {
@@ -247,9 +263,24 @@
     if (!artifact || failed || !session.atHead || session.pending || session.readOnly) return;
     draft = baseSource;
     draftBase = baseSource;
+    // A pair's side picked in Choices is the one an edit starts from.
+    const picked =
+      typeof shownVariant === 'number'
+        ? drawnSources.find(
+            ({ presentationId, source }) =>
+              presentationId === shownVariants[shownVariant as number]?.presentationId &&
+              source === baseSource
+          )
+        : undefined;
     draftFrom =
       chosen?.presentationId ??
+      picked?.presentationId ??
       drawnSources.find(({ source }) => source === baseSource)?.presentationId;
+    choicesBase = developerView
+      ? drawnSources.find(({ presentationId }) => presentationId === draftFrom)?.variant
+      : undefined;
+    choicesDraft = choicesBase ? variantDocument(choicesBase) : '';
+    choicesError = '';
     draftSummary = '';
     expanded = true;
     editMode = 'editing';
@@ -266,19 +297,30 @@
 
   function discardDraft() {
     draft = draftBase;
+    choicesDraft = choicesBase ? variantDocument(choicesBase) : '';
+    choicesError = '';
     discardRequested = false;
     editMode = 'readonly';
   }
 
   async function saveDraft() {
     if (!artifact || !dirty || session.pending || !session.atHead || session.readOnly) return;
+    const edits =
+      choicesBase && choicesChanged ? choiceEdits(choicesBase, choicesDraft) : undefined;
+    if (edits && 'error' in edits) {
+      choicesError = edits.error;
+      tab = 'variant';
+      return;
+    }
     const succeeded = await session.runCommand({
       type: 'save',
       artifactId: artifact.artifactId,
       source: draft,
       presentationCount,
       ...(draftFrom ? { from: draftFrom } : {}),
-      ...(draftSummary.trim() ? { summary: draftSummary.trim() } : {})
+      ...(draftSummary.trim() ? { summary: draftSummary.trim() } : {}),
+      ...(edits && Object.keys(edits.chosen).length ? { variant: edits.chosen } : {}),
+      ...(edits?.unset.length ? { unset: edits.unset } : {})
     });
     if (succeeded) {
       editMode = 'readonly';
@@ -314,7 +356,7 @@
       <header class="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         <EditIcon class="size-4 shrink-0 text-muted-foreground" />
         <div class="mr-auto min-w-0">
-          {#if variantJson && editMode === 'readonly' && !failed}
+          {#if variantJson && (editMode === 'readonly' || choicesBase) && !failed}
             <div class="flex gap-1" role="tablist" aria-label="Shown file">
               {#each [['source', sourceName], ['variant', 'Choices']] as [id, name] (id)}
                 <button
@@ -328,9 +370,11 @@
                       ? 'bg-muted text-foreground'
                       : 'text-muted-foreground hover:text-foreground'
                   ]}
-                  title={id === 'variant'
-                    ? 'The values chosen for the shown presentations, read-only'
-                    : undefined}
+                  title={id !== 'variant'
+                    ? undefined
+                    : editMode === 'editing'
+                      ? 'The values to build with: what the edit changes is chosen, the rest kept'
+                      : 'The values chosen for the shown presentations, read-only'}
                   onclick={() => {
                     tab = id as 'source' | 'variant';
                     expanded = true;
@@ -493,7 +537,29 @@
         </p>
       {/if}
 
-      {#if expanded && tab === 'variant' && variantJson && choiceTable}
+      {#if expanded && editMode === 'editing' && tab === 'variant' && choicesBase}
+        <!-- In developer view, the choices of the candidate the draft starts from, to edit: a
+          value changed or added is chosen, one removed returns to what it follows. -->
+        <div class="flex min-h-48 flex-1 flex-col overflow-hidden">
+          {#if choicesError}
+            <p class="border-b bg-destructive/10 px-4 py-2 text-sm text-destructive" role="alert">
+              {choicesError}
+            </p>
+          {/if}
+          <div class="min-h-0 flex-1 overflow-hidden">
+            <CodeMirrorEditor
+              value={choicesDraft}
+              language="json"
+              editable={session.atHead && !session.pending && !session.readOnly}
+              ariaLabel="Choices to build with"
+              onChange={(text) => {
+                choicesDraft = text;
+                choicesError = '';
+              }}
+            />
+          </div>
+        </div>
+      {:else if expanded && tab === 'variant' && variantJson && choiceTable}
         <!-- A strip saying whose choices they are, over them in words, or in developer view their
           document behind Details. One grid holds both, so the strip's group is within the whole. -->
         <div

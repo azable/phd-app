@@ -126,7 +126,12 @@ export const projectCommandSchema = v.variant('type', [
     /** Starts a new tree: the version, written from scratch, has no parent. */
     root: v.optional(v.literal(true)),
     /** Values to build the presentations with, each an option of its variable, as a tool sets them. */
-    variant: v.optional(designValuesSchema)
+    variant: v.optional(designValuesSchema),
+    /**
+     * Variables of the `from` candidate's values not to keep, so each returns to the level or
+     * starter it follows: those a developer removed from the choices' document.
+     */
+    unset: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(200))), v.maxLength(2_000)))
   }),
   v.strictObject({
     ...commandBase,

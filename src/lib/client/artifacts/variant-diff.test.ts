@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { Chunk } from '@codemirror/merge';
 import { Text } from '@codemirror/state';
 
-import { choiceName, choiceRows, differingKeys, variantDocument } from './variant-diff';
+import {
+  choiceEdits,
+  choiceName,
+  choiceRows,
+  differingKeys,
+  variantDocument
+} from './variant-diff';
 
 /** The rows of each document the merge view marks as changed, by the key each row sets. */
 function changedKeys(a: string, b: string) {
@@ -88,5 +94,38 @@ describe('choices in words', () => {
       { key: 'Label.size', name: 'Label size', values: ['small', 'large'] }
     ]);
     expect(choiceRows([top, {}], ['Box.gap'])[0].values).toEqual(['8', 'not set']);
+  });
+});
+
+describe("a developer's edit of the choices", () => {
+  const shown = { 'IntCell.fill': 'white', 'IntCell.padding': 0.375, $spacing: 0.375 };
+
+  it('keeps only the values changed or added, and lists those removed', () => {
+    const edited = variantDocument({
+      'IntCell.padding': 0.375,
+      $spacing: 0.125,
+      '<Node>.textSize': 14,
+      'Goal.shown': false
+    });
+    expect(choiceEdits(shown, edited)).toEqual({
+      chosen: { $spacing: 0.125, '<Node>.textSize': 14, 'Goal.shown': false },
+      unset: ['IntCell.fill']
+    });
+  });
+
+  it('changes nothing for the document as shown', () => {
+    expect(choiceEdits(shown, variantDocument(shown))).toEqual({ chosen: {}, unset: [] });
+  });
+
+  it('says why text is not a document of choices', () => {
+    expect(choiceEdits(shown, '{ "IntCell.fill": ')).toMatchObject({
+      error: expect.stringContaining('not valid JSON')
+    });
+    expect(choiceEdits(shown, '[1]')).toEqual({
+      error: 'The choices must be one JSON object, each variable to its value.'
+    });
+    expect(choiceEdits(shown, '{ "IntCell.fill": null }')).toEqual({
+      error: 'IntCell.fill must be a string, a number or a boolean, not null.'
+    });
   });
 });

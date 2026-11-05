@@ -838,7 +838,8 @@ async function executeProjectCommand(options: {
         ...(options.command.from ? { from: options.command.from } : {}),
         ...(options.command.summary ? { summary: options.command.summary } : {}),
         ...(options.command.root ? { root: true } : {}),
-        ...(options.command.variant ? { variant: options.command.variant } : {})
+        ...(options.command.variant ? { variant: options.command.variant } : {}),
+        ...(options.command.unset ? { unset: options.command.unset } : {})
       });
     case 'restore':
       return restoreProjectArtifacts({

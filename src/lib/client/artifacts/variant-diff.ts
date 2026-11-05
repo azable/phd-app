@@ -15,6 +15,40 @@ export function variantDocument(variant: DesignValues): string {
   return JSON.stringify(Object.fromEntries(sorted), null, 2);
 }
 
+/**
+ * A developer's edit of a version's choices as their document (see variantDocument): the values
+ * it changes or adds, to build with as chosen, and the variables it removes, to stop keeping, so
+ * every value left as it was keeps following its token or group; or why the text is not such a
+ * document. A value is a string, a number or a boolean, as a variant's are.
+ */
+export function choiceEdits(
+  shown: DesignValues,
+  text: string
+): { chosen: DesignValues; unset: string[] } | { error: string } {
+  let edited: unknown;
+  try {
+    edited = JSON.parse(text);
+  } catch (cause) {
+    return { error: `The choices are not valid JSON: ${(cause as Error).message}` };
+  }
+  if (!edited || typeof edited !== 'object' || Array.isArray(edited))
+    return { error: 'The choices must be one JSON object, each variable to its value.' };
+  const entries = Object.entries(edited);
+  const wrong = entries.find(
+    ([, value]) => !['string', 'number', 'boolean'].includes(typeof value)
+  );
+  if (wrong)
+    return {
+      error: `${wrong[0]} must be a string, a number or a boolean, not ${JSON.stringify(wrong[1])}.`
+    };
+  return {
+    chosen: Object.fromEntries(
+      entries.filter(([key, value]) => !Object.hasOwn(shown, key) || shown[key] !== value)
+    ) as DesignValues,
+    unset: Object.keys(shown).filter((key) => !Object.hasOwn(edited, key))
+  };
+}
+
 /** The keys whose values two variants do not share, a key only one of them sets included. */
 export function differingKeys(a: DesignValues, b: DesignValues): string[] {
   return [...new Set([...Object.keys(a), ...Object.keys(b)])]

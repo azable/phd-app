@@ -81,13 +81,17 @@ shows as one version, its first build, with the viewed variant's values where
 they still fit and the starter's for anything new; an `edit` or `revise` may
 give `values` of its own over those, which unlike a `vary`'s settle nothing;
 after a manual change the first presentation keeps the viewed variant's values
-and the second is randomised; refills of the presentation buffer stay random, as
-most are never shown ([`service.ts`](src/lib/server/projects/service.ts)
-`basedRequests`). With a `count` (at most 8, in whole pairs), a `vary` or
-`resample` makes that many, each drawn at random around the values the `vary`
-sets, and queues them in the presentation buffer: what it held is consumed, the
-first pair shows, and each Next pair, or New pair in dev mode, consumes the
-shown pair to show the next (`queueBuiltPresentations`, `waitingBehind` in
+and the second is randomised; in developer view a manual change can also edit
+the viewed variant's choices as JSON (the Choices tab while editing): the values
+it changes or adds are built as chosen and those it removes are no longer kept,
+so the rest still follow their tokens and groups (`choiceEdits`); refills of the
+presentation buffer stay random, as most are never shown
+([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
+`count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,
+each drawn at random around the values the `vary` sets, and queues them in the
+presentation buffer: what it held is consumed, the first pair shows, and each
+Next pair, or New pair in dev mode, consumes the shown pair to show the next
+(`queueBuiltPresentations`, `waitingBehind` in
 [`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
 `vary`, `edit` or `revise` may instead give `comparisons` the assistant designs,
 each a question and its two sides, each a short label in the participant's words
