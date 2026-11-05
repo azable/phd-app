@@ -9,7 +9,7 @@ import type {
   VariantRequest
 } from '$lib/shared/presentations';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
-import type { Readability } from '$lib/shared/readability';
+import type { Arrangement, Readability } from '$lib/shared/readability';
 
 export type PresentationBuilder = (
   source: string,
@@ -58,6 +58,8 @@ export type ModeBuildResult =
         drawn?: string[];
         // How large it draws on a typical stage, laid out on the server; none where it was not.
         readability?: Readability;
+        // Other arrangements of its free layouts, laid out on the server; none where not asked for.
+        arrangements?: Arrangement[];
       };
     }
   | {

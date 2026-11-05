@@ -157,9 +157,10 @@ import {
 } from './bound-props.server';
 import { bindableProps, lengthProps, valueOnlyProps } from './library/node/bound';
 import { iconNames } from './library/fonts';
+import { measuredArrangements } from './arrangements.server';
 import { readabilityOf } from './readability.server';
 import { drawingText } from './library/drawing';
-import type { Readability } from '$lib/shared/readability';
+import type { Arrangement, Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { drawingMarker, drawingProblems } from './drawings.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
@@ -271,6 +272,8 @@ export type SvelteBundle = {
     readability?: Readability;
     /** What it draws, in kinds and links, for the assistant (see library/drawing.ts). */
     drawing?: string;
+    /** Other arrangements of its free layouts, where asked for (see arrangements.server.ts). */
+    arrangements?: Arrangement[];
   };
 };
 
@@ -2452,7 +2455,8 @@ function standInsFor(
 export async function bundlePresentation(
   prepared: PreparedComponent,
   seed: number,
-  request: VariantRequest = {}
+  request: VariantRequest = {},
+  options: { arrange?: boolean } = {}
 ): Promise<SvelteBundle> {
   const { design } = prepared;
   let variant: ReturnType<typeof buildVariant>;
@@ -2717,10 +2721,21 @@ export async function bundlePresentation(
   // A step the view fails to draw shows nothing of it, and every such step would seem alike.
   if (laid.errors.length)
     throw new InvalidSvelteSourceError(drawFailureMessage(laid.errors), { code: 'draw_failed' });
+  const arrangements =
+    options.arrange && size && geometries
+      ? await measuredArrangements(
+          layoutBundle.text,
+          design.space,
+          values,
+          { size, geometry: geometries[0] },
+          frame.ratio
+        )
+      : undefined;
   const layout: SvelteBundle['layout'] = {
     ...laid,
     ...(size ? { readability: readabilityOf(size, frame.ratio) } : {}),
-    ...(drawing ? { drawing: drawingText(drawing) } : {})
+    ...(drawing ? { drawing: drawingText(drawing) } : {}),
+    ...(arrangements ? { arrangements } : {})
   };
   return {
     javascript,

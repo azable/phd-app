@@ -2,7 +2,7 @@
 
 import * as v from 'valibot';
 import { modeCatalog } from '$lib/modes/catalog';
-import { readabilitySchema } from '$lib/shared/readability';
+import { arrangementSchema, readabilitySchema } from '$lib/shared/readability';
 
 import { positiveSchema, recordedTextSchema, textSchema } from './projects/events/values';
 
@@ -134,6 +134,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),
   /** How large it draws on a typical stage, where the server laid it out. */
   readability: v.optional(readabilitySchema),
+  /** Other arrangements of its free layouts, laid out by the server, for the assistant. */
+  arrangements: v.optional(v.pipe(v.array(arrangementSchema), v.maxLength(16))),
   /** Each step a scene leaves out, drawing what the step before it drew, for the assistant. */
   warnings: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(200))),
   /** What it draws, in kinds and links, from the server's layout (modes/sverlin/library/drawing.ts). */

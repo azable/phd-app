@@ -3,7 +3,9 @@
 // of the server in it (see ../layout.server.ts). The host gives text widths and font metrics,
 // measured in the fonts every page embeds, and takes the geometry back as JSON, with the frame and
 // fit every step shows at, which the page draws with as given; what each step draws as
-// __sverlinDrawn (see recordLayouts); and how large it draws as __sverlinSize.
+// __sverlinDrawn (see recordLayouts); and how large it draws as __sverlinSize. Given design values,
+// it lays every step out with them in place of the variant's, to measure another arrangement (see
+// arrangementsOnServer), recording nothing else.
 
 import { render } from 'svelte/server';
 import {
@@ -33,7 +35,7 @@ type Host = {
 
 const scope = globalThis as unknown as {
   __sverlinHost: Host;
-  __sverlinLayOut?: (devicePixelRatio: number) => Promise<string>;
+  __sverlinLayOut?: (devicePixelRatio: number, design?: string) => Promise<string>;
   __sverlinDrawn?: string;
   __sverlinDrawing?: string;
   __sverlinSize?: string;
@@ -46,8 +48,14 @@ scope.window ??= { innerWidth: 1200, innerHeight: 800 };
 const steps = stepsOf(unpackStates(packed), atoms, listing, lengths);
 // Every step shares the variant, and so the frame's ratio.
 const ratio = (steps.states[0] as { __frame?: { ratio?: string } } | undefined)?.__frame?.ratio;
+const states = steps.states as { __design: Record<string, unknown> }[];
+const variant = states.map(({ __design }) => __design);
 
-scope.__sverlinLayOut = async (devicePixelRatio) => {
+scope.__sverlinLayOut = async (devicePixelRatio, design) => {
+  const values = design ? (JSON.parse(design) as Record<string, unknown>) : undefined;
+  states.forEach((state, phase) => {
+    state.__design = values ? { ...variant[phase], ...values } : variant[phase];
+  });
   const host = scope.__sverlinHost;
   const borders = new Set<number>();
   const widths = new Map<string, number>();
@@ -56,7 +64,7 @@ scope.__sverlinLayOut = async (devicePixelRatio) => {
   // The characters of text measured at each font size, each text once, for how large it reads.
   const characters = new Map<number, number>();
   // What is drawn is the same at any device pixel ratio but for borders snapping, so it is read once.
-  const drawn: string[] | undefined = devicePixelRatio === 1 ? [] : undefined;
+  const drawn: string[] | undefined = devicePixelRatio === 1 && !values ? [] : undefined;
   const reservation = await recordLayouts({
     steps,
     layouts,
@@ -94,10 +102,10 @@ scope.__sverlinLayOut = async (devicePixelRatio) => {
   });
   const extents = [...layouts.extents.values()];
   const frame = shownFrame(extents, ratio === 'fit', fitShapes);
-  if (drawn) {
-    scope.__sverlinDrawn = JSON.stringify(drawn);
+  if (drawn) scope.__sverlinDrawn = JSON.stringify(drawn);
+  if (devicePixelRatio === 1) {
     const size = frame && drawnSize(extents, frame, characters);
-    if (size) scope.__sverlinSize = JSON.stringify(size);
+    scope.__sverlinSize = size ? JSON.stringify(size) : undefined;
   }
   return JSON.stringify(geometryOf(layouts, { devicePixelRatio, borders }, frame, reservation));
 };

@@ -25,11 +25,13 @@ export async function buildBatch(
     return requests.map(({ seed }) => failure(seed, cause, elapsed()));
   }
   const results: ModeBuildResult[] = [];
-  for (const { seed, variant } of requests) {
+  for (const [index, { seed, variant }] of requests.entries()) {
     throwIfAborted(signal);
     try {
-      // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts).
-      const bundle = await bundlePresentation(prepared, seed, variant);
+      // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts);
+      // the first of a batch, the version a reply shows or a comparison's first side, measured in
+      // its other arrangements too (see arrangements.server.ts).
+      const bundle = await bundlePresentation(prepared, seed, variant, { arrange: index === 0 });
       logLayout(seed, bundle.layout);
       results.push({
         ok: true,
@@ -55,6 +57,7 @@ export async function buildBatch(
           structures: prepared.design.structures,
           ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),
           ...(bundle.layout.readability ? { readability: bundle.layout.readability } : {}),
+          ...(bundle.layout.arrangements ? { arrangements: bundle.layout.arrangements } : {}),
           ...(bundle.layout.drawing ? { drawing: bundle.layout.drawing } : {})
         }
       });

@@ -46,7 +46,7 @@ type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { stepRuns } from '$lib/shared/differing-steps';
-import { readabilityText } from '$lib/shared/readability';
+import { arrangementsText, readabilityText } from '$lib/shared/readability';
 import { interfacePartsFor, type InterfacePartId } from '$lib/shared/interface-parts';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
 import {
@@ -134,6 +134,11 @@ export type AiPresentationSummary = {
   contentSha256: string;
   /** How large it draws on a typical stage, where the server laid it out. */
   readability?: string;
+  /**
+   * The best arrangements of its free layouts, the shown one among them, laid out by the server
+   * with no model call: the values each sets and how it draws (see arrangementsText).
+   */
+  arrangements?: string[];
   /** Each step a scene leaves out, drawing what the step before it drew (see sceneSteps). */
   warnings?: string[];
   /**
@@ -978,6 +983,9 @@ export function presentationSummary(
     contentSha256: (scripted ? presentation.javascript : presentation.rendered).sha256,
     ...(scripted && presentation.readability
       ? { readability: readabilityText(presentation.readability) }
+      : {}),
+    ...(scripted && presentation.arrangements?.length
+      ? { arrangements: arrangementsText(presentation.arrangements) }
       : {}),
     ...(scripted && presentation.warnings?.length ? { warnings: presentation.warnings } : {}),
     ...(scripted && presentation.drawing ? { drawing: presentation.drawing } : {})

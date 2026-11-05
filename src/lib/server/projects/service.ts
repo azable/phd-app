@@ -1172,6 +1172,7 @@ export async function activateBuiltPresentations(
       ...(bundle.renders ? { renders: bundle.renders } : {}),
       ...(bundle.leftOut ? { leftOut: bundle.leftOut } : {}),
       ...(bundle.readability ? { readability: bundle.readability } : {}),
+      ...(bundle.arrangements?.length ? { arrangements: bundle.arrangements } : {}),
       ...(bundle.warnings?.length ? { warnings: bundle.warnings } : {}),
       ...(bundle.drawing ? { drawing: bundle.drawing } : {}),
       seed: item.seed,

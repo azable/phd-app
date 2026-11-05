@@ -76,3 +76,57 @@ export function unreadableProblem(readability: Readability): string | undefined 
   if (readability.text >= smallestReadableText) return undefined;
   return `The picture is too large to read: ${readabilityText(readability)} Show less at once rather than keeping every part: remove or combine parts, or show one level or part at a time; where both are fair readings of the request, compare the whole at once against one part at a time.`;
 }
+
+/**
+ * Another arrangement of a version's free layouts, laid out by the server with no model call (see
+ * modes/sverlin/arrangements.server.ts): the values it sets, how large it draws, and how many pairs
+ * of its links cross.
+ */
+export const arrangementSchema = v.strictObject({
+  values: v.record(
+    v.pipe(v.string(), v.maxLength(200)),
+    v.union([v.string(), v.number(), v.boolean()])
+  ),
+  readability: readabilitySchema,
+  crossings: v.number(),
+  /** Whether it is the version's own arrangement. */
+  shown: v.optional(v.boolean())
+});
+
+export type Arrangement = v.InferOutput<typeof arrangementSchema>;
+
+/**
+ * Arrangements best first: text readable on the typical stage before anything, then a fuller frame
+ * with fewer crossings, each crossing costing a tenth of the frame; the shown one first of equals.
+ */
+export function rankedArrangements(arrangements: readonly Arrangement[]): Arrangement[] {
+  const score = ({ readability, crossings }: Arrangement) =>
+    (readability.text >= smallestReadableText ? 1 : 0) + (readability.fill ?? 0) - crossings / 10;
+  return arrangements.toSorted(
+    (a, b) => score(b) - score(a) || Number(b.shown ?? false) - Number(a.shown ?? false)
+  );
+}
+
+/** How many arrangements the assistant is told of, best first. */
+const toldArrangements = 5;
+
+/**
+ * The best arrangements in a line each, for the assistant: the values each sets, its shape, its
+ * crossings and its text size, as "Graph.layoutSeed 3: 1.2:1 near square, filling 74% of its
+ * frame, 1 part, 0 crossings, text 14 px". One measuring as one above it does is left out, as
+ * nothing here tells them apart.
+ */
+export function arrangementsText(arrangements: readonly Arrangement[]): string[] {
+  const told = new Set<string>();
+  return rankedArrangements(arrangements)
+    .flatMap(({ values, readability, crossings, shown }) => {
+      const facts = `${layoutShape(readability)}, ${crossings} crossing${crossings === 1 ? '' : 's'}, text ${whole(readability.text)} px`;
+      if (told.has(facts)) return [];
+      told.add(facts);
+      const set = Object.entries(values)
+        .map(([variable, value]) => `${variable} ${value}`)
+        .join(', ');
+      return [`${set}: ${facts}${shown ? ' (shown)' : ''}`];
+    })
+    .slice(0, toldArrangements);
+}
