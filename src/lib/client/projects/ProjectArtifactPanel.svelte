@@ -242,11 +242,8 @@
     const keys = Object.keys(variant).sort((x, y) => x.localeCompare(y));
     return { caption: 'Choices of the version', columns: [], rows: choiceRows([variant], keys) };
   });
-  // In developer view, the choices' document instead, as a diff for a pair.
+  // The choices' document instead, as a diff for a pair: a file of the version, as its source is.
   let rawShown = $state(false);
-  const showingRaw = $derived(developerView && rawShown);
-  // The strip's buttons: a pair's differences or either side, and Details in developer view.
-  const choiceOptions = $derived(differences !== undefined || developerView);
   const optionButton =
     'rounded-md px-1.5 leading-6 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
   const optionOn = 'bg-background text-foreground ring-1 ring-border';
@@ -276,9 +273,7 @@
       chosen?.presentationId ??
       picked?.presentationId ??
       drawnSources.find(({ source }) => source === baseSource)?.presentationId;
-    choicesBase = developerView
-      ? drawnSources.find(({ presentationId }) => presentationId === draftFrom)?.variant
-      : undefined;
+    choicesBase = drawnSources.find(({ presentationId }) => presentationId === draftFrom)?.variant;
     choicesDraft = choicesBase ? variantDocument(choicesBase) : '';
     choicesError = '';
     draftSummary = '';
@@ -347,8 +342,12 @@
 
 <svelte:window onkeydown={copyShownNames} />
 
+<!-- Expanded, one height whichever file or view it shows, so switching does not resize it. -->
 <section
-  class={['flex min-h-0 flex-col border-t p-2', chosen || failed ? 'flex-1' : 'max-h-[38vh]']}
+  class={[
+    'flex min-h-0 flex-col border-t p-2',
+    chosen || failed ? 'flex-1' : expanded ? 'h-[38vh]' : 'max-h-[38vh]'
+  ]}
   aria-label="Project artifact"
 >
   {#if artifact}
@@ -538,7 +537,7 @@
       {/if}
 
       {#if expanded && editMode === 'editing' && tab === 'variant' && choicesBase}
-        <!-- In developer view, the choices of the candidate the draft starts from, to edit: a
+        <!-- The choices of the candidate the draft starts from, to edit: a
           value changed or added is chosen, one removed returns to what it follows. -->
         <div class="flex min-h-48 flex-1 flex-col overflow-hidden">
           {#if choicesError}
@@ -560,20 +559,14 @@
           </div>
         </div>
       {:else if expanded && tab === 'variant' && variantJson && choiceTable}
-        <!-- A strip saying whose choices they are, over them in words, or in developer view their
-          document behind Details. One grid holds both, so the strip's group is within the whole. -->
+        <!-- A strip saying whose choices they are, over them in words, or their document behind
+          Details, in one area the size of the source's, so switching does not resize the panel. -->
         <div
           class={[
-            'grid min-h-0 grid-cols-[minmax(0,1fr)_auto] text-sm',
-            showingRaw && 'flex-1 grid-rows-[auto_minmax(0,1fr)]'
+            'grid min-h-48 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] text-sm'
           ]}
         >
-          <span
-            class={[
-              'truncate border-b bg-muted px-4 py-2 text-muted-foreground',
-              !choiceOptions && 'col-span-2'
-            ]}
-          >
+          <span class="truncate border-b bg-muted px-4 py-2 text-muted-foreground">
             {#if differences && showingDifferences}
               Choices: {differences.a.label} vs {differences.b.label} · {differences.keys.length
                 ? `${differences.keys.length} of ${differences.total} differ`
@@ -584,37 +577,33 @@
               Choices of the version shown
             {/if}
           </span>
-          <!-- For one version only in developer view: the tour's Choices hint, which finds this
-            group, speaks of a pair. -->
-          {#if choiceOptions}
-            <span
-              class="flex items-center gap-1 border-b bg-muted px-4 py-2 text-muted-foreground"
-              role="group"
-              aria-label="Choices shown"
-            >
-              {#if differences}
-                {#each shownVariantOptions as { id, name } (id)}
-                  <button
-                    type="button"
-                    aria-pressed={shownVariant === id}
-                    class={[optionButton, shownVariant === id ? optionOn : 'hover:text-foreground']}
-                    onclick={() => (shownVariant = id)}>{name}</button
-                  >
-                {/each}
-              {/if}
-              {#if developerView}
+          <!-- The strip's buttons: a pair's differences or either side, and Details. A group for a
+            pair only: the tour's Choices hint, which finds it, speaks of a pair. -->
+          <span
+            class="flex items-center gap-1 border-b bg-muted px-4 py-2 text-muted-foreground"
+            role={differences ? 'group' : undefined}
+            aria-label={differences ? 'Choices shown' : undefined}
+          >
+            {#if differences}
+              {#each shownVariantOptions as { id, name } (id)}
                 <button
                   type="button"
-                  aria-pressed={showingRaw}
-                  class={[optionButton, showingRaw ? optionOn : 'hover:text-foreground']}
-                  title="The choices as their document"
-                  onclick={() => (rawShown = !rawShown)}>Details</button
+                  aria-pressed={shownVariant === id}
+                  class={[optionButton, shownVariant === id ? optionOn : 'hover:text-foreground']}
+                  onclick={() => (shownVariant = id)}>{name}</button
                 >
-              {/if}
-            </span>
-          {/if}
-          {#if showingRaw && differences && showingDifferences}
-            <div class="col-span-2 min-h-48 overflow-hidden">
+              {/each}
+            {/if}
+            <button
+              type="button"
+              aria-pressed={rawShown}
+              class={[optionButton, rawShown ? optionOn : 'hover:text-foreground']}
+              title="The choices as their document"
+              onclick={() => (rawShown = !rawShown)}>Details</button
+            >
+          </span>
+          {#if rawShown && differences && showingDifferences}
+            <div class="col-span-2 min-h-0 overflow-hidden">
               <VariantDiff
                 a={variantDocument(differences.a.variant)}
                 b={variantDocument(differences.b.variant)}
@@ -623,8 +612,8 @@
                 ariaLabel={`Choices: ${differences.a.label} vs ${differences.b.label}`}
               />
             </div>
-          {:else if showingRaw}
-            <div class="col-span-2 min-h-48 overflow-hidden">
+          {:else if rawShown}
+            <div class="col-span-2 min-h-0 overflow-hidden">
               <CodeMirrorEditor
                 value={variantJson}
                 language="json"
@@ -633,7 +622,7 @@
               />
             </div>
           {:else}
-            <div class="col-span-2 max-h-56 overflow-auto">
+            <div class="col-span-2 min-h-0 overflow-auto">
               {#if choiceTable.rows.length}
                 <table class="w-full text-left">
                   <caption class="sr-only">{choiceTable.caption}</caption>

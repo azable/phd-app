@@ -81,11 +81,11 @@ shows as one version, its first build, with the viewed variant's values where
 they still fit and the starter's for anything new; an `edit` or `revise` may
 give `values` of its own over those, which unlike a `vary`'s settle nothing;
 after a manual change the first presentation keeps the viewed variant's values
-and the second is randomised; in developer view a manual change can also edit
-the viewed variant's choices as JSON (the Choices tab while editing): the values
-it changes or adds are built as chosen and those it removes are no longer kept,
-so the rest still follow their tokens and groups (`choiceEdits`); refills of the
-presentation buffer stay random, as most are never shown
+and the second is randomised; a manual change can also edit the viewed variant's
+choices as JSON (the Choices tab while editing): the values it changes or adds
+are built as chosen and those it removes are no longer kept, so the rest still
+follow their tokens and groups (`choiceEdits`); refills of the presentation
+buffer stay random, as most are never shown
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
 `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,
 each drawn at random around the values the `vary` sets, and queues them in the
