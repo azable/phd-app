@@ -99,10 +99,12 @@ function caseOf(scanned: string, start: number): { written: WrittenCase } | { pr
     if (scanned[at] === '"' || scanned[at] === "'") {
       const end = scanned.indexOf(scanned[at], at + 1);
       if (end < 0) return { problem: `A <Case>'s ${key} is never closed.` };
-      if (key !== 'name')
+      if (key !== 'name') {
+        const text = scanned.slice(at + 1, end);
         return {
-          problem: `${key}="…" gives the input ${key} as text: give it as a value of its type, as ${key}={9} or ${key}={[2, 5, 7]}.`
+          problem: `${key}="${text}" gives the input ${key} as text: give it as a value of its type in braces, as ${key}={'${text}'} for one of its words, ${key}={9} for a number, or ${key}={[2, 5, 7]} for a list.`
         };
+      }
       name = scanned.slice(at + 1, end);
       at = end + 1;
       continue;

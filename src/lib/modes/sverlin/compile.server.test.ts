@@ -3065,6 +3065,27 @@ describe('cases', () => {
   });
 });
 
+describe('case inputs', () => {
+  it('shows a word given as text in quotes how to write it, not as a number', () => {
+    const source = `<script domain>
+  const Suit = type(['hearts', 'spades']);
+</script>
+<script input>
+  const suit = Suit;
+</script>
+<script algorithm>
+  @begin[let shown = Suit(suit);]
+</script>
+<View of="Suit" name="SuitWord"><Node value={this} /></View>
+<Layout name="Main" of="shown"><Node><Node>{shown}</Node></Node></Layout>
+<Case name="main" suit="hearts" />
+<Storyboard>
+  <Scene name="main" case="main" pause="@begin"><Main shown={shown} /></Scene>
+</Storyboard>`;
+    expect(() => prepareCurrent(source)).toThrow(/suit=\{'hearts'\}/u);
+  });
+});
+
 describe('listing names', () => {
   it.each(['C code', 'c++', 'Python 3'])(
     'takes a listing named %s, whose first word chooses its language',
