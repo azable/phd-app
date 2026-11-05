@@ -92,6 +92,20 @@ describe('inline maths drawn by MathJax', () => {
     expect('svg' in sum && sum.text).toBe('∑ᵢ₌₁ⁿ i');
   });
 
+  it.each(['\\sum_{i=1}^{n-1} i = \\frac{n(n-1)}{2}', 'n-1', 'a = b + c', '\\sqrt{n} \\le n'])(
+    'draws %s with operators at its top level, MathJax marking no line breaks',
+    (tex) => {
+      const drawn = mathsSvg(tex);
+      if (!('svg' in drawn)) throw new Error(drawn.problem);
+      expect(drawn.svg).not.toContain('mjx-break');
+    }
+  );
+
+  it('refuses a link, as \\href would bring', () => {
+    const drawn = mathsSvg('\\href{https://example.com}{x}');
+    expect('problem' in drawn && drawn.problem).toMatch(/draws shapes only|href/u);
+  });
+
   it("refuses TeX MathJax cannot read, with MathJax's reason", () => {
     const drawn = mathsSvg('\\frac{a');
     expect('problem' in drawn && drawn.problem).toMatch(/^\$\$\\frac\{a\$\$: .*/u);

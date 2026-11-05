@@ -41,8 +41,9 @@ function converter() {
           throw error;
         }
       }),
-      // Each SVG holds its own glyphs, as each is drawn alone.
-      OutputJax: new SVG({ fontCache: 'none' })
+      // Each SVG holds its own glyphs, as each is drawn alone; it sits in one line of text, which
+      // the layout never breaks, so it marks no places to break (as <mjx-break> elements).
+      OutputJax: new SVG({ fontCache: 'none', linebreaks: { inline: false } })
     });
   }
   return { document, adaptor };
