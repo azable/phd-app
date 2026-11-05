@@ -1471,6 +1471,27 @@ describe('submitProjectFeedback', () => {
       expect(repairWandered(written, failed('edit_not_applied'))).toBe(true);
     });
 
+    it("reads project 7464186f's repairs as progress: a bound prop retried, then its scenes", async () => {
+      const { repairWandered } = await import('./commands');
+      const bound = (expression: string) =>
+        `fill={${expression}} takes values that cannot be known before the algorithm runs.`;
+      const failed = (...diagnostics: { code: string; message: string }[]) => ({
+        source: '',
+        diagnostics
+      });
+      const first = failed(
+        { code: 'algorithm_error', message: 'Cost and Weight cannot be combined.' },
+        { code: 'bound_prop', message: bound('this.state') }
+      );
+      const second = failed(
+        { code: 'algorithm_error', message: 'Cost and Heuristic cannot be combined.' },
+        { code: 'bound_prop', message: bound("this.state === 'closed'") }
+      );
+      const scenes = failed({ code: 'view_storyboard', message: 'The scene search names @x.' });
+      expect(repairWandered(first, second)).toBe(false);
+      expect(repairWandered(second, scenes)).toBe(false);
+    });
+
     it('keeps repairing one stuck on a problem, or revealing one new one, to success', async () => {
       const result = await submit('unclosed', 'unclosed', 'twice', 'working');
       expect(failures(result.appendedEvents)).toHaveLength(3);

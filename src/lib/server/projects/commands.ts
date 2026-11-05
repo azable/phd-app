@@ -3063,8 +3063,11 @@ const buildStages: Record<string, number> = {
   unknown_prop: 0,
   invalid_prop: 0,
   design_value: 0,
+  bound_prop: 0,
   view_case: 1,
   algorithm_error: 1,
+  // Scenes are checked against the labels the run reached, once the view is clear.
+  view_storyboard: 2,
   listing_label: 2,
   link_placement: 3,
   layout_failed: 3,
@@ -3099,10 +3102,11 @@ export function repairWandered(previous: AttemptFailure, repair: AttemptFailure)
 
 /**
  * A problem's message without the list of what exists that some end with ("…; its kinds of node
- * are A, B."), which changes whenever the source does, so the same problem is recognised again.
+ * are A, B.") and without the expressions it quotes ({this.state}), which change whenever the
+ * source does, so the same problem is recognised again.
  */
 function stableMessage(message: string): string {
-  return message.replace(/;\s+its\b[^;]*?\bare\b[\s\S]*$/, '');
+  return message.replace(/;\s+its\b[^;]*?\bare\b[\s\S]*$/, '').replace(/\{[^{}]*\}/gu, '{…}');
 }
 
 /** Whether the project has a version of its own, rather than its mode's starter. */
