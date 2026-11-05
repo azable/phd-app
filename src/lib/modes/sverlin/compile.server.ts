@@ -160,6 +160,7 @@ import { readabilityOf } from './readability.server';
 import { drawingText } from './library/drawing';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
+import { drawingMarker, drawingProblems } from './drawings.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
 import {
   inputDeclarations,
@@ -3613,6 +3614,22 @@ function withNodeRefs(
     const callee = tag.type === 'RenderTag' ? tag.expression?.callee : undefined;
     if (around && callee && linkedTypes.has((callee as { name?: string }).name ?? ''))
       around.links = true;
+    // A drawing, written <Svg>, holds shapes the page draws as they are (see drawings).
+    if (
+      tag.type === 'Element' &&
+      tag.name === 'svg' &&
+      tag.attributes?.some((attribute) => attribute.name === drawingMarker)
+    ) {
+      if (!inNode)
+        reject(
+          'A drawing is part of a node, which gives it its place, size and colour: put it in one, as <Node><Svg viewBox="0 0 24 24">…</Svg></Node>.',
+          'view_markup',
+          tag.start
+        );
+      for (const { message, start } of drawingProblems(tag as never))
+        reject(message, 'view_markup', start);
+      return;
+    }
     const library =
       tag.type === 'InlineComponent' &&
       (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');

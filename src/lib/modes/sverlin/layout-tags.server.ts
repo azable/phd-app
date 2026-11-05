@@ -9,6 +9,7 @@
  * padded with spaces, and a part's closing is one longer.
  */
 
+import { drawingTags } from './drawings.server';
 import { fitted } from './layouts.server';
 import { mathsSvg } from './maths-svg.server';
 import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
@@ -140,7 +141,11 @@ export function layoutTags(source: string): {
       });
     scanned = scanned.slice(0, start) + blank(scanned.slice(start, end)) + scanned.slice(end);
   }
-  const problems = [...mathsProblems, ...writtenSnippets(scanned)];
+  // A drawing, <Svg viewBox="…">…</Svg>, becomes a sized <svg> root (see drawings), its tags read
+  // as spaces by every scan after, so no scan takes <Svg> for a layout's tag.
+  const drawings = drawingTags(scanned);
+  scanned = drawings.scanned;
+  const problems = [...mathsProblems, ...drawings.problems, ...writtenSnippets(scanned)];
   const declared: (DeclaredLayout & { opening: { start: number; end: number } })[] = [];
   for (const match of scanned.matchAll(layoutOpening)) {
     const start = match.index ?? 0;
@@ -217,7 +222,10 @@ export function layoutTags(source: string): {
   problems.push(...storyboard.problems);
   const unshown: Problem[] = storyboard.missing ? [storyboard.missing] : [];
   const containing = (at: number) => declared.find(({ body }) => at >= body.start && at < body.end);
-  const edits: { start: number; length: number; text: string }[] = [...mathsEdits];
+  const edits: { start: number; length: number; text: string }[] = [
+    ...mathsEdits,
+    ...drawings.edits
+  ];
   const renders = new Map<string, Set<string>>();
   const tags = new RegExp(
     `<(${[...byName.keys()].map((each) => each.replace('$', '\\$')).join('|') || '(?!)'})\\b((?:[^>{"']|"[^"]*"|'[^']*'|\\{[^}]*\\})*)>`,

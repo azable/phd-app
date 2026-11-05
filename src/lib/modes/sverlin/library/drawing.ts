@@ -11,6 +11,7 @@ export type DrawnShape =
   | 'circle'
   | 'box'
   | 'unboxed text'
+  | 'drawing'
   | 'white circle with no outline, unseen on the white page'
   | 'white box with no outline, unseen on the white page';
 
@@ -30,6 +31,8 @@ const painted = (value: string | undefined) =>
 
 function shapeOf(element: ModelElement, size?: { width: number; height: number }): DrawnShape {
   const { style } = element;
+  // A drawing written <Svg> is drawn as its shapes (see drawings), not as a box.
+  if (element.attributes['data-sv-drawing'] !== undefined) return 'drawing';
   const stroked = parseFloat(style['border-width'] ?? '') > 0 && style['border-style'] !== 'none';
   if (!stroked && !painted(style['background-color'])) return 'unboxed text';
   const radius = parseFloat(style['border-radius'] ?? '') || 0;

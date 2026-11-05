@@ -383,7 +383,8 @@ function textRuns(
     }
     finish();
   }
-  // Inline maths is an SVG the PDF cannot draw, so its text stands in its place, in its box.
+  // Inline maths and a drawing are SVG the PDF cannot draw, so their text stands in their place,
+  // in their box.
   for (const maths of element.querySelectorAll<HTMLElement>('[data-sv-math-text]')) {
     if (!ownedBy(maths.parentElement, element)) continue;
     const rect = maths.getBoundingClientRect();

@@ -1580,6 +1580,47 @@ too.
 - A token, `$i[…]`, or a region, `@x[…]`, cannot be inside maths: write it
   beside the maths. A single `$`, as in `$5`, is text.
 
+### Drawings
+
+When a value is best shown as a picture, such as a playing card's suit, draw it
+with SVG shapes in `<Svg>`, inside a node of a view or layout:
+
+```svelte
+<View of="Suit" name="SuitMark">
+  <Node>
+    <Svg viewBox="0 0 24 24" height="1.5" label={this}>
+      {#if this === 'hearts'}
+        <path d="M12 21 C4 14 2 10 6 6 C9 4 12 6 12 8 C12 6 15 4 18 6 C22 10 20 14 12 21 Z" />
+      {:else}
+        <path d="M12 3 C4 10 2 14 6 17 C9 19 11 17 12 15 L10 21 H14 L12 15 C13 17 15 19 18 17 C22 14 20 10 12 3 Z" />
+      {/if}
+    </Svg>
+  </Node>
+</View>
+```
+
+- `viewBox` gives the drawing's coordinates and proportions, `height` its height
+  in em of the node's text (1.5 if left out, at most 12), and the width follows
+  from the proportions. Both are written as they are, never computed, so every
+  value has the same room; the shapes outside the viewBox are cut off.
+- `label` is the text the drawing stands for, as `label={this}`: a screen reader
+  reads it, and the PDF, which draws no shapes, writes it in the drawing's
+  place.
+- The shapes are `path`, `circle`, `ellipse`, `rect`, `line`, `polyline`,
+  `polygon`, `g`, and `text`, `tspan` and `title` holding words as written. They
+  take their geometry (`d`, `cx`, `r`, `points`, `transform`, …) and strokes
+  (`stroke-width`, `stroke-linecap`, …), which may be computed from the value,
+  as `r={this * 2}`.
+- Shapes are filled in the node's text colour; `fill` and `stroke` are
+  `currentColor` or `none`, so the design's colours apply.
+- `{#if}` and `{#each}` choose the shapes by the value. The value is never shown
+  as text inside the drawing: write it in the node beside the drawing, as
+  `{this.rank}`.
+- A drawing holds nothing else: no link, image, style, script or handler.
+
+Keep a drawing simple: a few shapes that fill the viewBox, with strokes thick
+enough to read at a cell's size.
+
 ## Node
 
 A node is one of three things:
