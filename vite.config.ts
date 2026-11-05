@@ -29,8 +29,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: {
-      // Toolchain symlinks and generated state can exhaust Linux file watchers.
-      ignored: ['**/{.devenv,.direnv,.cache,.local,outputs,tmp}/**']
+      // Toolchain symlinks and generated state can exhaust Linux file watchers. Agents' worktrees
+      // (.claude) are whole checkouts: each change in one cleared the server's cache, and the dev
+      // server ran out of memory.
+      ignored: ['**/{.devenv,.direnv,.cache,.local,outputs,tmp,.claude}/**']
     },
     sourcemapIgnoreList(sourcePath) {
       return sourcePath.includes('node_modules');
