@@ -303,17 +303,18 @@ Each presentation's **Export** menu lists the render targets its mode offers
 component offers them. Sverlin renders every target from scene data
 ([`library/scene.ts`](src/lib/modes/sverlin/library/scene.ts)): each node's box,
 look, text lines, and palette names, and each link's curve, in the frame's
-logical coordinates, as the server draws them for the page. The app fetches a
-version's scenes from `/api/projects/[projectId]/scenes`
-([`server-scenes.ts`](src/lib/modes/sverlin/server-scenes.ts)), which rebuilds
-the version from its source, seed and variant and keeps the last few
-([`scenes.server.ts`](src/lib/modes/sverlin/scenes.server.ts)), then renders a
-target in the browser ([`targets/`](src/lib/modes/sverlin/targets/)): a PDF with
-a page per step, its text set in the embedded fonts, with DejaVu for characters
-none of them has, or the scene data itself as JSON; the server can make the PDF
-too ([`targets/pdf.server.ts`](src/lib/modes/sverlin/targets/pdf.server.ts)). A
-version an older app built, which a rebuild no longer gives the same page code,
-has no scenes: its stage says so, and it must be built again.
+logical coordinates, as the server draws them for the page. The page fetches a
+version's scenes from `/api/projects/[projectId]/scenes`, and an export its file
+from `/api/projects/[projectId]/exports`
+([`server-scenes.ts`](src/lib/modes/sverlin/server-scenes.ts)). The server
+rebuilds the version from its source, seed and variant and keeps the last few
+([`scenes.server.ts`](src/lib/modes/sverlin/scenes.server.ts)), and makes each
+export from those scenes
+([`targets/export.server.ts`](src/lib/modes/sverlin/targets/export.server.ts)):
+a PDF with a page per step, its text set in the embedded fonts, with DejaVu for
+characters none of them has, or the scene data itself as JSON. A version an
+older app built, which a rebuild no longer gives the same page code, has no
+scenes: its stage says so, and it must be built again.
 
 Generated JavaScript is compiled but **never executed by the server** or in the
 application origin; Sverlin algorithm blocks are interpreted by trusted server

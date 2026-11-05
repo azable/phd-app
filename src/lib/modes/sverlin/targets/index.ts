@@ -1,87 +1,15 @@
-/** The files a Sverlin presentation can be exported as, each rendered from its scene data. */
+/**
+ * The files a Sverlin presentation can be exported as, each made on the server from its scene data
+ * (see export.server.ts).
+ */
 
-import monoBold from 'dejavu-fonts-ttf/ttf/DejaVuSansMono-Bold.ttf?url';
-import mono from 'dejavu-fonts-ttf/ttf/DejaVuSansMono.ttf?url';
-import sansBold from 'dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf?url';
-import sans from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url';
-import serifBold from 'dejavu-fonts-ttf/ttf/DejaVuSerif-Bold.ttf?url';
-import serif from 'dejavu-fonts-ttf/ttf/DejaVuSerif.ttf?url';
+import type { RenderTarget } from '../../render-targets';
 
-import type { RenderedFile, RenderTarget } from '../../render-targets';
-import type { SverlinScene } from '../scene';
-import type { PdfResources } from './pdf';
-
-export type SverlinTarget = RenderTarget & {
-  render: (scene: SverlinScene) => Promise<RenderedFile>;
-};
-
-// Served as assets of the app and fetched only when a PDF uses them, by name without `.ttf`: the
-// embedded faces' TrueType files, the very glyphs of the page's WOFF2 files, which jsPDF cannot
-// read, and DejaVu for characters none of them has.
-const fontUrls: Record<string, string> = {
-  ...Object.fromEntries(
-    Object.entries(
-      import.meta.glob<string>('../fonts/*.ttf', { query: '?url', import: 'default', eager: true })
-    ).map(([path, url]) => [path.slice('../fonts/'.length, -'.ttf'.length), url])
-  ),
-  DejaVuSans: sans,
-  'DejaVuSans-Bold': sansBold,
-  DejaVuSerif: serif,
-  'DejaVuSerif-Bold': serifBold,
-  DejaVuSansMono: mono,
-  'DejaVuSansMono-Bold': monoBold
-};
-
-function browserResources(): PdfResources {
-  // A pixel painted in a colour reads back as RGBA, whatever CSS syntax the page computed it in.
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 1;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  const colours = new Map<string, [number, number, number, number]>();
-  return {
-    async font(file) {
-      const response = await fetch(fontUrls[file]);
-      if (!response.ok) throw new Error(`The font ${file} could not be loaded.`);
-      return response.arrayBuffer();
-    },
-    colour(css) {
-      const known = colours.get(css);
-      if (known) return known;
-      if (!context) return [0, 0, 0, 1];
-      context.clearRect(0, 0, 1, 1);
-      context.fillStyle = css;
-      context.fillRect(0, 0, 1, 1);
-      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
-      const rgba: [number, number, number, number] = [r, g, b, a / 255];
-      colours.set(css, rgba);
-      return rgba;
-    }
-  };
-}
-
-const fileName = (scene: SverlinScene, extension: string) =>
-  `presentation-${scene.presentationId.slice(0, 8)}-seed-${scene.seed}.${extension}`;
-
-export const sverlinTargets: SverlinTarget[] = [
-  {
-    id: 'pdf',
-    title: 'PDF, a page per step',
-    animated: false,
-    async render(scene: SverlinScene): Promise<RenderedFile> {
-      // jsPDF is large, so it loads only when a PDF is made.
-      const { renderPdf } = await import('./pdf');
-      return { name: fileName(scene, 'pdf'), blob: await renderPdf(scene, browserResources()) };
-    }
-  },
-  {
-    id: 'scene',
-    title: 'Scene data (JSON)',
-    animated: false,
-    async render(scene: SverlinScene): Promise<RenderedFile> {
-      return {
-        name: fileName(scene, 'scene.json'),
-        blob: new Blob([JSON.stringify(scene, null, 2)], { type: 'application/json' })
-      };
-    }
-  }
+export const sverlinTargets: RenderTarget[] = [
+  { id: 'pdf', title: 'PDF, a page per step', animated: false },
+  { id: 'scene', title: 'Scene data (JSON)', animated: false }
 ];
+
+/** The name an export of a version is saved as. */
+export const exportName = (presentationId: string, seed: number, extension: string): string =>
+  `presentation-${presentationId.slice(0, 8)}-seed-${seed}.${extension}`;

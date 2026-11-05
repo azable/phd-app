@@ -95,10 +95,24 @@ export type SceneSource = (
   steps?: readonly number[]
 ) => Promise<unknown>;
 
+/** A file a version is exported as, made on the server: its name, media type and bytes. */
+export type ExportedFile = { name: string; contentType: string; body: Uint8Array<ArrayBuffer> };
+
+/**
+ * A version exported as one of its mode's render targets (see render-targets.ts), made on the
+ * server; undefined for a target the mode has none of. Throws an UnavailableScenesError where the
+ * server has no scenes to make it from.
+ */
+export type ExportSource = (
+  presentation: BrowserBundlePresentation,
+  target: string
+) => Promise<ExportedFile | undefined>;
+
 type ModeBuilders = {
   buildPresentation?: PresentationBuilder;
   buildBatch?: SourceBatchBuilder;
   scenes?: SceneSource;
+  exportFile?: ExportSource;
 };
 
 const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {
@@ -112,9 +126,10 @@ export const modeBuilders = Object.fromEntries(
 
 function limited(builders: ModeBuilders | undefined): ModeBuilders | undefined {
   if (!builders) return undefined;
-  const { buildPresentation, buildBatch, scenes } = builders;
+  const { buildPresentation, buildBatch, scenes, exportFile } = builders;
   return {
     ...(scenes && { scenes }),
+    ...(exportFile && { exportFile }),
     ...(buildPresentation && {
       buildPresentation: (...options: Parameters<PresentationBuilder>) =>
         buildLimit.run(() => buildPresentation(...options))

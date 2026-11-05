@@ -15,9 +15,7 @@
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
-  import type { SceneFrame, SceneStep } from './library';
-  import type { SverlinScene } from './scene';
-  import { fetchScenes } from './server-scenes';
+  import { fetchExport, fetchScenes } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
 
@@ -77,28 +75,15 @@
 
   /** The files this presentation can be exported as. */
   export function renderTargets(): RenderTarget[] {
-    return sverlinTargets.map(({ id, title, animated }) => ({ id, title, animated }));
+    return sverlinTargets;
   }
 
-  /** Export this presentation as a target's file, from every step's scene the server drew. */
+  /** Export this presentation as a target's file, made on the server from its scenes. */
   export async function render(target: string): Promise<RenderedFile> {
-    const chosen = sverlinTargets.find(({ id }) => id === target);
-    if (!chosen) throw new Error(`There is no ${target} export.`);
+    if (!sverlinTargets.some(({ id }) => id === target))
+      throw new Error(`There is no ${target} export.`);
     if (!projectId) throw new Error('This visualization is in no project to draw it from.');
-    return chosen.render(sceneOf(await fetchScenes(projectId, presentation.presentationId)));
-  }
-
-  /** The scene render targets read, from every step's scene data. */
-  function sceneOf({ frame, steps }: { frame: SceneFrame; steps: SceneStep[] }): SverlinScene {
-    const { presentationId, seed, labels, variant } = presentation;
-    return {
-      format: 'sverlin-scene-v1',
-      presentationId,
-      seed,
-      ...(variant ? { variant } : {}),
-      frame,
-      steps: steps.map((step, index) => ({ ...step, label: labels[index] }))
-    };
+    return fetchExport(projectId, presentation.presentationId, target);
   }
 
   $effect(() => {
