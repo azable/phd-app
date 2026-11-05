@@ -275,6 +275,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     structure && form
       ? formCentres(form, structure, (node) => boxes[node], {
           room,
+          apart: spare,
           random: options.random ?? (() => 0.5),
           flow: options.flow,
           direction: options.direction

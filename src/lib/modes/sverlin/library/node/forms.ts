@@ -230,7 +230,10 @@ export function formCentres(
   structure: Structure,
   sizeOf: (node: number) => Size,
   options: {
+    /** Between linked nodes: an arrow's room, and its label's where links have labels. */
     room: number;
+    /** Between nodes no link joins, side by side in a layer: an arrow's room; the room if unset. */
+    apart?: number;
     random: (key: string) => number;
     flow?: 'x' | 'y';
     direction?: Direction;
@@ -243,12 +246,16 @@ export function formCentres(
   const step = { across, down };
   const runs = options.flow ?? (options.direction && axisOf[options.direction]);
   if (form === 'natural' && (structure.kind === 'tree' || structure.kind === 'layers')) {
-    // Layers lie a node's depth and room for an arrow apart, and nodes in a layer a node's breadth
-    // and as much room apart, so arrows fanning out from one node stay apart.
+    // Layers lie a node's depth and room for an arrow and its label apart, the way links run; nodes
+    // in a layer a node's breadth and an arrow's room apart, so arrows fanning out from one node
+    // stay apart: no link runs between neighbours in a layer to need its label's room. Each layer
+    // keeping the widest label's room both ways spread project c0dc2b85's ten small vertices over
+    // 813×897 px, drawn at 61% with 10 px text.
     const sideways = runs === 'x';
+    const apart = options.apart ?? options.room;
     const fanned = {
-      along: (sideways ? down : across) + options.room / 2,
-      deep: (sideways ? across : down) + options.room / 2
+      along: (sideways ? down : across) - options.room + apart,
+      deep: sideways ? across : down
     };
     const breadth = (node: number) => {
       const { width, height } = sizeOf(node);
@@ -256,7 +263,7 @@ export function formCentres(
     };
     const placed =
       structure.kind === 'tree'
-        ? treeCentres(structure, fanned, breadth, options.room * 1.5)
+        ? treeCentres(structure, fanned, breadth, apart)
         : layerCentres(structure, fanned, options.random);
     return new Map(
       [...placed].map(([node, { along, deep }]) => [
@@ -293,7 +300,7 @@ function sequenceCentres(
   count: number,
   cycle: boolean,
   { across, down }: Step,
-  options: { random: (key: string) => number }
+  options: { random: (key: string) => number; room: number }
 ): Point[] {
   const pick = (key: string, low: number, high: number) => low + options.random(key) * (high - low);
   const indices = Array.from({ length: count }, (_, i) => i);
@@ -344,8 +351,11 @@ function sequenceCentres(
     }
     case 'scatter': {
       // Free positions that keep each node near the next: a walk over a grid by rows, by columns,
-      // or spiralling inwards, as the seed chooses, each node nudged within its cell.
-      const cell = { x: across * 1.35, y: down * 1.5 };
+      // or spiralling inwards, as the seed chooses, each node nudged within its cell. A cell is a
+      // step, a node and an arrow's room, and the nudge at most two fifths of that room each way,
+      // so neighbours keep a fifth of it apart: a scattered graph is no sparser than a line.
+      const cell = { x: across, y: down };
+      const nudge = options.room * 0.8;
       const rows = rowsFor(cell);
       const columns = Math.ceil(count / rows);
       const walk = ['rows', 'columns', 'spiral'][Math.floor(options.random('scatter.walk') * 3)];
@@ -366,8 +376,8 @@ function sequenceCentres(
           cells.push(walk === 'rows' ? { x: along, y: line } : { x: line, y: along });
         }
       return indices.map((i) => ({
-        x: (cells[i].x + (options.random(`scatter.${i}.x`) - 0.5) * 0.5) * cell.x,
-        y: (cells[i].y + (options.random(`scatter.${i}.y`) - 0.5) * 0.5) * cell.y
+        x: cells[i].x * cell.x + (options.random(`scatter.${i}.x`) - 0.5) * nudge,
+        y: cells[i].y * cell.y + (options.random(`scatter.${i}.y`) - 0.5) * nudge
       }));
     }
     default:

@@ -247,10 +247,66 @@ describe('form placement', () => {
     });
     const xs = calls.nodes.map((node) => centres.get(node)!.x);
     // The leaves, a value each, sit their own width and a gap apart, not the root's width.
-    expect(xs[3] - xs[2]).toBe(80);
+    expect(xs[3] - xs[2]).toBe(70);
     // Each parent sits over the middle of its children.
     expect(xs[1]).toBe((xs[2] + xs[3]) / 2);
     expect(xs[0]).toBe((xs[1] + xs[4]) / 2);
+  });
+
+  it('keeps a label’s room only the way links run, nodes in a layer an arrow’s room apart', () => {
+    // A leads to B and C, both to D, each link with a label needing 100 px of room.
+    const graph = linked(4, [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 3]
+    ]) as Structure;
+    const centres = formCentres('natural', graph, () => ({ width: 60, height: 40 }), {
+      room: 100,
+      apart: 28,
+      random: keyedRandom(1, 'layers'),
+      direction: 'down'
+    });
+    const [a, b, c] = [0, 1, 2].map((node) => centres.get(node)!);
+    expect(Math.abs(b.x - c.x)).toBe(60 + 28);
+    expect(b.y - a.y).toBe(40 + 100);
+  });
+
+  it('scatters nodes no further apart than a line steps, never onto each other', () => {
+    const count = 10;
+    const path = linked(
+      count,
+      Array.from({ length: count - 1 }, (_, i) => [i, i + 1] as [number, number])
+    ) as Structure;
+    const node = { width: 60, height: 40 };
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const centres = [
+        ...formCentres('scatter', path, () => node, {
+          room: 30,
+          random: keyedRandom(seed, 'scatter')
+        }).values()
+      ];
+      for (const [i, p] of centres.entries())
+        for (const q of centres.slice(i + 1))
+          expect(Math.abs(p.x - q.x) >= node.width || Math.abs(p.y - q.y) >= node.height).toBe(
+            true
+          );
+      // A cell is a node and its room, so each node's nearest neighbour is a step away, give or take
+      // a nudge, as in a line: not a step and a third or a half, as cells once were.
+      for (const p of centres) {
+        const nearest = Math.min(
+          ...centres
+            .filter((q) => q !== p)
+            .map((q) =>
+              Math.max(
+                Math.abs(p.x - q.x) / (node.width + 30),
+                Math.abs(p.y - q.y) / (node.height + 30)
+              )
+            )
+        );
+        expect(nearest).toBeLessThanOrEqual(1.4);
+      }
+    }
   });
 
   it('rows a snake from its count and its nodes alone, as near a square as they go', () => {
@@ -340,8 +396,8 @@ describe('layered drawing', () => {
       const [a, b, c, d, e] = [0, 1, 2, 3, 4].map((node) => centres.get(node)!);
       expect(b.y).toBe(c.y);
       expect([a.y < b.y, b.y < d.y, d.y < e.y]).toEqual([true, true, true]);
-      // B and C side by side, clear of each other with room between, A, D and E over their middle.
-      expect(Math.abs(b.x - c.x)).toBeGreaterThan(size.width + 28);
+      // B and C side by side, an arrow's room between them, A, D and E over their middle.
+      expect(Math.abs(b.x - c.x)).toBeGreaterThanOrEqual(size.width + 28);
       expect([a.x, d.x, e.x]).toEqual([(b.x + c.x) / 2, (b.x + c.x) / 2, (b.x + c.x) / 2]);
       // Layers a node's height and room for an arrow apart, not much more.
       expect(b.y - a.y).toBeLessThan(size.height + 2 * 28);
