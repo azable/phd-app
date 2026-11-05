@@ -2400,6 +2400,22 @@ describe('props bound to a view’s value', () => {
       expect(design.space['StateMark.icon@from']).toBeUndefined();
     });
 
+    it('starts a node drawing only an icon unboxed, as a word, and a value cell boxed', () => {
+      const { design } = withState(
+        '<View of="State" name="StateMark"><Node icon={this} /></View>\n<View of="State" name="StateCell"><Node value={this} /></View>'
+      );
+      expect(design.starter).toMatchObject({
+        'StateMark.fill': 'none',
+        'StateMark.stroke': 'none',
+        'StateMark.strokeWidth': 0,
+        'StateMark.padding': 0,
+        'StateMark.minSize': 0,
+        'StateCell.fill': 'white',
+        'StateCell.stroke': 'neutral-300',
+        'StateCell.minSize': 2.5
+      });
+    });
+
     it('refuses an icon written as it is, the design choosing each value’s', () => {
       expect(() =>
         withState('<View of="State" name="StateMark"><Node icon="flag" /></View>')

@@ -3687,6 +3687,8 @@ function withNodeRefs(
     );
     if (has('layout') || links || (children.length === 1 && children[0].type === 'EachBlock'))
       return 'container';
+    // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
+    if (has('icon') && !has('value') && !children.length) return 'text';
     if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
