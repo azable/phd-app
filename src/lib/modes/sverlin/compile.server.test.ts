@@ -524,8 +524,9 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       code: 'view_markup',
       message: expect.stringContaining('<small>')
     });
+    // A lowercase <svg> is refused as a drawing written wrongly, naming <Svg>.
     await expect(view('<svg><circle r="4" /></svg>')).rejects.toMatchObject({
-      code: 'view_markup'
+      message: expect.stringContaining('<svg> is written <Svg')
     });
     await expect(view('<Node>{@html "<b>x</b>"}</Node>')).rejects.toMatchObject({
       code: 'view_markup',
