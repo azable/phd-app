@@ -8,7 +8,11 @@ import {
 import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
 import type { ProjectDocument } from '$lib/shared/projects/model';
-import { presentationStepName, type BrowserBundlePresentation } from '$lib/shared/presentations';
+import {
+  presentationStepName,
+  presentationVariant,
+  type BrowserBundlePresentation
+} from '$lib/shared/presentations';
 
 import type { ProjectCommandDependencies } from './commands';
 import { MemoryProjectRepository } from './memory-repository.test-support';
@@ -3589,6 +3593,27 @@ describe('several variants from chat', () => {
       expect(prompted()?.question).toEqual({ text, status: 'answered' });
     });
 
+    it('shows the picks applied once the last pair is answered, with no model call', async () => {
+      const { result } = await asking('Who is it for?');
+      const projectId = result.document.projectId;
+      const sides = presented(result.appendedEvents).map(({ payload }) => payload.presentation);
+      const ids = sides.map(({ presentationId }) => presentationId);
+      mocks.generatePrepared.mockClear();
+      const first = await prefer(projectId, ids.slice(0, 2), { preferred: ids[1] });
+      expect(presented(first.appendedEvents)).toEqual([]);
+      const last = await prefer(projectId, ids.slice(2, 4), { outcome: 'skip' });
+      const shown = presented(last.appendedEvents);
+      expect(shown).toHaveLength(1);
+      expect(shown[0].payload.question).toBeUndefined();
+      const variant = presentationVariant(shown[0].payload.presentation);
+      // The first pair's pick; the second, unsure, keeps what the first pair's sides share.
+      expect(variant['views.Int']).toBe('IntTally');
+      expect(variant['Highlight.Pointed.fill']).toBe(
+        presentationVariant(sides[0])['Highlight.Pointed.fill']
+      );
+      expect(mocks.generatePrepared).not.toHaveBeenCalled();
+    });
+
     it('is asked by the queued turn the last answer requests, with no model call', async () => {
       const { queueProjectPreference, runQueuedAssistantTurn } = await import('./commands');
       const { result } = await asking('Who is it for?');
@@ -3653,12 +3678,10 @@ describe('several variants from chat', () => {
 
     it('is asked when the participant writes before the pairs are answered, after their message', async () => {
       const { result } = await asking('Who is it for? Or tell me what to change.');
-      mocks.generatePrepared
-        .mockReset()
-        .mockResolvedValue({
-          ...generation(undefined, 'Bigger.'),
-          decision: { action: 'respond' }
-        });
+      mocks.generatePrepared.mockReset().mockResolvedValue({
+        ...generation(undefined, 'Bigger.'),
+        decision: { action: 'respond' }
+      });
       const written = await write(result.document.projectId, 'Make it bigger.');
       const types = written.appendedEvents.map(({ type }) => type);
       expect(types[0]).toBe('feedback.submitted');

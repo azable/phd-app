@@ -81,7 +81,9 @@ export const buildPurposeSchema = v.picklist([
   'manual-edit',
   'assistant-edit',
   'restore',
-  'variant-fallback'
+  'variant-fallback',
+  // The answers to a batch of comparisons applied, with no model call (commands.ts presentPicks).
+  'picks'
 ]);
 
 /** Validation fields shared by every immutable project event. */

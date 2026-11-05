@@ -19,6 +19,7 @@ import {
   type MessageContent
 } from '$lib/shared/projects/events/message-content';
 import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
+import { preferredPresentation } from '$lib/shared/projects/events/visualization-presented';
 import type { ArtifactChange, RecordedText } from '$lib/shared/projects/events/values';
 import type { ProjectCommandResult, ProjectDocument } from '$lib/shared/projects/model';
 import {
@@ -449,6 +450,13 @@ export async function runQueuedAssistantTurn(
       concurrentDependencies
     );
   if (waiting) return { document: current, appendedEvents: appendedSince(current) };
+  if (preferences.length && !rebase && !waitingComparisons(current).length)
+    current = await presentPicks(
+      current,
+      preferences.map(({ id }) => id),
+      options.operationId,
+      concurrentDependencies
+    );
   // A question held back with comparisons is asked once the last is answered, or when the
   // participant writes first; answers alone then wait with it for the participant's reply.
   const answersOnly = preferences.length === interactions.length;
@@ -626,6 +634,7 @@ export function submitProjectPreference(
     );
     document = answered.document;
     if (answered.waiting) return finishMutation(before, document);
+    document = await presentPicks(document, [preference.id], options.operationId, dependencies);
     if (heldQuestion(document.events))
       return finishMutation(
         before,
@@ -2195,6 +2204,114 @@ async function presentAfterRebase(
     { kind: 'system' },
     pair
   );
+}
+
+/**
+ * Once the last of a batch of comparisons is answered, show their outcome in place of the answered
+ * pair: the source as it is, with the values each pair's picked side set, and for a pair answered
+ * either is fine, unsure or not at all, the values the batch's other sides share. It is built with
+ * no model call; where that fails, the version the pairs were asked about is built instead. Pairs
+ * of another source than the current one, as an edit's, are left out.
+ */
+async function presentPicks(
+  document: ProjectDocument,
+  answeredIds: readonly EventId[],
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  const snapshot = projectSnapshotAt(document);
+  const entry = snapshot.artifacts[snapshot.entryArtifactId];
+  const presented = new Map(
+    document.events.flatMap((event) =>
+      event.type === 'visualization.presented'
+        ? [[event.payload.presentation.presentationId, event] as const]
+        : []
+    )
+  );
+  const answer = document.events.findLast(
+    (event): event is ProjectEventOf<'visualization.preference-recorded'> =>
+      event.type === 'visualization.preference-recorded' && answeredIds.includes(event.id)
+  );
+  const batch = answer && presented.get(answer.payload.presentations[0])?.operationId;
+  if (!entry || !batch) return document;
+  const sets = Map.groupBy(
+    [...presented.values()].filter(
+      (event) =>
+        event.operationId === batch &&
+        event.payload.question &&
+        event.payload.displaySetId &&
+        event.payload.presentation.format === 'browser-bundle-v1' &&
+        event.payload.presentation.source.sha256 === entry.content.sha256
+    ),
+    (event) => event.payload.displaySetId
+  );
+  const pairs = [...sets.values()].flatMap((set) => {
+    const [left, right] = set.toSorted((a, b) => a.payload.slot - b.payload.slot);
+    if (!left || !right) return [];
+    const ids = [left, right].map((event) => event.payload.presentation.presentationId);
+    const picked = document.events.findLast(
+      (event): event is ProjectEventOf<'visualization.preference-recorded'> =>
+        event.type === 'visualization.preference-recorded' &&
+        event.payload.presentations.every((id) => ids.includes(id))
+    );
+    const preferred = picked && preferredPresentation(picked.payload);
+    return [
+      {
+        left: presentationVariant(left.payload.presentation),
+        right: presentationVariant(right.payload.presentation),
+        picked: preferred
+          ? presentationVariant(presented.get(preferred)?.payload.presentation)
+          : undefined,
+        seed:
+          left.payload.presentation.format === 'browser-bundle-v1'
+            ? left.payload.presentation.seed
+            : 1
+      }
+    ];
+  });
+  if (!pairs.length) return document;
+  const asked = (applyPicks: boolean): DesignValues => {
+    const values: DesignValues = { ...pairs[0].left };
+    for (const [index, pair] of pairs.entries()) {
+      const other = pairs.find((_, at) => at !== index)?.left ?? pair.left;
+      for (const key of new Set([...Object.keys(pair.left), ...Object.keys(pair.right)])) {
+        if (pair.left[key] === pair.right[key]) continue;
+        const value = applyPicks && pair.picked ? pair.picked[key] : other[key];
+        if (value === undefined) delete values[key];
+        else values[key] = value;
+      }
+    }
+    return values;
+  };
+  for (const values of [asked(true), asked(false)]) {
+    assertCurrentProjectOperationActive();
+    const recorded = await buildProjectSourceBatch(
+      {
+        document,
+        sourceContent: entry.content.text,
+        source: entry.content,
+        sourceLabel: entry.path,
+        requests: [
+          {
+            seed: pairs[0].seed,
+            ...(Object.keys(values).length ? { variant: { base: values } } : {})
+          }
+        ],
+        purpose: 'picks',
+        input: 'committed-artifact',
+        operationId
+      },
+      dependencies.projectService
+    );
+    document = recorded.document;
+    if (batchSucceeded(recorded))
+      return activateBuiltPresentations(
+        { document, builds: recorded.builds },
+        dependencies.projectService,
+        { kind: 'system' }
+      );
+  }
+  return document;
 }
 
 /** The assistant's context, with the view helpers' where the turn runs them. */
