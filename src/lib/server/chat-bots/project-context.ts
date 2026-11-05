@@ -116,6 +116,37 @@ export type AiDesign = {
   variables: AiVariable[];
 };
 
+/**
+ * The design as the assistant reads it, most variables in brief: in full only those with options of
+ * their own (views, pointers, a listing's language, a prop whose option set is not named after it)
+ * or a value chosen or drawn for the viewed variant; every other variable, kept from the variant
+ * built on or the starter's, by its kind and prop with its value, its options design.options[prop].
+ * Each variable written out cost about 90 characters, and a typical design has 700 (project
+ * 7464186f: 63,000 of a 149,000-character context).
+ */
+export type AiDesignContext = {
+  options: Record<string, readonly DesignValue[]>;
+  variables: AiVariable[];
+  values: Record<string, Record<string, DesignValue>>;
+};
+
+export function designContext({ options, variables }: AiDesign): AiDesignContext {
+  const values: Record<string, Record<string, DesignValue>> = {};
+  const full = variables.filter(({ variable, options: set, value, origin }) => {
+    const dot = variable.lastIndexOf('.');
+    const prop = variable.slice(dot + 1);
+    const brief =
+      dot > 0 &&
+      typeof set === 'string' &&
+      set === prop &&
+      origin !== 'chosen' &&
+      origin !== 'random';
+    if (brief) (values[variable.slice(0, dot)] ??= {})[prop] = value;
+    return !brief;
+  });
+  return { options, variables: full, values };
+}
+
 /** One version of the source, named as the participant sees it, by the start of its hash. */
 export type AiSourceVersion = {
   id: string;
@@ -221,8 +252,11 @@ export type AiSelectedPresentation = AiPresentationSummary & {
   displaySetId?: string;
   format: RenderablePresentation['format'];
   steps: Array<{ label: string }>;
-  /** Its variant: every variable of its design space, by key. */
-  variant?: Record<string, DesignValue>;
+  /**
+   * Where its variant differs from the viewed one in project.design: those variables, by key, with
+   * its values. The whole variant repeated the design (23,000 characters in project 7464186f).
+   */
+  differs?: Record<string, DesignValue>;
 };
 
 /**
@@ -276,9 +310,9 @@ export type AiProjectContext = {
   versions: AiSourceVersion[];
   /**
    * The base's design space, with the values of the variant the participant is viewing. Empty when
-   * no presentation of the base recorded its variant.
+   * no presentation of the base recorded its variant. Most variables in brief (see designContext).
    */
-  design: AiDesign;
+  design: AiDesignContext;
   /**
    * Each label of the base, by name: how many spans it has, and how many of those change what the
    * view draws (drawn), from its newest successful build. Builds store them as runs.
@@ -661,7 +695,7 @@ export function projectAiContext(
     headEventId: events.at(-1)?.id ?? projectHead(document).id,
     base,
     versions: sourceVersions(document),
-    design,
+    design: designContext(design),
     ...(runs
       ? {
           spans: Object.fromEntries(
@@ -700,7 +734,7 @@ export function projectAiContext(
     selected: {
       events: selection.eventIds.map((id) => eventDetail(document, id)),
       presentations: (selection.presentationIds ?? []).map((id) =>
-        selectedPresentation(document, id)
+        selectedPresentation(document, id, design)
       ),
       elements: (selection.elements ?? []).flatMap((reference) =>
         selectedElement(document, reference)
@@ -768,21 +802,32 @@ function assistantInteraction(
   return { kind: 'batch', eventIds: [...eventIds], preferences };
 }
 
-function selectedPresentation(document: ProjectDocument, id: string): AiSelectedPresentation {
+function selectedPresentation(
+  document: ProjectDocument,
+  id: string,
+  viewed: AiDesign
+): AiSelectedPresentation {
   for (const event of document.events) {
     if (
       event.type === 'visualization.presented' &&
       event.payload.presentation.presentationId === id
     ) {
       const presentation = event.payload.presentation;
+      const current = new Map(viewed.variables.map(({ variable, value }) => [variable, value]));
+      const differs =
+        presentation.format === 'browser-bundle-v1' && presentation.variant
+          ? Object.fromEntries(
+              Object.entries(presentation.variant).filter(
+                ([key, value]) => current.get(key) !== value
+              )
+            )
+          : undefined;
       return {
         ...presentationSummary(event),
         displaySetId: event.payload.displaySetId,
         format: presentation.format,
         steps: presentationStepLabels(presentation).map((label) => ({ label })),
-        ...(presentation.format === 'browser-bundle-v1' && presentation.variant
-          ? { variant: presentation.variant }
-          : {})
+        ...(differs && Object.keys(differs).length ? { differs } : {})
       };
     }
   }

@@ -9,6 +9,7 @@ import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submi
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
+  designContext,
   designVariables,
   presentationSummary,
   projectAiContext,
@@ -289,6 +290,26 @@ describe('source versions in the AI context', () => {
 });
 
 describe('design variables in the AI context', () => {
+  it('writes out in full only views, pointers, special option sets and values chosen or drawn', () => {
+    const design = designContext({
+      options: { fill: ['none', 'white'], gap: [0.5, 1] },
+      variables: [
+        { variable: 'views.Int', options: ['IntCell', 'none'], value: 'IntCell', origin: 'kept' },
+        { variable: 'Map.fill', options: 'fill', value: 'none', origin: 'kept' },
+        { variable: 'Map.gap', options: 'gap', value: 0.5, origin: 'starter' },
+        { variable: 'Cell.fill', options: 'fill', value: 'white', origin: 'chosen' },
+        { variable: 'Cell.overflow', options: 'overflow.collection', value: 'scroll' }
+      ]
+    });
+    expect(design.variables.map(({ variable }) => variable)).toEqual([
+      'views.Int',
+      'Cell.fill',
+      'Cell.overflow'
+    ]);
+    expect(design.values).toEqual({ Map: { fill: 'none', gap: 0.5 } });
+    expect(design.options).toEqual({ fill: ['none', 'white'], gap: [0.5, 1] });
+  });
+
   it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {
     const value = document();
     const buildId = '22345678-1234-4123-8123-123456789abc';
