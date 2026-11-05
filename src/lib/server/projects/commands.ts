@@ -62,7 +62,12 @@ import {
 import { openAIAdapter } from '$lib/server/chat-adapters/openai';
 import type { ChatAdapter } from '$lib/server/chat-adapters/types';
 import { turnViewHelpers } from './view-helpers-config';
-import { viewHelperCalls, viewHelpersContext, viewHelperTimeoutMs } from './view-helpers';
+import {
+  viewHelperBackground,
+  viewHelperCalls,
+  viewHelpersContext,
+  viewHelperTimeoutMs
+} from './view-helpers';
 import { modeBuilders, type BuildRequest } from '$lib/modes/server';
 import {
   nextParticipantIntakeStep,
@@ -88,7 +93,8 @@ import type {
   ChatTurn,
   GeneratedMessageContent,
   RecoveryExplanation,
-  SourceArtifactChatOutput
+  SourceArtifactChatOutput,
+  ViewHelpersRequest
 } from '$lib/server/chat-bots/types';
 import type {
   Comparisons,
@@ -787,8 +793,8 @@ async function runSverlinAssistantTurn(
   // Whether a built picture went back to the assistant for a soft problem, text too small to read,
   // warnings, or alternatives it offered none of: one does once a turn, then it shows as built.
   let softReturned = false;
-  // The type the assistant asked the view helpers to propose views of, where they are on.
-  let helperType: string | undefined;
+  // What the assistant asked the view helpers to propose views of, where they are on.
+  let helperRequest: ViewHelpersRequest | undefined;
   const startedFrom = entrySource(document);
 
   const done = await runAttemptLadder(
@@ -816,7 +822,7 @@ async function runSverlinAssistantTurn(
       // brief entries of every attempt this turn, the latest for each attribute, steer this
       // decision's comparisons and are recorded with the accepted reply.
       for (const entry of generation.result.brief ?? []) turnBrief.set(entry.key, entry);
-      helperType = generation.result.viewHelpers ?? helperType;
+      helperRequest = generation.result.viewHelpers ?? helperRequest;
       const brief = turnBrief.size ? [...turnBrief.values()] : undefined;
 
       // The reply is recorded last, once its decision is accepted and has presented its version (a
@@ -1281,9 +1287,10 @@ async function runSverlinAssistantTurn(
   const source = entrySource(done);
   const starter = modeCatalog[projectSnapshotAt(done).mode].starter.source;
   const firstVersion = startedFrom === starter && source !== starter;
-  const type = helperType ?? (firstVersion ? mainViewType(source) : undefined);
-  return type && source !== starter
-    ? runViewHelpers(done, operationId, source, type, dependencies)
+  const firstType = firstVersion ? mainViewType(source) : undefined;
+  const request = helperRequest ?? (firstType ? { type: firstType } : undefined);
+  return request && source !== starter
+    ? runViewHelpers(done, operationId, source, request, dependencies)
     : done;
 }
 
@@ -2161,18 +2168,24 @@ async function runViewHelpers(
   document: ProjectDocument,
   operationId: string,
   source: string,
-  type: string,
+  { type, task }: ViewHelpersRequest,
   dependencies: ProjectCommandDependencies
 ): Promise<ProjectDocument> {
   const deadline = currentProjectOperationDeadline();
   if (deadline !== undefined && deadline - Date.now() < viewHelperTimeoutMs) return document;
   const adapter = dependencies.viewHelperAdapter ?? openAIAdapter;
   const operation = currentProjectOperationSignal();
+  const background = viewHelperBackground(document);
   const prompts: ChatbotPrompt[] = viewHelperDirections
     .slice(0, viewHelperCalls)
     .map((direction, index) => ({
       initialPrompt: viewHelperPrompt,
-      messages: [{ role: 'user', content: viewHelperTask(type, 1, source, direction) }],
+      messages: [
+        {
+          role: 'user',
+          content: viewHelperTask({ type, count: 1, source, direction, task, background })
+        }
+      ],
       context: {},
       attempt: { number: index + 1, purpose: 'helper' },
       parameters: { ...viewHelperParameters },
@@ -2279,6 +2292,7 @@ async function runViewHelpers(
         payload: {
           sourceSha256: sourceSha256(source),
           type,
+          ...(task ? { task } : {}),
           generationEventIds,
           candidates: checked.flatMap((candidate) =>
             candidate.kept

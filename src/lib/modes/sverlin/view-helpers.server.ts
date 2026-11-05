@@ -16,7 +16,7 @@ const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu
 
 /**
  * The guide's sections a view needs: the views themselves, the atomic types whose ranges size
- * them, the design's looks and bound props, and the node and stack they are made of. Taken from
+ * them, the design's looks and bound props, and the node, drawing and stack they are made of. Taken from
  * the guide by heading, so the extract always says what the guide says.
  */
 const viewSections = [
@@ -27,6 +27,7 @@ const viewSections = [
   "### Props bound to a view's value",
   '## Node',
   '### Props',
+  '### Drawings',
   '## Stack',
   '## The subset'
 ];
@@ -81,20 +82,37 @@ export const proposedViewsFormat = {
   }
 } as const;
 
-/** The task a helper is given: the type, how many views, a direction to try, and the source. */
-export const viewHelperTask = (
-  type: string,
-  count: number,
-  source: string,
-  direction?: string
-): string =>
-  `Write ${count} alternative view${count === 1 ? '' : 's'} of the type ${type}${direction ? `, trying ${direction}` : ''}. Return JSON {"views":[{"name","description","markup"}]}.\n\nThe source:\n\n${source}`;
+/**
+ * The task a helper is given: the type, how many views, a direction to try, the source, and where
+ * the assistant gave them, what the views should show and what is known of the participant.
+ */
+export const viewHelperTask = ({
+  type,
+  count,
+  source,
+  direction,
+  task,
+  background
+}: {
+  type: string;
+  count: number;
+  source: string;
+  direction?: string;
+  task?: string;
+  background?: string;
+}): string =>
+  [
+    `Write ${count} alternative view${count === 1 ? '' : 's'} of the type ${type}${direction ? `, trying ${direction}` : ''}. Return JSON {"views":[{"name","description","markup"}]}.`,
+    ...(task ? [`The task, from the assistant: ${task}`] : []),
+    ...(background ? [`What the participant has said and settled:\n${background}`] : []),
+    `The source:\n\n${source}`
+  ].join('\n\n');
 
-/** What each of the parallel helpers tries, so that their proposals differ. */
+/** What each of the parallel helpers tries toward the task, so that their proposals differ. */
 export const viewHelperDirections = [
   'a shape that shows the size, such as a bar or a column',
-  'an icon or a word',
-  'a compact mark without a box, or a card'
+  'an icon, a word, or a compact mark without a box',
+  'a drawing, an <Svg> of a few simple shapes chosen by the value'
 ];
 
 /**

@@ -76,6 +76,9 @@ Some features suit common needs. Offer them as alternatives where they fit:
   guide's Queries).
 - For an invariant, keep one layout so nothing jumps: pause between passes and
   show a highlight layer with `<When>` in a stack (see the guide's Stack).
+- When the participant asks for particular graphics, such as playing cards,
+  offer a drawing (see the guide's Drawings) as an alternative; where the view
+  helpers are on, give them the type and a short task saying what to draw.
 
 Choose a case whose input shows how the algorithm works, small enough to step
 through. For example: a power of two for divide and conquer, as 8 values for

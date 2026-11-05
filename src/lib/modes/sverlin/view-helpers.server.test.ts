@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import bars from './fixtures/bars.sverlin?raw';
-import bot from './bot.server';
+import bot, { viewHelpersRequest } from './bot.server';
 import {
   checkCandidate,
   fullGuidePrompt,
   guideSections,
   mainViewType,
-  viewHelperPrompt
+  viewHelperDirections,
+  viewHelperPrompt,
+  viewHelperTask
 } from './view-helpers.server';
 
 describe('view helpers', () => {
@@ -28,6 +30,14 @@ describe('view helpers', () => {
       markup: '<View of="Int" name="IntCell"><Node value={this} /></View>'
     });
     expect(kept).toMatchObject({ kept: true, name: 'IntCell', type: 'Int' });
+
+    const drawing = await checkCandidate(bars, 'Int', {
+      name: 'IntDial',
+      description: 'a dial whose hand turns with the number',
+      markup:
+        '<View of="Int" name="IntDial"><Node><Svg viewBox="0 0 24 24" height="2" label={this}><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><line x1="12" y1="12" x2="12" y2="4" stroke="currentColor" stroke-width="2" transform={`rotate(${this * 30} 12 12)`} /></Svg></Node></View>'
+    });
+    expect(drawing).toMatchObject({ kept: true, name: 'IntDial' });
 
     const broken = await checkCandidate(bars, 'Int', {
       name: 'IntBroken',
@@ -52,5 +62,32 @@ describe('view helpers', () => {
       project: { viewHelpers: {} }
     } as never);
     expect(on?.schema).toHaveProperty('properties.viewHelpers');
+  });
+
+  it('take a type and a task from the reply, or a type alone from turns before tasks', () => {
+    expect(viewHelpersRequest({ type: ' Card ', task: ' draw each as a playing card ' })).toEqual({
+      viewHelpers: { type: 'Card', task: 'draw each as a playing card' }
+    });
+    expect(viewHelpersRequest({ type: 'Card', task: '' })).toEqual({
+      viewHelpers: { type: 'Card' }
+    });
+    expect(viewHelpersRequest('Int')).toEqual({ viewHelpers: { type: 'Int' } });
+    expect(viewHelpersRequest(null)).toEqual({});
+    expect(viewHelpersRequest({ type: ' ', task: 'x' })).toEqual({});
+  });
+
+  it('give each helper the task and what the participant settled, with its direction', () => {
+    const asked = viewHelperTask({
+      type: 'Card',
+      count: 1,
+      source: '<View …>',
+      direction: viewHelperDirections[2],
+      task: 'draw each card as a playing card',
+      background: 'The brief:\n- audience: first-year students'
+    });
+    expect(asked).toContain('of the type Card, trying a drawing');
+    expect(asked).toContain('The task, from the assistant: draw each card as a playing card');
+    expect(asked).toContain('- audience: first-year students');
+    expect(viewHelperTask({ type: 'Int', count: 1, source: '' })).not.toContain('task');
   });
 });

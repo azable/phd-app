@@ -243,6 +243,8 @@ export type AiSelectedElement = {
 export type AiViewHelpers = {
   note: string;
   type?: string;
+  /** The task the candidates answered, as the assistant gave it. */
+  task?: string;
   candidates: { name: string; description: string; markup: string; readability?: string }[];
 };
 
@@ -373,7 +375,7 @@ const timelineCases = {
   'project.view-helpers-set': (event) =>
     `View helpers turned ${event.payload.enabled ? 'on' : 'off'} for this project.`,
   'visualization.view-candidates': (event) =>
-    `The view helpers proposed ${event.payload.candidates.length} alternative views of ${event.payload.type} that build and read (see viewHelpers).`
+    `The view helpers proposed ${event.payload.candidates.length} alternative views of ${event.payload.type}${event.payload.task ? ` for the task "${event.payload.task}"` : ''} that build and read (see viewHelpers).`
 } satisfies ProjectEventCases<string>;
 
 const conversationCases = {

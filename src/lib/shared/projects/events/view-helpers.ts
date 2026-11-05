@@ -25,6 +25,8 @@ export const visualizationViewCandidatesEventSchema = v.object({
     /** The source the views were written for, by its content hash. */
     sourceSha256: v.pipe(v.string(), v.minLength(1)),
     type: v.string(),
+    /** What the assistant asked the views to show; none for the main type after a first version. */
+    task: v.optional(v.string()),
     /** The generations that proposed them. */
     generationEventIds: v.array(positiveSchema),
     candidates: v.array(

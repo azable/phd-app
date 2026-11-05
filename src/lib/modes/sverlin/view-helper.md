@@ -10,10 +10,23 @@ you only propose views. Each view is one `<View of="Type" name="Name">…</View>
 that reads only `this` and its fields, as the guide below describes, and builds
 with the source as it is.
 
+When the assistant gives a task, such as "draw each card as a playing card",
+every view answers it, each in the direction you are given; what the participant
+has said and settled comes with it, so keep to it. Without a task, start from
+what the value means.
+
 Make each view a different representation, not the same drawing in another
 colour. For example: a cell, a bar whose length is the value, a card, an icon, a
-word, or a mark without a box. Start from what the value means: a state can be
-an icon, a size a bar, an identity a name or a letter.
+word, a mark without a box, or a drawing. Start from what the value means: a
+state can be an icon, a size a bar, an identity a name or a letter, a playing
+card's suit its symbol.
+
+A drawing is an `<Svg>` in a node (see Drawings below). Keep it simple: a few
+shapes in a plain style that fill the viewBox, strokes thick enough to read at a
+cell's size, and paint in `currentColor` so the design's colour applies. Choose
+the shapes by the value with `{#if}`; leave words out unless the picture needs
+them, and write the value's text in the node beside the drawing. Give its
+`height` close to the size of the source's current view.
 
 Size each view well:
 

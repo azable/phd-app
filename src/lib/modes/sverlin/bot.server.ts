@@ -5,8 +5,10 @@ import {
   parseRecoveryExplanation,
   recoveryExplanationJsonSchema,
   generatedMessageContentJsonSchema,
+  maximumViewHelpersTask,
   type ChatBotConfig,
-  type ChatResponseFormat
+  type ChatResponseFormat,
+  type ViewHelpersRequest
 } from '$lib/server/chat-bots/types';
 import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
 import {
@@ -90,7 +92,7 @@ const responseFormat = {
   }
 } satisfies ChatResponseFormat;
 
-/** The same, with the type the view helpers should propose views of, or null for none. */
+/** The same, with the type the view helpers should propose views of and their task, or null. */
 const responseFormatWithViewHelpers = {
   ...responseFormat,
   schema: {
@@ -98,9 +100,27 @@ const responseFormatWithViewHelpers = {
     properties: {
       ...responseFormat.schema.properties,
       viewHelpers: {
-        type: ['string', 'null'],
+        anyOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              type: {
+                type: 'string',
+                description: 'The type of the source to propose views of, as Card.'
+              },
+              task: {
+                type: 'string',
+                description:
+                  'What the views should show, in one short sentence from what the participant asked and settled, or an empty string.'
+              }
+            },
+            required: ['type', 'task']
+          },
+          { type: 'null' }
+        ],
         description:
-          'A type of the source the view helpers should propose alternative views of, after this reply, or null.'
+          'What the view helpers should propose alternative views of after this reply, or null.'
       }
     },
     required: [...responseFormat.schema.required, 'viewHelpers']
@@ -151,9 +171,21 @@ export default {
       decision: decision.output,
       ...(entries.length ? { brief: entries } : {}),
       ...(recovery ? { recovery } : {}),
-      ...(typeof output.viewHelpers === 'string' && output.viewHelpers.trim()
-        ? { viewHelpers: output.viewHelpers.trim() }
-        : {})
+      ...viewHelpersRequest(output.viewHelpers)
     };
   }
 } satisfies ChatBotConfig<AiProjectContext>;
+
+/**
+ * The view helpers' request in a reply: a type and a task, or, from turns before tasks, a type
+ * alone. None where it names no type.
+ */
+export function viewHelpersRequest(value: unknown): { viewHelpers?: ViewHelpersRequest } {
+  const { type, task } =
+    typeof value === 'string'
+      ? { type: value, task: undefined }
+      : ((value ?? {}) as { type?: unknown; task?: unknown });
+  if (typeof type !== 'string' || !type.trim()) return {};
+  const asked = typeof task === 'string' ? task.trim().slice(0, maximumViewHelpersTask) : '';
+  return { viewHelpers: { type: type.trim(), ...(asked ? { task: asked } : {}) } };
+}

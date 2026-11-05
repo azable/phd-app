@@ -192,9 +192,18 @@ export type SourceArtifactChatOutput = {
   decision: SourceDecision;
   brief?: BriefEntry[];
   recovery?: RecoveryExplanation;
-  /** A type the view helpers should propose alternative views of, where they are on. */
-  viewHelpers?: string;
+  /** What the view helpers should propose alternative views of, where they are on. */
+  viewHelpers?: ViewHelpersRequest;
 };
+
+/**
+ * The view helpers' request: the type to propose views of, and the task, what the views should show
+ * in the assistant's words, from what the participant asked and settled.
+ */
+export type ViewHelpersRequest = { type: string; task?: string };
+
+/** The longest task the helpers are given, in characters: a sentence or two. */
+export const maximumViewHelpersTask = 300;
 
 /** Candidate-based modes share one orchestration shape; each mode validates its own manifest. */
 export type CandidateAssistantOutput = {
