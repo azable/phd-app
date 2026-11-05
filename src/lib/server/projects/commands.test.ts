@@ -758,7 +758,7 @@ describe('submitProjectFeedback', () => {
     } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
 
     /** A linear-search project with one message queued and claimed by a turn with helpers on. */
-    async function claimedWithHelpers(writtenMeanwhile = false) {
+    async function claimedWithHelpers(writtenMeanwhile = false, adapter = helperAdapter) {
       const { getProjectTemplate } = await import('./starter-catalog');
       const { createProject } = await import('./service');
       const created = await createProject(
@@ -814,7 +814,7 @@ describe('submitProjectFeedback', () => {
       const { runQueuedAssistantTurn } = await import('./commands');
       return runQueuedAssistantTurn(
         { projectId: created.projectId, operationId: assistantOperationId },
-        { ...commandDependencies, viewHelperAdapter: helperAdapter }
+        { ...commandDependencies, viewHelperAdapter: adapter }
       );
     }
 
@@ -862,6 +862,36 @@ describe('submitProjectFeedback', () => {
       expect(
         followed.appendedEvents.some((event) => event.type === 'assistant.turn-requested')
       ).toBe(false);
+    });
+
+    it('sends a view that did not build back once to its helper, keeping it fixed', async () => {
+      const view = (name: string) => ({
+        name: 'IntDot',
+        description: 'a dot',
+        markup: `<View of="Int" name="${name}"><Node value={this} /></View>`
+      });
+      const retrying = {
+        id: 'test-helpers',
+        // The first answer misnames its view; told why, the helper fixes it.
+        generateReply: async ({ messages }: { messages: unknown[] }) => ({
+          output: { views: [view(messages.length > 1 ? 'IntDot' : 'Wrong')] }
+        })
+      } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+      const { appendedEvents } = await claimedWithHelpers(false, retrying);
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      // Each of the three helpers misnamed its view, and each fixed it when told.
+      expect(
+        candidates?.type === 'visualization.view-candidates' &&
+          candidates.payload.candidates.map(({ name }) => name)
+      ).toEqual(['IntDot', 'IntDot', 'IntDot']);
+      const attempts = appendedEvents.flatMap((event) =>
+        event.type === 'ai.generation-requested' && event.payload.purpose === 'helper'
+          ? [event.payload.attempt]
+          : []
+      );
+      expect(attempts).toEqual([1, 2, 3, 4, 5, 6]);
     });
 
     it('leaves the candidates to the turn of a message written meanwhile', async () => {

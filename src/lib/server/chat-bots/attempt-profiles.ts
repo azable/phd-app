@@ -13,8 +13,9 @@ import type { ChatBotAttemptProfile } from './types';
  * waiting on it is most of the participant's wait; a first source, and every repair, keep the
  * ladder's effort. Where a study condition, or an administrator's dev-mode switch, turns the view
  * helpers on (projects/view-helpers.ts), a turn adds at most three Luna calls at low effort after its
- * reply has shown, each time-boxed to 30 seconds: they add cost, about 40k input tokens and 2k
- * output tokens a turn with the guide's extract, but never delay the reply, and none counts
+ * reply has shown, each time-boxed to 30 seconds, and one retry for each view that did not build or
+ * read, so at most six: they add cost, about 40k input tokens and 2k output tokens a turn with the
+ * guide's extract and some 15k more for each retry, but never delay the reply, and none counts
  * against the ladder's four.
  */
 

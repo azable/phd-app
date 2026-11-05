@@ -2490,108 +2490,149 @@ async function runViewHelpers(
       parameters: { ...viewHelperParameters },
       responseFormat: proposedViewsFormat as unknown as ChatbotPrompt['responseFormat']
     }));
-  const replies = await Promise.all(
-    prompts.map(async (prompt) => {
-      const startedAt = performance.now();
-      const timeout = AbortSignal.timeout(viewHelperTimeoutMs);
-      const signal = operation ? AbortSignal.any([operation, timeout]) : timeout;
-      try {
-        const result = await adapter.generateReply({ ...prompt, signal });
-        const views = (
-          (result.output as { views?: ProposedView[] } | undefined)?.views ?? []
-        ).filter(
-          (view) =>
-            typeof view?.name === 'string' &&
-            typeof view.description === 'string' &&
-            typeof view.markup === 'string'
-        );
-        return {
-          prompt,
-          ok: true as const,
-          result,
-          views,
-          durationMs: performance.now() - startedAt
-        };
-      } catch (error) {
-        return { prompt, ok: false as const, error, durationMs: performance.now() - startedAt };
-      }
-    })
-  );
+  const call = (batch: ChatbotPrompt[]) =>
+    Promise.all(
+      batch.map(async (prompt) => {
+        const startedAt = performance.now();
+        const timeout = AbortSignal.timeout(viewHelperTimeoutMs);
+        const signal = operation ? AbortSignal.any([operation, timeout]) : timeout;
+        try {
+          const result = await adapter.generateReply({ ...prompt, signal });
+          const views = (
+            (result.output as { views?: ProposedView[] } | undefined)?.views ?? []
+          ).filter(
+            (view) =>
+              typeof view?.name === 'string' &&
+              typeof view.description === 'string' &&
+              typeof view.markup === 'string'
+          );
+          return {
+            prompt,
+            ok: true as const,
+            result,
+            views,
+            durationMs: performance.now() - startedAt
+          };
+        } catch (error) {
+          return { prompt, ok: false as const, error, durationMs: performance.now() - startedAt };
+        }
+      })
+    );
   let current = document;
   const generationEventIds: EventId[] = [];
-  for (const reply of replies) {
-    current = await appendProjectEvents(
-      current,
-      [
-        draftEvent<'ai.generation-requested'>({
-          type: 'ai.generation-requested',
-          actor: { kind: 'system' },
-          operationId,
-          payload: {
-            attempt: reply.prompt.attempt.number,
-            purpose: 'helper',
-            prompt: recordText(JSON.stringify(reply.prompt), 'application/json'),
-            promptTemplateSha256: sourceSha256(reply.prompt.initialPrompt),
-            requestedModel: reply.prompt.parameters.model,
-            parameters: { ...reply.prompt.parameters }
-          }
-        }),
-        reply.ok
-          ? draftEvent<'ai.generation-succeeded'>({
-              type: 'ai.generation-succeeded',
-              actor: { kind: 'assistant', botId: 'sverlin-view-helper' },
-              operationId,
-              payload: {
-                attempt: reply.prompt.attempt.number,
-                adapterId: adapter.id,
-                requestedModel: reply.prompt.parameters.model,
-                ...(reply.result.generation?.model ? { model: reply.result.generation.model } : {}),
-                ...(reply.result.generation?.responseId
-                  ? { responseId: reply.result.generation.responseId }
-                  : {}),
-                durationMs: Math.round(reply.durationMs),
-                ...(reply.result.generation?.usage ? { usage: reply.result.generation.usage } : {}),
-                response: recordText(
-                  JSON.stringify(reply.result.providerResponse ?? { views: reply.views }),
-                  'application/json'
-                )
-              }
-            })
-          : draftEvent<'ai.generation-failed'>({
-              type: 'ai.generation-failed',
-              actor: { kind: 'system' },
-              operationId,
-              payload: {
-                attempt: reply.prompt.attempt.number,
-                failureKind: generationFailureKind(reply.error),
-                durationMs: Math.round(reply.durationMs),
-                message: safeErrorMessage(reply.error),
-                details: recordText(
-                  generationErrorDetails(reply.error).value,
-                  generationErrorDetails(reply.error).mediaType
-                ),
-                ...(spentUsage(reply.error) ? { usage: spentUsage(reply.error) } : {})
-              }
-            })
-      ],
-      dependencies.projectService
-    );
-    const usage = reply.ok ? reply.result.generation?.usage : spentUsage(reply.error);
-    logModelCall({
-      projectId: current.projectId,
-      operationId,
-      attempt: reply.prompt.attempt.number,
-      purpose: 'helper',
-      model: (reply.ok && reply.result.generation?.model) || reply.prompt.parameters.model,
-      failed: !reply.ok,
-      ...(usage ? { usage } : {})
-    });
-    generationEventIds.push(projectHead(current).id);
-  }
-  const proposed = replies.flatMap((reply) => (reply.ok ? reply.views : []));
+  const record = async (replies: Awaited<ReturnType<typeof call>>) => {
+    for (const reply of replies) {
+      current = await appendProjectEvents(
+        current,
+        [
+          draftEvent<'ai.generation-requested'>({
+            type: 'ai.generation-requested',
+            actor: { kind: 'system' },
+            operationId,
+            payload: {
+              attempt: reply.prompt.attempt.number,
+              purpose: 'helper',
+              prompt: recordText(JSON.stringify(reply.prompt), 'application/json'),
+              promptTemplateSha256: sourceSha256(reply.prompt.initialPrompt),
+              requestedModel: reply.prompt.parameters.model,
+              parameters: { ...reply.prompt.parameters }
+            }
+          }),
+          reply.ok
+            ? draftEvent<'ai.generation-succeeded'>({
+                type: 'ai.generation-succeeded',
+                actor: { kind: 'assistant', botId: 'sverlin-view-helper' },
+                operationId,
+                payload: {
+                  attempt: reply.prompt.attempt.number,
+                  adapterId: adapter.id,
+                  requestedModel: reply.prompt.parameters.model,
+                  ...(reply.result.generation?.model
+                    ? { model: reply.result.generation.model }
+                    : {}),
+                  ...(reply.result.generation?.responseId
+                    ? { responseId: reply.result.generation.responseId }
+                    : {}),
+                  durationMs: Math.round(reply.durationMs),
+                  ...(reply.result.generation?.usage
+                    ? { usage: reply.result.generation.usage }
+                    : {}),
+                  response: recordText(
+                    JSON.stringify(reply.result.providerResponse ?? { views: reply.views }),
+                    'application/json'
+                  )
+                }
+              })
+            : draftEvent<'ai.generation-failed'>({
+                type: 'ai.generation-failed',
+                actor: { kind: 'system' },
+                operationId,
+                payload: {
+                  attempt: reply.prompt.attempt.number,
+                  failureKind: generationFailureKind(reply.error),
+                  durationMs: Math.round(reply.durationMs),
+                  message: safeErrorMessage(reply.error),
+                  details: recordText(
+                    generationErrorDetails(reply.error).value,
+                    generationErrorDetails(reply.error).mediaType
+                  ),
+                  ...(spentUsage(reply.error) ? { usage: spentUsage(reply.error) } : {})
+                }
+              })
+        ],
+        dependencies.projectService
+      );
+      const usage = reply.ok ? reply.result.generation?.usage : spentUsage(reply.error);
+      logModelCall({
+        projectId: current.projectId,
+        operationId,
+        attempt: reply.prompt.attempt.number,
+        purpose: 'helper',
+        model: (reply.ok && reply.result.generation?.model) || reply.prompt.parameters.model,
+        failed: !reply.ok,
+        ...(usage ? { usage } : {})
+      });
+      generationEventIds.push(projectHead(current).id);
+    }
+  };
+  const replies = await call(prompts);
+  await record(replies);
+  const proposed = replies.flatMap((reply) =>
+    reply.ok ? reply.views.map((view) => ({ view, prompt: reply.prompt })) : []
+  );
   if (!proposed.length) return current;
   const checked = [];
-  for (const view of proposed) checked.push(await checkCandidate(source, type, view));
+  for (const { view } of proposed) checked.push(await checkCandidate(source, type, view));
+  // A view that did not build or read goes back once to its helper with the reason, as a repair
+  // does, rather than the helpers' prompt growing a rule for each mistake seen.
+  const retried = checked
+    .map((candidate, index) => ({ candidate, ...proposed[index] }))
+    .filter(({ candidate }) => !candidate.kept)
+    .slice(0, viewHelperCalls);
+  const late = deadline !== undefined && deadline - Date.now() < viewHelperTimeoutMs;
+  if (retried.length && !late) {
+    const again = await call(
+      retried.map(({ candidate, view, prompt }, index) => ({
+        ...prompt,
+        messages: [
+          ...prompt.messages,
+          { role: 'assistant', content: JSON.stringify({ views: [view] }) },
+          {
+            role: 'user',
+            content: `The view ${view.name} was left out: ${candidate.kept ? '' : candidate.reason} Return it fixed, as {"views":[{"name","description","markup"}]}.`
+          }
+        ],
+        attempt: { number: viewHelperCalls + index + 1, purpose: 'helper' }
+      }))
+    );
+    await record(again);
+    for (const [index, reply] of again.entries()) {
+      const fixed = reply.ok ? reply.views[0] : undefined;
+      if (!fixed) continue;
+      const result = await checkCandidate(source, type, fixed);
+      if (result.kept) checked[checked.indexOf(retried[index].candidate)] = result;
+    }
+  }
   return appendProjectEvents(
     current,
     [
